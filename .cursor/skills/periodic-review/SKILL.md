@@ -1,13 +1,13 @@
 ---
-description: Periodic review skill - quarterly context and workspace health check
-globs: ["context/**/*", "memory/**/*"]
+name: periodic-review
+description: Quarterly context and workspace health check. Use when the user wants a quarterly review, context review, workspace health check, or to verify context is up to date.
 ---
 
 # Periodic Review Skill
 
 Guide users through periodic reviews of context, memory, and workspace health.
 
-## Trigger Phrases
+## When to Use
 
 - "Quarterly review"
 - "Review my context"

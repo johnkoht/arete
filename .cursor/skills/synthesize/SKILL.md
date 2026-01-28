@@ -1,13 +1,13 @@
 ---
-description: Synthesis skill - process project inputs into insights and decisions
-globs: ["**/working/*", "**/synthesis*"]
+name: synthesize
+description: Process project inputs into insights and decisions. Use when the user wants to synthesize findings, process inputs, summarize learnings, or pull together research.
 ---
 
 # Synthesize Skill
 
 Help users process raw inputs from projects into structured insights, patterns, and decisions.
 
-## Trigger Phrases
+## When to Use
 
 - "synthesize"
 - "process my inputs"
@@ -15,8 +15,7 @@ Help users process raw inputs from projects into structured insights, patterns, 
 - "summarize findings"
 - "pull together"
 
-## When to Use
-
+Also useful:
 - After gathering research inputs
 - Before making decisions
 - When inputs feel overwhelming

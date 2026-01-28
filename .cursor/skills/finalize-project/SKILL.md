@@ -1,13 +1,13 @@
 ---
-description: Finalize project skill - complete projects, commit to context, archive
-globs: ["projects/active/**/*"]
+name: finalize-project
+description: Complete projects, commit changes to context, and archive. Use when the user wants to finalize, complete, wrap up, or archive a project.
 ---
 
 # Finalize Project Skill
 
 Guide users through completing projects, committing changes to context, and archiving.
 
-## Trigger Phrases
+## When to Use
 
 - "finalize project"
 - "complete this project"
@@ -15,9 +15,7 @@ Guide users through completing projects, committing changes to context, and arch
 - "archive project"
 - "commit changes"
 
-## When to Use
-
-When a project has:
+Also when a project has:
 - Completed its outputs
 - Reached its goals (or decided to stop)
 - Learnings ready to capture

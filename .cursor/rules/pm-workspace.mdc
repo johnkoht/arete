@@ -37,14 +37,16 @@ When a user wants to do PM work, guide them to the appropriate action:
 
 | User Intent | Action | Skill |
 |-------------|--------|-------|
-| "How does this work?" / "Give me a tour" | Orient to workspace | `workspace-tour.mdc` |
-| "I need to understand a problem" | Start a discovery project | `discovery.mdc` |
-| "I want to write a PRD" | Create PRD project | `create-prd.mdc` |
-| "Analyze competitors" | Competitive analysis project | `competitive-analysis.mdc` |
-| "Build/update roadmap" | Roadmap project | `construct-roadmap.mdc` |
-| "Process my notes/feedback" | Synthesize within project | `synthesize.mdc` |
-| "Finish this project" | Finalize and archive | `finalize-project.mdc` |
-| "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review.mdc` |
+| "How does this work?" / "Give me a tour" | Orient to workspace | `workspace-tour` |
+| "I need to understand a problem" | Start a discovery project | `discovery` |
+| "I want to write a PRD" | Create PRD project | `create-prd` |
+| "Analyze competitors" | Competitive analysis project | `competitive-analysis` |
+| "Build/update roadmap" | Roadmap project | `construct-roadmap` |
+| "Process my notes/feedback" | Synthesize within project | `synthesize` |
+| "Finish this project" | Finalize and archive | `finalize-project` |
+| "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
+
+Skills are located in `.cursor/skills/` and follow the Agent Skills standard.
 
 ## Before Starting Any Work
 

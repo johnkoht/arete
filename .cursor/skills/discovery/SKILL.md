@@ -1,13 +1,13 @@
 ---
-description: Discovery skill - guide problem discovery and research synthesis
-globs: ["**/discovery*"]
+name: discovery
+description: Guide problem discovery and research synthesis. Use when the user wants to start discovery, understand a problem, research a topic, or validate assumptions.
 ---
 
 # Discovery Skill
 
 Guide users through discovery projects to understand problems, validate assumptions, and size opportunities.
 
-## Trigger Phrases
+## When to Use
 
 - "start discovery"
 - "I need to understand..."
@@ -117,7 +117,7 @@ As user conducts research, help capture in `inputs/`:
 
 ### 5. Synthesis
 
-When ready to synthesize (use `synthesize.mdc`):
+When ready to synthesize (use `synthesize` skill):
 
 1. Review all inputs
 2. Identify patterns and themes
@@ -199,7 +199,7 @@ When discovery is complete:
 1. Review findings with user
 2. Identify context updates (users, competitive landscape, etc.)
 3. Log key learnings to `memory/learnings.md`
-4. Use `finalize-project.mdc` to archive
+4. Use `finalize-project` skill to archive
 
 ## Research Best Practices
 

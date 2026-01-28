@@ -1,13 +1,13 @@
 ---
-description: PRD creation skill - interactive Product Requirements Document creation
-globs: ["**/prd*", "**/PRD*"]
+name: create-prd
+description: Interactive Product Requirements Document creation with a Product Leader persona. Use when the user wants to create, write, or start a PRD.
 ---
 
 # Create PRD Skill
 
 Guide users through creating Product Requirements Documents with a Product Leader persona.
 
-## Trigger Phrases
+## When to Use
 
 - "create a prd"
 - "write a prd"

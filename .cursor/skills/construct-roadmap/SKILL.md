@@ -1,13 +1,13 @@
 ---
-description: Roadmap construction skill - build and maintain product roadmaps
-globs: ["**/roadmap*"]
+name: construct-roadmap
+description: Build and maintain product roadmaps. Use when the user wants to build, update, or plan a roadmap, do quarterly planning, or prioritize backlog.
 ---
 
 # Construct Roadmap Skill
 
 Guide users through building, updating, and communicating product roadmaps.
 
-## Trigger Phrases
+## When to Use
 
 - "build roadmap"
 - "update roadmap"

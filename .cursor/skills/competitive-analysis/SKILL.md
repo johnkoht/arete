@@ -1,13 +1,13 @@
 ---
-description: Competitive analysis skill - research and document competitive landscape
-globs: ["**/competitive*", "**/competitor*"]
+name: competitive-analysis
+description: Research and document competitive landscape. Use when the user wants to analyze competitors, do competitive research, or update competitive landscape.
 ---
 
 # Competitive Analysis Skill
 
 Guide users through competitive research and landscape documentation.
 
-## Trigger Phrases
+## When to Use
 
 - "competitive analysis"
 - "analyze competitor"

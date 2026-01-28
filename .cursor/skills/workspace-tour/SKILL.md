@@ -1,6 +1,6 @@
 ---
-description: Workspace tour skill - orient users to the PM workspace
-globs: ["README.md", "SETUP.md"]
+name: workspace-tour
+description: Orient users to the Areté PM workspace. Use when the user asks for a tour, how the workspace works, what they can do, or says they're new.
 ---
 
 # Workspace Tour Skill
@@ -9,7 +9,7 @@ Help users understand Areté and how to use it effectively.
 
 > **Areté** (ἀρετή) - "excellence" in Ancient Greek. This workspace is designed to help you pursue excellence in product management.
 
-## Trigger Phrases
+## When to Use
 
 - "Give me a tour"
 - "How does this workspace work?"
