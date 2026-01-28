@@ -1,7 +1,5 @@
 # Areté
 
-*Excellence in product management.*
-
 A Cursor-native workspace for product managers to maintain context, run structured workflows, and build institutional memory.
 
 > **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" or "virtue" - the pursuit of fulfilling one's purpose to the highest degree.
