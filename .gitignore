@@ -1,0 +1,32 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Environment files (in case someone adds them)
+.env
+.env.local
+.env.*.local
+
+# Personal notes that shouldn't be committed
+# (uncomment if you want to keep local-only notes)
+# personal-notes.md
+# scratch-local.md
+
+# QMD cache (if you run qmd in the workspace)
+.qmd/
+
+# Node modules (if any tooling is added)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp

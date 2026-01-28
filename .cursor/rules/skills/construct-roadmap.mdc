@@ -1,0 +1,275 @@
+---
+description: Roadmap construction skill - build and maintain product roadmaps
+globs: ["**/roadmap*"]
+---
+
+# Construct Roadmap Skill
+
+Guide users through building, updating, and communicating product roadmaps.
+
+## Trigger Phrases
+
+- "build roadmap"
+- "update roadmap"
+- "roadmap planning"
+- "quarterly planning"
+- "prioritize backlog"
+
+## Workflow
+
+### 1. Project Setup
+
+Create roadmap project:
+
+```
+projects/active/[period]-roadmap/
+├── README.md
+├── inputs/
+│   ├── initiatives/
+│   ├── feedback/
+│   └── constraints/
+├── working/
+│   ├── prioritization.md
+│   └── draft-roadmap.md
+└── outputs/
+    └── roadmap.md
+```
+
+### 2. Gather Inputs
+
+Collect inputs for roadmap planning:
+
+**Strategic Inputs**
+- Company goals (from `context/goals-strategy.md`)
+- Product vision
+- Key metrics to move
+
+**Demand Inputs**
+- Customer feedback
+- Sales requests
+- Support tickets
+- User research
+
+**Supply Inputs**
+- Team capacity
+- Technical constraints
+- Dependencies
+- Tech debt priorities
+
+**External Inputs**
+- Market trends
+- Competitive moves
+- Regulatory requirements
+
+### 3. Candidate Initiatives
+
+List all potential initiatives in `inputs/initiatives/`:
+
+```markdown
+# Initiative: [Name]
+
+**Problem/Opportunity**: [What this addresses]
+**Proposed Solution**: [High-level approach]
+**Target Outcome**: [What success looks like]
+**Requestor/Source**: [Where this came from]
+
+## Sizing Estimates
+- **Effort**: S / M / L / XL
+- **Impact**: Low / Medium / High
+- **Confidence**: Low / Medium / High
+
+## Dependencies
+- [What this depends on]
+
+## Risks
+- [Key risks]
+
+## Strategic Alignment
+- [How it connects to goals]
+```
+
+### 4. Prioritization Framework
+
+Default to **RICE** scoring:
+
+| Factor | Description | Scale |
+|--------|-------------|-------|
+| **Reach** | How many users affected | Number |
+| **Impact** | How much it moves metrics | 0.25 (minimal) to 3 (massive) |
+| **Confidence** | How sure are we | 0.5 (low) to 1 (high) |
+| **Effort** | Person-weeks to build | Number |
+
+**RICE Score** = (Reach × Impact × Confidence) / Effort
+
+Create `working/prioritization.md`:
+
+```markdown
+# Prioritization: [Period]
+
+## Framework: RICE
+
+| Initiative | Reach | Impact | Confidence | Effort | Score |
+|------------|-------|--------|------------|--------|-------|
+| [Init A] | 1000 | 2 | 0.8 | 4 | 400 |
+| [Init B] | 500 | 3 | 0.5 | 2 | 375 |
+
+## Additional Considerations
+- Strategic alignment
+- Dependencies
+- Risk/complexity
+- Customer commitments
+
+## Prioritized List
+1. [Initiative] - Score: X, Notes: [why]
+2. [Initiative] - Score: Y, Notes: [why]
+```
+
+**Alternative Frameworks**:
+- **MoSCoW**: Must/Should/Could/Won't
+- **Value vs. Effort**: 2x2 matrix
+- **Kano Model**: Basic/Performance/Delighters
+- **Weighted Scoring**: Custom criteria weights
+
+### 5. Capacity Planning
+
+Assess team capacity:
+
+```markdown
+## Capacity: [Period]
+
+**Team Size**: X engineers, Y designers
+**Available Weeks**: [Total - PTO - overhead]
+**Capacity**: ~[X] person-weeks
+
+### Allocation
+- New Features: 60%
+- Tech Debt: 20%
+- Bugs/Maintenance: 20%
+
+### Constraints
+- [Key constraint]
+- [Key dependency]
+```
+
+### 6. Draft Roadmap
+
+Create `working/draft-roadmap.md`:
+
+**Timeline View**:
+```markdown
+# Roadmap: [Period]
+
+## Q1 2026
+### Now (In Progress)
+- [Initiative]: [Status, Owner]
+
+### Next (Committed)
+- [Initiative]: [Target date]
+- [Initiative]: [Target date]
+
+### Later (Planned)
+- [Initiative]
+- [Initiative]
+
+## Q2 2026
+### Planned
+- [Initiative]
+- [Initiative]
+
+## Future (Exploratory)
+- [Initiative]
+- [Initiative]
+```
+
+**Theme-Based View**:
+```markdown
+# Roadmap by Theme
+
+## Theme: [User Acquisition]
+- Q1: [Initiative]
+- Q2: [Initiative]
+
+## Theme: [Retention]
+- Q1: [Initiative]
+- Q2: [Initiative]
+
+## Theme: [Platform]
+- Q1: [Initiative]
+- Q2: [Initiative]
+```
+
+### 7. Review & Refine
+
+Before finalizing:
+
+1. **Sanity check capacity**: Does it fit?
+2. **Check dependencies**: Sequencing correct?
+3. **Validate with stakeholders**: Major objections?
+4. **Document trade-offs**: What we're NOT doing
+5. **Risk assessment**: What could derail this?
+
+### 8. Final Output
+
+Create `outputs/roadmap.md`:
+
+```markdown
+# Product Roadmap: [Period]
+
+**Last Updated**: YYYY-MM-DD
+**Owner**: [Name]
+**Review Cycle**: [Monthly/Quarterly]
+
+## Strategic Context
+[Brief summary of goals this roadmap supports]
+
+## Roadmap Overview
+
+### Now (In Progress)
+| Initiative | Owner | Status | Target |
+|------------|-------|--------|--------|
+| [Name] | [Team] | [Status] | [Date] |
+
+### Next (Committed)
+| Initiative | Owner | Target | Notes |
+|------------|-------|--------|-------|
+| [Name] | [Team] | [Quarter] | |
+
+### Later (Planned)
+| Initiative | Target | Confidence |
+|------------|--------|------------|
+| [Name] | [Quarter] | Medium |
+
+### Future (Exploratory)
+- [Initiative]
+- [Initiative]
+
+## Key Dependencies
+- [Dependency and impact]
+
+## Risks & Mitigations
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| [Risk] | [High/Med/Low] | [Plan] |
+
+## What We're NOT Doing
+- [Initiative]: [Why deprioritized]
+
+## Change Log
+- YYYY-MM-DD: [Change made]
+```
+
+### 9. Context Update
+
+After finalizing:
+
+1. Consider updating `context/goals-strategy.md` if roadmap reflects strategic shifts
+2. Log major prioritization decisions to `memory/decisions.md`
+3. Set calendar for roadmap review
+
+## Roadmap Best Practices
+
+- **Outcomes over outputs**: Frame around problems, not features
+- **Appropriate precision**: Detailed near-term, fuzzy long-term
+- **Living document**: Update regularly, note changes
+- **Communication tool**: Tailor for audience
+- **Not a commitment**: Plans change, that's okay

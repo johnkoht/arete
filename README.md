@@ -1,0 +1,104 @@
+# Areté
+
+*Excellence in product management.*
+
+A Cursor-native workspace for product managers to maintain context, run structured workflows, and build institutional memory.
+
+> **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" or "virtue" - the pursuit of fulfilling one's purpose to the highest degree.
+
+## What This Is
+
+A structured system for PM work:
+- **Context Management** - Maintain business and product context as source of truth
+- **Project-Based Workflows** - Discovery, PRDs, competitive analysis, roadmaps
+- **Institutional Memory** - Capture decisions and learnings for future reference
+- **Semantic Search** - Find relevant content with QMD integration
+
+## Use This Template
+
+This is a **GitHub template repository**. To use it:
+
+1. Click **"Use this template"** → **"Create a new repository"**
+2. Name your repo (e.g., `my-company-pm`) and set it to **Private**
+3. Clone your new repo and open in Cursor
+4. Start filling in your context files
+
+Your personal/company data stays in your private repo. This template stays public and generic.
+
+## Quick Start
+
+### First 5 Minutes
+
+1. Open `context/business-overview.md` and fill in your company basics
+2. (Optional) Set up QMD for semantic search - see `SETUP.md`
+3. Ask the agent: "Give me a tour" or "What can I do here?"
+
+### Structure
+
+```
+arete/
+├── .cursor/rules/       # Cursor rules and skills
+├── context/             # Business context (source of truth)
+├── projects/            # Active and archived projects
+├── memory/              # Decisions, learnings, activity log
+├── templates/           # Project, input, and output templates
+├── scratchpad.md        # Quick capture
+└── SETUP.md             # Detailed setup guide
+```
+
+## Available Actions
+
+| Action | How to Start |
+|--------|--------------|
+| Workspace Tour | "Give me a tour" |
+| Discovery | "Start a discovery project for [topic]" |
+| PRD Creation | "Create a PRD for [feature]" |
+| Competitive Analysis | "Do competitive analysis on [competitors]" |
+| Roadmap Planning | "Build roadmap for [period]" |
+| Synthesize | "Synthesize what we've learned" |
+| Finalize | "Finalize this project" |
+| Periodic Review | "Quarterly review" |
+
+## What's a Project?
+
+A **project** is a flexible container for any bounded PM work:
+- A 2-week discovery effort
+- A single PRD for a feature
+- A competitive analysis sprint
+- A quarterly roadmap cycle
+- A large multi-month initiative
+
+Projects are however YOU want to organize your work. Not everything needs a project - use `scratchpad.md` for quick notes.
+
+## Example Prompts
+
+**Starting work:**
+- "Start a discovery project for improving user onboarding"
+- "I need to write a PRD for a new checkout flow"
+- "Help me analyze our top 3 competitors"
+
+**During a project:**
+- "Add these meeting notes to the current project"
+- "What have we learned so far?"
+- "Synthesize the user feedback we've collected"
+
+**Wrapping up:**
+- "Finalize this project"
+- "Log this decision: we chose Stripe because..."
+
+**Quick questions:**
+- "What do we know about [topic]?"
+- "Why did we decide to [decision]?"
+
+## Documentation
+
+- `SETUP.md` - Detailed setup, QMD configuration, troubleshooting
+- `.cursor/rules/` - All Cursor rules and skills
+
+## Contributing
+
+Contributions welcome! This is an open-source template. If you have improvements, please open a PR.
+
+## License
+
+MIT - See [LICENSE](LICENSE)

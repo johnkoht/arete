@@ -1,0 +1,241 @@
+---
+description: Synthesis skill - process project inputs into insights and decisions
+globs: ["**/working/*", "**/synthesis*"]
+---
+
+# Synthesize Skill
+
+Help users process raw inputs from projects into structured insights, patterns, and decisions.
+
+## Trigger Phrases
+
+- "synthesize"
+- "process my inputs"
+- "what did we learn"
+- "summarize findings"
+- "pull together"
+
+## When to Use
+
+- After gathering research inputs
+- Before making decisions
+- When inputs feel overwhelming
+- To prepare for finalization
+
+## Workflow
+
+### 1. Inventory Inputs
+
+First, inventory what's available in the project's `inputs/` folder:
+
+```bash
+# Use QMD to search project inputs
+qmd search "[topic]" -c pm-workspace
+```
+
+List inputs by type:
+- Meeting notes
+- Interview transcripts
+- Feedback
+- Data/metrics
+- Research
+
+### 2. Read & Extract
+
+For each input, extract:
+
+**Key Facts**
+- Concrete observations
+- Quotes
+- Data points
+
+**Interpretations**
+- What this suggests
+- Patterns observed
+
+**Questions Raised**
+- What this makes you wonder
+- Gaps identified
+
+### 3. Pattern Recognition
+
+Look across inputs for:
+
+**Recurring Themes**
+- What comes up multiple times?
+- From different sources?
+
+**Contradictions**
+- Where do sources disagree?
+- What explains the difference?
+
+**Surprises**
+- What was unexpected?
+- What challenges assumptions?
+
+**Gaps**
+- What's missing?
+- What do we still not know?
+
+### 4. Create Synthesis Document
+
+Write to `working/synthesis.md`:
+
+```markdown
+# Synthesis: [Topic]
+
+**Date**: YYYY-MM-DD
+**Inputs Reviewed**: [List]
+**Synthesized By**: [Agent + User]
+
+## Summary
+[2-3 sentence overview of key takeaways]
+
+## Key Findings
+
+### Finding 1: [Title]
+**Observation**: [What we saw]
+**Evidence**: 
+- [Source 1]: "[Quote or data]"
+- [Source 2]: "[Quote or data]"
+**Confidence**: High / Medium / Low
+**Implication**: [What this means]
+
+### Finding 2: [Title]
+...
+
+## Patterns Observed
+
+### Pattern: [Name]
+**Seen in**: [Sources]
+**Description**: [What the pattern is]
+**Significance**: [Why it matters]
+
+## Contradictions & Tensions
+
+### [Topic]
+- **View A**: [Position] (from [source])
+- **View B**: [Position] (from [source])
+- **Resolution**: [How to reconcile, or note as open question]
+
+## Surprises
+
+- **[Surprise]**: [Why unexpected, what it means]
+
+## Open Questions
+
+- [Question]: [Why it matters, how we might answer]
+
+## Recommendations
+
+Based on this synthesis:
+
+1. **[Action]**: [Because...]
+2. **[Action]**: [Because...]
+
+## Next Steps
+
+- [ ] [Follow-up needed]
+- [ ] [Decision to make]
+```
+
+### 5. Decision Preparation
+
+If synthesis is meant to inform a decision, add:
+
+```markdown
+## Decision Framework
+
+### The Decision
+[What needs to be decided]
+
+### Options
+#### Option A: [Name]
+- **Pros**: 
+- **Cons**: 
+- **Evidence supporting**: 
+
+#### Option B: [Name]
+- **Pros**: 
+- **Cons**: 
+- **Evidence supporting**: 
+
+### Recommendation
+[Your recommendation and why]
+
+### Risks of Recommendation
+[What could go wrong]
+
+### Reversibility
+[How easy to change course]
+```
+
+### 6. Review with User
+
+Present synthesis and:
+- Confirm interpretation of inputs
+- Discuss patterns and surprises
+- Validate recommendations
+- Identify missing perspectives
+
+### 7. Update Working Documents
+
+Based on review:
+- Refine synthesis
+- Note disagreements
+- Add additional context
+- Flag items for memory
+
+## Synthesis Tips
+
+**Stay Grounded in Evidence**
+- Cite sources for findings
+- Distinguish fact from interpretation
+- Note confidence levels
+
+**Embrace Contradictions**
+- Don't force false consensus
+- Contradictions often reveal important nuances
+- Explore why sources differ
+
+**Be Explicit About Gaps**
+- What don't we know?
+- What would change our conclusions?
+- What's the cost of being wrong?
+
+**Actionable Output**
+- Findings should lead somewhere
+- Recommendations should be specific
+- Next steps should be clear
+
+## Integration with QMD
+
+### Before Synthesis
+
+If the user has recently added inputs, prompt them to update the index:
+
+```
+Before searching for related content, you may want to update the search index:
+  qmd update
+This ensures your recent inputs are included in the search.
+```
+
+### Search for Related Content
+
+Use QMD to enhance synthesis:
+
+```bash
+# Find related past learnings
+qmd query "what did we learn about [topic]"
+
+# Find relevant decisions
+qmd search "decision [related area]"
+
+# Find similar past synthesis
+qmd vsearch "synthesis [problem area]"
+```
+
+Reference past work to:
+- Build on previous insights
+- Avoid repeating mistakes
+- Connect to institutional knowledge
