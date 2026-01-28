@@ -12,20 +12,23 @@ Areté is a Product Management workspace for Cursor that helps you:
 
 ```
 arete/
-├── .cursor/rules/           # Cursor rules and skills
-│   ├── pm-workspace.mdc     # Main workspace behavior
-│   ├── project-management.mdc
-│   ├── context-management.mdc
-│   ├── qmd-search.mdc
-│   └── skills/              # PM skills (8 total)
-│       ├── create-prd.mdc
-│       ├── discovery.mdc
-│       ├── competitive-analysis.mdc
-│       ├── construct-roadmap.mdc
-│       ├── synthesize.mdc
-│       ├── finalize-project.mdc
-│       ├── workspace-tour.mdc
-│       └── periodic-review.mdc
+├── .cursor/
+│   ├── rules/               # Cursor rules (always-on behavior)
+│   │   ├── pm-workspace.mdc     # Main workspace behavior
+│   │   ├── project-management.mdc
+│   │   ├── context-management.mdc
+│   │   └── qmd-search.mdc
+│   │
+│   └── skills/              # Agent Skills (on-demand workflows)
+│       ├── create-prd/
+│       ├── discovery/
+│       ├── competitive-analysis/
+│       ├── construct-roadmap/
+│       ├── synthesize/
+│       ├── finalize-project/
+│       ├── workspace-tour/
+│       ├── periodic-review/
+│       └── generate-mockup/
 │
 ├── context/                 # Core context (source of truth)
 │   ├── business-overview.md
@@ -133,9 +136,41 @@ qmd status                  # Check index health
 
 The agent will prompt you to run `qmd update` at key moments (after finalizing projects, before synthesis).
 
-### 3. Start Using the Workspace
+### 3. Optional: MCP Integrations
 
-**Start a project:**
+MCP (Model Context Protocol) integrations extend the workspace with external tools. These are optional but unlock additional capabilities.
+
+#### Mockup Generation (Lovable or Vercel v0)
+
+The `generate-mockup` skill can create interactive prototypes from PRDs and discovery findings. Requires one of:
+
+**Lovable MCP** (recommended for full prototypes):
+- [Setup docs](https://docs.lovable.dev/integrations/mcp-servers)
+- Generates interactive, shareable prototypes
+- Can read from Notion, Linear, etc. for additional context
+
+**Vercel v0**:
+- Good for individual UI components and screens
+- Lighter weight than full prototypes
+
+Without an MCP configured, the skill generates a detailed prompt you can paste into your preferred tool.
+
+#### Other MCP Options
+
+See `scratchpad.md` → "MCP Integrations" for future integration ideas:
+- **Linear**: Sync roadmap items, create issues from PRDs
+- **Notion**: Pull/push documentation, export PRDs
+- **Figma**: Reference designs in PRDs and competitive analysis
+
+#### Configuring MCP in Cursor
+
+1. Open Cursor Settings (Cmd+Shift+J)
+2. Navigate to the MCP section
+3. Add your MCP server URL and authenticate
+
+### 4. Start Using the Workspace
+
+**Start a project** (or invoke skills with `/skill-name`):
 - "Start a discovery project for [topic]"
 - "Create a PRD for [feature]"
 - "Do a competitive analysis on [competitors]"

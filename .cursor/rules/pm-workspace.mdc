@@ -43,6 +43,7 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Analyze competitors" | Competitive analysis project | `competitive-analysis` |
 | "Build/update roadmap" | Roadmap project | `construct-roadmap` |
 | "Process my notes/feedback" | Synthesize within project | `synthesize` |
+| "Visualize / prototype this" | Generate mockup | `generate-mockup` |
 | "Finish this project" | Finalize and archive | `finalize-project` |
 | "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
 

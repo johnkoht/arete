@@ -7,7 +7,9 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 ## Ideas
 <!-- Quick ideas - date them so you know when they came up -->
 
-- [YYYY-MM-DD] [Idea description]
+- [2026-01-27] **Subagents for Competitive Research**: When analyzing 2+ competitors, spawn parallel subagents to research each competitor simultaneously. Each subagent gathers pricing, features, positioning, then main agent synthesizes into comparison matrix. Could extend to other parallel tasks (market research, multi-source discovery).
+
+- [2026-01-27] **Mockup/Prototype Generation via Lovable MCP**: Create a skill that generates interactive prototypes from PRDs, discovery findings, or feature ideas. Use Lovable's MCP integration to build UI mockups directly from PM artifacts. Could also explore Vercel v0 as alternative.
 
 ---
 
