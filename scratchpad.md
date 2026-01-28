@@ -48,6 +48,34 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 - Agent uses this when preparing deliverables ("CEO always asks about ROI")
 - Structure: `people/[name].md` with sections for role, preferences, notable quotes
 
+### Package-Based Distribution (Shelved)
+*Added: 2026-01-27*
+
+Current approach: Fork + Upstream remote for updates. Works fine for single workspace.
+
+**Future option:** Publish as npm package for cleaner distribution:
+```
+my-workspace/
+├── node_modules/@arete/workspace/   # Framework as dependency
+├── .cursor/rules/                   # Symlinked from package
+├── context/                         # Your data
+├── projects/                        # Your data
+└── arete.config.js                  # Optional customization
+```
+
+**CLI commands:**
+- `npx @arete/workspace init` - Scaffold workspace, copy rules
+- `npx @arete/workspace update` - Update rules/templates
+- `npx @arete/workspace sync` - Re-sync after package update
+
+**Benefits:** Semantic versioning, `npm update` for upgrades, easy multi-workspace setup, simpler distribution.
+
+**Trade-offs:** Adds Node.js dependency, more complex setup, symlink quirks.
+
+**When to revisit:** If using across multiple clients/projects, or sharing with others.
+
+---
+
 ### MCP Integrations
 When MCP integrations are added, consider these use cases:
 
