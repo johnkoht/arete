@@ -35,7 +35,10 @@ Your personal/company data stays in your private repo. This template stays publi
 
 ```
 arete/
-├── .cursor/rules/       # Cursor rules and skills
+├── .cursor/
+│   ├── rules/           # Cursor rules
+│   ├── skills/          # Stateless workflows (discovery, PRD, etc.)
+│   └── tools/           # Lifecycle-based capabilities (onboarding, etc.)
 ├── context/             # Business context (source of truth)
 ├── projects/            # Active and archived projects
 ├── memory/              # Decisions, learnings, activity log
@@ -45,6 +48,8 @@ arete/
 ```
 
 ## Available Actions
+
+### Skills (Stateless Workflows)
 
 | Action | How to Start |
 |--------|--------------|
@@ -56,6 +61,16 @@ arete/
 | Synthesize | "Synthesize what we've learned" |
 | Finalize | "Finalize this project" |
 | Periodic Review | "Quarterly review" |
+
+### Tools (Lifecycle-Based Capabilities)
+
+Tools are different from skills - they have phases, track progress, and eventually complete.
+
+| Tool | Purpose | How to Start |
+|------|---------|--------------|
+| Onboarding | 30/60/90 day plan for thriving at a new job | "Start onboarding tool" or "Help me with my 30/60/90 day plan" |
+
+See `.cursor/tools/README.md` for more about the tools framework.
 
 ## What's a Project?
 

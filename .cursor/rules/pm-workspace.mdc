@@ -14,6 +14,10 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ```
 product-workspace/
+├── .cursor/
+│   ├── rules/         # Workspace behavior rules
+│   ├── skills/        # Stateless procedures (discovery, PRD, etc.)
+│   └── tools/         # Lifecycle-based capabilities (onboarding, etc.)
 ├── context/           # Core business context (source of truth)
 ├── resources/         # Raw inputs (L1: immutable, timestamped)
 │   ├── meetings/      # Meeting notes and transcripts
@@ -48,6 +52,8 @@ The workspace uses a three-layer memory architecture:
 
 When a user wants to do PM work, guide them to the appropriate action:
 
+### Skills (Stateless Procedures)
+
 | User Intent | Action | Skill |
 |-------------|--------|-------|
 | "How does this work?" / "Give me a tour" | Orient to workspace | `workspace-tour` |
@@ -61,6 +67,16 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
 
 Skills are located in `.cursor/skills/` and follow the Agent Skills standard.
+
+### Tools (Lifecycle-Based Capabilities)
+
+Tools are different from skills - they have phases, track progress over time, and eventually complete/deprecate.
+
+| User Intent | Action | Tool |
+|-------------|--------|------|
+| "I'm starting a new job" / "30/60/90 plan" | Start onboarding | `onboarding` |
+
+Tools are located in `.cursor/tools/`. When activated, tools create a project in `projects/active/` to track state and progress. See `.cursor/tools/README.md` for framework details.
 
 ## Before Starting Any Work
 
