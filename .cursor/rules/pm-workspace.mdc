@@ -14,14 +14,27 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ```
 product-workspace/
-├── context/           # Core context (source of truth)
+├── context/           # Core business context (source of truth)
+├── resources/         # Raw inputs (L1: immutable, timestamped)
+│   ├── meetings/      # Meeting notes and transcripts
+│   └── notes/         # Standalone notes
+├── memory/            # Extracted and synthesized knowledge
+│   ├── items/         # L2: Atomic facts (decisions, learnings, observations)
+│   └── summaries/     # L3: Evolving context (collaboration, sessions)
 ├── projects/          # Active and archived projects
+│   ├── index.md       # Project overview
 │   ├── active/        # Currently in progress (2-3 max)
 │   └── archive/       # Completed projects
-├── memory/            # Institutional knowledge
-├── scratchpad.md      # Quick capture space
+├── scratchpad.md      # Shared working space (user + agent)
 └── templates/         # Project, input, and output templates
 ```
+
+### Memory Layers
+
+The workspace uses a three-layer memory architecture:
+- **L1 Resources**: Raw, immutable inputs (meetings, notes) in `resources/`
+- **L2 Items**: Extracted atomic facts (decisions, learnings, observations) in `memory/items/`
+- **L3 Summaries**: Synthesized context (collaboration profile, sessions) in `memory/summaries/`
 
 ## Core Principles
 
@@ -79,16 +92,36 @@ projects/active/[project-name]/
 - Only `outputs/` contains final deliverables
 - Project status tracked in README.md
 
-## Quick Capture
+## Quick Capture & Scratchpad
 
-For ideas, notes, or TODOs that don't fit a project yet, add them to `scratchpad.md`. The scratchpad is a shared space between you and the user.
+The scratchpad (`scratchpad.md`) is a **shared working space** for both user and agent:
+- Add items when user says "let's punt on that" or "park it for later"
+- Agent can add ideas, questions, or follow-ups worth capturing
+- Review periodically and move items to proper homes
+
+For **timestamped permanent captures**, use `resources/notes/` instead.
 
 ## Logging to Memory
 
 After significant actions, log to the appropriate memory file:
-- **decisions.md**: Key decisions with rationale
-- **learnings.md**: Insights that inform future work
-- **activity-log.md**: What happened when
+
+**Items (atomic facts)**:
+- `memory/items/decisions.md`: Key decisions with rationale
+- `memory/items/learnings.md`: Insights that inform future work
+- `memory/items/agent-observations.md`: Observations about working with user
+
+**Summaries (synthesized)**:
+- `memory/summaries/collaboration.md`: How to work with user (synthesized from observations)
+- `memory/summaries/sessions.md`: Work session tracking for continuity
+
+**Activity**:
+- `memory/activity-log.md`: Chronological record of what happened when
+
+**Resources (raw inputs)**:
+- `resources/meetings/`: Meeting notes and transcripts
+- `resources/notes/`: Standalone notes
+
+See `.cursor/rules/agent-memory.mdc` for detailed guidance on when and how to update memory.
 
 ## Response Style
 

@@ -78,6 +78,23 @@ my-workspace/
 
 ---
 
+### Meeting Automation (Fathom Integration)
+*Added: 2026-02-03*
+
+Explore automating meeting capture via Fathom API/webhook:
+- Auto-add meeting summaries to `resources/meetings/` when meeting ends
+- Include both summary and transcript
+- Auto-populate meeting index
+- Could trigger post-meeting: extract decisions → `memory/items/decisions.md`
+
+**To investigate:**
+- Fathom API capabilities and authentication
+- Webhook setup for meeting end events
+- File format for transcripts (separate file or embedded?)
+- How to handle meeting metadata (attendees, duration, etc.)
+
+---
+
 ### MCP Integrations
 When MCP integrations are added, consider these use cases:
 
