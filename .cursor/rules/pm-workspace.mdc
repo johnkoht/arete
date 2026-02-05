@@ -14,6 +14,7 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ```
 product-workspace/
+├── .credentials/      # API keys and tokens (gitignored)
 ├── .cursor/
 │   ├── rules/         # Workspace behavior rules
 │   ├── skills/        # Stateless procedures (discovery, PRD, etc.)

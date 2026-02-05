@@ -133,26 +133,34 @@ Planned automation capabilities:
 
 ## Authentication
 
-**Credentials are never stored in the repository.**
+**Credentials are never stored in version control.**
 
 Authentication options:
 
-1. **Environment Variables** (recommended)
+1. **Local Credentials File** (recommended)
+   ```bash
+   # Copy the example and add your keys
+   cp .credentials/credentials.yaml.example .credentials/credentials.yaml
+   ```
+   
+   The `.credentials/` folder is gitignored. See `.credentials/README.md` for setup instructions.
+
+2. **Environment Variables**
    ```bash
    export FATHOM_API_KEY="your-key"
-   export SLACK_TOKEN="xoxb-your-token"
+   export SLACK_BOT_TOKEN="xoxb-your-token"
    ```
 
-2. **External Config File**
+3. **External Config File**
    ```yaml
-   # ~/.arete/credentials.yaml (gitignored location)
+   # ~/.arete/credentials.yaml (outside workspace)
    fathom:
      api_key: "your-key"
    slack:
-     token: "xoxb-your-token"
+     bot_token: "xoxb-your-token"
    ```
 
-3. **MCP Servers** (where available)
+4. **MCP Servers** (where available)
    Some integrations use MCP servers that handle their own auth.
 
 ## MCP Integration

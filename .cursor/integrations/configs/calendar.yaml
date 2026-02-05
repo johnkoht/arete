@@ -1,116 +1,124 @@
 # Calendar Integration
-# Sync with Google Calendar or Outlook for meeting context and scheduling
-# Supports both read (upcoming meetings) and write (create events)
+# Supports local Apple Calendar (macOS) or cloud providers (Google/Outlook)
 
 # === Identity ===
 name: calendar
 display_name: Calendar
 type: calendar
-status: inactive  # Change to 'active' after configuring
+status: inactive  # Change to 'active' after setup
 
 # === Provider ===
-# Uncomment the provider you use
-provider: google    # google | outlook
-# provider: outlook
+# Local access (no OAuth required)
+provider: apple       # apple | google | outlook
+
+# === Provider-Specific Setup ===
+#
+# APPLE CALENDAR (macOS) - Recommended
+#   No API keys needed! Uses local Calendar.app data.
+#   
+#   Option 1: icalBuddy CLI (easiest)
+#     brew install ical-buddy
+#     Test: icalBuddy -n eventsToday
+#   
+#   Option 2: AppleScript
+#     Built into macOS, no install needed
+#   
+#   Option 3: Direct file access
+#     Calendar data at: ~/Library/Calendars/
+#
+# GOOGLE CALENDAR
+#   Requires OAuth setup in Google Cloud Console
+#   Store credentials in .credentials/credentials.yaml
+#
+# OUTLOOK CALENDAR  
+#   Requires Azure AD app registration
+#   Store credentials in .credentials/credentials.yaml
 
 # === Capabilities ===
 capabilities:
-  pull: true        # Can fetch upcoming/past events
-  push: true        # Can create and update events
-  seed: true        # Can backfill historical events
-  webhook: false    # Real-time updates (requires setup)
+  pull: true        # Read events from calendar
+  push: true        # Create/update events (Apple: via AppleScript)
+  seed: true        # Backfill historical events
+  webhook: false    # No real-time push for local access
 
-# === Authentication ===
-auth:
-  type: oauth
-  # 
-  # For Google Calendar:
-  #   1. Enable Calendar API in Google Cloud Console
-  #   2. Create OAuth credentials
-  #   3. Store in ~/.arete/credentials.yaml:
-  #      calendar:
-  #        provider: google
-  #        client_id: "your-client-id"
-  #        client_secret: "your-client-secret"
-  #        refresh_token: "your-refresh-token"
-  #
-  # For Outlook:
-  #   1. Register app in Azure AD
-  #   2. Store credentials similarly
-  #
-  # Alternative: Use MCP server for Google Calendar
-  #   - Handles auth automatically
-  #   - npm install @anthropic/mcp-server-google-calendar
+# === Apple Calendar Settings ===
+apple:
+  method: icalbuddy   # icalbuddy | applescript | files
+  
+  # icalBuddy options (if using icalbuddy method)
+  icalbuddy:
+    # Install: brew install ical-buddy
+    # Docs: https://hasseg.org/icalBuddy/
+    calendars: []           # Empty = all calendars, or list specific names
+    exclude_calendars:      # Calendars to skip
+      - "Birthdays"
+      - "Holidays"
+    include_todos: false
+  
+  # AppleScript options (if using applescript method)
+  applescript:
+    calendar_app: "Calendar"  # or "Fantastical" if you use that
 
 # === Sync Settings ===
 sync:
-  frequency: manual       # manual | daily | realtime
+  frequency: manual       # manual | daily
   last_sync: null
   
-  # Pull settings
+  # Pull window
   pull_window:
     past_days: 7          # How far back to look
     future_days: 14       # How far ahead to look
 
 # === Seed Settings ===
 seed:
-  supported_range: 365d   # Google: up to 2 years, Outlook: varies
+  supported_range: 365d   # Apple Calendar keeps extensive history
   default_range: 60d
   filters_available:
     - date_range
-    - attendees
-    - calendars           # Specific calendar IDs
-    - event_types         # meetings, focus time, etc.
+    - calendars
+    - attendee_count
 
 # === Data Mapping ===
 mapping:
   destination: resources/meetings/
   naming: "{date}-{title_slug}.md"
-  template: templates/inputs/meeting-note.md  # Use standard meeting template
+  template: templates/inputs/meeting-note.md
 
 # === Field Mapping ===
 fields:
-  title: event.summary
-  date: event.start.dateTime
-  duration: calculated    # From start/end times
+  title: event.title
+  date: event.start_date
+  duration: calculated      # From start/end
   attendees: event.attendees
-  agenda: event.description
   location: event.location
-  organizer: event.organizer
-  recurring: event.recurrence
-  meeting_link: event.conferenceData.entryPoints  # Zoom/Meet link
+  notes: event.notes        # Event description/agenda
+  url: event.url            # Video call link if present
+  calendar: event.calendar_name
+  recurring: event.recurrence_rule
 
 # === Filtering Defaults ===
 defaults:
   min_attendees: 2              # Skip events with just you
-  exclude_all_day: true         # Skip all-day events (usually not meetings)
-  exclude_declined: true        # Skip events you declined
+  min_duration: 10              # Skip events under 10 minutes
+  exclude_all_day: true         # Skip all-day events
   exclude_patterns:
     - "Focus Time"
     - "Lunch"
     - "Blocked"
     - "OOO"
     - "PTO"
-  calendars: []                 # Empty = all calendars, or specify IDs
+    - "Travel"
 
-# === Push Settings ===
+# === Push Settings (AppleScript) ===
 push:
-  default_calendar: primary     # Calendar ID for new events
-  default_duration: 30          # Minutes
-  include_prep_notes: true      # Add agenda from Areté to event description
-  reminder_minutes: 10          # Default reminder
-
-# === MCP Server ===
-# If using MCP for calendar access
-mcp:
-  enabled: false
-  server: "@anthropic/mcp-server-google-calendar"
-  # When enabled, auth is handled by the MCP server
+  default_calendar: ""      # Calendar name for new events (empty = default)
+  default_duration: 30      # Minutes
+  add_video_link: false     # Auto-add Meet/Zoom link
 
 # === Rate Limits ===
 rate_limits:
-  requests_per_minute: 100
-  batch_size: 50
+  requests_per_minute: 60   # Local access is fast
+  batch_size: 100
 
 # === Error State ===
 error: null

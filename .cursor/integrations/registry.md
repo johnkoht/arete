@@ -19,10 +19,11 @@ Track available integrations, their status, and configuration.
 |-------------|------|--------|--------------|--------|
 | Fathom | Meeting Recorder | Available | Pull, Seed | [fathom.yaml](configs/fathom.yaml) |
 | Granola | Meeting Recorder | Planned | Pull, Seed | - |
-| Google Calendar | Calendar | Available | Pull, Push | [calendar.yaml](configs/calendar.yaml) |
+| Apple Calendar | Calendar | Available | Pull, Push, Seed | [calendar.yaml](configs/calendar.yaml) |
+| Google Calendar | Calendar | Planned | Pull, Push | - |
 | Outlook Calendar | Calendar | Planned | Pull, Push | - |
 | Slack | Communication | Planned | Pull, Push | - |
-| Email (Gmail) | Communication | Planned | Pull | - |
+| Apple Mail | Communication | Planned | Pull | - |
 
 ## Project Management
 

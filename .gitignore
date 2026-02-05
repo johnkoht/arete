@@ -23,6 +23,14 @@ notion-export/
 .env.local
 .env.*.local
 
+# Local credentials (API keys, tokens, secrets)
+# The folder and templates are committed; only actual credential files are ignored
+.credentials/credentials.yaml
+.credentials/credentials.yml
+.credentials/*.json
+.credentials/*.key
+.credentials/*.pem
+
 # Personal notes that shouldn't be committed
 # (uncomment if you want to keep local-only notes)
 # personal-notes.md

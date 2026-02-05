@@ -12,23 +12,17 @@ Areté is a Product Management workspace for Cursor that helps you:
 
 ```
 arete/
+├── .credentials/            # API keys and tokens (gitignored)
+│   ├── README.md
+│   └── credentials.yaml.example
+│
 ├── .cursor/
 │   ├── rules/               # Cursor rules (always-on behavior)
-│   │   ├── pm-workspace.mdc     # Main workspace behavior
-│   │   ├── project-management.mdc
-│   │   ├── context-management.mdc
-│   │   └── qmd-search.mdc
-│   │
-│   └── skills/              # Agent Skills (on-demand workflows)
-│       ├── create-prd/
-│       ├── discovery/
-│       ├── competitive-analysis/
-│       ├── construct-roadmap/
-│       ├── synthesize/
-│       ├── finalize-project/
-│       ├── workspace-tour/
-│       ├── periodic-review/
-│       └── generate-mockup/
+│   ├── skills/              # Agent Skills (on-demand workflows)
+│   ├── tools/               # Lifecycle-based tools (onboarding, seeding)
+│   └── integrations/        # External tool connections
+│       ├── configs/         # Integration configurations
+│       └── registry.md      # Integration status tracking
 │
 ├── context/                 # Core context (source of truth)
 │   ├── business-overview.md
@@ -44,9 +38,12 @@ arete/
 │   └── archive/             # Completed projects
 │
 ├── memory/                  # Institutional knowledge
-│   ├── decisions.md         # Decision log
-│   ├── learnings.md         # Insights and learnings
+│   ├── items/               # Atomic facts (decisions, learnings)
+│   ├── summaries/           # Synthesized context
 │   └── activity-log.md      # Activity history
+│
+├── scripts/                 # Setup and utility scripts
+│   └── check-setup.sh       # Verify dependencies
 │
 ├── scratchpad.md            # Quick capture space
 │
@@ -57,6 +54,20 @@ arete/
 ```
 
 ## Quick Start
+
+### 0. Check Dependencies
+
+Run the setup check to see what's installed and what's optional:
+
+```bash
+./scripts/check-setup.sh
+```
+
+To install all missing optional tools:
+
+```bash
+./scripts/check-setup.sh --install
+```
 
 ### 1. Populate Context (Priority Order)
 
