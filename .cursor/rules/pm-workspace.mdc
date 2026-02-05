@@ -17,7 +17,8 @@ product-workspace/
 ├── .cursor/
 │   ├── rules/         # Workspace behavior rules
 │   ├── skills/        # Stateless procedures (discovery, PRD, etc.)
-│   └── tools/         # Lifecycle-based capabilities (onboarding, etc.)
+│   ├── tools/         # Lifecycle-based capabilities (onboarding, etc.)
+│   └── integrations/  # External tool connections (calendar, Fathom, etc.)
 ├── context/           # Core business context (source of truth)
 ├── resources/         # Raw inputs (L1: immutable, timestamped)
 │   ├── meetings/      # Meeting notes and transcripts
@@ -65,6 +66,7 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Visualize / prototype this" | Generate mockup | `generate-mockup` |
 | "Finish this project" | Finalize and archive | `finalize-project` |
 | "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
+| "Sync my meetings" / "Pull from Fathom" | Manual integration sync | `sync` |
 
 Skills are located in `.cursor/skills/` and follow the Agent Skills standard.
 
@@ -75,8 +77,25 @@ Tools are different from skills - they have phases, track progress over time, an
 | User Intent | Action | Tool |
 |-------------|--------|------|
 | "I'm starting a new job" / "30/60/90 plan" | Start onboarding | `onboarding` |
+| "Seed my context" / "Import meeting history" | Bootstrap from integrations | `seed-context` |
 
 Tools are located in `.cursor/tools/`. When activated, tools create a project in `projects/active/` to track state and progress. See `.cursor/tools/README.md` for framework details.
+
+### Integrations
+
+Integrations connect Areté to external tools (calendar, meeting recorders, Slack, etc.) to automate data flow.
+
+| User Intent | Action | Resource |
+|-------------|--------|----------|
+| "What integrations are available?" | View integration status | `.cursor/integrations/registry.md` |
+| "Configure Fathom" / "Set up calendar" | Configure integration | `.cursor/integrations/configs/` |
+
+Integrations support three data flows:
+- **Pull**: Read data from external systems (meetings, events, messages)
+- **Push**: Write updates to external systems (Slack posts, calendar events)
+- **Seed**: Bulk historical import to bootstrap context
+
+See `.cursor/integrations/README.md` for framework details.
 
 ## Before Starting Any Work
 

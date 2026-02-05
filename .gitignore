@@ -7,6 +7,17 @@ Thumbs.db
 *.swo
 *~
 
+# Note-taking apps
+.obsidian/
+.trash/
+.logseq/
+logseq/bak/
+.stversions/
+*.syncthing*
+
+# Notion exports (if accidentally placed here)
+notion-export/
+
 # Environment files (in case someone adds them)
 .env
 .env.local

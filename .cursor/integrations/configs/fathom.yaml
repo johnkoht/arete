@@ -1,0 +1,88 @@
+# Fathom Integration
+# AI-powered meeting recorder that captures transcripts, summaries, and action items
+# https://fathom.video
+
+# === Identity ===
+name: fathom
+display_name: Fathom
+type: meeting-recorder
+status: inactive  # Change to 'active' after configuring credentials
+
+# === Capabilities ===
+capabilities:
+  pull: true        # Can fetch meetings, transcripts, summaries
+  push: false       # Fathom is read-only
+  seed: true        # Supports historical backfill
+  webhook: false    # No webhook support currently
+
+# === Authentication ===
+auth:
+  type: api_key
+  # Get your API key from: https://fathom.video/settings/api
+  # 
+  # Store credentials outside repo:
+  #   Option 1 - Environment variable:
+  #     export FATHOM_API_KEY="your-api-key"
+  #   
+  #   Option 2 - Credentials file (~/.arete/credentials.yaml):
+  #     fathom:
+  #       api_key: "your-api-key"
+
+# === Sync Settings ===
+sync:
+  frequency: manual       # manual | daily | after_meeting
+  last_sync: null         # Updated automatically after sync
+
+# === Seed Settings ===
+seed:
+  supported_range: 90d    # Fathom retains ~90 days of meetings
+  default_range: 30d      # Default for quick seed
+  filters_available:
+    - date_range          # Filter by start/end date
+    - participants        # Filter by attendee email
+    - keywords            # Filter by title keywords
+    - min_duration        # Skip very short meetings
+
+# === Data Mapping ===
+mapping:
+  destination: resources/meetings/
+  naming: "{date}-{title_slug}.md"    # e.g., 2026-02-05-product-roadmap-review.md
+  template: templates/inputs/integration-meeting.md
+
+# === Field Mapping ===
+# How Fathom data maps to template fields
+fields:
+  title: meeting.title
+  date: meeting.date                  # ISO format
+  duration: meeting.duration_minutes
+  attendees: meeting.participants     # Array of names/emails
+  summary: meeting.ai_summary
+  key_points: meeting.highlights      # Array of key moments
+  action_items: meeting.action_items  # Array of tasks
+  decisions: meeting.decisions        # If available
+  transcript: meeting.transcript      # Full text
+  meeting_id: meeting.id
+  recording_link: meeting.recording_url
+  source_link: meeting.fathom_url
+
+# === Filtering Defaults ===
+defaults:
+  min_duration: 5                     # Skip meetings under 5 minutes
+  exclude_patterns:                   # Skip these meeting types
+    - "Focus Time"
+    - "Blocked"
+    - "OOO"
+  include_transcript: true            # Include full transcript in import
+
+# === Rate Limits ===
+rate_limits:
+  requests_per_minute: 60
+  batch_size: 10                      # Items per batch request
+
+# === Error State ===
+# Populated automatically if sync fails
+error: null
+# error:
+#   code: auth_expired
+#   message: "API key invalid or expired"
+#   timestamp: 2026-02-05T10:00:00Z

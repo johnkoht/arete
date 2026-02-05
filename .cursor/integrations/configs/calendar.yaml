@@ -1,0 +1,116 @@
+# Calendar Integration
+# Sync with Google Calendar or Outlook for meeting context and scheduling
+# Supports both read (upcoming meetings) and write (create events)
+
+# === Identity ===
+name: calendar
+display_name: Calendar
+type: calendar
+status: inactive  # Change to 'active' after configuring
+
+# === Provider ===
+# Uncomment the provider you use
+provider: google    # google | outlook
+# provider: outlook
+
+# === Capabilities ===
+capabilities:
+  pull: true        # Can fetch upcoming/past events
+  push: true        # Can create and update events
+  seed: true        # Can backfill historical events
+  webhook: false    # Real-time updates (requires setup)
+
+# === Authentication ===
+auth:
+  type: oauth
+  # 
+  # For Google Calendar:
+  #   1. Enable Calendar API in Google Cloud Console
+  #   2. Create OAuth credentials
+  #   3. Store in ~/.arete/credentials.yaml:
+  #      calendar:
+  #        provider: google
+  #        client_id: "your-client-id"
+  #        client_secret: "your-client-secret"
+  #        refresh_token: "your-refresh-token"
+  #
+  # For Outlook:
+  #   1. Register app in Azure AD
+  #   2. Store credentials similarly
+  #
+  # Alternative: Use MCP server for Google Calendar
+  #   - Handles auth automatically
+  #   - npm install @anthropic/mcp-server-google-calendar
+
+# === Sync Settings ===
+sync:
+  frequency: manual       # manual | daily | realtime
+  last_sync: null
+  
+  # Pull settings
+  pull_window:
+    past_days: 7          # How far back to look
+    future_days: 14       # How far ahead to look
+
+# === Seed Settings ===
+seed:
+  supported_range: 365d   # Google: up to 2 years, Outlook: varies
+  default_range: 60d
+  filters_available:
+    - date_range
+    - attendees
+    - calendars           # Specific calendar IDs
+    - event_types         # meetings, focus time, etc.
+
+# === Data Mapping ===
+mapping:
+  destination: resources/meetings/
+  naming: "{date}-{title_slug}.md"
+  template: templates/inputs/meeting-note.md  # Use standard meeting template
+
+# === Field Mapping ===
+fields:
+  title: event.summary
+  date: event.start.dateTime
+  duration: calculated    # From start/end times
+  attendees: event.attendees
+  agenda: event.description
+  location: event.location
+  organizer: event.organizer
+  recurring: event.recurrence
+  meeting_link: event.conferenceData.entryPoints  # Zoom/Meet link
+
+# === Filtering Defaults ===
+defaults:
+  min_attendees: 2              # Skip events with just you
+  exclude_all_day: true         # Skip all-day events (usually not meetings)
+  exclude_declined: true        # Skip events you declined
+  exclude_patterns:
+    - "Focus Time"
+    - "Lunch"
+    - "Blocked"
+    - "OOO"
+    - "PTO"
+  calendars: []                 # Empty = all calendars, or specify IDs
+
+# === Push Settings ===
+push:
+  default_calendar: primary     # Calendar ID for new events
+  default_duration: 30          # Minutes
+  include_prep_notes: true      # Add agenda from Areté to event description
+  reminder_minutes: 10          # Default reminder
+
+# === MCP Server ===
+# If using MCP for calendar access
+mcp:
+  enabled: false
+  server: "@anthropic/mcp-server-google-calendar"
+  # When enabled, auth is handled by the MCP server
+
+# === Rate Limits ===
+rate_limits:
+  requests_per_minute: 100
+  batch_size: 50
+
+# === Error State ===
+error: null
