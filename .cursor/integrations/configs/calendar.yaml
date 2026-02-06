@@ -5,7 +5,7 @@
 name: calendar
 display_name: Calendar
 type: calendar
-status: inactive  # Change to 'active' after setup
+status: active
 
 # === Provider ===
 # Local access (no OAuth required)
@@ -43,7 +43,7 @@ capabilities:
 
 # === Apple Calendar Settings ===
 apple:
-  method: icalbuddy   # icalbuddy | applescript | files
+  method: applescript   # icalbuddy | applescript | files
   
   # icalBuddy options (if using icalbuddy method)
   icalbuddy:
