@@ -131,6 +131,15 @@ You are a Task subagent completing ONE task from an Areté feature PRD.
 
 ## Context
 
+### About Areté
+**READ THIS FIRST**: `AGENTS.md` in the repository root contains comprehensive architecture, patterns, and context about what Areté is, who uses it, and how systems work together.
+
+Key points:
+- Areté is a PM workspace tool for context, workflows, and institutional memory
+- End users are Product Managers working at tech companies
+- Build system (`.cursor/build/`) vs Product (shipped to users) - keep these separate
+- Tech stack: TypeScript (NodeNext), Node.js, ES modules with `.js` extensions
+
 ### Codebase
 - **Tech stack**: TypeScript, Node.js, tsx test runner
 - **Module system**: NodeNext (use .js extensions for imports)

@@ -1,0 +1,99 @@
+# Progress Log - 2026-02-06
+
+Test run for autonomous agent loop system.
+
+
+## Task task-1: Add getBuildVersion utility function
+Completed: 2026-02-06T20:45:00Z
+
+### What Changed
+- Modified src/core/utils.ts:
+  - Added imports for fs.readFileSync, path, and url modules
+  - Added getBuildVersion() function that reads version from package.json
+  - Added __filename and __dirname setup for ES modules
+  - Exported getBuildVersion in both named export and default object
+
+### Learnings
+- The codebase uses NodeNext module resolution with ES modules
+- Need to use fileURLToPath and dirname to get __dirname in ES modules
+- All utility functions follow pattern: JSDoc comment, export function, typed parameters/return
+- Default export object at bottom includes all utility functions
+- Git is aliased to 'hub' in this environment - use 'command git' to bypass
+
+### Gotchas
+- Git commit initially failed due to 'git' being aliased to 'hub' 
+- Solution: Use 'command git commit' instead of 'git commit'
+- package.json is two directories up from src/core/utils.ts
+
+### Notes for Future Tasks
+- Always use 'command git' for git operations to avoid hub alias issues
+- Quality checks (typecheck + test) should run before committing
+- Follow existing patterns in the file being modified
+- ES modules require explicit .js extensions in imports (NodeNext)
+
+---
+
+## Task task-2: Write tests for getBuildVersion
+Completed: 2026-02-06T21:15:00Z
+
+### What Changed
+- Modified test/core/utils.test.ts:
+  - Added import for getBuildVersion function
+  - Added new describe block for getBuildVersion tests
+  - Added 4 test cases:
+    1. Verifies function returns a string
+    2. Verifies returned string is non-empty
+    3. Verifies format matches semver pattern (x.y.z with optional pre-release/build metadata)
+    4. Verifies version has at least 3 parts (major.minor.patch)
+
+### Learnings
+- Test patterns follow AAA (Arrange-Act-Assert) structure
+- Tests use node:test describe/it blocks with node:assert/strict
+- Semver regex pattern supports optional pre-release and build metadata
+- All tests follow existing naming convention: "does what it should do"
+- Tests import functions with .js extensions (NodeNext resolution)
+
+### Quality Checks
+- npm run typecheck: PASSED (no type errors)
+- npm test: PASSED (76 tests total, all passing)
+- All 4 new getBuildVersion tests passing
+
+### Notes for Future Tasks
+- Always run both typecheck and test before committing
+- Follow existing test patterns in the file (describe blocks, assertions)
+- Use descriptive error messages in assertions (helps debugging)
+- Command git works reliably for commit operations
+
+---
+
+## Task task-3: Document the utility
+Completed: 2026-02-06T21:45:00Z
+
+### What Changed
+- Created src/core/AGENTS.md:
+  - Added comprehensive documentation for getBuildVersion function
+  - Included purpose, when to use/not use, signature, and return type
+  - Added three usage examples (basic, CLI command, with other utilities)
+  - Documented implementation details and error handling
+  - Added testing information and related functions section
+
+### Learnings
+- AGENTS.md files provide AI-readable documentation for agents
+- Documentation should include purpose, usage examples, and when NOT to use
+- Place AGENTS.md files near the code they document (src/core/AGENTS.md for src/core/utils.ts)
+- Include both "when to use" and "when NOT to use" guidance for clarity
+- Usage examples should show real-world patterns (basic, CLI, combined with other functions)
+- Document error conditions even for simple utilities
+
+### Quality Checks
+- npm run typecheck: PASSED (no type errors)
+- npm test: PASSED (76 tests total, all passing)
+- Markdown file requires no compilation or type checking
+
+### Notes for Future Tasks
+- AGENTS.md is a documentation file, so quality checks focus on code, not docs
+- Documentation task is simpler than code tasks - no new tests needed
+- Follow markdown best practices: clear headings, code blocks with language tags
+- Document implementation details for maintainability
+
+---

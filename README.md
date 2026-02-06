@@ -123,8 +123,15 @@ Projects are however YOU want to organize your work. Not everything needs a proj
 
 ## Documentation
 
+### For Users
 - `SETUP.md` - Detailed setup, QMD configuration, troubleshooting
-- `.cursor/rules/` - All Cursor rules and skills
+- `.cursor/rules/` - Cursor rules for PM workflows
+- `.cursor/skills/` - Available PM skills and workflows
+
+### For Developers (Areté Maintainers)
+- `AGENTS.md` - Architecture, patterns, and context for AI agents building Areté
+- `.cursor/build/` - Internal build system and autonomous development tools
+- `.cursor/build/MEMORY.md` - Build history and architectural decisions
 
 ## Contributing
 

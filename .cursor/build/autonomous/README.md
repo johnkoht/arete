@@ -19,6 +19,14 @@ Inspired by [Ralph](https://github.com/snarktank/ralph), adapted for Cursor-nati
 
 Areté maintainers working in this repository to build new Areté features.
 
+## Prerequisites
+
+Before using the autonomous system:
+
+1. **Read `AGENTS.md`** (repository root) - Contains architecture, patterns, and context about Areté
+2. **Understand the codebase** - TypeScript, NodeNext, ES modules with `.js` extensions
+3. **Have tests passing** - Run `npm test` and `npm run typecheck` before starting
+
 ## Quick Start
 
 ### 1. Create a PRD for the Feature
@@ -81,6 +89,32 @@ graph TD
 ```
 
 ## Key Concepts
+
+### Context Sources for Subagents
+
+Each subagent has access to multiple sources of knowledge:
+
+1. **AGENTS.md** (repository root) - **Read this first!**
+   - Complete architecture and system overview
+   - What Areté is, who uses it, and why it exists
+   - High-level features, systems, and patterns
+   - Coding conventions, common gotchas
+   - Future concepts and design decisions
+
+2. **progress.txt** - Learnings from previous tasks in this PRD
+   - Files changed, patterns discovered
+   - Implementation decisions and gotchas
+   - Advice for subsequent tasks
+
+3. **AGENTS.md files in codebase** - Domain-specific documentation
+   - Placed near the code they document
+   - Provide AI-readable context for specific systems
+
+4. **PRD goal and task description** - Feature-specific context
+   - High-level objective
+   - Detailed task requirements and acceptance criteria
+
+This multi-layer context ensures each subagent has both architectural understanding and task-specific knowledge.
 
 ### Fresh Context Per Task
 
