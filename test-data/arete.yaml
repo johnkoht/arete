@@ -1,0 +1,2 @@
+# Config snippet for test data — merged into workspace arete.yaml on seed
+internal_email_domain: "acme.com"
