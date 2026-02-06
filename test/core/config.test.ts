@@ -100,6 +100,14 @@ describe('config', () => {
       assert.equal(config.settings.memory.learnings.prompt_before_save, true);
     });
 
+    it('returns internal_email_domain when present in arete.yaml', () => {
+      const yamlContent = `internal_email_domain: acme.com\n`;
+      writeFileSync(join(tmpDir, 'arete.yaml'), yamlContent);
+
+      const config = loadConfig(tmpDir);
+      assert.equal(config.internal_email_domain, 'acme.com');
+    });
+
     it('handles malformed YAML gracefully', () => {
       writeFileSync(join(tmpDir, 'arete.yaml'), ':\n  bad yaml: [[[');
       // Should not throw, falls back to defaults

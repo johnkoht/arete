@@ -8,6 +8,8 @@ export interface AreteConfig {
   version: string | null;
   source: string;
   created?: string;
+  /** Internal email domain for classifying meeting attendees (e.g. "acme.com") */
+  internal_email_domain?: string;
   skills: {
     core: string[];
     overrides: string[];
