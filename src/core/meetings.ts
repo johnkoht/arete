@@ -21,6 +21,9 @@ export interface MeetingForSave {
   action_items: string[];
   highlights: string[];
   attendees?: Array<{ name?: string | null; email?: string | null } | string>;
+  attendee_ids?: string[];
+  company?: string;
+  pillar?: string;
   url: string;
   share_url?: string;
 }
@@ -81,7 +84,33 @@ export function meetingFilename(meeting: MeetingForSave): string {
 }
 
 /**
+ * Build YAML frontmatter block for meeting files.
+ */
+function buildMeetingFrontmatter(
+  meeting: MeetingForSave,
+  integration: string
+): string {
+  const attendeesStr = formatAttendees(meeting.attendees ?? []);
+  const attendeeIds = meeting.attendee_ids ?? [];
+  const company = meeting.company ?? '';
+  const pillar = meeting.pillar ?? '';
+  const lines = [
+    '---',
+    `title: "${meeting.title.replace(/"/g, '\\"')}"`,
+    `date: "${meeting.date}"`,
+    `source: "${integration}"`,
+    `attendees: "${attendeesStr.replace(/"/g, '\\"')}"`,
+    `attendee_ids: [${attendeeIds.map((s) => `"${s}"`).join(', ')}]`,
+    `company: "${company.replace(/"/g, '\\"')}"`,
+    `pillar: "${pillar.replace(/"/g, '\\"')}"`,
+    '---',
+  ];
+  return lines.join('\n');
+}
+
+/**
  * Render the meeting markdown from the template.
+ * Prepends YAML frontmatter before the template body.
  */
 function renderMeetingTemplate(
   meeting: MeetingForSave,
@@ -118,7 +147,8 @@ function renderMeetingTemplate(
   for (const [k, v] of Object.entries(vars)) {
     template = template.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
   }
-  return template;
+  const frontmatter = buildMeetingFrontmatter(meeting, integration);
+  return frontmatter + '\n\n' + template;
 }
 
 /**

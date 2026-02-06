@@ -62,6 +62,30 @@ describe('saveMeetingFile', () => {
     assert.ok(content.includes('Manual'));
   });
 
+  it('outputs YAML frontmatter with title, date, source, attendees, attendee_ids, company, pillar', () => {
+    const meeting: MeetingForSave = {
+      ...minimalMeeting,
+      attendees: [{ name: 'Jane Doe', email: 'jane@acme.com' }],
+      attendee_ids: ['jane-doe'],
+      company: 'Acme',
+      pillar: 'Growth',
+    };
+    const path = saveMeetingFile(meeting, tmpDir, null, {
+      integration: 'Fathom',
+    });
+    assert.ok(path);
+    const content = readFileSync(path!, 'utf8');
+    assert.ok(content.startsWith('---'), 'starts with frontmatter');
+    assert.ok(content.includes('title: "Product Review"'));
+    assert.ok(content.includes('date: "2026-02-05"'));
+    assert.ok(content.includes('source: "Fathom"'));
+    assert.ok(content.includes('attendees: "Jane Doe"'));
+    assert.ok(content.includes('attendee_ids: ["jane-doe"]'));
+    assert.ok(content.includes('company: "Acme"'));
+    assert.ok(content.includes('pillar: "Growth"'));
+    assert.ok(content.includes('---\n\n'), 'frontmatter ends before body');
+  });
+
   it('returns null when file exists and force is false', () => {
     saveMeetingFile(minimalMeeting, tmpDir, null);
     const path2 = saveMeetingFile(minimalMeeting, tmpDir, null, { force: false });
