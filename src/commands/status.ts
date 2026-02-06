@@ -105,6 +105,7 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
       context: existsSync(paths.context),
       memory: existsSync(paths.memory),
       projects: existsSync(paths.projects),
+      people: existsSync(paths.people),
       resources: existsSync(paths.resources)
     }
   };

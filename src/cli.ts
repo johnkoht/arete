@@ -29,6 +29,11 @@ import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
 import { pullCommand } from './commands/pull.js';
 import { meetingAddCommand } from './commands/meeting.js';
+import {
+  peopleListCommand,
+  peopleShowCommand,
+  peopleIndexCommand
+} from './commands/people.js';
 
 // Configure program
 program
@@ -181,6 +186,31 @@ meetingCmd
   .option('--stdin', 'Read JSON from stdin')
   .option('--json', 'Output as JSON')
   .action((opts) => meetingAddCommand(opts));
+
+// People management
+const peopleCmd = program
+  .command('people')
+  .description('List and show people (internal, customers, users)');
+
+peopleCmd
+  .command('list')
+  .description('List people in the workspace')
+  .option('--category <name>', 'Filter: internal, customers, or users')
+  .option('--json', 'Output as JSON')
+  .action((opts) => peopleListCommand(opts));
+
+peopleCmd
+  .command('show <slug-or-email>')
+  .description('Show a person by slug or email')
+  .option('--category <name>', 'Category when looking up by slug')
+  .option('--json', 'Output as JSON')
+  .action((slugOrEmail, opts) => peopleShowCommand(slugOrEmail, opts));
+
+peopleCmd
+  .command('index')
+  .description('Regenerate people/index.md from person files')
+  .option('--json', 'Output as JSON')
+  .action((opts) => peopleIndexCommand(opts));
 
 // Parse and execute
 program.parse();

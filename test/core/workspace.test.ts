@@ -101,6 +101,7 @@ describe('workspace', () => {
       assert.equal(paths.memory, join('/test/workspace', 'memory'));
       assert.equal(paths.projects, join('/test/workspace', 'projects'));
       assert.equal(paths.resources, join('/test/workspace', 'resources'));
+      assert.equal(paths.people, join('/test/workspace', 'people'));
       assert.equal(paths.credentials, join('/test/workspace', '.credentials'));
       assert.equal(paths.templates, join('/test/workspace', 'templates'));
     });

@@ -81,6 +81,9 @@ A **structured workspace** with:
 - `arete status` - Check workspace health
 - `arete pull` - Sync from integrations
 - `arete seed` - Import historical data
+- `arete people list` - List people (optional `--category internal|customers|users`)
+- `arete people show <slug|email>` - Show a person
+- `arete people index` - Regenerate people/index.md
 
 ## Architecture
 
@@ -105,6 +108,7 @@ arete/
 ├── context/             # USER CONTEXT (workspace-specific)
 ├── projects/            # USER PROJECTS (active and archived)
 ├── memory/              # USER MEMORY (decisions, learnings)
+├── people/              # PEOPLE (internal, customers, users)
 ├── resources/           # USER RESOURCES (meetings, notes)
 └── templates/           # Templates for projects and outputs
 ```
@@ -185,7 +189,30 @@ findWorkspaceRoot(startDir: string): string | null
 
 **Shipped**: Skills are bundled with npm package for end users
 
-### 5. Build/Development System
+### 5. People System
+
+**Purpose**: Track people (internal colleagues, customers, users) with index and detail views; link to meetings and projects via email or slug.
+
+**Storage**: `people/{internal|customers|users}/{slug}.md` with optional YAML frontmatter (name, email, role, company, team, category).
+
+**Index**: `people/index.md` — table of all people; regenerate with `arete people index`.
+
+**Service**: `src/core/people.ts`
+```typescript
+listPeople(paths, options?: { category }): Person[]
+getPersonBySlug(paths, category, slug): Person | null
+getPersonByEmail(paths, email): Person | null
+updatePeopleIndex(paths): void
+slugifyPersonName(name): string
+```
+
+**Types**: `Person` (slug, name, email?, role?, company?, team?, category) and `PersonCategory` ('internal' | 'customers' | 'users') in `src/types.ts`.
+
+**Linking**: Meetings can list `attendee_ids: [slug]` in frontmatter (optional); projects can list `stakeholders: [slug]`. Lookup by email matches person files for "Recent meetings" style features.
+
+**CLI**: `arete people list`, `arete people show <slug-or-email>`, `arete people index`.
+
+### 6. Build/Development System
 
 **Location**: `.cursor/build/` (NEVER shipped to users)
 
@@ -228,12 +255,6 @@ findWorkspaceRoot(startDir: string): string | null
 **Tests**: Mirror `src/` structure in `test/`, use `*.test.ts` naming
 
 ## Future Concepts (Not Yet Implemented)
-
-### People System
-**Purpose**: Track attendees, stakeholders, collaborators  
-**Location**: Planned for `src/core/people.ts`  
-**Structure**: `{ name, email?, role?, company? }`  
-**Links**: Connect to meetings, projects, decisions
 
 ### Insights System
 **Purpose**: Extract patterns and themes from meetings/notes  

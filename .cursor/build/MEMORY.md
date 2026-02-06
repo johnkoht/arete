@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [People system](entries/2026-02-06_people-system.md) — People tracking (internal, customers, users); people/ dirs, index, core module, CLI (list/show/index); linking conventions for meetings and projects.
 - 2026-02-06 [Autonomous agent loop system](entries/2026-02-06_autonomous-agent-loop.md) — Cursor-native autonomous execution for Areté development; prd-to-json and execute-prd skills; fresh Task subagents per task; progress tracking.
 - 2026-02-06 [Shared meetings service and index update](entries/2026-02-06_meetings-service-and-index.md) — Core meetings module; Fathom refactor; arete meeting add; save-meeting skill; index auto-update on save.
 - 2026-02-05 [Fathom Node migration & API URL fix](entries/2026-02-05_fathom-node-migration.md) — Fathom integration moved from Python to Node; External API base URL and URL() fix; fetch flow uses list-with-includes.

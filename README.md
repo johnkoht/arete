@@ -10,6 +10,7 @@ A structured system for PM work:
 - **Context Management** - Maintain business and product context as source of truth
 - **Project-Based Workflows** - Discovery, PRDs, competitive analysis, roadmaps
 - **Institutional Memory** - Capture decisions and learnings for future reference
+- **People** - Track internal colleagues, customers, and users; link to meetings and projects
 - **Semantic Search** - Find relevant content with QMD integration
 
 ## Use This Template
@@ -42,6 +43,7 @@ arete/
 ├── context/             # Business context (source of truth)
 ├── projects/            # Active and archived projects
 ├── memory/              # Decisions, learnings, activity log
+├── people/              # People (internal, customers, users)
 ├── templates/           # Project, input, and output templates
 ├── scratchpad.md        # Quick capture
 └── SETUP.md             # Detailed setup guide

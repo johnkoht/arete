@@ -65,6 +65,7 @@ export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
     memory: join(workspaceRoot, 'memory'),
     projects: join(workspaceRoot, 'projects'),
     resources: join(workspaceRoot, 'resources'),
+    people: join(workspaceRoot, 'people'),
     credentials: join(workspaceRoot, '.credentials'),
     templates: join(workspaceRoot, 'templates')
   };

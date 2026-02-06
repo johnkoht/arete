@@ -26,6 +26,20 @@ export interface AreteConfig {
   };
 }
 
+/** People category for person classification */
+export type PersonCategory = 'internal' | 'customers' | 'users';
+
+/** Person record (from frontmatter or API) */
+export interface Person {
+  slug: string;
+  name: string;
+  email?: string | null;
+  role?: string | null;
+  company?: string | null;
+  team?: string | null;
+  category: PersonCategory;
+}
+
 /** Return type of getWorkspacePaths() */
 export interface WorkspacePaths {
   root: string;
@@ -41,6 +55,7 @@ export interface WorkspacePaths {
   memory: string;
   projects: string;
   resources: string;
+  people: string;
   credentials: string;
   templates: string;
 }
