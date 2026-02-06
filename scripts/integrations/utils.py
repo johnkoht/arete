@@ -24,28 +24,54 @@ def get_workspace_root() -> Path:
     """
     Find the Areté workspace root directory.
 
-    Looks for the workspace by finding the directory containing .cursor/
-    starting from the script location and going up.
+    Resolution order:
+    1. ARETE_WORKSPACE_ROOT environment variable (set by CLI)
+    2. Walk up from current working directory
+    3. Walk up from script location (fallback)
 
     Returns:
         Path to workspace root
     """
-    # Start from script location
-    current = Path(__file__).parent
+    # 1. Check environment variable (set by the Node CLI)
+    env_root = os.environ.get("ARETE_WORKSPACE_ROOT")
+    if env_root:
+        env_path = Path(env_root)
+        if env_path.is_dir():
+            return env_path
 
-    # Go up looking for workspace markers
-    for _ in range(10):  # Max 10 levels up
-        if (current / ".cursor").is_dir():
-            return current
-        if (current / "context").is_dir() and (current / "memory").is_dir():
+    # 2. Walk up from current working directory
+    current = Path.cwd()
+    for _ in range(10):
+        if _is_arete_workspace(current):
             return current
         parent = current.parent
         if parent == current:
             break
         current = parent
 
-    # Fallback: assume scripts/integrations/ is in workspace
+    # 3. Walk up from script location (fallback for direct invocation)
+    current = Path(__file__).parent
+    for _ in range(10):
+        if _is_arete_workspace(current):
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    # Last resort: assume scripts/integrations/ is in workspace
     return Path(__file__).parent.parent.parent
+
+
+def _is_arete_workspace(directory: Path) -> bool:
+    """Check if a directory looks like an Areté workspace."""
+    # Must have context/ and memory/ (characteristic of a workspace, not the CLI repo)
+    if (directory / "context").is_dir() and (directory / "memory").is_dir():
+        return True
+    # Or an explicit arete.yaml manifest
+    if (directory / "arete.yaml").is_file():
+        return True
+    return False
 
 
 def load_credentials(integration_name: str) -> Optional[dict]:

@@ -1,0 +1,45 @@
+{
+  "name": "@arete/cli",
+  "version": "0.1.0",
+  "description": "Areté - Product Management Workspace CLI",
+  "type": "module",
+  "bin": {
+    "arete": "./bin/arete.js"
+  },
+  "main": "./src/index.js",
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "tools/",
+    "integrations/",
+    "templates/",
+    "rules/"
+  ],
+  "scripts": {
+    "start": "node bin/arete.js",
+    "test": "node --test 'test/**/*.test.js'",
+    "test:js": "node --test 'test/**/*.test.js'",
+    "test:py": "python3 -m unittest scripts/integrations/test_utils.py scripts/integrations/test_fathom.py",
+    "test:all": "npm run test:js && npm run test:py"
+  },
+  "keywords": [
+    "product-management",
+    "pm",
+    "workspace",
+    "cli",
+    "cursor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "fs-extra": "^11.2.0",
+    "yaml": "^2.4.0",
+    "inquirer": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

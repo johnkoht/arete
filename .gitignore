@@ -48,8 +48,14 @@ __pycache__/
 .venv/
 venv/
 
-# Node modules (if any tooling is added)
+# Node modules
 node_modules/
+package-lock.json
+
+# CLI-managed directories (for consumer workspaces)
+# These are populated by `arete install` and shouldn't be committed
+.cursor/skills-core/
+.cursor/tools-core/
 
 # Logs
 *.log

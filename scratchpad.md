@@ -16,7 +16,7 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 ## TODOs
 <!-- Action items that don't belong to a specific project yet -->
 
-- [ ] [TODO item]
+- [ ] **Skill customization documentation**: Create user-facing docs explaining how to override/customize skills. Cover: (1) when to use default vs customize, (2) how to override just a template vs entire skill, (3) examples of common customizations, (4) how overrides merge with core. Should be part of skill onboarding flow.
 
 ---
 

@@ -1,0 +1,92 @@
+---
+description: Testing requirements - all code changes must include tests
+globs: ["src/**/*", "scripts/**/*", "bin/**/*", "test/**/*"]
+alwaysApply: true
+---
+
+# Testing Requirements
+
+All code changes in this workspace MUST include corresponding tests. Never ship code without test coverage.
+
+## Test Infrastructure
+
+### JavaScript (Node.js built-in test runner)
+
+- **Location**: `test/` directory, mirroring `src/` structure
+- **Naming**: `*.test.js` (e.g., `test/core/config.test.js`)
+- **Runner**: `node --test 'test/**/*.test.js'` or `npm test`
+- **Imports**: Use `node:test` (`describe`, `it`, `beforeEach`, `afterEach`, `mock`) and `node:assert/strict`
+- **Pattern**: ES modules (`import`/`export`)
+
+```javascript
+import { describe, it, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+```
+
+### Python (unittest)
+
+- **Location**: `scripts/integrations/test_*.py` (co-located with source)
+- **Naming**: `test_<module>.py` (e.g., `test_utils.py`, `test_fathom.py`)
+- **Runner**: `python3 -m unittest scripts/integrations/test_*.py` or `npm run test:py`
+- **Pattern**: `unittest.TestCase` with `unittest.mock` for mocking
+
+```python
+import unittest
+from unittest.mock import patch, MagicMock
+```
+
+## Rules
+
+### 1. Every Code Change Needs Tests
+
+- **New functions/modules**: Write unit tests covering happy path, edge cases, and error handling
+- **Bug fixes**: Write a regression test that reproduces the bug before fixing it
+- **Refactors**: Ensure existing tests still pass; add tests for any new behavior
+
+### 2. Test Structure
+
+- **Descriptive names**: Test names should describe the behavior being tested
+- **Arrange-Act-Assert**: Follow the AAA pattern in each test
+- **Isolation**: Tests must not depend on external services, network, or filesystem state
+- **Mocking**: Mock external dependencies (APIs, filesystem, child processes)
+- **Cleanup**: Use `beforeEach`/`afterEach` (JS) or `setUp`/`tearDown` (Python) to clean up temp files
+
+### 3. What to Test
+
+| Layer | Test Focus | Mocking |
+|-------|-----------|---------|
+| Core utilities (`src/core/`) | Pure logic, config resolution, path handling | Mock filesystem |
+| Commands (`src/commands/`) | Command routing, error handling, output format | Mock workspace, child_process |
+| Python integrations (`scripts/`) | API client logic, data transformation, filtering | Mock HTTP requests |
+
+### 4. Running Tests
+
+```bash
+# All tests
+npm run test:all
+
+# JavaScript only
+npm test
+
+# Python only
+npm run test:py
+```
+
+### 5. Before Submitting Changes
+
+- Run `npm test` to verify JS tests pass
+- Run `npm run test:py` to verify Python tests pass
+- Ensure no test regressions
+
+## Test File Mapping
+
+| Source File | Test File |
+|------------|-----------|
+| `src/core/config.js` | `test/core/config.test.js` |
+| `src/core/workspace.js` | `test/core/workspace.test.js` |
+| `src/core/utils.js` | `test/core/utils.test.js` |
+| `src/commands/fathom.js` | `test/commands/fathom.test.js` |
+| `scripts/integrations/utils.py` | `scripts/integrations/test_utils.py` |
+| `scripts/integrations/fathom.py` | `scripts/integrations/test_fathom.py` |
+
+When adding new source files, create a corresponding test file following this pattern.
