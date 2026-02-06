@@ -10,23 +10,25 @@ All code changes in this workspace MUST include corresponding tests. Never ship 
 
 ## Test Infrastructure
 
-### JavaScript (Node.js built-in test runner)
+### TypeScript (Node.js built-in test runner via tsx)
 
 - **Location**: `test/` directory, mirroring `src/` structure
-- **Naming**: `*.test.js` (e.g., `test/core/config.test.js`)
-- **Runner**: `node --test 'test/**/*.test.js'` or `npm test`
+- **Naming**: `*.test.ts` (e.g., `test/core/config.test.ts`)
+- **Runner**: `tsx --test 'test/**/*.test.ts'` or `npm test`
 - **Imports**: Use `node:test` (`describe`, `it`, `beforeEach`, `afterEach`, `mock`) and `node:assert/strict`
-- **Pattern**: ES modules (`import`/`export`)
+- **Pattern**: ES modules with TypeScript types
+- **Import paths**: Use `.js` extensions in imports (required by NodeNext module resolution)
 
-```javascript
+```typescript
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { someFunction } from '../../src/core/module.js';
 ```
 
 ### Python (unittest)
 
 - **Location**: `scripts/integrations/test_*.py` (co-located with source)
-- **Naming**: `test_<module>.py` (e.g., `test_utils.py`, `test_fathom.py`)
+- **Naming**: `test_<module>.py` (e.g., `test_utils.py`)
 - **Runner**: `python3 -m unittest scripts/integrations/test_*.py` or `npm run test:py`
 - **Pattern**: `unittest.TestCase` with `unittest.mock` for mocking
 
@@ -49,7 +51,7 @@ from unittest.mock import patch, MagicMock
 - **Arrange-Act-Assert**: Follow the AAA pattern in each test
 - **Isolation**: Tests must not depend on external services, network, or filesystem state
 - **Mocking**: Mock external dependencies (APIs, filesystem, child processes)
-- **Cleanup**: Use `beforeEach`/`afterEach` (JS) or `setUp`/`tearDown` (Python) to clean up temp files
+- **Cleanup**: Use `beforeEach`/`afterEach` (TS) or `setUp`/`tearDown` (Python) to clean up temp files
 
 ### 3. What to Test
 
@@ -57,24 +59,29 @@ from unittest.mock import patch, MagicMock
 |-------|-----------|---------|
 | Core utilities (`src/core/`) | Pure logic, config resolution, path handling | Mock filesystem |
 | Commands (`src/commands/`) | Command routing, error handling, output format | Mock workspace, child_process |
+| Types (`src/types.ts`) | Type definitions don't need tests | N/A |
 | Python integrations (`scripts/`) | API client logic, data transformation, filtering | Mock HTTP requests |
 
 ### 4. Running Tests
 
 ```bash
-# All tests
+# All tests (typecheck + JS + Python)
 npm run test:all
 
-# JavaScript only
+# TypeScript tests only
 npm test
 
-# Python only
+# Python tests only
 npm run test:py
+
+# Type checking only
+npm run typecheck
 ```
 
 ### 5. Before Submitting Changes
 
-- Run `npm test` to verify JS tests pass
+- Run `npm run typecheck` to verify types are correct
+- Run `npm test` to verify TS tests pass
 - Run `npm run test:py` to verify Python tests pass
 - Ensure no test regressions
 
@@ -82,11 +89,10 @@ npm run test:py
 
 | Source File | Test File |
 |------------|-----------|
-| `src/core/config.js` | `test/core/config.test.js` |
-| `src/core/workspace.js` | `test/core/workspace.test.js` |
-| `src/core/utils.js` | `test/core/utils.test.js` |
-| `src/commands/fathom.js` | `test/commands/fathom.test.js` |
+| `src/core/config.ts` | `test/core/config.test.ts` |
+| `src/core/workspace.ts` | `test/core/workspace.test.ts` |
+| `src/core/utils.ts` | `test/core/utils.test.ts` |
+| `src/integrations/fathom/` | `test/integrations/fathom.test.ts` |
 | `scripts/integrations/utils.py` | `scripts/integrations/test_utils.py` |
-| `scripts/integrations/fathom.py` | `scripts/integrations/test_fathom.py` |
 
 When adding new source files, create a corresponding test file following this pattern.

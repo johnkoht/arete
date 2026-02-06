@@ -1,8 +1,8 @@
 /**
- * Tests for src/core/utils.js
+ * Tests for src/core/utils.ts
  */
 
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -12,13 +12,13 @@ import {
 
 describe('utils', () => {
   describe('output', () => {
-    let originalLog;
-    let logged;
+    let originalLog: typeof console.log;
+    let logged: unknown[][];
 
     beforeEach(() => {
       logged = [];
       originalLog = console.log;
-      console.log = (...args) => logged.push(args);
+      console.log = (...args: unknown[]) => logged.push(args);
     });
 
     afterEach(() => {
@@ -29,13 +29,13 @@ describe('utils', () => {
       const data = { key: 'value', nested: { a: 1 } };
       output(data, { json: true });
       assert.equal(logged.length, 1);
-      const parsed = JSON.parse(logged[0][0]);
+      const parsed = JSON.parse(logged[0][0] as string);
       assert.deepEqual(parsed, data);
     });
 
     it('outputs formatted JSON with 2-space indentation', () => {
       output({ a: 1 }, { json: true });
-      const jsonStr = logged[0][0];
+      const jsonStr = logged[0][0] as string;
       assert.ok(jsonStr.includes('  "a"'));
     });
 
@@ -54,9 +54,9 @@ describe('utils', () => {
   describe('formatPath', () => {
     it('returns relative path when under cwd', () => {
       const cwd = process.cwd();
-      const fullPath = `${cwd}/src/core/config.js`;
+      const fullPath = `${cwd}/src/core/config.ts`;
       const result = formatPath(fullPath);
-      assert.equal(result, './src/core/config.js');
+      assert.equal(result, './src/core/config.ts');
     });
 
     it('returns full path when not under cwd', () => {

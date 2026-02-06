@@ -7,8 +7,9 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
+import type { AreteConfig } from '../types.js';
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: AreteConfig = {
   schema: 1,
   version: null,
   source: 'npm',
@@ -33,15 +34,15 @@ const DEFAULT_CONFIG = {
 /**
  * Load and parse a YAML config file
  */
-function loadYamlFile(filePath) {
+function loadYamlFile(filePath: string): Record<string, unknown> | null {
   if (!existsSync(filePath)) {
     return null;
   }
   try {
     const content = readFileSync(filePath, 'utf8');
-    return parseYaml(content);
+    return parseYaml(content) as Record<string, unknown>;
   } catch (err) {
-    console.error(`Warning: Could not parse ${filePath}: ${err.message}`);
+    console.error(`Warning: Could not parse ${filePath}: ${(err as Error).message}`);
     return null;
   }
 }
@@ -49,7 +50,7 @@ function loadYamlFile(filePath) {
 /**
  * Deep merge two objects
  */
-function deepMerge(target, source) {
+function deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
   const result = { ...target };
   
   for (const key of Object.keys(source)) {
@@ -66,14 +67,14 @@ function deepMerge(target, source) {
 /**
  * Get global config path
  */
-export function getGlobalConfigPath() {
+export function getGlobalConfigPath(): string {
   return join(homedir(), '.arete', 'config.yaml');
 }
 
 /**
  * Get workspace config path
  */
-export function getWorkspaceConfigPath(workspacePath) {
+export function getWorkspaceConfigPath(workspacePath: string): string {
   return join(workspacePath, 'arete.yaml');
 }
 
@@ -81,9 +82,9 @@ export function getWorkspaceConfigPath(workspacePath) {
  * Load resolved configuration for a workspace
  * Resolution order: workspace > global > defaults
  */
-export function loadConfig(workspacePath) {
+export function loadConfig(workspacePath: string | null): AreteConfig {
   // Start with defaults
-  let config = { ...DEFAULT_CONFIG };
+  let config = { ...DEFAULT_CONFIG } as Record<string, any>;
   
   // Merge global config
   const globalConfig = loadYamlFile(getGlobalConfigPath());
@@ -99,13 +100,13 @@ export function loadConfig(workspacePath) {
     }
   }
   
-  return config;
+  return config as AreteConfig;
 }
 
 /**
  * Get default config
  */
-export function getDefaultConfig() {
+export function getDefaultConfig(): AreteConfig {
   return { ...DEFAULT_CONFIG };
 }
 

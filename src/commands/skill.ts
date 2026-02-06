@@ -6,14 +6,30 @@ import { existsSync, readdirSync, readFileSync, cpSync, mkdirSync, writeFileSync
 import { join, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
-import { findWorkspaceRoot, getWorkspacePaths, getSourcePaths } from '../core/workspace.js';
+import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { loadConfig, getWorkspaceConfigPath } from '../core/config.js';
 import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
+import type { CommandOptions } from '../types.js';
+
+export interface SkillOptions extends CommandOptions {
+  name?: string;
+}
+
+interface SkillInfo {
+  name: string;
+  description?: string;
+  type?: string;
+  includes?: Record<string, unknown>;
+  path?: string;
+  id?: string;
+  source?: string;
+  overridden?: boolean;
+}
 
 /**
  * Get skill info from SKILL.md
  */
-function getSkillInfo(skillPath) {
+function getSkillInfo(skillPath: string): SkillInfo {
   const skillFile = join(skillPath, 'SKILL.md');
   if (!existsSync(skillFile)) {
     return { name: basename(skillPath) };
@@ -24,15 +40,15 @@ function getSkillInfo(skillPath) {
     // Parse frontmatter
     const match = content.match(/^---\n([\s\S]*?)\n---/);
     if (match) {
-      const frontmatter = parseYaml(match[1]);
+      const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
       return {
-        name: frontmatter.name || basename(skillPath),
-        description: frontmatter.description || '',
-        type: frontmatter.type || 'stateless',
-        includes: frontmatter.includes || {}
+        name: (frontmatter.name as string) || basename(skillPath),
+        description: (frontmatter.description as string) || '',
+        type: (frontmatter.type as string) || 'stateless',
+        includes: (frontmatter.includes as Record<string, unknown>) || {}
       };
     }
-  } catch (err) {
+  } catch {
     // Ignore parse errors
   }
   
@@ -42,7 +58,7 @@ function getSkillInfo(skillPath) {
 /**
  * Get list of skills with info
  */
-function getSkillsList(dir) {
+function getSkillsList(dir: string): SkillInfo[] {
   if (!existsSync(dir)) return [];
   
   return readdirSync(dir, { withFileTypes: true })
@@ -60,7 +76,7 @@ function getSkillsList(dir) {
 /**
  * List skills
  */
-async function listSkills(options) {
+async function listSkills(options: CommandOptions): Promise<void> {
   const { json } = options;
   
   const workspaceRoot = findWorkspaceRoot();
@@ -74,13 +90,12 @@ async function listSkills(options) {
   }
   
   const paths = getWorkspacePaths(workspaceRoot);
-  const config = loadConfig(workspaceRoot);
   
   const coreSkills = getSkillsList(paths.skillsCore);
   const localSkills = getSkillsList(paths.skillsLocal);
   
   // Merge and mark overrides
-  const allSkills = [];
+  const allSkills: SkillInfo[] = [];
   const localIds = localSkills.map(s => s.id);
   
   for (const skill of coreSkills) {
@@ -121,7 +136,7 @@ async function listSkills(options) {
   console.log(chalk.dim(`  ${coreSkills.length} core, ${localSkills.length} local`));
   console.log('');
   
-  for (const skill of allSkills.sort((a, b) => a.id.localeCompare(b.id))) {
+  for (const skill of allSkills.sort((a, b) => (a.id || '').localeCompare(b.id || ''))) {
     let badge = '';
     if (skill.overridden) {
       badge = chalk.yellow(' (overridden)');
@@ -131,7 +146,7 @@ async function listSkills(options) {
     
     const typeTag = skill.type === 'lifecycle' ? chalk.dim(' [lifecycle]') : '';
     
-    console.log(`  ${chalk.dim('•')} ${chalk.bold(skill.id)}${badge}${typeTag}`);
+    console.log(`  ${chalk.dim('•')} ${chalk.bold(skill.id || skill.name)}${badge}${typeTag}`);
     if (skill.description) {
       console.log(`    ${chalk.dim(skill.description)}`);
     }
@@ -143,7 +158,7 @@ async function listSkills(options) {
 /**
  * Override a skill (copy to skills-local)
  */
-async function overrideSkill(options) {
+async function overrideSkill(options: SkillOptions): Promise<void> {
   const { name, json } = options;
   
   const workspaceRoot = findWorkspaceRoot();
@@ -157,10 +172,9 @@ async function overrideSkill(options) {
   }
   
   const paths = getWorkspacePaths(workspaceRoot);
-  const config = loadConfig(workspaceRoot);
   
-  const corePath = join(paths.skillsCore, name);
-  const localPath = join(paths.skillsLocal, name);
+  const corePath = join(paths.skillsCore, name!);
+  const localPath = join(paths.skillsLocal, name!);
   
   // Check if skill exists in core
   if (!existsSync(corePath)) {
@@ -197,16 +211,18 @@ async function overrideSkill(options) {
   if (existsSync(configPath)) {
     try {
       const configContent = readFileSync(configPath, 'utf8');
-      const yamlConfig = parseYaml(configContent) || {};
+      const yamlConfig = (parseYaml(configContent) as Record<string, unknown>) || {};
       
-      yamlConfig.skills = yamlConfig.skills || {};
-      yamlConfig.skills.overrides = yamlConfig.skills.overrides || [];
+      const skills = (yamlConfig.skills || {}) as Record<string, unknown>;
+      const overrides = (skills.overrides || []) as string[];
       
-      if (!yamlConfig.skills.overrides.includes(name)) {
-        yamlConfig.skills.overrides.push(name);
+      if (!overrides.includes(name!)) {
+        overrides.push(name!);
+        skills.overrides = overrides;
+        yamlConfig.skills = skills;
         writeFileSync(configPath, stringifyYaml(yamlConfig), 'utf8');
       }
-    } catch (err) {
+    } catch {
       // Ignore config update errors
     }
   }
@@ -230,8 +246,8 @@ async function overrideSkill(options) {
 /**
  * Add a skill (placeholder for registry)
  */
-async function addSkill(options) {
-  const { name, json } = options;
+async function addSkill(options: SkillOptions): Promise<void> {
+  const { json } = options;
   
   if (json) {
     console.log(JSON.stringify({
@@ -249,7 +265,7 @@ async function addSkill(options) {
 /**
  * Remove a skill (local only)
  */
-async function removeSkill(options) {
+async function removeSkill(options: SkillOptions): Promise<void> {
   const { name, json } = options;
   
   if (json) {
@@ -267,7 +283,7 @@ async function removeSkill(options) {
 /**
  * Skill command router
  */
-export async function skillCommand(action, options) {
+export async function skillCommand(action: string, options: SkillOptions): Promise<void> {
   switch (action) {
     case 'list':
       return listSkills(options);

@@ -1,0 +1,16 @@
+# User-specific (Arete build)
+
+This file is for **you** as the developer of Arete. Copy to `USER.md` (gitignored) and customize.
+
+- **Local env**: Node version, Python path, any local overrides
+- **Preferences**: How you like to run tests, preferred editors, branch naming
+- **Context**: Things that would confuse an agent (e.g. "I always use pnpm locally")
+- **Reminders**: Personal TODOs, follow-ups that aren't in Linear
+
+## Example
+
+```markdown
+- Node: nvm use (20.x)
+- I use pnpm; package.json scripts work but I run `pnpm test` not `npm test`
+- Fathom: test with sandbox API key in .credentials (see SETUP.md)
+```

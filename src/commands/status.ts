@@ -2,18 +2,26 @@
  * Status command - show workspace status
  */
 
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
-import { findWorkspaceRoot, getWorkspacePaths, isAreteWorkspace } from '../core/workspace.js';
-import { loadConfig, getWorkspaceConfigPath } from '../core/config.js';
-import { success, error, warn, info, header, section, listItem, formatPath } from '../core/utils.js';
+import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
+import { loadConfig } from '../core/config.js';
+import { success, error, info, header, section, listItem, formatPath } from '../core/utils.js';
+import type { CommandOptions } from '../types.js';
+
+interface IntegrationInfo {
+  name: string;
+  status: string;
+  type?: string;
+  error?: string;
+}
 
 /**
  * Get list of skills in a directory
  */
-function getSkillsList(dir) {
+function getSkillsList(dir: string): string[] {
   if (!existsSync(dir)) return [];
   
   return readdirSync(dir, { withFileTypes: true })
@@ -25,16 +33,16 @@ function getSkillsList(dir) {
 /**
  * Get integration status from configs
  */
-function getIntegrationStatus(configsDir) {
+function getIntegrationStatus(configsDir: string): IntegrationInfo[] {
   if (!existsSync(configsDir)) return [];
   
-  const integrations = [];
+  const integrations: IntegrationInfo[] = [];
   const files = readdirSync(configsDir).filter(f => f.endsWith('.yaml'));
   
   for (const file of files) {
     try {
       const content = readFileSync(join(configsDir, file), 'utf8');
-      const config = parseYaml(content);
+      const config = parseYaml(content) as Record<string, string>;
       integrations.push({
         name: config.name || basename(file, '.yaml'),
         status: config.status || 'inactive',
@@ -44,7 +52,7 @@ function getIntegrationStatus(configsDir) {
       integrations.push({
         name: basename(file, '.yaml'),
         status: 'error',
-        error: err.message
+        error: (err as Error).message
       });
     }
   }
@@ -55,7 +63,7 @@ function getIntegrationStatus(configsDir) {
 /**
  * Status command handler
  */
-export async function statusCommand(options) {
+export async function statusCommand(options: CommandOptions): Promise<void> {
   const { json } = options;
   
   // Find workspace
@@ -89,7 +97,8 @@ export async function statusCommand(options) {
     skills: {
       core: getSkillsList(paths.skillsCore),
       local: getSkillsList(paths.skillsLocal),
-      merged: getSkillsList(paths.skills)
+      merged: getSkillsList(paths.skills),
+      overrides: [] as string[]
     },
     integrations: getIntegrationStatus(join(paths.integrations, 'configs')),
     directories: {

@@ -36,6 +36,9 @@ notion-export/
 # personal-notes.md
 # scratch-local.md
 
+# User-specific build context (copy from USER.md.example)
+USER.md
+
 # QMD cache (if you run qmd in the workspace)
 .qmd/
 
@@ -51,6 +54,9 @@ venv/
 # Node modules
 node_modules/
 package-lock.json
+
+# TypeScript build output
+dist/
 
 # CLI-managed directories (for consumer workspaces)
 # These are populated by `arete install` and shouldn't be committed

@@ -9,65 +9,20 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { success, error, warn, info, header, listItem } from '../core/utils.js';
+import { INTEGRATIONS } from '../integrations/registry.js';
+import type { CommandOptions } from '../types.js';
 
-/**
- * Available integrations
- */
-const INTEGRATIONS = {
-  fathom: {
-    name: 'fathom',
-    displayName: 'Fathom',
-    description: 'Meeting recording and transcription',
-    implements: ['meeting-recordings'],
-    auth: {
-      type: 'api_key',
-      envVar: 'FATHOM_API_KEY',
-      configKey: 'api_key',
-      instructions: 'Get your API key from https://fathom.video/settings/api'
-    },
-    status: 'available'
-  },
-  granola: {
-    name: 'granola',
-    displayName: 'Granola',
-    description: 'AI meeting notes',
-    implements: ['meeting-recordings'],
-    auth: {
-      type: 'api_key',
-      envVar: 'GRANOLA_API_KEY'
-    },
-    status: 'planned'
-  },
-  'google-calendar': {
-    name: 'google-calendar',
-    displayName: 'Google Calendar',
-    description: 'Calendar integration',
-    implements: ['calendar'],
-    auth: {
-      type: 'oauth'
-    },
-    status: 'planned'
-  },
-  notion: {
-    name: 'notion',
-    displayName: 'Notion',
-    description: 'Notes and documentation',
-    implements: ['notes'],
-    auth: {
-      type: 'api_key',
-      envVar: 'NOTION_API_KEY'
-    },
-    status: 'planned'
-  }
-};
+export interface IntegrationOptions extends CommandOptions {
+  name?: string;
+}
 
 /**
  * Get integration config from workspace
  */
-function getIntegrationConfig(configPath) {
+function getIntegrationConfig(configPath: string): Record<string, unknown> | null {
   if (!existsSync(configPath)) return null;
   try {
-    return parseYaml(readFileSync(configPath, 'utf8'));
+    return parseYaml(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -76,14 +31,14 @@ function getIntegrationConfig(configPath) {
 /**
  * List integrations
  */
-async function listIntegrations(options) {
+async function listIntegrations(options: CommandOptions): Promise<void> {
   const { json } = options;
   
   const workspaceRoot = findWorkspaceRoot();
   const paths = workspaceRoot ? getWorkspacePaths(workspaceRoot) : null;
   
   // Get configured integrations
-  const configured = {};
+  const configured: Record<string, string> = {};
   if (paths && existsSync(join(paths.integrations, 'configs'))) {
     const configFiles = readdirSync(join(paths.integrations, 'configs'))
       .filter(f => f.endsWith('.yaml'));
@@ -92,7 +47,7 @@ async function listIntegrations(options) {
       const name = basename(file, '.yaml');
       const config = getIntegrationConfig(join(paths.integrations, 'configs', file));
       if (config) {
-        configured[name] = config.status || 'inactive';
+        configured[name] = (config.status as string) || 'inactive';
       }
     }
   }
@@ -116,7 +71,7 @@ async function listIntegrations(options) {
   header('Available Integrations');
   
   // Group by tool
-  const byTool = {};
+  const byTool: Record<string, typeof integrations> = {};
   for (const int of integrations) {
     for (const tool of int.implements) {
       byTool[tool] = byTool[tool] || [];
@@ -151,7 +106,7 @@ async function listIntegrations(options) {
 /**
  * Add an integration
  */
-async function addIntegration(options) {
+async function addIntegration(options: IntegrationOptions): Promise<void> {
   const { name, json } = options;
   
   const workspaceRoot = findWorkspaceRoot();
@@ -164,7 +119,7 @@ async function addIntegration(options) {
     process.exit(1);
   }
   
-  const integration = INTEGRATIONS[name];
+  const integration = INTEGRATIONS[name!];
   if (!integration) {
     if (json) {
       console.log(JSON.stringify({ success: false, error: `Unknown integration: ${name}` }));
@@ -215,7 +170,7 @@ async function addIntegration(options) {
   }
   
   // Handle authentication
-  let credentials = {};
+  const credentials: Record<string, string> = {};
   if (integration.auth.type === 'api_key' && !json) {
     if (integration.auth.instructions) {
       console.log(chalk.dim(integration.auth.instructions));
@@ -238,13 +193,13 @@ async function addIntegration(options) {
       
       // Save to credentials file
       const credPath = join(paths.credentials, 'credentials.yaml');
-      let creds = {};
+      let creds: Record<string, unknown> = {};
       if (existsSync(credPath)) {
         try {
-          creds = parseYaml(readFileSync(credPath, 'utf8')) || {};
-        } catch {}
+          creds = (parseYaml(readFileSync(credPath, 'utf8')) as Record<string, unknown>) || {};
+        } catch { /* empty */ }
       }
-      creds[name] = credentials;
+      creds[name!] = credentials;
       writeFileSync(credPath, stringifyYaml(creds), 'utf8');
     }
   }
@@ -254,7 +209,7 @@ async function addIntegration(options) {
     name: integration.name,
     display_name: integration.displayName,
     implements: integration.implements,
-    status: credentials[integration.auth?.configKey] ? 'active' : 'inactive',
+    status: credentials[integration.auth?.configKey || ''] ? 'active' : 'inactive',
     added: new Date().toISOString(),
     auth: {
       type: integration.auth.type,
@@ -288,9 +243,7 @@ async function addIntegration(options) {
 /**
  * Configure an integration
  */
-async function configureIntegration(options) {
-  const { name, json } = options;
-  
+async function configureIntegration(options: IntegrationOptions): Promise<void> {
   // Same as add for now
   return addIntegration(options);
 }
@@ -298,7 +251,7 @@ async function configureIntegration(options) {
 /**
  * Remove an integration
  */
-async function removeIntegration(options) {
+async function removeIntegration(options: IntegrationOptions): Promise<void> {
   const { name, json } = options;
   
   const workspaceRoot = findWorkspaceRoot();
@@ -340,7 +293,7 @@ async function removeIntegration(options) {
 /**
  * Integration command router
  */
-export async function integrationCommand(action, options) {
+export async function integrationCommand(action: string, options: IntegrationOptions): Promise<void> {
   switch (action) {
     case 'list':
       return listIntegrations(options);

@@ -2,107 +2,23 @@
  * Pull command - fetch latest data from integrations
  */
 
-import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { parse as parseYaml } from 'yaml';
-import chalk from 'chalk';
-import { findWorkspaceRoot, getWorkspacePaths, getPackageRoot } from '../core/workspace.js';
-import { loadConfig } from '../core/config.js';
+import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { success, error, warn, info, header, listItem } from '../core/utils.js';
+import { findIntegrationScript, runIntegrationScript, getIntegrationStatus } from '../core/scripts.js';
+import { PULLABLE_INTEGRATIONS } from '../integrations/registry.js';
+import { pullFathom } from '../integrations/fathom/index.js';
+import type { CommandOptions, ScriptableIntegration } from '../types.js';
 
-/**
- * Integrations that support pulling
- */
-const PULLABLE_INTEGRATIONS = {
-  fathom: {
-    name: 'fathom',
-    displayName: 'Fathom',
-    description: 'Fetch recent meeting recordings',
-    defaultDays: 7,
-    script: 'fathom.py',
-    command: 'fetch'
-  }
-};
-
-/**
- * Get integration status from config
- */
-function getIntegrationStatus(paths, integrationName) {
-  const configPath = join(paths.integrations, 'configs', `${integrationName}.yaml`);
-  if (!existsSync(configPath)) return null;
-  
-  try {
-    const config = parseYaml(readFileSync(configPath, 'utf8'));
-    return config.status;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Find the integration script
- */
-function findIntegrationScript(integrationName) {
-  const workspaceRoot = findWorkspaceRoot();
-  
-  if (workspaceRoot) {
-    const workspaceScript = join(workspaceRoot, 'scripts', 'integrations', `${integrationName}.py`);
-    if (existsSync(workspaceScript)) {
-      return workspaceScript;
-    }
-  }
-  
-  const packageRoot = getPackageRoot();
-  const packageScript = join(packageRoot, 'scripts', 'integrations', `${integrationName}.py`);
-  if (existsSync(packageScript)) {
-    return packageScript;
-  }
-  
-  return null;
-}
-
-/**
- * Run integration script
- */
-function runIntegrationScript(scriptPath, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const workspaceRoot = findWorkspaceRoot() || process.cwd();
-    
-    const proc = spawn('python3', [scriptPath, ...args], {
-      stdio: options.quiet ? 'pipe' : 'inherit',
-      cwd: workspaceRoot,
-      env: { ...process.env, ARETE_WORKSPACE_ROOT: workspaceRoot }
-    });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    if (options.quiet) {
-      proc.stdout.on('data', (data) => { stdout += data; });
-      proc.stderr.on('data', (data) => { stderr += data; });
-    }
-    
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr, code });
-      } else {
-        reject(new Error(stderr || `Process exited with code ${code}`));
-      }
-    });
-    
-    proc.on('error', (err) => {
-      reject(err);
-    });
-  });
+export interface PullOptions extends CommandOptions {
+  days?: number;
 }
 
 /**
  * Pull command handler
  */
-export async function pullCommand(integration, options) {
+export async function pullCommand(integration: string | undefined, options: PullOptions): Promise<void> {
   const { days = 7, json } = options;
-  
+
   // Find workspace
   const workspaceRoot = findWorkspaceRoot();
   if (!workspaceRoot) {
@@ -114,12 +30,12 @@ export async function pullCommand(integration, options) {
     }
     process.exit(1);
   }
-  
+
   const paths = getWorkspacePaths(workspaceRoot);
-  
+
   // Determine which integrations to pull from
-  let integrationsToPull = [];
-  
+  let integrationsToPull: Array<ScriptableIntegration & { status: string }> = [];
+
   if (integration) {
     // Specific integration requested
     const int = PULLABLE_INTEGRATIONS[integration];
@@ -132,7 +48,7 @@ export async function pullCommand(integration, options) {
       }
       process.exit(1);
     }
-    
+
     const status = getIntegrationStatus(paths, integration);
     if (status !== 'active') {
       if (json) {
@@ -143,7 +59,7 @@ export async function pullCommand(integration, options) {
       }
       process.exit(1);
     }
-    
+
     integrationsToPull = [{ ...int, status }];
   } else {
     // Pull from all active integrations
@@ -153,11 +69,11 @@ export async function pullCommand(integration, options) {
         integrationsToPull.push({ ...intConfig, status });
       }
     }
-    
+
     if (integrationsToPull.length === 0) {
       if (json) {
-        console.log(JSON.stringify({ 
-          success: false, 
+        console.log(JSON.stringify({
+          success: false,
           error: 'No active integrations to pull from'
         }));
       } else {
@@ -167,22 +83,46 @@ export async function pullCommand(integration, options) {
       process.exit(1);
     }
   }
-  
+
   if (!json) {
     header('Pull Latest Data');
     listItem('Integrations', integrationsToPull.map(i => i.displayName).join(', '));
     listItem('Time range', `Last ${days} days`);
     console.log('');
   }
-  
+
   // Run pull for each integration
-  const results = [];
-  
+  const results: Array<{ integration: string; success: boolean; days?: number; error?: string }> = [];
+
   for (const int of integrationsToPull) {
     if (!json) {
       info(`Pulling from ${int.displayName}...`);
     }
-    
+
+    // Fathom: native Node implementation (no Python script)
+    if (int.name === 'fathom') {
+      try {
+        const result = await pullFathom(days, json ?? false);
+        if (result.success) {
+          results.push({ integration: int.name, success: true, days });
+          if (!json) {
+            success(`${int.displayName} pull complete!`);
+          }
+        } else {
+          results.push({ integration: int.name, success: false, error: result.error ?? 'Unknown error' });
+          if (!json) {
+            error(`${int.displayName} pull failed: ${result.error ?? 'Unknown error'}`);
+          }
+        }
+      } catch (err) {
+        results.push({ integration: int.name, success: false, error: (err as Error).message });
+        if (!json) {
+          error(`${int.displayName} pull failed: ${(err as Error).message}`);
+        }
+      }
+      continue;
+    }
+
     const scriptPath = findIntegrationScript(int.name);
     if (!scriptPath) {
       results.push({ integration: int.name, success: false, error: 'Script not found' });
@@ -191,25 +131,25 @@ export async function pullCommand(integration, options) {
       }
       continue;
     }
-    
+
     try {
       const args = [int.command || 'fetch', '--days', String(days)];
       if (json) args.push('--json');
-      
+
       await runIntegrationScript(scriptPath, args, { quiet: json });
-      
+
       results.push({ integration: int.name, success: true, days });
       if (!json) {
         success(`${int.displayName} pull complete!`);
       }
     } catch (err) {
-      results.push({ integration: int.name, success: false, error: err.message });
+      results.push({ integration: int.name, success: false, error: (err as Error).message });
       if (!json) {
-        error(`${int.displayName} pull failed: ${err.message}`);
+        error(`${int.displayName} pull failed: ${(err as Error).message}`);
       }
     }
   }
-  
+
   // Summary
   if (json) {
     console.log(JSON.stringify({

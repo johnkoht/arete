@@ -1,8 +1,8 @@
 /**
- * Tests for src/core/config.js
+ * Tests for src/core/config.ts
  */
 
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
@@ -16,14 +16,14 @@ import {
 } from '../../src/core/config.js';
 
 // Helpers
-function createTmpDir() {
+function createTmpDir(): string {
   const dir = join(tmpdir(), `arete-test-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 describe('config', () => {
-  let tmpDir;
+  let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = createTmpDir();
@@ -52,7 +52,7 @@ describe('config', () => {
       const a = getDefaultConfig();
       const b = getDefaultConfig();
       assert.notEqual(a, b);
-      a.source = 'modified';
+      (a as any).source = 'modified';
       assert.equal(b.source, 'npm');
     });
   });

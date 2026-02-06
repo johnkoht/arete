@@ -75,7 +75,7 @@ case "${1:-help}" in
             echo "  get <id>           Get specific recording"
             exit 1
         fi
-        python3 "$SCRIPT_DIR/scripts/integrations/fathom.py" "$@"
+        node "$SCRIPT_DIR/bin/arete.js" fathom "$@"
         ;;
     
     # Help & info

@@ -31,7 +31,7 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 ## Questions to Explore
 <!-- Questions that came up that we should investigate -->
 
-- [Question]
+- [2026-02-05] **Generate Mockup skill dependencies**: We have a generate-mockup skill — do we need a dedicated tool or integration for Vercel v0 and/or Lovable? Or does the skill handle it sufficiently on its own?
 
 ---
 

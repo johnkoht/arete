@@ -1,5 +1,5 @@
 /**
- * Tests for src/core/workspace.js
+ * Tests for src/core/workspace.ts
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
@@ -16,14 +16,14 @@ import {
 } from '../../src/core/workspace.js';
 
 // Helpers
-function createTmpDir() {
+function createTmpDir(): string {
   const dir = join(tmpdir(), `arete-test-ws-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 describe('workspace', () => {
-  let tmpDir;
+  let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = createTmpDir();
@@ -60,8 +60,6 @@ describe('workspace', () => {
     it('returns false when only context + memory exist (no .cursor)', () => {
       mkdirSync(join(tmpDir, 'context'), { recursive: true });
       mkdirSync(join(tmpDir, 'memory'), { recursive: true });
-      // No .cursor, no arete.yaml - this actually returns true because
-      // the check is hasCursorDir && hasContext && hasMemory, so without .cursor it's false
       assert.equal(isAreteWorkspace(tmpDir), false);
     });
   });
@@ -124,7 +122,7 @@ describe('workspace', () => {
     it('parses "local:" source', () => {
       const result = parseSourceType('local:/some/path');
       assert.equal(result.type, 'local');
-      assert.ok(result.path.endsWith('/some/path') || result.path.includes('some/path'));
+      assert.ok(result.path!.endsWith('/some/path') || result.path!.includes('some/path'));
     });
 
     it('throws on unknown source type', () => {

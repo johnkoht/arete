@@ -15,6 +15,11 @@ import {
 } from '../core/workspace.js';
 import { getDefaultConfig } from '../core/config.js';
 import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
+import type { CommandOptions, InstallResults } from '../types.js';
+
+export interface InstallOptions extends CommandOptions {
+  source?: string;
+}
 
 /**
  * Directories to create in a new workspace
@@ -49,7 +54,7 @@ const WORKSPACE_DIRS = [
 /**
  * Default files to create
  */
-const DEFAULT_FILES = {
+const DEFAULT_FILES: Record<string, string> = {
   'scratchpad.md': `# Scratchpad
 
 Quick capture space for notes, ideas, and TODOs. Review periodically and move items to appropriate places.
@@ -161,7 +166,7 @@ Work session tracking for continuity.
 /**
  * Copy directory contents (non-recursive for specific folders)
  */
-function copyDirectoryContents(src, dest, options = {}) {
+function copyDirectoryContents(src: string, dest: string, options: { symlink?: boolean } = {}): string[] {
   const { symlink = false } = options;
   
   if (!existsSync(src)) {
@@ -173,7 +178,7 @@ function copyDirectoryContents(src, dest, options = {}) {
     mkdirSync(dest, { recursive: true });
   }
   
-  const copied = [];
+  const copied: string[] = [];
   const items = readdirSync(src, { withFileTypes: true });
   
   for (const item of items) {
@@ -202,7 +207,7 @@ function copyDirectoryContents(src, dest, options = {}) {
 /**
  * Install command handler
  */
-export async function installCommand(directory, options) {
+export async function installCommand(directory: string | undefined, options: InstallOptions): Promise<void> {
   const targetDir = resolve(directory || '.');
   const { source = 'npm', json } = options;
   
@@ -212,9 +217,9 @@ export async function installCommand(directory, options) {
     sourceInfo = parseSourceType(source);
   } catch (err) {
     if (json) {
-      console.log(JSON.stringify({ success: false, error: err.message }));
+      console.log(JSON.stringify({ success: false, error: (err as Error).message }));
     } else {
-      error(err.message);
+      error((err as Error).message);
     }
     process.exit(1);
   }
@@ -241,7 +246,7 @@ export async function installCommand(directory, options) {
     console.log('');
   }
   
-  const results = {
+  const results: InstallResults = {
     directories: [],
     files: [],
     skills: [],
@@ -265,7 +270,7 @@ export async function installCommand(directory, options) {
         mkdirSync(fullPath, { recursive: true });
         results.directories.push(dir);
       } catch (err) {
-        results.errors.push({ type: 'directory', path: dir, error: err.message });
+        results.errors.push({ type: 'directory', path: dir, error: (err as Error).message });
       }
     }
   }
@@ -280,7 +285,7 @@ export async function installCommand(directory, options) {
         writeFileSync(fullPath, content, 'utf8');
         results.files.push(filePath);
       } catch (err) {
-        results.errors.push({ type: 'file', path: filePath, error: err.message });
+        results.errors.push({ type: 'file', path: filePath, error: (err as Error).message });
       }
     }
   }
@@ -350,9 +355,9 @@ export async function installCommand(directory, options) {
     created: new Date().toISOString().split('T')[0],
     skills: {
       core: results.skills,
-      overrides: []
+      overrides: [] as string[]
     },
-    tools: [],
+    tools: [] as string[],
     integrations: {},
     settings: getDefaultConfig().settings
   };

@@ -2,9 +2,10 @@
  * Workspace detection and path utilities
  */
 
-import { existsSync, statSync } from 'fs';
+import { existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import type { WorkspacePaths, SourceType, SourcePaths } from '../types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,7 +13,7 @@ const __dirname = dirname(__filename);
 /**
  * Get the path to the CLI package root
  */
-export function getPackageRoot() {
+export function getPackageRoot(): string {
   // Go up from src/core/ to package root
   return resolve(__dirname, '..', '..');
 }
@@ -20,7 +21,7 @@ export function getPackageRoot() {
 /**
  * Check if a directory is an Areté workspace
  */
-export function isAreteWorkspace(dir) {
+export function isAreteWorkspace(dir: string): boolean {
   // Check for arete.yaml (new format) or characteristic directories
   const hasManifest = existsSync(join(dir, 'arete.yaml'));
   const hasCursorDir = existsSync(join(dir, '.cursor'));
@@ -33,7 +34,7 @@ export function isAreteWorkspace(dir) {
 /**
  * Find workspace root starting from a directory
  */
-export function findWorkspaceRoot(startDir = process.cwd()) {
+export function findWorkspaceRoot(startDir: string = process.cwd()): string | null {
   let current = resolve(startDir);
   
   while (current !== dirname(current)) {
@@ -49,7 +50,7 @@ export function findWorkspaceRoot(startDir = process.cwd()) {
 /**
  * Get workspace paths
  */
-export function getWorkspacePaths(workspaceRoot) {
+export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
   return {
     root: workspaceRoot,
     manifest: join(workspaceRoot, 'arete.yaml'),
@@ -72,7 +73,7 @@ export function getWorkspacePaths(workspaceRoot) {
 /**
  * Get source paths from CLI package
  */
-export function getSourcePaths() {
+export function getSourcePaths(): SourcePaths {
   const packageRoot = getPackageRoot();
   
   return {
@@ -87,9 +88,8 @@ export function getSourcePaths() {
 
 /**
  * Determine source type from string
- * @param {string} source - 'npm', 'symlink', or 'local:/path/to/arete'
  */
-export function parseSourceType(source) {
+export function parseSourceType(source: string): SourceType {
   if (source === 'npm') {
     return { type: 'npm', path: null };
   }

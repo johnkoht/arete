@@ -4,10 +4,14 @@
 
 import chalk from 'chalk';
 
+export interface OutputOptions {
+  json?: boolean;
+}
+
 /**
  * Output helper - handles both human and JSON output
  */
-export function output(data, options = {}) {
+export function output(data: unknown, options: OutputOptions = {}): void {
   if (options.json) {
     console.log(JSON.stringify(data, null, 2));
   } else if (typeof data === 'string') {
@@ -21,35 +25,35 @@ export function output(data, options = {}) {
 /**
  * Print a success message
  */
-export function success(message) {
+export function success(message: string): void {
   console.log(chalk.green('✓') + ' ' + message);
 }
 
 /**
  * Print an error message
  */
-export function error(message) {
+export function error(message: string): void {
   console.log(chalk.red('✗') + ' ' + message);
 }
 
 /**
  * Print a warning message
  */
-export function warn(message) {
+export function warn(message: string): void {
   console.log(chalk.yellow('⚠') + ' ' + message);
 }
 
 /**
  * Print an info message
  */
-export function info(message) {
+export function info(message: string): void {
   console.log(chalk.blue('ℹ') + ' ' + message);
 }
 
 /**
  * Print a header
  */
-export function header(title) {
+export function header(title: string): void {
   console.log('');
   console.log(chalk.bold(title));
   console.log('');
@@ -58,7 +62,7 @@ export function header(title) {
 /**
  * Print a section
  */
-export function section(title) {
+export function section(title: string): void {
   console.log('');
   console.log(chalk.dim('─'.repeat(40)));
   console.log(chalk.bold(title));
@@ -68,7 +72,7 @@ export function section(title) {
 /**
  * Print a list item
  */
-export function listItem(label, value, indent = 0) {
+export function listItem(label: string, value?: string, indent: number = 0): void {
   const padding = '  '.repeat(indent);
   if (value !== undefined) {
     console.log(`${padding}${chalk.dim('•')} ${label}: ${chalk.cyan(value)}`);
@@ -80,7 +84,7 @@ export function listItem(label, value, indent = 0) {
 /**
  * Format a path for display (relative to cwd if possible)
  */
-export function formatPath(fullPath) {
+export function formatPath(fullPath: string): string {
   const cwd = process.cwd();
   if (fullPath.startsWith(cwd)) {
     return '.' + fullPath.slice(cwd.length);

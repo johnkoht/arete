@@ -2,17 +2,22 @@
  * Update command - pull latest from source
  */
 
-import { existsSync, readdirSync, rmSync, cpSync, symlinkSync, statSync } from 'fs';
+import { existsSync, readdirSync, rmSync, cpSync, symlinkSync } from 'fs';
 import { join, basename } from 'path';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
-import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
+import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
+import type { CommandOptions, SyncResults } from '../types.js';
+
+export interface UpdateOptions extends CommandOptions {
+  check?: boolean;
+}
 
 /**
  * Get list of items in directory
  */
-function getDirContents(dir) {
+function getDirContents(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter(d => !d.name.startsWith('.') && !d.name.startsWith('_'))
@@ -22,16 +27,15 @@ function getDirContents(dir) {
 /**
  * Sync directory contents from source to destination
  */
-function syncDirectory(srcDir, destDir, options = {}) {
+function syncDirectory(srcDir: string, destDir: string, options: { symlink?: boolean; preserve?: string[] } = {}): SyncResults {
   const { symlink = false, preserve = [] } = options;
-  const results = { added: [], updated: [], preserved: [], removed: [] };
+  const results: SyncResults = { added: [], updated: [], preserved: [], removed: [] };
   
   if (!existsSync(srcDir)) {
     return results;
   }
   
   const srcItems = getDirContents(srcDir);
-  const destItems = existsSync(destDir) ? getDirContents(destDir) : [];
   
   // Add/update items from source
   for (const item of srcItems) {
@@ -67,7 +71,7 @@ function syncDirectory(srcDir, destDir, options = {}) {
 /**
  * Update command handler
  */
-export async function updateCommand(options) {
+export async function updateCommand(options: UpdateOptions): Promise<void> {
   const { check, json } = options;
   
   // Find workspace
@@ -96,9 +100,9 @@ export async function updateCommand(options) {
     sourceInfo = parseSourceType(source);
   } catch (err) {
     if (json) {
-      console.log(JSON.stringify({ success: false, error: err.message }));
+      console.log(JSON.stringify({ success: false, error: (err as Error).message }));
     } else {
-      error(err.message);
+      error((err as Error).message);
     }
     process.exit(1);
   }
@@ -121,8 +125,8 @@ export async function updateCommand(options) {
   }
   
   const results = {
-    skills: { added: [], updated: [], preserved: localOverrides },
-    rules: { added: [], updated: [], preserved: [] }
+    skills: { added: [] as string[], updated: [] as string[], preserved: localOverrides },
+    rules: { added: [] as string[], updated: [] as string[], preserved: [] as string[] }
   };
   
   // Check skills

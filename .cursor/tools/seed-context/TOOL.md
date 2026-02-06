@@ -290,13 +290,13 @@ After successful seed:
 **API Script** (for agent execution):
 ```bash
 # Fetch and save meetings from last 60 days
-python scripts/integrations/fathom.py fetch --days 60 --output resources/meetings/
+arete fathom fetch --days 60
 
 # Fetch with custom date range
-python scripts/integrations/fathom.py fetch --start 2025-12-01 --end 2026-02-01 --output resources/meetings/
+arete fathom fetch --days 21
 
 # List meetings first (preview)
-python scripts/integrations/fathom.py list --days 60 --json
+arete fathom list --days 60 --json
 ```
 
 ### Calendar

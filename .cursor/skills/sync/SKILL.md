@@ -282,16 +282,16 @@ If sync fails:
 **API Script** (for agent execution):
 ```bash
 # List meetings from last 7 days
-python scripts/integrations/fathom.py list --days 7
+arete fathom list --days 7
 
 # List meetings in date range
-python scripts/integrations/fathom.py list --start 2026-02-01 --end 2026-02-05
+arete fathom list --days 7
 
 # Fetch and save specific meeting
-python scripts/integrations/fathom.py get <recording_id> --output resources/meetings/
+arete fathom get <recording_id>
 
 # Batch fetch and save all meetings
-python scripts/integrations/fathom.py fetch --days 7 --output resources/meetings/
+arete fathom fetch --days 7
 ```
 
 ### Calendar

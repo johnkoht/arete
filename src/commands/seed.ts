@@ -2,117 +2,27 @@
  * Seed command - import historical data from integrations
  */
 
-import { spawn } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { findWorkspaceRoot, getWorkspacePaths, getPackageRoot } from '../core/workspace.js';
-import { loadConfig } from '../core/config.js';
+import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { success, error, warn, info, header, listItem, section } from '../core/utils.js';
+import { findIntegrationScript, runIntegrationScript, getIntegrationStatus } from '../core/scripts.js';
+import { SEEDABLE_INTEGRATIONS } from '../integrations/registry.js';
+import { pullFathom } from '../integrations/fathom/index.js';
+import type { CommandOptions, ScriptableIntegration } from '../types.js';
 
-/**
- * Available integrations that support seeding
- */
-const SEEDABLE_INTEGRATIONS = {
-  fathom: {
-    name: 'fathom',
-    displayName: 'Fathom',
-    description: 'Import meeting recordings and transcripts',
-    defaultDays: 60,
-    maxDays: 365,
-    script: 'fathom.py',
-    command: 'fetch'
-  }
-};
-
-/**
- * Get integration status from config
- */
-function getIntegrationStatus(paths, integrationName) {
-  const configPath = join(paths.integrations, 'configs', `${integrationName}.yaml`);
-  if (!existsSync(configPath)) return null;
-  
-  try {
-    const config = parseYaml(readFileSync(configPath, 'utf8'));
-    return config.status;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Find the integration script
- */
-function findIntegrationScript(integrationName) {
-  const workspaceRoot = findWorkspaceRoot();
-  
-  // Try workspace first
-  if (workspaceRoot) {
-    const workspaceScript = join(workspaceRoot, 'scripts', 'integrations', `${integrationName}.py`);
-    if (existsSync(workspaceScript)) {
-      return workspaceScript;
-    }
-  }
-  
-  // Try package root
-  const packageRoot = getPackageRoot();
-  const packageScript = join(packageRoot, 'scripts', 'integrations', `${integrationName}.py`);
-  if (existsSync(packageScript)) {
-    return packageScript;
-  }
-  
-  // Try integrations folder structure
-  const integrationsScript = join(packageRoot, 'integrations', integrationName, 'scripts', 'fetch.py');
-  if (existsSync(integrationsScript)) {
-    return integrationsScript;
-  }
-  
-  return null;
-}
-
-/**
- * Run integration script
- */
-function runIntegrationScript(scriptPath, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const workspaceRoot = findWorkspaceRoot() || process.cwd();
-    
-    const proc = spawn('python3', [scriptPath, ...args], {
-      stdio: options.quiet ? 'pipe' : 'inherit',
-      cwd: workspaceRoot,
-      env: { ...process.env, ARETE_WORKSPACE_ROOT: workspaceRoot }
-    });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    if (options.quiet) {
-      proc.stdout.on('data', (data) => { stdout += data; });
-      proc.stderr.on('data', (data) => { stderr += data; });
-    }
-    
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve({ stdout, stderr, code });
-      } else {
-        reject(new Error(stderr || `Process exited with code ${code}`));
-      }
-    });
-    
-    proc.on('error', (err) => {
-      reject(err);
-    });
-  });
+export interface SeedOptions extends CommandOptions {
+  days?: number;
+  integration?: string;
+  yes?: boolean;
 }
 
 /**
  * Seed command handler
  */
-export async function seedCommand(options) {
+export async function seedCommand(options: SeedOptions): Promise<void> {
   const { days, integration, json, yes } = options;
-  
+
   // Find workspace
   const workspaceRoot = findWorkspaceRoot();
   if (!workspaceRoot) {
@@ -124,29 +34,28 @@ export async function seedCommand(options) {
     }
     process.exit(1);
   }
-  
+
   const paths = getWorkspacePaths(workspaceRoot);
-  const config = loadConfig(workspaceRoot);
-  
+
   if (!json) {
     header('Seed Workspace');
     console.log('Import historical data from your connected integrations.');
     console.log('');
   }
-  
+
   // Get available seedable integrations
-  const available = [];
+  const available: Array<ScriptableIntegration & { status: string }> = [];
   for (const [name, intConfig] of Object.entries(SEEDABLE_INTEGRATIONS)) {
     const status = getIntegrationStatus(paths, name);
     if (status === 'active') {
       available.push({ ...intConfig, status });
     }
   }
-  
+
   if (available.length === 0) {
     if (json) {
-      console.log(JSON.stringify({ 
-        success: false, 
+      console.log(JSON.stringify({
+        success: false,
         error: 'No active integrations support seeding',
         hint: 'Run "arete integration add fathom" to add an integration'
       }));
@@ -157,12 +66,11 @@ export async function seedCommand(options) {
     }
     process.exit(1);
   }
-  
+
   // Select integration(s)
-  let selectedIntegrations = [];
-  
+  let selectedIntegrations: Array<ScriptableIntegration & { status: string }> = [];
+
   if (integration) {
-    // Specific integration requested
     const int = SEEDABLE_INTEGRATIONS[integration];
     if (!int) {
       if (json) {
@@ -172,7 +80,7 @@ export async function seedCommand(options) {
       }
       process.exit(1);
     }
-    
+
     const status = getIntegrationStatus(paths, integration);
     if (status !== 'active') {
       if (json) {
@@ -183,13 +91,11 @@ export async function seedCommand(options) {
       }
       process.exit(1);
     }
-    
+
     selectedIntegrations = [{ ...int, status }];
   } else if (json || yes) {
-    // Non-interactive: use all available
     selectedIntegrations = available;
   } else {
-    // Interactive selection
     const { selected } = await inquirer.prompt([
       {
         type: 'checkbox',
@@ -202,15 +108,15 @@ export async function seedCommand(options) {
         }))
       }
     ]);
-    
+
     if (selected.length === 0) {
       info('No integrations selected');
       return;
     }
-    
+
     selectedIntegrations = available.filter(i => selected.includes(i.name));
   }
-  
+
   // Determine days
   let seedDays = days;
   if (!seedDays && !json && !yes) {
@@ -228,7 +134,7 @@ export async function seedCommand(options) {
         default: 1
       }
     ]);
-    
+
     if (daysChoice === 'custom') {
       const { customDays } = await inquirer.prompt([
         {
@@ -236,17 +142,17 @@ export async function seedCommand(options) {
           name: 'customDays',
           message: 'Enter number of days:',
           default: 60,
-          validate: (val) => val > 0 && val <= 365 ? true : 'Enter a number between 1 and 365'
-        }
+          validate: (val: number) => val > 0 && val <= 365 ? true : 'Enter a number between 1 and 365'
+        } as any
       ]);
       seedDays = customDays;
     } else {
       seedDays = daysChoice;
     }
   }
-  
-  seedDays = seedDays || 60; // Default
-  
+
+  seedDays = seedDays || 60;
+
   // Confirm
   if (!json && !yes) {
     console.log('');
@@ -254,7 +160,7 @@ export async function seedCommand(options) {
     listItem('Integrations', selectedIntegrations.map(i => i.displayName).join(', '));
     listItem('Time range', `Last ${seedDays} days`);
     console.log('');
-    
+
     const { confirm } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -263,22 +169,45 @@ export async function seedCommand(options) {
         default: true
       }
     ]);
-    
+
     if (!confirm) {
       info('Seeding cancelled');
       return;
     }
   }
-  
+
   // Run seeding for each integration
-  const results = [];
-  
+  const results: Array<{ integration: string; success: boolean; days?: number; error?: string }> = [];
+
   for (const int of selectedIntegrations) {
     if (!json) {
       console.log('');
       info(`Seeding from ${int.displayName}...`);
     }
-    
+
+    if (int.name === 'fathom') {
+      try {
+        const result = await pullFathom(seedDays, json ?? false);
+        if (result.success) {
+          results.push({ integration: int.name, success: true, days: seedDays });
+          if (!json) {
+            success(`${int.displayName} seeding complete!`);
+          }
+        } else {
+          results.push({ integration: int.name, success: false, error: result.error ?? 'Unknown error' });
+          if (!json) {
+            error(`${int.displayName} seeding failed: ${result.error ?? 'Unknown error'}`);
+          }
+        }
+      } catch (err) {
+        results.push({ integration: int.name, success: false, error: (err as Error).message });
+        if (!json) {
+          error(`${int.displayName} seeding failed: ${(err as Error).message}`);
+        }
+      }
+      continue;
+    }
+
     const scriptPath = findIntegrationScript(int.name);
     if (!scriptPath) {
       results.push({ integration: int.name, success: false, error: 'Script not found' });
@@ -287,25 +216,25 @@ export async function seedCommand(options) {
       }
       continue;
     }
-    
+
     try {
       const args = [int.command || 'fetch', '--days', String(seedDays)];
       if (json) args.push('--json');
-      
+
       await runIntegrationScript(scriptPath, args, { quiet: json });
-      
+
       results.push({ integration: int.name, success: true, days: seedDays });
       if (!json) {
         success(`${int.displayName} seeding complete!`);
       }
     } catch (err) {
-      results.push({ integration: int.name, success: false, error: err.message });
+      results.push({ integration: int.name, success: false, error: (err as Error).message });
       if (!json) {
-        error(`${int.displayName} seeding failed: ${err.message}`);
+        error(`${int.displayName} seeding failed: ${(err as Error).message}`);
       }
     }
   }
-  
+
   // Summary
   if (json) {
     console.log(JSON.stringify({
@@ -315,17 +244,17 @@ export async function seedCommand(options) {
   } else {
     console.log('');
     section('Seeding Complete');
-    
+
     const succeeded = results.filter(r => r.success).length;
     const failed = results.filter(r => !r.success).length;
-    
+
     if (succeeded > 0) {
       success(`${succeeded} integration(s) seeded successfully`);
     }
     if (failed > 0) {
       warn(`${failed} integration(s) failed`);
     }
-    
+
     console.log('');
     console.log(chalk.dim('Next steps:'));
     console.log(`  • Review imported items in ${chalk.cyan('resources/meetings/')}`);

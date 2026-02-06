@@ -8,12 +8,26 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
-import { success, error, warn, info, header, listItem } from '../core/utils.js';
+import { success, error, warn, info, header } from '../core/utils.js';
+import type { CommandOptions } from '../types.js';
+
+interface SetupIntegration {
+  name: string;
+  displayName: string;
+  description: string;
+  tool: string;
+  auth: {
+    type: string;
+    envVar?: string;
+    instructions?: string;
+  };
+  status?: string;
+}
 
 /**
  * Available integrations to configure
  */
-const AVAILABLE_INTEGRATIONS = [
+const AVAILABLE_INTEGRATIONS: SetupIntegration[] = [
   {
     name: 'fathom',
     displayName: 'Fathom',
@@ -41,13 +55,13 @@ const AVAILABLE_INTEGRATIONS = [
 /**
  * Load credentials file
  */
-function loadCredentials(credentialsPath) {
+function loadCredentials(credentialsPath: string): Record<string, Record<string, string>> {
   if (!existsSync(credentialsPath)) {
     return {};
   }
   try {
     const content = readFileSync(credentialsPath, 'utf8');
-    return parseYaml(content) || {};
+    return (parseYaml(content) as Record<string, Record<string, string>>) || {};
   } catch {
     return {};
   }
@@ -56,7 +70,7 @@ function loadCredentials(credentialsPath) {
 /**
  * Save credentials file
  */
-function saveCredentials(credentialsPath, credentials) {
+function saveCredentials(credentialsPath: string, credentials: Record<string, unknown>): void {
   const dir = join(credentialsPath, '..');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -67,11 +81,11 @@ function saveCredentials(credentialsPath, credentials) {
 /**
  * Update integration config status
  */
-function updateIntegrationConfig(configPath, status) {
-  let config = {};
+function updateIntegrationConfig(configPath: string, status: string): void {
+  let config: Record<string, unknown> = {};
   if (existsSync(configPath)) {
     try {
-      config = parseYaml(readFileSync(configPath, 'utf8')) || {};
+      config = (parseYaml(readFileSync(configPath, 'utf8')) as Record<string, unknown>) || {};
     } catch {
       config = {};
     }
@@ -84,7 +98,7 @@ function updateIntegrationConfig(configPath, status) {
 /**
  * Setup command handler
  */
-export async function setupCommand(options) {
+export async function setupCommand(options: CommandOptions): Promise<void> {
   const { json } = options;
   
   // Find workspace
@@ -111,9 +125,6 @@ export async function setupCommand(options) {
     console.log('Configure integrations and credentials for your workspace.');
     console.log('');
   }
-  
-  // Get available integrations
-  const availableIntegrations = AVAILABLE_INTEGRATIONS.filter(i => i.status !== 'coming_soon');
   
   if (json) {
     // For JSON mode, just output current state
@@ -151,21 +162,21 @@ export async function setupCommand(options) {
   
   // Load existing credentials
   const credentials = loadCredentials(credentialsPath);
-  const configured = [];
+  const configured: string[] = [];
   
   // Configure each selected integration
   for (const integrationName of selectedIntegrations) {
-    const integration = AVAILABLE_INTEGRATIONS.find(i => i.name === integrationName);
+    const integration = AVAILABLE_INTEGRATIONS.find(i => i.name === integrationName)!;
     
     console.log('');
     console.log(chalk.bold(`Configuring ${integration.displayName}...`));
     
     if (integration.auth.type === 'api_key') {
-      console.log(chalk.dim(integration.auth.instructions));
+      console.log(chalk.dim(integration.auth.instructions!));
       console.log('');
       
       const existingKey = credentials[integration.name]?.api_key || 
-                         process.env[integration.auth.envVar] || '';
+                         process.env[integration.auth.envVar!] || '';
       const maskedKey = existingKey ? '****' + existingKey.slice(-4) : '';
       
       const { apiKey } = await inquirer.prompt([
