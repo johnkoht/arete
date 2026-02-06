@@ -177,6 +177,8 @@ findWorkspaceRoot(startDir: string): string | null
 
 **Install**: `arete install [directory]` creates workspace structure
 
+**Update backfill**: `arete update` ensures missing workspace dirs and default files exist (single source of truth in `src/core/workspace-structure.ts`). Never overwrites existing files. Lets existing workspaces get new structure (e.g. `people/`) when features ship.
+
 **Config**: `arete.yaml` (global + workspace-specific)
 
 ### 4. Skills System

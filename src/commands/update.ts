@@ -7,6 +7,7 @@ import { join, basename } from 'path';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
+import { ensureWorkspaceStructure } from '../core/workspace-structure.js';
 import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
 import type { CommandOptions, SyncResults } from '../types.js';
 
@@ -126,9 +127,15 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   
   const results = {
     skills: { added: [] as string[], updated: [] as string[], preserved: localOverrides },
-    rules: { added: [] as string[], updated: [] as string[], preserved: [] as string[] }
+    rules: { added: [] as string[], updated: [] as string[], preserved: [] as string[] },
+    structure: { directoriesAdded: [] as string[], filesAdded: [] as string[] }
   };
-  
+
+  // Ensure workspace structure (missing dirs and default files — never overwrites)
+  const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check });
+  results.structure.directoriesAdded = structureResult.directoriesAdded;
+  results.structure.filesAdded = structureResult.filesAdded;
+
   // Check skills
   if (existsSync(sourcePaths.skills)) {
     const srcSkills = getDirContents(sourcePaths.skills);
@@ -169,6 +176,17 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     }, null, 2));
     
     if (check) return;
+  }
+
+  // Display structure backfill (already applied when not check)
+  if (!json && (results.structure.directoriesAdded.length > 0 || results.structure.filesAdded.length > 0)) {
+    info('Workspace structure: added missing directories and/or default files');
+    if (results.structure.directoriesAdded.length > 0) {
+      info(`  Directories: ${results.structure.directoriesAdded.join(', ')}`);
+    }
+    if (results.structure.filesAdded.length > 0) {
+      info(`  Files: ${results.structure.filesAdded.join(', ')}`);
+    }
   }
   
   // Display what will be updated
@@ -225,12 +243,16 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     
     const totalAdded = skillsResult.added.length + rulesResult.added.length;
     const totalUpdated = skillsResult.updated.length + rulesResult.updated.length;
-    
+    const structureAdded = results.structure.directoriesAdded.length + results.structure.filesAdded.length;
+
+    if (structureAdded > 0) {
+      listItem('Structure (new dirs/files)', structureAdded.toString());
+    }
     if (totalAdded > 0) {
-      listItem('Added', totalAdded.toString());
+      listItem('Skills/rules added', totalAdded.toString());
     }
     if (totalUpdated > 0) {
-      listItem('Updated', totalUpdated.toString());
+      listItem('Skills/rules updated', totalUpdated.toString());
     }
     if (skillsResult.preserved.length > 0) {
       listItem('Preserved (overrides)', skillsResult.preserved.join(', '));
