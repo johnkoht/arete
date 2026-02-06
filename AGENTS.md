@@ -80,7 +80,8 @@ A **structured workspace** with:
 - `arete install` - Initialize workspace
 - `arete status` - Check workspace health
 - `arete pull` - Sync from integrations
-- `arete seed` - Import historical data
+- `arete seed` - Import historical data from integrations
+- `arete seed test-data` - **(Dev only)** Copy fixture data into workspace for local testing; see `TEST-SCENARIOS.md` for test prompts. Available only when package is linked (`npm link`) or installed via `--source symlink`; `test-data/` is excluded from the published npm package.
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show a person
 - `arete people index` - Regenerate people/index.md
@@ -369,6 +370,10 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 ```
+
+## Test Data (Development Only)
+
+For local testing, `arete seed test-data` copies fixture data (meetings, people, plans, projects, memory) into the workspace. Requires the package to be linked (`npm link`) or installed with `--source symlink`; the `test-data/` directory is not published to npm. After seeding, `TEST-SCENARIOS.md` in the workspace root lists prompts for meeting-prep, daily-plan, process-meetings, and other flows.
 
 ## Additional Resources
 
