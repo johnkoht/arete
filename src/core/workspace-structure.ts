@@ -28,6 +28,9 @@ export const WORKSPACE_DIRS = [
   'resources',
   'resources/meetings',
   'resources/notes',
+  'resources/plans',
+  'resources/plans/archive',
+  'templates/plans',
   '.cursor',
   '.cursor/rules',
   '.cursor/skills',
@@ -89,6 +92,80 @@ Standalone notes and observations.
 ## Recent Notes
 
 None yet.
+`,
+  'resources/plans/README.md': `# Planning
+
+Quarter and weekly plans live here. They align to org strategy in \`context/goals-strategy.md\`.
+
+## Hierarchy
+
+- **Quarter goals**: \`quarter-YYYY-Qn.md\` (e.g. \`quarter-2026-Q1.md\`) — 3–5 outcomes per quarter with links to org pillars/OKRs.
+- **Week priorities**: \`week-YYYY-Www.md\` (e.g. \`week-2026-W06.md\`) — top 3–5 outcomes per week, linked to quarter goals.
+- **Daily** (Phase 2): Lightweight in scratchpad or a section in the week file; full daily plans later.
+
+## Archive
+
+Past quarter and week files can go in \`resources/plans/archive/\` to keep the root focused on current plans.
+
+## Skills
+
+Use **quarter-plan**, **goals-alignment**, **week-plan**, and **week-review** skills to create and update these files.
+`,
+  'templates/plans/quarter-goals.md': `# Quarter Goals — [YYYY-Qn]
+
+**Quarter**: [Start date] – [End date]
+
+## Outcomes (3–5)
+
+### [Qn-1] [Outcome title]
+- **Success criteria**: [1–2 sentences]
+- **Org alignment**: [Pillar / OKR from context/goals-strategy.md]
+
+### [Qn-2] [Outcome title]
+- **Success criteria**:
+- **Org alignment**:
+
+(Add more as needed.)
+
+## Alignment table
+
+| My goal | Org pillar / OKR |
+|--------|------------------|
+| [Qn-1] | |
+| [Qn-2] | |
+
+## Notes / milestones
+
+-
+`,
+  'templates/plans/week-priorities.md': `# Week Priorities — [YYYY-Www]
+
+**Week of**: [Monday date]
+
+## Top 3–5 outcomes
+
+### 1. [Outcome]
+- **Success criteria**: 
+- **Advances quarter goal**: [e.g. Q1-2]
+- **Effort**: deep / medium / quick (optional)
+
+### 2. [Outcome]
+- **Success criteria**:
+- **Advances quarter goal**:
+
+(Add more as needed.)
+
+## Commitments due this week
+
+-
+
+## Carried over from last week
+
+-
+
+## End of week review (fill during week-review)
+
+-
 `,
   'people/index.md': `# People Index
 

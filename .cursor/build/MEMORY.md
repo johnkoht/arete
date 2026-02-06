@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [PM Planning System PRD and autonomous setup](entries/2026-02-06_pm-planning-system-prd-and-autonomous.md) — PRD and prd.json for PM planning (resources/plans, quarter/week skills); scratchpad automations and plan→execution feedback.
 - 2026-02-06 [Update workspace structure backfill](entries/2026-02-06_update-workspace-structure-backfill.md) — arete update ensures missing workspace dirs and default files; single source of truth in workspace-structure.ts; existing workspaces get new structure (e.g. people/) on update.
 - 2026-02-06 [People system](entries/2026-02-06_people-system.md) — People tracking (internal, customers, users); people/ dirs, index, core module, CLI (list/show/index); linking conventions for meetings and projects.
 - 2026-02-06 [Autonomous agent loop system](entries/2026-02-06_autonomous-agent-loop.md) — Cursor-native autonomous execution for Areté development; prd-to-json and execute-prd skills; fresh Task subagents per task; progress tracking.

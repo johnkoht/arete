@@ -74,6 +74,42 @@ Some kind of built-in product coach that can:
 
 Form TBD: could be a **skill** ("talk to my coach"), a **tool** with phases (e.g. weekly check-in), a **persona** the agent adopts in certain modes, or a dedicated **coach mode** in the CLI. Might use context (goals, roadmap, memory) to stay relevant and push on the right things.
 
+### Proactive Recommendations System
+*Added: 2026-02-06*
+
+A system where the agent can proactively recommend actions or prompt the user about workspace health. The system should track **timestamps** for key actions and recommend when things are stale.
+
+**Timestamp-based checks (examples):**
+- **Quarterly goals**: If `context/goals-strategy.md` (or equivalent) hasn’t been updated in e.g. **4 months** → treat as a problem; agent should recommend setting/refreshing goals.
+- **Calendar / meeting sync**: If the user hasn’t synced (e.g. `arete pull` or calendar sync) in **1–2 days** → recommend they sync so meetings and context are current.
+- **Weekly plan**: If there’s no plan for the current week or it’s very stale → nudge to update.
+
+**Stored timestamps (concept):**
+- Persist “last synced at”, “last goals update”, etc. (e.g. in workspace state or derived from file mtimes).
+- Agent (or `arete status`) compares these to thresholds and surfaces recommendations.
+
+**Triggers:**
+- User asks a question → agent can include a gentle prompt ("By the way, your quarterly goals haven’t been updated in 4 months…")
+- Agent proactively suggests ("You haven’t synced in a couple of days — want to run a quick pull?")
+- Periodic check-in when user starts a session.
+
+**Implementation:**
+- Part of `arete status` (workspace health) with clear “last done” ages and thresholds.
+- Lightweight checks (file timestamps, stored last-run times).
+- User can ask "what should I do?" or "check my workspace health" to get recommendations.
+
+---
+
+### Background sync worker
+*Added: 2026-02-06*
+
+A **background worker** that syncs pullable sources (e.g. calendar, Fathom meetings) on an interval (e.g. **every 30 minutes**), so the workspace stays up to date without the user having to run `arete pull` manually.
+
+- Run `arete pull` (or equivalent) for configured integrations on a schedule.
+- Could be a long-running process (e.g. `arete daemon` or `arete sync --watch`) or a system cron/launchd job.
+- Respect rate limits and credentials; log failures for user visibility.
+- Complements the recommendation system: if background sync is enabled, “last synced” stays fresh; if not, agent can still recommend syncing after 1–2 days.
+
 ### People/Stakeholders Tracking
 - Index of people involved (name, role, team, contact) — see **Background → People** for index + ID/mapping design.
 - Per-person memory: what they care about, common questions, pet peeves
@@ -158,6 +194,51 @@ When MCP integrations are added, consider these use cases:
 - Pull design context for PRDs
 - Reference designs in competitive analysis
 - Link mockups to requirements
+
+---
+
+### Planning System: Automations, Integrations, and Proactive Use
+*Added: 2026-02-06*
+
+Once `resources/plans/` (quarter goals, week priorities) and skills exist, the system can use this data for:
+
+**Proactive / agent-driven**
+- **Quarter goals stale**: If no `resources/plans/quarter-YYYY-Qn.md` for current quarter (or file > 4 months old) → nudge "Set or refresh your quarter goals" (link quarter-plan skill). Integrate with Proactive Recommendations and `arete status`.
+- **Week plan missing or stale**: If no `resources/plans/week-YYYY-Www.md` for current week (or empty/stale) → nudge "Plan your week" (week-plan skill). E.g. Monday morning or when user asks "what should I focus on?"
+- **Alignment check**: Periodically (e.g. start of quarter or when goals-strategy.md changes) suggest "View goals alignment" (goals-alignment skill) so PM sees org vs PM goals and gaps.
+- **Review prompts**: End of week → suggest week-review; end of quarter → suggest quarter review (and feed into next quarter-plan).
+
+**Integrations (future)**
+- **Calendar**: When building week plan, pull this week’s meetings and suggest which days have deep-work blocks; surface "commitments due" from meeting notes or calendar.
+- **Linear / Jira**: Map quarter goals (e.g. Q1-1, Q1-2) to initiatives or epics; show "progress toward Q1 goals" from completed issues. Optional: tag issues with goal ID.
+- **Meetings (Fathom)**: After saving a meeting, suggest linking it to a quarter goal or week priority ("Did this advance a goal?") for traceability.
+- **arete status**: Extend workspace health to include "Last quarter goals set", "Current week plan exists", "Goals alignment last viewed" (from file mtimes or optional metadata).
+
+**Automations (lightweight)**
+- **Archive old plans**: Optional script or `arete` subcommand: move past quarter file to `resources/plans/archive/`, rename or archive past weeks so current week is easy to find.
+- **Alignment snapshot**: When PM runs goals-alignment, optionally auto-save a snapshot to `resources/plans/archive/alignment-YYYY-Qn.md` for history (e.g. once per quarter).
+
+**Coach / accountability**
+- Product Coach (see above) can use quarter and week plans to "push": "You said Q1-2 was a priority; nothing in this week’s plan advances it," or "Your week plan has 5 deep-work items but only 2 free blocks."
+
+---
+
+### Plan → Autonomous Execution: Feedback for Improvement
+*Added: 2026-02-06*
+
+When going from a **plan** (e.g. PM Planning System plan) to **autonomous agent execution** (execute-prd with prd.json):
+
+**What worked well**
+- PRD in `projects/active/.../outputs/` gives a single source of truth; prd.json tasks can reference it ("Reference PRD outputs for structure").
+- Atomic tasks (one TS change + test, then skills as separate tasks) keep each subagent scope small and typecheck/test reliable.
+- Having a copy of prd.json in repo root (`prd-pm-planning-system.json`) when write to `.cursor/build/` was restricted; then `cp` into autonomous folder with elevated permissions.
+
+**Improvements to try**
+- **Plan → PRD → prd.json in one flow**: When creating a plan, optionally output a "PRD summary" and a "suggested prd.json task list" so the maintainer can paste into autonomous without re-authoring. Or a small script/skill: "Convert plan section 7 (Implementation outline) into prd.json userStories."
+- **Default file content in the repo**: For tasks that add DEFAULT_FILES with long content, consider checking in the desired README/template content as real files under a `workspace-structure-defaults/` or in the PRD project, so the subagent can read and paste instead of inventing. Reduces drift and ensures consistency.
+- **First task includes test updates**: Including "add tests for new dirs/files" in the same task as workspace-structure changes keeps the codebase green and documents expected structure.
+- **Branch name in plan**: If the plan specified a branch (e.g. `feature/pm-planning-system`), include it in the PRD or prd.json so execute-prd doesn’t need a second step.
+- **Execute-prd prerequisite check**: Before spawning, verify that the task description and acceptance criteria are sufficient for a fresh subagent (e.g. "contains path to edit" and "contains pass criteria"). Optional: light validation or prompt hint to subagent: "If the task references a file, open it first."
 
 ---
 

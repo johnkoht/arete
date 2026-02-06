@@ -38,12 +38,28 @@ describe('workspace-structure', () => {
       assert.ok(WORKSPACE_DIRS.includes('projects'));
       assert.ok(WORKSPACE_DIRS.includes('resources'));
     });
+
+    it('includes planning dirs', () => {
+      assert.ok(WORKSPACE_DIRS.includes('resources/plans'));
+      assert.ok(WORKSPACE_DIRS.includes('resources/plans/archive'));
+      assert.ok(WORKSPACE_DIRS.includes('templates/plans'));
+    });
   });
 
   describe('DEFAULT_FILES', () => {
     it('includes people/index.md', () => {
       assert.ok('people/index.md' in DEFAULT_FILES);
       assert.ok(DEFAULT_FILES['people/index.md'].includes('People Index'));
+    });
+
+    it('includes planning default files', () => {
+      assert.ok('resources/plans/README.md' in DEFAULT_FILES);
+      assert.ok(
+        DEFAULT_FILES['resources/plans/README.md'].includes('Planning') ||
+          DEFAULT_FILES['resources/plans/README.md'].includes('quarter')
+      );
+      assert.ok('templates/plans/quarter-goals.md' in DEFAULT_FILES);
+      assert.ok('templates/plans/week-priorities.md' in DEFAULT_FILES);
     });
   });
 
