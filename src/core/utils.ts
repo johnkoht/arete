@@ -3,6 +3,12 @@
  */
 
 import chalk from 'chalk';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface OutputOptions {
   json?: boolean;
@@ -92,6 +98,15 @@ export function formatPath(fullPath: string): string {
   return fullPath;
 }
 
+/**
+ * Get the build version from package.json
+ */
+export function getBuildVersion(): string {
+  const packageJsonPath = join(__dirname, '../../package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  return packageJson.version;
+}
+
 export default {
   output,
   success,
@@ -101,5 +116,6 @@ export default {
   header,
   section,
   listItem,
-  formatPath
+  formatPath,
+  getBuildVersion
 };
