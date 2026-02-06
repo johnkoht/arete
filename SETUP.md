@@ -63,6 +63,8 @@ arete/
 
 **Planning structure**: `resources/plans/` and `templates/plans/` are created by `arete install` and backfilled by `arete update` so existing workspaces get the planning feature when it ships.
 
+**Meeting propagation**: After saving or syncing meetings, run the **process-meetings** skill to update people and memory. Optional: set `internal_email_domain` in `arete.yaml` (e.g. `internal_email_domain: "acme.com"`) so attendees from your org are classified as internal.
+
 ## Understanding the Architecture
 
 ### For Users (Product Managers)

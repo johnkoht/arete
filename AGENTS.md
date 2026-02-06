@@ -144,9 +144,16 @@ saveMeeting(meeting: MeetingForSave, workspaceRoot: string): SaveMeetingResult
 updateMeetingsIndex(workspaceRoot: string, filename: string): void
 ```
 
-**Format**: Markdown with frontmatter (title, date, attendees, source)
+**Format**: Markdown with YAML frontmatter: `title`, `date`, `source`, `attendees`, `attendee_ids`, `company`, `pillar`. Body: summary, key points, action items, decisions, transcript.
 
 **Integrations**: Fathom pulls meetings via `src/integrations/fathom/`
+
+**Meeting Propagation**:
+- Run the **process-meetings** skill to propagate meeting content into people and memory.
+- Creates/updates person files (`people/internal/` or `people/customers/`) from attendees; writes `attendee_ids` to meeting frontmatter.
+- Extracts decisions and learnings for inline review; appends approved items to `memory/items/decisions.md` and `memory/items/learnings.md`.
+- Internal vs external classification: set `internal_email_domain` in `arete.yaml` (e.g. `"acme.com"`). Attendees whose email domain matches go to `people/internal/`; others to `people/customers/`.
+- See People System for linking conventions (`attendee_ids`, stakeholders).
 
 ### 2. Integrations System
 

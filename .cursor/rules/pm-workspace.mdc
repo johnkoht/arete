@@ -78,6 +78,7 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Finish this project" | Finalize and archive | `finalize-project` |
 | "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
 | "Sync my meetings" / "Pull from Fathom" | Manual integration sync | `sync` |
+| "Process my meetings" / "Update people from meetings" / "Extract decisions" | Propagate meetings to people and memory | `process-meetings` |
 
 Skills are located in `.cursor/skills/` and follow the Agent Skills standard.
 
