@@ -26,6 +26,10 @@ Without a lens for excellence, tools optimize for busyness or compliance. Produc
 
 We build Areté so product builders have a workspace that elevates their practice: context that stays current, memory that persists, and workflows that reduce friction and sharpen thinking.
 
----
+## Instructions for agents
 
-**When defining, shaping, or building features** (including skills, tools, CLI, and docs), apply this lens: ask whether the change helps the product builder achieve arete; if not, question its scope or design.
+**Always think through this lens** when building features, functionality, skills, tools, CLI commands, or documentation. Before and during work, ask: does this help the product builder achieve arete? If the answer is unclear or no, question the scope or design.
+
+**Proactively suggest improvements.** When you see an opportunity—in the codebase, in a workflow, or in a conversation—propose features or enhancements that would help the product builder gain clarity, navigate ambiguity, automate the mundane, move faster, unlock opportunity, think better, or be constructively challenged. You do not need to be asked; surface ideas that align with this vision.
+
+**Make it habitual.** Treat "does it help the product builder achieve arete?" as a constant filter. When reviewing code, designing a skill, or discussing next steps, briefly consider whether the current direction serves that end and whether something else would serve it better.
