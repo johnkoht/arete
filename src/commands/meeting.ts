@@ -22,6 +22,9 @@ interface MeetingInput {
   url?: string;
   action_items?: string[];
   attendees?: string[] | Array<{ name?: string; email?: string }>;
+  attendee_ids?: string[];
+  company?: string;
+  pillar?: string;
   duration_minutes?: number;
 }
 
@@ -43,6 +46,12 @@ function normalizeMeetingInput(raw: MeetingInput): MeetingForSave {
       )
     : [];
 
+  const attendeeIds = Array.isArray(raw.attendee_ids)
+    ? raw.attendee_ids.filter((s): s is string => typeof s === 'string')
+    : undefined;
+  const company = typeof raw.company === 'string' ? raw.company.trim() || undefined : undefined;
+  const pillar = typeof raw.pillar === 'string' ? raw.pillar.trim() || undefined : undefined;
+
   return {
     title,
     date,
@@ -52,6 +61,9 @@ function normalizeMeetingInput(raw: MeetingInput): MeetingForSave {
     action_items: actionItems,
     highlights: [],
     attendees,
+    attendee_ids: attendeeIds?.length ? attendeeIds : undefined,
+    company,
+    pillar,
     url: raw.url?.trim() ?? '',
   };
 }
