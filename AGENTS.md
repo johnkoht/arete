@@ -214,7 +214,26 @@ slugifyPersonName(name): string
 
 **CLI**: `arete people list`, `arete people show <slug-or-email>`, `arete people index`.
 
-### 6. Build/Development System
+### 6. Planning System
+
+**Purpose**: Quarter and weekly planning aligned to org strategy; plans live in `resources/plans/`.
+
+**Storage**:
+- Quarter goals: `resources/plans/quarter-YYYY-Qn.md` (e.g. `quarter-2026-Q1.md`) — 3–5 outcomes with success criteria and org pillar/OKR links.
+- Week priorities: `resources/plans/week-YYYY-Www.md` (e.g. `week-2026-W06.md`) — top 3–5 outcomes linked to quarter goals, commitments due, carried over.
+- Archive: `resources/plans/archive/` for past quarter/week files and alignment snapshots.
+
+**Alignment**: Plans align to org strategy in `context/goals-strategy.md`. Use an alignment table (My goal → Org pillar/OKR) in quarter files and quarter-goal links in week files.
+
+**Skills**:
+- **quarter-plan** — Set quarter goals, link to org pillars/OKRs, write quarter file.
+- **goals-alignment** — View and compare PM goals to org; optional snapshot to archive.
+- **week-plan** — Set weekly priorities linked to quarter goals; write week file.
+- **week-review** — Mark priorities done/partial/carried; brief quarter progress; optional session summary.
+
+**Phase 2**: Daily planning (lightweight in scratchpad or week file; full daily plans later).
+
+### 7. Build/Development System
 
 **Location**: `.cursor/build/` (NEVER shipped to users)
 

@@ -43,17 +43,25 @@ arete/
 │   ├── summaries/           # Synthesized context
 │   └── activity-log.md      # Activity history
 │
+├── resources/               # Raw inputs and plans
+│   ├── meetings/            # Meeting notes and transcripts
+│   ├── notes/               # Standalone notes
+│   └── plans/               # Quarter and week plans (quarter-YYYY-Qn.md, week-YYYY-Www.md)
+│       └── archive/         # Past plans and alignment snapshots
+│
 ├── scripts/                 # Setup and utility scripts
 │   ├── setup.sh             # Setup and install dependencies
 │   └── integrations/        # Integration API scripts
 │
 ├── scratchpad.md            # Quick capture space
-│
 └── templates/               # Document templates
+    ├── plans/               # Quarter and week plan templates
     ├── projects/            # Project templates
     ├── inputs/              # Input templates
     └── outputs/             # Output templates (PRDs, etc.)
 ```
+
+**Planning structure**: `resources/plans/` and `templates/plans/` are created by `arete install` and backfilled by `arete update` so existing workspaces get the planning feature when it ships.
 
 ## Understanding the Architecture
 

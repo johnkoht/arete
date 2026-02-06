@@ -68,6 +68,10 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "I want to write a PRD" | Create PRD project | `create-prd` |
 | "Analyze competitors" | Competitive analysis project | `competitive-analysis` |
 | "Build/update roadmap" | Roadmap project | `construct-roadmap` |
+| "View goals" / "Compare to org" | View alignment of PM goals to org | `goals-alignment` |
+| "Set quarter goals" / "Plan the quarter" | Quarter goals aligned to org | `quarter-plan` |
+| "Plan the week" / "Weekly priorities" | Set week outcomes linked to quarter | `week-plan` |
+| "Review the week" / "Close the week" | Mark done/partial/carried, quarter progress | `week-review` |
 | "Process my notes/feedback" | Synthesize within project | `synthesize` |
 | "Save this meeting" / Paste meeting content | Save to resources/meetings | `save-meeting` |
 | "Visualize / prototype this" | Generate mockup | `generate-mockup` |
@@ -107,9 +111,10 @@ See `.cursor/integrations/README.md` for framework details.
 ## Before Starting Any Work
 
 1. **Check active projects**: Look in `projects/active/` for existing work
-2. **Read relevant context**: Check `context/` files for business background
-3. **Search with QMD**: Actually run `qmd query "[topic]"` via shell to find related content
-4. **Check scratchpad**: Review `scratchpad.md` for relevant notes
+2. **Check current plans**: For planning work, see `resources/plans/` (quarter and week files) and use **quarter-plan**, **goals-alignment**, **week-plan**, or **week-review** as needed
+3. **Read relevant context**: Check `context/` files for business background
+4. **Search with QMD**: Actually run `qmd query "[topic]"` via shell to find related content
+5. **Check scratchpad**: Review `scratchpad.md` for relevant notes
 
 **Important**: When searching with QMD, execute the shell command - don't just mention it. For example:
 ```bash
