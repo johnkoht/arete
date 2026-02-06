@@ -27,6 +27,7 @@ import { skillCommand } from './commands/skill.js';
 import { integrationCommand } from './commands/integration.js';
 import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
+import { seedTestDataCommand } from './commands/seed-test-data.js';
 import { pullCommand } from './commands/pull.js';
 import { meetingAddCommand } from './commands/meeting.js';
 import {
@@ -76,13 +77,19 @@ program
   .action(statusCommand);
 
 program
-  .command('seed')
-  .description('Import historical data from integrations')
+  .command('seed [source]')
+  .description('Import data: omit source for integrations, or use "test-data" for dev fixtures')
   .option('--days <n>', 'Number of days to import', parseInt)
   .option('--integration <name>', 'Specific integration to seed from')
   .option('--yes', 'Skip confirmation prompts')
+  .option('--force', 'Overwrite existing files (test-data only)')
   .option('--json', 'Output as JSON')
-  .action(seedCommand);
+  .action(async (source: string | undefined, opts: Record<string, unknown>) => {
+    if (source === 'test-data') {
+      return seedTestDataCommand(opts);
+    }
+    return seedCommand(opts);
+  });
 
 program
   .command('pull [integration]')
