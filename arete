@@ -35,6 +35,9 @@ print_help() {
     echo "  init          Initialize workspace (directories, credentials)"
     echo "  setup all     Full setup (install + init)"
     echo ""
+    echo -e "${BOLD}Meeting Commands${NC}"
+    echo "  meeting add --file <path>  Add meeting from JSON file"
+    echo ""
     echo -e "${BOLD}Integration Commands${NC}"
     echo "  fathom list [--days N]     List recent Fathom recordings"
     echo "  fathom fetch [--days N]    Fetch and save recordings"
@@ -61,6 +64,12 @@ case "${1:-help}" in
         ;;
     init)
         "$SCRIPT_DIR/scripts/setup.sh" init
+        ;;
+    
+    # Meeting commands
+    meeting)
+        shift
+        node "$SCRIPT_DIR/bin/arete.js" meeting "$@"
         ;;
     
     # Fathom integration

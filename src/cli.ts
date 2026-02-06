@@ -28,6 +28,7 @@ import { integrationCommand } from './commands/integration.js';
 import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
 import { pullCommand } from './commands/pull.js';
+import { meetingAddCommand } from './commands/meeting.js';
 
 // Configure program
 program
@@ -167,6 +168,19 @@ fathomCmd
   .description('Get a specific recording')
   .option('--json', 'Output as JSON')
   .action((id, opts) => fathomCommand('get', { id, ...opts }));
+
+// Meeting commands (manual capture, paste-into-chat flow)
+const meetingCmd = program
+  .command('meeting')
+  .description('Add meetings from manual input');
+
+meetingCmd
+  .command('add')
+  .description('Add a meeting from JSON file or stdin')
+  .option('--file <path>', 'Path to JSON file with meeting data')
+  .option('--stdin', 'Read JSON from stdin')
+  .option('--json', 'Output as JSON')
+  .action((opts) => meetingAddCommand(opts));
 
 // Parse and execute
 program.parse();

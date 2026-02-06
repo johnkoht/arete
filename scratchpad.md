@@ -4,6 +4,27 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 
 ---
 
+## Background
+<!-- Reference context: people, plans, company strategy. Expand into context/ or memory as it solidifies. -->
+
+### People
+- **Index**: Names, roles, teams, contact (email/Slack). May live in `context/people.md` or `people/[slug].md`.
+- **IDs / mapping**: Stable ID per person (e.g. slug: `jane-doe`) so we can link:
+  - **Person → meeting**: Meeting frontmatter or body lists `attendees: [person-id]` or link to people index.
+  - **Person → project**: Project README or inputs list `stakeholders: [person-id]` or key contacts.
+- Enables: "All meetings with Jane", "Projects where Sarah is stakeholder", and per-person memory (preferences, quotes).
+
+### Plans
+- **Day plan**: Today’s focus, meetings, top 3 priorities. Could live in scratchpad or `resources/plans/day-YYYY-MM-DD.md`.
+- **Weekly plan**: This week’s goals, key meetings, themes. Align with `resources/plans/week-YYYY-Www.md` or similar.
+- **Review**: Weekly review (what shipped, what slipped, learnings), retro, or checkpoint. Feed into memory/items and next week’s plan.
+
+### Company (strategic pillars / outcomes)
+- **Already in context**: `context/goals-strategy.md` has Strategic Pillars, OKRs, and outcomes (e.g. bets and their outcomes).
+- Keep pillars and outcomes there; reference from projects and roadmap work.
+
+---
+
 ## Ideas
 <!-- Quick ideas - date them so you know when they came up -->
 
@@ -43,12 +64,22 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 - Options for deep research vs quick tasks
 - Let user customize model selection for: discovery, synthesis, PRD writing, etc.
 
+### Product Coach (built-in)
+*Added: 2026-02-05*
+
+Some kind of built-in product coach that can:
+- **Challenge**: Question assumptions, poke holes in strategy, ask "so what?" and "why this first?"
+- **Sounding board**: Think through options out loud, rehearse arguments, stress-test narratives
+- **Push**: Hold accountable to goals, call out drift, nudge when stuck or avoiding hard decisions
+
+Form TBD: could be a **skill** ("talk to my coach"), a **tool** with phases (e.g. weekly check-in), a **persona** the agent adopts in certain modes, or a dedicated **coach mode** in the CLI. Might use context (goals, roadmap, memory) to stay relevant and push on the right things.
+
 ### People/Stakeholders Tracking
-- Index of people involved (name, role, team, contact)
+- Index of people involved (name, role, team, contact) — see **Background → People** for index + ID/mapping design.
 - Per-person memory: what they care about, common questions, pet peeves
 - Auto-populate from meeting transcripts
 - Agent uses this when preparing deliverables ("CEO always asks about ROI")
-- Structure: `people/[name].md` with sections for role, preferences, notable quotes
+- Structure: `people/[slug].md` or `context/people.md` with sections for role, preferences, notable quotes; use stable IDs to link to meetings and projects.
 
 ### Package-Based Distribution (Shelved)
 *Added: 2026-01-27*

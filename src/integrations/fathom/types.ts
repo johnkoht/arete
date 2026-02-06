@@ -75,20 +75,3 @@ export interface RecordingTranscriptResponse {
   transcript?: TranscriptSegment[];
   segments?: TranscriptSegment[];
 }
-
-/** Normalized meeting shape for saving to markdown */
-export interface MeetingForSave {
-  title: string;
-  date: string;
-  created_at?: string;
-  recording_id: number;
-  id?: number;
-  duration_minutes: number;
-  summary: string;
-  transcript: string;
-  action_items: string[];
-  highlights: string[];
-  attendees: Invitee[];
-  url: string;
-  share_url?: string;
-}

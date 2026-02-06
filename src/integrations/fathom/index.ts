@@ -10,9 +10,10 @@
 
 import { findWorkspaceRoot, getWorkspacePaths } from '../../core/workspace.js';
 import { error, info, success } from '../../core/utils.js';
+import { saveMeeting, meetingFilename } from '../../core/meetings.js';
 import { FathomClient, loadFathomApiKey } from './client.js';
-import { meetingFromListItem, saveMeeting, meetingFilename } from './save.js';
-import type { MeetingForSave } from './types.js';
+import { meetingFromListItem } from './save.js';
+import type { MeetingForSave } from './save.js';
 import type { CommandOptions } from '../../types.js';
 
 export interface FathomOptions extends CommandOptions {
@@ -129,8 +130,11 @@ async function doFetchRecordings(
         process.stdout.write(`  Saving: ${title}... `);
       }
       const meeting = meetingFromListItem(m);
-      const savedPath = saveMeeting(meeting, outputDir, paths, false);
-      if (savedPath) {
+      const result = saveMeeting(meeting, outputDir, paths, {
+        integration: 'Fathom',
+        force: false,
+      });
+      if (result.saved) {
         if (!json) {
           console.log(`✓ ${meetingFilename(meeting)}`);
         }
@@ -251,9 +255,12 @@ async function getRecording(options: FathomOptions): Promise<void> {
       return;
     }
 
-    const savedPath = saveMeeting(meeting, outputDir, paths, false);
-    if (savedPath) {
-      success(`Saved: ${savedPath}`);
+    const result = saveMeeting(meeting, outputDir, paths, {
+      integration: 'Fathom',
+      force: false,
+    });
+    if (result.saved && result.path) {
+      success(`Saved: ${result.path}`);
     } else {
       info(`Skipped (already exists): ${meetingFilename(meeting)}`);
     }

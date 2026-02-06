@@ -1,21 +1,10 @@
 /**
- * Save Fathom meetings to markdown using the integration-meeting template.
+ * Fathom-specific transforms: API response → MeetingForSave.
+ * Saving and index updates are handled by src/core/meetings.ts.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import type { WorkspacePaths } from '../../types.js';
-import type { FathomMeeting, MeetingForSave, Invitee, TranscriptSegment } from './types.js';
-import { getPackageRoot } from '../../core/workspace.js';
-
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
+import type { FathomMeeting, Invitee, TranscriptSegment } from './types.js';
+import type { MeetingForSave } from '../../core/meetings.js';
 
 function meetingDurationMinutes(m: FathomMeeting): number {
   const start = m.recording_start_time || m.scheduled_start_time;
@@ -82,88 +71,4 @@ export function meetingFromListItem(item: FathomMeeting): MeetingForSave {
   };
 }
 
-function formatAttendees(attendees: Invitee[]): string {
-  if (!Array.isArray(attendees)) return '';
-  return attendees
-    .map((a) => (a && typeof a === 'object' ? (a.name ?? a.email ?? String(a)) : String(a)))
-    .join(', ');
-}
-
-/**
- * Resolve path to integration-meeting.md template (workspace override or package default).
- */
-export function getTemplatePath(paths: { templates: string } | null): string {
-  const templateRel = join('inputs', 'integration-meeting.md');
-  if (paths?.templates) {
-    const workspaceTemplate = join(paths.templates, templateRel);
-    if (existsSync(workspaceTemplate)) return workspaceTemplate;
-  }
-  const packageRoot = getPackageRoot();
-  return join(packageRoot, 'templates', templateRel);
-}
-
-/**
- * Render the meeting markdown from the template.
- */
-export function renderMeetingTemplate(meeting: MeetingForSave, templatePath: string): string {
-  let template = readFileSync(templatePath, 'utf8');
-  const keyPoints = meeting.highlights?.length
-    ? meeting.highlights.map((h) => `- ${h}`).join('\n')
-    : 'No key points captured.';
-  const actionItemsStr = meeting.action_items?.length
-    ? meeting.action_items.map((a) => `- [ ] ${a}`).join('\n')
-    : 'No action items captured.';
-  const decisionsStr = 'No decisions captured.';
-  const importDate = new Date().toISOString().slice(0, 10);
-
-  const vars: Record<string, string> = {
-    title: meeting.title,
-    date: meeting.date,
-    duration: `${meeting.duration_minutes} minutes`,
-    integration: 'Fathom',
-    import_date: importDate,
-    attendees: formatAttendees(meeting.attendees ?? []),
-    summary: meeting.summary || 'No summary available.',
-    key_points: keyPoints,
-    action_items: actionItemsStr,
-    decisions: decisionsStr,
-    transcript: meeting.transcript || 'No transcript available.',
-    meeting_id: String(meeting.recording_id ?? meeting.id ?? ''),
-    recording_link: meeting.url ?? '',
-    source_link: meeting.url ?? meeting.share_url ?? '',
-  };
-
-  for (const [k, v] of Object.entries(vars)) {
-    template = template.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
-  }
-  return template;
-}
-
-/**
- * Generate filename for the meeting (e.g. 2026-02-05-product-review.md).
- */
-export function meetingFilename(meeting: MeetingForSave): string {
-  let dateStr = meeting.date;
-  if (dateStr && dateStr.includes('T')) dateStr = dateStr.slice(0, 10);
-  if (!dateStr) dateStr = new Date().toISOString().slice(0, 10);
-  const titleSlug = slugify(meeting.title || 'untitled');
-  return `${dateStr}-${titleSlug}.md`;
-}
-
-/**
- * Save meeting to outputDir. Returns the saved file path or null if skipped (duplicate).
- */
-export function saveMeeting(
-  meeting: MeetingForSave,
-  outputDir: string,
-  paths: WorkspacePaths | null,
-  force: boolean = false
-): string | null {
-  const fullPath = join(outputDir, meetingFilename(meeting));
-  if (!force && existsSync(fullPath)) return null;
-  mkdirSync(outputDir, { recursive: true });
-  const templatePath = getTemplatePath(paths);
-  const content = renderMeetingTemplate(meeting, templatePath);
-  writeFileSync(fullPath, content, 'utf8');
-  return fullPath;
-}
+export type { MeetingForSave } from '../../core/meetings.js';

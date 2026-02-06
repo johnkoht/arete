@@ -6,12 +6,8 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { FathomClient, loadFathomApiKey } from '../../src/integrations/fathom/client.js';
 import { FATHOM_API_BASE } from '../../src/integrations/fathom/config.js';
-import {
-  meetingFromListItem,
-  meetingFilename,
-  getTemplatePath,
-  renderMeetingTemplate,
-} from '../../src/integrations/fathom/save.js';
+import { meetingFromListItem } from '../../src/integrations/fathom/save.js';
+import { meetingFilename } from '../../src/core/meetings.js';
 import type { FathomMeeting } from '../../src/integrations/fathom/types.js';
 
 describe('Fathom config', () => {
@@ -124,31 +120,5 @@ describe('meetingFilename', () => {
       url: '',
     });
     assert.equal(name, '2026-02-05-product-review.md');
-  });
-});
-
-describe('renderMeetingTemplate', () => {
-  it('replaces template variables', () => {
-    const templatePath = getTemplatePath(null);
-    const content = renderMeetingTemplate(
-      {
-        title: 'Test Meeting',
-        date: '2026-02-05',
-        recording_id: 99,
-        duration_minutes: 15,
-        summary: 'Summary here.',
-        transcript: 'Transcript here.',
-        action_items: ['Do thing'],
-        highlights: [],
-        attendees: [],
-        url: 'https://fathom.video/x',
-      },
-      templatePath
-    );
-    assert.ok(content.includes('Test Meeting'));
-    assert.ok(content.includes('2026-02-05'));
-    assert.ok(content.includes('Summary here.'));
-    assert.ok(content.includes('Transcript here.'));
-    assert.ok(content.includes('Do thing'));
   });
 });
