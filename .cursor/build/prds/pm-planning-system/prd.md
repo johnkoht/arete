@@ -1,7 +1,7 @@
 # PRD: PM Planning System
 
 **Version**: 1.0  
-**Status**: Approved for implementation  
+**Status**: Implemented (2026-02-06)  
 **Execution**: Autonomous agent loop (prd.json)
 
 ---
@@ -65,20 +65,19 @@ PMs need a single place to see their high-level goals, align them with org strat
 
 ## 4. Acceptance Criteria (Implementation)
 
-- [ ] `WORKSPACE_DIRS` includes `resources/plans`, `resources/plans/archive`, `templates/plans`.
-- [ ] `DEFAULT_FILES` includes `resources/plans/README.md`, `templates/plans/quarter-goals.md`, `templates/plans/week-priorities.md` with correct content.
-- [ ] Workspace structure tests assert the new dirs and at least one new default file.
-- [ ] Skill files exist: `.cursor/skills/quarter-plan/SKILL.md`, `.cursor/skills/goals-alignment/SKILL.md`, `.cursor/skills/week-plan/SKILL.md`, `.cursor/skills/week-review/SKILL.md` with When to Use and Workflow as specified.
-- [ ] AGENTS.md updated with Planning System description and skill references.
-- [ ] SETUP.md updated with planning in workspace layout and update behavior.
-- [ ] pm-workspace.mdc updated with planning actions/skills.
-- [ ] Running `npm run typecheck` and `npm test` passes after all changes.
+- [x] `WORKSPACE_DIRS` includes `resources/plans`, `resources/plans/archive`, `templates/plans`.
+- [x] `DEFAULT_FILES` includes `resources/plans/README.md`, `templates/plans/quarter-goals.md`, `templates/plans/week-priorities.md` with correct content.
+- [x] Workspace structure tests assert the new dirs and at least one new default file.
+- [x] Skill files exist: `.cursor/skills/quarter-plan/SKILL.md`, `.cursor/skills/goals-alignment/SKILL.md`, `.cursor/skills/week-plan/SKILL.md`, `.cursor/skills/week-review/SKILL.md` with When to Use and Workflow as specified.
+- [x] AGENTS.md updated with Planning System description and skill references.
+- [x] SETUP.md updated with planning in workspace layout and update behavior.
+- [x] pm-workspace.mdc updated with planning actions/skills.
+- [x] Running `npm run typecheck` and `npm test` passes after all changes.
 
 ---
 
 ## 5. Dependencies & References
 
-- **Plan**: PM Planning System plan (plan file and summary in conversation).
 - **Org context**: `context/goals-strategy.md` — unchanged; source for alignment.
 - **Existing skills**: construct-roadmap (product roadmap, different from PM quarter goals); periodic-review (context health, can reference planning in suggestions).
 - **Workspace structure**: `src/core/workspace-structure.ts` is single source of truth; install and update use it.

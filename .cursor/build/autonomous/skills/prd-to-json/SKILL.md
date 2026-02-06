@@ -18,7 +18,7 @@ Convert a markdown PRD into structured JSON format (`prd.json`) for use with the
 
 ## Prerequisites
 
-- A markdown PRD exists (typically in `projects/active/{name}/outputs/`)
+- A markdown PRD exists (prefer `.cursor/build/prds/{name}/prd.md`; legacy: `projects/active/{name}/outputs/prd-*.md`)
 - PRD has clear tasks/user stories with acceptance criteria
 
 ## Workflow
@@ -39,8 +39,11 @@ Use this context to ensure tasks align with the codebase's current state and don
 Ask the user for the PRD file path, or search for recent PRDs:
 
 ```bash
-# Find recent PRDs
-find projects/active -name "prd-*.md" -type f
+# Find PRDs (preferred location)
+ls -la .cursor/build/prds/*/prd.md
+
+# Legacy: projects/active
+find projects/active -name "prd-*.md" -type f 2>/dev/null
 ```
 
 ### 3. Read and Parse the PRD

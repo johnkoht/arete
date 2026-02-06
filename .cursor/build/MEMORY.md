@@ -15,6 +15,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [Meeting Intelligence PRD execution](entries/2026-02-06_meeting-intelligence-prd-execution.md) — meeting-prep and daily-plan skills; get_meeting_context pattern; docs updated.
+- 2026-02-06 [PRD placement: build folder, not projects](entries/2026-02-06_prd-placement-build-not-projects.md) — Areté PRDs live in `.cursor/build/prds/`, not `projects/active/`; moved meeting-propagation and meeting-intelligence.
 - 2026-02-06 [Meeting Propagation PRD execution](entries/2026-02-06_meeting-propagation-prd.md) — Template frontmatter, process-meetings skill, internal_email_domain config, docs.
 - 2026-02-06 [PRD-task subagent and enriched instructions](entries/2026-02-06_prd-task-subagent-and-instructions.md) — Custom subagent `.cursor/agents/prd-task.md` for fresh context per task; execute-prd prefers it; instructions added for conventions, repo root, workspace-structure only-add, git, failure handling, Python test:py.
 - 2026-02-06 [Context files on install](entries/2026-02-06_context-files-on-install.md) — Install/update now create context/ files (business-overview, goals-strategy, etc.) with placeholders; learning: canonical user-facing files in docs should be in DEFAULT_FILES.

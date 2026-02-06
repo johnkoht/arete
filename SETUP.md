@@ -65,6 +65,8 @@ arete/
 
 **Meeting propagation**: After saving or syncing meetings, run the **process-meetings** skill to update people and memory. Optional: set `internal_email_domain` in `arete.yaml` (e.g. `internal_email_domain: "acme.com"`) so attendees from your org are classified as internal.
 
+**Meeting intelligence**: Use **meeting-prep** to build a prep brief before a meeting (attendees, recent meetings, action items, talking points). Use **daily-plan** to see today's focus, week priorities, and meeting context for each of today's meetings (you supply the meeting list; no calendar integration in v1).
+
 ## Understanding the Architecture
 
 ### For Users (Product Managers)
@@ -232,6 +234,8 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 - "Start a discovery project for [topic]"
 - "Create a PRD for [feature]"
 - "Do a competitive analysis on [competitors]"
+- "Prep for my meeting with [person]" (meeting-prep)
+- "What's on my plate today?" (daily-plan)
 
 **Quick capture:**
 - Add notes to `scratchpad.md` anytime

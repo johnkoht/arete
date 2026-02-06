@@ -155,6 +155,11 @@ updateMeetingsIndex(workspaceRoot: string, filename: string): void
 - Internal vs external classification: set `internal_email_domain` in `arete.yaml` (e.g. `"acme.com"`). Attendees whose email domain matches go to `people/internal/`; others to `people/customers/`.
 - See People System for linking conventions (`attendee_ids`, stakeholders).
 
+**Meeting Intelligence**:
+- **meeting-prep** — Build a prep brief for an upcoming (or past) meeting: attendee details, recent meetings, related projects, open action items, suggested talking points. Uses get_meeting_context pattern (read people, meetings, projects; aggregate).
+- **daily-plan** — Today's focus, week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, carry-over. User supplies today's meetings (no calendar in v1).
+- Both skills use the **get_meeting_context** pattern: resolve attendees → read people → search meetings → read projects → extract action items.
+
 ### 2. Integrations System
 
 **Pattern**: Each integration in `src/integrations/{name}/`
@@ -237,8 +242,9 @@ slugifyPersonName(name): string
 - **goals-alignment** — View and compare PM goals to org; optional snapshot to archive.
 - **week-plan** — Set weekly priorities linked to quarter goals; write week file.
 - **week-review** — Mark priorities done/partial/carried; brief quarter progress; optional session summary.
+- **daily-plan** — Today's focus, week priorities, meeting context per meeting; user supplies today's meetings (see Meeting Intelligence in §1 Meetings System).
 
-**Phase 2**: Daily planning (lightweight in scratchpad or week file; full daily plans later).
+**Phase 2**: Full daily plans with structured day files; v1 outputs to chat.
 
 ### 7. Build/Development System
 
@@ -307,6 +313,13 @@ When building Areté features:
 7. **Use TypeScript strictly** - no `any`, proper types
 
 ## Common Patterns
+
+### Adding a PRD for Areté Features
+
+1. Create `.cursor/build/prds/{feature-name}/` directory
+2. Add `prd.md` (full PRD) and `README.md` (summary)
+3. Do **not** put Areté feature PRDs in `projects/active/` — that is for PMs *using* Areté
+4. Use prd-to-json skill with `.cursor/build/prds/{feature-name}/prd.md`
 
 ### Adding a New Integration
 

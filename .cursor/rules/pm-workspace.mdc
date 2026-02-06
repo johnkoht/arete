@@ -79,6 +79,8 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Quarterly review" / "Is context current?" | Review workspace health | `periodic-review` |
 | "Sync my meetings" / "Pull from Fathom" | Manual integration sync | `sync` |
 | "Process my meetings" / "Update people from meetings" / "Extract decisions" | Propagate meetings to people and memory | `process-meetings` |
+| "Prep for meeting" / "Meeting prep" / "Call with X" | Build prep brief (attendees, recent meetings, action items, talking points) | `meeting-prep` |
+| "What's on my plate today?" / "Daily plan" / "Today's focus" | Today's focus, meetings with context, commitments due | `daily-plan` |
 
 Skills are located in `.cursor/skills/` and follow the Agent Skills standard.
 
