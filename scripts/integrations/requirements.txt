@@ -1,0 +1,8 @@
+# Requirements for Areté integration scripts
+# Install with: pip install -r scripts/integrations/requirements.txt
+
+# HTTP requests
+requests>=2.28.0
+
+# YAML parsing (optional, fallback parser included)
+PyYAML>=6.0

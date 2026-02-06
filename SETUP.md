@@ -12,6 +12,7 @@ Areté is a Product Management workspace for Cursor that helps you:
 
 ```
 arete/
+├── arete                    # CLI entry point (./arete help)
 ├── .credentials/            # API keys and tokens (gitignored)
 │   ├── README.md
 │   └── credentials.yaml.example
@@ -43,7 +44,8 @@ arete/
 │   └── activity-log.md      # Activity history
 │
 ├── scripts/                 # Setup and utility scripts
-│   └── check-setup.sh       # Verify dependencies
+│   ├── setup.sh             # Setup and install dependencies
+│   └── integrations/        # Integration API scripts
 │
 ├── scratchpad.md            # Quick capture space
 │
@@ -55,18 +57,25 @@ arete/
 
 ## Quick Start
 
-### 0. Check Dependencies
+### 0. Run Setup
 
-Run the setup check to see what's installed and what's optional:
-
-```bash
-./scripts/check-setup.sh
-```
-
-To install all missing optional tools:
+Use the `arete` CLI to check dependencies and set up the workspace:
 
 ```bash
-./scripts/check-setup.sh --install
+# Check what's installed
+./arete setup
+
+# Install missing dependencies
+./arete install
+
+# Initialize workspace (create directories, credentials)
+./arete init
+
+# Full setup (install + init)
+./arete setup all
+
+# See all available commands
+./arete help
 ```
 
 ### 1. Populate Context (Priority Order)

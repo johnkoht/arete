@@ -25,6 +25,17 @@ A tool for bootstrapping your Areté workspace with historical data from externa
 - Daily/weekly sync → Configure integration for scheduled sync
 - Single item import → Use `sync` skill
 
+## Review Model
+
+Seed operations use **queue-based review**—extracted decisions and learnings are saved to `memory/pending-review.md` for later processing. This is appropriate for bulk imports where inline review would be overwhelming.
+
+| Sync Type | Review Approach |
+|-----------|-----------------|
+| **Focused** (sync skill) | Inline - propose and confirm immediately |
+| **Bulk** (this tool) | Queue - save to pending review for later |
+
+After seeding, process the queue by saying "review pending items" or during weekly planning.
+
 ## Scope Options
 
 ### Quick Seed (30 days)
@@ -167,9 +178,9 @@ For each item:
 4. Save to destination with proper naming
 5. Update progress
 
-### 5. Completion
+### 5. Completion & Synthesis Queueing
 
-When seed completes:
+When seed completes, extract candidate decisions/learnings and add to the review queue:
 
 ```markdown
 # Seed Complete - Fathom
@@ -177,7 +188,7 @@ When seed completes:
 Completed: 2026-02-05 10:12 AM
 Duration: 12 minutes
 
-## Results
+## Import Results
 | Metric | Count |
 |--------|-------|
 | Items found | 47 |
@@ -194,15 +205,43 @@ Duration: 12 minutes
 - 2026-02-03-sprint-planning.md
 - ...
 
-## Suggested Next Steps
+## Synthesis Queue
+Extracted potential decisions and learnings from imported content:
 
-1. **Review imports**: Scan a few files to verify quality
-2. **Synthesize context**: Extract patterns from this data
-   - "Synthesize decisions from the imported meetings"
-   - "What themes emerge from my user interviews?"
-3. **Update memory**: Pull key learnings into memory files
-4. **Connect to projects**: Link relevant meetings to active projects
+| Type | Count | Status |
+|------|-------|--------|
+| Decisions | 12 | Added to review queue |
+| Learnings | 18 | Added to review queue |
+
+Items saved to `memory/pending-review.md` for your review.
+
+## Next Steps
+
+1. **Process review queue**: Say "review pending items" to approve/edit/skip
+2. **Or defer to weekly planning**: Queue will be surfaced during planning
+3. **Spot check imports**: Scan a few files to verify quality
 ```
+
+#### Extraction Logic
+
+When extracting from imported meetings, look for:
+
+**Decisions** (look for):
+- Explicit choices: "we decided", "we chose", "going with"
+- Conclusions from debates: "after discussing", "the consensus was"
+- Action outcomes: "we will", "the plan is"
+
+**Learnings** (look for):
+- User insights: quotes, behaviors, feedback patterns
+- Process observations: what worked/didn't work
+- Market/competitive insights
+
+Add each candidate to `memory/pending-review.md` with:
+- Title (concise summary)
+- Source (link to imported file)
+- Extracted date
+- Context/insight
+- Suggested rationale/implications
 
 ### 6. Post-Seed Actions
 
@@ -215,10 +254,14 @@ After successful seed:
 
 2. **Update integration config**: Set `last_sync`
 
-3. **Offer synthesis**: 
-   - "Want me to extract key decisions from these meetings?"
-   - "Should I identify themes across your user interviews?"
-   - "Want me to build a summary of recent discussions?"
+3. **Offer to process queue**:
+   - "You have 30 items in your review queue. Process now or save for later?"
+   - If now → Present items in batches for approval
+   - If later → Items remain in `memory/pending-review.md`
+
+4. **Remind about weekly planning**:
+   - "Your review queue will be surfaced during weekly planning"
+   - "Say 'review pending items' anytime to process the queue"
 
 ---
 
@@ -243,6 +286,18 @@ After successful seed:
 - By attendee: Focus on customer meetings
 - By keyword: "interview", "planning", "review"
 - Exclude: Internal 1:1s if too noisy
+
+**API Script** (for agent execution):
+```bash
+# Fetch and save meetings from last 60 days
+python scripts/integrations/fathom.py fetch --days 60 --output resources/meetings/
+
+# Fetch with custom date range
+python scripts/integrations/fathom.py fetch --start 2025-12-01 --end 2026-02-01 --output resources/meetings/
+
+# List meetings first (preview)
+python scripts/integrations/fathom.py list --days 60 --json
+```
 
 ### Calendar
 

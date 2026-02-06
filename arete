@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Areté CLI
+# Simple entry point for workspace commands
+#
+# Usage:
+#   ./arete setup        Check dependencies
+#   ./arete install      Install missing dependencies
+#   ./arete init         Initialize workspace
+#   ./arete help         Show all commands
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+print_logo() {
+    echo ""
+    echo -e "${BOLD}  Areté${NC} - Product Management Workspace"
+    echo ""
+}
+
+print_help() {
+    print_logo
+    echo "Usage: ./arete <command>"
+    echo ""
+    echo -e "${BOLD}Setup Commands${NC}"
+    echo "  setup         Check status of all dependencies"
+    echo "  install       Install missing dependencies"
+    echo "  init          Initialize workspace (directories, credentials)"
+    echo "  setup all     Full setup (install + init)"
+    echo ""
+    echo -e "${BOLD}Integration Commands${NC}"
+    echo "  fathom list [--days N]     List recent Fathom recordings"
+    echo "  fathom fetch [--days N]    Fetch and save recordings"
+    echo ""
+    echo -e "${BOLD}Other${NC}"
+    echo "  help          Show this help message"
+    echo "  version       Show version"
+    echo ""
+    echo "Examples:"
+    echo "  ./arete setup              # Check what's installed"
+    echo "  ./arete install            # Install missing tools"
+    echo "  ./arete fathom list        # List recent meetings"
+    echo ""
+}
+
+case "${1:-help}" in
+    # Setup commands
+    setup)
+        shift
+        "$SCRIPT_DIR/scripts/setup.sh" "${@:-check}"
+        ;;
+    install)
+        "$SCRIPT_DIR/scripts/setup.sh" install
+        ;;
+    init)
+        "$SCRIPT_DIR/scripts/setup.sh" init
+        ;;
+    
+    # Fathom integration
+    fathom)
+        shift
+        if [ -z "$1" ]; then
+            echo -e "${YELLOW}Usage: ./arete fathom <command>${NC}"
+            echo ""
+            echo "Commands:"
+            echo "  list [--days N]    List recent recordings"
+            echo "  fetch [--days N]   Fetch and save recordings"
+            echo "  get <id>           Get specific recording"
+            exit 1
+        fi
+        python3 "$SCRIPT_DIR/scripts/integrations/fathom.py" "$@"
+        ;;
+    
+    # Help & info
+    help|-h|--help)
+        print_help
+        ;;
+    version|-v|--version)
+        echo "Areté v0.1.0"
+        ;;
+    
+    # Unknown command
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        print_help
+        exit 1
+        ;;
+esac

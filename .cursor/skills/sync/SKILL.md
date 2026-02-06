@@ -21,6 +21,15 @@ Manually synchronize data between the Areté workspace and connected external in
 - Initial setup/backfill → Use `seed-context` tool
 - Continuous/automated sync → Configure integration for realtime
 
+## Review Model
+
+This skill uses **inline review** for synthesis—extracted decisions and learnings are presented immediately for user approval. This is appropriate for focused syncs where context is fresh.
+
+| Sync Type | Review Approach |
+|-----------|-----------------|
+| **Focused** (this skill) | Inline - propose and confirm immediately |
+| **Bulk** (seed-context) | Queue - save to `memory/pending-review.md` for later |
+
 ## Sync Types
 
 ### Pull Sync
@@ -131,11 +140,105 @@ After successful sync:
 
 2. **Update config**: Set `last_sync` in integration config
 
-3. **Suggest follow-ups**:
-   - For meeting imports: "Want me to extract decisions and action items?"
-   - For multiple items: "Want me to synthesize these?"
+3. **Extract and Review** (for meeting imports):
+   - Read imported meetings and identify potential decisions and learnings
+   - Present for inline review (see Synthesis Workflow below)
 
-### 5. Error Handling
+### 5. Synthesis Workflow (Inline Review)
+
+After importing meetings, extract candidate decisions and learnings for user review.
+
+#### Step 1: Extract Candidates
+
+Read through imported content looking for:
+
+**Decisions** (look for):
+- Explicit choices: "we decided", "we chose", "going with"
+- Conclusions from debates: "after discussing", "the consensus was"
+- Action outcomes: "we will", "the plan is"
+
+**Learnings** (look for):
+- User insights: quotes, behaviors, feedback patterns
+- Process observations: what worked/didn't work
+- Market/competitive insights
+
+#### Step 2: Present for Review
+
+Show candidates organized by type:
+
+```markdown
+## Synthesis Review - [X] Meetings Processed
+
+I found potential decisions and learnings in the imported meetings.
+Review each item and approve, edit, or skip.
+
+---
+
+### Proposed Decisions ([N])
+
+**1. [Decision title]**
+- **Source**: [2026-02-05-meeting-title.md](resources/meetings/2026-02-05-meeting-title.md)
+- **Context**: "[Quote or context from meeting]"
+- **Suggested rationale**: [Why this decision matters]
+
+→ Approve / Edit / Skip?
+
+**2. [Decision title]**
+...
+
+---
+
+### Proposed Learnings ([N])
+
+**1. [Learning title]**
+- **Source**: [2026-02-04-user-interview.md](resources/meetings/2026-02-04-user-interview.md)
+- **Insight**: "[What was learned]"
+- **Suggested implications**: [How this affects future work]
+
+→ Approve / Edit / Skip?
+
+---
+
+**Quick actions**: Approve all | Skip all | Review one by one
+```
+
+#### Step 3: Process Approvals
+
+For each approved item:
+
+**Decisions** → Append to `memory/items/decisions.md`:
+```markdown
+### YYYY-MM-DD: [Decision Title]
+
+**Project**: [If applicable]
+**Context**: [What led to this decision]
+**Decision**: [What was decided]
+**Rationale**: [Why this choice]
+**Alternatives Considered**: [If known from meeting]
+**Status**: Active
+```
+
+**Learnings** → Append to `memory/items/learnings.md`:
+```markdown
+### YYYY-MM-DD: [Learning Title]
+
+**Source**: [Meeting or sync that surfaced this]
+**Insight**: [What was learned]
+**Implications**: [How this affects future work]
+**Applied To**: [Will be updated as learning is used]
+```
+
+#### Step 4: Report Results
+
+```markdown
+## Synthesis Complete
+
+- Decisions approved: X (added to memory/items/decisions.md)
+- Learnings approved: Y (added to memory/items/learnings.md)
+- Items skipped: Z
+```
+
+### 6. Error Handling
 
 If sync fails:
 
@@ -175,6 +278,21 @@ If sync fails:
 - Destination: `resources/meetings/`
 - Template: `templates/inputs/integration-meeting.md`
 - Naming: `{date}-{title}.md`
+
+**API Script** (for agent execution):
+```bash
+# List meetings from last 7 days
+python scripts/integrations/fathom.py list --days 7
+
+# List meetings in date range
+python scripts/integrations/fathom.py list --start 2026-02-01 --end 2026-02-05
+
+# Fetch and save specific meeting
+python scripts/integrations/fathom.py get <recording_id> --output resources/meetings/
+
+# Batch fetch and save all meetings
+python scripts/integrations/fathom.py fetch --days 7 --output resources/meetings/
+```
 
 ### Calendar
 

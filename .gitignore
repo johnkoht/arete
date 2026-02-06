@@ -39,6 +39,15 @@ notion-export/
 # QMD cache (if you run qmd in the workspace)
 .qmd/
 
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+
 # Node modules (if any tooling is added)
 node_modules/
 
