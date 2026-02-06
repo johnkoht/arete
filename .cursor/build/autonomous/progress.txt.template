@@ -1,0 +1,51 @@
+# Progress Log Template
+
+This file tracks learnings and context across task executions. Each subagent should:
+1. Read this file before starting work
+2. Append an entry after completing their task
+
+## Entry Format
+
+```
+## Task {id}: {title}
+Completed: YYYY-MM-DD HH:MM
+
+### What Changed
+- List files that were modified
+- Brief description of changes made
+
+### Learnings
+- Patterns discovered in the codebase
+- Gotchas encountered and how they were resolved
+- Design decisions made and rationale
+
+### Notes for Future Tasks
+- Advice for subsequent iterations
+- Things to watch out for
+- Connections to other parts of the system
+
+---
+```
+
+## Example Entry
+
+```
+## Task task-1: Add utility function to core utils
+Completed: 2026-02-06 14:30
+
+### What Changed
+- Modified src/core/utils.ts
+- Added formatTimestamp function with proper TypeScript types
+
+### Learnings
+- This codebase uses strict TypeScript with NodeNext module resolution
+- All imports must use .js extensions even for .ts files
+- The utils.ts file follows a pattern of pure functions with no side effects
+
+### Notes for Future Tasks
+- When adding utilities, check if similar functionality exists first
+- Follow the existing naming convention: verbNoun format
+- Always export both the function and its types
+
+---
+```

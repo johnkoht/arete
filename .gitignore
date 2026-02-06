@@ -70,3 +70,7 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Autonomous execution system (runtime files)
+.cursor/build/autonomous/prd.json
+.cursor/build/autonomous/progress.txt

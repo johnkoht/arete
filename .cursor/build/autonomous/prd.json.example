@@ -1,0 +1,57 @@
+{
+  "name": "example-feature",
+  "branchName": "feature/example-feature",
+  "goal": "Add a new example feature to demonstrate the autonomous execution system",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add utility function to core utils",
+      "description": "Create a new utility function `formatTimestamp(date: Date): string` that formats dates as 'YYYY-MM-DD HH:mm:ss'. Add it to src/core/utils.ts.",
+      "acceptanceCriteria": [
+        "Function exists in src/core/utils.ts",
+        "Function accepts a Date object",
+        "Function returns formatted string in 'YYYY-MM-DD HH:mm:ss' format",
+        "Function is exported",
+        "Typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Write tests for formatTimestamp",
+      "description": "Create comprehensive tests for the formatTimestamp utility function. Test happy path, edge cases (midnight, leap year), and ensure proper formatting.",
+      "acceptanceCriteria": [
+        "Test file exists at test/core/utils.test.ts",
+        "Tests cover happy path (regular date)",
+        "Tests cover edge cases (midnight, year boundaries)",
+        "All tests pass with npm test",
+        "Typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Document the new utility in AGENTS.md",
+      "description": "Add documentation about the formatTimestamp utility to the appropriate AGENTS.md file. Explain when to use it and provide an example.",
+      "acceptanceCriteria": [
+        "AGENTS.md updated with formatTimestamp documentation",
+        "Includes usage example",
+        "Explains when to use this vs other date formatting approaches",
+        "Follows existing AGENTS.md formatting conventions"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-06T10:00:00Z",
+    "totalTasks": 3,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

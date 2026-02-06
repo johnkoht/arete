@@ -72,6 +72,24 @@ Tools are different from skills - they have phases, track progress, and eventual
 
 See `.cursor/tools/README.md` for more about the tools framework.
 
+---
+
+## Autonomous Development (Maintainers Only)
+
+⚠️ **For Areté developers only** - Not a user-facing feature.
+
+If you're building features for Areté itself, we have an autonomous agent loop system that can execute PRD tasks sequentially with fresh context per task. This is inspired by [Ralph](https://github.com/snarktank/ralph) but adapted for Cursor-native execution.
+
+**Quick overview:**
+1. Create a markdown PRD for an Areté feature
+2. Convert it to JSON task list with `prd-to-json` skill
+3. Execute autonomously with `execute-prd` skill
+4. Review commits and merge
+
+See [`.cursor/build/autonomous/README.md`](.cursor/build/autonomous/README.md) for full documentation.
+
+---
+
 ## What's a Project?
 
 A **project** is a flexible container for any bounded PM work:
