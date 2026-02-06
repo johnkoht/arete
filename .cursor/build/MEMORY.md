@@ -15,6 +15,9 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [Context files on install](entries/2026-02-06_context-files-on-install.md) — Install/update now create context/ files (business-overview, goals-strategy, etc.) with placeholders; learning: canonical user-facing files in docs should be in DEFAULT_FILES.
+- 2026-02-06 [Execute-PRD fallback when Task tool unavailable](entries/2026-02-06_execute-prd-fallback.md) — Documented fallback in execute-prd skill and autonomous README: when no Task/subagent tool exists, agent executes tasks in sequence with same quality gates and prd/progress updates.
+- 2026-02-06 [PM Planning System PRD execution](entries/2026-02-06_pm-planning-system-execution.md) — Executed prd.json: four skills (quarter-plan, goals-alignment, week-plan, week-review), AGENTS.md §6 Planning System, SETUP.md and pm-workspace.mdc updates; branch feature/pm-planning-system, commit 191b9d7.
 - 2026-02-06 [PM Planning System PRD and autonomous setup](entries/2026-02-06_pm-planning-system-prd-and-autonomous.md) — PRD and prd.json for PM planning (resources/plans, quarter/week skills); scratchpad automations and plan→execution feedback.
 - 2026-02-06 [Update workspace structure backfill](entries/2026-02-06_update-workspace-structure-backfill.md) — arete update ensures missing workspace dirs and default files; single source of truth in workspace-structure.ts; existing workspaces get new structure (e.g. people/) on update.
 - 2026-02-06 [People system](entries/2026-02-06_people-system.md) — People tracking (internal, customers, users); people/ dirs, index, core module, CLI (list/show/index); linking conventions for meetings and projects.

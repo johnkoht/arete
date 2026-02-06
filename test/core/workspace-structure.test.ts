@@ -61,6 +61,24 @@ describe('workspace-structure', () => {
       assert.ok('templates/plans/quarter-goals.md' in DEFAULT_FILES);
       assert.ok('templates/plans/week-priorities.md' in DEFAULT_FILES);
     });
+
+    it('includes context default files with placeholder content', () => {
+      const contextFiles = [
+        'context/README.md',
+        'context/business-overview.md',
+        'context/users-personas.md',
+        'context/products-services.md',
+        'context/business-model.md',
+        'context/goals-strategy.md',
+        'context/competitive-landscape.md',
+      ];
+      for (const file of contextFiles) {
+        assert.ok(file in DEFAULT_FILES, `expected ${file} in DEFAULT_FILES`);
+      }
+      assert.ok(DEFAULT_FILES['context/README.md'].includes('Context'));
+      assert.ok(DEFAULT_FILES['context/business-overview.md'].includes('Business Overview'));
+      assert.ok(DEFAULT_FILES['context/goals-strategy.md'].includes('Goals & Strategy'));
+    });
   });
 
   describe('ensureWorkspaceStructure', () => {
@@ -78,6 +96,16 @@ describe('workspace-structure', () => {
       assert.ok(existsSync(join(tmpDir, 'people/index.md')));
       const content = readFileSync(join(tmpDir, 'people/index.md'), 'utf8');
       assert.ok(content.includes('People Index'));
+    });
+
+    it('creates context files with placeholder content', () => {
+      const result = ensureWorkspaceStructure(tmpDir);
+      assert.ok(result.filesAdded.includes('context/business-overview.md'));
+      assert.ok(result.filesAdded.includes('context/goals-strategy.md'));
+      const overview = readFileSync(join(tmpDir, 'context/business-overview.md'), 'utf8');
+      assert.ok(overview.includes('Business Overview') && overview.includes('[Your company name]'));
+      const goals = readFileSync(join(tmpDir, 'context/goals-strategy.md'), 'utf8');
+      assert.ok(goals.includes('Goals & Strategy') && goals.includes('North Star'));
     });
 
     it('does not overwrite existing files', () => {

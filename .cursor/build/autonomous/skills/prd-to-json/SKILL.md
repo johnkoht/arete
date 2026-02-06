@@ -23,7 +23,18 @@ Convert a markdown PRD into structured JSON format (`prd.json`) for use with the
 
 ## Workflow
 
-### 1. Locate the PRD
+### 1. Read Build Memory (Context)
+
+**Before converting**, read `.cursor/build/MEMORY.md` and optionally the most recent entry files in `.cursor/build/entries/`. This provides:
+
+- Recent architectural decisions and refactors
+- Established patterns (e.g. integration structure, workspace backfill)
+- Gotchas and migrations (e.g. Node migration, URL fixes)
+- What to avoid (e.g. don't add Python scripts if we're migrating to Node)
+
+Use this context to ensure tasks align with the codebase's current state and don't conflict with recent decisions.
+
+### 2. Locate the PRD
 
 Ask the user for the PRD file path, or search for recent PRDs:
 
@@ -32,7 +43,7 @@ Ask the user for the PRD file path, or search for recent PRDs:
 find projects/active -name "prd-*.md" -type f
 ```
 
-### 2. Read and Parse the PRD
+### 3. Read and Parse the PRD
 
 Read the markdown PRD and extract:
 
@@ -46,14 +57,14 @@ Read the markdown PRD and extract:
 - Description (story details)
 - Acceptance criteria (look for "Acceptance Criteria", "Definition of Done", or bullet lists)
 
-### 3. Generate Task IDs
+### 4. Generate Task IDs
 
 Create unique IDs for each task:
 - Use kebab-case format: `task-1`, `task-2`, etc.
 - Or derive from task titles: `add-utility-function`, `write-tests`, etc.
 - Ensure IDs are unique within the PRD
 
-### 4. Derive Branch Name
+### 5. Derive Branch Name
 
 Suggest a branch name based on the feature:
 - Format: `feature/{name}` or `refactor/{name}`
@@ -62,7 +73,7 @@ Suggest a branch name based on the feature:
 
 Ask user to confirm or customize.
 
-### 5. Build PRD Object
+### 6. Build PRD Object
 
 Create the JSON structure following the schema in `.cursor/build/autonomous/schema.ts`:
 
@@ -94,7 +105,7 @@ Create the JSON structure following the schema in `.cursor/build/autonomous/sche
 }
 ```
 
-### 6. Validate
+### 7. Validate
 
 Ensure:
 - Each task has at least one acceptance criterion
@@ -105,7 +116,7 @@ Ensure:
 
 Reference `.cursor/build/autonomous/schema.ts` for validation functions.
 
-### 7. Write prd.json
+### 8. Write prd.json
 
 Write the JSON to `.cursor/build/autonomous/prd.json`:
 
@@ -117,7 +128,7 @@ const outputPath = '.cursor/build/autonomous/prd.json';
 fs.writeFileSync(outputPath, JSON.stringify(prd, null, 2));
 ```
 
-### 8. Initialize progress.txt
+### 9. Initialize progress.txt
 
 Create or clear the progress log:
 
@@ -130,7 +141,7 @@ echo "# Progress Log - $(date)" > .cursor/build/autonomous/progress.txt
 echo "" >> .cursor/build/autonomous/progress.txt
 ```
 
-### 9. Confirm with User
+### 10. Confirm with User
 
 Present summary:
 ```

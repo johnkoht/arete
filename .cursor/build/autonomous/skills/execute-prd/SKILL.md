@@ -22,6 +22,8 @@ Orchestrate autonomous execution of PRD tasks by spawning fresh Task subagents f
 - Git repository is clean (or user acknowledges dirty state)
 - Tests and typecheck are working (`npm run typecheck`, `npm test`)
 
+**Preferred execution**: Use the **prd-task** custom subagent (`.cursor/agents/prd-task.md`) so each task runs in a fresh context window. Cursor exposes custom subagents as tools when the `.cursor/agents/` directory contains subagent files. If no subagent tool is available, follow the fallback in Step 3: execute each task yourself, one at a time.
+
 ## How It Works
 
 ```
@@ -148,7 +150,10 @@ Key points:
 - **Conventions**: See AGENTS.md files in the repo
 
 ### Previous Work
-Read `.cursor/build/autonomous/progress.txt` for learnings from previous tasks.
+Read `.cursor/build/autonomous/progress.txt` for learnings from previous tasks in this PRD run.
+
+### Build Memory
+Read `.cursor/build/MEMORY.md` for recent architectural decisions, refactors, and gotchas across past work. Entries document migrations, pattern changes, and fixes worth following. Use this to avoid repeating mistakes and to align with established patterns.
 
 ### PRD Goal
 {prd.goal}
@@ -223,10 +228,9 @@ After 3 failed attempts at quality checks:
 ```
 
 **Spawn the subagent**:
-```typescript
-// Using Task tool with subagent_type="generalPurpose"
-// Let subagent work autonomously
-```
+- **Preferred (Cursor subagents)**: If you have a tool to run the **prd-task** subagent (custom subagent from `.cursor/agents/prd-task.md`), use it. Pass as the prompt to the subagent the full task block below (Task Details, Acceptance Criteria, Context, Your Job, Constraints). The subagent runs in a fresh context window, implements the task, runs typecheck and tests, commits, updates prd.json and progress.txt, and returns the result. Wait for the subagent to finish (foreground).
+- **Alternative**: If you have another Task/subagent tool (e.g. generic task runner), use it with the prompt above.
+- **Fallback (no subagent tool)**: If you have no way to launch a subagent, execute the task yourself in this session: implement the work, run `npm run typecheck` and `npm test`, commit, update prd.json and progress.txt. Process **one task per iteration**. Same quality gates and updates.
 
 #### Step 4: Check Subagent Result
 
@@ -370,14 +374,9 @@ The orchestrator:
 
 ## Parent Agent Context Management
 
-**Keep it lightweight!** The parent orchestrator should:
-- ✅ Read/write prd.json
-- ✅ Spawn Task subagents
-- ✅ Check git status
-- ✅ Update metadata
-- ❌ Never write actual code
-- ❌ Never debug failing tasks (that's subagent's job)
-- ❌ Never accumulate large context
+**When using the Task tool (subagents):** The orchestrator should stay lightweight: read/write prd.json, spawn subagents, check git status, update metadata. Do not write code or debug failing tasks.
+
+**When in fallback mode (no Task tool):** You are both orchestrator and executor. Still process one task at a time; run typecheck and tests per task; commit per task; update prd.json and progress.txt after each task. Prefer separate commits per task when possible.
 
 If parent context grows large after many iterations:
 - User can simply say "continue executing PRD" to start fresh orchestrator
