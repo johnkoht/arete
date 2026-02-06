@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   output,
   formatPath,
+  getBuildVersion,
 } from '../../src/core/utils.js';
 
 describe('utils', () => {
@@ -68,6 +69,34 @@ describe('utils', () => {
       const cwd = process.cwd();
       const result = formatPath(cwd);
       assert.equal(result, '.');
+    });
+  });
+
+  describe('getBuildVersion', () => {
+    it('returns a string', () => {
+      const version = getBuildVersion();
+      assert.equal(typeof version, 'string');
+    });
+
+    it('returns a non-empty string', () => {
+      const version = getBuildVersion();
+      assert.ok(version.length > 0);
+    });
+
+    it('matches semver format (x.y.z)', () => {
+      const version = getBuildVersion();
+      const semverPattern = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$/;
+      assert.ok(
+        semverPattern.test(version),
+        `Expected version "${version}" to match semver format`
+      );
+    });
+
+    it('returns the version from package.json', () => {
+      const version = getBuildVersion();
+      // Should be a valid semver version
+      const parts = version.split('.');
+      assert.ok(parts.length >= 3, 'Version should have at least 3 parts (major.minor.patch)');
     });
   });
 });
