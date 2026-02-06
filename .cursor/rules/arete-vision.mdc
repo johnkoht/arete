@@ -1,0 +1,31 @@
+---
+description: Product philosophy - does it help the product builder achieve arete?
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Areté Vision — Product Philosophy
+
+The driving question behind every feature and design decision in Areté:
+
+**Does it help the product builder achieve arete?**
+
+## What that means
+
+**Areté** (ἀρετή) is excellence—the pursuit of fulfilling one's purpose to the highest degree. Achieving arete for product builders means helping them operate at their highest level. Concretely, we ask: does it help them **gain clarity**, **navigate ambiguity**, **automate the mundane**, **move faster**, **unlock opportunity**, **think better**, or **challenge them** constructively? Every feature and design decision should be evaluated against this—excellence in the full scope of product work, not just efficiency or busyness.
+
+## Who the user is
+
+Product builders: product managers, product leaders (individual contributors through CPOs). They need clarity, understanding, vision, and strategy; they must navigate stakeholders, negotiate, inspire, and align. They synthesize signal from noise, make decisions under uncertainty, and benefit from structure that preserves institutional memory and sharpens judgment.
+
+## Why this matters to them
+
+Without a lens for excellence, tools optimize for busyness or compliance. Product builders need to make better decisions, keep context, and sustain impact—for themselves and their organizations. Areté exists to support that.
+
+## Why we are building this
+
+We build Areté so product builders have a workspace that elevates their practice: context that stays current, memory that persists, and workflows that reduce friction and sharpen thinking.
+
+---
+
+**When defining, shaping, or building features** (including skills, tools, CLI, and docs), apply this lens: ask whether the change helps the product builder achieve arete; if not, question its scope or design.

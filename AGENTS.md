@@ -291,12 +291,13 @@ slugifyPersonName(name): string
 
 When building Areté features:
 
-1. **Read this file first** for architecture understanding
-2. **Check build memory** (`.cursor/build/MEMORY.md`) for recent changes
-3. **Follow patterns** established in existing code
-4. **Write tests** for all new functionality
-5. **Update AGENTS.md** with new patterns or gotchas discovered
-6. **Use TypeScript strictly** - no `any`, proper types
+1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
+2. **Read this file first** for architecture understanding
+3. **Check build memory** (`.cursor/build/MEMORY.md`) for recent changes
+4. **Follow patterns** established in existing code
+5. **Write tests** for all new functionality
+6. **Update AGENTS.md** with new patterns or gotchas discovered
+7. **Use TypeScript strictly** - no `any`, proper types
 
 ## Common Patterns
 

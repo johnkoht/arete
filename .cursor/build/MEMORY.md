@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [PRD-task subagent and enriched instructions](entries/2026-02-06_prd-task-subagent-and-instructions.md) — Custom subagent `.cursor/agents/prd-task.md` for fresh context per task; execute-prd prefers it; instructions added for conventions, repo root, workspace-structure only-add, git, failure handling, Python test:py.
 - 2026-02-06 [Context files on install](entries/2026-02-06_context-files-on-install.md) — Install/update now create context/ files (business-overview, goals-strategy, etc.) with placeholders; learning: canonical user-facing files in docs should be in DEFAULT_FILES.
 - 2026-02-06 [Execute-PRD fallback when Task tool unavailable](entries/2026-02-06_execute-prd-fallback.md) — Documented fallback in execute-prd skill and autonomous README: when no Task/subagent tool exists, agent executes tasks in sequence with same quality gates and prd/progress updates.
 - 2026-02-06 [PM Planning System PRD execution](entries/2026-02-06_pm-planning-system-execution.md) — Executed prd.json: four skills (quarter-plan, goals-alignment, week-plan, week-review), AGENTS.md §6 Planning System, SETUP.md and pm-workspace.mdc updates; branch feature/pm-planning-system, commit 191b9d7.
