@@ -2,6 +2,15 @@
 
 > **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" - the pursuit of fulfilling one's purpose to the highest degree.
 
+## Context: BUILDER vs GUIDE
+
+**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc`.
+
+- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `.cursor/build/entries/` and MEMORY.md; PRDs in `.cursor/build/prds/`. Do not run `arete seed test-data` here.
+- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `memory/items/`. Do not use build rules or `.cursor/build/`.
+
+**Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
+
 ## What Areté Is
 
 Areté is a **Cursor-native workspace for product managers** to maintain context, run structured workflows, and build institutional memory.
@@ -92,6 +101,89 @@ A **structured workspace** with:
 
 - **Skill router** (`src/core/skill-router.ts`): Maps a free-form user message to a skill id and path using skill descriptions and optional `triggers` in skill frontmatter. Used by `arete skill route` and `arete route`. Agents can run `arete skill route "prep me for Jane"` to get `meeting-prep` and then load that skill.
 - **Model router** (`src/core/model-router.ts`): Suggests task complexity tier (fast / balanced / powerful) from prompt content—e.g. simple lookups → fast, analysis/planning/writing → powerful. Areté does not switch models programmatically (no Cursor/IDE API); the suggestion is for the user or for tooling that can set the model (Dex-style).
+
+## How the System Operates (Production Flow)
+
+This section describes how the Cursor agent should behave when a user asks for PM work in an Areté workspace: what gets loaded into context, how routing and skills fit in, and the top-to-bottom flow.
+
+### What Is In Context by Default
+
+When the user sends a message in Cursor (chat or composer), the agent typically has:
+
+| Layer | What's included | Source |
+|-------|-----------------|--------|
+| **Rules** | pm-workspace.mdc (alwaysApply), arete-vision, testing, dev, etc. | `.cursor/rules/*.mdc` |
+| **Architecture** | AGENTS.md (this file) | Root |
+| **Workspace layout** | Open files, recent files; workspace is the Areté root | Cursor |
+| **Tools** | read_file, grep, run_terminal_cmd, list_dir, etc. | Cursor |
+
+The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions live in **pm-workspace.mdc**. The agent does **not** automatically have the full text of every skill file in context until it loads one. So the flow is: recognize or resolve intent → load the right skill file → execute it.
+
+### Flow: "Help me prep for my meeting with Jane"
+
+1. **User message**  
+   User says: *"Help me prep for my meeting with jane"* (or similar).
+
+2. **Intent match**  
+   Per pm-workspace: **default to the router**, then fall back to the table if no match.  
+   - Agent runs: `arete skill route "help me prep for my meeting with jane"`  
+   - Response (e.g. JSON or stdout): `skill: meeting-prep`, `path: ...`. Agent now knows which skill to run.  
+   - If the router had returned no match, the agent would use the intent table in the rule to pick a skill or ask the user to clarify.
+
+3. **Load the skill**  
+   Agent **reads** the skill file:  
+   `.cursor/skills/meeting-prep/SKILL.md` (or `.cursor/skills-core/meeting-prep/SKILL.md` in an installed workspace).  
+   That file is now in context. It contains: Agent Instructions, When to Use, **Get Meeting Context** pattern (steps 1–6), Workflow (Identify meeting → Gather context → Build brief → Close), and output format.
+
+4. **Execute the workflow**  
+   - **Identify meeting**: Attendee = Jane → resolve to a person slug (e.g. search `people/` or use `people/index.md`; slug e.g. `jane-doe`).  
+   - **Gather context** (get_meeting_context):  
+     - Read `people/internal/jane-doe.md` (or the path for that slug).  
+     - List/filter `resources/meetings/*.md` by `attendee_ids` or body containing Jane; read 1–3 most recent.  
+     - Scan `projects/active/*/README.md` for Jane as stakeholder; read matching projects.  
+     - Extract unchecked action items from those meetings (and person file if any).  
+     - **QMD**: Run e.g. `qmd query "decisions or learnings involving Jane or Acme"`, `qmd query "meetings or notes about onboarding"` (if relevant); use results in the brief.  
+   - **Build brief**: Emit markdown: Attendees, Recent meetings, Related projects, Open action items, Suggested talking points (and optional Related context from QMD).  
+   - **Close**: Offer to save the brief; suggest process-meetings after the meeting.
+
+5. **Response**  
+   Agent replies with the prep brief. If the user asks *"What did you use?"*, the agent reports: **meeting-prep** skill, get_meeting_context pattern, reads of person/meeting/project files, and QMD queries.
+
+**Context pulled in during execution** (not all in context at once): the chosen skill file; then, via tools, the specific person file(s), 1–3 meeting files, relevant project READMEs, and QMD result snippets. So context is **skill + workspace data the skill asks for**.
+
+### Flow: "Help me analyze this data"
+
+1. **User message**  
+   User says: *"Help me analyze this data"* (and may attach or point to a file/selection).
+
+2. **Intent match**  
+   Default to the router; fall back to the table.  
+   - Agent runs: `arete skill route "help me analyze this data"`. Router may return **synthesize** or no match.  
+   - If no match: use the table ("Process my notes/feedback" → synthesize; "I need to understand a problem" → discovery) or ask for clarification.  
+
+3. **Load the skill**  
+   If the agent chose **synthesize**: read `.cursor/skills/synthesize/SKILL.md`. It specifies: inventory project `inputs/`, use QMD to search inputs, read and extract, pattern recognition, create synthesis document.
+
+4. **Execute**  
+   - Determine project: if user said "this data", check for an active project or attached file. Synthesize skill expects work inside a project’s `inputs/`. If there’s no project, agent may create one or ask which project.  
+   - Follow the skill: inventory inputs, QMD search, read files, extract facts/interpretations/questions, find patterns, produce synthesis doc.  
+   - If the agent chose **discovery** instead: load discovery skill and run its workflow (problem framing, research, validation).
+
+5. **Response**  
+   Agent delivers the synthesis (or discovery output). If asked what it used: **synthesize** (or discovery) skill, project inputs, QMD.
+
+**Context pulled in**: the skill file; then project `inputs/` (and optionally `context/`, `memory/items/` via QMD). For ad-hoc "analyze this" with no skill match, the agent may just read the attached/referenced data and analyze it without a formal skill.
+
+### Summary: What Should Be Included in Context
+
+| When | What to include |
+|------|------------------|
+| **Always (from rules)** | pm-workspace.mdc (intent table, "Using skills", "Skill router"); AGENTS.md for architecture. |
+| **After routing / intent** | The **single skill file** for the chosen skill (e.g. meeting-prep or synthesize). |
+| **During skill execution** | Only what the skill asks for: specific person files, meeting files, project READMEs, QMD query results. Not the entire workspace. |
+| **Optional first step** | Output of `arete skill route "<user message>"` or `arete route "<message>" --json` (skill id + path; and model tier if using route). |
+
+So: **rules + chosen skill + data the skill fetches**. The agent should not dump the whole repo into context; it should follow the skill’s steps and pull only the files and search results needed for that workflow.
 
 ## Architecture
 

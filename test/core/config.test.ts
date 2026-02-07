@@ -11,6 +11,7 @@ import { tmpdir } from 'os';
 import {
   loadConfig,
   getDefaultConfig,
+  getAgentMode,
   getGlobalConfigPath,
   getWorkspaceConfigPath,
 } from '../../src/core/config.js';
@@ -118,6 +119,57 @@ describe('config', () => {
     it('handles null workspacePath', () => {
       const config = loadConfig(null);
       assert.equal(config.source, 'npm');
+    });
+  });
+
+  describe('getAgentMode', () => {
+    const origAgentMode = process.env.AGENT_MODE;
+
+    afterEach(() => {
+      if (origAgentMode !== undefined) process.env.AGENT_MODE = origAgentMode;
+      else delete process.env.AGENT_MODE;
+    });
+
+    it('returns builder when AGENT_MODE=BUILDER', () => {
+      process.env.AGENT_MODE = 'BUILDER';
+      assert.equal(getAgentMode(tmpDir), 'builder');
+    });
+
+    it('returns guide when AGENT_MODE=GUIDE', () => {
+      process.env.AGENT_MODE = 'GUIDE';
+      assert.equal(getAgentMode(tmpDir), 'guide');
+    });
+
+    it('returns builder when arete.yaml has agent_mode: builder', () => {
+      delete process.env.AGENT_MODE;
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'agent_mode: builder\n');
+      assert.equal(getAgentMode(tmpDir), 'builder');
+    });
+
+    it('returns guide when arete.yaml has agent_mode: guide', () => {
+      delete process.env.AGENT_MODE;
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'agent_mode: guide\n');
+      assert.equal(getAgentMode(tmpDir), 'guide');
+    });
+
+    it('returns builder when workspace has .cursor/build/MEMORY.md and src/cli.ts', () => {
+      delete process.env.AGENT_MODE;
+      mkdirSync(join(tmpDir, '.cursor', 'build'), { recursive: true });
+      mkdirSync(join(tmpDir, 'src'), { recursive: true });
+      writeFileSync(join(tmpDir, '.cursor', 'build', 'MEMORY.md'), '');
+      writeFileSync(join(tmpDir, 'src', 'cli.ts'), '');
+      assert.equal(getAgentMode(tmpDir), 'builder');
+    });
+
+    it('returns guide when no env, no agent_mode in config, and not build repo', () => {
+      delete process.env.AGENT_MODE;
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\n');
+      assert.equal(getAgentMode(tmpDir), 'guide');
+    });
+
+    it('returns guide when workspacePath is null', () => {
+      delete process.env.AGENT_MODE;
+      assert.equal(getAgentMode(null), 'guide');
     });
   });
 });

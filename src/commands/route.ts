@@ -4,6 +4,7 @@
  */
 
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
+import { getAgentMode } from '../core/config.js';
 import { routeToSkill } from '../core/skill-router.js';
 import { classifyTask } from '../core/model-router.js';
 import { getMergedSkillsForRouting } from './skill.js';
@@ -29,10 +30,13 @@ export async function routeCommand(query: string, options: CommandOptions): Prom
 
   const modelClassification = classifyTask(query);
 
+  const agentMode = workspaceRoot ? getAgentMode(workspaceRoot) : null;
+
   if (json) {
     console.log(JSON.stringify({
       success: true,
       query: query.trim(),
+      agent_mode: agentMode,
       skill: skillRoute
         ? { skill: skillRoute.skill, path: skillRoute.path, reason: skillRoute.reason }
         : null,

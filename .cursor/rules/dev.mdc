@@ -6,6 +6,8 @@ alwaysApply: true
 
 # Dev practices (Arete build)
 
+**Only when in Build Context (BUILDER mode).** See `arete-context.mdc`. If `agent_mode` is `guide` or you are in an end-user workspace, ignore this rule.
+
 Standards for building and changing Arete. **Testing** is covered in `testing.mdc`; this rule covers the rest.
 
 ## Build memory

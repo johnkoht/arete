@@ -82,13 +82,15 @@ When a user wants to do PM work, guide them to the appropriate action:
 | "Prep for meeting" / "Meeting prep" / "Call with X" | Build prep brief (attendees, recent meetings, action items, talking points) | `meeting-prep` |
 | "What's on my plate today?" / "Daily plan" / "Today's focus" | Today's focus, meetings with context, commitments due | `daily-plan` |
 
-Skills are located in `.cursor/skills/{name}/SKILL.md`.
+Skills are located in `.cursor/skills/{name}/SKILL.md` (or `.cursor/skills-core/{name}/SKILL.md` in an installed workspace).
 
-**Using skills**: When the user's intent matches a row in the table above, **load and follow the corresponding skill**: read `.cursor/skills/{name}/SKILL.md` and execute its workflow. Do not substitute ad-hoc tool use (e.g. grep/read only) for the skill—skills define the procedure, tools (including QMD), and output format. If the user asks what you used, name the skill and the tools it specified (e.g. meeting-prep, QMD, person/meeting/project reads).
+**Routing (default: router; fallback: table)**  
+When the user's message could be a PM action (meeting prep, synthesis, planning, sync, etc.):
 
-**Skill router (optional)**: To resolve which skill to use from a free-form message, run:
-`arete skill route "<user message>"`
-or `arete route "<user message>" --json` for skill + model tier suggestion. Then load and execute the returned skill.
+1. **Run the router first**: Execute `arete skill route "<user message>"` (or `arete route "<user message>" --json` for skill + model tier). If it returns a skill, load that skill's SKILL.md and execute its workflow.
+2. **If the router returns no match**: Use the intent table above to pick the best-matching skill (match the message to a row), or ask the user to clarify.
+
+Do not substitute ad-hoc tool use (e.g. grep/read only) for the skill—skills define the procedure, tools (including QMD), and output format. If the user asks what you used, name the skill and the tools it specified (e.g. meeting-prep, QMD, person/meeting/project reads). The table remains the catalog of available skills and the fallback when the router does not match.
 
 ### Tools (Lifecycle-Based Capabilities)
 

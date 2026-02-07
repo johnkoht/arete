@@ -14,7 +14,7 @@ import {
   getPackageRoot
 } from '../core/workspace.js';
 import { getDefaultConfig } from '../core/config.js';
-import { WORKSPACE_DIRS, DEFAULT_FILES } from '../core/workspace-structure.js';
+import { WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
 import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
 import type { CommandOptions, InstallResults } from '../types.js';
 
@@ -173,15 +173,29 @@ export async function installCommand(directory: string | undefined, options: Ins
     results.skills = skillsCopied.map(p => basename(p));
   }
   
-  // Copy/symlink rules
+  // Copy/symlink only product rules (exclude build-only: dev.mdc, testing.mdc)
   if (!json) info(`${useSymlinks ? 'Linking' : 'Copying'} rules...`);
   
   if (existsSync(sourcePaths.rules)) {
-    const rulesCopied = copyDirectoryContents(
-      sourcePaths.rules,
-      workspacePaths.rules,
-      { symlink: useSymlinks }
-    );
+    const allowed = new Set(PRODUCT_RULES_ALLOW_LIST);
+    const items = readdirSync(sourcePaths.rules, { withFileTypes: true });
+    const rulesCopied: string[] = [];
+    for (const item of items) {
+      if (!item.isFile() || !allowed.has(item.name)) continue;
+      const srcPath = join(sourcePaths.rules, item.name);
+      const destPath = join(workspacePaths.rules, item.name);
+      if (existsSync(destPath)) continue;
+      try {
+        if (useSymlinks) {
+          symlinkSync(srcPath, destPath);
+        } else {
+          cpSync(srcPath, destPath);
+        }
+        rulesCopied.push(destPath);
+      } catch (err) {
+        results.errors.push({ type: 'file', path: item.name, error: (err as Error).message });
+      }
+    }
     results.rules = rulesCopied.map(p => basename(p));
   }
   
@@ -211,6 +225,7 @@ export async function installCommand(directory: string | undefined, options: Ins
     schema: 1,
     version: '0.1.0',
     source: source,
+    agent_mode: 'guide' as const,
     created: new Date().toISOString().split('T')[0],
     skills: {
       core: results.skills,

@@ -6,6 +6,8 @@ alwaysApply: true
 
 # Testing Requirements
 
+**Only when in Build Context (BUILDER mode).** See `arete-context.mdc`. If `agent_mode` is `guide` or you are in an end-user workspace, ignore this rule.
+
 All code changes in this workspace MUST include corresponding tests. Never ship code without test coverage.
 
 ## Test Infrastructure

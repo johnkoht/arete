@@ -47,6 +47,20 @@ export const WORKSPACE_DIRS = [
 ];
 
 /**
+ * Rule files to copy on install (product rules only). Build-only rules (dev.mdc, testing.mdc)
+ * are excluded so end-user workspaces never get them. Add new product rules here when added.
+ */
+export const PRODUCT_RULES_ALLOW_LIST = [
+  'arete-context.mdc',
+  'arete-vision.mdc',
+  'pm-workspace.mdc',
+  'agent-memory.mdc',
+  'context-management.mdc',
+  'project-management.mdc',
+  'qmd-search.mdc'
+];
+
+/**
  * Default files created when missing. Key = path relative to workspace root.
  * Do not overwrite existing files (preserves user content on update).
  */

@@ -5,14 +5,15 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import type { AreteConfig, AgentMode } from '../types.js';
 import { parse as parseYaml } from 'yaml';
 import { homedir } from 'os';
-import type { AreteConfig } from '../types.js';
 
 const DEFAULT_CONFIG: AreteConfig = {
   schema: 1,
   version: null,
   source: 'npm',
+  agent_mode: undefined,
   skills: {
     core: [],
     overrides: []
@@ -110,9 +111,34 @@ export function getDefaultConfig(): AreteConfig {
   return { ...DEFAULT_CONFIG };
 }
 
+/**
+ * Resolve agent mode: AGENT_MODE env (if set) > arete.yaml agent_mode > infer from workspace.
+ * Used by context rule and CLI so GUIDE never sees build skills/services.
+ */
+export function getAgentMode(workspacePath: string | null): AgentMode {
+  const envMode = process.env.AGENT_MODE?.toLowerCase();
+  if (envMode === 'builder' || envMode === 'guide') {
+    return envMode;
+  }
+  if (workspacePath) {
+    const config = loadConfig(workspacePath);
+    if (config.agent_mode === 'builder' || config.agent_mode === 'guide') {
+      return config.agent_mode;
+    }
+  }
+  // Infer: if this looks like the Areté source repo, builder; else guide
+  if (workspacePath) {
+    const hasBuild = existsSync(join(workspacePath, '.cursor', 'build', 'MEMORY.md'));
+    const hasCli = existsSync(join(workspacePath, 'src', 'cli.ts'));
+    if (hasBuild && hasCli) return 'builder';
+  }
+  return 'guide';
+}
+
 export default {
   loadConfig,
   getDefaultConfig,
+  getAgentMode,
   getGlobalConfigPath,
   getWorkspaceConfigPath
 };

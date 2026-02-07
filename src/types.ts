@@ -2,12 +2,17 @@
  * Shared type definitions for Areté CLI
  */
 
+/** Agent mode: builder = building Areté; guide = leading/empowering the user (end-product) */
+export type AgentMode = 'builder' | 'guide';
+
 /** Shape of the resolved config object */
 export interface AreteConfig {
   schema: number;
   version: string | null;
   source: string;
   created?: string;
+  /** Agent mode: builder (building Areté) or guide (end-user workspace). Used by rules and CLI. */
+  agent_mode?: AgentMode;
   /** Internal email domain for classifying meeting attendees (e.g. "acme.com") */
   internal_email_domain?: string;
   skills: {
