@@ -96,3 +96,11 @@ npm run typecheck
 | `scripts/integrations/utils.py` | `scripts/integrations/test_utils.py` |
 
 When adding new source files, create a corresponding test file following this pattern.
+
+### 6. Seed test-data: do not run in arete repo
+
+When working on testing, seed, or `test-data/` functionality:
+
+- **Do not run** `arete seed test-data` when the workspace is the arete development repo (contains `test-data/`, `src/commands/seed-test-data.ts`).
+- **Remind the user** to run seed only in a separate Areté-enabled project, not in the arete repo.
+- **After completing a task**, check for accidentally generated seed data: `people/internal/jane-doe.md`, `alex-eng.md`, `people/customers/bob-buyer.md`, `carol-champion.md`, `resources/meetings/2026-*.md`, `projects/active/onboarding-discovery/`, `TEST-SCENARIOS.md` at root. If found, ask: "Seed test data appears to have been generated in this workspace. Should I remove it?"

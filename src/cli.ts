@@ -24,6 +24,7 @@ import { setupCommand } from './commands/setup.js';
 import { updateCommand } from './commands/update.js';
 import { statusCommand } from './commands/status.js';
 import { skillCommand } from './commands/skill.js';
+import { routeCommand } from './commands/route.js';
 import { integrationCommand } from './commands/integration.js';
 import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
@@ -126,6 +127,19 @@ skillCmd
   .description('Copy skill to skills-local for customization')
   .option('--json', 'Output as JSON')
   .action((name, opts) => skillCommand('override', { name, ...opts }));
+
+skillCmd
+  .command('route <query>')
+  .description('Route a user message to the best-matching skill (for agents or scripting)')
+  .option('--json', 'Output as JSON')
+  .action((query, opts) => skillCommand('route', { query, ...opts }));
+
+// Top-level route: skill + model tier suggestion
+program
+  .command('route <query>')
+  .description('Route query to skill and suggest model tier (skill + model in one call)')
+  .option('--json', 'Output as JSON')
+  .action((query, opts) => routeCommand(query, opts));
 
 // Integration Management
 const integrationCmd = program

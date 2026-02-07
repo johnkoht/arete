@@ -34,6 +34,7 @@ PRDs for Areté feature development (Meeting Propagation, Meeting Intelligence) 
 
 - Moved Meeting Propagation and Meeting Intelligence PRDs from `projects/active/` to `.cursor/build/prds/`.
 - Removed `projects/active/meeting-propagation-prd/` and `projects/active/meeting-intelligence-prd/`.
+- Moved PM Planning System PRD from `projects/active/pm-planning-system-prd/` to `.cursor/build/prds/pm-planning-system/`.
 
 ## Rules Updated
 

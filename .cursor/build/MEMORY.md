@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-06 [Seed test-data: do not run locally](entries/2026-02-06_seed-test-data-no-local-run.md) — Agent and user should not run `arete seed test-data` in arete repo; check for accidental seed output after tasks; ask user before removing.
 - 2026-02-06 [Meeting Intelligence PRD execution](entries/2026-02-06_meeting-intelligence-prd-execution.md) — meeting-prep and daily-plan skills; get_meeting_context pattern; docs updated.
 - 2026-02-06 [PRD placement: build folder, not projects](entries/2026-02-06_prd-placement-build-not-projects.md) — Areté PRDs live in `.cursor/build/prds/`, not `projects/active/`; moved meeting-propagation and meeting-intelligence.
 - 2026-02-06 [Meeting Propagation PRD execution](entries/2026-02-06_meeting-propagation-prd.md) — Template frontmatter, process-meetings skill, internal_email_domain config, docs.

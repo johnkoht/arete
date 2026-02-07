@@ -85,6 +85,13 @@ A **structured workspace** with:
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show a person
 - `arete people index` - Regenerate people/index.md
+- `arete skill route "<query>"` - Route a user message to the best-matching skill (for agents; use before loading a skill)
+- `arete route "<query>"` - Route to skill and suggest model tier (fast/balanced/powerful) in one call; `--json` for machine-readable output
+
+### Skill and model routers
+
+- **Skill router** (`src/core/skill-router.ts`): Maps a free-form user message to a skill id and path using skill descriptions and optional `triggers` in skill frontmatter. Used by `arete skill route` and `arete route`. Agents can run `arete skill route "prep me for Jane"` to get `meeting-prep` and then load that skill.
+- **Model router** (`src/core/model-router.ts`): Suggests task complexity tier (fast / balanced / powerful) from prompt content—e.g. simple lookups → fast, analysis/planning/writing → powerful. Areté does not switch models programmatically (no Cursor/IDE API); the suggestion is for the user or for tooling that can set the model (Dex-style).
 
 ## Architecture
 

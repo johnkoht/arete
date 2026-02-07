@@ -8,16 +8,16 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 <!-- Reference context: people, plans, company strategy. Expand into context/ or memory as it solidifies. -->
 
 ### People
-- **Index**: Names, roles, teams, contact (email/Slack). May live in `context/people.md` or `people/[slug].md`.
-- **IDs / mapping**: Stable ID per person (e.g. slug: `jane-doe`) so we can link:
+- **Index**: ✓ Implemented. `people/{internal|customers|users}/[slug].md`; `people/index.md`; `arete people list/show/index`.
+- **IDs / mapping**: ✓ Stable slug per person; link via:
   - **Person → meeting**: Meeting frontmatter or body lists `attendees: [person-id]` or link to people index.
   - **Person → project**: Project README or inputs list `stakeholders: [person-id]` or key contacts.
 - Enables: "All meetings with Jane", "Projects where Sarah is stakeholder", and per-person memory (preferences, quotes).
 
 ### Plans
-- **Day plan**: Today’s focus, meetings, top 3 priorities. Could live in scratchpad or `resources/plans/day-YYYY-MM-DD.md`.
-- **Weekly plan**: This week’s goals, key meetings, themes. Align with `resources/plans/week-YYYY-Www.md` or similar.
-- **Review**: Weekly review (what shipped, what slipped, learnings), retro, or checkpoint. Feed into memory/items and next week’s plan.
+- **Day plan**: Today’s focus, meetings, top 3 priorities. ✓ **daily-plan** skill outputs to chat; optional day file in Phase 2.
+- **Weekly plan**: This week’s goals, key meetings, themes. ✓ **week-plan** skill; `resources/plans/week-YYYY-Www.md`.
+- **Review**: Weekly review (what shipped, what slipped, learnings). ✓ **week-review** skill.
 
 ### Company (strategic pillars / outcomes)
 - **Already in context**: `context/goals-strategy.md` has Strategic Pillars, OKRs, and outcomes (e.g. bets and their outcomes).
@@ -111,11 +111,8 @@ A **background worker** that syncs pullable sources (e.g. calendar, Fathom meeti
 - Complements the recommendation system: if background sync is enabled, “last synced” stays fresh; if not, agent can still recommend syncing after 1–2 days.
 
 ### People/Stakeholders Tracking
-- Index of people involved (name, role, team, contact) — see **Background → People** for index + ID/mapping design.
-- Per-person memory: what they care about, common questions, pet peeves
-- Auto-populate from meeting transcripts
-- Agent uses this when preparing deliverables ("CEO always asks about ROI")
-- Structure: `people/[slug].md` or `context/people.md` with sections for role, preferences, notable quotes; use stable IDs to link to meetings and projects.
+- ✓ **Foundation built**: people/, process-meetings (auto-populate from meeting attendees), meeting-prep (uses people when preparing). See **Background → People**.
+- **Remaining (future)**: Per-person memory enrichment (what they care about, pet peeves); agent patterns for "CEO always asks about ROI".
 
 ### Package-Based Distribution (Shelved)
 *Added: 2026-01-27*
@@ -229,7 +226,7 @@ Once `resources/plans/` (quarter goals, week priorities) and skills exist, the s
 When going from a **plan** (e.g. PM Planning System plan) to **autonomous agent execution** (execute-prd with prd.json):
 
 **What worked well**
-- PRD in `projects/active/.../outputs/` gives a single source of truth; prd.json tasks can reference it ("Reference PRD outputs for structure").
+- PRD in `.cursor/build/prds/{name}/prd.md` gives a single source of truth; prd.json tasks can reference it ("Reference PRD outputs for structure"). (PRDs for Areté features live in build folder, not projects/active.)
 - Atomic tasks (one TS change + test, then skills as separate tasks) keep each subagent scope small and typecheck/test reliable.
 - Having a copy of prd.json in repo root (`prd-pm-planning-system.json`) when write to `.cursor/build/` was restricted; then `cp` into autonomous folder with elevated permissions.
 
@@ -242,4 +239,4 @@ When going from a **plan** (e.g. PM Planning System plan) to **autonomous agent 
 
 ---
 
-*Last cleaned: [Date]*
+*Last cleaned: 2026-02-06 — Meeting Intelligence, PRD placement, pm-planning-system move.*
