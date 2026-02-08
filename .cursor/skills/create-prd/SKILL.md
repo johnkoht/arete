@@ -57,7 +57,7 @@ Adopt a **Product Leader persona** and ask strategic questions:
 #### Strategic Fit
 - How does this connect to company/product goals?
 - Is this tactical or strategic?
-- Reference `context/goals-strategy.md`
+- Reference `goals/strategy.md`
 
 #### Scope
 - What timeline/constraints?

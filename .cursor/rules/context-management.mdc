@@ -81,7 +81,7 @@ Each context file should include:
 
 If you notice context is outdated while working:
 
-1. **Note it in scratchpad.md** for later
+1. **Note it in now/scratchpad.md** for later
 2. **Continue with current work** using available context
 3. **Address during finalization** if relevant to current project
 4. **Or create a dedicated project** if significant update needed
