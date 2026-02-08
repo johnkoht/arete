@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-08 [Phase 4 (A–B): Skill management and role defaults](entries/2026-02-08_phase-4-skill-management-a-b.md) — override/reset/diff/list UX; skills.defaults config; applySkillDefaults; arete skill defaults/set-default/unset-default; tests.
 - 2026-02-07 [Phase 3: Intelligence services](entries/2026-02-07_phase-3-intelligence-services.md) — Context injection, memory retrieval, entity resolution, briefing assembly, enhanced skill router; CLI commands (arete context/memory/resolve/brief); pm-workspace rule update; 67 new tests.
 - 2026-02-07 [Phase 2: Project templates](entries/2026-02-07_phase-2-project-templates.md) — Directory-based templates for discovery, definition, delivery, analysis, roadmap; README + phase guide + inputs/working/outputs; skill project_template alignment.
 - 2026-02-07 [Phase 2: Skill refactoring](entries/2026-02-07_phase-2-skill-refactoring.md) — PATTERNS.md (get_meeting_context, extract_decisions_learnings); slimmed meeting-prep, daily-plan, process-meetings, sync, synthesize, finalize-project; extended frontmatter on all 18 skills.

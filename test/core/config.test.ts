@@ -42,7 +42,8 @@ describe('config', () => {
       assert.equal(config.schema, 1);
       assert.equal(config.version, null);
       assert.equal(config.source, 'npm');
-      assert.deepEqual(config.skills, { core: [], overrides: [] });
+      assert.deepEqual(config.skills.core, []);
+      assert.deepEqual(config.skills.overrides, []);
       assert.deepEqual(config.tools, []);
       assert.deepEqual(config.integrations, {});
       assert.ok(config.settings);
@@ -119,6 +120,19 @@ describe('config', () => {
     it('handles null workspacePath', () => {
       const config = loadConfig(null);
       assert.equal(config.source, 'npm');
+    });
+
+    it('loads skills.defaults from arete.yaml', () => {
+      const yamlContent = `skills:
+  defaults:
+    create-prd: netflix-prd
+    discovery: null
+`;
+      writeFileSync(join(tmpDir, 'arete.yaml'), yamlContent);
+      const config = loadConfig(tmpDir);
+      assert.ok(config.skills.defaults);
+      assert.equal(config.skills.defaults!['create-prd'], 'netflix-prd');
+      assert.equal(config.skills.defaults!['discovery'], null);
     });
   });
 

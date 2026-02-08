@@ -114,6 +114,7 @@ skillCmd
   .command('list')
   .description('List available and installed skills')
   .option('--json', 'Output as JSON')
+  .option('--verbose', 'Show primitives, work_type, category')
   .action((opts) => skillCommand('list', opts));
 
 skillCmd
@@ -133,6 +134,38 @@ skillCmd
   .description('Copy skill to skills-local for customization')
   .option('--json', 'Output as JSON')
   .action((name, opts) => skillCommand('override', { name, ...opts }));
+
+skillCmd
+  .command('reset <name>')
+  .description('Remove your override and restore the default skill')
+  .option('--json', 'Output as JSON')
+  .option('--yes', 'Skip confirmation')
+  .action((name, opts) => skillCommand('reset', { name, ...opts }));
+
+skillCmd
+  .command('diff <name>')
+  .description('Show what you changed vs the default skill')
+  .option('--json', 'Output as JSON')
+  .action((name, opts) => skillCommand('diff', { name, ...opts }));
+
+skillCmd
+  .command('defaults')
+  .description('Show which roles have custom skill assignments')
+  .option('--json', 'Output as JSON')
+  .action((opts) => skillCommand('defaults', opts));
+
+skillCmd
+  .command('set-default <skill-name>')
+  .description('Use this skill for a role (e.g. create-prd) when routing')
+  .requiredOption('--for <role>', 'Role to assign (e.g. create-prd, discovery)')
+  .option('--json', 'Output as JSON')
+  .action((skillName, opts) => skillCommand('set-default', { name: skillName, role: opts.for, ...opts }));
+
+skillCmd
+  .command('unset-default <role>')
+  .description('Restore Areté default for a role')
+  .option('--json', 'Output as JSON')
+  .action((role, opts) => skillCommand('unset-default', { name: role, ...opts }));
 
 skillCmd
   .command('route <query>')

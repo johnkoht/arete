@@ -2,8 +2,9 @@
  * Skill management commands
  */
 
-import { existsSync, readdirSync, readFileSync, cpSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, cpSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join, basename } from 'path';
+import { createInterface } from 'readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
@@ -14,6 +15,10 @@ import type { CommandOptions } from '../types.js';
 
 export interface SkillOptions extends CommandOptions {
   name?: string;
+  verbose?: boolean;
+  yes?: boolean;
+  role?: string;
+  query?: string;
 }
 
 interface SkillInfo {
@@ -118,11 +123,39 @@ export function getMergedSkillsForRouting(paths: ReturnType<typeof getWorkspaceP
   return result;
 }
 
+/** Apply skills.defaults: if matched role has a preferred skill, resolve to it. */
+export function applySkillDefaults(
+  routed: import('../core/skill-router.js').RoutedSkill | null,
+  mergedSkills: SkillInfo[],
+  defaults: Record<string, string | null> | undefined
+): import('../core/skill-router.js').RoutedSkill | null {
+  if (!routed || !defaults) return routed;
+  const preferred = defaults[routed.skill];
+  if (preferred === null || preferred === undefined) return routed;
+  const resolved = mergedSkills.find(s => s.id === preferred);
+  if (!resolved?.path) return routed;
+  return {
+    ...routed,
+    skill: resolved.id ?? preferred,
+    path: resolved.path,
+    resolvedFrom: routed.skill,
+  };
+}
+
+/** Default skill names (roles) that Areté ships — used for set-default/unset-default validation. */
+export function getDefaultRoleNames(paths: ReturnType<typeof getWorkspacePaths>): string[] {
+  if (!existsSync(paths.skillsCore)) return [];
+  return readdirSync(paths.skillsCore, { withFileTypes: true })
+    .filter(d => (d.isDirectory() || d.isSymbolicLink()) && !d.name.startsWith('_'))
+    .map(d => d.name)
+    .sort();
+}
+
 /**
  * List skills
  */
-async function listSkills(options: CommandOptions): Promise<void> {
-  const { json } = options;
+async function listSkills(options: SkillOptions): Promise<void> {
+  const { json, verbose } = options;
   
   const workspaceRoot = findWorkspaceRoot();
   if (!workspaceRoot) {
@@ -178,22 +211,32 @@ async function listSkills(options: CommandOptions): Promise<void> {
   
   header('Available Skills');
   
-  console.log(chalk.dim(`  ${coreSkills.length} core, ${localSkills.length} local`));
+  const defaultCount = allSkills.filter(s => s.source === 'core' && !s.overridden).length;
+  const customizedCount = allSkills.filter(s => s.overridden).length;
+  const thirdPartyCount = allSkills.filter(s => s.source === 'local' && !s.overridden).length;
+  console.log(chalk.dim(`  ${defaultCount} default, ${customizedCount} customized, ${thirdPartyCount} third-party`));
   console.log('');
   
   for (const skill of allSkills.sort((a, b) => (a.id || '').localeCompare(b.id || ''))) {
     let badge = '';
     if (skill.overridden) {
-      badge = chalk.yellow(' (overridden)');
+      badge = chalk.yellow(' (customized)');
     } else if (skill.source === 'local') {
-      badge = chalk.green(' (local)');
+      badge = chalk.green(' (third-party)');
     }
     
     const typeTag = skill.type === 'lifecycle' ? chalk.dim(' [lifecycle]') : '';
-    
-    console.log(`  ${chalk.dim('•')} ${chalk.bold(skill.id || skill.name)}${badge}${typeTag}`);
+    const displayName = skill.id || skill.name;
+    console.log(`  ${chalk.dim('•')} ${chalk.bold(displayName)}${badge}${typeTag}`);
     if (skill.description) {
       console.log(`    ${chalk.dim(skill.description)}`);
+    }
+    if (verbose) {
+      const parts: string[] = [];
+      if (skill.primitives?.length) parts.push(`primitives: ${skill.primitives.join(', ')}`);
+      if (skill.work_type) parts.push(`work_type: ${skill.work_type}`);
+      if (skill.category) parts.push(`category: ${skill.category}`);
+      if (parts.length) console.log(`    ${chalk.dim(parts.join(' | '))}`);
     }
   }
   
@@ -289,6 +332,170 @@ async function overrideSkill(options: SkillOptions): Promise<void> {
 }
 
 /**
+ * Reset a skill (remove user override, restore default)
+ */
+async function resetSkill(options: SkillOptions): Promise<void> {
+  const { name, json, yes } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  const paths = getWorkspacePaths(workspaceRoot);
+  const localPath = join(paths.skillsLocal, name!);
+  const corePath = join(paths.skillsCore, name!);
+
+  if (!existsSync(localPath)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `No local override for skill: ${name}` }));
+    } else {
+      warn(`No local override for skill: ${name}`);
+      info('Only customized skills can be reset. Use "arete skill list" to see overrides.');
+    }
+    process.exit(1);
+  }
+
+  if (!existsSync(corePath)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Skill not in core: ${name}` }));
+    } else {
+      error(`Skill not in core: ${name}. Resetting would remove it entirely.`);
+    }
+    process.exit(1);
+  }
+
+  // Warn if local differs from core (user has modified)
+  const coreFile = join(corePath, 'SKILL.md');
+  const localFile = join(localPath, 'SKILL.md');
+  if (existsSync(coreFile) && existsSync(localFile)) {
+    const coreContent = readFileSync(coreFile, 'utf8');
+    const localContent = readFileSync(localFile, 'utf8');
+    if (coreContent !== localContent) {
+      if (!json) warn('Your customized version differs from the default. Resetting will discard your changes.');
+    }
+  }
+
+  if (!yes && !json) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(`Remove override for "${name}" and use default? [y/N] `, resolve);
+    });
+    rl.close();
+    if (answer.trim().toLowerCase() !== 'y' && answer.trim().toLowerCase() !== 'yes') {
+      info('Cancelled.');
+      return;
+    }
+  }
+
+  rmSync(localPath, { recursive: true, force: true });
+
+  const configPath = getWorkspaceConfigPath(workspaceRoot);
+  if (existsSync(configPath)) {
+    try {
+      const configContent = readFileSync(configPath, 'utf8');
+      const yamlConfig = (parseYaml(configContent) as Record<string, unknown>) || {};
+      const skills = (yamlConfig.skills || {}) as Record<string, unknown>;
+      const overrides = ((skills.overrides as string[]) || []).filter((s: string) => s !== name);
+      skills.overrides = overrides;
+      yamlConfig.skills = skills;
+      writeFileSync(configPath, stringifyYaml(yamlConfig), 'utf8');
+    } catch {
+      // Ignore config update errors
+    }
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ success: true, skill: name, message: 'Override removed' }, null, 2));
+  } else {
+    success(`Reset skill: ${name}. Using default from skills-core.`);
+  }
+}
+
+/**
+ * Show diff between user override and default skill
+ */
+async function diffSkill(options: SkillOptions): Promise<void> {
+  const { name, json } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  const paths = getWorkspacePaths(workspaceRoot);
+  const localPath = join(paths.skillsLocal, name!);
+  const corePath = join(paths.skillsCore, name!);
+
+  if (!existsSync(localPath)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `No local override for skill: ${name}` }));
+    } else {
+      warn(`No local override for skill: ${name}`);
+      info('Use "arete skill override ' + name + '" to create one, then "arete skill diff ' + name + '" to see changes.');
+    }
+    process.exit(1);
+  }
+
+  const coreFile = join(corePath, 'SKILL.md');
+  const localFile = join(localPath, 'SKILL.md');
+  if (!existsSync(coreFile) || !existsSync(localFile)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Missing SKILL.md in core or local' }));
+    } else {
+      error('Missing SKILL.md in default or customized skill.');
+    }
+    process.exit(1);
+  }
+
+  const coreLines = readFileSync(coreFile, 'utf8').split(/\r?\n/);
+  const localLines = readFileSync(localFile, 'utf8').split(/\r?\n/);
+
+  // Simple line-by-line diff: compare by index, show - for default-only, + for local-only
+  const result: { op: string; line: string; num?: number }[] = [];
+  const maxLen = Math.max(coreLines.length, localLines.length);
+  for (let i = 0; i < maxLen; i++) {
+    const coreLine = i < coreLines.length ? coreLines[i] : undefined;
+    const localLine = i < localLines.length ? localLines[i] : undefined;
+    if (coreLine === localLine) {
+      result.push({ op: ' ', line: coreLine ?? '', num: i + 1 });
+    } else {
+      if (coreLine !== undefined) result.push({ op: '-', line: coreLine, num: i + 1 });
+      if (localLine !== undefined) result.push({ op: '+', line: localLine, num: i + 1 });
+    }
+  }
+
+  if (json) {
+    console.log(JSON.stringify({
+      success: true,
+      skill: name,
+      diff: result.filter(r => r.op !== ' ')
+    }, null, 2));
+    return;
+  }
+
+  header(`Diff: ${name} (default vs your version)`);
+  console.log(chalk.dim('  - line from default (skills-core)'));
+  console.log(chalk.dim('  + line from your version (skills-local)'));
+  console.log('');
+  for (const { op, line } of result) {
+    if (op === '-') console.log(chalk.red(`  - ${line}`));
+    else if (op === '+') console.log(chalk.green(`  + ${line}`));
+    else if (line) console.log(chalk.dim(`    ${line}`));
+  }
+}
+
+/**
  * Add a skill (placeholder for registry)
  */
 async function addSkill(options: SkillOptions): Promise<void> {
@@ -326,6 +533,201 @@ async function removeSkill(options: SkillOptions): Promise<void> {
 }
 
 /**
+ * Show current skill defaults (role → preferred skill)
+ */
+async function defaultsSkills(options: SkillOptions): Promise<void> {
+  const { json } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  const paths = getWorkspacePaths(workspaceRoot);
+  const config = loadConfig(workspaceRoot);
+  const roles = getDefaultRoleNames(paths);
+  const defaults = config.skills?.defaults ?? {};
+
+  const table: Record<string, string> = {};
+  for (const role of roles) {
+    const preferred = defaults[role];
+    table[role] = preferred ?? '(default)';
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ success: true, defaults: table, roles }, null, 2));
+    return;
+  }
+
+  header('Skill defaults (role → preferred skill)');
+  console.log(chalk.dim('  When routing matches a role, this skill is used instead of the Areté default.'));
+  console.log('');
+  for (const [role, skill] of Object.entries(table).sort(([a], [b]) => a.localeCompare(b))) {
+    const value = skill === '(default)' ? chalk.dim('(default)') : chalk.bold(skill);
+    console.log(`  ${chalk.dim('•')} ${role} ${chalk.dim('→')} ${value}`);
+  }
+  console.log('');
+}
+
+/**
+ * Set preferred skill for a role
+ */
+async function setDefaultSkill(options: SkillOptions): Promise<void> {
+  const { name: skillName, role, json } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  if (!skillName || !role) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Use: arete skill set-default <skill-name> --for <role>' }));
+    } else {
+      error('Use: arete skill set-default <skill-name> --for <role>');
+    }
+    process.exit(1);
+  }
+
+  const paths = getWorkspacePaths(workspaceRoot);
+  const config = loadConfig(workspaceRoot);
+  const merged = getMergedSkillsForRouting(paths);
+  const roles = getDefaultRoleNames(paths);
+
+  if (!roles.includes(role)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Unknown role: ${role}`, validRoles: roles }));
+    } else {
+      error(`Unknown role: ${role}`);
+      info('Valid roles: ' + roles.join(', '));
+    }
+    process.exit(1);
+  }
+
+  const skillExists = merged.some(s => s.id === skillName);
+  if (!skillExists) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Skill not found: ${skillName}` }));
+    } else {
+      error(`Skill not found: ${skillName}`);
+      info('Run "arete skill list" to see installed skills.');
+    }
+    process.exit(1);
+  }
+
+  const configPath = getWorkspaceConfigPath(workspaceRoot);
+  let yamlConfig: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      const content = readFileSync(configPath, 'utf8');
+      yamlConfig = (parseYaml(content) as Record<string, unknown>) || {};
+    } catch {
+      // ignore
+    }
+  }
+  const skills = (yamlConfig.skills || {}) as Record<string, unknown>;
+  const defaults = (skills.defaults as Record<string, string | null>) || {};
+  defaults[role] = skillName;
+  skills.defaults = defaults;
+  yamlConfig.skills = skills;
+
+  if (!existsSync(join(workspaceRoot))) {
+    // ensure parent dir exists for arete.yaml
+  }
+  writeFileSync(configPath, stringifyYaml(yamlConfig), 'utf8');
+
+  if (json) {
+    console.log(JSON.stringify({ success: true, role, skill: skillName }, null, 2));
+  } else {
+    success(`Default for role "${role}" set to: ${skillName}`);
+  }
+}
+
+/**
+ * Unset preferred skill for a role (restore Areté default)
+ */
+async function unsetDefaultSkill(options: SkillOptions): Promise<void> {
+  const { name: role, json } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  if (!role) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Use: arete skill unset-default <role>' }));
+    } else {
+      error('Use: arete skill unset-default <role>');
+    }
+    process.exit(1);
+  }
+
+  const configPath = getWorkspaceConfigPath(workspaceRoot);
+  if (!existsSync(configPath)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `No custom default for role: ${role}` }));
+    } else {
+      warn(`No custom default for role: ${role}`);
+    }
+    return;
+  }
+
+  let yamlConfig: Record<string, unknown> = {};
+  try {
+    const content = readFileSync(configPath, 'utf8');
+    yamlConfig = (parseYaml(content) as Record<string, unknown>) || {};
+  } catch {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Could not read arete.yaml' }));
+    } else {
+      error('Could not read arete.yaml');
+    }
+    process.exit(1);
+  }
+
+  const skills = (yamlConfig.skills || {}) as Record<string, unknown>;
+  const defaults = (skills.defaults as Record<string, string | null>) || {};
+  if (!(role in defaults)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `No custom default for role: ${role}` }));
+    } else {
+      warn(`No custom default for role: ${role}`);
+    }
+    return;
+  }
+  delete defaults[role];
+  if (Object.keys(defaults).length === 0) {
+    delete skills.defaults;
+  } else {
+    skills.defaults = defaults;
+  }
+  yamlConfig.skills = skills;
+  writeFileSync(configPath, stringifyYaml(yamlConfig), 'utf8');
+
+  if (json) {
+    console.log(JSON.stringify({ success: true, role, message: 'Restored Areté default' }, null, 2));
+  } else {
+    success(`Restored Areté default for role: ${role}`);
+  }
+}
+
+/**
  * Route a user query to a skill
  */
 async function routeSkill(options: SkillOptions & { query?: string }): Promise<void> {
@@ -352,6 +754,7 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
   }
 
   const paths = getWorkspacePaths(workspaceRoot);
+  const config = loadConfig(workspaceRoot);
   const skills = getMergedSkillsForRouting(paths);
   const candidates = skills.map(s => ({
     id: s.id,
@@ -369,7 +772,8 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
     project_template: s.project_template,
   }));
 
-  const routed = routeToSkill(query, candidates);
+  let routed = routeToSkill(query, candidates);
+  routed = applySkillDefaults(routed, skills, config.skills?.defaults);
 
   if (json) {
     console.log(JSON.stringify({
@@ -384,6 +788,7 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
             work_type: routed.work_type,
             category: routed.category,
             requires_briefing: routed.requires_briefing,
+            resolvedFrom: routed.resolvedFrom,
           }
         : null
     }, null, 2));
@@ -392,6 +797,9 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
 
   if (routed) {
     success(`Route to skill: ${routed.skill}`);
+    if (routed.resolvedFrom) {
+      listItem('Default for role', `${routed.resolvedFrom} → ${routed.skill}`);
+    }
     listItem('Path', formatPath(routed.path));
     listItem('Reason', routed.reason);
     console.log('');
@@ -415,6 +823,16 @@ export async function skillCommand(action: string, options: SkillOptions): Promi
       return removeSkill(options);
     case 'override':
       return overrideSkill(options);
+    case 'reset':
+      return resetSkill(options);
+    case 'diff':
+      return diffSkill(options);
+    case 'defaults':
+      return defaultsSkills(options);
+    case 'set-default':
+      return setDefaultSkill(options);
+    case 'unset-default':
+      return unsetDefaultSkill(options);
     case 'route':
       return routeSkill(options);
     default:

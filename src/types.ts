@@ -18,6 +18,8 @@ export interface AreteConfig {
   skills: {
     core: string[];
     overrides: string[];
+    /** Role-to-skill mapping: default skill name -> preferred replacement (null = use Areté default) */
+    defaults?: Record<string, string | null>;
   };
   tools: string[];
   integrations: Record<string, unknown>;
@@ -269,4 +271,6 @@ export interface ExtendedRoutedSkill {
   work_type?: WorkType;
   category?: SkillCategory;
   requires_briefing?: boolean;
+  /** Set when skills.defaults redirected to a different skill */
+  resolvedFrom?: string;
 }

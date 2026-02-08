@@ -4,10 +4,10 @@
  */
 
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
-import { getAgentMode } from '../core/config.js';
+import { loadConfig, getAgentMode } from '../core/config.js';
 import { routeToSkill } from '../core/skill-router.js';
 import { classifyTask } from '../core/model-router.js';
-import { getMergedSkillsForRouting } from './skill.js';
+import { getMergedSkillsForRouting, applySkillDefaults } from './skill.js';
 import type { CommandOptions } from '../types.js';
 
 export async function routeCommand(query: string, options: CommandOptions): Promise<void> {
@@ -17,20 +17,22 @@ export async function routeCommand(query: string, options: CommandOptions): Prom
   const skillRoute = workspaceRoot
     ? (() => {
         const paths = getWorkspacePaths(workspaceRoot);
+        const config = loadConfig(workspaceRoot);
         const skills = getMergedSkillsForRouting(paths);
-        return routeToSkill(query, skills.map(s => ({
+        const candidates = skills.map(s => ({
           id: s.id,
           name: s.name,
           description: s.description,
           path: s.path,
           triggers: s.triggers,
-          // Extended frontmatter (Phase 3)
           primitives: s.primitives as import('../types.js').ProductPrimitive[] | undefined,
           work_type: s.work_type as import('../types.js').WorkType | undefined,
           category: s.category as import('../types.js').SkillCategory | undefined,
           intelligence: s.intelligence,
           requires_briefing: s.requires_briefing,
-        })));
+        }));
+        const routed = routeToSkill(query, candidates);
+        return applySkillDefaults(routed, skills, config.skills?.defaults);
       })()
     : null;
 
@@ -52,6 +54,7 @@ export async function routeCommand(query: string, options: CommandOptions): Prom
             work_type: skillRoute.work_type,
             category: skillRoute.category,
             requires_briefing: skillRoute.requires_briefing,
+            resolvedFrom: skillRoute.resolvedFrom,
           }
         : null,
       model: {
