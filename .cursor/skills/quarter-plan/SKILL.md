@@ -1,6 +1,13 @@
 ---
 name: quarter-plan
 description: Set quarter goals and align to org strategy. Use when the user wants to set quarter goals, plan the quarter, or align PM outcomes to org pillars/OKRs.
+primitives:
+  - Problem
+  - Solution
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
 ---
 
 # Quarter Plan Skill

@@ -1,6 +1,10 @@
 ---
 name: week-review
 description: Review and close the week; mark priorities done/partial/carried and note quarter progress. Use when the user wants to review the week or close the week.
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
 ---
 
 # Week Review Skill

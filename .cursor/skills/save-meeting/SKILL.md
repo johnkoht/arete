@@ -1,6 +1,8 @@
 ---
 name: save-meeting
 description: Save pasted meeting content (summary, transcript, URL) to resources/meetings. Use when the user pastes meeting content and wants to save it, or says "save this meeting".
+work_type: operations
+category: essential
 ---
 
 # Save Meeting Skill

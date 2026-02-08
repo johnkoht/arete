@@ -1,6 +1,16 @@
 ---
 name: periodic-review
 description: Quarterly context and workspace health check. Use when the user wants a quarterly review, context review, workspace health check, or to verify context is up to date.
+primitives:
+  - Problem
+  - User
+  - Solution
+  - Market
+  - Risk
+work_type: operations
+category: essential
+intelligence:
+  - context_injection
 ---
 
 # Periodic Review Skill
@@ -47,7 +57,7 @@ Check each context file for:
 | business-model.md | [Date] | |
 | users-personas.md | [Date] | |
 | products-services.md | [Date] | |
-| goals-strategy.md | [Date] | |
+| goals/strategy.md | [Date] | |
 | competitive-landscape.md | [Date] | |
 
 ### Recommended Updates

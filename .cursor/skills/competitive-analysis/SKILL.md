@@ -1,6 +1,16 @@
 ---
 name: competitive-analysis
 description: Research and document competitive landscape. Use when the user wants to analyze competitors, do competitive research, or update competitive landscape.
+primitives:
+  - Market
+  - Risk
+work_type: analysis
+category: default
+creates_project: true
+project_template: competitive-analysis
+intelligence:
+  - context_injection
+requires_briefing: false
 ---
 
 # Competitive Analysis Skill

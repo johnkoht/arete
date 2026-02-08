@@ -1,6 +1,17 @@
 ---
 name: construct-roadmap
 description: Build and maintain product roadmaps. Use when the user wants to build, update, or plan a roadmap, do quarterly planning, or prioritize backlog.
+primitives:
+  - Solution
+  - Market
+  - Risk
+work_type: delivery
+category: default
+creates_project: true
+project_template: roadmap
+intelligence:
+  - context_injection
+requires_briefing: false
 ---
 
 # Construct Roadmap Skill

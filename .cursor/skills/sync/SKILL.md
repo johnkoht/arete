@@ -1,6 +1,10 @@
 ---
 name: sync
 description: Manually sync data between Areté and external integrations. Use when the user wants to pull data from or push updates to connected tools.
+work_type: operations
+category: essential
+intelligence:
+  - synthesis
 ---
 
 # Sync Skill
@@ -140,103 +144,7 @@ After successful sync:
 
 2. **Update config**: Set `last_sync` in integration config
 
-3. **Extract and Review** (for meeting imports):
-   - Read imported meetings and identify potential decisions and learnings
-   - Present for inline review (see Synthesis Workflow below)
-
-### 5. Synthesis Workflow (Inline Review)
-
-After importing meetings, extract candidate decisions and learnings for user review.
-
-#### Step 1: Extract Candidates
-
-Read through imported content looking for:
-
-**Decisions** (look for):
-- Explicit choices: "we decided", "we chose", "going with"
-- Conclusions from debates: "after discussing", "the consensus was"
-- Action outcomes: "we will", "the plan is"
-
-**Learnings** (look for):
-- User insights: quotes, behaviors, feedback patterns
-- Process observations: what worked/didn't work
-- Market/competitive insights
-
-#### Step 2: Present for Review
-
-Show candidates organized by type:
-
-```markdown
-## Synthesis Review - [X] Meetings Processed
-
-I found potential decisions and learnings in the imported meetings.
-Review each item and approve, edit, or skip.
-
----
-
-### Proposed Decisions ([N])
-
-**1. [Decision title]**
-- **Source**: [2026-02-05-meeting-title.md](resources/meetings/2026-02-05-meeting-title.md)
-- **Context**: "[Quote or context from meeting]"
-- **Suggested rationale**: [Why this decision matters]
-
-→ Approve / Edit / Skip?
-
-**2. [Decision title]**
-...
-
----
-
-### Proposed Learnings ([N])
-
-**1. [Learning title]**
-- **Source**: [2026-02-04-user-interview.md](resources/meetings/2026-02-04-user-interview.md)
-- **Insight**: "[What was learned]"
-- **Suggested implications**: [How this affects future work]
-
-→ Approve / Edit / Skip?
-
----
-
-**Quick actions**: Approve all | Skip all | Review one by one
-```
-
-#### Step 3: Process Approvals
-
-For each approved item:
-
-**Decisions** → Append to `.arete/memory/items/decisions.md`:
-```markdown
-### YYYY-MM-DD: [Decision Title]
-
-**Project**: [If applicable]
-**Context**: [What led to this decision]
-**Decision**: [What was decided]
-**Rationale**: [Why this choice]
-**Alternatives Considered**: [If known from meeting]
-**Status**: Active
-```
-
-**Learnings** → Append to `.arete/memory/items/learnings.md`:
-```markdown
-### YYYY-MM-DD: [Learning Title]
-
-**Source**: [Meeting or sync that surfaced this]
-**Insight**: [What was learned]
-**Implications**: [How this affects future work]
-**Applied To**: [Will be updated as learning is used]
-```
-
-#### Step 4: Report Results
-
-```markdown
-## Synthesis Complete
-
-- Decisions approved: X (added to .arete/memory/items/decisions.md)
-- Learnings approved: Y (added to .arete/memory/items/learnings.md)
-- Items skipped: Z
-```
+3. **Extract and Review** (for meeting imports): Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). Extract candidates from imported content, present for inline review, write approved items to `.arete/memory/items/`. Report: Decisions approved X, Learnings Y, Skipped Z.
 
 ### 6. Error Handling
 

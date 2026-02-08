@@ -1,6 +1,18 @@
 ---
 name: finalize-project
 description: Complete projects, commit changes to context, and archive. Use when the user wants to finalize, complete, wrap up, or archive a project.
+primitives:
+  - Problem
+  - User
+  - Solution
+  - Market
+  - Risk
+work_type: operations
+category: essential
+intelligence:
+  - context_injection
+  - memory_retrieval
+  - inline_review
 ---
 
 # Finalize Project Skill
@@ -69,7 +81,7 @@ Determine what should update core context:
 - [ ] No changes needed
 - [ ] Update: [What and why]
 
-### goals-strategy.md
+### goals/strategy.md
 - [ ] No changes needed
 - [ ] Update: [What and why]
 
@@ -111,41 +123,13 @@ Apply updates to context files:
 
 ### 5. Log to Memory
 
-#### Decisions
+#### Decisions and Learnings
 
-For key decisions made during the project, log to `.arete/memory/items/decisions.md`:
-
-```markdown
-## YYYY-MM-DD: [Decision Title]
-
-**Project**: [Project name]
-**Context**: [What led to this decision]
-**Decision**: [What was decided]
-**Rationale**: [Why this choice]
-**Alternatives Considered**:
-- [Option A]: [Why not]
-- [Option B]: [Why not]
-**Status**: Active
-**Review Date**: [When to revisit, if applicable]
-```
-
-#### Learnings
-
-For insights worth preserving, log to `.arete/memory/items/learnings.md`:
-
-```markdown
-## YYYY-MM-DD: [Learning Title]
-
-**Project**: [Project name]
-**Source**: [Where this came from]
-**Insight**: [What we learned]
-**Implications**: [How this affects future work]
-**Applied To**: [Where we've used this, if applicable]
-```
+For key decisions and learnings from the project, append to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` using the standard format — see [PATTERNS.md](../PATTERNS.md) (extract_decisions_learnings). You may add **Review Date** for decisions and **Project** where applicable.
 
 #### Activity Log
 
-Add entry to `memory/activity-log.md`:
+Add entry to `.arete/activity/activity-log.md`:
 
 ```markdown
 ## YYYY-MM-DD

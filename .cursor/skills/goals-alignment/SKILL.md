@@ -1,6 +1,12 @@
 ---
 name: goals-alignment
 description: View and compare PM quarter goals to org strategy. Use when the user wants to view goals, compare to org, or roll up alignment.
+primitives:
+  - Problem
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
 ---
 
 # Goals Alignment Skill

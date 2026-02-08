@@ -1,11 +1,20 @@
 ---
 name: synthesize
 description: Process project inputs into insights and decisions. Use when the user wants to synthesize findings, process inputs, summarize learnings, or pull together research.
+primitives:
+  - Problem
+  - User
+  - Solution
+work_type: analysis
+category: essential
+intelligence:
+  - memory_retrieval
+  - synthesis
 ---
 
 # Synthesize Skill
 
-Help users process raw inputs from projects into structured insights, patterns, and decisions.
+This skill is the default implementation of the **synthesis** intelligence service: inventory inputs, extract and cross-analyze (patterns, contradictions, gaps), produce structured synthesis and optional decision framework. Help users process raw inputs from projects into structured insights, patterns, and decisions.
 
 ## When to Use
 

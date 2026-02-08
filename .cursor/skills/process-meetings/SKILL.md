@@ -1,11 +1,20 @@
 ---
 name: process-meetings
 description: Process meeting notes into people and memory. Use when the user wants to update people from meetings, extract decisions and learnings, or propagate meeting content.
+primitives:
+  - User
+  - Risk
+work_type: operations
+category: essential
+intelligence:
+  - entity_resolution
+  - synthesis
+  - memory_retrieval
 ---
 
 # Process Meetings Skill
 
-Read meeting files from `resources/meetings/`, create or update person files from attendees, write `attendee_ids` to meeting frontmatter, and extract decisions and learnings for user review and memory.
+Read meeting files from `resources/meetings/`, create or update person files from attendees (entity resolution), write `attendee_ids` to meeting frontmatter, and extract decisions and learnings for user review and memory using the **extract_decisions_learnings** pattern.
 
 ## When to Use
 
@@ -23,62 +32,35 @@ Read meeting files from `resources/meetings/`, create or update person files fro
 internal_email_domain: "acme.com"
 ```
 
-If absent, all attendees are classified as external (customers). Attendees whose email domain matches are placed in `people/internal/`; others go to `people/customers/`.
+If absent, all attendees are classified as external (customers). Attendees whose email domain matches go to `people/internal/`; others to `people/customers/`.
 
 ## Workflow
 
 ### 1. Gather Context
 
 - Read `arete.yaml` or `~/.arete/config.yaml` for `internal_email_domain`. If absent, treat all attendees as external (customers).
-- List meeting files in `resources/meetings/`:
-  - Default: last 7 days (by filename `YYYY-MM-DD-*.md`)
-  - Support arguments: `today` (only today), `"search term"` (filter by title/attendee), `--days-back=N` (last N days)
+- List meeting files in `resources/meetings/`: default last 7 days (by filename `YYYY-MM-DD-*.md`). Support: `today`, `"search term"`, `--days-back=N`.
 
-**Legacy meetings**: Handle meetings without YAML frontmatter (pre-enrichment). Parse:
-- Title from first `#` heading
-- Date from filename (`YYYY-MM-DD-title-slug.md`)
-- Attendees from body (e.g. "**Attendees**: ..." or "Attendees: ..." line)
+**Legacy meetings** (no YAML frontmatter): Parse title from first `#` heading, date from filename, attendees from body ("**Attendees**: ..." or "Attendees: ...").
 
-### 2. For Each Meeting
+### 2. For Each Meeting — People (Entity Resolution)
 
-Parse frontmatter and body (title, date, attendees, company, decisions section, action items, summary).
+Parse frontmatter and body (title, date, attendees, company, summary).
 
 **For each attendee** (from frontmatter `attendees` or body):
 
-- Resolve slug using `slugifyPersonName(name)` (see `src/core/people.ts` or pattern: lowercase, replace spaces with hyphens, strip non-alphanumeric).
+- Resolve slug: lowercase, replace spaces with hyphens, strip non-alphanumeric (see `src/core/people.ts` slugifyPersonName).
 - Category: `people/internal/` if email domain matches `internal_email_domain`; else `people/customers/`.
-- Create `people/<category>/<slug>.md` if missing. Frontmatter: `name`, `email`, `company` (from meeting if known).
-- Update existing: append "Last met: YYYY-MM-DD" or add meeting to "Recent meetings" section if present.
+- Create `people/<category>/<slug>.md` if missing (frontmatter: name, email, company).
+- Update existing: append "Last met: YYYY-MM-DD" or add to "Recent meetings".
 
 ### 3. Write attendee_ids to Meeting Frontmatter
 
-After resolving people, add or update meeting file frontmatter with `attendee_ids: [slug1, slug2]`. For legacy files without frontmatter, prepend YAML frontmatter and preserve body.
+After resolving people, add or update meeting frontmatter with `attendee_ids: [slug1, slug2]`. For legacy files, prepend YAML frontmatter and preserve body.
 
 ### 4. Extract Decisions and Learnings
 
-From "## Decisions Made" and "## Summary" / "## Key Points": propose candidate decisions and learnings. Present for inline review (approve / edit / skip) — same pattern as the sync skill's Synthesis Workflow.
-
-**For approved items**:
-
-- **Decisions** → Append to `.arete/memory/items/decisions.md`:
-  ```markdown
-  ### YYYY-MM-DD: [Decision Title]
-  **Project**: [If applicable]
-  **Context**: [What led to this decision]
-  **Decision**: [What was decided]
-  **Rationale**: [Why this choice]
-  **Alternatives Considered**: [If known]
-  **Status**: Active
-  ```
-
-- **Learnings** → Append to `.arete/memory/items/learnings.md`:
-  ```markdown
-  ### YYYY-MM-DD: [Learning Title]
-  **Source**: [Meeting that surfaced this]
-  **Insight**: [What was learned]
-  **Implications**: [How this affects future work]
-  **Applied To**: [Will be updated as used]
-  ```
+Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). Scan "## Decisions Made" and "## Summary" / "## Key Points" for candidates; present for inline review (approve / edit / skip); write approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` per the formats in PATTERNS.md.
 
 ### 5. Summary
 
@@ -88,12 +70,12 @@ Report: meetings processed, people created/updated, decisions and learnings adde
 
 - `today` — process only today's meetings
 - `"search term"` — filter meetings by title or attendee
-- `--days-back=N` — process last N days (default 7)
+- `--days-back=N` — last N days (default 7)
 - `--people-only` — skip decisions/learnings extraction
 - `--no-people` — skip people propagation; only extract decisions/learnings
 
-## Integration
+## References
 
-- **People system**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
-- **Sync skill**: Inline synthesis pattern for decisions/learnings (approve/edit/skip)
-- **Meetings**: `resources/meetings/` with frontmatter (`attendee_ids`, `company`, `pillar`)
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings
+- **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
+- **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `company`, `pillar`)

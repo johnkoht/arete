@@ -1,6 +1,19 @@
 ---
 name: create-prd
 description: Interactive Product Requirements Document creation with a Product Leader persona. Use when the user wants to create, write, or start a PRD.
+primitives:
+  - Problem
+  - User
+  - Solution
+  - Risk
+work_type: definition
+category: default
+creates_project: true
+project_template: prd
+intelligence:
+  - context_injection
+  - memory_retrieval
+requires_briefing: false
 ---
 
 # Create PRD Skill

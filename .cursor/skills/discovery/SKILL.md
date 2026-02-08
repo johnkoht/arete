@@ -1,6 +1,17 @@
 ---
 name: discovery
 description: Guide problem discovery and research synthesis. Use when the user wants to start discovery, understand a problem, research a topic, or validate assumptions.
+primitives:
+  - Problem
+  - User
+work_type: discovery
+category: default
+creates_project: true
+project_template: discovery
+intelligence:
+  - context_injection
+  - memory_retrieval
+requires_briefing: false
 ---
 
 # Discovery Skill

@@ -7,19 +7,28 @@ triggers:
   - prep me for
   - call with
   - meeting prep for
+primitives:
+  - User
+  - Problem
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
+  - entity_resolution
+  - memory_retrieval
 ---
 
 # Meeting Prep Skill
 
-Build a prep brief for a meeting: attendee details, recent meetings with those people, related projects, open action items, and suggested talking points. Uses the get_meeting_context pattern.
+Build a prep brief for a meeting: attendee details, recent meetings, related projects, open action items, and suggested talking points. Uses the **get_meeting_context** intelligence pattern.
 
 ## Agent Instructions
 
-**When the user asks for meeting prep** (e.g. "prep me for my meeting with Jane", "call with Acme", "meeting prep for Product Review"):
+**When the user asks for meeting prep** (e.g. "prep me for my meeting with Jane", "call with Acme"):
 
-1. **Use this skill** — Read and execute this skill's workflow. Do not substitute ad-hoc grep/read only; follow the get_meeting_context pattern and steps below.
-2. **Use QMD when available** — Run `qmd query "..."` (or `qmd search` / `qmd vsearch`) to find related decisions, learnings, and context; incorporate into the brief (see "QMD" in Gather Context).
-3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context pattern), read person/meeting/project files, and ran QMD queries for related decisions/learnings where applicable."
+1. **Use this skill** — Execute this workflow. Do not substitute ad-hoc grep/read only; use the get_meeting_context pattern.
+2. **Use QMD when available** — Run `qmd query "..."` to find related decisions/learnings; incorporate into the brief (step 6 of the pattern).
+3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context pattern), person/meeting/project reads, and QMD for related context."
 
 ## When to Use
 
@@ -28,30 +37,9 @@ Build a prep brief for a meeting: attendee details, recent meetings with those p
 - "Meeting prep for Product Review"
 - Before or after a meeting to refresh context
 
-## Get Meeting Context (Pattern)
+## Gather Context
 
-Before building the brief, gather context for the meeting. This pattern is shared with the **daily-plan** skill.
-
-**Inputs**: Meeting title (optional), attendee names or slugs.
-
-**Steps**:
-
-1. **Resolve attendees** — Match names to people slugs (search `people/` by name, or use slug directly). Optionally run `qmd query "[attendee name] person"` to find the right person file.
-2. **Read person files** — For each attendee: `people/{internal|customers|users}/{slug}.md`. Extract name, role, company, and any action items or notes in the person file.
-3. **Search meetings** — List `resources/meetings/*.md`. Filter where frontmatter `attendee_ids` includes attendee slugs, or body/attendees list mentions their names. Sort by date descending; take 1–3 most recent.
-4. **Read projects** — Scan `projects/active/` READMEs. Find projects where `stakeholders` or body mentions attendee names/slugs.
-5. **Extract action items** — From recent meetings with attendees: look for "## Action Items" or similar; collect unchecked items (e.g. `- [ ] ...`). Prefer items that reference the attendee or "For me" / "Follow up".
-6. **QMD (optional but recommended)** — Run QMD to surface related institutional memory and context. Execute in shell, then use results in the brief:
-   - `qmd query "decisions or learnings involving [attendee name] or [company]"`
-   - `qmd query "meetings or notes about [project topic]"`
-   - Include any relevant decisions, learnings, or past context in "Suggested talking points" or a short "Related context" line.
-
-**Outputs** (for skill use):
-- Attendee details (name, role, company, last met date)
-- Recent meetings (1–3 with brief summary)
-- Related projects (where they're stakeholders)
-- Outstanding action items
-- Prep suggestions (derived from above)
+Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Inputs: meeting title (optional), attendee names or slugs. Outputs: attendee details, recent meetings, related projects, outstanding action items. Include QMD queries (step 6) for decisions/learnings involving the attendee or topic.
 
 ## Workflow
 
@@ -59,11 +47,11 @@ Before building the brief, gather context for the meeting. This pattern is share
 
 - User provides: meeting title and/or attendee names.
 - If not provided, ask: "Which meeting? Please share the title and/or attendee names."
-- Note: No calendar integration in v1; user supplies title/attendees.
+- No calendar integration in v1; user supplies title/attendees.
 
 ### 2. Gather Context
 
-Run the **get_meeting_context** pattern above. Resolve attendees, read people, meetings, projects; extract action items. **Run QMD queries** (step 6 of the pattern) to pull in decisions/learnings that mention the attendee or meeting topic; incorporate into the brief.
+Run **get_meeting_context** (see PATTERNS.md). Use the outputs to build the brief.
 
 ### 3. Build Prep Brief
 
@@ -91,7 +79,7 @@ Output markdown:
 - Ask about [Z]
 ```
 
-Keep it concise and prep-focused. User can ask for more or less detail.
+Keep it concise and prep-focused.
 
 ### 4. Close
 
@@ -100,8 +88,8 @@ Keep it concise and prep-focused. User can ask for more or less detail.
 
 ## References
 
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
 - **People**: `people/` (internal, customers, users)
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `attendees`)
 - **Projects**: `projects/active/` READMEs (`stakeholders`)
-- **QMD**: Run `qmd query "..."` for semantic search across context, memory, projects (see SETUP.md if QMD not configured).
 - **Related**: process-meetings, daily-plan

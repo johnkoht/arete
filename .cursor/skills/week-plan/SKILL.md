@@ -1,6 +1,13 @@
 ---
 name: week-plan
 description: Plan the week and set weekly priorities. Use when the user wants to plan the week or set top weekly outcomes linked to quarter goals.
+primitives:
+  - Problem
+  - Solution
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
 ---
 
 # Week Plan Skill

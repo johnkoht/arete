@@ -1,11 +1,21 @@
 ---
 name: daily-plan
 description: Surface today's focus, week priorities, and meeting context for each of today's meetings. Use when the user wants a daily plan or "what's on my plate today".
+primitives:
+  - User
+  - Problem
+  - Solution
+work_type: planning
+category: essential
+intelligence:
+  - context_injection
+  - entity_resolution
+  - memory_retrieval
 ---
 
 # Daily Plan Skill
 
-Build a daily plan: today's focus from week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, and carry-over. Uses the get_meeting_context pattern for each meeting.
+Build a daily plan: today's focus from week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, and carry-over. Uses the **get_meeting_context** pattern for each meeting.
 
 ## When to Use
 
@@ -13,30 +23,22 @@ Build a daily plan: today's focus from week priorities, meeting context per meet
 - "Daily plan"
 - "Today's focus"
 
-## Get Meeting Context (Pattern)
+## Gather Context for Meetings
 
-For each of today's meetings, gather context. Same pattern as **meeting-prep** skill:
-
-1. Resolve attendees to people slugs
-2. Read person files
-3. Search meetings involving attendees (by `attendee_ids` or attendee names)
-4. Read projects where attendees are stakeholders
-5. Extract unchecked action items from recent meetings
+For each of today's meetings, run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Use the outputs to summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
 
 ## Workflow
 
 ### 1. Gather Context
 
-- **Read** current week file: `now/week.md`.
-- **Read** quarter file if needed: `goals/quarter.md` for goal context.
+- **Read** `now/week.md` (current week priorities).
+- **Read** `goals/quarter.md` if needed for goal context.
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Ask** user for today's meetings: "List today's meetings (title + attendees) or say 'none'." No calendar integration in v1.
 
 ### 2. For Each Meeting
 
-Run the **get_meeting_context** pattern:
-- Attendee details, recent meetings, related project, open action items, prep suggestions.
-- Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
+Run **get_meeting_context** (see PATTERNS.md). Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
 
 ### 3. Build Daily Plan
 
@@ -65,8 +67,6 @@ Output markdown:
 
 ## References
 
-- **Week file**: `now/week.md`
-- **Quarter file**: `goals/quarter.md`
-- **Scratchpad**: `now/scratchpad.md`
-- **People, Meetings, Projects**: See meeting-prep skill
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
+- **Week file**: `now/week.md` | **Quarter**: `goals/quarter.md` | **Scratchpad**: `now/scratchpad.md`
 - **Related**: meeting-prep, week-plan, week-review

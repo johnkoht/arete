@@ -1,6 +1,8 @@
 ---
 name: workspace-tour
 description: Orient users to the Areté PM workspace. Use when the user asks for a tour, how the workspace works, what they can do, or says they're new.
+work_type: operations
+category: essential
 ---
 
 # Workspace Tour Skill
@@ -38,7 +40,7 @@ It helps you:
 - `business-model.md` - How you make money
 - `users-personas.md` - Who you're building for
 - `products-services.md` - What you're building
-- `goals-strategy.md` - Where you're headed
+- `goals/strategy.md` - Where you're headed
 - `competitive-landscape.md` - Your market position
 
 These change infrequently - only when you finalize a project."

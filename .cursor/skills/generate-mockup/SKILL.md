@@ -1,6 +1,14 @@
 ---
 name: generate-mockup
 description: Generate interactive UI mockups and prototypes from PRDs, discovery findings, or feature ideas using Lovable or Vercel v0. Use when the user wants to visualize a feature, create a prototype, build a mockup, or see what something would look like.
+primitives:
+  - Solution
+  - User
+work_type: delivery
+category: default
+intelligence:
+  - context_injection
+requires_briefing: false
 ---
 
 # Generate Mockup Skill
