@@ -83,10 +83,10 @@ describe('seedTestDataCommand', () => {
     assert.ok(peopleInternal.length >= 2, 'Expected at least 2 internal people');
     assert.ok(peopleCustomers.length >= 2, 'Expected at least 2 customer people');
 
-    const plansDir = join(tmpWorkspace, 'resources', 'plans');
-    assert.ok(existsSync(plansDir), 'Plans dir should exist');
-    const planFiles = readdirSync(plansDir).filter((n) => n.endsWith('.md'));
-    assert.ok(planFiles.length >= 2, 'Expected at least 2 plan files');
+    const goalsQuarter = join(tmpWorkspace, 'goals', 'quarter.md');
+    const nowWeek = join(tmpWorkspace, 'now', 'week.md');
+    assert.ok(existsSync(goalsQuarter), 'goals/quarter.md should exist');
+    assert.ok(existsSync(nowWeek), 'now/week.md should exist');
 
     const testScenarios = join(tmpWorkspace, 'TEST-SCENARIOS.md');
     assert.ok(existsSync(testScenarios), 'TEST-SCENARIOS.md should be copied');

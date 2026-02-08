@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-07 [Phase 1: Workspace restructure](entries/2026-02-07_phase-1-workspace-restructure.md) — now/, goals/, .arete/memory/ implemented; migration on update; all skills, rules, and src updated; tests pass.
 - 2026-02-07 [Product OS architecture direction](entries/2026-02-07_product-os-architecture.md) — Five product primitives (Problem, User, Solution, Market, Risk); intelligence layer over skill library; workspace restructure (now/, goals/, .arete/memory/); adapter pattern for skills; project templates by work type.
 - 2026-02-07 [Agent mode: BUILDER vs GUIDE](entries/2026-02-07_agent-mode-builder-guide.md) — agent_mode in arete.yaml; arete-context.mdc; install writes guide and copies only product rules; AGENT_MODE env override; dev/testing scoped to BUILDER.
 - 2026-02-06 [Seed test-data: do not run locally](entries/2026-02-06_seed-test-data-no-local-run.md) — Agent and user should not run `arete seed test-data` in arete repo; check for accidental seed output after tasks; ask user before removing.

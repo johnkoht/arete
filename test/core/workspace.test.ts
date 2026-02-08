@@ -41,7 +41,14 @@ describe('workspace', () => {
       assert.equal(isAreteWorkspace(tmpDir), true);
     });
 
-    it('returns true when .cursor + context + memory exist', () => {
+    it('returns true when .cursor + context + .arete/memory exist', () => {
+      mkdirSync(join(tmpDir, '.cursor'), { recursive: true });
+      mkdirSync(join(tmpDir, 'context'), { recursive: true });
+      mkdirSync(join(tmpDir, '.arete', 'memory'), { recursive: true });
+      assert.equal(isAreteWorkspace(tmpDir), true);
+    });
+
+    it('returns true when .cursor + context + legacy memory exist', () => {
       mkdirSync(join(tmpDir, '.cursor'), { recursive: true });
       mkdirSync(join(tmpDir, 'context'), { recursive: true });
       mkdirSync(join(tmpDir, 'memory'), { recursive: true });
@@ -98,7 +105,9 @@ describe('workspace', () => {
       assert.equal(paths.tools, join('/test/workspace', '.cursor', 'tools'));
       assert.equal(paths.integrations, join('/test/workspace', '.cursor', 'integrations'));
       assert.equal(paths.context, join('/test/workspace', 'context'));
-      assert.equal(paths.memory, join('/test/workspace', 'memory'));
+      assert.equal(paths.memory, join('/test/workspace', '.arete', 'memory'));
+      assert.equal(paths.now, join('/test/workspace', 'now'));
+      assert.equal(paths.goals, join('/test/workspace', 'goals'));
       assert.equal(paths.projects, join('/test/workspace', 'projects'));
       assert.equal(paths.resources, join('/test/workspace', 'resources'));
       assert.equal(paths.people, join('/test/workspace', 'people'));
