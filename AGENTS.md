@@ -20,11 +20,9 @@ Areté is a **product builder's operating system** — a Cursor-native workspace
 Areté is evolving from a skill-centric workspace to a product intelligence platform. See `.cursor/build/prds/product-os/vision.md` for the full vision. Key concepts:
 
 - **Five product primitives**: Problem, User, Solution, Market, Risk — the knowledge model the intelligence layer reasons about.
-- **Intelligence layer**: Context injection, memory retrieval, entity resolution, synthesis — services that make any skill or workflow dramatically more effective.
+- **Intelligence layer** (Phase 3, implemented): Context injection, memory retrieval, entity resolution, briefing assembly — services in `src/core/` that make any skill or workflow dramatically more effective. CLI: `arete context`, `arete memory search`, `arete resolve`, `arete brief`.
 - **Skills as methods**: Areté ships opinionated default skills but users can swap them. The value is the intelligence underneath, not the procedures on top.
-- **Workspace restructure**: `now/` (daily focus), `goals/` (elevated), `.arete/memory/` (system-managed), project templates by work type.
-
-> **Note**: The codebase is in transition. Current workspace structure and skills still follow the pre-restructure layout documented below. Updates will land incrementally.
+- **Workspace restructure** (Phases 0-2, complete): `now/` (daily focus), `goals/` (elevated), `.arete/memory/` (system-managed), project templates by work type, skill interface contract with extended frontmatter.
 
 ### The Problem We Solve
 
@@ -359,7 +357,27 @@ slugifyPersonName(name): string
 
 **Phase 2**: Full daily plans with structured day files; v1 outputs to chat.
 
-### 7. Build/Development System
+### 7. Intelligence Services (Phase 3)
+
+**Purpose**: Provide intelligence capabilities that make any skill or workflow dramatically more effective. The agent (Cursor's AI) is the runtime — these services are TypeScript modules callable from CLI or referenced by agent rules.
+
+**Location**: `src/core/` (code) + `.cursor/rules/pm-workspace.mdc` (agent instructions)
+
+**Services**:
+
+| Service | Module | CLI | Purpose |
+|---------|--------|-----|---------|
+| Context Injection | `src/core/context-injection.ts` | `arete context --for "query"` | Map primitives to workspace files, assemble ContextBundle with gaps |
+| Memory Retrieval | `src/core/memory-retrieval.ts` | `arete memory search "query"` | Token-based search across .arete/memory/ items |
+| Entity Resolution | `src/core/entity-resolution.ts` | `arete resolve "reference"` | Fuzzy resolve names to people, meetings, projects |
+| Briefing Assembly | `src/core/briefing.ts` | `arete brief --for "query"` | Combine all services into primitive briefing |
+| Skill Router (enhanced) | `src/core/skill-router.ts` | `arete skill route "query"` | Route with primitives, work_type, category metadata |
+
+**Types**: All intelligence types in `src/types.ts`: `ProductPrimitive`, `ContextBundle`, `MemoryResult`, `ResolvedEntity`, `ExtendedSkillCandidate`, etc.
+
+**Adapter Pattern**: Before community/third-party skills (or any with `requires_briefing: true`), the agent runs `arete brief` to assemble context. After skill execution, outputs feed back into the workspace. See `.cursor/build/prds/product-os/skill-interface.md` for the full contract.
+
+### 8. Build/Development System
 
 **Location**: `.cursor/build/` (NEVER shipped to users)
 
