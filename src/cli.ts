@@ -36,6 +36,12 @@ import {
   peopleShowCommand,
   peopleIndexCommand
 } from './commands/people.js';
+import {
+  contextCommand,
+  memorySearchCommand,
+  resolveCommand,
+  briefCommand
+} from './commands/intelligence.js';
 
 // Configure program
 program
@@ -232,6 +238,44 @@ peopleCmd
   .description('Regenerate people/index.md from person files')
   .option('--json', 'Output as JSON')
   .action((opts) => peopleIndexCommand(opts));
+
+// Intelligence Services
+program
+  .command('context')
+  .description('Assemble relevant workspace context for a task')
+  .requiredOption('--for <query>', 'Task description to get context for')
+  .option('--primitives <list>', 'Comma-separated primitives: Problem,User,Solution,Market,Risk')
+  .option('--json', 'Output as JSON')
+  .action((opts) => contextCommand(opts));
+
+const memoryCmd = program
+  .command('memory')
+  .description('Search workspace memory');
+
+memoryCmd
+  .command('search <query>')
+  .description('Search decisions, learnings, and observations')
+  .option('--types <list>', 'Comma-separated types: decisions,learnings,observations')
+  .option('--limit <n>', 'Max results to return')
+  .option('--json', 'Output as JSON')
+  .action((query, opts) => memorySearchCommand(query, opts));
+
+program
+  .command('resolve <reference>')
+  .description('Resolve an ambiguous reference to a workspace entity')
+  .option('--type <type>', 'Entity type: person, meeting, project, any', 'any')
+  .option('--all', 'Return all matches (not just the best)')
+  .option('--json', 'Output as JSON')
+  .action((reference, opts) => resolveCommand(reference, opts));
+
+program
+  .command('brief')
+  .description('Assemble a primitive briefing before running a skill')
+  .requiredOption('--for <query>', 'Task description')
+  .option('--skill <name>', 'Skill name for the briefing')
+  .option('--primitives <list>', 'Comma-separated primitives')
+  .option('--json', 'Output as JSON')
+  .action((opts) => briefCommand(opts));
 
 // Parse and execute
 program.parse();

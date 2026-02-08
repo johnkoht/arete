@@ -1,13 +1,21 @@
 /**
  * Skill router: map user query to the best-matching Areté skill.
  * Used by CLI `arete skill route` and optionally by agents to decide which skill to load.
+ *
+ * Enhanced in Phase 3 to read extended frontmatter (primitives, work_type, category)
+ * and include intelligence metadata in routing responses.
  */
 
-export type RoutedSkill = {
-  skill: string;
-  path: string;
-  reason: string;
-};
+import type {
+  ExtendedSkillCandidate,
+  ExtendedRoutedSkill,
+  ProductPrimitive,
+  WorkType,
+  SkillCategory,
+} from '../types.js';
+
+// Keep legacy types for backward compatibility
+export type RoutedSkill = ExtendedRoutedSkill;
 
 export type SkillCandidate = {
   id?: string;
@@ -15,12 +23,30 @@ export type SkillCandidate = {
   description?: string;
   path?: string;
   triggers?: string[];
+  // Extended fields (Phase 3)
+  primitives?: ProductPrimitive[];
+  work_type?: WorkType;
+  category?: SkillCategory;
+  intelligence?: string[];
+  requires_briefing?: boolean;
+  creates_project?: boolean;
+  project_template?: string;
 };
 
 const STOP_WORDS = new Set([
   'a', 'an', 'the', 'for', 'with', 'my', 'me', 'i', 'to', 'and', 'or', 'is', 'it',
   'in', 'on', 'at', 'of', 'this', 'that', 'what', 'how', 'can', 'you', 'please'
 ]);
+
+/** Work-type keywords for matching queries like "I want to do discovery" */
+const WORK_TYPE_KEYWORDS: Record<WorkType, string[]> = {
+  discovery: ['discovery', 'discover', 'research', 'explore', 'investigate', 'understand'],
+  definition: ['define', 'prd', 'requirements', 'spec', 'specification'],
+  delivery: ['deliver', 'launch', 'ship', 'release', 'rollout'],
+  analysis: ['analyze', 'analysis', 'compare', 'evaluate', 'assess'],
+  planning: ['plan', 'planning', 'goals', 'priorities', 'quarter', 'week', 'roadmap'],
+  operations: ['sync', 'save', 'process', 'update', 'finalize', 'tour', 'review'],
+};
 
 function tokenize(text: string): string[] {
   return text
@@ -76,12 +102,30 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
     }
   }
 
+  // Phase 3: work_type matching — if query mentions a work type the skill supports
+  if (skill.work_type) {
+    const keywords = WORK_TYPE_KEYWORDS[skill.work_type] || [];
+    const workTypeMatch = qTokens.some(t => keywords.includes(t));
+    if (workTypeMatch) {
+      score += 6;
+    }
+  }
+
+  // Phase 3: Category-based tiebreaker — essential > default > community
+  // Applied as a small bonus so essential skills win ties
+  if (skill.category === 'essential') {
+    score += 2;
+  } else if (skill.category === 'default') {
+    score += 1;
+  }
+  // community gets no bonus
+
   return score;
 }
 
 /**
  * Route a user message to the best-matching skill, if any.
- * Returns the skill id, path, and a short reason; or null if no good match.
+ * Returns the skill id, path, reason, and intelligence metadata; or null if no good match.
  */
 export function routeToSkill(query: string, skills: SkillCandidate[]): RoutedSkill | null {
   if (!query?.trim() || skills.length === 0) return null;
@@ -109,6 +153,11 @@ export function routeToSkill(query: string, skills: SkillCandidate[]): RoutedSki
   return {
     skill: best.skill.id || best.skill.name || '',
     path,
-    reason
+    reason,
+    // Phase 3: include intelligence metadata for downstream services
+    primitives: best.skill.primitives,
+    work_type: best.skill.work_type,
+    category: best.skill.category,
+    requires_briefing: best.skill.requires_briefing,
   };
 }

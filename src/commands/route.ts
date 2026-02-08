@@ -23,7 +23,13 @@ export async function routeCommand(query: string, options: CommandOptions): Prom
           name: s.name,
           description: s.description,
           path: s.path,
-          triggers: s.triggers
+          triggers: s.triggers,
+          // Extended frontmatter (Phase 3)
+          primitives: s.primitives as import('../types.js').ProductPrimitive[] | undefined,
+          work_type: s.work_type as import('../types.js').WorkType | undefined,
+          category: s.category as import('../types.js').SkillCategory | undefined,
+          intelligence: s.intelligence,
+          requires_briefing: s.requires_briefing,
         })));
       })()
     : null;
@@ -38,7 +44,15 @@ export async function routeCommand(query: string, options: CommandOptions): Prom
       query: query.trim(),
       agent_mode: agentMode,
       skill: skillRoute
-        ? { skill: skillRoute.skill, path: skillRoute.path, reason: skillRoute.reason }
+        ? {
+            skill: skillRoute.skill,
+            path: skillRoute.path,
+            reason: skillRoute.reason,
+            primitives: skillRoute.primitives,
+            work_type: skillRoute.work_type,
+            category: skillRoute.category,
+            requires_briefing: skillRoute.requires_briefing,
+          }
         : null,
       model: {
         tier: modelClassification.tier,

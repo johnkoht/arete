@@ -1,27 +1,36 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { routeToSkill } from '../../src/core/skill-router.js';
+import type { SkillCandidate } from '../../src/core/skill-router.js';
 
 describe('skill-router', () => {
-  const skills = [
+  const skills: SkillCandidate[] = [
     {
       id: 'meeting-prep',
       name: 'meeting-prep',
       description: 'Build a prep brief. Use when the user wants to prepare for a meeting, get context before a call.',
       path: '/ws/.cursor/skills-core/meeting-prep',
-      triggers: ['meeting prep', 'prep for meeting', 'call with']
+      triggers: ['meeting prep', 'prep for meeting', 'call with'],
+      primitives: ['User'],
+      work_type: 'operations',
+      category: 'default',
     },
     {
       id: 'daily-plan',
       name: 'daily-plan',
       description: 'Surface today\'s focus and meeting context. Use when the user wants a daily plan or what\'s on my plate today.',
-      path: '/ws/.cursor/skills-core/daily-plan'
+      path: '/ws/.cursor/skills-core/daily-plan',
+      work_type: 'planning',
+      category: 'default',
     },
     {
       id: 'synthesize',
       name: 'synthesize',
       description: 'Process project inputs into insights. Use when the user wants to synthesize findings or pull together research.',
-      path: '/ws/.cursor/skills-core/synthesize'
+      path: '/ws/.cursor/skills-core/synthesize',
+      primitives: ['Problem', 'User', 'Solution'],
+      work_type: 'analysis',
+      category: 'default',
     }
   ];
 
@@ -77,5 +86,86 @@ describe('skill-router', () => {
       assert.ok(r, `Expected a match for: ${q}`);
       assert.equal(r!.skill, 'meeting-prep', `Expected meeting-prep for: ${q}`);
     }
+  });
+
+  // Phase 3: Extended frontmatter tests
+
+  it('includes primitives in routing response', () => {
+    const r = routeToSkill('prep me for my meeting', skills);
+    assert.ok(r);
+    assert.deepEqual(r!.primitives, ['User']);
+  });
+
+  it('includes work_type in routing response', () => {
+    const r = routeToSkill('synthesize findings', skills);
+    assert.ok(r);
+    assert.equal(r!.work_type, 'analysis');
+  });
+
+  it('includes category in routing response', () => {
+    const r = routeToSkill('daily plan', skills);
+    assert.ok(r);
+    assert.equal(r!.category, 'default');
+  });
+
+  it('boosts skills matching work_type keywords', () => {
+    // "I want to do some analysis" should match synthesize via work_type
+    const analysisSkills: SkillCandidate[] = [
+      {
+        id: 'synthesize',
+        name: 'synthesize',
+        description: 'Process inputs into insights.',
+        path: '/ws/.cursor/skills-core/synthesize',
+        work_type: 'analysis',
+      },
+      {
+        id: 'save-meeting',
+        name: 'save-meeting',
+        description: 'Save meeting content.',
+        path: '/ws/.cursor/skills-core/save-meeting',
+        work_type: 'operations',
+      },
+    ];
+    const r = routeToSkill('analyze my research data', analysisSkills);
+    assert.ok(r);
+    assert.equal(r!.skill, 'synthesize');
+  });
+
+  it('prefers essential skills over community in ties', () => {
+    const tiedSkills: SkillCandidate[] = [
+      {
+        id: 'core-prd',
+        name: 'core-prd',
+        description: 'Create a PRD for product requirements.',
+        path: '/ws/.cursor/skills-core/core-prd',
+        category: 'essential',
+      },
+      {
+        id: 'community-prd',
+        name: 'community-prd',
+        description: 'Create a PRD for product requirements.',
+        path: '/ws/.cursor/skills-local/community-prd',
+        category: 'community',
+      },
+    ];
+    const r = routeToSkill('create a prd', tiedSkills);
+    assert.ok(r);
+    assert.equal(r!.skill, 'core-prd');
+  });
+
+  it('includes requires_briefing in routing response', () => {
+    const skillsWithBriefing: SkillCandidate[] = [
+      {
+        id: 'community-prd',
+        name: 'community-prd',
+        description: 'Create a PRD for product requirements.',
+        path: '/ws/.cursor/skills-local/community-prd',
+        category: 'community',
+        requires_briefing: true,
+      },
+    ];
+    const r = routeToSkill('create a prd', skillsWithBriefing);
+    assert.ok(r);
+    assert.equal(r!.requires_briefing, true);
   });
 });

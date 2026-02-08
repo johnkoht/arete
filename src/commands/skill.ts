@@ -26,6 +26,14 @@ interface SkillInfo {
   source?: string;
   overridden?: boolean;
   triggers?: string[];
+  // Extended frontmatter (Phase 3)
+  primitives?: string[];
+  work_type?: string;
+  category?: string;
+  intelligence?: string[];
+  requires_briefing?: boolean;
+  creates_project?: boolean;
+  project_template?: string;
 }
 
 /**
@@ -48,7 +56,15 @@ function getSkillInfo(skillPath: string): SkillInfo {
         description: (frontmatter.description as string) || '',
         type: (frontmatter.type as string) || 'stateless',
         includes: (frontmatter.includes as Record<string, unknown>) || {},
-        triggers: Array.isArray(frontmatter.triggers) ? (frontmatter.triggers as string[]) : undefined
+        triggers: Array.isArray(frontmatter.triggers) ? (frontmatter.triggers as string[]) : undefined,
+        // Extended frontmatter (Phase 3)
+        primitives: Array.isArray(frontmatter.primitives) ? (frontmatter.primitives as string[]) : undefined,
+        work_type: typeof frontmatter.work_type === 'string' ? frontmatter.work_type : undefined,
+        category: typeof frontmatter.category === 'string' ? frontmatter.category : undefined,
+        intelligence: Array.isArray(frontmatter.intelligence) ? (frontmatter.intelligence as string[]) : undefined,
+        requires_briefing: typeof frontmatter.requires_briefing === 'boolean' ? frontmatter.requires_briefing : undefined,
+        creates_project: typeof frontmatter.creates_project === 'boolean' ? frontmatter.creates_project : undefined,
+        project_template: typeof frontmatter.project_template === 'string' ? frontmatter.project_template : undefined,
       };
     }
   } catch {
@@ -342,7 +358,15 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
     name: s.name,
     description: s.description,
     path: s.path,
-    triggers: s.triggers
+    triggers: s.triggers,
+    // Extended frontmatter (Phase 3)
+    primitives: s.primitives as import('../types.js').ProductPrimitive[] | undefined,
+    work_type: s.work_type as import('../types.js').WorkType | undefined,
+    category: s.category as import('../types.js').SkillCategory | undefined,
+    intelligence: s.intelligence,
+    requires_briefing: s.requires_briefing,
+    creates_project: s.creates_project,
+    project_template: s.project_template,
   }));
 
   const routed = routeToSkill(query, candidates);
@@ -352,7 +376,15 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
       success: true,
       query: query.trim(),
       route: routed
-        ? { skill: routed.skill, path: routed.path, reason: routed.reason }
+        ? {
+            skill: routed.skill,
+            path: routed.path,
+            reason: routed.reason,
+            primitives: routed.primitives,
+            work_type: routed.work_type,
+            category: routed.category,
+            requires_briefing: routed.requires_briefing,
+          }
         : null
     }, null, 2));
     return;

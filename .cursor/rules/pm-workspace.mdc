@@ -128,17 +128,76 @@ Integrations support three data flows:
 
 See `.cursor/integrations/README.md` for framework details.
 
+## Intelligence Services
+
+Areté provides intelligence services that assemble context, search memory, and resolve entities. Use these before and during skill execution to make any workflow more effective.
+
+### Primitive Briefing (Before Skills)
+
+Before running any community/third-party skill (or any skill with `requires_briefing: true`), assemble a **primitive briefing** using:
+
+```bash
+arete brief --for "task description" --skill skill-name --json
+```
+
+This combines context injection, memory retrieval, and entity resolution into a structured briefing organized by product primitive (Problem, User, Solution, Market, Risk). Present the briefing to the user: "Here's what I've gathered. Here's what might be missing."
+
+For essential/default skills that have their own context-gathering steps, the briefing is optional but recommended for complex tasks.
+
+### Context Injection
+
+Get relevant workspace files for a task:
+
+```bash
+arete context --for "create a PRD for search feature" --json
+```
+
+Optionally filter by primitives: `--primitives Problem,User,Solution`
+
+### Memory Search
+
+Search decisions, learnings, and observations:
+
+```bash
+arete memory search "onboarding" --json
+```
+
+Optionally filter by type: `--types decisions,learnings`
+
+### Entity Resolution
+
+Resolve ambiguous references (person names, meeting titles, project names):
+
+```bash
+arete resolve "Jane" --json
+arete resolve "onboarding meeting" --type meeting --json
+arete resolve "search project" --type project --all --json
+```
+
+### When to Use Intelligence Services
+
+| Situation | Service |
+|-----------|---------|
+| Before any skill with `requires_briefing: true` | `arete brief` |
+| Before community/third-party skills | `arete brief` |
+| When starting substantial work | `arete context` |
+| When a topic might have history | `arete memory search` |
+| When a name/reference is ambiguous | `arete resolve` |
+| When the user says "what do we know about X" | `arete context` + `arete memory search` |
+
 ## Before Starting Any Work
 
 1. **Check active projects**: Look in `projects/active/` for existing work
 2. **Check current plans**: For planning work, see `goals/quarter.md` and `now/week.md` and use **quarter-plan**, **goals-alignment**, **week-plan**, or **week-review** as needed
-3. **Read relevant context**: Check `context/` files for business background
-4. **Search with QMD**: Actually run `qmd query "[topic]"` via shell to find related content
-5. **Check scratchpad**: Review `now/scratchpad.md` for relevant notes
+3. **Read relevant context**: Use `arete context --for "[topic]" --json` to assemble relevant files, or check `context/` files directly
+4. **Search memory**: Run `arete memory search "[topic]" --json` to surface past decisions and learnings
+5. **Search with QMD**: Optionally run `qmd query "[topic]"` via shell for semantic search
+6. **Check scratchpad**: Review `now/scratchpad.md` for relevant notes
 
-**Important**: When searching with QMD, execute the shell command - don't just mention it. For example:
+**Important**: When using intelligence services, execute the shell commands - don't just mention them. For example:
 ```bash
-qmd query "user onboarding"
+arete context --for "user onboarding" --json
+arete memory search "onboarding" --json
 ```
 Then reference the results in your response.
 
