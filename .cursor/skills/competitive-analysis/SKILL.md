@@ -7,7 +7,7 @@ primitives:
 work_type: analysis
 category: default
 creates_project: true
-project_template: competitive-analysis
+project_template: analysis
 intelligence:
   - context_injection
 requires_briefing: false

@@ -9,7 +9,7 @@ primitives:
 work_type: definition
 category: default
 creates_project: true
-project_template: prd
+project_template: definition
 intelligence:
   - context_injection
   - memory_retrieval

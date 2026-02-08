@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-07 [Phase 2: Project templates](entries/2026-02-07_phase-2-project-templates.md) — Directory-based templates for discovery, definition, delivery, analysis, roadmap; README + phase guide + inputs/working/outputs; skill project_template alignment.
 - 2026-02-07 [Phase 2: Skill refactoring](entries/2026-02-07_phase-2-skill-refactoring.md) — PATTERNS.md (get_meeting_context, extract_decisions_learnings); slimmed meeting-prep, daily-plan, process-meetings, sync, synthesize, finalize-project; extended frontmatter on all 18 skills.
 - 2026-02-07 [Phase 1: Workspace restructure](entries/2026-02-07_phase-1-workspace-restructure.md) — now/, goals/, .arete/memory/ implemented; migration on update; all skills, rules, and src updated; tests pass.
 - 2026-02-07 [Product OS architecture direction](entries/2026-02-07_product-os-architecture.md) — Five product primitives (Problem, User, Solution, Market, Risk); intelligence layer over skill library; workspace restructure (now/, goals/, .arete/memory/); adapter pattern for skills; project templates by work type.
