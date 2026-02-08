@@ -149,6 +149,13 @@ skillCmd
   .action((name, opts) => skillCommand('diff', { name, ...opts }));
 
 skillCmd
+  .command('install <source>')
+  .description('Install a skill from skills.sh (owner/repo) or local path')
+  .option('--json', 'Output as JSON')
+  .option('--yes', 'Skip prompts (e.g. use for role)')
+  .action((source, opts) => skillCommand('install', { name: source, ...opts }));
+
+skillCmd
   .command('defaults')
   .description('Show which roles have custom skill assignments')
   .option('--json', 'Output as JSON')

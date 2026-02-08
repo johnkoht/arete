@@ -15,6 +15,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-08 [Phase 4 (C–D): Skill ecosystem and docs](entries/2026-02-08_phase-4-skill-ecosystem-c-d.md) — arete skill install (skills.sh + local); .arete-meta.yaml sidecar; getSkillInfo reads sidecar; .cursor/skills/README.md; SETUP.md Customizing Skills; arete status context freshness; periodic-review references status; AGENTS.md skill management.
 - 2026-02-08 [Phase 4 (A–B): Skill management and role defaults](entries/2026-02-08_phase-4-skill-management-a-b.md) — override/reset/diff/list UX; skills.defaults config; applySkillDefaults; arete skill defaults/set-default/unset-default; tests.
 - 2026-02-07 [Phase 3: Intelligence services](entries/2026-02-07_phase-3-intelligence-services.md) — Context injection, memory retrieval, entity resolution, briefing assembly, enhanced skill router; CLI commands (arete context/memory/resolve/brief); pm-workspace rule update; 67 new tests.
 - 2026-02-07 [Phase 2: Project templates](entries/2026-02-07_phase-2-project-templates.md) — Directory-based templates for discovery, definition, delivery, analysis, roadmap; README + phase guide + inputs/working/outputs; skill project_template alignment.

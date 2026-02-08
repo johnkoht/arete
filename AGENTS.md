@@ -111,6 +111,15 @@ A **structured workspace** with:
 - **Skill router** (`src/core/skill-router.ts`): Maps a free-form user message to a skill id and path using skill descriptions and optional `triggers` in skill frontmatter. Used by `arete skill route` and `arete route`. Agents can run `arete skill route "prep me for Jane"` to get `meeting-prep` and then load that skill.
 - **Model router** (`src/core/model-router.ts`): Suggests task complexity tier (fast / balanced / powerful) from prompt content—e.g. simple lookups → fast, analysis/planning/writing → powerful. Areté does not switch models programmatically (no Cursor/IDE API); the suggestion is for the user or for tooling that can set the model (Dex-style).
 
+### Skill management
+
+- **Default skills**: Shipped in `.cursor/skills-core/` (in installed workspaces). User overrides live in `.cursor/skills-local/`; when a skill has the same name in both, the local version wins.
+- **Role defaults** (`skills.defaults` in arete.yaml): Maps a *role* (default skill name, e.g. `create-prd`) to a *preferred skill* (e.g. `netflix-prd`). After the router matches a skill, the command layer applies this mapping and returns the preferred skill’s path (and `resolvedFrom` when a preference was applied). Commands: `arete skill defaults`, `arete skill set-default <skill> --for <role>`, `arete skill unset-default <role>`.
+- **Override / reset / diff**: `arete skill override <name>` copies a default to skills-local for editing; `arete skill reset <name>` removes the override; `arete skill diff <name>` shows changes vs the default.
+- **Install**: `arete skill install <source>` — if source looks like `owner/repo`, runs `npx skills add <source>` (skills.sh); if source is a local path, copies the skill into `.cursor/skills-local/<name>/`. After install, Areté generates a `.arete-meta.yaml` sidecar (category: community, requires_briefing: true, best-guess work_type/primitives) and may prompt to set the skill as default for an overlapping role.
+- **Sidecar metadata** (`.arete-meta.yaml`): For third-party skills that lack Areté’s extended frontmatter, the sidecar supplies category, requires_briefing, work_type, primitives, triggers, etc. `getSkillInfo()` in `src/commands/skill.ts` reads the sidecar and merges it into skill info so the router and list get correct metadata. Users can edit the sidecar without touching SKILL.md.
+- **Docs**: `.cursor/skills/README.md` (shipped with the package) describes what skills are, default vs customized vs third-party, and how to override, install, and set role defaults.
+
 ## How the System Operates (Production Flow)
 
 This section describes how the Cursor agent should behave when a user asks for PM work in an Areté workspace: what gets loaded into context, how routing and skills fit in, and the top-to-bottom flow.

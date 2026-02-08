@@ -2,8 +2,9 @@
  * Skill management commands
  */
 
-import { existsSync, readdirSync, readFileSync, cpSync, mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join, basename } from 'path';
+import { existsSync, readdirSync, readFileSync, cpSync, mkdirSync, writeFileSync, rmSync, statSync } from 'fs';
+import { join, basename, resolve, sep } from 'path';
+import { spawnSync } from 'child_process';
 import { createInterface } from 'readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
@@ -41,28 +42,53 @@ interface SkillInfo {
   project_template?: string;
 }
 
+const ARETE_META_FILENAME = '.arete-meta.yaml';
+
 /**
- * Get skill info from SKILL.md
+ * Read .arete-meta.yaml sidecar (Phase 4: third-party skill metadata fallback)
+ */
+function readAreteMeta(skillPath: string): Partial<SkillInfo> | null {
+  const metaFile = join(skillPath, ARETE_META_FILENAME);
+  if (!existsSync(metaFile)) return null;
+  try {
+    const content = readFileSync(metaFile, 'utf8');
+    const meta = parseYaml(content) as Record<string, unknown>;
+    const out: Partial<SkillInfo> = {};
+    if (Array.isArray(meta.primitives)) out.primitives = meta.primitives as string[];
+    if (typeof meta.work_type === 'string') out.work_type = meta.work_type;
+    if (typeof meta.category === 'string') out.category = meta.category;
+    if (typeof meta.requires_briefing === 'boolean') out.requires_briefing = meta.requires_briefing;
+    if (Array.isArray(meta.triggers)) out.triggers = meta.triggers as string[];
+    if (Array.isArray(meta.intelligence)) out.intelligence = meta.intelligence as string[];
+    if (typeof meta.creates_project === 'boolean') out.creates_project = meta.creates_project;
+    if (typeof meta.project_template === 'string') out.project_template = meta.project_template;
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get skill info from SKILL.md and .arete-meta.yaml (sidecar fallback for extended fields)
  */
 function getSkillInfo(skillPath: string): SkillInfo {
   const skillFile = join(skillPath, 'SKILL.md');
   if (!existsSync(skillFile)) {
     return { name: basename(skillPath) };
   }
-  
+
+  let info: SkillInfo = { name: basename(skillPath) };
   try {
     const content = readFileSync(skillFile, 'utf8');
-    // Parse frontmatter
     const match = content.match(/^---\n([\s\S]*?)\n---/);
     if (match) {
       const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
-      return {
+      info = {
         name: (frontmatter.name as string) || basename(skillPath),
         description: (frontmatter.description as string) || '',
         type: (frontmatter.type as string) || 'stateless',
         includes: (frontmatter.includes as Record<string, unknown>) || {},
         triggers: Array.isArray(frontmatter.triggers) ? (frontmatter.triggers as string[]) : undefined,
-        // Extended frontmatter (Phase 3)
         primitives: Array.isArray(frontmatter.primitives) ? (frontmatter.primitives as string[]) : undefined,
         work_type: typeof frontmatter.work_type === 'string' ? frontmatter.work_type : undefined,
         category: typeof frontmatter.category === 'string' ? frontmatter.category : undefined,
@@ -75,8 +101,20 @@ function getSkillInfo(skillPath: string): SkillInfo {
   } catch {
     // Ignore parse errors
   }
-  
-  return { name: basename(skillPath) };
+
+  const sidecar = readAreteMeta(skillPath);
+  if (sidecar) {
+    if (sidecar.primitives !== undefined) info.primitives = sidecar.primitives;
+    if (sidecar.work_type !== undefined) info.work_type = sidecar.work_type;
+    if (sidecar.category !== undefined) info.category = sidecar.category;
+    if (sidecar.requires_briefing !== undefined) info.requires_briefing = sidecar.requires_briefing;
+    if (sidecar.triggers !== undefined) info.triggers = sidecar.triggers;
+    if (sidecar.intelligence !== undefined) info.intelligence = sidecar.intelligence;
+    if (sidecar.creates_project !== undefined) info.creates_project = sidecar.creates_project;
+    if (sidecar.project_template !== undefined) info.project_template = sidecar.project_template;
+  }
+
+  return info;
 }
 
 /**
@@ -495,6 +533,268 @@ async function diffSkill(options: SkillOptions): Promise<void> {
   }
 }
 
+/** Best-guess work_type from description (for third-party skills) */
+function guessWorkTypeFromDescription(description: string): string | undefined {
+  const d = description.toLowerCase();
+  if (/\b(prd|requirements?|spec|specification|define)\b/.test(d)) return 'definition';
+  if (/\b(discover|research|explore|investigate|understand)\b/.test(d)) return 'discovery';
+  if (/\b(analyze|analysis|compare|evaluate|assess)\b/.test(d)) return 'analysis';
+  if (/\b(plan|planning|goals?|priorities?|quarter|week|roadmap)\b/.test(d)) return 'planning';
+  if (/\b(deliver|launch|ship|release|rollout)\b/.test(d)) return 'delivery';
+  if (/\b(sync|save|process|update|finalize|tour|review)\b/.test(d)) return 'operations';
+  return undefined;
+}
+
+/** Best-guess primitives from description */
+function guessPrimitivesFromDescription(description: string): string[] {
+  const d = description.toLowerCase();
+  const out: string[] = [];
+  if (/\b(problem|pain|need|friction|opportunity)\b/.test(d)) out.push('Problem');
+  if (/\b(user|persona|customer|segment)\b/.test(d)) out.push('User');
+  if (/\b(solution|feature|product)\b/.test(d)) out.push('Solution');
+  if (/\b(market|competitor|competitive|landscape)\b/.test(d)) out.push('Market');
+  if (/\b(risk|uncertainty|constraint)\b/.test(d)) out.push('Risk');
+  return out;
+}
+
+/** Write .arete-meta.yaml sidecar for a third-party skill */
+function writeAreteMeta(skillPath: string, meta: Record<string, unknown>): void {
+  const metaFile = join(skillPath, ARETE_META_FILENAME);
+  writeFileSync(metaFile, stringifyYaml(meta), 'utf8');
+}
+
+/** Detect if installed skill overlaps a default role (by work_type or description keywords) */
+function detectOverlapRole(
+  installedSkill: SkillInfo,
+  paths: ReturnType<typeof getWorkspacePaths>
+): string | undefined {
+  const coreSkills = getSkillsList(paths.skillsCore);
+  const desc = (installedSkill.description ?? '').toLowerCase();
+  const workType = installedSkill.work_type ?? guessWorkTypeFromDescription(installedSkill.description ?? '');
+  for (const core of coreSkills) {
+    if (!core.id) continue;
+    if (workType && core.work_type === workType) return core.id;
+    const coreDesc = (core.description ?? '').toLowerCase();
+    const coreName = (core.id ?? '').toLowerCase().replace(/-/g, ' ');
+    if (coreName && (desc.includes(coreName) || desc.includes(core.id ?? ''))) return core.id;
+    if (core.work_type === 'definition' && /\bprd\b/.test(desc)) return core.id;
+    if (core.work_type === 'discovery' && /\bdiscover|research\b/.test(desc)) return core.id;
+  }
+  return undefined;
+}
+
+/**
+ * Install a skill: from skills.sh (owner/repo) or local path.
+ * Generates .arete-meta.yaml sidecar and optionally prompts to set as default for a role.
+ */
+async function installSkill(options: SkillOptions): Promise<void> {
+  const { name: source, json, yes } = options;
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+
+  if (!source?.trim()) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Missing source. Use: arete skill install <owner/repo> or <path>' }));
+    } else {
+      error('Missing source');
+      info('Examples: arete skill install owner/repo  or  arete skill install ./path/to/skill');
+    }
+    process.exit(1);
+  }
+
+  const paths = getWorkspacePaths(workspaceRoot);
+  const isLikelySkillsSh = source.includes('/') && !source.startsWith('.') && !source.startsWith('/') && !source.includes(sep);
+
+  if (isLikelySkillsSh) {
+    // npx skills add <source>
+    if (!json) info('Running: npx skills add ' + source);
+    const result = spawnSync('npx', ['skills', 'add', source], {
+      cwd: workspaceRoot,
+      shell: true,
+      stdio: json ? 'pipe' : 'inherit',
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      if (json) {
+        console.log(JSON.stringify({
+          success: false,
+          error: 'npx skills add failed',
+          stderr: result.stderr,
+          code: result.status,
+        }, null, 2));
+      } else {
+        error('npx skills add failed');
+        if (result.stderr) console.log(result.stderr);
+      }
+      process.exit(1);
+    }
+    // Only add .arete-meta.yaml under skills-local (user space) so we don't touch core/package skills
+    const candidates = [paths.skillsLocal].filter(d => d && existsSync(d));
+    let installedPath: string | null = null;
+    for (const dir of candidates) {
+      if (!existsSync(dir)) continue;
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+        const skillDir = join(dir, e.name);
+        const skillFile = join(skillDir, 'SKILL.md');
+        if (existsSync(skillFile)) {
+          const metaFile = join(skillDir, ARETE_META_FILENAME);
+          if (!existsSync(metaFile)) {
+            const skillInfo = getSkillInfo(skillDir);
+            const meta: Record<string, unknown> = {
+              category: 'community',
+              requires_briefing: true,
+            };
+            const wt = guessWorkTypeFromDescription(skillInfo.description ?? '');
+            if (wt) meta.work_type = wt;
+            const prims = guessPrimitivesFromDescription(skillInfo.description ?? '');
+            if (prims.length) meta.primitives = prims;
+            writeAreteMeta(skillDir, meta);
+            installedPath = skillDir;
+            if (!json) {
+              success(`Added Areté metadata: ${e.name}`);
+              listItem('Skill', skillInfo.name ?? e.name);
+              if (skillInfo.description) listItem('Description', skillInfo.description);
+            }
+          }
+          if (!installedPath) installedPath = skillDir;
+        }
+      }
+    }
+    if (json) {
+      console.log(JSON.stringify({
+        success: true,
+        source,
+        message: 'Skill installed via skills.sh. Metadata added if skill was found under .cursor/skills.',
+        path: installedPath ?? undefined,
+      }, null, 2));
+    } else if (!installedPath) {
+      info('Skill was installed by skills.sh. If it appears under .cursor/skills, run "arete skill list" to see it.');
+      info('To add a skill from a local path: arete skill install ./path/to/skill');
+    }
+    if (installedPath && !json && !yes) {
+      const installedSkillInfo = getSkillInfo(installedPath);
+      const role = detectOverlapRole(installedSkillInfo, paths);
+      if (role) {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await new Promise<string>((res) => {
+          rl.question(`Use this skill for role "${role}"? [y/N] `, res);
+        });
+        rl.close();
+        if (answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes') {
+          await setDefaultSkill({ name: installedSkillInfo.id ?? basename(installedPath), role, json: false });
+        }
+      }
+    }
+    return;
+  }
+
+  // Local path: copy to .cursor/skills-local/<name>
+  const resolvedSource = resolve(workspaceRoot, source);
+  if (!existsSync(resolvedSource)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Path not found: ${source}` }));
+    } else {
+      error(`Path not found: ${source}`);
+    }
+    process.exit(1);
+  }
+
+  const stat = statSync(resolvedSource);
+  let sourceDir: string;
+  let skillName: string;
+  if (stat.isFile()) {
+    if (basename(resolvedSource) !== 'SKILL.md') {
+      if (json) {
+        console.log(JSON.stringify({ success: false, error: 'Local install expects SKILL.md or a directory containing SKILL.md' }));
+      } else {
+        error('Local install expects SKILL.md or a directory containing SKILL.md');
+      }
+      process.exit(1);
+    }
+    sourceDir = join(resolvedSource, '..');
+    skillName = basename(sourceDir);
+  } else {
+    sourceDir = resolvedSource;
+    skillName = basename(resolvedSource);
+    if (!existsSync(join(sourceDir, 'SKILL.md'))) {
+      if (json) {
+        console.log(JSON.stringify({ success: false, error: 'Directory must contain SKILL.md' }));
+      } else {
+        error('Directory must contain SKILL.md');
+      }
+      process.exit(1);
+    }
+  }
+
+  const destDir = join(paths.skillsLocal, skillName);
+  if (existsSync(destDir)) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Skill already installed: ${skillName}` }));
+    } else {
+      error(`Skill already installed: ${skillName}`);
+    }
+    process.exit(1);
+  }
+
+  if (!existsSync(paths.skillsLocal)) {
+    mkdirSync(paths.skillsLocal, { recursive: true });
+  }
+  cpSync(sourceDir, destDir, { recursive: true, dereference: true });
+
+  const installedSkillInfo = getSkillInfo(destDir);
+  const displayName = installedSkillInfo.name ?? skillName;
+  const meta: Record<string, unknown> = {
+    category: 'community',
+    requires_briefing: true,
+  };
+  const wt = guessWorkTypeFromDescription(installedSkillInfo.description ?? '');
+  if (wt) meta.work_type = wt;
+  const prims = guessPrimitivesFromDescription(installedSkillInfo.description ?? '');
+  if (prims.length) meta.primitives = prims;
+  writeAreteMeta(destDir, meta);
+
+  if (json) {
+    console.log(JSON.stringify({
+      success: true,
+      skill: skillName,
+      name: displayName,
+      description: installedSkillInfo.description,
+      path: destDir,
+    }, null, 2));
+    return;
+  }
+
+  success(`Installed skill: ${displayName}`);
+  listItem('Location', formatPath(destDir));
+  if (installedSkillInfo.description) listItem('Description', installedSkillInfo.description);
+  console.log(chalk.dim('  .arete-meta.yaml added (category: community, requires_briefing: true)'));
+  console.log('');
+
+  if (!yes) {
+    const role = detectOverlapRole(installedSkillInfo, paths);
+    if (role) {
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const answer = await new Promise<string>((res) => {
+        rl.question(`Use this skill for role "${role}"? [y/N] `, res);
+      });
+      rl.close();
+      if (answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes') {
+        await setDefaultSkill({ name: skillName, role, json: false });
+      }
+    }
+  }
+}
+
 /**
  * Add a skill (placeholder for registry)
  */
@@ -827,6 +1127,8 @@ export async function skillCommand(action: string, options: SkillOptions): Promi
       return resetSkill(options);
     case 'diff':
       return diffSkill(options);
+    case 'install':
+      return installSkill(options);
     case 'defaults':
       return defaultsSkills(options);
     case 'set-default':

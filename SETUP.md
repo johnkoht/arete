@@ -63,6 +63,18 @@ arete/
 
 **Meeting intelligence**: Use **meeting-prep** to build a prep brief before a meeting (attendees, recent meetings, action items, talking points). Use **daily-plan** to see today's focus, week priorities, and meeting context for each of today's meetings (you supply the meeting list; no calendar integration in v1).
 
+## Customizing Skills
+
+Skills are workflows (discovery, PRD, meeting prep, etc.) that ship in `.cursor/skills-core/`. You can customize them, add third-party skills, or choose a different skill for a given role.
+
+- **Override a skill**: `arete skill override <name>` — copies the default into `.cursor/skills-local/` so you can edit it.
+- **Reset**: `arete skill reset <name>` — remove your override and use the default again.
+- **Install from skills.sh or a path**: `arete skill install owner/repo` or `arete skill install ./path/to/skill`.
+- **Use a different skill for a role**: `arete skill set-default <skill-name> --for <role>` (e.g. use a community PRD skill for the "create-prd" role).
+- **View defaults**: `arete skill defaults`
+
+See [.cursor/skills/README.md](.cursor/skills/README.md) for full skill management docs.
+
 ## Understanding the Architecture
 
 ### For Users (Product Managers)

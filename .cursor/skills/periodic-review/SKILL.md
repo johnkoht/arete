@@ -43,7 +43,9 @@ This helps ensure your business context is current and your memory is useful.
 
 ### 1. Context Health Check
 
-Check each context file for:
+Run **`arete status`** to see which context files haven't been modified in 30+ days (reported under "Context Freshness").
+
+Then check each context file for:
 - **Last Updated date**: Is it > 90 days old?
 - **Completeness**: Are key sections filled in?
 - **Relevance**: Has anything changed that makes this outdated?

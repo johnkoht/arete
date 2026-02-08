@@ -2,7 +2,7 @@
  * Status command - show workspace status
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
@@ -60,6 +60,33 @@ function getIntegrationStatus(configsDir: string): IntegrationInfo[] {
   return integrations;
 }
 
+const CONTEXT_STALE_DAYS = 30;
+
+/**
+ * Get context files that haven't been modified in 30+ days
+ */
+function getStaleContextFiles(contextDir: string): string[] {
+  if (!existsSync(contextDir)) return [];
+  const stale: string[] = [];
+  const cutoff = Date.now() - CONTEXT_STALE_DAYS * 24 * 60 * 60 * 1000;
+  try {
+    const files = readdirSync(contextDir, { withFileTypes: true });
+    for (const f of files) {
+      if (!f.isFile() || !f.name.endsWith('.md') || f.name.startsWith('_')) continue;
+      const full = join(contextDir, f.name);
+      try {
+        const stat = statSync(full);
+        if (stat.mtimeMs < cutoff) stale.push(f.name);
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return stale;
+}
+
 /**
  * Status command handler
  */
@@ -107,7 +134,8 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
       projects: existsSync(paths.projects),
       people: existsSync(paths.people),
       resources: existsSync(paths.resources)
-    }
+    },
+    contextStale: getStaleContextFiles(paths.context)
   };
   
   // Check for overrides
@@ -175,6 +203,17 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
     }
   }
   
+  // Context freshness (files not modified in 30+ days)
+  if (status.contextStale.length > 0) {
+    section('Context Freshness');
+    console.log(chalk.dim(`  Files not modified in ${CONTEXT_STALE_DAYS}+ days:`));
+    for (const f of status.contextStale) {
+      console.log(`  ${chalk.yellow('⚠')} context/${f}`);
+    }
+    console.log(chalk.dim('  Run periodic-review skill or update these files.'));
+    console.log('');
+  }
+
   // Directories
   section('Workspace Directories');
   

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { stringify as stringifyYaml } from 'yaml';
 import { getWorkspacePaths } from '../../src/core/workspace.js';
 import {
   applySkillDefaults,
@@ -100,5 +101,35 @@ describe('skill commands', () => {
       assert.ok(roles.includes('discovery'));
       assert.equal(roles.length, 2);
     });
+  });
+});
+
+describe('getSkillInfo with .arete-meta.yaml sidecar', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpWorkspace();
+  });
+
+  afterEach(() => {
+    if (tmpDir && existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('merges sidecar metadata when SKILL.md lacks extended fields', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const netflixPath = join(tmpDir, '.cursor', 'skills-local', 'netflix-prd');
+    writeFileSync(
+      join(netflixPath, '.arete-meta.yaml'),
+      stringifyYaml({ category: 'community', requires_briefing: true, work_type: 'definition' }),
+      'utf8'
+    );
+    const skills = getMergedSkillsForRouting(paths);
+    const netflix = skills.find(s => s.id === 'netflix-prd');
+    assert.ok(netflix);
+    assert.equal(netflix!.category, 'community');
+    assert.equal(netflix!.requires_briefing, true);
+    assert.equal(netflix!.work_type, 'definition');
   });
 });

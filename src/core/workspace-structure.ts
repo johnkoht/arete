@@ -75,6 +75,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 > **Purpose**: High-level overview of your business - what you do, who you serve, and your core value proposition.
 > **Last Updated**: [Date]
+> **Last Reviewed**: [Date]
 > **Updated By**: [Initial setup]
 
 ## Company Name
@@ -120,6 +121,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 > **Purpose**: Your target users, their characteristics, needs, and pain points.
 > **Last Updated**: [Date]
+> **Last Reviewed**: [Date]
 > **Updated By**: [Initial setup]
 
 ## Persona 1: [Name/Title]
