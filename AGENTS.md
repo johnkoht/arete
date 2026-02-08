@@ -13,7 +13,18 @@
 
 ## What Areté Is
 
-Areté is a **Cursor-native workspace for product managers** to maintain context, run structured workflows, and build institutional memory.
+Areté is a **product builder's operating system** — a Cursor-native workspace that manages product knowledge, provides intelligence services to any workflow, and creates a consistent interface between the messy reality of product work and the tools you use.
+
+### Architecture Direction (Active)
+
+Areté is evolving from a skill-centric workspace to a product intelligence platform. See `.cursor/build/prds/product-os/vision.md` for the full vision. Key concepts:
+
+- **Five product primitives**: Problem, User, Solution, Market, Risk — the knowledge model the intelligence layer reasons about.
+- **Intelligence layer**: Context injection, memory retrieval, entity resolution, synthesis — services that make any skill or workflow dramatically more effective.
+- **Skills as methods**: Areté ships opinionated default skills but users can swap them. The value is the intelligence underneath, not the procedures on top.
+- **Workspace restructure**: `now/` (daily focus), `goals/` (elevated), `.arete/memory/` (system-managed), project templates by work type.
+
+> **Note**: The codebase is in transition. Current workspace structure and skills still follow the pre-restructure layout documented below. Updates will land incrementally.
 
 ### The Problem We Solve
 
