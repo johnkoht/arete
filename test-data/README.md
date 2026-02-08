@@ -16,7 +16,7 @@ arete seed test-data
 - **people/** — 4 person files (2 internal, 2 customers)
 - **plans/** — Quarter and week plan files for current period
 - **projects/** — 1 active discovery project
-- **memory/** — Sample decisions and learnings
+- **memory/** — Sample decisions and learnings (seeded to .arete/memory/items/)
 - **context/** — goals-strategy.md with org pillars/OKRs
 - **TEST-SCENARIOS.md** — User playbook copied to workspace root; lists prompts for testing meeting-prep, daily-plan, process-meetings, etc.
 

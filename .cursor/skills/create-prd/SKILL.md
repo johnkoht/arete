@@ -100,7 +100,7 @@ Before generating, check context files:
 - `context/users-personas.md` - Target users
 - `context/products-services.md` - Related products
 - `context/competitive-landscape.md` - Competitors
-- `context/goals-strategy.md` - Strategic alignment
+- `goals/strategy.md` - Strategic alignment
 
 Use QMD to find related past work:
 ```bash

@@ -14,19 +14,18 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ```
 product-workspace/
-├── .credentials/      # API keys and tokens (gitignored)
-├── .cursor/
-│   ├── rules/         # Workspace behavior rules
-│   ├── skills/        # Stateless procedures (discovery, PRD, etc.)
-│   ├── tools/         # Lifecycle-based capabilities (onboarding, etc.)
-│   └── integrations/  # External tool connections (calendar, Fathom, etc.)
+├── now/               # Start here. Current focus and working surface.
+│   ├── scratchpad.md  # Quick capture, parking lot, working notes.
+│   ├── week.md        # This week's priorities and outcomes.
+│   └── today.md       # Today's focus (populated by daily-plan skill).
+├── goals/             # Strategy and goals. What you're optimizing for.
+│   ├── strategy.md    # Org strategy, OKRs, pillars.
+│   ├── quarter.md     # Current quarter goals.
+│   └── initiatives.md # Strategic bets that projects reference.
 ├── context/           # Core business context (source of truth)
 ├── resources/         # Raw inputs (L1: immutable, timestamped)
 │   ├── meetings/      # Meeting notes and transcripts
 │   └── notes/         # Standalone notes
-├── memory/            # Extracted and synthesized knowledge
-│   ├── items/         # L2: Atomic facts (decisions, learnings, observations)
-│   └── summaries/     # L3: Evolving context (collaboration, sessions)
 ├── projects/          # Active and archived projects
 │   ├── index.md       # Project overview
 │   ├── active/        # Currently in progress (2-3 max)
@@ -36,16 +35,26 @@ product-workspace/
 │   ├── internal/      # Colleagues, teammates
 │   ├── customers/     # Key accounts, buyers
 │   └── users/         # Product users
-├── scratchpad.md      # Shared working space (user + agent)
-└── templates/         # Project, input, and output templates
+├── templates/         # Project, input, and output templates
+├── .credentials/      # API keys and tokens (gitignored)
+├── .cursor/
+│   ├── rules/         # Workspace behavior rules
+│   ├── skills/        # Stateless procedures (discovery, PRD, etc.)
+│   ├── tools/         # Lifecycle-based capabilities (onboarding, etc.)
+│   └── integrations/  # External tool connections (calendar, Fathom, etc.)
+└── .arete/            # System-managed. Not user-edited directly.
+    ├── memory/        # Decisions, learnings, observations, summaries.
+    │   ├── items/     # Atomic: decisions.md, learnings.md, agent-observations.md
+    │   └── summaries/ # Synthesized: collaboration.md, sessions.md
+    └── activity/      # Activity log, session tracking.
 ```
 
 ### Memory Layers
 
 The workspace uses a three-layer memory architecture:
 - **L1 Resources**: Raw, immutable inputs (meetings, notes) in `resources/`
-- **L2 Items**: Extracted atomic facts (decisions, learnings, observations) in `memory/items/`
-- **L3 Summaries**: Synthesized context (collaboration profile, sessions) in `memory/summaries/`
+- **L2 Items**: Extracted atomic facts (decisions, learnings, observations) in `.arete/memory/items/`
+- **L3 Summaries**: Synthesized context (collaboration profile, sessions) in `.arete/memory/summaries/`
 
 ## Core Principles
 
@@ -122,10 +131,10 @@ See `.cursor/integrations/README.md` for framework details.
 ## Before Starting Any Work
 
 1. **Check active projects**: Look in `projects/active/` for existing work
-2. **Check current plans**: For planning work, see `resources/plans/` (quarter and week files) and use **quarter-plan**, **goals-alignment**, **week-plan**, or **week-review** as needed
+2. **Check current plans**: For planning work, see `goals/quarter.md` and `now/week.md` and use **quarter-plan**, **goals-alignment**, **week-plan**, or **week-review** as needed
 3. **Read relevant context**: Check `context/` files for business background
 4. **Search with QMD**: Actually run `qmd query "[topic]"` via shell to find related content
-5. **Check scratchpad**: Review `scratchpad.md` for relevant notes
+5. **Check scratchpad**: Review `now/scratchpad.md` for relevant notes
 
 **Important**: When searching with QMD, execute the shell command - don't just mention it. For example:
 ```bash
@@ -152,7 +161,7 @@ projects/active/[project-name]/
 
 ## Quick Capture & Scratchpad
 
-The scratchpad (`scratchpad.md`) is a **shared working space** for both user and agent:
+The scratchpad (`now/scratchpad.md`) is a **shared working space** for both user and agent:
 - Add items when user says "let's punt on that" or "park it for later"
 - Agent can add ideas, questions, or follow-ups worth capturing
 - Review periodically and move items to proper homes
@@ -164,16 +173,16 @@ For **timestamped permanent captures**, use `resources/notes/` instead.
 After significant actions, log to the appropriate memory file:
 
 **Items (atomic facts)**:
-- `memory/items/decisions.md`: Key decisions with rationale
-- `memory/items/learnings.md`: Insights that inform future work
-- `memory/items/agent-observations.md`: Observations about working with user
+- `.arete/memory/items/decisions.md`: Key decisions with rationale
+- `.arete/memory/items/learnings.md`: Insights that inform future work
+- `.arete/memory/items/agent-observations.md`: Observations about working with user
 
 **Summaries (synthesized)**:
-- `memory/summaries/collaboration.md`: How to work with user (synthesized from observations)
-- `memory/summaries/sessions.md`: Work session tracking for continuity
+- `.arete/memory/summaries/collaboration.md`: How to work with user (synthesized from observations)
+- `.arete/memory/summaries/sessions.md`: Work session tracking for continuity
 
 **Activity**:
-- `memory/activity-log.md`: Chronological record of what happened when
+- `.arete/activity/activity-log.md`: Chronological record of what happened when
 
 **Resources (raw inputs)**:
 - `resources/meetings/`: Meeting notes and transcripts

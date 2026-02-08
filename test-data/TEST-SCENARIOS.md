@@ -42,7 +42,7 @@ arete people index
 - "Review the week" (week-review)
 - "View goals alignment" (goals-alignment)
 
-**Expected**: Files in resources/plans/ created or updated.
+**Expected**: Files in goals/ and now/ created or updated (quarter.md, week.md).
 
 ## Projects & Memory
 

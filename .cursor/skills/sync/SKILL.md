@@ -28,7 +28,7 @@ This skill uses **inline review** for synthesis—extracted decisions and learni
 | Sync Type | Review Approach |
 |-----------|-----------------|
 | **Focused** (this skill) | Inline - propose and confirm immediately |
-| **Bulk** (seed-context) | Queue - save to `memory/pending-review.md` for later |
+| **Bulk** (seed-context) | Queue - save to `.arete/memory/pending-review.md` for later |
 
 ## Sync Types
 
@@ -206,7 +206,7 @@ Review each item and approve, edit, or skip.
 
 For each approved item:
 
-**Decisions** → Append to `memory/items/decisions.md`:
+**Decisions** → Append to `.arete/memory/items/decisions.md`:
 ```markdown
 ### YYYY-MM-DD: [Decision Title]
 
@@ -218,7 +218,7 @@ For each approved item:
 **Status**: Active
 ```
 
-**Learnings** → Append to `memory/items/learnings.md`:
+**Learnings** → Append to `.arete/memory/items/learnings.md`:
 ```markdown
 ### YYYY-MM-DD: [Learning Title]
 
@@ -233,8 +233,8 @@ For each approved item:
 ```markdown
 ## Synthesis Complete
 
-- Decisions approved: X (added to memory/items/decisions.md)
-- Learnings approved: Y (added to memory/items/learnings.md)
+- Decisions approved: X (added to .arete/memory/items/decisions.md)
+- Learnings approved: Y (added to .arete/memory/items/learnings.md)
 - Items skipped: Z
 ```
 

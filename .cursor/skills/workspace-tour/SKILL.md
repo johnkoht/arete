@@ -59,14 +59,14 @@ Each project has:
 
 ### 4. Memory
 
-"Your **memory** (`memory/`) captures institutional knowledge:
+"Your **memory** (`.arete/memory/`) captures institutional knowledge:
 - `decisions.md` - Why you made key choices
 - `learnings.md` - Insights to remember
 - `activity-log.md` - What happened when"
 
 ### 5. Scratchpad
 
-"The **scratchpad** (`scratchpad.md`) is for quick capture:
+"The **scratchpad** (`now/scratchpad.md`) is for quick capture:
 - Ideas that pop up
 - Quick notes
 - TODOs for later

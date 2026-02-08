@@ -5,7 +5,7 @@ description: Plan the week and set weekly priorities. Use when the user wants to
 
 # Week Plan Skill
 
-Guide the PM to define the top 3–5 outcomes for the week, linked to quarter goals. Read current quarter goals, last week file, active projects, and scratchpad/commitments. Output is a week priorities file in `resources/plans/`.
+Guide the PM to define the top 3–5 outcomes for the week, linked to quarter goals. Read current quarter goals, last week file, active projects, and scratchpad/commitments. Output is `now/week.md`.
 
 ## When to Use
 
@@ -18,10 +18,10 @@ Guide the PM to define the top 3–5 outcomes for the week, linked to quarter go
 
 ### 1. Gather Context
 
-- **Read** current quarter goals: `resources/plans/quarter-YYYY-Qn.md`.
-- **Read** last week file in `resources/plans/` if any (e.g. `week-YYYY-Www.md`) for carry-over and continuity.
+- **Read** current quarter goals: `goals/quarter.md`.
+- **Read** last week file: `now/week.md` for carry-over and continuity.
 - **Read** `projects/active/` (README or key files) for commitments tied to projects.
-- **Read** `scratchpad.md` for ad-hoc commitments or "due this week" items.
+- **Read** `now/scratchpad.md` for ad-hoc commitments or "due this week" items.
 
 ### 2. Guide to Top 3–5 Outcomes
 
@@ -39,7 +39,7 @@ Also capture:
 
 ### 3. Write Week File
 
-- **File**: `resources/plans/week-YYYY-Www.md` (e.g. `week-2026-W06.md` using ISO week).
+- **File**: `now/week.md`.
 - **Structure**: Use the template at `templates/plans/week-priorities.md`:
   - Week dates
   - Top 3–5 outcomes with quarter goal links
@@ -54,11 +54,11 @@ Also capture:
 
 ## References
 
-- **Quarter goals**: `resources/plans/quarter-YYYY-Qn.md`
-- **Last week**: `resources/plans/week-YYYY-Www.md`
-- **Output**: `resources/plans/week-YYYY-Www.md`
+- **Quarter goals**: `goals/quarter.md`
+- **Last week**: `now/week.md`
+- **Output**: `now/week.md`
 - **Template**: `templates/plans/week-priorities.md`
-- **Context**: `projects/active/`, `scratchpad.md`
+- **Context**: `projects/active/`, `now/scratchpad.md`
 
 ## Error Handling
 

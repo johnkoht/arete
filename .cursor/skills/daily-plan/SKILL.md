@@ -27,9 +27,9 @@ For each of today's meetings, gather context. Same pattern as **meeting-prep** s
 
 ### 1. Gather Context
 
-- **Read** current week file: `resources/plans/week-YYYY-Www.md` (use ISO week for today).
-- **Read** quarter file if needed: `resources/plans/quarter-YYYY-Qn.md` for goal context.
-- **Read** `scratchpad.md` for ad-hoc items.
+- **Read** current week file: `now/week.md`.
+- **Read** quarter file if needed: `goals/quarter.md` for goal context.
+- **Read** `now/scratchpad.md` for ad-hoc items.
 - **Ask** user for today's meetings: "List today's meetings (title + attendees) or say 'none'." No calendar integration in v1.
 
 ### 2. For Each Meeting
@@ -61,12 +61,12 @@ Output markdown:
 
 ### 4. Optional
 
-- Offer to create `resources/plans/day-YYYY-MM-DD.md` with this content for reference. (Phase 2: structured day files; v1 output to chat only.)
+- Offer to create `now/today.md` with this content for reference. (Phase 2: structured day files; v1 output to chat only.)
 
 ## References
 
-- **Week file**: `resources/plans/week-YYYY-Www.md`
-- **Quarter file**: `resources/plans/quarter-YYYY-Qn.md`
-- **Scratchpad**: `scratchpad.md`
+- **Week file**: `now/week.md`
+- **Quarter file**: `goals/quarter.md`
+- **Scratchpad**: `now/scratchpad.md`
 - **People, Meetings, Projects**: See meeting-prep skill
 - **Related**: meeting-prep, week-plan, week-review

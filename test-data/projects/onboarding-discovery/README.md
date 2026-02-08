@@ -33,5 +33,5 @@ User research and support tickets indicate friction in onboarding. Step 3 and ad
 
 ## Related Context
 
-- context/goals-strategy.md — Pillar 1, activation
+- goals/strategy.md — Pillar 1, activation
 - resources/meetings/ — User research synthesis, customer calls

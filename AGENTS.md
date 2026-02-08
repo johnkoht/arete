@@ -7,7 +7,7 @@
 **Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc`.
 
 - **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `.cursor/build/entries/` and MEMORY.md; PRDs in `.cursor/build/prds/`. Do not run `arete seed test-data` here.
-- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `memory/items/`. Do not use build rules or `.cursor/build/`.
+- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `.cursor/build/`.
 
 **Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
 
@@ -183,7 +183,7 @@ The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions
 5. **Response**  
    Agent delivers the synthesis (or discovery output). If asked what it used: **synthesize** (or discovery) skill, project inputs, QMD.
 
-**Context pulled in**: the skill file; then project `inputs/` (and optionally `context/`, `memory/items/` via QMD). For ad-hoc "analyze this" with no skill match, the agent may just read the attached/referenced data and analyze it without a formal skill.
+**Context pulled in**: the skill file; then project `inputs/` (and optionally `context/`, `.arete/memory/items/` via QMD). For ad-hoc "analyze this" with no skill match, the agent may just read the attached/referenced data and analyze it without a formal skill.
 
 ### Summary: What Should Be Included in Context
 
@@ -262,7 +262,7 @@ updateMeetingsIndex(workspaceRoot: string, filename: string): void
 **Meeting Propagation**:
 - Run the **process-meetings** skill to propagate meeting content into people and memory.
 - Creates/updates person files (`people/internal/` or `people/customers/`) from attendees; writes `attendee_ids` to meeting frontmatter.
-- Extracts decisions and learnings for inline review; appends approved items to `memory/items/decisions.md` and `memory/items/learnings.md`.
+- Extracts decisions and learnings for inline review; appends approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md`.
 - Internal vs external classification: set `internal_email_domain` in `arete.yaml` (e.g. `"acme.com"`). Attendees whose email domain matches go to `people/internal/`; others to `people/customers/`.
 - See People System for linking conventions (`attendee_ids`, stakeholders).
 
@@ -339,14 +339,16 @@ slugifyPersonName(name): string
 
 ### 6. Planning System
 
-**Purpose**: Quarter and weekly planning aligned to org strategy; plans live in `resources/plans/`.
+**Purpose**: Quarter and weekly planning aligned to org strategy; plans live in `goals/` and `now/`.
 
 **Storage**:
-- Quarter goals: `resources/plans/quarter-YYYY-Qn.md` (e.g. `quarter-2026-Q1.md`) — 3–5 outcomes with success criteria and org pillar/OKR links.
-- Week priorities: `resources/plans/week-YYYY-Www.md` (e.g. `week-2026-W06.md`) — top 3–5 outcomes linked to quarter goals, commitments due, carried over.
-- Archive: `resources/plans/archive/` for past quarter/week files and alignment snapshots.
+- Strategy: `goals/strategy.md` — org pillars, OKRs, strategic framework.
+- Quarter goals: `goals/quarter.md` — 3–5 outcomes with success criteria and org pillar/OKR links.
+- Week priorities: `now/week.md` — top 3–5 outcomes linked to quarter goals, commitments due, carried over.
+- Daily focus: `now/today.md` — today's focus (populated by daily-plan).
+- Archive: `goals/archive/` for alignment snapshots.
 
-**Alignment**: Plans align to org strategy in `context/goals-strategy.md`. Use an alignment table (My goal → Org pillar/OKR) in quarter files and quarter-goal links in week files.
+**Alignment**: Plans align to org strategy in `goals/strategy.md`. Use an alignment table (My goal → Org pillar/OKR) in quarter file and quarter-goal links in week file.
 
 **Skills**:
 - **quarter-plan** — Set quarter goals, link to org pillars/OKRs, write quarter file.

@@ -60,7 +60,7 @@ From "## Decisions Made" and "## Summary" / "## Key Points": propose candidate d
 
 **For approved items**:
 
-- **Decisions** → Append to `memory/items/decisions.md`:
+- **Decisions** → Append to `.arete/memory/items/decisions.md`:
   ```markdown
   ### YYYY-MM-DD: [Decision Title]
   **Project**: [If applicable]
@@ -71,7 +71,7 @@ From "## Decisions Made" and "## Summary" / "## Key Points": propose candidate d
   **Status**: Active
   ```
 
-- **Learnings** → Append to `memory/items/learnings.md`:
+- **Learnings** → Append to `.arete/memory/items/learnings.md`:
   ```markdown
   ### YYYY-MM-DD: [Learning Title]
   **Source**: [Meeting that surfaced this]

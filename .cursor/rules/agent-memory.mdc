@@ -9,17 +9,19 @@ resources/                    # L1: Raw, immutable, timestamped
 ├── meetings/                 # Meeting notes and transcripts
 └── notes/                    # Standalone notes
 
-memory/
-├── items/                    # L2: Atomic facts (extracted)
-│   ├── decisions.md          # Key decisions with rationale
-│   ├── learnings.md          # Insights from work
-│   └── agent-observations.md # Your observations about working with user
-├── summaries/                # L3: Synthesized context (evolving)
-│   ├── collaboration.md      # How to work with user (derived from observations)
-│   └── sessions.md           # Work session tracking
-└── activity-log.md           # Chronological activity record
+.arete/
+├── memory/
+│   ├── items/                # L2: Atomic facts (extracted)
+│   │   ├── decisions.md      # Key decisions with rationale
+│   │   ├── learnings.md      # Insights from work
+│   │   └── agent-observations.md # Your observations about working with user
+│   └── summaries/            # L3: Synthesized context (evolving)
+│       ├── collaboration.md  # How to work with user (derived from observations)
+│       └── sessions.md       # Work session tracking
+└── activity/
+    └── activity-log.md       # Chronological activity record
 
-scratchpad.md                 # Shared working space (user + agent)
+now/scratchpad.md             # Shared working space (user + agent)
 ```
 
 ## Observation Triggers (L2 → agent-observations.md)
@@ -43,7 +45,7 @@ Record an observation when:
 
 ### How to Record Observations
 
-- Add to the appropriate section in `memory/items/agent-observations.md`
+- Add to the appropriate section in `.arete/memory/items/agent-observations.md`
 - Format: `- [YYYY-MM-DD] [Observation] → [Implication]`
 - Be specific and atomic - one fact per line
 - Always tell the user when you're saving an observation
@@ -59,7 +61,7 @@ Offer to update the collaboration profile when:
 ### How to Synthesize
 
 - Review all observations in `agent-observations.md`
-- Update relevant sections in `memory/summaries/collaboration.md`
+- Update relevant sections in `.arete/memory/summaries/collaboration.md`
 - Note the synthesis date and observation count
 - Ask user to review and correct if needed
 
@@ -98,11 +100,11 @@ The scratchpad is a **shared working space** for both user and agent.
 
 | Content | Location |
 |---------|----------|
-| "Park this for later" | scratchpad.md |
+| "Park this for later" | now/scratchpad.md |
 | Timestamped permanent capture | resources/notes/ |
-| Key decision made | memory/items/decisions.md |
-| Insight learned | memory/items/learnings.md |
-| Observation about user | memory/items/agent-observations.md |
+| Key decision made | .arete/memory/items/decisions.md |
+| Insight learned | .arete/memory/items/learnings.md |
+| Observation about user | .arete/memory/items/agent-observations.md |
 
 ## Transparency Rules
 
@@ -113,7 +115,7 @@ The scratchpad is a **shared working space** for both user and agent.
    - "I have several new observations. Would you like me to update the collaboration profile?"
 
 3. **Ask if work should be added to memory**
-   - After substantive work (refactors, decisions, bug fixes, migrations), **ask**: “Should I add this to memory?” — and specify which: **build memory** (`.cursor/build/MEMORY.md` for Arete build/tooling) or **PM workspace memory** (`memory/items/` for decisions, learnings, observations). Don’t add without confirming unless the user has already asked you to record it.
+   - After substantive work (refactors, decisions, bug fixes, migrations), **ask**: “Should I add this to memory?” — and specify which: **build memory** (`.cursor/build/MEMORY.md` for Arete build/tooling) or **PM workspace memory** (`.arete/memory/items/` for decisions, learnings, observations). Don’t add without confirming unless the user has already asked you to record it.
 
 4. **Corrections become new observations**
    - If user corrects your synthesis, log it as a new observation, don't silently edit

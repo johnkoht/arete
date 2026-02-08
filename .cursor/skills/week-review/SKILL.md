@@ -18,8 +18,8 @@ Read the current week file and quarter file, then guide the PM to mark prioritie
 
 ### 1. Read Context
 
-- **Read** the current week file: `resources/plans/week-YYYY-Www.md`.
-- **Read** the quarter file: `resources/plans/quarter-YYYY-Qn.md` (for progress against goals).
+- **Read** the current week file: `now/week.md`.
+- **Read** the quarter file: `goals/quarter.md` (for progress against goals).
 
 ### 2. Review Each Priority
 
@@ -42,7 +42,7 @@ No need to rewrite the quarter file unless the user wants to adjust goals.
 
 ### 4. Optional Capture
 
-- **Option A**: Add one short paragraph to `memory/summaries/sessions.md` (e.g. "Week of YYYY-MM-DD: …").
+- **Option A**: Add one short paragraph to `.arete/memory/summaries/sessions.md` (e.g. "Week of YYYY-MM-DD: …").
 - **Option B**: Fill the "End of week review" section in the week file with a few sentences.
 - Ask the user if they want either before writing.
 
@@ -53,9 +53,9 @@ No need to rewrite the quarter file unless the user wants to adjust goals.
 
 ## References
 
-- **Week file**: `resources/plans/week-YYYY-Www.md`
-- **Quarter file**: `resources/plans/quarter-YYYY-Qn.md`
-- **Optional**: `memory/summaries/sessions.md`
+- **Week file**: `now/week.md`
+- **Quarter file**: `goals/quarter.md`
+- **Optional**: `.arete/memory/summaries/sessions.md`
 
 ## Error Handling
 

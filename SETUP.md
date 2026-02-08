@@ -13,24 +13,22 @@ Areté is a Product Management workspace for Cursor that helps you:
 ```
 arete/
 ├── arete                    # CLI entry point (./arete help)
-├── .credentials/            # API keys and tokens (gitignored)
-│   ├── README.md
-│   └── credentials.yaml.example
+├── now/                     # Current focus (start here)
+│   ├── scratchpad.md        # Quick capture, parking lot
+│   ├── week.md              # This week's priorities
+│   └── today.md             # Today's focus (daily-plan)
 │
-├── .cursor/
-│   ├── rules/               # Cursor rules (always-on behavior)
-│   ├── skills/              # Agent Skills (on-demand workflows)
-│   ├── tools/               # Lifecycle-based tools (onboarding, seeding)
-│   └── integrations/        # External tool connections
-│       ├── configs/         # Integration configurations
-│       └── registry.md      # Integration status tracking
+├── goals/                   # Strategy and goals
+│   ├── strategy.md          # Org strategy, OKRs, pillars
+│   ├── quarter.md           # Current quarter goals
+│   ├── initiatives.md       # Strategic bets
+│   └── archive/             # Alignment snapshots
 │
 ├── context/                 # Core context (source of truth)
 │   ├── business-overview.md
 │   ├── business-model.md
 │   ├── competitive-landscape.md
 │   ├── products-services.md
-│   ├── goals-strategy.md
 │   ├── users-personas.md
 │   └── _history/            # Archived context versions
 │
@@ -38,30 +36,28 @@ arete/
 │   ├── active/              # Currently in progress
 │   └── archive/             # Completed projects
 │
-├── memory/                  # Institutional knowledge
-│   ├── items/               # Atomic facts (decisions, learnings)
-│   ├── summaries/           # Synthesized context
-│   └── activity-log.md      # Activity history
-│
-├── resources/               # Raw inputs and plans
+├── resources/               # Raw inputs
 │   ├── meetings/            # Meeting notes and transcripts
-│   ├── notes/               # Standalone notes
-│   └── plans/               # Quarter and week plans (quarter-YYYY-Qn.md, week-YYYY-Www.md)
-│       └── archive/         # Past plans and alignment snapshots
+│   └── notes/               # Standalone notes
 │
+├── .arete/                  # System-managed (not user-edited directly)
+│   ├── memory/              # Institutional knowledge
+│   │   ├── items/           # Atomic facts (decisions, learnings)
+│   │   └── summaries/       # Synthesized context
+│   └── activity/            # Activity log
+│
+├── .credentials/            # API keys and tokens (gitignored)
+├── .cursor/                 # Rules, skills, tools, integrations
+├── people/                  # People (internal, customers, users)
 ├── scripts/                 # Setup and utility scripts
-│   ├── setup.sh             # Setup and install dependencies
-│   └── integrations/        # Integration API scripts
-│
-├── scratchpad.md            # Quick capture space
 └── templates/               # Document templates
-    ├── plans/               # Quarter and week plan templates
+    ├── plans/               # Plan templates (goals, week)
     ├── projects/            # Project templates
     ├── inputs/              # Input templates
     └── outputs/             # Output templates (PRDs, etc.)
 ```
 
-**Planning structure**: `resources/plans/` and `templates/plans/` are created by `arete install` and backfilled by `arete update` so existing workspaces get the planning feature when it ships.
+**Planning structure**: `now/`, `goals/`, and `templates/plans/` are created by `arete install` and backfilled by `arete update`. Existing workspaces are migrated automatically on `arete update`.
 
 **Meeting propagation**: After saving or syncing meetings, run the **process-meetings** skill to update people and memory. Optional: set `internal_email_domain` in `arete.yaml` (e.g. `internal_email_domain: "acme.com"`) so attendees from your org are classified as internal.
 
@@ -74,7 +70,7 @@ arete/
 When you use Areté, you interact with:
 - **Context files** (`context/`) - Your business and product knowledge
 - **Projects** (`projects/`) - Your active and archived PM work
-- **Memory** (`memory/`) - Decisions, learnings, institutional knowledge
+- **Memory** (`.arete/memory/`) - Decisions, learnings, institutional knowledge
 - **Skills** (`.cursor/skills/`) - PM workflows like discovery, PRD creation
 - **Tools** (`.cursor/tools/`) - Lifecycle features like onboarding
 
@@ -129,7 +125,7 @@ Start with the most important context files:
 
 **Medium Priority** (do next):
 4. `context/business-model.md` - How you make money
-5. `context/goals-strategy.md` - Strategic direction
+5. `goals/strategy.md` - Strategic direction
 6. `context/competitive-landscape.md` - Competitors
 
 ### 2. Set Up QMD (Recommended)

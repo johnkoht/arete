@@ -40,7 +40,7 @@ projects/active/[period]-roadmap/
 Collect inputs for roadmap planning:
 
 **Strategic Inputs**
-- Company goals (from `context/goals-strategy.md`)
+- Company goals (from `goals/strategy.md`)
 - Product vision
 - Key metrics to move
 
@@ -262,8 +262,8 @@ Create `outputs/roadmap.md`:
 
 After finalizing:
 
-1. Consider updating `context/goals-strategy.md` if roadmap reflects strategic shifts
-2. Log major prioritization decisions to `memory/decisions.md`
+1. Consider updating `goals/strategy.md` if roadmap reflects strategic shifts
+2. Log major prioritization decisions to `.arete/memory/items/decisions.md`
 3. Set calendar for roadmap review
 
 ## Roadmap Best Practices

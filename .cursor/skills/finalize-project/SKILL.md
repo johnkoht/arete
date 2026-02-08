@@ -113,7 +113,7 @@ Apply updates to context files:
 
 #### Decisions
 
-For key decisions made during the project, log to `memory/decisions.md`:
+For key decisions made during the project, log to `.arete/memory/items/decisions.md`:
 
 ```markdown
 ## YYYY-MM-DD: [Decision Title]
@@ -131,7 +131,7 @@ For key decisions made during the project, log to `memory/decisions.md`:
 
 #### Learnings
 
-For insights worth preserving, log to `memory/learnings.md`:
+For insights worth preserving, log to `.arete/memory/items/learnings.md`:
 
 ```markdown
 ## YYYY-MM-DD: [Learning Title]
@@ -174,7 +174,7 @@ Mark project as complete:
 - Updated [file]: [What changed]
 
 ## Learnings Captured
-- [Link to learning in memory/learnings.md]
+- [Link to learning in .arete/memory/items/learnings.md]
 ```
 
 ### 7. Archive Project
