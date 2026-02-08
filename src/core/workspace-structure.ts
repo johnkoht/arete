@@ -5,19 +5,27 @@
  * existing workspaces get them on `arete update`.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 /**
  * Directories that should exist in an Areté workspace.
  * Add new top-level or nested dirs here when shipping new features.
+ *
+ * Phase 1 (Product OS): now/, goals/, .arete/ replace scratchpad, resources/plans, memory/.
  */
 export const WORKSPACE_DIRS = [
+  'now',
+  'goals',
+  'goals/archive',
   'context',
   'context/_history',
-  'memory',
-  'memory/items',
-  'memory/summaries',
+  '.arete',
+  '.arete/memory',
+  '.arete/memory/items',
+  '.arete/memory/summaries',
+  '.arete/activity',
+  '.arete/config',
   'projects',
   'projects/active',
   'projects/archive',
@@ -28,8 +36,6 @@ export const WORKSPACE_DIRS = [
   'resources',
   'resources/meetings',
   'resources/notes',
-  'resources/plans',
-  'resources/plans/archive',
   'templates/plans',
   '.cursor',
   '.cursor/rules',
@@ -349,7 +355,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 ## Change History
 - [Date]: Initial setup
 `,
-  'context/goals-strategy.md': `# Goals & Strategy
+  'goals/strategy.md': `# Goals & Strategy
 
 > **Purpose**: Business goals, OKRs, strategic direction, and market positioning.
 > **Last Updated**: [Date]
@@ -607,12 +613,12 @@ Fill these in (see SETUP.md for guidance):
 - **users-personas.md** — Target users and personas
 - **products-services.md** — Product portfolio and offerings
 - **business-model.md** — How you make money
-- **goals-strategy.md** — Strategic direction, OKRs, alignment (used by quarter-plan and week-plan)
+- **Strategy** — Moved to \`goals/strategy.md\` (see goals/ for strategy, quarter, initiatives)
 - **competitive-landscape.md** — Competitors and market positioning
 
 When you finalize projects that update context, previous versions are archived to \`context/_history/\`.
 `,
-  'scratchpad.md': `# Scratchpad
+  'now/scratchpad.md': `# Scratchpad
 
 Quick capture space for notes, ideas, and TODOs. Review periodically and move items to appropriate places.
 
@@ -625,6 +631,100 @@ Quick capture space for notes, ideas, and TODOs. Review periodically and move it
 ## Notes
 
 ---
+`,
+  'now/week.md': `# Week Priorities
+
+**Week of**: [Monday date]
+
+## Top 3–5 outcomes
+
+### 1. [Outcome]
+- **Success criteria**:
+- **Advances quarter goal**:
+- **Effort**: deep / medium / quick (optional)
+
+### 2. [Outcome]
+
+(Add more as needed. Use **week-plan** skill to set priorities.)
+
+## Commitments due this week
+
+-
+
+## Carried over from last week
+
+-
+
+## End of week review (fill during week-review)
+
+-
+`,
+  'now/today.md': `# Today's Focus
+
+**Date**: [YYYY-MM-DD]
+
+## Top priorities
+
+1.
+2.
+3.
+
+## Meetings today
+
+-
+
+## Commitments due
+
+-
+
+(Use **daily-plan** skill to populate. User supplies today's meetings.)
+`,
+  'goals/quarter.md': `# Quarter Goals — [YYYY-Qn]
+
+**Quarter**: [Start date] – [End date]
+
+## Outcomes (3–5)
+
+### [Qn-1] [Outcome title]
+- **Success criteria**: [1–2 sentences]
+- **Org alignment**: [Pillar / OKR from goals/strategy.md]
+
+### [Qn-2] [Outcome title]
+- **Success criteria**:
+- **Org alignment**:
+
+(Add more as needed. Use **quarter-plan** skill.)
+
+## Alignment table
+
+| My goal | Org pillar / OKR |
+|--------|------------------|
+| [Qn-1] | |
+| [Qn-2] | |
+
+## Notes / milestones
+
+-
+`,
+  'goals/initiatives.md': `# Strategic Initiatives
+
+Lightweight strategic bets that projects reference for alignment.
+
+## Current initiatives
+
+### [Initiative 1]
+- **What**: [One-line description]
+- **Why**: [Strategic rationale]
+- **Projects**: [Links to projects/active/...]
+
+### [Initiative 2]
+- **What**:
+- **Why**:
+- **Projects**:
+
+## Past initiatives (for reference)
+
+-
 `,
   'projects/index.md': `# Projects Index
 
@@ -654,24 +754,6 @@ Standalone notes and observations.
 
 None yet.
 `,
-  'resources/plans/README.md': `# Planning
-
-Quarter and weekly plans live here. They align to org strategy in \`context/goals-strategy.md\`.
-
-## Hierarchy
-
-- **Quarter goals**: \`quarter-YYYY-Qn.md\` (e.g. \`quarter-2026-Q1.md\`) — 3–5 outcomes per quarter with links to org pillars/OKRs.
-- **Week priorities**: \`week-YYYY-Www.md\` (e.g. \`week-2026-W06.md\`) — top 3–5 outcomes per week, linked to quarter goals.
-- **Daily** (Phase 2): Lightweight in scratchpad or a section in the week file; full daily plans later.
-
-## Archive
-
-Past quarter and week files can go in \`resources/plans/archive/\` to keep the root focused on current plans.
-
-## Skills
-
-Use **quarter-plan**, **goals-alignment**, **week-plan**, and **week-review** skills to create and update these files.
-`,
   'templates/plans/quarter-goals.md': `# Quarter Goals — [YYYY-Qn]
 
 **Quarter**: [Start date] – [End date]
@@ -680,7 +762,7 @@ Use **quarter-plan**, **goals-alignment**, **week-plan**, and **week-review** sk
 
 ### [Qn-1] [Outcome title]
 - **Success criteria**: [1–2 sentences]
-- **Org alignment**: [Pillar / OKR from context/goals-strategy.md]
+- **Org alignment**: [Pillar / OKR from goals/strategy.md]
 
 ### [Qn-2] [Outcome title]
 - **Success criteria**:
@@ -870,37 +952,37 @@ fathom:
 .credentials/credentials.yaml
 .cursor/skills-core/
 `,
-  'memory/activity-log.md': `# Activity Log
+  '.arete/activity/activity-log.md': `# Activity Log
 
 Chronological record of significant workspace activity.
 
 ---
 `,
-  'memory/items/decisions.md': `# Decisions Log
+  '.arete/memory/items/decisions.md': `# Decisions Log
 
 Key decisions with context and rationale.
 
 ---
 `,
-  'memory/items/learnings.md': `# Learnings Log
+  '.arete/memory/items/learnings.md': `# Learnings Log
 
 Insights and learnings from work.
 
 ---
 `,
-  'memory/items/agent-observations.md': `# Agent Observations
+  '.arete/memory/items/agent-observations.md': `# Agent Observations
 
 Observations about working preferences and patterns.
 
 ---
 `,
-  'memory/summaries/collaboration.md': `# Collaboration Profile
+  '.arete/memory/summaries/collaboration.md': `# Collaboration Profile
 
 How to work effectively together.
 
 ---
 `,
-  'memory/summaries/sessions.md': `# Session Summaries
+  '.arete/memory/summaries/sessions.md': `# Session Summaries
 
 Work session tracking for continuity.
 
@@ -956,4 +1038,121 @@ export function ensureWorkspaceStructure(
   }
 
   return { directoriesAdded, filesAdded };
+}
+
+export interface MigrateLegacyResult {
+  migrated: string[];
+  skipped: string[];
+  messages: string[];
+}
+
+/**
+ * Migrate legacy workspace structure to Product OS layout.
+ * Copies from old locations to new; never overwrites existing files.
+ * Call before ensureWorkspaceStructure so new dirs exist for migration.
+ */
+export function migrateLegacyWorkspaceStructure(workspaceRoot: string): MigrateLegacyResult {
+  const migrated: string[] = [];
+  const skipped: string[] = [];
+  const messages: string[] = [];
+
+  function copyIfMissing(src: string, dest: string, label: string): void {
+    if (!existsSync(src)) return;
+    if (existsSync(dest)) {
+      skipped.push(label);
+      return;
+    }
+    const destDir = join(dest, '..');
+    if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+    copyFileSync(src, dest);
+    migrated.push(label);
+  }
+
+  function copyDirContentsIfMissing(srcDir: string, destDir: string, labelPrefix: string): void {
+    if (!existsSync(srcDir)) return;
+    if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+    const entries = readdirSync(srcDir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isFile() || !ent.name.endsWith('.md')) continue;
+      const srcPath = join(srcDir, ent.name);
+      const destPath = join(destDir, ent.name);
+      if (existsSync(destPath)) {
+        skipped.push(`${labelPrefix}/${ent.name}`);
+      } else {
+        copyFileSync(srcPath, destPath);
+        migrated.push(`${labelPrefix}/${ent.name}`);
+      }
+    }
+  }
+
+  // memory/ → .arete/memory/
+  const oldMemoryItems = join(workspaceRoot, 'memory', 'items');
+  const newMemoryItems = join(workspaceRoot, '.arete', 'memory', 'items');
+  copyDirContentsIfMissing(oldMemoryItems, newMemoryItems, 'memory/items');
+
+  const oldMemorySummaries = join(workspaceRoot, 'memory', 'summaries');
+  const newMemorySummaries = join(workspaceRoot, '.arete', 'memory', 'summaries');
+  copyDirContentsIfMissing(oldMemorySummaries, newMemorySummaries, 'memory/summaries');
+
+  const oldActivityLog = join(workspaceRoot, 'memory', 'activity-log.md');
+  const newActivityLog = join(workspaceRoot, '.arete', 'activity', 'activity-log.md');
+  copyIfMissing(oldActivityLog, newActivityLog, 'memory/activity-log.md');
+
+  // scratchpad.md → now/scratchpad.md
+  copyIfMissing(
+    join(workspaceRoot, 'scratchpad.md'),
+    join(workspaceRoot, 'now', 'scratchpad.md'),
+    'scratchpad.md'
+  );
+
+  // context/goals-strategy.md → goals/strategy.md
+  copyIfMissing(
+    join(workspaceRoot, 'context', 'goals-strategy.md'),
+    join(workspaceRoot, 'goals', 'strategy.md'),
+    'context/goals-strategy.md'
+  );
+
+  // resources/plans/quarter-*.md → goals/quarter.md (most recent)
+  const plansDir = join(workspaceRoot, 'resources', 'plans');
+  const goalsQuarterDest = join(workspaceRoot, 'goals', 'quarter.md');
+  if (existsSync(plansDir) && !existsSync(goalsQuarterDest)) {
+    const files = readdirSync(plansDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && /^quarter-\d{4}-Q\d\.md$/.test(e.name))
+      .map((e) => e.name)
+      .sort()
+      .reverse();
+    if (files.length > 0) {
+      const latest = join(plansDir, files[0]);
+      if (!existsSync(goalsQuarterDest)) {
+        mkdirSync(join(goalsQuarterDest, '..'), { recursive: true });
+        copyFileSync(latest, goalsQuarterDest);
+        migrated.push(`resources/plans/${files[0]} → goals/quarter.md`);
+      }
+    }
+  }
+
+  // resources/plans/week-*.md → now/week.md (most recent)
+  const nowWeekDest = join(workspaceRoot, 'now', 'week.md');
+  if (existsSync(plansDir) && !existsSync(nowWeekDest)) {
+    const files = readdirSync(plansDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && /^week-\d{4}-W\d{2}\.md$/.test(e.name))
+      .map((e) => e.name)
+      .sort()
+      .reverse();
+    if (files.length > 0) {
+      const latest = join(plansDir, files[0]);
+      mkdirSync(join(nowWeekDest, '..'), { recursive: true });
+      copyFileSync(latest, nowWeekDest);
+      migrated.push(`resources/plans/${files[0]} → now/week.md`);
+    }
+  }
+
+  if (migrated.length > 0) {
+    messages.push(`Migrated ${migrated.length} item(s) from legacy structure. Old files preserved.`);
+  }
+  if (skipped.length > 0) {
+    messages.push(`Skipped ${skipped.length} (destination already exists).`);
+  }
+
+  return { migrated, skipped, messages };
 }

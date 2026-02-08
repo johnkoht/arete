@@ -59,7 +59,10 @@ export interface WorkspacePaths {
   tools: string;
   integrations: string;
   context: string;
+  /** Canonical memory path: .arete/memory (items, summaries) */
   memory: string;
+  now: string;
+  goals: string;
   projects: string;
   resources: string;
   people: string;

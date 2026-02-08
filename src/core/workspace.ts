@@ -26,7 +26,7 @@ export function isAreteWorkspace(dir: string): boolean {
   const hasManifest = existsSync(join(dir, 'arete.yaml'));
   const hasCursorDir = existsSync(join(dir, '.cursor'));
   const hasContext = existsSync(join(dir, 'context'));
-  const hasMemory = existsSync(join(dir, 'memory'));
+  const hasMemory = existsSync(join(dir, '.arete', 'memory')) || existsSync(join(dir, 'memory'));
   
   return hasManifest || (hasCursorDir && hasContext && hasMemory);
 }
@@ -62,7 +62,9 @@ export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
     tools: join(workspaceRoot, '.cursor', 'tools'),
     integrations: join(workspaceRoot, '.cursor', 'integrations'),
     context: join(workspaceRoot, 'context'),
-    memory: join(workspaceRoot, 'memory'),
+    memory: join(workspaceRoot, '.arete', 'memory'),
+    now: join(workspaceRoot, 'now'),
+    goals: join(workspaceRoot, 'goals'),
     projects: join(workspaceRoot, 'projects'),
     resources: join(workspaceRoot, 'resources'),
     people: join(workspaceRoot, 'people'),

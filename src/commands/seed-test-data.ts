@@ -173,18 +173,29 @@ export async function seedTestDataCommand(options: SeedTestDataOptions): Promise
     }
   }
 
-  // Copy plans -> resources/plans
+  // Copy plans -> goals/quarter.md, now/week.md (Product OS layout)
   const plansSrc = join(testDataDir, 'plans');
-  const plansDest = paths.resources ? join(workspaceRoot, 'resources', 'plans') : null;
-  if (plansDest && existsSync(plansSrc)) {
+  if (existsSync(plansSrc)) {
     const files = readdirSync(plansSrc, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith('.md'));
-    for (const f of files) {
-      const destPath = join(plansDest, f.name);
-      if (!force && existsSync(destPath)) continue;
-      mkdirSync(plansDest, { recursive: true });
-      copyFileSync(join(plansSrc, f.name), destPath, force ? undefined : 0);
-      stats.plans++;
+      .filter((e) => e.isFile() && e.name.endsWith('.md'))
+      .map((e) => e.name);
+    const quarterFiles = files.filter((n) => n.startsWith('quarter-')).sort().reverse();
+    const weekFiles = files.filter((n) => n.startsWith('week-')).sort().reverse();
+    if (quarterFiles.length > 0) {
+      const dest = join(paths.goals, 'quarter.md');
+      if (force || !existsSync(dest)) {
+        mkdirSync(join(dest, '..'), { recursive: true });
+        copyFileSync(join(plansSrc, quarterFiles[0]), dest, force ? undefined : 0);
+        stats.plans++;
+      }
+    }
+    if (weekFiles.length > 0) {
+      const dest = join(paths.now, 'week.md');
+      if (force || !existsSync(dest)) {
+        mkdirSync(join(dest, '..'), { recursive: true });
+        copyFileSync(join(plansSrc, weekFiles[0]), dest, force ? undefined : 0);
+        stats.plans++;
+      }
     }
   }
 
@@ -222,17 +233,26 @@ export async function seedTestDataCommand(options: SeedTestDataOptions): Promise
     }
   }
 
-  // Copy context (goals-strategy and any others)
+  // Copy context (business files) and goals-strategy -> goals/strategy.md (Product OS)
   const contextSrc = join(testDataDir, 'context');
   if (existsSync(contextSrc)) {
     const files = readdirSync(contextSrc, { withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith('.md'));
     for (const f of files) {
-      const destPath = join(paths.context, f.name);
-      if (!force && existsSync(destPath)) continue;
-      mkdirSync(paths.context, { recursive: true });
-      copyFileSync(join(contextSrc, f.name), destPath, force ? undefined : 0);
-      stats.context++;
+      if (f.name === 'goals-strategy.md') {
+        const goalsStrategyDest = join(paths.goals, 'strategy.md');
+        if (force || !existsSync(goalsStrategyDest)) {
+          mkdirSync(paths.goals, { recursive: true });
+          copyFileSync(join(contextSrc, f.name), goalsStrategyDest, force ? undefined : 0);
+          stats.context++;
+        }
+      } else {
+        const destPath = join(paths.context, f.name);
+        if (!force && existsSync(destPath)) continue;
+        mkdirSync(paths.context, { recursive: true });
+        copyFileSync(join(contextSrc, f.name), destPath, force ? undefined : 0);
+        stats.context++;
+      }
     }
   }
 

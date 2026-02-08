@@ -258,7 +258,7 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
     console.log('');
     console.log(chalk.dim('Next steps:'));
     console.log(`  • Review imported items in ${chalk.cyan('resources/meetings/')}`);
-    console.log(`  • Check pending items: ${chalk.cyan('memory/pending-review.md')}`);
+    console.log(`  • Check pending items: ${chalk.cyan('.arete/memory/pending-review.md')}`);
     console.log(`  • Run ${chalk.cyan('arete status')} to see workspace state`);
     console.log('');
   }

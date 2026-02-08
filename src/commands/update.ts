@@ -7,7 +7,7 @@ import { join, basename } from 'path';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
-import { ensureWorkspaceStructure } from '../core/workspace-structure.js';
+import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure } from '../core/workspace-structure.js';
 import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
 import type { CommandOptions, SyncResults } from '../types.js';
 
@@ -130,6 +130,15 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     rules: { added: [] as string[], updated: [] as string[], preserved: [] as string[] },
     structure: { directoriesAdded: [] as string[], filesAdded: [] as string[] }
   };
+
+  // Migrate legacy structure (memory/, scratchpad, goals-strategy, resources/plans) before backfill
+  const migrationResult = migrateLegacyWorkspaceStructure(workspaceRoot);
+  if (migrationResult.migrated.length > 0 && !json) {
+    info('Migrated legacy workspace structure to Product OS layout');
+    for (const msg of migrationResult.messages) {
+      info(`  ${msg}`);
+    }
+  }
 
   // Ensure workspace structure (missing dirs and default files — never overwrites)
   const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check });
