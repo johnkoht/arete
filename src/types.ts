@@ -146,3 +146,127 @@ export interface SyncResults {
   preserved: string[];
   removed: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Intelligence Services Types (Phase 3)
+// ---------------------------------------------------------------------------
+
+/** Product primitive — the five building blocks of product knowledge */
+export type ProductPrimitive = 'Problem' | 'User' | 'Solution' | 'Market' | 'Risk';
+
+/** All valid product primitives */
+export const PRODUCT_PRIMITIVES: readonly ProductPrimitive[] = [
+  'Problem', 'User', 'Solution', 'Market', 'Risk'
+] as const;
+
+/** Work type classification for skills */
+export type WorkType = 'discovery' | 'definition' | 'delivery' | 'analysis' | 'planning' | 'operations';
+
+/** Skill category */
+export type SkillCategory = 'essential' | 'default' | 'community';
+
+// --- Context Injection ---
+
+/** A file reference with content assembled during context injection */
+export interface ContextFile {
+  path: string;
+  relativePath: string;
+  primitive?: ProductPrimitive;
+  category: 'context' | 'goals' | 'projects' | 'people' | 'resources' | 'memory';
+  summary?: string;
+  content?: string;
+}
+
+/** Gap identified during context assembly */
+export interface ContextGap {
+  primitive?: ProductPrimitive;
+  description: string;
+  suggestion?: string;
+}
+
+/** Result of context injection — the assembled context bundle */
+export interface ContextBundle {
+  query: string;
+  primitives: ProductPrimitive[];
+  files: ContextFile[];
+  gaps: ContextGap[];
+  confidence: 'High' | 'Medium' | 'Low';
+  assembledAt: string;
+}
+
+/** Options for getRelevantContext */
+export interface ContextInjectionOptions {
+  primitives?: ProductPrimitive[];
+  workType?: WorkType;
+}
+
+// --- Memory Retrieval ---
+
+/** Memory item type */
+export type MemoryItemType = 'decisions' | 'learnings' | 'observations';
+
+/** A single memory search result */
+export interface MemoryResult {
+  content: string;
+  source: string;
+  type: MemoryItemType;
+  date?: string;
+  relevance: string;
+}
+
+/** Memory search results */
+export interface MemorySearchResult {
+  query: string;
+  results: MemoryResult[];
+  total: number;
+}
+
+/** Options for searchMemory */
+export interface MemorySearchOptions {
+  types?: MemoryItemType[];
+  limit?: number;
+}
+
+// --- Entity Resolution ---
+
+/** Entity type for resolution */
+export type EntityType = 'person' | 'meeting' | 'project' | 'any';
+
+/** A resolved entity */
+export interface ResolvedEntity {
+  type: 'person' | 'meeting' | 'project';
+  path: string;
+  name: string;
+  slug?: string;
+  metadata: Record<string, unknown>;
+  score: number;
+}
+
+// --- Enhanced Skill Router ---
+
+/** Extended skill candidate with Phase 2 frontmatter */
+export interface ExtendedSkillCandidate {
+  id?: string;
+  name?: string;
+  description?: string;
+  path?: string;
+  triggers?: string[];
+  primitives?: ProductPrimitive[];
+  work_type?: WorkType;
+  category?: SkillCategory;
+  intelligence?: string[];
+  requires_briefing?: boolean;
+  creates_project?: boolean;
+  project_template?: string;
+}
+
+/** Enhanced routing result with intelligence metadata */
+export interface ExtendedRoutedSkill {
+  skill: string;
+  path: string;
+  reason: string;
+  primitives?: ProductPrimitive[];
+  work_type?: WorkType;
+  category?: SkillCategory;
+  requires_briefing?: boolean;
+}
