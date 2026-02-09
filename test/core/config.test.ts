@@ -134,6 +134,31 @@ describe('config', () => {
       assert.equal(config.skills.defaults!['create-prd'], 'netflix-prd');
       assert.equal(config.skills.defaults!['discovery'], null);
     });
+
+    it('loads integrations.calendar config when present', () => {
+      const yamlContent = `integrations:
+  calendar:
+    provider: macos
+    calendars:
+      - Work
+      - Personal
+`;
+      writeFileSync(join(tmpDir, 'arete.yaml'), yamlContent);
+      const config = loadConfig(tmpDir);
+      assert.ok(config.integrations.calendar);
+      assert.equal(config.integrations.calendar.provider, 'macos');
+      assert.ok(Array.isArray(config.integrations.calendar.calendars));
+      assert.equal(config.integrations.calendar.calendars!.length, 2);
+      assert.equal(config.integrations.calendar.calendars![0], 'Work');
+      assert.equal(config.integrations.calendar.calendars![1], 'Personal');
+    });
+
+    it('handles missing integrations.calendar section', () => {
+      const yamlContent = `schema: 1\nsource: npm\n`;
+      writeFileSync(join(tmpDir, 'arete.yaml'), yamlContent);
+      const config = loadConfig(tmpDir);
+      assert.equal(config.integrations.calendar, undefined);
+    });
   });
 
   describe('getAgentMode', () => {

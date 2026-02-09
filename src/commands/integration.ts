@@ -5,9 +5,11 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { execSync } from 'child_process';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
+import { getWorkspaceConfigPath } from '../core/config.js';
 import { success, error, warn, info, header, listItem } from '../core/utils.js';
 import { INTEGRATIONS } from '../integrations/registry.js';
 import type { CommandOptions } from '../types.js';
@@ -241,10 +243,178 @@ async function addIntegration(options: IntegrationOptions): Promise<void> {
 }
 
 /**
+ * Check if ical-buddy is installed
+ */
+function isIcalBuddyInstalled(): boolean {
+  try {
+    execSync('which ical-buddy', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get list of available calendars from ical-buddy
+ */
+function listCalendars(): string[] {
+  try {
+    const output = execSync('ical-buddy calendars', { encoding: 'utf8' });
+    return output
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  } catch (err) {
+    throw new Error(`Failed to list calendars: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Configure calendar integration (macOS)
+ */
+async function configureCalendar(options: CommandOptions): Promise<void> {
+  const { json } = options;
+  
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+    } else {
+      error('Not in an Areté workspace');
+    }
+    process.exit(1);
+  }
+  
+  // Check if ical-buddy is installed
+  if (!isIcalBuddyInstalled()) {
+    if (json) {
+      console.log(JSON.stringify({ 
+        success: false, 
+        error: 'ical-buddy not found. Install with: brew install ical-buddy' 
+      }));
+    } else {
+      error('ical-buddy not found');
+      console.log('');
+      console.log('Install ical-buddy with:');
+      console.log(`  ${chalk.cyan('brew install ical-buddy')}`);
+      console.log('');
+    }
+    process.exit(1);
+  }
+  
+  // List available calendars
+  let calendars: string[];
+  try {
+    calendars = listCalendars();
+  } catch (err) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: (err as Error).message }));
+    } else {
+      error((err as Error).message);
+    }
+    process.exit(1);
+  }
+  
+  if (calendars.length === 0) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'No calendars found' }));
+    } else {
+      warn('No calendars found in macOS Calendar');
+    }
+    process.exit(1);
+  }
+  
+  if (!json) {
+    console.log('');
+    console.log(chalk.bold('Available calendars:'));
+    calendars.forEach((cal, i) => console.log(`  ${i + 1}. ${cal}`));
+    console.log('');
+  }
+  
+  // Prompt user to select calendars
+  let selectedCalendars: string[];
+  if (json) {
+    // In JSON mode, default to all calendars
+    selectedCalendars = calendars;
+  } else {
+    const { selection } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'selection',
+        message: 'Select calendars (comma-separated numbers, or "all"):',
+        default: 'all'
+      }
+    ]);
+    
+    if (selection.toLowerCase() === 'all') {
+      selectedCalendars = calendars;
+    } else {
+      const indices = selection
+        .split(',')
+        .map((s: string) => parseInt(s.trim(), 10) - 1)
+        .filter((i: number) => i >= 0 && i < calendars.length);
+      selectedCalendars = indices.map((i: number) => calendars[i]);
+    }
+  }
+  
+  if (selectedCalendars.length === 0) {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: 'No calendars selected' }));
+    } else {
+      warn('No calendars selected');
+    }
+    process.exit(1);
+  }
+  
+  // Write to arete.yaml
+  const configPath = getWorkspaceConfigPath(workspaceRoot);
+  let config: Record<string, any> = { schema: 1 };
+  if (existsSync(configPath)) {
+    try {
+      config = parseYaml(readFileSync(configPath, 'utf8')) as Record<string, any>;
+    } catch {
+      // Use default
+    }
+  }
+  
+  // Update integrations.calendar
+  if (!config.integrations) {
+    config.integrations = {};
+  }
+  config.integrations.calendar = {
+    provider: 'macos',
+    calendars: selectedCalendars
+  };
+  
+  writeFileSync(configPath, stringifyYaml(config), 'utf8');
+  
+  if (json) {
+    console.log(JSON.stringify({
+      success: true,
+      provider: 'macos',
+      calendars: selectedCalendars
+    }, null, 2));
+  } else {
+    console.log('');
+    success('Calendar integration configured!');
+    listItem('Provider', 'macOS Calendar');
+    listItem('Calendars', selectedCalendars.join(', '));
+    console.log('');
+  }
+}
+
+/**
  * Configure an integration
  */
 async function configureIntegration(options: IntegrationOptions): Promise<void> {
-  // Same as add for now
+  const { name } = options;
+  
+  // Special case: calendar configuration
+  if (name === 'calendar') {
+    return configureCalendar(options);
+  }
+  
+  // Same as add for other integrations
   return addIntegration(options);
 }
 

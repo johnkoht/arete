@@ -51,6 +51,17 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     },
     status: 'planned'
   },
+  calendar: {
+    name: 'calendar',
+    displayName: 'macOS Calendar',
+    description: 'macOS Calendar integration via ical-buddy',
+    implements: ['calendar'],
+    auth: {
+      type: 'api_key', // Not really, but needed for type
+      instructions: 'Requires ical-buddy: brew install ical-buddy'
+    },
+    status: 'available'
+  },
   notion: {
     name: 'notion',
     displayName: 'Notion',

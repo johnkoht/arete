@@ -237,7 +237,20 @@ export async function installCommand(directory: string | undefined, options: Ins
   };
   
   const manifestPath = join(targetDir, 'arete.yaml');
-  writeFileSync(manifestPath, stringifyYaml(manifest), 'utf8');
+  let manifestYaml = stringifyYaml(manifest);
+  
+  // Add commented-out calendar config example
+  manifestYaml += `
+# Calendar integration (macOS only)
+# Uncomment and configure with: arete integration configure calendar
+# calendar:
+#   provider: macos
+#   calendars:
+#     - Work
+#     - Personal
+`;
+  
+  writeFileSync(manifestPath, manifestYaml, 'utf8');
   results.files.push('arete.yaml');
   
   // Output results
