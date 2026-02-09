@@ -59,9 +59,8 @@ package-lock.json
 dist/
 
 # CLI-managed directories (for consumer workspaces)
-# These are populated by `arete install` and shouldn't be committed
-.cursor/skills-core/
-.cursor/tools-core/
+# Populated by `arete install`; dev: run scripts/dev-setup.sh to seed .agents/skills
+.agents/
 
 # Logs
 *.log
@@ -72,5 +71,5 @@ npm-debug.log*
 *.temp
 
 # Autonomous execution system (runtime files)
-.cursor/build/autonomous/prd.json
-.cursor/build/autonomous/progress.txt
+dev/autonomous/prd.json
+dev/autonomous/progress.txt
