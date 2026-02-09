@@ -34,7 +34,8 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
 - **Read** `now/week.md` (current week priorities).
 - **Read** `goals/quarter.md` if needed for goal context.
 - **Read** `now/scratchpad.md` for ad-hoc items.
-- **Ask** user for today's meetings: "List today's meetings (title + attendees) or say 'none'." No calendar integration in v1.
+- **Try Calendar (if configured)**: Run `arete pull calendar --today --json`. If the command succeeds and returns events (check `success: true` and non-empty `events` array), use those as today's meeting list and note the calendar names. If the command fails, returns no events, or is not configured, fall back to asking the user.
+- **Ask** user for today's meetings (fallback if calendar unavailable): "List today's meetings (title + attendees) or say 'none'."
 
 ### 2. For Each Meeting
 
@@ -51,6 +52,8 @@ Output markdown:
 - [Top 2–3 outcomes from week priorities or scratchpad]
 
 ### Meetings
+[Note: Include source at the top: "Pulled from Calendar (calendar-names)" or "User provided"]
+
 - **[Meeting title]** — Attendees: X, Y  
   Context: [1–2 line summary]; Prep: [suggestion]
 
