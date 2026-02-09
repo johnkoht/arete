@@ -10,17 +10,13 @@
   "types": "./dist/index.d.ts",
   "files": [
     "bin/",
-    "dist/",
-    "skills/",
-    "tools/",
-    "integrations/",
-    "templates/",
-    "rules/"
+    "dist/"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-runtime.js",
     "typecheck": "tsc --noEmit",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "start": "node bin/arete.js",
     "test": "tsx --test 'test/**/*.test.ts'",
