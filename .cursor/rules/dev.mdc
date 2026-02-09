@@ -20,6 +20,15 @@ Standards for building and changing Arete. **Testing** is covered in `testing.md
 
 **Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: “Should I add this to build memory (.cursor/build/MEMORY.md)?” If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
 
+## Pre-mortem for complex work
+
+For **multi-step work** (PRD execution, large refactors, new systems, integration work)—and **when using Plan Mode**—conduct a pre-mortem before execution.
+
+- **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
+- **How**: Use `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
+- **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
+- **References**: `.cursor/build/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `.cursor/build/skills/execute-prd/SKILL.md`.
+
 ## TypeScript / Node.js
 
 - **Config**: `tsconfig.json` (NodeNext, strict). Tests: `tsconfig.test.json`.
