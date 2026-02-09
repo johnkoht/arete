@@ -99,9 +99,19 @@ function formatBriefingMarkdown(
     lines.push(`### ${prim}`);
 
     if (files.length > 0) {
-      for (const f of files) {
+      // Sort files by relevanceScore descending before formatting
+      const sortedFiles = [...files].sort((a, b) => {
+        const scoreA = a.relevanceScore ?? 0;
+        const scoreB = b.relevanceScore ?? 0;
+        return scoreB - scoreA;
+      });
+
+      for (const f of sortedFiles) {
         const summary = f.summary || '(no summary)';
-        lines.push(`- ${summary} — Source: \`${f.relativePath}\``);
+        const scoreStr = f.relevanceScore !== undefined
+          ? ` (relevance: ${f.relevanceScore.toFixed(2)})`
+          : '';
+        lines.push(`- ${summary} — Source: \`${f.relativePath}\`${scoreStr}`);
       }
     }
 
@@ -117,9 +127,19 @@ function formatBriefingMarkdown(
   // Strategy/goals context (untagged files)
   if (untagged.length > 0) {
     lines.push('### Strategic Context');
-    for (const f of untagged) {
+    // Sort untagged files by relevanceScore descending
+    const sortedUntagged = [...untagged].sort((a, b) => {
+      const scoreA = a.relevanceScore ?? 0;
+      const scoreB = b.relevanceScore ?? 0;
+      return scoreB - scoreA;
+    });
+
+    for (const f of sortedUntagged) {
       const summary = f.summary || '(no summary)';
-      lines.push(`- ${summary} — Source: \`${f.relativePath}\``);
+      const scoreStr = f.relevanceScore !== undefined
+        ? ` (relevance: ${f.relevanceScore.toFixed(2)})`
+        : '';
+      lines.push(`- ${summary} — Source: \`${f.relativePath}\`${scoreStr}`);
     }
     lines.push('');
   }
@@ -133,7 +153,10 @@ function formatBriefingMarkdown(
       // Extract title from content (first line after ###)
       const titleMatch = item.content.match(/^###\s+(?:\d{4}-\d{2}-\d{2}:\s*)?(.+)/m);
       const title = titleMatch ? titleMatch[1].trim() : item.content.slice(0, 80);
-      lines.push(`- **${typeLabel}**: ${dateStr}${title} — Source: \`${item.source}\``);
+      const scoreStr = item.score !== undefined
+        ? ` (score: ${item.score.toFixed(2)})`
+        : '';
+      lines.push(`- **${typeLabel}**: ${dateStr}${title} — Source: \`${item.source}\`${scoreStr}`);
     }
     lines.push('');
   }
@@ -166,6 +189,13 @@ function formatBriefingMarkdown(
       const suggestion = gap.suggestion ? ` — Suggestion: ${gap.suggestion}` : '';
       lines.push(`- ${gap.description}${suggestion}`);
     }
+    
+    // Add note when confidence is Low (stronger gap signal)
+    if (confidence === 'Low') {
+      lines.push('');
+      lines.push('**Note**: Low confidence indicates that semantic search found limited relevant content for this task. Consider adding more context to the workspace or refining the task description.');
+    }
+    
     lines.push('');
   }
 

@@ -152,5 +152,82 @@ describe('briefing', () => {
       const result = await assembleBriefing('anything', paths);
       assert.ok(result.markdown.includes('**Assembled**:'));
     });
+
+    it('includes relevance scores in markdown for files', async () => {
+      writeFile(tmpDir, 'context/business-overview.md', '# Business\n\nWe solve search problems for enterprise customers.');
+      writeFile(tmpDir, 'goals/strategy.md', '# Strategy\n\nFocus on enterprise search solutions.');
+
+      const result = await assembleBriefing('search feature', paths, {
+        primitives: ['Problem'],
+      });
+
+      // Files from context injection now have relevanceScore (at least staticScore = 0.5)
+      assert.ok(result.markdown.includes('(relevance:'), 'Should include relevance score in markdown');
+    });
+
+    it('includes scores in markdown for memory results', async () => {
+      writeFile(tmpDir, '.arete/memory/items/decisions.md', '### 2026-01-15: Use Elasticsearch for search\n\n**Decision**: We chose Elasticsearch for better performance.\n');
+
+      const result = await assembleBriefing('search technology', paths);
+      
+      if (result.memory.results.length > 0) {
+        // Memory results should have scores
+        assert.ok(result.memory.results[0].score !== undefined, 'Memory result should have score');
+        // Check if markdown includes score (only if memory results were found)
+        if (result.markdown.includes('Relevant Memory')) {
+          assert.ok(result.markdown.includes('(score:'), 'Should include score in markdown for memory results');
+        }
+      }
+    });
+
+    it('sorts files by relevance score descending within primitives', async () => {
+      writeFile(tmpDir, 'context/business-overview.md', '# Business\n\nWe solve enterprise problems with search and discovery tools.');
+      writeFile(tmpDir, 'context/users-personas.md', '# Users\n\nEnterprise admins who need search capabilities.');
+
+      const result = await assembleBriefing('search feature', paths, {
+        primitives: ['Problem', 'User'],
+      });
+
+      // Verify files have relevance scores
+      const filesWithScores = result.context.files.filter(f => f.relevanceScore !== undefined);
+      assert.ok(filesWithScores.length > 0, 'Should have files with relevance scores');
+
+      // Check markdown output: extract relevance scores in order for each primitive section
+      const problemSection = result.markdown.match(/### Problem\n([\s\S]*?)(?=\n###|$)/);
+      if (problemSection) {
+        const scoreMatches = problemSection[0].matchAll(/relevance: ([\d.]+)/g);
+        const scores = Array.from(scoreMatches).map(m => parseFloat(m[1]));
+        if (scores.length > 1) {
+          // Verify scores are in descending order
+          for (let i = 1; i < scores.length; i++) {
+            assert.ok(scores[i - 1] >= scores[i], `Scores should be descending: ${scores[i - 1]} >= ${scores[i]}`);
+          }
+        }
+      }
+    });
+
+    it('includes low confidence note in gaps when confidence is Low', async () => {
+      // Create minimal context to trigger Low confidence
+      const result = await assembleBriefing('very specific obscure task', paths, {
+        primitives: ['Problem', 'User', 'Solution', 'Market', 'Risk'],
+      });
+
+      if (result.confidence === 'Low' && result.context.gaps.length > 0) {
+        assert.ok(result.markdown.includes('Low confidence indicates'), 'Should include note about low confidence');
+      }
+    });
+
+    it('notes when SearchProvider found no relevant content', async () => {
+      // Empty workspace, no files => gaps for all primitives => Low confidence
+      const result = await assembleBriefing('create a new feature', paths, {
+        primitives: ['Problem', 'User'],
+      });
+
+      // Should have gaps and likely Low confidence
+      assert.ok(result.context.gaps.length > 0, 'Should have gaps in empty workspace');
+      if (result.confidence === 'Low') {
+        assert.ok(result.markdown.includes('semantic search found limited relevant content'), 'Should note limited content found');
+      }
+    });
   });
 });
