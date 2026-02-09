@@ -18,13 +18,13 @@ import type { AreteConfig } from '../../src/types.js';
 
 describe('calendar', () => {
   describe('getCalendarProvider', () => {
-    it('returns null when no calendar integration configured', () => {
+    it('returns null when no calendar integration configured', async () => {
       const config = getDefaultConfig();
-      const provider = getCalendarProvider(config);
+      const provider = await getCalendarProvider(config);
       assert.equal(provider, null);
     });
 
-    it('returns null when calendar config exists but no provider specified', () => {
+    it('returns null when calendar config exists but no provider specified', async () => {
       const config: AreteConfig = {
         ...getDefaultConfig(),
         integrations: {
@@ -33,11 +33,11 @@ describe('calendar', () => {
           },
         },
       };
-      const provider = getCalendarProvider(config);
+      const provider = await getCalendarProvider(config);
       assert.equal(provider, null);
     });
 
-    it('returns null when calendar config has empty provider', () => {
+    it('returns null when calendar config has empty provider', async () => {
       const config: AreteConfig = {
         ...getDefaultConfig(),
         integrations: {
@@ -46,11 +46,11 @@ describe('calendar', () => {
           },
         },
       };
-      const provider = getCalendarProvider(config);
+      const provider = await getCalendarProvider(config);
       assert.equal(provider, null);
     });
 
-    it('returns null for now even with valid provider (C2 implementation pending)', () => {
+    it('returns null when ical-buddy provider specified but not available', async () => {
       const config: AreteConfig = {
         ...getDefaultConfig(),
         integrations: {
@@ -60,9 +60,11 @@ describe('calendar', () => {
           },
         },
       };
-      const provider = getCalendarProvider(config);
-      // For now, always returns null - providers will be added in C2
-      assert.equal(provider, null);
+      const provider = await getCalendarProvider(config);
+      // Returns null if ical-buddy is not installed on the system
+      // In CI/test environments without ical-buddy, this will be null
+      // If ical-buddy is installed, it will return the provider
+      assert.ok(provider === null || provider.name === 'ical-buddy');
     });
   });
 

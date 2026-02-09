@@ -56,7 +56,7 @@ export interface CalendarProvider {
  * @param config - Areté configuration
  * @returns CalendarProvider instance or null
  */
-export function getCalendarProvider(config: AreteConfig): CalendarProvider | null {
+export async function getCalendarProvider(config: AreteConfig): Promise<CalendarProvider | null> {
   // Check if calendar integration is configured
   if (!config.integrations.calendar) {
     return null;
@@ -67,7 +67,17 @@ export function getCalendarProvider(config: AreteConfig): CalendarProvider | nul
     return null;
   }
 
-  // For now, always return null - providers will be added in C2
-  // When implemented, check provider type and return appropriate provider instance
+  // Check for ical-buddy provider
+  if (calendarConfig.provider === 'ical-buddy') {
+    const { getProvider } = await import('./calendar-providers/ical-buddy.js');
+    const provider = getProvider();
+    
+    // Only return if available
+    const available = await provider.isAvailable();
+    if (available) {
+      return provider;
+    }
+  }
+
   return null;
 }
