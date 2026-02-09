@@ -20,7 +20,7 @@ arete skill route "<user's exact message>"
 
 # 2. LOAD (MANDATORY)  
 # Read the skill file it returns, e.g.:
-# .cursor/skills/meeting-prep/SKILL.md
+# .agents/skills/meeting-prep/SKILL.md
 
 # 3. EXECUTE (MANDATORY)
 # Follow the skill's complete workflow
@@ -45,7 +45,7 @@ Proceed with normal tools.
 ✅ User: "Help me prep for my meeting with Alex"
 ✅ Agent: [Runs `arete skill route "help me prep for my meeting with alex"`]
 ✅ Agent: [Router returns: meeting-prep]
-✅ Agent: [Reads .cursor/skills/meeting-prep/SKILL.md]
+✅ Agent: [Reads .agents/skills/meeting-prep/SKILL.md]
 ✅ Agent: [Follows the skill's complete workflow]
 ```
 

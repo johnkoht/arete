@@ -6,7 +6,7 @@ Skills are reusable workflows that help you (and your AI) get things done in Are
 
 ## Default skills
 
-Areté ships with default skills for core PM workflows. They live in `.cursor/skills-core/` after install. You can use them as-is or customize them.
+Areté ships with default skills for core PM workflows. They live in `.agents/skills/` after install. You can use them as-is or add your own.
 
 | Area | Examples |
 |------|----------|
@@ -74,7 +74,7 @@ Shows which roles have a custom skill and which use the Areté default.
 
 ## Creating your own skill
 
-1. Create a folder (e.g. `.cursor/skills-local/my-skill/`).
+1. Create a folder (e.g. `.agents/skills/my-skill/`).
 2. Add `SKILL.md` with a standard skill format: name, description, and steps (see [Agent Skills](https://agentskills.io) and [skills.sh docs](https://skills.sh/docs)).
 3. Optionally add `.arete-meta.yaml` with `category: community`, `requires_briefing: true`, and `work_type` / `primitives` so routing and briefing work well.
 

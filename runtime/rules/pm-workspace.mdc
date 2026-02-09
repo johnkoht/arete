@@ -97,7 +97,7 @@ The workspace uses a three-layer memory architecture:
 ✅ User: "Help me prep for my meeting with Alex"
 ✅ Agent: [Runs `arete skill route "help me prep for my meeting with alex"`]
 ✅ Router returns: meeting-prep
-✅ Agent: [Reads .cursor/skills/meeting-prep/SKILL.md]
+✅ Agent: [Reads .agents/skills/meeting-prep/SKILL.md]
 ✅ Agent: [Follows get_meeting_context pattern: resolve attendees, read person files, search meetings, read projects, extract action items, run QMD queries]
 ✅ Agent: [Outputs brief in skill's prescribed format]
 ```
@@ -387,7 +387,7 @@ When working in this PM workspace:
 
 - [ ] **Did I recognize this as a PM action?** (meeting prep, synthesis, planning, discovery, PRD, etc.)
 - [ ] **Did I run the skill router?** (`arete skill route "<message>"`)
-- [ ] **Did I load and read the matched skill file?** (e.g., `.cursor/skills/meeting-prep/SKILL.md`)
+- [ ] **Did I load and read the matched skill file?** (e.g., `.agents/skills/meeting-prep/SKILL.md`)
 - [ ] **Did I follow the skill's complete workflow?** (not ad-hoc Grep/Glob/Read)
 - [ ] **Did I use the patterns the skill specified?** (e.g., get_meeting_context)
 - [ ] **Did I use the intelligence services the skill specified?** (QMD, memory search, entity resolution)

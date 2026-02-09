@@ -6,8 +6,8 @@
 
 **Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc`.
 
-- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `.cursor/build/entries/` and MEMORY.md; PRDs in `.cursor/build/prds/`. Do not run `arete seed test-data` here.
-- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `.cursor/build/`.
+- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here.
+- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
 
 **Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
 
@@ -17,7 +17,7 @@ Areté is a **product builder's operating system** — a Cursor-native workspace
 
 ### Architecture Direction (Active)
 
-Areté is evolving from a skill-centric workspace to a product intelligence platform. See `.cursor/build/prds/product-os/vision.md` for the full vision. Key concepts:
+Areté is evolving from a skill-centric workspace to a product intelligence platform. See `dev/prds/product-os/vision.md` for the full vision. Key concepts:
 
 - **Five product primitives**: Problem, User, Solution, Market, Risk — the knowledge model the intelligence layer reasons about.
 - **Intelligence layer** (Phase 3, implemented): Context injection, memory retrieval, entity resolution, briefing assembly — services in `src/core/` that make any skill or workflow dramatically more effective. CLI: `arete context`, `arete memory search`, `arete resolve`, `arete brief`.
@@ -113,12 +113,11 @@ A **structured workspace** with:
 
 ### Skill management
 
-- **Default skills**: Shipped in `.cursor/skills-core/` (in installed workspaces). User overrides live in `.cursor/skills-local/`; when a skill has the same name in both, the local version wins.
+- **Skills**: All skills live in `.agents/skills/` (last-in-wins; single location). Shipped with the package and copied on `arete install`.
 - **Role defaults** (`skills.defaults` in arete.yaml): Maps a *role* (default skill name, e.g. `create-prd`) to a *preferred skill* (e.g. `netflix-prd`). After the router matches a skill, the command layer applies this mapping and returns the preferred skill’s path (and `resolvedFrom` when a preference was applied). Commands: `arete skill defaults`, `arete skill set-default <skill> --for <role>`, `arete skill unset-default <role>`.
-- **Override / reset / diff**: `arete skill override <name>` copies a default to skills-local for editing; `arete skill reset <name>` removes the override; `arete skill diff <name>` shows changes vs the default.
-- **Install**: `arete skill install <source>` — if source looks like `owner/repo`, runs `npx skills add <source>` (skills.sh); if source is a local path, copies the skill into `.cursor/skills-local/<name>/`. After install, Areté generates a `.arete-meta.yaml` sidecar (category: community, requires_briefing: true, best-guess work_type/primitives) and may prompt to set the skill as default for an overlapping role.
+- **Install**: `arete skill install <source>` — if source looks like `owner/repo`, runs `npx skills add <source>` (skills.sh); if source is a local path, copies the skill into `.agents/skills/<name>/`. After install, Areté generates a `.arete-meta.yaml` sidecar (category: community, requires_briefing: true, best-guess work_type/primitives) and may prompt to set the skill as default for an overlapping role.
 - **Sidecar metadata** (`.arete-meta.yaml`): For third-party skills that lack Areté’s extended frontmatter, the sidecar supplies category, requires_briefing, work_type, primitives, triggers, etc. `getSkillInfo()` in `src/commands/skill.ts` reads the sidecar and merges it into skill info so the router and list get correct metadata. Users can edit the sidecar without touching SKILL.md.
-- **Docs**: `.cursor/skills/README.md` (shipped with the package) describes what skills are, default vs customized vs third-party, and how to override, install, and set role defaults.
+- **Docs**: `.agents/skills/README.md` (shipped in package as `dist/skills/README.md`) describes what skills are and how to install and set role defaults.
 
 ## How the System Operates (Production Flow)
 
@@ -150,7 +149,7 @@ The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions
 
 3. **Load the skill**  
    Agent **reads** the skill file:  
-   `.cursor/skills/meeting-prep/SKILL.md` (or `.cursor/skills-core/meeting-prep/SKILL.md` in an installed workspace).  
+   `.agents/skills/meeting-prep/SKILL.md`.  
    That file is now in context. It contains: Agent Instructions, When to Use, **Get Meeting Context** pattern (steps 1–6), Workflow (Identify meeting → Gather context → Build brief → Close), and output format.
 
 4. **Execute the workflow**  
@@ -180,7 +179,7 @@ The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions
    - If no match: use the table ("Process my notes/feedback" → synthesize; "I need to understand a problem" → discovery) or ask for clarification.  
 
 3. **Load the skill**  
-   If the agent chose **synthesize**: read `.cursor/skills/synthesize/SKILL.md`. It specifies: inventory project `inputs/`, use QMD to search inputs, read and extract, pattern recognition, create synthesis document.
+   If the agent chose **synthesize**: read `.agents/skills/synthesize/SKILL.md`. It specifies: inventory project `inputs/`, use QMD to search inputs, read and extract, pattern recognition, create synthesis document.
 
 4. **Execute**  
    - Determine project: if user said "this data", check for an active project or attached file. Synthesize skill expects work inside a project’s `inputs/`. If there’s no project, agent may create one or ask which project.  
@@ -234,7 +233,7 @@ arete/
 ### Key Concepts
 
 **Build System vs Product:**
-- `.cursor/build/` = Internal tooling for developing Areté (NEVER shipped)
+- `dev/` = Internal tooling for developing Areté (NEVER shipped; was `.cursor/build/`)
 - Everything else = Product shipped to users via npm
 
 **Memory Layers:**
@@ -313,7 +312,7 @@ findWorkspaceRoot(startDir: string): string | null
 
 ### 4. Skills System
 
-**Location**: `.cursor/skills/{name}/SKILL.md`
+**Location**: `.agents/skills/{name}/SKILL.md`
 
 **Format**: Agent Skills standard (https://agentskills.io)
 
@@ -384,19 +383,19 @@ slugifyPersonName(name): string
 
 **Types**: All intelligence types in `src/types.ts`: `ProductPrimitive`, `ContextBundle`, `MemoryResult`, `ResolvedEntity`, `ExtendedSkillCandidate`, etc.
 
-**Adapter Pattern**: Before community/third-party skills (or any with `requires_briefing: true`), the agent runs `arete brief` to assemble context. After skill execution, outputs feed back into the workspace. See `.cursor/build/prds/product-os/skill-interface.md` for the full contract.
+**Adapter Pattern**: Before community/third-party skills (or any with `requires_briefing: true`), the agent runs `arete brief` to assemble context. After skill execution, outputs feed back into the workspace. See `dev/prds/product-os/skill-interface.md` for the full contract.
 
 ### 8. Build/Development System
 
-**Location**: `.cursor/build/` (NEVER shipped to users)
+**Location**: `dev/` (NEVER shipped to users)
 
-**Autonomous Loop**: `.cursor/build/autonomous/`
+**Autonomous Loop**: `dev/autonomous/`
 - Converts PRDs to JSON task lists
 - Spawns Task subagents per task
 - Runs tests, commits on success
 - Used ONLY for developing Areté itself
 
-**Build Memory**: `.cursor/build/MEMORY.md` and `entries/`
+**Build Memory**: `dev/MEMORY.md` and `dev/entries/`
 - Documents architectural changes
 - Tracks tooling decisions
 - Used by Areté maintainers
@@ -614,7 +613,7 @@ Every prompt includes:
 #### execute-prd Skill Workflow
 
 **Phase 0: Understand**
-1. Read PRD (`.cursor/build/prds/{feature-name}/prd.md`)
+1. Read PRD (`dev/prds/{feature-name}/prd.md`)
 2. Check `prd.json` for completed tasks
 3. Map task dependencies (which tasks must complete before others)
 
@@ -636,8 +635,8 @@ Every prompt includes:
 **Phase 3: Post-Mortem**
 1. Analyze: Which risks materialized? Which mitigations worked?
 2. Extract learnings: Collaboration patterns, system improvements, prompt templates
-3. Update build memory: Create entry in `.cursor/build/entries/YYYY-MM-DD_{feature-name}-learnings.md`
-4. Add line to `.cursor/build/MEMORY.md`
+3. Update build memory: Create entry in `dev/entries/YYYY-MM-DD_{feature-name}-learnings.md`
+4. Add line to `dev/MEMORY.md`
 
 #### Metrics from First Execution
 
@@ -661,18 +660,18 @@ Every prompt includes:
 #### References
 
 **Skills**:
-- `.cursor/build/skills/execute-prd/SKILL.md` — Full orchestration workflow
-- `.cursor/agents/prd-task.md` — Subagent instructions (for Task tool)
+- `dev/skills/execute-prd/SKILL.md` — Full orchestration workflow
+- `dev/agents/prd-task.md` — Subagent instructions (for Task tool)
 
 **Memory**:
-- `.cursor/build/entries/2026-02-09_builder-orchestration-learnings.md` — Detailed post-mortem from first execution
-- `.cursor/build/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md` — Formalization of patterns
+- `dev/entries/2026-02-09_builder-orchestration-learnings.md` — Detailed post-mortem from first execution
+- `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md` — Formalization of patterns
 
 **Templates**:
-- `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md` — Standalone pre-mortem template for ad-hoc use
+- `dev/templates/PRE-MORTEM-TEMPLATE.md` — Standalone pre-mortem template for ad-hoc use
 
 **See also**:
-- Build/Development System (§8) for context on `.cursor/build/` structure
+- Build/Development System (§8) for context on `dev/` structure
 - Testing Guide (`.cursor/rules/testing.mdc`) for test requirements referenced in verification
 
 ## Technology Stack
@@ -720,7 +719,7 @@ When building Areté features:
 
 1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
 2. **Read this file first** for architecture understanding
-3. **Check build memory** (`.cursor/build/MEMORY.md`) for recent changes
+3. **Check build memory** (`dev/MEMORY.md`) for recent changes
 4. **Follow patterns** established in existing code
 5. **Write tests** for all new functionality
 6. **Update AGENTS.md** with new patterns or gotchas discovered
@@ -730,10 +729,10 @@ When building Areté features:
 
 ### Adding a PRD for Areté Features
 
-1. Create `.cursor/build/prds/{feature-name}/` directory
+1. Create `dev/prds/{feature-name}/` directory
 2. Add `prd.md` (full PRD) and `README.md` (summary)
 3. Do **not** put Areté feature PRDs in `projects/active/` — that is for PMs *using* Areté
-4. Use prd-to-json skill with `.cursor/build/prds/{feature-name}/prd.md`
+4. Use prd-to-json skill with `dev/prds/{feature-name}/prd.md`
 
 ### Adding a New Integration
 
@@ -748,7 +747,7 @@ When building Areté features:
 
 ### Adding a New Skill
 
-1. Create `.cursor/skills/{name}/SKILL.md`
+1. Create `runtime/skills/{name}/SKILL.md` (in repo; shipped as dist/skills)
 2. Follow Agent Skills format (name, description, workflow)
 3. Include "When to Use" section
 4. Provide clear step-by-step workflow
@@ -790,7 +789,7 @@ For local testing, `arete seed test-data` copies fixture data (meetings, people,
 
 ## Additional Resources
 
-- **Build Memory**: `.cursor/build/MEMORY.md` - Recent changes and decisions
+- **Build Memory**: `dev/MEMORY.md` - Recent changes and decisions
 - **Testing Guide**: `.cursor/rules/testing.mdc` - How to write tests
 - **Dev Practices**: `.cursor/rules/dev.mdc` - Coding standards
 - **README**: `README.md` - User-facing documentation

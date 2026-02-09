@@ -2,9 +2,11 @@
 
 Index of significant changes to **Arete’s build, tooling, and architecture**. Detail lives in dated entries; this file is the index.
 
+> **Note**: Paths in entries before 2026-02-09 reference pre-reorganization structure (`.cursor/build/` = now `dev/`).
+
 - **USER.md** (gitignored): User-specific context — copy from `USER.md.example`.
-- **Entries**: `.cursor/build/entries/YYYY-MM-DD_short-title.md` — one file per change or decision. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
-- **Collaboration**: `.cursor/build/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Injected into new build conversations for immediate context.
+- **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change or decision. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Injected into new build conversations for immediate context.
 
 ## Conventions
 
@@ -16,6 +18,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-09 [Repo reorganization](entries/2026-02-09_repo-reorganization.md) — runtime/ and dev/; single .agents/skills/; dropped override/reset/diff; copy-runtime build; getSourcePaths() dev vs compiled.
 - 2026-02-09 [Skill install GitHub URL fix](entries/2026-02-09_skill-install-github-url-fix.md) — Fixed skill install to parse GitHub URLs (https://github.com/owner/repo); made `skill add` alias for `install` with `--skill` support; parseSkillSource() helper; 11 new tests.
 - 2026-02-09: Builder Orchestration Learnings — orchestrator + subagent pattern for autonomous PRD execution; 12/12 tasks first-attempt, zero iterations → entries/2026-02-09_builder-orchestration-learnings.md
 - 2026-02-09: Intelligence & Calendar — search providers, calendar integration → entries/2026-02-09_intelligence-and-calendar.md
