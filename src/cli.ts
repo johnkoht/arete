@@ -30,6 +30,7 @@ import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
 import { seedTestDataCommand } from './commands/seed-test-data.js';
 import { pullCommand } from './commands/pull.js';
+import { pullCalendar } from './commands/pull-calendar.js';
 import { meetingAddCommand } from './commands/meeting.js';
 import {
   peopleListCommand,
@@ -100,10 +101,16 @@ program
 
 program
   .command('pull [integration]')
-  .description('Fetch latest data from integrations')
+  .description('Fetch latest data from integrations or calendar')
   .option('--days <n>', 'Number of days to fetch', '7')
+  .option('--today', 'Fetch only today\'s events (calendar only)')
   .option('--json', 'Output as JSON')
-  .action(pullCommand);
+  .action((integration, opts) => {
+    if (integration === 'calendar') {
+      return pullCalendar({ today: opts.today, json: opts.json });
+    }
+    return pullCommand(integration, opts);
+  });
 
 // Skill Management
 const skillCmd = program
