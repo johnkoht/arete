@@ -22,7 +22,13 @@ export interface AreteConfig {
     defaults?: Record<string, string | null>;
   };
   tools: string[];
-  integrations: Record<string, unknown>;
+  integrations: Record<string, unknown> & {
+    /** Calendar integration configuration */
+    calendar?: {
+      provider: string;
+      calendars?: string[];
+    };
+  };
   settings: {
     memory: {
       decisions: {
