@@ -2,8 +2,8 @@
  * Memory Retrieval Service — Intelligence Layer (Phase 3)
  *
  * Search across .arete/memory/ to surface relevant decisions, learnings, and
- * observations for a given task. Uses token-based keyword matching for v1;
- * delegates to QMD if available in the future.
+ * observations for a given task. Uses SearchProvider (QMD when available,
+ * token-based fallback otherwise) with recency weighting.
  *
  * Memory files are structured as markdown with ### headings per item:
  *   ### YYYY-MM-DD: Title
@@ -13,6 +13,8 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { getSearchProvider, tokenize } from './search.js';
+import type { SearchResult } from './search.js';
 import type {
   WorkspacePaths,
   MemoryItemType,
@@ -33,22 +35,45 @@ const MEMORY_FILES: Record<MemoryItemType, string> = {
   observations: 'agent-observations.md',
 };
 
+// Recency boost thresholds (in days)
+const RECENCY_30_DAYS = 30;
+const RECENCY_90_DAYS = 90;
+const RECENCY_30_BOOST = 0.2; // +20%
+const RECENCY_90_BOOST = 0.1; // +10%
+
 // ---------------------------------------------------------------------------
-// Tokenizer
+// Recency Weighting
 // ---------------------------------------------------------------------------
 
-const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'for', 'with', 'my', 'me', 'i', 'to', 'and', 'or', 'is', 'it',
-  'in', 'on', 'at', 'of', 'this', 'that', 'what', 'how', 'can', 'you', 'please',
-  'want', 'need', 'create', 'build', 'start', 'run', 'do', 'help',
-]);
+/**
+ * Calculate recency boost for a memory item based on its date.
+ * Items within 30 days get +20% boost, within 90 days get +10% boost.
+ */
+function calculateRecencyBoost(dateStr?: string): number {
+  if (!dateStr) return 0;
+  
+  try {
+    const itemDate = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - itemDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 0; // Future date, no boost
+    if (diffDays <= RECENCY_30_DAYS) return RECENCY_30_BOOST;
+    if (diffDays <= RECENCY_90_DAYS) return RECENCY_90_BOOST;
+    return 0;
+  } catch {
+    return 0;
+  }
+}
 
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(t => t.length > 1 && !STOP_WORDS.has(t));
+/**
+ * Apply recency boost to a score (multiplicative).
+ * Note: Boosted scores may exceed 1.0, which is fine for ranking purposes.
+ */
+function applyRecencyBoost(score: number, dateStr?: string): number {
+  const boost = calculateRecencyBoost(dateStr);
+  return score * (1 + boost);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,22 +192,74 @@ function buildRelevance(section: MemorySection, queryTokens: string[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// SearchProvider Result Mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine memory type from file path.
+ */
+function getMemoryTypeFromPath(filePath: string): MemoryItemType | null {
+  const fileName = filePath.split(/[/\\]/).pop() || '';
+  if (fileName === 'decisions.md') return 'decisions';
+  if (fileName === 'learnings.md') return 'learnings';
+  if (fileName === 'agent-observations.md') return 'observations';
+  return null;
+}
+
+/**
+ * Map SearchProvider results to MemoryResult[].
+ * Parses sections from each file and creates individual MemoryResult items.
+ */
+function mapSearchResultsToMemory(searchResults: SearchResult[]): MemoryResult[] {
+  const memoryResults: MemoryResult[] = [];
+  
+  for (const sr of searchResults) {
+    const memType = getMemoryTypeFromPath(sr.path);
+    if (!memType) continue;
+    
+    const sections = parseMemorySections(sr.content);
+    const fileName = sr.path.split(/[/\\]/).pop() || '';
+    
+    // Each section becomes a MemoryResult
+    for (const section of sections) {
+      const baseScore = sr.score;
+      const boostedScore = applyRecencyBoost(baseScore, section.date);
+      
+      memoryResults.push({
+        content: section.raw,
+        source: fileName,
+        type: memType,
+        date: section.date,
+        relevance: `Semantic match (score: ${sr.score.toFixed(2)})`,
+        score: boostedScore,
+      });
+    }
+  }
+  
+  return memoryResults;
+}
+
+// ---------------------------------------------------------------------------
 // Main function
 // ---------------------------------------------------------------------------
 
 /**
  * Search workspace memory for items matching a query.
+ * 
+ * Uses SearchProvider (QMD when available, token-based fallback otherwise)
+ * for semantic search across memory items. Applies recency weighting.
+ * Falls back to section-level token scanning if provider returns no results.
  *
  * @param query - Search query (free-form text)
  * @param paths - Workspace paths
  * @param options - Optionally filter by memory type and limit results
  * @returns MemorySearchResult with matched items
  */
-export function searchMemory(
+export async function searchMemory(
   query: string,
   paths: WorkspacePaths,
   options: MemorySearchOptions = {}
-): MemorySearchResult {
+): Promise<MemorySearchResult> {
   const { types, limit = DEFAULT_LIMIT } = options;
   const queryTokens = tokenize(query);
 
@@ -195,52 +272,99 @@ export function searchMemory(
     ? types
     : ['decisions', 'learnings', 'observations'];
 
-  const allResults: (MemoryResult & { _score: number })[] = [];
-
+  // Build list of memory file paths to search (relative to workspace root)
+  const memoryFileRelPaths: string[] = [];
   for (const memType of typesToSearch) {
     const fileName = MEMORY_FILES[memType];
     if (!fileName) continue;
-
     const filePath = join(memoryItemsDir, fileName);
-    if (!existsSync(filePath)) continue;
-
-    let content: string;
-    try {
-      content = readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
+    if (existsSync(filePath)) {
+      // Convert to relative path from workspace root for SearchProvider
+      const relPath = join('.arete', 'memory', 'items', fileName);
+      memoryFileRelPaths.push(relPath);
     }
+  }
 
-    const sections = parseMemorySections(content);
+  if (memoryFileRelPaths.length === 0) {
+    return { query, results: [], total: 0 };
+  }
 
-    for (const section of sections) {
-      const score = scoreSection(section, queryTokens);
-      if (score > 0) {
-        allResults.push({
-          content: section.raw,
-          source: fileName,
-          type: memType,
-          date: section.date,
-          relevance: buildRelevance(section, queryTokens),
-          _score: score,
-        });
+  // Primary search path: use SearchProvider
+  let allResults: MemoryResult[] = [];
+  
+  try {
+    const provider = getSearchProvider(paths.root);
+    const searchResults = await provider.semanticSearch(query, {
+      paths: memoryFileRelPaths,
+      limit: limit * 3, // Get more results to have enough after section parsing
+    });
+
+    if (searchResults.length > 0) {
+      allResults = mapSearchResultsToMemory(searchResults);
+    }
+  } catch {
+    // Provider error, fall through to fallback
+  }
+
+  // Fallback: use token-based section scanning
+  if (allResults.length === 0) {
+    const fallbackResults: (MemoryResult & { _rawScore: number })[] = [];
+
+    for (const memType of typesToSearch) {
+      const fileName = MEMORY_FILES[memType];
+      if (!fileName) continue;
+
+      const filePath = join(memoryItemsDir, fileName);
+      if (!existsSync(filePath)) continue;
+
+      let content: string;
+      try {
+        content = readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      const sections = parseMemorySections(content);
+
+      for (const section of sections) {
+        const rawScore = scoreSection(section, queryTokens);
+        if (rawScore > 0) {
+          fallbackResults.push({
+            content: section.raw,
+            source: fileName,
+            type: memType,
+            date: section.date,
+            relevance: buildRelevance(section, queryTokens),
+            _rawScore: rawScore,
+          });
+        }
       }
     }
+
+    // Normalize fallback scores to 0-1 range and apply recency boost
+    const maxRaw = fallbackResults.length > 0 ? Math.max(...fallbackResults.map(r => r._rawScore)) : 1;
+    allResults = fallbackResults.map(({ _rawScore, ...rest }) => {
+      const normalizedScore = maxRaw > 0 ? _rawScore / maxRaw : 0;
+      const boostedScore = applyRecencyBoost(normalizedScore, rest.date);
+      return {
+        ...rest,
+        score: boostedScore,
+      };
+    });
   }
 
   // Sort by score descending, then by date descending
   allResults.sort((a, b) => {
-    if (b._score !== a._score) return b._score - a._score;
+    const scoreA = a.score ?? 0;
+    const scoreB = b.score ?? 0;
+    if (scoreB !== scoreA) return scoreB - scoreA;
     const dateA = a.date || '';
     const dateB = b.date || '';
     return dateB.localeCompare(dateA);
   });
 
   const total = allResults.length;
-  const limited = allResults.slice(0, limit);
-
-  // Strip internal _score from results
-  const results: MemoryResult[] = limited.map(({ _score, ...rest }) => rest);
+  const results = allResults.slice(0, limit);
 
   return { query, results, total };
 }

@@ -214,6 +214,7 @@ export interface MemoryResult {
   type: MemoryItemType;
   date?: string;
   relevance: string;
+  score?: number;
 }
 
 /** Memory search results */
