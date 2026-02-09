@@ -114,6 +114,7 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   const config = loadConfig(workspaceRoot);
   
   // Gather status info
+  const skillsList = getSkillsList(paths.agentSkills);
   const status = {
     workspace: {
       path: workspaceRoot,
@@ -122,10 +123,8 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
       created: config.created || 'unknown'
     },
     skills: {
-      core: getSkillsList(paths.skillsCore),
-      local: getSkillsList(paths.skillsLocal),
-      merged: getSkillsList(paths.skills),
-      overrides: [] as string[]
+      list: skillsList,
+      count: skillsList.length
     },
     integrations: getIntegrationStatus(join(paths.integrations, 'configs')),
     directories: {
@@ -137,11 +136,6 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
     },
     contextStale: getStaleContextFiles(paths.context)
   };
-  
-  // Check for overrides
-  status.skills.overrides = status.skills.local.filter(s => 
-    status.skills.core.includes(s)
-  );
   
   // JSON output
   if (json) {
@@ -162,30 +156,12 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   
   // Skills
   section('Skills');
-  
-  const coreCount = status.skills.core.length;
-  const localCount = status.skills.local.length;
-  const overrideCount = status.skills.overrides.length;
-  
-  listItem('Core skills', coreCount.toString());
-  if (localCount > 0) {
-    listItem('Local skills', localCount.toString());
-  }
-  if (overrideCount > 0) {
-    listItem('Overrides', status.skills.overrides.join(', '));
-  }
-  
-  if (coreCount > 0) {
+  listItem('Skills', status.skills.count.toString());
+  if (status.skills.count > 0) {
     console.log('');
     console.log(chalk.dim('  Available skills:'));
-    const allSkills = [...new Set([...status.skills.core, ...status.skills.local])].sort();
-    for (const skill of allSkills) {
-      const isOverride = status.skills.overrides.includes(skill);
-      const isLocal = status.skills.local.includes(skill) && !status.skills.core.includes(skill);
-      let badge = '';
-      if (isOverride) badge = chalk.yellow(' (override)');
-      else if (isLocal) badge = chalk.green(' (local)');
-      console.log(`    ${chalk.dim('•')} ${skill}${badge}`);
+    for (const skill of status.skills.list.sort()) {
+      console.log(`    ${chalk.dim('•')} ${skill}`);
     }
   }
   

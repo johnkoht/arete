@@ -149,25 +149,25 @@ export async function installCommand(directory: string | undefined, options: Ins
     }
   }
   
-  // Get source paths
+  // Get source paths (runtime/ in dev, dist/ when compiled)
   const sourcePaths = sourceInfo.path ? {
-    skills: join(sourceInfo.path, '.cursor', 'skills'),
-    tools: join(sourceInfo.path, '.cursor', 'tools'),
-    rules: join(sourceInfo.path, '.cursor', 'rules'),
-    integrations: join(sourceInfo.path, '.cursor', 'integrations'),
-    templates: join(sourceInfo.path, 'templates')
+    skills: join(sourceInfo.path, 'runtime', 'skills'),
+    tools: join(sourceInfo.path, 'runtime', 'tools'),
+    rules: join(sourceInfo.path, 'runtime', 'rules'),
+    integrations: join(sourceInfo.path, 'runtime', 'integrations'),
+    templates: join(sourceInfo.path, 'runtime', 'templates')
   } : getSourcePaths();
   
   const workspacePaths = getWorkspacePaths(targetDir);
   const useSymlinks = sourceInfo.type === 'symlink';
   
-  // Copy/symlink skills to skills-core
+  // Copy/symlink skills to .agents/skills
   if (!json) info(`${useSymlinks ? 'Linking' : 'Copying'} skills...`);
   
   if (existsSync(sourcePaths.skills)) {
     const skillsCopied = copyDirectoryContents(
       sourcePaths.skills, 
-      workspacePaths.skillsCore,
+      workspacePaths.agentSkills,
       { symlink: useSymlinks }
     );
     results.skills = skillsCopied.map(p => basename(p));

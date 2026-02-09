@@ -61,9 +61,8 @@ export interface WorkspacePaths {
   manifest: string;
   cursor: string;
   rules: string;
-  skills: string;
-  skillsCore: string;
-  skillsLocal: string;
+  /** Single skills location: .agents/skills (last-in-wins) */
+  agentSkills: string;
   tools: string;
   integrations: string;
   context: string;

@@ -139,25 +139,6 @@ skillCmd
   .action((name, opts) => skillCommand('remove', { name, ...opts }));
 
 skillCmd
-  .command('override <name>')
-  .description('Copy skill to skills-local for customization')
-  .option('--json', 'Output as JSON')
-  .action((name, opts) => skillCommand('override', { name, ...opts }));
-
-skillCmd
-  .command('reset <name>')
-  .description('Remove your override and restore the default skill')
-  .option('--json', 'Output as JSON')
-  .option('--yes', 'Skip confirmation')
-  .action((name, opts) => skillCommand('reset', { name, ...opts }));
-
-skillCmd
-  .command('diff <name>')
-  .description('Show what you changed vs the default skill')
-  .option('--json', 'Output as JSON')
-  .action((name, opts) => skillCommand('diff', { name, ...opts }));
-
-skillCmd
   .command('install <source>')
   .description('Install a skill from skills.sh (owner/repo) or local path')
   .option('--skill <name>', 'For multi-skill repos: specify which skill to install')

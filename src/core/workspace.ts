@@ -3,7 +3,7 @@
  */
 
 import { existsSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import type { WorkspacePaths, SourceType, SourcePaths } from '../types.js';
 
@@ -56,9 +56,7 @@ export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
     manifest: join(workspaceRoot, 'arete.yaml'),
     cursor: join(workspaceRoot, '.cursor'),
     rules: join(workspaceRoot, '.cursor', 'rules'),
-    skills: join(workspaceRoot, '.cursor', 'skills'),
-    skillsCore: join(workspaceRoot, '.cursor', 'skills-core'),
-    skillsLocal: join(workspaceRoot, '.cursor', 'skills-local'),
+    agentSkills: join(workspaceRoot, '.agents', 'skills'),
     tools: join(workspaceRoot, '.cursor', 'tools'),
     integrations: join(workspaceRoot, '.cursor', 'integrations'),
     context: join(workspaceRoot, 'context'),
@@ -74,18 +72,22 @@ export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
 }
 
 /**
- * Get source paths from CLI package
+ * Get source paths from CLI package.
+ * When running from src/ (tsx dev), use runtime/. When running from dist/ (compiled), use dist/.
  */
 export function getSourcePaths(): SourcePaths {
   const packageRoot = getPackageRoot();
-  
+  const __filenameForResolve = fileURLToPath(import.meta.url);
+  const runningFromSrc = __filenameForResolve.includes(sep + 'src' + sep);
+  const base = runningFromSrc ? join(packageRoot, 'runtime') : join(packageRoot, 'dist');
+
   return {
     root: packageRoot,
-    skills: join(packageRoot, '.cursor', 'skills'),
-    tools: join(packageRoot, '.cursor', 'tools'),
-    rules: join(packageRoot, '.cursor', 'rules'),
-    integrations: join(packageRoot, '.cursor', 'integrations'),
-    templates: join(packageRoot, 'templates')
+    skills: join(base, 'skills'),
+    tools: join(base, 'tools'),
+    rules: join(base, 'rules'),
+    integrations: join(base, 'integrations'),
+    templates: join(base, 'templates')
   };
 }
 

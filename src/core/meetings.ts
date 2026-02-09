@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import type { WorkspacePaths } from '../types.js';
-import { getPackageRoot } from './workspace.js';
+import { getSourcePaths } from './workspace.js';
 
 /** Normalized meeting shape for saving to markdown (shared across integrations) */
 export interface MeetingForSave {
@@ -68,8 +68,8 @@ function getTemplatePath(paths: { templates: string } | null): string {
     const workspaceTemplate = join(paths.templates, templateRel);
     if (existsSync(workspaceTemplate)) return workspaceTemplate;
   }
-  const packageRoot = getPackageRoot();
-  return join(packageRoot, 'templates', templateRel);
+  const sourcePaths = getSourcePaths();
+  return join(sourcePaths.templates, templateRel);
 }
 
 /**

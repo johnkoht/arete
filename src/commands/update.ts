@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, rmSync, cpSync, symlinkSync } from 'fs';
 import { join, basename } from 'path';
 import chalk from 'chalk';
-import { findWorkspaceRoot, getWorkspacePaths, parseSourceType } from '../core/workspace.js';
+import { findWorkspaceRoot, getWorkspacePaths, getSourcePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
 import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure } from '../core/workspace-structure.js';
 import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
@@ -108,14 +108,16 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
   
-  // Get source paths
-  const sourcePaths = {
-    skills: join(sourceInfo.path || process.cwd(), '.cursor', 'skills'),
-    rules: join(sourceInfo.path || process.cwd(), '.cursor', 'rules'),
-    tools: join(sourceInfo.path || process.cwd(), '.cursor', 'tools')
-  };
+  // Get source paths (runtime/ in dev/symlink, dist/ when compiled)
+  const sourcePaths = sourceInfo.path
+    ? {
+        skills: join(sourceInfo.path, 'runtime', 'skills'),
+        rules: join(sourceInfo.path, 'runtime', 'rules'),
+        tools: join(sourceInfo.path, 'runtime', 'tools')
+      }
+    : getSourcePaths();
   
-  // Check what would be updated
+  // Preserved skills (no longer used; kept for backward compat in config)
   const localOverrides = config.skills?.overrides || [];
   
   if (!json) {
@@ -148,7 +150,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   // Check skills
   if (existsSync(sourcePaths.skills)) {
     const srcSkills = getDirContents(sourcePaths.skills);
-    const destSkills = getDirContents(paths.skillsCore);
+    const destSkills = getDirContents(paths.agentSkills);
     
     for (const skill of srcSkills) {
       if (localOverrides.includes(skill)) {
@@ -234,8 +236,8 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     info('Applying updates...');
   }
   
-  // Update skills-core
-  const skillsResult = syncDirectory(sourcePaths.skills, paths.skillsCore, {
+  // Update .agents/skills
+  const skillsResult = syncDirectory(sourcePaths.skills, paths.agentSkills, {
     symlink: useSymlinks,
     preserve: localOverrides
   });

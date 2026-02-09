@@ -39,9 +39,8 @@ export const WORKSPACE_DIRS = [
   'templates/plans',
   '.cursor',
   '.cursor/rules',
-  '.cursor/skills',
-  '.cursor/skills-core',
-  '.cursor/skills-local',
+  '.agents',
+  '.agents/skills',
   '.cursor/tools',
   '.cursor/integrations',
   '.cursor/integrations/configs',
@@ -953,7 +952,7 @@ fathom:
 `,
   '.gitignore': `# Areté gitignore additions
 .credentials/credentials.yaml
-.cursor/skills-core/
+.agents/
 `,
   '.arete/activity/activity-log.md': `# Activity Log
 
