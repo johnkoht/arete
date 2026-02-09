@@ -3,7 +3,9 @@
  * Supports keyword and semantic search with swappable backends (QMD, token-based fallback).
  */
 
+import { spawnSync } from 'child_process';
 import { getSearchProvider as getFallbackProvider } from './search-providers/fallback.js';
+import { getSearchProvider as getQmdProvider } from './search-providers/qmd.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,9 +63,16 @@ export function tokenize(text: string): string[] {
  * Return the best available search provider.
  * Checks QMD first (when available), falls back to token-based provider.
  *
- * @param _workspaceRoot - Workspace root path (used by providers that need it)
+ * @param workspaceRoot - Workspace root path (used by providers that need it)
  */
-export function getSearchProvider(_workspaceRoot: string): SearchProvider {
-  // QMD provider will be checked first in task A3; for now return fallback
-  return getFallbackProvider(_workspaceRoot);
+export function getSearchProvider(workspaceRoot: string): SearchProvider {
+  try {
+    const r = spawnSync('which', ['qmd'], { encoding: 'utf8' });
+    if (r.status === 0 && (r.stdout?.trim()?.length ?? 0) > 0) {
+      return getQmdProvider(workspaceRoot);
+    }
+  } catch {
+    // ignore
+  }
+  return getFallbackProvider(workspaceRoot);
 }
