@@ -34,6 +34,10 @@
 - Asks for learnings and observations to be captured. Values institutional memory about collaboration, not just about code.
 - Wants backlog items captured in scratchpad rather than lost. Uses `now/scratchpad.md` as a parking lot for future work.
 - Prefers a single PRD covering related work (e.g. intelligence + calendar together) rather than separate PRDs — keeps the execution scope coherent.
+- **Review workflow**: After reviewing completed work (PRD tasks, subagent deliverables, features), distinguish between:
+  - **PRD-level changes** (significant functionality changes, missing acceptance criteria) → update the PRD
+  - **Enhancement-level items** (performance optimizations, nice-to-haves, minor improvements) → add to scratchpad
+  - When minor observations emerge during a review, proactively add them to scratchpad or offer: "Should I add these enhancements to the scratchpad?"
 
 ---
 

@@ -47,15 +47,29 @@
 
 **Takeaway**: Trust TypeScript's type system to guide subagents. They catch errors and propagate changes correctly.
 
+### 6. Autonomous Execution Requires Explicit Permission
+**Problem**: Initial orchestration required babysitting (permission prompts for `prd.json`, `progress.txt` writes, git commits).
+- User expected "start and walk away" autonomy
+- Agent was being cautious, asking permission for file operations
+- Defeated the purpose of "autonomous" execution
+
+**Solution**: Added explicit "Autonomous Execution Rules" sections to:
+- `.cursor/build/autonomous/skills/execute-prd/SKILL.md`
+- `.cursor/agents/prd-task.md`
+- Instructions: "DO NOT ask for permission to write files, make commits, or proceed"
+
+**Takeaway**: Agent needs explicit permission to NOT ask for permission. Counter-intuitive but critical for true autonomy.
+
 ---
 
 ## Collaboration Patterns Observed
 
 ### Builder Preferences (from this session)
-1. **Autonomous execution preferred**: "Please proceed and run autonomously"
+1. **Truly autonomous execution**: "Please proceed and run autonomously" — expects "start and take a nap" level autonomy, not babysitting
 2. **Trust but verify**: Wanted code review + test verification between tasks
 3. **Learnings captured**: "Please provide learnings and update builder memories"
 4. **Post-mortem analysis**: Requested comprehensive analysis at end
+5. **Friction identification**: Proactively reports UX issues ("Why do I need to babysit?") and expects fixes
 
 ### Agent Behaviors That Worked
 1. **Proactive problem-solving**: When prd-task enum failed, switched to generalPurpose without asking
@@ -114,22 +128,29 @@ After each subagent completes:
 
 ---
 
-## System Improvements Needed
+## System Improvements
 
-### 1. Implement `prd-task` Subagent Type
+### ✅ Fixed: Autonomous Execution
+- **Problem**: Required babysitting (permission prompts for files/commits)
+- **Solution**: Added explicit "Autonomous Execution Rules" to execute-prd and prd-task
+- **Status**: Complete — now truly autonomous
+
+### Still Needed
+
+#### 1. Implement `prd-task` Subagent Type
 - Currently documented but not available in Task tool enum
 - Would reduce prompt boilerplate (knows to run tests, commit, update prd.json)
 
-### 2. Automated Code Review
+#### 2. Automated Code Review
 - Run checks before human review: pattern compliance, test coverage, error handling
 - Report: "✅ Patterns followed, ⚠️ Missing error handling in line 45"
 
-### 3. Parallel Task Execution (Cautiously)
+#### 3. Parallel Task Execution (Cautiously)
 - Some tasks are truly independent (C1 + C2 in this PRD)
 - Risk: Integration issues if patterns diverge
 - Only enable for explicitly marked "independent" tasks
 
-### 4. Progress Dashboard
+#### 4. Progress Dashboard
 - Real-time: "Task 7/12 complete, 314/314 tests passing, 7 commits"
 - CLI: `arete prd status` to check long-running PRDs
 

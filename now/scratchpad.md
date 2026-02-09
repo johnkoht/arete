@@ -38,9 +38,11 @@
 ### Orchestration System - This Week
 *(From Feb 9 post-mortem of intelligence-and-calendar PRD)*
 
+- ✅ **Fixed autonomous execution** — Added explicit "Autonomous Execution Rules" to execute-prd skill and prd-task subagent. System now runs without babysitting (no permission prompts for file writes/commits).
+
 - **Update AGENTS.md with Orchestration Pattern** — Add section "11. Autonomous PRD Execution" after section 10 (Calendar System). Content: Overview of execute-prd skill, orchestrator + subagent pattern, when to use vs manual development, link to builder-orchestration-learnings.md. Should be ~50-100 lines documenting the pattern we just proved works.
 
-- **Validate execute-prd skill on second PRD** — Test the orchestration system on a different feature PRD (smaller, 2-5 tasks) to validate the pattern holds. Look for: Does pre-mortem catch different risks? Do mitigations from last session apply? Does agent follow the workflow without drift? Document any refinements needed to the skill.
+- **Validate execute-prd skill on second PRD** — Test the orchestration system on a different feature PRD (smaller, 2-5 tasks) to validate the pattern holds. Look for: Does pre-mortem catch different risks? Do mitigations from last session apply? Does agent follow the workflow without drift? Does it run truly autonomously? Document any refinements needed to the skill.
 
 - **Finalize dev.mdc update** — Either use the dev.mdc.new file I created (mv command) or manually paste the pre-mortem section. Verify it appears in Cursor's rules when building Areté. Test that agents reference it when starting complex work.
 

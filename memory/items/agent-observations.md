@@ -41,6 +41,8 @@
 
 <!-- How you prefer to organize work, capture information, communicate -->
 
+- [2026-02-09] During review workflows, explicitly instructed to distinguish between PRD-level changes (significant) and enhancement-level items (minor observations) → PRD updates vs scratchpad additions. Expects agent to proactively add minor enhancements to scratchpad after reviews or ask if uncertain.
+
 ---
 
 <!-- 

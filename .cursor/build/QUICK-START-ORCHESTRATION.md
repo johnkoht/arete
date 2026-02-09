@@ -32,8 +32,10 @@ Let's start with Phase 0 and the pre-mortem.
 1. **Load context** (execute-prd skill, recommendations, learnings)
 2. **Understand PRD** (read prd.md and prd.json)
 3. **Present pre-mortem** (8 risk categories, wait for your approval)
-4. **Execute tasks** (spawn subagents, review, verify, track)
+4. **Execute tasks autonomously** (spawn subagents, review, verify, track — NO babysitting required)
 5. **Deliver post-mortem** (analyze effectiveness, capture learnings)
+
+**Note**: After you approve the pre-mortem, the agent will work through ALL tasks without asking for permission to write files or make commits. You can literally walk away and come back when it's done. ☕
 
 ---
 
