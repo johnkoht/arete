@@ -58,9 +58,18 @@ package-lock.json
 # TypeScript build output
 dist/
 
-# CLI-managed directories (for consumer workspaces)
-# Populated by `arete install`; dev: run scripts/dev-setup.sh to seed .agents/skills
+# CLI-managed / workspace directories (consumer workspaces only)
+# Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.
 .agents/
+context/
+now/
+goals/
+projects/
+people/
+resources/
+templates/
+memory/
+.arete/
 
 # Logs
 *.log
