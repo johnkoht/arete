@@ -1,0 +1,54 @@
+---
+description: MANDATORY ROUTING - Read this FIRST before ANY response
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 🛑 STOP - READ THIS FIRST
+
+Before responding to ANY user request in this Areté workspace:
+
+## Is this a PM action?
+
+Meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, process meetings, etc.
+
+## If YES, follow this EXACT sequence:
+
+```bash
+# 1. ROUTE (MANDATORY)
+arete skill route "<user's exact message>"
+
+# 2. LOAD (MANDATORY)  
+# Read the skill file it returns, e.g.:
+# .cursor/skills/meeting-prep/SKILL.md
+
+# 3. EXECUTE (MANDATORY)
+# Follow the skill's complete workflow
+# Do NOT improvise with Grep/Glob/Read
+```
+
+## If NO:
+
+Proceed with normal tools.
+
+---
+
+**Anti-Pattern** (what NOT to do):
+```
+❌ User: "Help me prep for my meeting with Alex"
+❌ Agent: [Immediately runs Glob/Grep/Read to find Alex's files]
+❌ Problem: Skipped router, skipped skill, improvised workflow
+```
+
+**Correct Pattern**:
+```
+✅ User: "Help me prep for my meeting with Alex"
+✅ Agent: [Runs `arete skill route "help me prep for my meeting with alex"`]
+✅ Agent: [Router returns: meeting-prep]
+✅ Agent: [Reads .cursor/skills/meeting-prep/SKILL.md]
+✅ Agent: [Follows the skill's complete workflow]
+```
+
+---
+
+**You WILL be asked to verify you followed this. If you skipped the router and skill, you FAILED the task.**

@@ -1,0 +1,35 @@
+---
+description: Agent mode (BUILDER vs GUIDE) - which context the agent is in and where to put memories
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Agent mode: BUILDER vs GUIDE
+
+Determine which mode you are in and behave accordingly. Mode is set in `arete.yaml` as `agent_mode: builder` or `agent_mode: guide`, or overridden by the `AGENT_MODE` environment variable (e.g. `AGENT_MODE=GUIDE` for testing). If neither is set, infer: workspace with `src/cli.ts` and `.cursor/build/MEMORY.md` = builder; otherwise = guide.
+
+## BUILDER (building Areté)
+
+You are in the Areté source repo, building the product.
+
+- **Memory**: Put build memories in `.cursor/build/entries/` and add a line to `.cursor/build/MEMORY.md`. Do **not** use `memory/items/` for build decisions or learnings.
+- **PRDs**: Areté feature PRDs go in `.cursor/build/prds/{feature-name}/prd.md`, not in `projects/active/`.
+- **Rules**: Follow dev.mdc and testing.mdc. Use AGENTS.md for architecture.
+- **Skills**: Product skills (meeting-prep, create-prd, etc.) exist here for development; build skills (execute-prd, prd-to-json) under `.cursor/build/` are available. Do not run `arete seed test-data` in this repo.
+- **Projects**: Do not treat `projects/active/` as the PM's projects; that structure is for end users.
+
+## GUIDE (leading and empowering the user)
+
+You are in an end-user workspace. Your job is to help the PM achieve arete using Areté's tools, skills, and services.
+
+- **Memory**: Put user memories in `.arete/memory/items/` (decisions.md, learnings.md, agent-observations.md). Do **not** use `.cursor/build/` — it does not exist in production.
+- **Rules**: Follow pm-workspace.mdc and agent-memory.mdc. Ignore dev.mdc and testing.mdc (they are not installed in user workspaces).
+- **Skills**: Use only product skills. Use the skill router: `arete route "<query>"` or `arete skill route "<query>"` to find the right skill. Load and follow the skill from `.cursor/skills/` or `.cursor/skills-core/`.
+- **PRDs**: Use the create-prd skill and `projects/active/` for the user's PRDs.
+
+## Override (testing)
+
+To force a mode (e.g. test GUIDE behavior in the repo), set the environment variable:
+
+- `AGENT_MODE=BUILDER` — treat this workspace as the Areté build context.
+- `AGENT_MODE=GUIDE` — treat this workspace as an end-user context (product skills and .arete/memory/ only).
