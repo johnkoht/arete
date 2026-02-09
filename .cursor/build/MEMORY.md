@@ -3,7 +3,8 @@
 Index of significant changes to **Arete’s build, tooling, and architecture**. Detail lives in dated entries; this file is the index.
 
 - **USER.md** (gitignored): User-specific context — copy from `USER.md.example`.
-- **Entries**: `.cursor/build/entries/YYYY-MM-DD_short-title.md` — one file per change or decision.
+- **Entries**: `.cursor/build/entries/YYYY-MM-DD_short-title.md` — one file per change or decision. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `.cursor/build/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Injected into new build conversations for immediate context.
 
 ## Conventions
 
@@ -15,6 +16,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-09 [Builder collaboration profile and mode-aware memory](entries/2026-02-09_builder-collaboration-profile.md) — Created .cursor/build/collaboration.md; reset product agent-observations template; rewrote agent-memory.mdc to route by BUILDER vs GUIDE mode; updated dev.mdc and MEMORY.md conventions.
 - 2026-02-08 [Phase 4 (C–D): Skill ecosystem and docs](entries/2026-02-08_phase-4-skill-ecosystem-c-d.md) — arete skill install (skills.sh + local); .arete-meta.yaml sidecar; getSkillInfo reads sidecar; .cursor/skills/README.md; SETUP.md Customizing Skills; arete status context freshness; periodic-review references status; AGENTS.md skill management.
 - 2026-02-08 [Phase 4 (A–B): Skill management and role defaults](entries/2026-02-08_phase-4-skill-management-a-b.md) — override/reset/diff/list UX; skills.defaults config; applySkillDefaults; arete skill defaults/set-default/unset-default; tests.
 - 2026-02-07 [Phase 3: Intelligence services](entries/2026-02-07_phase-3-intelligence-services.md) — Context injection, memory retrieval, entity resolution, briefing assembly, enhanced skill router; CLI commands (arete context/memory/resolve/brief); pm-workspace rule update; 67 new tests.

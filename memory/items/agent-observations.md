@@ -21,17 +21,13 @@
 
 ## Working Patterns
 
-- [2026-02-09] Prefers to discuss architecture and trade-offs before committing to a plan. Wants to hear concerns, what must be right now vs. what can improve later — before seeing a PRD.
-- [2026-02-09] Comfortable making fast directional calls: "I'm good with this solution!" once trade-offs are clear. Doesn't need excessive deliberation.
-- [2026-02-09] Uses the autonomous agent loop for building — prefers to review a PRD together, then hand off to a new conversation for execution via subagents. Separates planning from building.
+<!-- How you prefer to collaborate, make decisions, pace work -->
 
 ---
 
 ## Domain Emphasis
 
-- [2026-02-09] Strong preference for swappable/non-boxed-in designs: "Can we design and build it in a way that we could potentially swap that out in the near future?" Wants clean interfaces without over-engineering extensibility.
-- [2026-02-09] Pragmatic about scope: chose Apple Calendar (ical-buddy) over Google OAuth because it's simpler and achieves the goal. Doesn't want to invest heavily in complex auth flows when a lighter path exists.
-- [2026-02-09] Thinks in integration priority order: calendar first (highest PM impact), then Notion, then Linear/Jira, then Slack. Prioritizes by how much context each integration unlocks for daily PM work.
+<!-- What you emphasize, your areas of focus, recurring themes -->
 
 ---
 
@@ -43,9 +39,7 @@
 
 ## Process Preferences
 
-- [2026-02-09] Asks for learnings and observations to be captured: "If there are any learnings you've uncovered about working with me, my styles, etc., please add them to the internal memories." Values institutional memory about collaboration, not just about code.
-- [2026-02-09] Wants backlog items captured in scratchpad rather than lost: "Let's also add google and microsoft calendar integrations to the backlog in scratchpad." Uses scratchpad as a parking lot for future work.
-- [2026-02-09] Prefers a single PRD covering related work (intelligence + calendar together) rather than separate PRDs — keeps the execution scope coherent.
+<!-- How you prefer to organize work, capture information, communicate -->
 
 ---
 

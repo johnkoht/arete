@@ -14,10 +14,11 @@ Standards for building and changing Arete. **Testing** is covered in `testing.md
 
 - **USER.md** (root, gitignored): User-specific context. Copy from `USER.md.example` and fill in local env, preferences, reminders.
 - **MEMORY.md**: `.cursor/build/MEMORY.md` — index of significant build/architecture changes.
-- **Entries**: `.cursor/build/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering.
+- **Entries**: `.cursor/build/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `.cursor/build/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
 - **PRDs for Areté features**: Put PRDs in `.cursor/build/prds/{feature-name}/prd.md`, not in `projects/active/`. `projects/active/` is for PMs *using* Areté; `.cursor/build/` is internal build tooling.
 
-**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: “Should I add this to build memory (.cursor/build/MEMORY.md)?” If yes, create a dated entry and add a line to the index.
+**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: “Should I add this to build memory (.cursor/build/MEMORY.md)?” If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
 
 ## TypeScript / Node.js
 
