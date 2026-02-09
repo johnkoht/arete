@@ -30,7 +30,7 @@ describe('integration registry', () => {
         assert.ok(Array.isArray(int.implements), `${key} implements should be array`);
         assert.ok(int.implements.length > 0, `${key} implements should not be empty`);
         assert.ok(int.auth, `${key} missing auth`);
-        assert.ok(['api_key', 'oauth'].includes(int.auth.type), `${key} invalid auth type`);
+        assert.ok(['api_key', 'oauth', 'none'].includes(int.auth.type), `${key} invalid auth type`);
         assert.ok(['available', 'planned'].includes(int.status), `${key} invalid status`);
       }
     });

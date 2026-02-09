@@ -401,6 +401,127 @@ slugifyPersonName(name): string
 - Tracks tooling decisions
 - Used by Areté maintainers
 
+### 9. Search Provider System
+
+**Purpose**: Provide swappable search backends for memory retrieval, context injection, and skills. Supports semantic search (via QMD) with graceful fallback to token-based search.
+
+**Location**: `src/core/search.ts` (interface + factory) + `src/core/search-providers/` (implementations)
+
+**Interface**: `SearchProvider`
+```typescript
+interface SearchProvider {
+  name: string;
+  isAvailable(): Promise<boolean>;
+  search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+  semanticSearch(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+}
+```
+
+**Methods**:
+- `isAvailable()` — Returns true if the provider can be used (e.g. QMD installed and collection configured)
+- `search()` — Keyword search (fast, literal matching)
+- `semanticSearch()` — Semantic/vector search (conceptual matching, slower, requires embeddings)
+
+**Result**: `SearchResult[]` with `path`, `content`, `score` (0-1), and `matchType` ('keyword' | 'semantic' | 'hybrid')
+
+**Providers**:
+
+| Provider | Module | When Used | Availability |
+|----------|--------|-----------|--------------|
+| QmdSearchProvider | `src/core/search-providers/qmd.ts` | When QMD is installed and configured | Checks for `qmd` command and collection |
+| FallbackSearchProvider | `src/core/search-providers/fallback.ts` | Always (token-based search) | Always available |
+
+**Factory**: `getSearchProvider(workspaceRoot, config)` in `src/core/search.ts`
+- Returns QMD provider if available
+- Falls back to token-based provider if QMD not installed or no collection found
+- Logs which provider is in use (for debugging)
+
+**Usage**: All intelligence services (memory retrieval, context injection, briefing) use the factory to get a provider. Skills and agent rules do not call providers directly — they use CLI commands (`arete memory search`, `arete context`, `arete brief`) which internally use the provider system.
+
+**Adding a new provider**:
+1. Create `src/core/search-providers/{name}.ts` implementing `SearchProvider`
+2. Add factory logic in `getSearchProvider()` to return your provider when conditions are met
+3. Update this section with provider details
+
+**See also**: Intelligence Services (§7) for services that use search providers
+
+### 10. Calendar System
+
+**Purpose**: Provide calendar integration for daily planning and meeting intelligence. Currently supports macOS Calendar via ical-buddy; designed to support Google Calendar, Microsoft Graph, and other providers.
+
+**Location**: `src/core/calendar.ts` (interface + factory) + `src/core/calendar-providers/` (implementations)
+
+**Interface**: `CalendarProvider`
+```typescript
+interface CalendarProvider {
+  name: string;
+  isAvailable(): Promise<boolean>;
+  getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]>;
+  getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]>;
+}
+
+interface CalendarEvent {
+  title: string;
+  startTime: Date;
+  endTime: Date;
+  calendar: string;
+  location?: string;
+  attendees: CalendarAttendee[];
+  notes?: string;
+  isAllDay: boolean;
+}
+```
+
+**Methods**:
+- `isAvailable()` — Returns true if the provider can be used (e.g. ical-buddy installed on macOS)
+- `getTodayEvents()` — Fetch today's events, optionally filtered by calendar names
+- `getUpcomingEvents(days)` — Fetch events for the next N days
+
+**Options**: `CalendarOptions`
+- `calendars?: string[]` — Filter to specific calendar names (if omitted, all calendars included)
+
+**Providers**:
+
+| Provider | Module | When Used | Platform |
+|----------|--------|-----------|----------|
+| IcalBuddyProvider | `src/core/calendar-providers/ical-buddy.ts` | macOS with ical-buddy installed | macOS only |
+| (Future) GoogleCalendarProvider | — | OAuth-authenticated Google account | Cross-platform |
+| (Future) MSGraphProvider | — | OAuth-authenticated Microsoft 365 account | Cross-platform |
+
+**Factory**: `getCalendarProvider(config)` in `src/core/calendar.ts`
+- Returns ical-buddy provider if on macOS and command is available
+- Returns null if no provider available (calendar features disabled)
+
+**Configuration**: `integrations.calendar` in `arete.yaml`
+```yaml
+integrations:
+  calendar:
+    provider: ical-buddy
+    calendars:
+      - Work
+      - Personal
+```
+
+**CLI Commands**:
+- `arete integration configure calendar` — Interactive setup (select calendars to include)
+- `arete pull calendar --today` — Fetch today's events and display
+- `arete pull calendar --days 7` — Fetch next 7 days of events
+
+**Person Matching**: The calendar system matches event attendees to workspace people by email. When an attendee email matches a person file (`people/internal/` or `people/customers/`), the CLI output shows the person's slug and file path for easy context lookup.
+
+**Integration with Skills**: The **daily-plan** skill uses `arete pull calendar --today --json` to fetch today's events, then builds context for each meeting using the **get_meeting_context** pattern (see Meetings System §1).
+
+**Adding a new provider**:
+1. Create `src/core/calendar-providers/{name}.ts` implementing `CalendarProvider`
+2. Add factory logic in `getCalendarProvider()` to detect and return your provider
+3. Add integration entry to `src/integrations/registry.ts` with `implements: ['calendar']`
+4. Update this section with provider details
+
+**See also**: 
+- Meetings System (§1) for meeting intelligence and get_meeting_context pattern
+- Planning System (§6) for daily-plan skill
+- Integrations System (§2) for registry and CLI commands
+
 ## Technology Stack
 
 **Language**: TypeScript (strict mode, NodeNext)  

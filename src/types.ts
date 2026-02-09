@@ -101,7 +101,7 @@ export interface CommandOptions {
 
 /** Integration auth configuration */
 export interface IntegrationAuth {
-  type: 'api_key' | 'oauth';
+  type: 'api_key' | 'oauth' | 'none';
   envVar?: string;
   configKey?: string;
   instructions?: string;

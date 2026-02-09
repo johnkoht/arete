@@ -51,14 +51,13 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     },
     status: 'planned'
   },
-  calendar: {
-    name: 'calendar',
-    displayName: 'macOS Calendar',
+  'apple-calendar': {
+    name: 'apple-calendar',
+    displayName: 'Apple Calendar',
     description: 'macOS Calendar integration via ical-buddy',
     implements: ['calendar'],
     auth: {
-      type: 'api_key', // Not really, but needed for type
-      instructions: 'Requires ical-buddy: brew install ical-buddy'
+      type: 'none'
     },
     status: 'available'
   },

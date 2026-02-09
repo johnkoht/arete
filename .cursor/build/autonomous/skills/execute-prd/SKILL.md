@@ -24,6 +24,24 @@ Orchestrate autonomous execution of PRD tasks by spawning fresh Task subagents f
 
 **Preferred execution**: Use the **prd-task** custom subagent (`.cursor/agents/prd-task.md`) so each task runs in a fresh context window. Cursor exposes custom subagents as tools when the `.cursor/agents/` directory contains subagent files. If no subagent tool is available, follow the fallback in Step 3: execute each task yourself, one at a time.
 
+## Autonomous Execution Rules
+
+**CRITICAL**: This is an autonomous workflow. Once started:
+
+1. **DO NOT ask for permission** to write to `prd.json`, `progress.txt`, or make commits
+2. **DO NOT pause between tasks** waiting for approval
+3. **DO NOT ask "should I proceed?"** — just proceed
+4. **DO proceed through all tasks** until completion or max iterations
+5. **DO update status files** (`prd.json`, `progress.txt`) as you go without prompting
+
+The user has explicitly started autonomous execution. They expect you to work through the entire task list without interruption. Only stop if:
+- All tasks are complete
+- Max iterations reached
+- A task fails after max retries (log it and continue to next task)
+- Git/system errors that require user intervention
+
+Update files, spawn subagents, run tests, and commit — all without asking. That's what "autonomous" means.
+
 ## How It Works
 
 ```
@@ -181,12 +199,16 @@ git commit -m "[PRD: {prd.name}] Task {task.id}: {task.title}"
 ```
 
 ### 4. Update PRD Status
+**IMPORTANT**: Do this automatically without asking for permission.
+
 Edit `.cursor/build/autonomous/prd.json`:
 - Set `passes: true`
 - Set `status: "complete"`
 - Add `commitSha: "<sha>"` (from git log)
 
 ### 5. Log Learnings
+**IMPORTANT**: Do this automatically without asking for permission.
+
 Append to `.cursor/build/autonomous/progress.txt`:
 
 ```

@@ -204,7 +204,53 @@ qmd status                  # Check index health
 
 The agent will prompt you to run `qmd update` at key moments (after finalizing projects, before synthesis).
 
-### 3. Optional: MCP Integrations
+### 3. Calendar Setup (macOS)
+
+The calendar integration enables automatic daily planning with meeting context. Currently supports macOS Calendar via ical-buddy.
+
+#### Installation
+
+**Install ical-buddy**:
+
+```bash
+brew install ical-buddy
+```
+
+#### Configuration
+
+```bash
+# Interactive setup — select which calendars to include
+arete integration configure calendar
+
+# Test the integration
+arete pull calendar --today
+```
+
+The configure command will:
+1. List all your macOS calendars
+2. Let you select which ones to include (e.g. Work, Personal)
+3. Save the selection to `arete.yaml` under `integrations.calendar.calendars`
+
+#### Usage
+
+```bash
+# View today's events
+arete pull calendar --today
+
+# View next 7 days
+arete pull calendar --days 7
+
+# JSON output (for skills/automation)
+arete pull calendar --today --json
+```
+
+**Person Matching**: Calendar attendees are automatically matched to people in your workspace (by email). When viewing events, you'll see person slugs and file paths for attendees in your workspace, making it easy to pull up context before meetings.
+
+**Skills Integration**: The **daily-plan** skill uses calendar data to build meeting context for each of today's meetings. It shows who you're meeting with, what you owe them, recent meetings, and prep suggestions.
+
+**Future Providers**: Google Calendar and Microsoft 365 calendar support are planned. The calendar system is designed to support multiple providers — configuration in `arete.yaml` will support provider selection when additional providers are available.
+
+### 4. Optional: MCP Integrations
 
 MCP (Model Context Protocol) integrations extend the workspace with external tools. These are optional but unlock additional capabilities.
 
@@ -236,7 +282,7 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 2. Navigate to the MCP section
 3. Add your MCP server URL and authenticate
 
-### 4. Start Using the Workspace
+### 5. Start Using the Workspace
 
 **Start a project** (or invoke skills with `/skill-name`):
 - "Start a discovery project for [topic]"
