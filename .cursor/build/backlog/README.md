@@ -15,6 +15,14 @@ Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prd
 
 ## High Priority
 
+### Self-Guided Onboarding
+**Status**: Blocked - needs infrastructure  
+**File**: `features/self-guided-onboarding.md`  
+**What**: `arete onboard` command that uses Areté itself to onboard users (creates personalized project, week/daily plans, adaptive paths)  
+**Why**: Critical adoption blocker - users bounce when workspace is empty even though tools work. Need clear path from "empty" to "valuable" workspace  
+**Effort**: Large (8-12 tasks: enhanced setup, path logic, plan generation, checkpoints, progress tracking)  
+**Dependencies**: Enhanced `arete setup` (QMD automation), week/daily planning infrastructure, progress tracking system  
+
 ### Google Calendar Provider
 **Status**: Ready for PRD  
 **File**: `features/google-calendar-provider.md`  

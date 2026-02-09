@@ -57,6 +57,7 @@ export const WORKSPACE_DIRS = [
  * are excluded so end-user workspaces never get them. Add new product rules here when added.
  */
 export const PRODUCT_RULES_ALLOW_LIST = [
+  'routing-mandatory.mdc',
   'arete-context.mdc',
   'arete-vision.mdc',
   'pm-workspace.mdc',
