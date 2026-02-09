@@ -70,7 +70,7 @@ export async function contextCommand(options: ContextCommandOptions): Promise<vo
 
   const { paths } = requireWorkspace(json);
   const primitives = parsePrimitives(options.primitives);
-  const result = getRelevantContext(query, paths, { primitives });
+  const result = await getRelevantContext(query, paths, { primitives });
 
   if (json) {
     console.log(JSON.stringify({
@@ -152,7 +152,7 @@ export async function memorySearchCommand(
     ? options.types.split(',').map(s => s.trim()) as ('decisions' | 'learnings' | 'observations')[]
     : undefined;
   const limit = options.limit ? parseInt(options.limit, 10) : undefined;
-  const result = searchMemory(query, paths, { types, limit });
+  const result = await searchMemory(query, paths, { types, limit });
 
   if (json) {
     console.log(JSON.stringify({
@@ -325,7 +325,7 @@ export async function briefCommand(options: BriefCommandOptions): Promise<void> 
   const { paths } = requireWorkspace(json);
   const primitives = parsePrimitives(options.primitives);
 
-  const briefing = assembleBriefing(task, paths, {
+  const briefing = await assembleBriefing(task, paths, {
     primitives,
     skill: options.skill,
   });

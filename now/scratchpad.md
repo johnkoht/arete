@@ -26,4 +26,13 @@
 
 ## Notes
 
+### Intelligence & Calendar PRD - Enhancements
+*(From Feb 9 review of completed search infrastructure)*
+
+- **Search performance benchmarking**: Token-based fallback and QMD provider both look solid, but consider adding performance metrics/benchmarking for large workspaces (1000+ files, 100MB+ content). Could inform timeout tuning or pagination needs.
+
+- **Search result caching**: Consider lightweight in-memory caching for repeated queries within same session. Would help meeting-prep and daily-plan workflows that may run similar queries multiple times.
+
+- **QMD status awareness**: Currently we check `which qmd` for availability. Could enhance to check `qmd status` to surface QMD health (index outdated, embedding issues) and suggest `qmd update` when needed.
+
 <!-- Quick capture space for parking lot items -->

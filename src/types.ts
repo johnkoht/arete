@@ -177,6 +177,7 @@ export interface ContextFile {
   category: 'context' | 'goals' | 'projects' | 'people' | 'resources' | 'memory';
   summary?: string;
   content?: string;
+  relevanceScore?: number;
 }
 
 /** Gap identified during context assembly */
@@ -200,6 +201,8 @@ export interface ContextBundle {
 export interface ContextInjectionOptions {
   primitives?: ProductPrimitive[];
   workType?: WorkType;
+  maxFiles?: number;
+  minScore?: number;
 }
 
 // --- Memory Retrieval ---

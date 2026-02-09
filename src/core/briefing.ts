@@ -241,11 +241,11 @@ function extractEntityReferences(task: string): string[] {
  * @param options - Primitives, work type, skill name
  * @returns PrimitiveBriefing with markdown and structured data
  */
-export function assembleBriefing(
+export async function assembleBriefing(
   task: string,
   paths: WorkspacePaths,
   options: BriefingOptions = {}
-): PrimitiveBriefing {
+): Promise<PrimitiveBriefing> {
   const now = new Date().toISOString();
   const { primitives, workType, skill } = options;
 
@@ -253,10 +253,10 @@ export function assembleBriefing(
   const contextOptions: ContextInjectionOptions = {};
   if (primitives) contextOptions.primitives = primitives;
   if (workType) contextOptions.workType = workType;
-  const context = getRelevantContext(task, paths, contextOptions);
+  const context = await getRelevantContext(task, paths, contextOptions);
 
   // 2. Memory retrieval
-  const memory = searchMemory(task, paths, { limit: 5 });
+  const memory = await searchMemory(task, paths, { limit: 5 });
 
   // 3. Entity resolution — extract references from the task and resolve them
   const entityRefs = extractEntityReferences(task);

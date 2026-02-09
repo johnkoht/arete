@@ -19,6 +19,7 @@ import type {
   ContextInjectionOptions,
 } from '../types.js';
 import { PRODUCT_PRIMITIVES } from '../types.js';
+import { getSearchProvider } from './search.js';
 
 // ---------------------------------------------------------------------------
 // Primitive → workspace file mapping
@@ -144,19 +145,23 @@ function hasTokenOverlap(text: string, tokens: string[]): boolean {
  *
  * @param query - Task description or skill name + context
  * @param paths - Workspace paths
- * @param options - Optionally specify primitives or work type
+ * @param options - Optionally specify primitives, work type, maxFiles, minScore
  * @returns ContextBundle with files, gaps, and confidence
  */
-export function getRelevantContext(
+export async function getRelevantContext(
   query: string,
   paths: WorkspacePaths,
   options: ContextInjectionOptions = {}
-): ContextBundle {
+): Promise<ContextBundle> {
   const now = new Date().toISOString();
   const queryTokens = tokenize(query);
   const primitives = options.primitives && options.primitives.length > 0
     ? options.primitives
     : [...PRODUCT_PRIMITIVES];
+  
+  const maxFiles = options.maxFiles ?? 15;
+  const minScore = options.minScore ?? 0.3;
+  const staticScore = 0.5; // Minimum relevance for static map files
 
   const files: ContextFile[] = [];
   const gaps: ContextGap[] = [];
@@ -166,7 +171,8 @@ export function getRelevantContext(
   function addFile(
     filePath: string,
     category: ContextFile['category'],
-    primitive?: ProductPrimitive
+    primitive?: ProductPrimitive,
+    relevanceScore?: number
   ): void {
     if (seenPaths.has(filePath)) return;
     const content = safeRead(filePath);
@@ -179,16 +185,17 @@ export function getRelevantContext(
       category,
       summary: extractSummary(content),
       content,
+      relevanceScore,
     });
   }
 
-  // 1. Always-include files (goals/strategy, goals/quarter)
+  // 1. Always-include files (goals/strategy, goals/quarter) - static, minimum relevance
   for (const entry of ALWAYS_INCLUDE) {
     const fullPath = join(paths.root, entry.file);
-    addFile(fullPath, entry.category);
+    addFile(fullPath, entry.category, undefined, staticScore);
   }
 
-  // 2. Primitive-mapped files
+  // 2. Primitive-mapped files - static, minimum relevance
   for (const prim of primitives) {
     const mappings = PRIMITIVE_FILE_MAP[prim];
     let foundForPrimitive = false;
@@ -198,7 +205,7 @@ export function getRelevantContext(
         const fullPath = join(paths.root, file);
         const content = safeRead(fullPath);
         if (content !== null && !isPlaceholder(content)) {
-          addFile(fullPath, mapping.category, prim);
+          addFile(fullPath, mapping.category, prim, staticScore);
           foundForPrimitive = true;
         }
       }
@@ -221,7 +228,7 @@ export function getRelevantContext(
     }
   }
 
-  // 3. People files: if User primitive is relevant, add people who match query tokens
+  // 3. People files: if User primitive is relevant, add people who match query tokens (token-based, static scoring)
   if (primitives.includes('User')) {
     const peopleCategories = ['internal', 'customers', 'users'];
     for (const cat of peopleCategories) {
@@ -234,7 +241,7 @@ export function getRelevantContext(
           const filePath = join(catDir, entry.name);
           const content = safeRead(filePath);
           if (content && hasTokenOverlap(content, queryTokens)) {
-            addFile(filePath, 'people', 'User');
+            addFile(filePath, 'people', 'User', staticScore);
           }
         }
       } catch {
@@ -243,7 +250,7 @@ export function getRelevantContext(
     }
   }
 
-  // 4. Active projects: scan READMEs for query-relevant projects
+  // 4. Active projects: scan READMEs for query-relevant projects (token-based, static scoring)
   const activeDir = join(paths.projects, 'active');
   const activeProjects = listProjects(activeDir);
   for (const projName of activeProjects) {
@@ -251,11 +258,11 @@ export function getRelevantContext(
     const content = safeRead(readmePath);
     if (content && hasTokenOverlap(content, queryTokens)) {
       const prim = primitives.includes('Solution') ? 'Solution' : undefined;
-      addFile(readmePath, 'projects', prim);
+      addFile(readmePath, 'projects', prim, staticScore);
     }
   }
 
-  // 5. Memory items: search for query-relevant items in .arete/memory
+  // 5. Memory items: search for query-relevant items in .arete/memory (token-based, static scoring)
   const memoryItemsDir = join(paths.memory, 'items');
   if (existsSync(memoryItemsDir)) {
     const memoryFiles = ['decisions.md', 'learnings.md'];
@@ -263,15 +270,57 @@ export function getRelevantContext(
       const filePath = join(memoryItemsDir, mf);
       const content = safeRead(filePath);
       if (content && hasTokenOverlap(content, queryTokens)) {
-        addFile(filePath, 'memory', 'Risk');
+        addFile(filePath, 'memory', 'Risk', staticScore);
       }
     }
   }
 
-  // 6. Compute confidence
+  // 6. SearchProvider discovery: use semantic search to find additional relevant files
+  try {
+    const provider = getSearchProvider(paths.root);
+    const searchResults = await provider.semanticSearch(query, {
+      limit: maxFiles * 2, // Fetch more than needed, we'll filter and dedupe
+      minScore,
+    });
+
+    for (const result of searchResults) {
+      // Skip if already included in static files
+      if (seenPaths.has(result.path)) continue;
+      
+      // Skip if score is below threshold
+      if (result.score < minScore) continue;
+
+      // Determine category from path
+      const relPath = relative(paths.root, result.path);
+      let category: ContextFile['category'] = 'resources';
+      if (relPath.startsWith('context/')) category = 'context';
+      else if (relPath.startsWith('goals/')) category = 'goals';
+      else if (relPath.startsWith('projects/')) category = 'projects';
+      else if (relPath.startsWith('people/')) category = 'people';
+      else if (relPath.startsWith('.arete/memory/')) category = 'memory';
+
+      // Add discovered file with its search score
+      addFile(result.path, category, undefined, result.score);
+    }
+  } catch (err) {
+    // If SearchProvider fails, continue with static files only
+    // This ensures backward compatibility and graceful degradation
+  }
+
+  // 7. Sort files by relevance score (descending), then cap at maxFiles
+  files.sort((a, b) => {
+    const scoreA = a.relevanceScore ?? 0;
+    const scoreB = b.relevanceScore ?? 0;
+    return scoreB - scoreA;
+  });
+
+  // Cap at maxFiles
+  const cappedFiles = files.slice(0, maxFiles);
+
+  // 8. Compute confidence
   const totalPrimitives = primitives.length;
   const coveredPrimitives = totalPrimitives - gaps.length;
-  const contextFileCount = files.filter(f => f.category === 'context').length;
+  const contextFileCount = cappedFiles.filter(f => f.category === 'context').length;
 
   let confidence: ContextBundle['confidence'];
   if (coveredPrimitives >= totalPrimitives && contextFileCount >= 2) {
@@ -285,7 +334,7 @@ export function getRelevantContext(
   return {
     query,
     primitives,
-    files,
+    files: cappedFiles,
     gaps,
     confidence,
     assembledAt: now,
