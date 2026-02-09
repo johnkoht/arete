@@ -522,6 +522,159 @@ integrations:
 - Planning System (§6) for daily-plan skill
 - Integrations System (§2) for registry and CLI commands
 
+### 11. Autonomous PRD Execution
+
+**Purpose**: Systematic execution of multi-task PRDs using an orchestrator + subagent pattern. Enables autonomous development with pre-mortem risk mitigation, detailed prompts, and continuous verification.
+
+**Location**: `.cursor/build/skills/execute-prd/SKILL.md` (orchestration skill) + `.cursor/agents/prd-task.md` (subagent instructions)
+
+**Status**: Production-ready. First execution (intelligence-and-calendar PRD) achieved 100% success: 12/12 tasks complete, 0 iterations required, 0/8 pre-mortem risks materialized.
+
+#### Pattern Overview
+
+The system uses a two-layer architecture:
+
+1. **Orchestrator** (primary agent)
+   - Reads PRD and identifies dependencies
+   - Conducts mandatory pre-mortem (8 risk categories)
+   - Crafts detailed prompts for each task
+   - Spawns subagents sequentially
+   - Reviews code and runs full test suite
+   - Tracks progress in `prd.json` and `progress.txt`
+
+2. **Subagents** (task executors)
+   - Receive focused context (specific files to read)
+   - Follow explicit patterns (reference examples, not abstractions)
+   - Implement with tests
+   - Run typecheck + full test suite
+   - Commit with conventional commits
+   - Update tracking files autonomously
+
+**Key insight**: The orchestrator doesn't just delegate—it provides **show-don't-tell guidance** by referencing specific example files that demonstrate the pattern.
+
+#### When to Use
+
+Use autonomous PRD execution for:
+
+| Work Type | Why | Example |
+|-----------|-----|---------|
+| **Multi-task PRDs** | 3+ dependent tasks benefit from systematic execution | Intelligence services (12 tasks with A→B→C dependencies) |
+| **Complex refactors** | High risk of integration issues; pre-mortem + verification critical | Migration from one pattern to another across multiple files |
+| **New systems** | Need consistent patterns across components | New integration (client, types, save, tests, CLI) |
+
+**Do not use** for:
+- Single-task changes (overhead not justified)
+- Exploratory work (requirements unclear)
+- Work requiring human judgment at each step
+
+#### Key Success Factors
+
+The intelligence-and-calendar PRD execution identified these critical practices:
+
+##### 1. Show, Don't Tell
+**Anti-pattern**: "Use good mocking patterns"  
+**Pattern**: "Follow the `testDeps` pattern from `test/integrations/qmd.test.ts` lines 12-18"
+
+Every prompt includes:
+- **Context files to read**: "Read these files first: 1. search.ts (search provider interface), 2. qmd.ts (QMD implementation example), 3. types.ts (type definitions)"
+- **Pattern references**: Specific file + line ranges demonstrating the desired approach
+- **Implementation notes**: Concrete guidance, not abstractions
+
+##### 2. Mandatory Pre-Mortem
+**Process**: Before starting, identify risks across 8 categories and define actionable mitigations.
+
+| Risk Category | Example from First Execution |
+|---------------|------------------------------|
+| Fresh context | Subagents won't know dependencies → List exact files to read in every prompt |
+| Test patterns | New tests might not follow testDeps → Reference qmd.test.ts explicitly |
+| Integration | B2 changes might break callers → Run full test suite (not just new tests) |
+| Backward compatibility | CLI changes could break scripts → Verify existing commands still work |
+
+**Result**: 0/8 risks materialized because mitigations were applied proactively.
+
+##### 3. Sequential Execution with Full Verification
+**Approach**: Execute tasks in dependency order (A1→A2→A3→B1→B2→B3), not parallel.
+
+**After each task**:
+- Code review against 6-point checklist (`.js` imports, no `any`, error handling, tests, backward compatibility, patterns)
+- Run `npm run typecheck` (must pass)
+- Run `npm test` (full suite, not just new tests)
+- Verify integration with prior work
+
+**Benefit**: Each subagent inherits clean, tested work. TypeScript compiler guides propagation (e.g., when B2 made `getRelevantContext()` async, subagent automatically updated callers).
+
+##### 4. Explicit Autonomy Permission
+**Problem**: Initial attempts required "babysitting"—agent asked permission for file writes, commits, progress updates.
+
+**Solution**: Added explicit "Autonomous Execution Rules" to both execute-prd and prd-task:
+> "DO NOT ask for permission to write files, make commits, or proceed. The user expects true autonomy: start the work, execute completely, report when done."
+
+**Insight**: Agents need explicit permission to NOT ask for permission. Counter-intuitive but critical for "start and take a nap" autonomy.
+
+#### execute-prd Skill Workflow
+
+**Phase 0: Understand**
+1. Read PRD (`.cursor/build/prds/{feature-name}/prd.md`)
+2. Check `prd.json` for completed tasks
+3. Map task dependencies (which tasks must complete before others)
+
+**Phase 1: Pre-Mortem** (Mandatory)
+1. Identify risks across 8 categories: fresh context, test patterns, integration issues, backward compatibility, scope drift, naming collisions, documentation, performance
+2. Define specific, actionable mitigations for each risk
+3. Present to user: "Here are 8 risks I identified. Proceed with these mitigations?"
+4. User approves or refines
+
+**Phase 2: Execute** (Loop until all tasks complete)
+1. **Prep context**: Read related source files, tests, types
+2. **Craft prompt**: Include task details, acceptance criteria, files to read, pattern references, pre-mortem mitigations
+3. **Spawn subagent**: Use Task tool with `generalPurpose` (or `prd-task` when available)
+4. **Review code**: Apply 6-point checklist
+5. **Verify**: Run typecheck + full test suite
+6. **Iterate or accept**: If acceptance criteria met and tests pass → accept; else → iterate with specific feedback
+7. **Track**: Update `prd.json` (mark complete) and `progress.txt` (commit SHA, timestamp)
+
+**Phase 3: Post-Mortem**
+1. Analyze: Which risks materialized? Which mitigations worked?
+2. Extract learnings: Collaboration patterns, system improvements, prompt templates
+3. Update build memory: Create entry in `.cursor/build/entries/YYYY-MM-DD_{feature-name}-learnings.md`
+4. Add line to `.cursor/build/MEMORY.md`
+
+#### Metrics from First Execution
+
+**PRD**: intelligence-and-calendar (12 tasks)  
+**Date**: 2026-02-09  
+**Orchestrator**: execute-prd skill (first production use)
+
+| Metric | Result |
+|--------|--------|
+| Tasks completed | 12/12 (100%) |
+| Success rate (first attempt) | 12/12 (100%) - zero iterations |
+| Pre-mortem risks identified | 8 |
+| Pre-mortem risks that materialized | 0/8 (0%) |
+| Tests added | 67 new tests |
+| Test pass rate | 314/314 (100%) |
+| Context used | 95K/1M tokens (9.5% of budget) |
+| Commits | 12 (one per task) |
+
+**Key outcome**: Autonomous execution is not only feasible but highly effective when pre-mortem + show-don't-tell prompts are applied systematically.
+
+#### References
+
+**Skills**:
+- `.cursor/build/skills/execute-prd/SKILL.md` — Full orchestration workflow
+- `.cursor/agents/prd-task.md` — Subagent instructions (for Task tool)
+
+**Memory**:
+- `.cursor/build/entries/2026-02-09_builder-orchestration-learnings.md` — Detailed post-mortem from first execution
+- `.cursor/build/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md` — Formalization of patterns
+
+**Templates**:
+- `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md` — Standalone pre-mortem template for ad-hoc use
+
+**See also**:
+- Build/Development System (§8) for context on `.cursor/build/` structure
+- Testing Guide (`.cursor/rules/testing.mdc`) for test requirements referenced in verification
+
 ## Technology Stack
 
 **Language**: TypeScript (strict mode, NodeNext)  
