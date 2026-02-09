@@ -585,6 +585,40 @@ function detectOverlapRole(
 }
 
 /**
+ * Parse GitHub URL or owner/repo string into normalized owner/repo format.
+ * Returns null if input appears to be a local path.
+ * 
+ * Examples:
+ * - "owner/repo" → "owner/repo"
+ * - "https://github.com/owner/repo" → "owner/repo"
+ * - "https://github.com/owner/repo.git" → "owner/repo"
+ * - "https://github.com/owner/repo/tree/main/skills/prd" → null (treated as local; use --skill flag instead)
+ * - "./path" → null
+ * - "/abs/path" → null
+ */
+function parseSkillSource(source: string): { type: 'skillssh'; normalized: string } | { type: 'local' } {
+  // Local path indicators
+  if (source.startsWith('.') || source.startsWith('/') || source.startsWith('~')) {
+    return { type: 'local' };
+  }
+
+  // GitHub URL patterns - matches github.com/owner/repo (with optional .git and trailing slash, but NO additional path segments)
+  const githubUrlMatch = source.match(/^https?:\/\/github\.com\/([^\/]+\/[^\/]+?)(?:\.git)?\/?$/);
+  if (githubUrlMatch) {
+    return { type: 'skillssh', normalized: githubUrlMatch[1] };
+  }
+
+  // owner/repo format (exactly one slash, exactly two parts, no backslashes)
+  const parts = source.split('/');
+  if (parts.length === 2 && !source.includes('\\') && parts[0] && parts[1]) {
+    return { type: 'skillssh', normalized: source };
+  }
+
+  // Anything else is treated as local
+  return { type: 'local' };
+}
+
+/**
  * Install a skill: from skills.sh (owner/repo) or local path.
  * Generates .arete-meta.yaml sidecar and optionally prompts to set as default for a role.
  */
@@ -607,16 +641,19 @@ async function installSkill(options: SkillOptions): Promise<void> {
     } else {
       error('Missing source');
       info('Examples: arete skill install owner/repo  or  arete skill install ./path/to/skill');
+      info('           arete skill install https://github.com/owner/repo');
     }
     process.exit(1);
   }
 
   const paths = getWorkspacePaths(workspaceRoot);
-  const isLikelySkillsSh = source.includes('/') && !source.startsWith('.') && !source.startsWith('/') && !source.includes(sep);
+  const parsed = parseSkillSource(source);
+  const isLikelySkillsSh = parsed.type === 'skillssh';
 
   if (isLikelySkillsSh) {
     // npx skills add <source> [--skill <name>]
-    const args = ['skills', 'add', source];
+    const normalizedSource = parsed.type === 'skillssh' ? parsed.normalized : source;
+    const args = ['skills', 'add', normalizedSource];
     if (options.skill) {
       args.push('--skill', options.skill);
     }
@@ -678,7 +715,8 @@ async function installSkill(options: SkillOptions): Promise<void> {
     if (json) {
       console.log(JSON.stringify({
         success: true,
-        source,
+        source: normalizedSource,
+        originalSource: source !== normalizedSource ? source : undefined,
         message: 'Skill installed via skills.sh. Metadata added if skill was found under .cursor/skills.',
         path: installedPath ?? undefined,
       }, null, 2));
@@ -797,25 +835,6 @@ async function installSkill(options: SkillOptions): Promise<void> {
         await setDefaultSkill({ name: skillName, role, json: false });
       }
     }
-  }
-}
-
-/**
- * Add a skill (placeholder for registry)
- */
-async function addSkill(options: SkillOptions): Promise<void> {
-  const { json } = options;
-  
-  if (json) {
-    console.log(JSON.stringify({
-      success: false,
-      error: 'Skill registry not yet implemented',
-      hint: 'Core skills are installed automatically. Use "arete skill override" to customize.'
-    }));
-  } else {
-    warn('Skill registry not yet implemented');
-    info('Core skills are installed automatically with "arete install"');
-    info('Use "arete skill override <name>" to customize a skill');
   }
 }
 
@@ -1122,8 +1141,6 @@ export async function skillCommand(action: string, options: SkillOptions): Promi
   switch (action) {
     case 'list':
       return listSkills(options);
-    case 'add':
-      return addSkill(options);
     case 'remove':
       return removeSkill(options);
     case 'override':

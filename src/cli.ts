@@ -125,10 +125,12 @@ skillCmd
   .action((opts) => skillCommand('list', opts));
 
 skillCmd
-  .command('add <name>')
-  .description('Install a skill')
+  .command('add <source>')
+  .description('Install a skill (alias for install)')
+  .option('--skill <name>', 'For multi-skill repos: specify which skill to install')
   .option('--json', 'Output as JSON')
-  .action((name, opts) => skillCommand('add', { name, ...opts }));
+  .option('--yes', 'Skip prompts (e.g. use for role)')
+  .action((source, opts) => skillCommand('install', { name: source, skill: opts.skill, ...opts }));
 
 skillCmd
   .command('remove <name>')

@@ -16,6 +16,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-09 [Skill install GitHub URL fix](entries/2026-02-09_skill-install-github-url-fix.md) — Fixed skill install to parse GitHub URLs (https://github.com/owner/repo); made `skill add` alias for `install` with `--skill` support; parseSkillSource() helper; 11 new tests.
 - 2026-02-09: Builder Orchestration Learnings — orchestrator + subagent pattern for autonomous PRD execution; 12/12 tasks first-attempt, zero iterations → entries/2026-02-09_builder-orchestration-learnings.md
 - 2026-02-09: Intelligence & Calendar — search providers, calendar integration → entries/2026-02-09_intelligence-and-calendar.md
 - 2026-02-09 [Builder collaboration profile and mode-aware memory](entries/2026-02-09_builder-collaboration-profile.md) — Created .cursor/build/collaboration.md; reset product agent-observations template; rewrote agent-memory.mdc to route by BUILDER vs GUIDE mode; updated dev.mdc and MEMORY.md conventions.
