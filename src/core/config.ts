@@ -129,7 +129,7 @@ export function getAgentMode(workspacePath: string | null): AgentMode {
   }
   // Infer: if this looks like the Areté source repo, builder; else guide
   if (workspacePath) {
-    const hasBuild = existsSync(join(workspacePath, '.cursor', 'build', 'MEMORY.md'));
+    const hasBuild = existsSync(join(workspacePath, 'dev', 'MEMORY.md'));
     const hasCli = existsSync(join(workspacePath, 'src', 'cli.ts'));
     if (hasBuild && hasCli) return 'builder';
   }

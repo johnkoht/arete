@@ -21,7 +21,7 @@ function createTmpDir(): string {
 
 async function createMinimalWorkspace(dir: string): Promise<void> {
   // Create minimal workspace structure
-  mkdirSync(join(dir, '.cursor', 'skills-core'), { recursive: true });
+  mkdirSync(join(dir, '.agents', 'skills'), { recursive: true });
   
   // Create arete.yaml
   const manifest = {

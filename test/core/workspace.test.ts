@@ -99,9 +99,7 @@ describe('workspace', () => {
       assert.equal(paths.manifest, join('/test/workspace', 'arete.yaml'));
       assert.equal(paths.cursor, join('/test/workspace', '.cursor'));
       assert.equal(paths.rules, join('/test/workspace', '.cursor', 'rules'));
-      assert.equal(paths.skills, join('/test/workspace', '.cursor', 'skills'));
-      assert.equal(paths.skillsCore, join('/test/workspace', '.cursor', 'skills-core'));
-      assert.equal(paths.skillsLocal, join('/test/workspace', '.cursor', 'skills-local'));
+      assert.equal(paths.agentSkills, join('/test/workspace', '.agents', 'skills'));
       assert.equal(paths.tools, join('/test/workspace', '.cursor', 'tools'));
       assert.equal(paths.integrations, join('/test/workspace', '.cursor', 'integrations'));
       assert.equal(paths.context, join('/test/workspace', 'context'));

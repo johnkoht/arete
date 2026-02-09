@@ -19,13 +19,12 @@ import type { RoutedSkill } from '../../src/core/skill-router.js';
 function createTmpWorkspace(): string {
   const dir = join(tmpdir(), `arete-skill-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
-  mkdirSync(join(dir, '.cursor', 'skills-core', 'create-prd'), { recursive: true });
-  mkdirSync(join(dir, '.cursor', 'skills-core', 'discovery'), { recursive: true });
-  mkdirSync(join(dir, '.cursor', 'skills-local'), { recursive: true });
-  writeFileSync(join(dir, '.cursor', 'skills-core', 'create-prd', 'SKILL.md'), '---\nname: create-prd\n---');
-  writeFileSync(join(dir, '.cursor', 'skills-core', 'discovery', 'SKILL.md'), '---\nname: discovery\n---');
-  mkdirSync(join(dir, '.cursor', 'skills-local', 'netflix-prd'), { recursive: true });
-  writeFileSync(join(dir, '.cursor', 'skills-local', 'netflix-prd', 'SKILL.md'), '---\nname: netflix-prd\n---');
+  mkdirSync(join(dir, '.agents', 'skills', 'create-prd'), { recursive: true });
+  mkdirSync(join(dir, '.agents', 'skills', 'discovery'), { recursive: true });
+  mkdirSync(join(dir, '.agents', 'skills', 'netflix-prd'), { recursive: true });
+  writeFileSync(join(dir, '.agents', 'skills', 'create-prd', 'SKILL.md'), '---\nname: create-prd\n---');
+  writeFileSync(join(dir, '.agents', 'skills', 'discovery', 'SKILL.md'), '---\nname: discovery\n---');
+  writeFileSync(join(dir, '.agents', 'skills', 'netflix-prd', 'SKILL.md'), '---\nname: netflix-prd\n---');
   writeFileSync(join(dir, 'arete.yaml'), 'schema: 1\n');
   return dir;
 }
@@ -94,12 +93,13 @@ describe('skill commands', () => {
   });
 
   describe('getDefaultRoleNames', () => {
-    it('returns skill names from skills-core', () => {
+    it('returns skill names from .agents/skills', () => {
       const paths = getWorkspacePaths(tmpDir);
       const roles = getDefaultRoleNames(paths);
       assert.ok(roles.includes('create-prd'));
       assert.ok(roles.includes('discovery'));
-      assert.equal(roles.length, 2);
+      assert.ok(roles.includes('netflix-prd'));
+      assert.equal(roles.length, 3);
     });
   });
 });
@@ -119,7 +119,7 @@ describe('getSkillInfo with .arete-meta.yaml sidecar', () => {
 
   it('merges sidecar metadata when SKILL.md lacks extended fields', () => {
     const paths = getWorkspacePaths(tmpDir);
-    const netflixPath = join(tmpDir, '.cursor', 'skills-local', 'netflix-prd');
+    const netflixPath = join(tmpDir, '.agents', 'skills', 'netflix-prd');
     writeFileSync(
       join(netflixPath, '.arete-meta.yaml'),
       stringifyYaml({ category: 'community', requires_briefing: true, work_type: 'definition' }),
