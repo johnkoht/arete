@@ -158,9 +158,10 @@ skillCmd
 skillCmd
   .command('install <source>')
   .description('Install a skill from skills.sh (owner/repo) or local path')
+  .option('--skill <name>', 'For multi-skill repos: specify which skill to install')
   .option('--json', 'Output as JSON')
   .option('--yes', 'Skip prompts (e.g. use for role)')
-  .action((source, opts) => skillCommand('install', { name: source, ...opts }));
+  .action((source, opts) => skillCommand('install', { name: source, skill: opts.skill, ...opts }));
 
 skillCmd
   .command('defaults')

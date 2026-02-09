@@ -20,6 +20,7 @@ export interface SkillOptions extends CommandOptions {
   yes?: boolean;
   role?: string;
   query?: string;
+  skill?: string;
 }
 
 interface SkillInfo {
@@ -614,9 +615,13 @@ async function installSkill(options: SkillOptions): Promise<void> {
   const isLikelySkillsSh = source.includes('/') && !source.startsWith('.') && !source.startsWith('/') && !source.includes(sep);
 
   if (isLikelySkillsSh) {
-    // npx skills add <source>
-    if (!json) info('Running: npx skills add ' + source);
-    const result = spawnSync('npx', ['skills', 'add', source], {
+    // npx skills add <source> [--skill <name>]
+    const args = ['skills', 'add', source];
+    if (options.skill) {
+      args.push('--skill', options.skill);
+    }
+    if (!json) info('Running: npx ' + args.join(' '));
+    const result = spawnSync('npx', args, {
       cwd: workspaceRoot,
       shell: true,
       stdio: json ? 'pipe' : 'inherit',
