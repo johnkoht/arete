@@ -16,6 +16,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-09: Builder Orchestration Learnings — orchestrator + subagent pattern for autonomous PRD execution; 12/12 tasks first-attempt, zero iterations → entries/2026-02-09_builder-orchestration-learnings.md
 - 2026-02-09: Intelligence & Calendar — search providers, calendar integration → entries/2026-02-09_intelligence-and-calendar.md
 - 2026-02-09 [Builder collaboration profile and mode-aware memory](entries/2026-02-09_builder-collaboration-profile.md) — Created .cursor/build/collaboration.md; reset product agent-observations template; rewrote agent-memory.mdc to route by BUILDER vs GUIDE mode; updated dev.mdc and MEMORY.md conventions.
 - 2026-02-08 [Phase 4 (C–D): Skill ecosystem and docs](entries/2026-02-08_phase-4-skill-ecosystem-c-d.md) — arete skill install (skills.sh + local); .arete-meta.yaml sidecar; getSkillInfo reads sidecar; .cursor/skills/README.md; SETUP.md Customizing Skills; arete status context freshness; periodic-review references status; AGENTS.md skill management.

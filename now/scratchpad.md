@@ -35,4 +35,22 @@
 
 - **QMD status awareness**: Currently we check `which qmd` for availability. Could enhance to check `qmd status` to surface QMD health (index outdated, embedding issues) and suggest `qmd update` when needed.
 
+### Orchestration System - This Week
+*(From Feb 9 post-mortem of intelligence-and-calendar PRD)*
+
+- **Update AGENTS.md with Orchestration Pattern** — Add section "11. Autonomous PRD Execution" after section 10 (Calendar System). Content: Overview of execute-prd skill, orchestrator + subagent pattern, when to use vs manual development, link to builder-orchestration-learnings.md. Should be ~50-100 lines documenting the pattern we just proved works.
+
+- **Validate execute-prd skill on second PRD** — Test the orchestration system on a different feature PRD (smaller, 2-5 tasks) to validate the pattern holds. Look for: Does pre-mortem catch different risks? Do mitigations from last session apply? Does agent follow the workflow without drift? Document any refinements needed to the skill.
+
+- **Finalize dev.mdc update** — Either use the dev.mdc.new file I created (mv command) or manually paste the pre-mortem section. Verify it appears in Cursor's rules when building Areté. Test that agents reference it when starting complex work.
+
+### Orchestration System - This Month
+*(Future improvements to the orchestration pattern)*
+
+- **Implement prd-task subagent type** — Currently execute-prd uses generalPurpose subagent (works fine). Create dedicated prd-task type that knows to: run tests after implementation, commit with conventional commits format, update prd.json and progress.txt automatically. Would reduce prompt boilerplate and make execution more consistent. Requires: Adding prd-task to Task tool enum in Cursor, testing on sample PRD.
+
+- **Add automated code review checks** — Before orchestrator does manual review, run automated pattern checks: .js import extensions (NodeNext), no any types (strict TS), error handling present (try/catch), test coverage (new code has tests). Output: "✅ Patterns OK" or "⚠️ Missing error handling in line 45". Could be a simple script that scans changed files. Saves orchestrator time, catches obvious issues early.
+
+- **Create progress dashboard command** — Add `arete prd status` CLI command that shows: Task X/Y complete, Z tests passing, N commits, estimated time remaining (based on task velocity). Useful for long-running PRDs (10+ tasks) to track progress without reading prd.json manually. Could also show: which task is currently in progress, last commit time, any failures.
+
 <!-- Quick capture space for parking lot items -->
