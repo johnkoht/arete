@@ -54,7 +54,7 @@ export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
   return {
     root: workspaceRoot,
     manifest: join(workspaceRoot, 'arete.yaml'),
-    cursor: join(workspaceRoot, '.cursor'),
+    ideConfig: join(workspaceRoot, '.cursor'),
     rules: join(workspaceRoot, '.cursor', 'rules'),
     agentSkills: join(workspaceRoot, '.agents', 'skills'),
     tools: join(workspaceRoot, '.cursor', 'tools'),

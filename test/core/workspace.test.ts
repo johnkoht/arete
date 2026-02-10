@@ -97,7 +97,7 @@ describe('workspace', () => {
       const paths = getWorkspacePaths('/test/workspace');
       assert.equal(paths.root, '/test/workspace');
       assert.equal(paths.manifest, join('/test/workspace', 'arete.yaml'));
-      assert.equal(paths.cursor, join('/test/workspace', '.cursor'));
+      assert.equal(paths.ideConfig, join('/test/workspace', '.cursor'));
       assert.equal(paths.rules, join('/test/workspace', '.cursor', 'rules'));
       assert.equal(paths.agentSkills, join('/test/workspace', '.agents', 'skills'));
       assert.equal(paths.tools, join('/test/workspace', '.cursor', 'tools'));

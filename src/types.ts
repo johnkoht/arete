@@ -66,7 +66,7 @@ export interface Person {
 export interface WorkspacePaths {
   root: string;
   manifest: string;
-  cursor: string;
+  ideConfig: string;
   rules: string;
   /** Single skills location: .agents/skills (last-in-wins) */
   agentSkills: string;
