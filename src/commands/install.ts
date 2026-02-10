@@ -14,8 +14,9 @@ import {
   getPackageRoot
 } from '../core/workspace.js';
 import { getDefaultConfig } from '../core/config.js';
-import { WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
+import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
 import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
+import { getAdapter } from '../core/adapters/index.js';
 import type { CommandOptions, InstallResults } from '../types.js';
 
 export interface InstallOptions extends CommandOptions {
@@ -122,7 +123,11 @@ export async function installCommand(directory: string | undefined, options: Ins
   // Create workspace directories
   if (!json) info('Creating workspace structure...');
   
-  for (const dir of WORKSPACE_DIRS) {
+  // Get adapter (defaults to Cursor for new installations)
+  const adapter = getAdapter('cursor');
+  const allDirs = [...BASE_WORKSPACE_DIRS, ...adapter.getIDEDirs()];
+  
+  for (const dir of allDirs) {
     const fullPath = join(targetDir, dir);
     if (!existsSync(fullPath)) {
       try {

@@ -7,14 +7,17 @@
 
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import type { IDEAdapter } from './ide-adapter.js';
+import { detectAdapter } from './adapters/index.js';
 
 /**
- * Directories that should exist in an Areté workspace.
+ * Base directories that should exist in an Areté workspace (IDE-agnostic).
  * Add new top-level or nested dirs here when shipping new features.
+ * IDE-specific directories (e.g., .cursor/, .claude/) are added via adapter.getIDEDirs().
  *
  * Phase 1 (Product OS): now/, goals/, .arete/ replace scratchpad, resources/plans, memory/.
  */
-export const WORKSPACE_DIRS = [
+export const BASE_WORKSPACE_DIRS = [
   'now',
   'goals',
   'goals/archive',
@@ -37,13 +40,8 @@ export const WORKSPACE_DIRS = [
   'resources/meetings',
   'resources/notes',
   'templates/plans',
-  '.cursor',
-  '.cursor/rules',
   '.agents',
   '.agents/skills',
-  '.cursor/tools',
-  '.cursor/integrations',
-  '.cursor/integrations/configs',
   '.credentials',
   'templates',
   'templates/inputs',
@@ -1000,6 +998,8 @@ export interface EnsureWorkspaceStructureResult {
 export interface EnsureWorkspaceStructureOptions {
   /** If true, only report what would be added; do not create anything. */
   dryRun?: boolean;
+  /** IDE adapter to use; auto-detects if not provided. */
+  adapter?: IDEAdapter;
 }
 
 /**
@@ -1015,7 +1015,13 @@ export function ensureWorkspaceStructure(
   const directoriesAdded: string[] = [];
   const filesAdded: string[] = [];
 
-  for (const dir of WORKSPACE_DIRS) {
+  // Get adapter (auto-detect if not provided)
+  const adapter = options.adapter || detectAdapter(workspaceRoot);
+  
+  // Combine base workspace dirs with IDE-specific dirs
+  const allDirs = [...BASE_WORKSPACE_DIRS, ...adapter.getIDEDirs()];
+
+  for (const dir of allDirs) {
     const fullPath = join(workspaceRoot, dir);
     if (!existsSync(fullPath)) {
       if (!dryRun) {
