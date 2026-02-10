@@ -28,7 +28,9 @@ Key codebase facts: TypeScript, NodeNext (use .js extensions in imports), `npm t
 
 **CRITICAL - Autonomous Execution**: This is part of an autonomous workflow. DO NOT ask for permission to write files (`prd.json`, `progress.txt`), make commits, or proceed with any of the steps below. Just do them. The user expects you to work autonomously.
 
-1. **Implement the task** — Write or modify only the code/files needed for this task. Follow existing patterns; do not refactor unrelated code.
+**Reviewer (Sr. Engineer)**: After you complete, the Reviewer will perform a thorough code review: technical review (imports, types, error handling, tests, patterns), AC review (implementation matches acceptance criteria), quality (DRY, KISS, best solution), and reuse (no reimplementing existing services/helpers). Use existing services and abstractions per AGENTS.md; apply DRY and KISS.
+
+1. **Implement the task** — Write or modify only the code/files needed for this task. Follow existing patterns; use existing services/helpers where they fit (see AGENTS.md). Do not reimplement what already exists; do not refactor unrelated code.
 2. **Run quality checks** — From the repo root: `npm run typecheck` and `npm test`. If the task involves Python (`scripts/integrations/`), also run `npm run test:py`. Fix until all relevant checks pass.
 3. **Commit only if passing** — `git add -A` then `git commit -m "[PRD: {prd.name}] Task {task.id}: {task.title}"`. Use the prd.name, task.id, and task.title from the parent's prompt. **Do this without asking for permission.**
 4. **Update PRD status** — In `dev/autonomous/prd.json` edit only this task's object: set `passes: true`, `status: "complete"`, and `commitSha: "<sha>"` (from `git log -1 --format=%h`). Do not change other tasks or metadata. **Do this automatically without asking.**

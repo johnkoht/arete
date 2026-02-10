@@ -1,6 +1,6 @@
 ---
 name: execute-prd
-description: Autonomous PRD execution with orchestrator + subagent pattern. Includes pre-mortem, task delegation, code review, and post-mortem analysis.
+description: Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Orchestrator owns PRD understanding, value/alignment, breakdown, context for subagents, and holistic post-completion review and report. Reviewer owns pre-work sanity check and post-work code review (technical, AC, quality, reuse). Includes pre-mortem, structured feedback on iterate, and refactor backlog.
 category: build
 work_type: development
 primitives: []
@@ -9,7 +9,29 @@ requires_briefing: false
 
 # Execute PRD Skill
 
-Autonomously execute a PRD by spawning subagents for each task, reviewing their work, and ensuring quality. Includes mandatory pre-mortem to identify and mitigate risks before starting.
+Autonomously execute a PRD by spawning subagents for each task, with two distinct roles: **Orchestrator** (senior engineering manager) and **Reviewer** (senior engineer).
+
+## Roles
+
+### Orchestrator — Sr. Engineering Manager
+
+The Orchestrator acts as a sr. engineering manager. Goals:
+
+- **Understand the PRD well** and how it fits into the broader Areté system.
+- **Understand the benefits and value** this will provide to end users.
+- **If there is no clarity or alignment**, ask the builder before proceeding.
+- **Break down the work** and provide the right context and information for each subagent to complete their tasks.
+
+Like a sr. engineering manager, the Orchestrator is a product thinker and technical leader: ensures the right problem is being solved and the right scope and context are given to the team (subagents).
+
+**After all tasks are completed**, the Orchestrator returns to sr. eng manager mode and performs a **holistic review**: Does this solve the problem and satisfy the needs and problem statement of the PRD? Is there anything missing? Are there learnings or insights to extract? If changes are needed, the Orchestrator goes back through the loop (or to particular subagents) to get the work done. Once complete, the Orchestrator provides a report to the builder.
+
+### Reviewer — Sr. Engineer
+
+The Reviewer acts as a sr. engineer in two moments:
+
+1. **Before work begins**: When a task is about to go to a subagent, the Reviewer reviews and confirms details, AC, and clarity on what to build. This is a **sanity check** before work begins.
+2. **After the subagent completes**: The Reviewer performs a **thorough code review** as a sr. engineer: validates the work, acceptance criteria, and tests (technical review, AC review, quality check DRY/KISS, reuse and duplication check, refactor backlog when applicable). Accept or iterate with structured feedback to the subagent.
 
 ## When to Use
 
@@ -25,23 +47,29 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
 
 ## Workflow
 
-### Phase 0: Understand the PRD
+### Phase 0: Understand the PRD (Orchestrator — Sr. Eng Manager)
 
-1. **Read the PRD**
+1. **Read and Internalize the PRD**
    - Read `dev/prds/{feature-name}/prd.md`
    - Read `dev/autonomous/prd.json` (task breakdown)
-   - Understand dependencies between tasks (A1→A2→A3→B1...)
+   - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
+   - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
+   - Understand dependencies between tasks (A1→A2→A3→B1...).
 
-2. **Identify Completed Work**
+2. **Clarity and Alignment**
+   - If anything is unclear (scope, problem statement, success criteria, or how it fits Areté), **ask the builder** before proceeding. Do not assume.
+   - Confirm alignment: this PRD is the right thing to execute at this time.
+
+3. **Identify Completed Work**
    - Check prd.json for tasks with `status: "complete"`
    - Read progress.txt to understand what's been done
    - Identify next pending task in dependency order
 
-### Phase 1: Pre-Mortem (MANDATORY)
+### Phase 1: Pre-Mortem (MANDATORY) — Orchestrator
 
 **Purpose**: Identify risks before starting, create actionable mitigations.
 
-3. **Identify Risks**
+4. **Identify Risks**
    
    Consider these common risk categories:
    
@@ -52,11 +80,12 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
    | **Integration** | How will tasks integrate? | "B2 async change might break callers" |
    | **Scope Creep** | How to prevent over-implementation? | "Strict acceptance criteria adherence" |
    | **Code Quality** | What patterns must be followed? | ".js imports, no any, error handling" |
+   | **Reuse / Duplication** | Could subagent reimplement instead of reuse? | "Use getSearchProvider(); don't add new search logic" |
    | **Dependencies** | Are dependencies clear? | "Can't do B1 until A3 is done" |
    | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
    | **State Tracking** | How to track progress? | "Update prd.json after each task" |
 
-4. **Document Mitigations**
+5. **Document Mitigations**
    
    For each risk, create concrete mitigation:
    
@@ -67,7 +96,7 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
    **Verification**: [How to check mitigation was applied]
    ```
 
-5. **Share Pre-Mortem with User**
+6. **Share Pre-Mortem with User**
    
    Present risks + mitigations table. Ask:
    - "Do you see any other risks?"
@@ -78,13 +107,13 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
 
 For each pending task (in dependency order):
 
-6. **Prepare Context**
+7. **Prepare Context** (Orchestrator)
    
    - **Read prior completed tasks**: Check what's been built (files, patterns, tests)
    - **Identify files to reference**: List specific files subagent should read first
    - **Check mitigations**: Review pre-mortem - which mitigations apply to this task?
 
-7. **Craft Subagent Prompt**
+8. **Craft Subagent Prompt** (Orchestrator)
    
    Use this template:
    
@@ -111,6 +140,10 @@ For each pending task (in dependency order):
    - [Pattern 2]: Reference [specific file that shows this pattern]
    ...
    
+   **Reuse & Design**:
+   - Use existing services, helpers, and abstractions per AGENTS.md (e.g. getSearchProvider(), shared CLI helpers). Do not reimplement what already exists.
+   - Apply DRY (don't repeat yourself) and KISS (simplest solution that meets acceptance criteria). Prefer existing modules over new ones when they fit.
+   
    **Pre-Mortem Mitigations Applied**:
    - [Mitigation 1 from pre-mortem]
    - [Mitigation 2 from pre-mortem]
@@ -133,7 +166,15 @@ For each pending task (in dependency order):
    - ✅ Reference pre-mortem mitigations explicitly
    - ❌ Don't say "use good patterns" (too vague)
 
-8. **Spawn Subagent**
+9. **Reviewer: Pre-Work Sanity Check** (Sr. Engineer)
+
+   Before spawning the subagent, the Reviewer confirms:
+   - **Details**: Task description and acceptance criteria are clear and unambiguous.
+   - **AC**: Acceptance criteria are complete and testable; nothing critical is missing.
+   - **Clarity on what to build**: The prompt and context (files to read, patterns) give the subagent enough to implement without guessing. Dependencies and pre-mortem mitigations for this task are reflected.
+   - If anything is vague or missing, refine the prompt or ask the Orchestrator to add context — then proceed to spawn only when the sanity check passes.
+
+10. **Spawn Subagent** (Orchestrator)
    
    ```
    Task tool with subagent_type: generalPurpose
@@ -143,11 +184,12 @@ For each pending task (in dependency order):
    
    Wait for subagent to complete and return results.
 
-9. **Code Review**
+11. **Reviewer: Code Review** (Sr. Engineer)
+
+   After the subagent completes, perform a thorough code review as a sr. engineer: validate the work, acceptance criteria, and tests. Ensure the agent wrote quality code, tested their work, and used DRY/KISS and the best solution given context and constraints.
    
-   After subagent completes, verify:
+   **11a. Technical Review**
    
-   **Quality Checklist**:
    - [ ] Uses `.js` extensions in imports (NodeNext module resolution)
    - [ ] No `any` types (strict TypeScript)
    - [ ] Proper error handling (try/catch with graceful fallback)
@@ -155,9 +197,33 @@ For each pending task (in dependency order):
    - [ ] Backward compatibility preserved (function signatures unchanged)
    - [ ] Follows project patterns (see dev.mdc)
    
-   **Read changed files**: Check implementation matches acceptance criteria.
+   **11b. AC Review**
+   
+   - Read all changed files. Verify implementation **matches acceptance criteria** for this task (no more, no less).
+   - Flag scope drift (implemented more than asked) or missing criteria.
+   
+   **11c. Quality Check (DRY, KISS, Best Solution)**
+   
+   - [ ] **DRY**: No duplicated logic that already exists elsewhere; no copy-paste that should be a shared util or existing service.
+   - [ ] **KISS**: Implementation is the simplest that meets acceptance criteria; no over-engineering or unnecessary abstraction.
+   - [ ] **Best solution**: Code is appropriate for context and constraints (e.g. used existing provider instead of reimplementing; didn't hardcode what should be config).
+   - Flag lazy or fragile choices: hardcoding, bypassing abstractions the codebase expects, or doing the minimum in a brittle way.
+   
+   **11d. Reuse & Duplication Check**
+   
+   - **New services/modules**: For any new file or "service-like" code (e.g. new helper module, new provider), ask: does equivalent functionality already exist? Check AGENTS.md and `src/` (e.g. `src/core/`, `src/integrations/`). If the solution already exists elsewhere, flag: "Reimplemented existing capability — use [X] instead."
+   - **Repetitive but not abstracted**: If the implementation is correct but you notice similar logic exists elsewhere without a shared abstraction, do **not** block acceptance. Instead: add a **refactor backlog item** (step 11e) so it can be addressed later. Continue with accept/iterate based on other criteria.
+   
+   **11e. Refactor Backlog (When Applicable)**
+   
+   When you find repetitive logic that isn't yet abstracted (same pattern in multiple places, no shared util):
+   1. Create a short backlog item in `dev/backlog/improvements/` using the naming pattern `refactor-[short-description].md` (e.g. `refactor-search-scoring-shared-util.md`).
+   2. In the file include: **What** (duplicated pattern and where), **Why** (DRY/maintainability), **Suggested direction** (e.g. extract to `src/core/utils.ts`), **Effort** (Tiny/Small/Medium).
+   3. Note the item in progress.txt or your review summary so the final report can list "Refactor items added to backlog: N."
+   
+   **If any of 11a–11d fail**: Proceed to step 13 (Accept or Iterate) with **Iterate** — give the subagent structured feedback (see step 13). Do not accept until the subagent has addressed the issues or you have explicitly decided to accept with a known backlog item only (11e).
 
-10. **Verify Tests**
+12. **Verify Tests** (Reviewer)
     
     Run full test suite (not just new tests):
     
@@ -171,39 +237,57 @@ For each pending task (in dependency order):
     - **Resume subagent**: Provide specific feedback, ask to fix
     - **Repeat review**: After fix, verify again
 
-11. **Accept or Iterate**
+13. **Accept or Iterate** (Reviewer)
     
     **Accept if**:
-    - ✅ All acceptance criteria met
-    - ✅ Quality checklist passed
+    - ✅ All acceptance criteria met (11b)
+    - ✅ Technical review passed (11a)
+    - ✅ Quality check passed — DRY, KISS, best solution (11c)
+    - ✅ Reuse check passed — no reimplemented existing capability (11d); refactor-only items (11e) are backlogged, not blockers
     - ✅ All tests passing (including existing tests)
     - ✅ Pre-mortem mitigations applied
     
-    **Iterate if**:
-    - ❌ Scope drift (implemented more than asked)
-    - ❌ Missing tests or edge cases
-    - ❌ Pattern violations (any types, missing .js, etc.)
+    **Iterate if** (any of the following):
+    - ❌ AC not met (scope drift, missing criteria, or over-implementation)
+    - ❌ Technical review failed (pattern violations: any types, missing .js, error handling, tests, backward compat)
+    - ❌ Quality check failed: lazy/fragile implementation, violated DRY/KISS, or clearly worse solution than existing option
+    - ❌ Reuse check failed: reimplemented existing service/capability instead of using it
     - ❌ Tests failing
     
-    **Resume subagent** with specific feedback. Repeat from step 9.
+    **When iterating: give the subagent structured feedback.** Resume the subagent with a prompt that includes:
+    1. **What was wrong**: Specific finding (e.g. "Reimplemented search logic; getSearchProvider() already exists in src/core/search.ts").
+    2. **What to do**: Concrete instruction (e.g. "Remove the new search helper; import getSearchProvider from './search.js' and use provider.semanticSearch().").
+    3. **Files to check**: List files or line ranges to change.
+    4. **Re-verify**: "After fixing, run npm run typecheck and npm test again; then update prd.json and progress.txt."
+    
+    Repeat from step 11 (Reviewer: Code Review) after the subagent returns.
 
-12. **Update Tracking**
+14. **Update Tracking** (Orchestrator)
     
     Once accepted:
     - Mark task complete in prd.json (`status: "complete"`)
     - Verify commitSha is recorded
     - Check: `completedTasks` count matches complete status count
 
-13. **Progress Update (Every 3 Tasks)**
+15. **Progress Update (Every 3 Tasks)** (Orchestrator)
     
     Report to user:
     - "Task X/Y complete: [title]"
     - "Next: [next task title]"
     - "Tests: Z/Z passing"
 
-### Phase 3: Post-Mortem (After All Tasks)
+### Phase 3: Holistic Review and Close (Orchestrator — Sr. Eng Manager, then Report)
 
-14. **Analyze Pre-Mortem Effectiveness**
+**Orchestrator returns to sr. eng manager role.** All tasks are complete from a Reviewer perspective; now assess the whole.
+
+16. **Orchestrator: Holistic Review**
+
+   - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
+   - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
+   - **Learnings and insights**: What can we extract for the builder and for future PRDs?
+   - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then spawn, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.
+
+17. **Analyze Pre-Mortem Effectiveness**
     
     For each risk identified in pre-mortem:
     - Did it materialize? (Yes/No)
@@ -217,13 +301,13 @@ For each pending task (in dependency order):
     | Fresh context | No | Yes (file lists) | Yes |
     | Test patterns | No | Yes (testDeps ref) | Yes |
     
-15. **Identify Surprises**
+18. **Identify Surprises**
     
     What happened that wasn't in the pre-mortem?
     - **Positive surprises**: What went better than expected?
     - **Negative surprises**: What issues arose that weren't anticipated?
 
-16. **Extract Learnings**
+19. **Extract Learnings**
     
     Synthesize:
     - **What worked well**: Patterns to repeat
@@ -231,7 +315,7 @@ For each pending task (in dependency order):
     - **Collaboration patterns**: How did builder respond? What did they prefer?
     - **System improvements**: What would make next PRD execution smoother?
 
-17. **Update Builder Memory**
+20. **Update Builder Memory**
     
     Create entry: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
     
@@ -241,15 +325,17 @@ For each pending task (in dependency order):
     - Collaboration patterns observed
     - Recommendations for future PRDs
     - Metrics (tasks completed, success rate, iterations, context used)
+    - Refactor backlog items added (count and paths)
     
     Add line to `dev/MEMORY.md`.
 
-18. **Deliver Final Report**
-    
-    Present to user:
+21. **Deliver Final Report to Builder** (Orchestrator)
+
+   Present to the builder:
     - **Status**: X/Y tasks complete, all tests passing
     - **Quality**: Success rate (first-attempt vs iterations)
     - **Pre-mortem review**: How many risks materialized
+    - **Refactor items added to backlog**: Count and list (so user can triage later)
     - **Key learnings**: Top 3-5 takeaways
     - **Recommendations**: What to improve for next time
 
@@ -274,6 +360,7 @@ For each pending task (in dependency order):
 **Tests**: ✅ [total] passing
 **Quality**: ✅ [success-rate]% first-attempt
 **Pre-mortem**: [risks-materialized]/[risks-identified] risks hit
+**Refactor items added to backlog**: [N] (see list below if N > 0)
 
 ## Deliverables
 - [Feature 1]
@@ -282,6 +369,10 @@ For each pending task (in dependency order):
 
 ## Pre-Mortem Analysis
 [Table of risks vs outcomes]
+
+## Refactor Backlog Items (if any)
+- `dev/backlog/improvements/refactor-[name].md` — [one-line summary]
+- ...
 
 ## Key Learnings
 1. [Learning 1]
@@ -352,14 +443,59 @@ After implementation:
 Proceed with implementation.
 ```
 
+### Refactor Backlog Item Example
+
+When the orchestrator finds repetitive logic that isn't yet abstracted, create a short file in `dev/backlog/improvements/`:
+
+```markdown
+# Refactor: [Short description]
+
+**Status**: Backlog  
+**Effort**: Tiny | Small | Medium  
+**Source**: PRD [name], Task [id] — orchestrator review
+
+## What
+
+[Describe the duplicated pattern and where it appears, e.g. "Score calculation logic appears in memory-retrieval.ts and context-injection.ts with minor variations."]
+
+## Why
+
+DRY / maintainability; single place to change behavior.
+
+## Suggested direction
+
+[E.g. "Extract to src/core/scoreSection.ts and use in both callers."]
+```
+
+### Structured Feedback to Subagent Example
+
+When iterating, the orchestrator resumes the subagent with concrete instructions:
+
+```markdown
+Your previous implementation for Task B1 had one issue that must be fixed before acceptance.
+
+**What was wrong**: You added a new local search helper in memory-retrieval.ts. Equivalent functionality already exists: the codebase has getSearchProvider() in src/core/search.ts, which returns a SearchProvider with semanticSearch() and search(). The PRD and AGENTS.md specify using the existing search abstraction.
+
+**What to do**:
+1. Remove the new search helper and any duplicate search logic from memory-retrieval.ts.
+2. Import getSearchProvider from '../search.js' (or the correct relative path).
+3. Use getSearchProvider(workspaceRoot) and then provider.semanticSearch() for the primary path, with fallback to the existing parseMemorySections + scoreSection logic when the provider returns no results.
+4. Keep the same public API (searchMemory signature unchanged).
+
+**Files to check**: src/core/memory-retrieval.ts (remove new helper, add getSearchProvider usage).
+
+After fixing, run npm run typecheck and npm test again. Update prd.json and progress.txt. Then return your result.
+```
+
 ## Success Criteria
 
 - All tasks completed (X/X)
 - All tests passing
-- All acceptance criteria met
+- All acceptance criteria met (Reviewer)
+- Holistic review passed: PRD problem and needs satisfied (Orchestrator)
 - Pre-mortem risks did not materialize (or were mitigated successfully)
 - Builder memory updated with learnings
-- Final report delivered
+- Final report delivered to builder (Orchestrator)
 
 ## References
 
