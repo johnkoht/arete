@@ -27,7 +27,8 @@ For **multi-step work** (PRD execution, large refactors, new systems, integratio
 - **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
 - **How**: Use `dev/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
 - **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
-- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/skills/execute-prd/SKILL.md`.
+- **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `dev/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
+- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/skills/execute-prd/SKILL.md`, `dev/skills/plan-to-prd/SKILL.md`.
 
 ## TypeScript / Node.js
 

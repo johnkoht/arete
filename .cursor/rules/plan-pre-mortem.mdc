@@ -18,9 +18,31 @@ You **must** conduct a pre-mortem when **any** of these are true:
 
 If the work is a single, well-understood task, a pre-mortem is optional.
 
+## PRD Gateway: Large Plans
+
+**Before** running a pre-mortem, check whether this plan is substantial enough to warrant the PRD path.
+
+**Offer PRD path** if any of these apply:
+
+- Plan has **3+ numbered or bullet steps**
+- Plan mentions: new system, new integration, large refactor, multi-file change
+- Plan references **multiple components** (e.g. `src/`, `test/`, `docs/`)
+
+**If PRD path applies**, present this choice to the user:
+
+> "This plan has [X] steps and involves [brief scope]. For work of this size, Areté recommends using the **PRD + autonomous agent loop** for better risk mitigation and execution quality. Would you like to:
+>
+> 1. **Convert to PRD** — I'll create prd.md and prd.json, then give you a handoff prompt for a new agent to execute via execute-prd.
+> 2. **Proceed with plan** — I'll run a pre-mortem and execute this plan directly."
+
+- **If user chooses "Convert to PRD"**: Load `dev/skills/plan-to-prd/SKILL.md` and follow its workflow. Do not execute the plan.
+- **If user chooses "Proceed with plan"**: Continue with the pre-mortem below.
+
+**If plan does not meet the threshold**: Skip the PRD offer and go directly to the pre-mortem.
+
 ## What to Do
 
-**After** you have a draft plan and **before** you start executing it:
+**After** you have a draft plan and **before** you start executing it (and after the PRD gateway, if applicable):
 
 1. **Run a pre-mortem** using the same process as the execute-prd skill:
    - Read `dev/templates/PRE-MORTEM-TEMPLATE.md` for the format and risk categories.
@@ -35,6 +57,7 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 
 ## References
 
+- **PRD gateway skill**: `dev/skills/plan-to-prd/SKILL.md`
 - **Template and categories**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
 - **Rationale and examples**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
 - **Full workflow (PRD execution)**: `dev/skills/execute-prd/SKILL.md`

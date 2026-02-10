@@ -566,6 +566,26 @@ Use autonomous PRD execution for:
 - Exploratory work (requirements unclear)
 - Work requiring human judgment at each step
 
+#### Plan Mode and PRD Gateway
+
+When the user creates a plan in **Plan Mode** (Cursor's plan-before-execute flow), the agent may offer the PRD path instead of executing the plan directly.
+
+**Flow**:
+1. User creates plan in Plan Mode
+2. Agent finishes plan draft
+3. **Scope check**: Plan has 3+ steps, or mentions new system/integration/large refactor, or touches multiple components?
+4. **If yes** → Offer: "Convert to PRD" or "Proceed with plan"
+5. **Convert to PRD** → Load `dev/skills/plan-to-prd/SKILL.md`: create PRD, run prd-to-json, write `dev/prds/{feature-name}/EXECUTE.md` handoff
+6. **Proceed with plan** → Run pre-mortem, execute plan directly
+
+**Plan-to-PRD skill** (`dev/skills/plan-to-prd/SKILL.md`):
+- Converts the approved plan into `dev/prds/{feature-name}/prd.md`
+- Runs prd-to-json to produce `dev/autonomous/prd.json`
+- Creates `dev/prds/{feature-name}/EXECUTE.md` with a prompt to paste into a new chat
+- User starts new chat, pastes prompt → agent loads execute-prd and runs full workflow
+
+**Rule**: `plan-pre-mortem.mdc` defines the scope check and PRD offer. See also `dev.mdc` for Plan → PRD path guidance.
+
 #### Key Success Factors
 
 The intelligence-and-calendar PRD execution identified these critical practices:
