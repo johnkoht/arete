@@ -738,8 +738,10 @@ Every prompt includes:
 When building Areté features:
 
 1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
-2. **Read this file first** for architecture understanding
-3. **Check build memory** (`dev/MEMORY.md`) for recent changes
+2. **Read this file first** for architecture understanding.
+3. **Leverage build memory before acting** (see `.cursor/rules/agent-memory.mdc` § Leverage build memory):
+   - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
+   - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don’t repeat past mistakes.
 4. **Follow patterns** established in existing code
 5. **Write tests** for all new functionality
 6. **Update AGENTS.md** with new patterns or gotchas discovered

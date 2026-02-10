@@ -21,6 +21,25 @@ In BUILDER mode, memory about the developer goes to `dev/`:
 
 **Do not** write to `memory/items/` or `.arete/memory/` in BUILDER mode — those are product templates for end users. **Do not** put backlog items or future work in `dev/entries/` — entries record what happened or was decided, not what might be done.
 
+### Leverage build memory (when to read) — BUILDER only
+
+**Purpose**: Use existing learnings *before* acting so you don’t repeat past mistakes. Writing memory is not enough; the agent must read it at the right times.
+
+1. **At start of substantive build work** (new feature, refactor, PRD execution, multi-file change):
+   - Read **`dev/collaboration.md`** — Working patterns, design philosophy, process preferences, **Corrections** (things the builder has corrected). Apply these when proposing plans, placing files, or making trade-off calls.
+   - Read **`dev/MEMORY.md`** — Scan the index (one-line summaries and links). You do **not** read every file in `dev/entries/`; you use the index to find what’s relevant. When the index shows an entry that matches your task (same area, recent corrections, related system), **open and read that entry** (or at least its Learnings section) to confirm and apply the learning.
+
+2. **Before doing something that has bitten us before** — Read the relevant entry (or its Learnings):
+   - Adding backlog/future work → entries and collaboration.md Corrections (backlog goes in `dev/backlog/features/` or `improvements/`, not in entries or root).
+   - Running seed or test-data → entry on seed-test-data (do not run in arete repo; check for accidental output after tasks).
+   - PRD placement → entries on PRD placement (Areté PRDs in `dev/prds/`, not `projects/active/`).
+   - Pre-mortem / Plan Mode / multi-step plan → execute-prd and plan-pre-mortem rules; consider PRD path for large plans.
+   - Subagent / Task tool → execute-prd fallback and prd-task entry.
+
+3. **When unsure** — If the task touches architecture, tooling, or builder preferences, read `dev/collaboration.md` and scan `dev/MEMORY.md` for matching topics. When you find a matching entry in the index, read that entry (or its Learnings) to confirm; when in doubt, read the specific entry linked from the index.
+
+**Note**: `dev/collaboration.md` is described as "injected into new build conversations" — that only happens if the agent (or rules) actually loads it. This section makes that load explicit.
+
 ### GUIDE mode (end-user workspace)
 
 In GUIDE mode, memory about the PM user goes to `.arete/memory/`:
