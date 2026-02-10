@@ -145,18 +145,8 @@ export class ClaudeAdapter implements IDEAdapter {
     const version = config.version || '1.0.0';
 
     // Read routing-mandatory.mdc content to inline in section 2
-    let routingContent = '';
-    try {
-      const routingPath = join(workspaceRoot, 'runtime/rules/routing-mandatory.mdc');
-      if (existsSync(routingPath)) {
-        const fullContent = readFileSync(routingPath, 'utf-8');
-        // Strip frontmatter if present
-        const contentWithoutFrontmatter = fullContent.replace(/^---[\s\S]*?---\n\n/, '');
-        routingContent = contentWithoutFrontmatter.trim();
-      }
-    } catch (error) {
-      // Fallback if file can't be read
-      routingContent = `# 🛑 STOP - READ THIS FIRST
+    // Fallback content if file doesn't exist or can't be read
+    const fallbackRouting = `# 🛑 STOP - READ THIS FIRST
 
 Before responding to ANY user request in this Areté workspace:
 
@@ -186,6 +176,19 @@ Proceed with normal tools.
 ---
 
 **You WILL be asked to verify you followed this. If you skipped the router and skill, you FAILED the task.**`;
+
+    let routingContent = fallbackRouting;
+    
+    try {
+      const routingPath = join(workspaceRoot, 'runtime/rules/routing-mandatory.mdc');
+      if (existsSync(routingPath)) {
+        const fullContent = readFileSync(routingPath, 'utf-8');
+        // Strip frontmatter if present
+        const contentWithoutFrontmatter = fullContent.replace(/^---[\s\S]*?---\n\n/, '');
+        routingContent = contentWithoutFrontmatter.trim();
+      }
+    } catch (error) {
+      // Use fallback on error (already set above)
     }
 
     const claudeMd = `# Areté - Product Builder's Operating System
