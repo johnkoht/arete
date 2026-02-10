@@ -62,6 +62,7 @@ program
   .command('install [directory]')
   .description('Initialize a new Areté workspace')
   .option('--source <source>', 'Installation source: npm, symlink, or local:/path', 'npm')
+  .option('--ide <target>', 'Target IDE: cursor or claude', 'cursor')
   .option('--json', 'Output as JSON')
   .action(installCommand);
 
