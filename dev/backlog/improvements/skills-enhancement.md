@@ -3,7 +3,7 @@
 **Date**: 2026-02-10  
 **Context**: Phase 2 of skills.sh evaluation—analyzed OSS skills to identify improvements for Areté's 5 native skills.
 
-**Update (2026-02-10)**: PM wisdom integration delivered many of the recommended improvements (named frameworks, anti-patterns, scaffolding) for **create-prd**, **discovery**, **construct-roadmap**, **quarter-plan**, and **goals-alignment**. Top 25 high-priority concepts from 16 articles + 17 books are now in those skills; see `dev/wisdom-registry.md` and `dev/backlog/improvements/pm-wisdom-COMPLETE-SUMMARY.md`. This backlog remains the source for OSS-inspired methodology; wisdom registry is the source for literature-inspired concepts. Both can feed future skill updates.
+**Update (2026-02-10)**: PM wisdom integration delivered many of the recommended improvements (named frameworks, anti-patterns, scaffolding) for **create-prd**, **discovery**, **construct-roadmap**, **quarter-plan**, and **goals-alignment**. Top 25 high-priority concepts from 16 articles + 17 books are now in those skills; see `dev/wisdom-registry.md` and `dev/entries/2026-02-10_pm-wisdom-integration-complete.md`. This backlog remains the source for OSS-inspired methodology; wisdom registry is the source for literature-inspired concepts. Both can feed future skill updates.
 
 ---
 

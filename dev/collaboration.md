@@ -39,6 +39,7 @@
   - **Enhancement-level items** (performance optimizations, nice-to-haves, minor improvements) → add to scratchpad (raw) or `dev/backlog/` (if discussed with a plan). Never add to entries.
   - When minor observations emerge during a review, proactively add them to scratchpad or offer: "Should I add these enhancements to the scratchpad?"
 - **Closing or pausing a project**: Clean up outstanding/completed backlog items, update MEMORY.md index, add a dated entry with learnings, and mark progress/backlog docs (complete or on hold). Keeps institutional memory accurate and avoids orphaned state.
+- **Completed backlog artifacts**: Prefer delete over archive. The entry documents what was done; git history preserves content. Keeps repo lean; no need to bloat with an archive that duplicates the entry.
 
 ---
 

@@ -158,7 +158,6 @@ The 78 concepts from PM wisdom literature cluster into four implementation theme
 
 ## References
 
-- **Concept matrix**: `pm-wisdom-concept-matrix.md`
-- **Phase A outputs**: `pm-wisdom-phase-a-outputs.md`
-- **Phase B outputs**: `pm-wisdom-phase-b-outputs.md`
+- **Wisdom registry**: `dev/wisdom-registry.md`
+- **Build entry**: `dev/entries/2026-02-10_pm-wisdom-integration-complete.md` (what was done; phase artifacts in git history)
 - **Format reference**: `skills-enhancement.md`

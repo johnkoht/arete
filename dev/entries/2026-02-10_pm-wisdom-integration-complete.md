@@ -25,7 +25,7 @@
 - **Skills enhanced**: create-prd, quarter-plan, discovery, construct-roadmap, goals-alignment (5 skills).
 - **Shared pattern**: `light_pre_mortem` in `runtime/skills/PATTERNS.md` (referenced by 3 skills).
 - **Knowledge base**: `dev/wisdom-registry.md` — catalog with agent prompt suggestions.
-- **Backlog artifacts**: concept matrix, prioritized backlog, phase 1–3 implementation summaries, complete summary.
+- **Backlog**: prioritized backlog (44 on hold) kept; phase artifacts (extraction outputs, concept matrix, implementation summaries, progress tracker) deleted—entry + git history are the record.
 
 ---
 
@@ -47,6 +47,7 @@
 ### Backlog & Memory Hygiene
 
 - When closing or pausing a project: clean up outstanding backlog items, update MEMORY.md index, add a dated entry with learnings, and mark progress/backlog docs (complete / on hold). Avoids orphaned state and keeps institutional memory accurate.
+- **Completed backlog project artifacts**: Don't archive by default—delete them. The build entry documents what was done; git history preserves the content if needed. Keeps the repo lean and avoids duplicate record-keeping (entry vs archive).
 
 ### Skills Enhancement Overlap
 
@@ -58,5 +59,5 @@
 
 - **Wisdom registry**: `dev/wisdom-registry.md`
 - **Prioritized backlog**: `dev/backlog/improvements/pm-wisdom-prioritized-backlog.md` (top 25 complete; rest on hold)
-- **Complete summary**: `dev/backlog/improvements/pm-wisdom-COMPLETE-SUMMARY.md`
-- **Progress tracker**: `dev/backlog/improvements/pm-wisdom-progress.md` (marked complete)
+
+Phase artifacts (extraction outputs, concept matrix, implementation summaries, progress tracker) were removed to avoid repo bloat; entry + git history preserve what was done.
