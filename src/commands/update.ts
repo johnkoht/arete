@@ -2,13 +2,15 @@
  * Update command - pull latest from source
  */
 
-import { existsSync, readdirSync, rmSync, cpSync, symlinkSync } from 'fs';
+import { existsSync, readdirSync, rmSync, cpSync, symlinkSync, writeFileSync } from 'fs';
 import { join, basename } from 'path';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths, getSourcePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
-import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure } from '../core/workspace-structure.js';
+import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
 import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
+import { getAdapterFromConfig } from '../core/adapters/index.js';
+import { transpileRules } from '../core/rule-transpiler.js';
 import type { CommandOptions, SyncResults } from '../types.js';
 
 export interface UpdateOptions extends CommandOptions {
@@ -91,8 +93,12 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
   
-  const paths = getWorkspacePaths(workspaceRoot);
   const config = loadConfig(workspaceRoot);
+  
+  // Load adapter from config (auto-detects if ide_target not set)
+  const adapter = getAdapterFromConfig(config, workspaceRoot);
+  
+  const paths = getWorkspacePaths(workspaceRoot, adapter);
   
   // Determine source
   const source = config.source || 'npm';
@@ -143,7 +149,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
 
   // Ensure workspace structure (missing dirs and default files — never overwrites)
-  const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check });
+  const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check, adapter });
   results.structure.directoriesAdded = structureResult.directoriesAdded;
   results.structure.filesAdded = structureResult.filesAdded;
 
@@ -242,10 +248,20 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     preserve: localOverrides
   });
   
-  // Update rules
-  const rulesResult = syncDirectory(sourcePaths.rules, paths.rules, {
-    symlink: useSymlinks
-  });
+  // Transpile rules to IDE-specific format (always regenerate)
+  const rulesResult = transpileRules(
+    sourcePaths.rules,
+    paths.rules,
+    adapter,
+    config,
+    PRODUCT_RULES_ALLOW_LIST
+  );
+  
+  // Regenerate IDE-specific root files (e.g., CLAUDE.md with updated timestamp)
+  const rootFiles = adapter.generateRootFiles(config, workspaceRoot);
+  for (const [filename, content] of Object.entries(rootFiles)) {
+    writeFileSync(join(workspaceRoot, filename), content, 'utf-8');
+  }
   
   // Summary
   if (!json) {
