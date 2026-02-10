@@ -120,7 +120,8 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
       path: workspaceRoot,
       version: config.version || 'unknown',
       source: config.source || 'unknown',
-      created: config.created || 'unknown'
+      created: config.created || 'unknown',
+      ide: config.ide_target || 'cursor'
     },
     skills: {
       list: skillsList,
@@ -153,6 +154,7 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   listItem('Path', formatPath(workspaceRoot));
   listItem('Version', status.workspace.version);
   listItem('Source', status.workspace.source);
+  listItem('IDE', status.workspace.ide);
   
   // Skills
   section('Skills');
@@ -199,6 +201,14 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   }
   
   console.log('');
+  
+  // Check for ambiguous IDE setup
+  const hasCursor = existsSync(join(workspaceRoot, '.cursor'));
+  const hasClaude = existsSync(join(workspaceRoot, '.claude'));
+  if (hasCursor && hasClaude && !config.ide_target) {
+    console.log(chalk.yellow('⚠️  Both .cursor/ and .claude/ directories exist. Set \'ide_target\' in arete.yaml to avoid ambiguity.'));
+    console.log('');
+  }
 }
 
 export default statusCommand;
