@@ -62,3 +62,22 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 ```
 
 **Rule**: Never write to memory without user approval. Always present candidates for Approve / Edit / Skip first.
+
+---
+
+## light_pre_mortem
+
+**Purpose**: Quick risk identification before committing to a decision (PRD, quarter plan, roadmap). Takes 5 minutes; surfaces 2-3 risks with mitigations.
+
+**Used by**: create-prd, quarter-plan, construct-roadmap
+
+**Steps**:
+
+1. **Frame the scenario** — "If [this decision/plan/PRD] failed 6 months from now, what would have caused it?"
+2. **Surface 2-3 risks** — Ask the user to identify specific failure causes (not vague "bad execution")
+3. **Define one mitigation per risk** — Concrete action to reduce likelihood or impact
+4. **Document** (optional) — Add risks/mitigations to the deliverable (PRD, quarter file, roadmap)
+
+**Outputs**: 2-3 risk-mitigation pairs; optional inclusion in deliverable.
+
+**Note**: For higher-stakes decisions (PRD execution, large refactors), use the full pre-mortem template at `dev/templates/PRE-MORTEM-TEMPLATE.md` with 8 risk categories.

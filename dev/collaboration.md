@@ -38,6 +38,7 @@
   - **PRD-level changes** (significant functionality changes, missing acceptance criteria) → update the PRD
   - **Enhancement-level items** (performance optimizations, nice-to-haves, minor improvements) → add to scratchpad (raw) or `dev/backlog/` (if discussed with a plan). Never add to entries.
   - When minor observations emerge during a review, proactively add them to scratchpad or offer: "Should I add these enhancements to the scratchpad?"
+- **Closing or pausing a project**: Clean up outstanding/completed backlog items, update MEMORY.md index, add a dated entry with learnings, and mark progress/backlog docs (complete or on hold). Keeps institutional memory accurate and avoids orphaned state.
 
 ---
 
@@ -70,6 +71,6 @@ Things the builder has corrected — important context for avoiding repeat mista
 
 ## Last Synthesized
 
-2026-02-09 — Initial synthesis from builder observations migrated from `memory/items/agent-observations.md`.
+2026-02-10 — Added: closing/pausing project = clean up backlog, update memory, add entry, mark progress (from PM wisdom integration complete).
 
 ---

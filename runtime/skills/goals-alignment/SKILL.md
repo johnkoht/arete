@@ -25,6 +25,10 @@ Read org strategy and the current quarter plan, then output an alignment view: o
 
 ### 1. Read Inputs
 
+#### Team Health Check (Optional)
+
+Before reviewing alignment, offer a brief **team health check** using the Five Dysfunctions pyramid (Patrick Lencioni): (1) **Trust** — vulnerability-based, (2) **Conflict** — healthy disagreement, (3) **Commitment** — clarity and buy-in, (4) **Accountability** — peers hold each other, (5) **Results** — team outcomes over individual. If any level is weak, alignment will be fragile. Ask: "Want to run through the Five Dysfunctions check before we look at the alignment?"
+
 - **Read** `goals/strategy.md` — org pillars, OKRs, strategic framework.
 - **Read** the current quarter file: `goals/quarter.md`.
 

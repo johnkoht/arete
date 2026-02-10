@@ -3,6 +3,8 @@
 **Date**: 2026-02-10  
 **Context**: Phase 2 of skills.sh evaluation—analyzed OSS skills to identify improvements for Areté's 5 native skills.
 
+**Update (2026-02-10)**: PM wisdom integration delivered many of the recommended improvements (named frameworks, anti-patterns, scaffolding) for **create-prd**, **discovery**, **construct-roadmap**, **quarter-plan**, and **goals-alignment**. Top 25 high-priority concepts from 16 articles + 17 books are now in those skills; see `dev/wisdom-registry.md` and `dev/backlog/improvements/pm-wisdom-COMPLETE-SUMMARY.md`. This backlog remains the source for OSS-inspired methodology; wisdom registry is the source for literature-inspired concepts. Both can feed future skill updates.
+
 ---
 
 ## Executive Summary
@@ -29,7 +31,7 @@ OSS skills offer **methodology depth**, **explicit guardrails**, and **concrete 
 | **discovery** | Marty Cagan 10 Questions (value, usability, feasibility, viability) | majiayu000 | High |
 | **discovery** | Opportunity Solution Tree (outcomes → opportunities → solutions) | majiayu000 | High |
 | **competitive-analysis** | Messaging Comparison Matrix (8 dimensions: positioning, audience, tone, proof, CTA, etc.) | anthropics | High |
-| **competitive-analysis** | Battlecard structure (objections, differentiators, proof points, landmines) | anthropics | High |
+| **competitive-analysis** | Battlecard structure (objecti ons, differentiators, proof points, landmines) | anthropics | High |
 | **competitive-analysis** | 6-layer or 7-layer analysis framework (product, pricing, marketing, sales, team, tech, positioning) | 1nf-sh | High |
 | **synthesize** | Thematic analysis (code, cluster, theme) | anthropics | Medium |
 | **synthesize** | Triangulation (methodological, data, analyst) | anthropics | Medium |

@@ -31,6 +31,8 @@ Guide the PM through defining 3–5 quarter outcomes, success criteria, and alig
 
 ### 2. Guide to 3–5 Outcomes
 
+If your org has a vision, treat it as a *picture of a better place*. Check that each quarter outcome moves the company toward that picture.
+
 Ask the PM to define **3–5 outcomes** for the quarter. For each outcome capture:
 
 - **Title** — Short, outcome-oriented (e.g. "Ship onboarding v2", "Complete discovery for X").
@@ -38,6 +40,10 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 - **Org alignment** — Which pillar or OKR from `goals/strategy.md` this supports (e.g. "Pillar 2: Retention", "O1-KR2").
 
 ### 3. Write Quarter File
+
+#### Quick Pre-Mortem
+
+Use the `light_pre_mortem` pattern before locking outcomes.
 
 - **File**: `goals/quarter.md`.
 - **Structure**: Use the template at `templates/plans/quarter-goals.md`:
@@ -49,6 +55,33 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 
 - Summarize the quarter outcomes and alignment.
 - Suggest next steps: **goals-alignment** to view the alignment view, **week-plan** when ready to plan the first week.
+
+## Frameworks
+
+Strategic frameworks for quarter planning:
+
+**Strategy kernel**: Good strategy has three parts: (1) Diagnosis (what's really going on), (2) Guiding policy (approach to obstacles), (3) Coherent action (coordinated steps). Before finalizing quarter outcomes, check: Do we have all three?
+
+**Disagree and commit**: Aim for clarity and commitment over consensus. If stakeholders disagree, document the disagreement but still commit to the decision. Clarity > consensus.
+
+**SMT and OKRs**: Use Strategy → Metrics → Tactics to create OKRs. Each outcome should have a proxy metric; add a forecast (e.g., "improve retention from 95% to 96%") to turn SMT into OKRs. Beware false precision—these are guesses, not certainties.
+
+**Proxy metrics checklist**: Good proxy metrics are: (1) Measurable, (2) Moveable (you can impact it), (3) Non-average (segment new vs existing), (4) Correlated to outcomes, (5) Not gameable. Use this checklist when defining success criteria.
+
+**Shallow vs deep alignment**: Alignment is dynamic equilibrium, not a checkbox. Shallow = low-stakes, fits on a slide. Deep = embraces tension and conflicting truths, requires psychological safety. Aim for deep alignment when planning the quarter.
+
+**Empowered teams**: Teams should own outcomes (solve problems), not outputs (build features). Frame quarter goals as outcomes to solve, not a list of features to ship.
+
+**Operating system for decisions**: Define who decides, who consults, and who is informed for each major decision type. Clarify this with stakeholders when planning the quarter.
+
+**PM leverage pyramid**: PM leverage is highest in vision and strategy; scope and backlog are optimization. When planning the quarter, ensure you're operating at the vision/strategy level, not just optimizing tactics.
+
+## Anti-patterns
+
+Common mistakes to avoid:
+
+- **Fluff and goals-as-strategy**: Avoid gibberish posing as strategy and mistaking goals for strategy. Strategy requires diagnosis, guiding policy, and coherent action.
+- **Superficial objectives**: Failing to address real obstacles is not strategy.
 
 ## References
 

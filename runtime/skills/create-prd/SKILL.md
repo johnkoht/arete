@@ -31,6 +31,8 @@ Guide users through creating Product Requirements Documents with a Product Leade
 
 ### 1. Project Setup
 
+Write PRDs iteratively—provide "just enough" so Design and Engineering can start exploration. Avoid 2-month waterfall specs.
+
 First, create a PRD project:
 
 ```
@@ -76,6 +78,8 @@ Adopt a **Product Leader persona** and ask strategic questions:
 - What timeline/constraints?
 - What resources available?
 - What's explicitly out of scope?
+
+**Note**: Treat legal, privacy, security, etc. as advisors, not approvers. Incorporate their input, but the PM decides what's best for customers and the business.
 
 ### 3. Quick Mode
 
@@ -145,12 +149,16 @@ After creating the PRD:
 
 1. **Offer review**: "Would you like me to review for gaps or provide devil's advocate perspective?"
 
-2. **Suggest next steps**:
+2. **Light pre-mortem** (optional): Use the `light_pre_mortem` pattern before finalizing.
+
+3. **Invite pushback**: Before locking the PRD, ask the user or a stakeholder: "What am I getting wrong?" to invite genuine pushback and surface blind spots.
+
+4. **Suggest next steps**:
    - "Should we update any context files?"
    - "Are there strategic frameworks that could strengthen this?"
    - "What's the review/approval process?"
 
-3. **Note open questions**: Highlight areas needing more info
+5. **Note open questions**: Highlight areas needing more info
 
 ### 9. Special Modes
 
@@ -160,11 +168,29 @@ After creating the PRD:
 - Question metrics
 - Suggest alternatives
 - Highlight underestimated risks
+- Offer: "Want to argue the opposite case to stress-test this PRD?"
 
 **Strategic Review Mode** (on request):
 - Porter's 5 Forces lens
 - 7 Powers analysis
 - Thinking in Bets: What are we betting? What if wrong?
+
+## Anti-patterns
+
+Common mistakes to avoid when creating PRDs:
+
+- **Version two is a lie**: Don't rely on v2; ship v1 as a complete product that works if never improved.
+- **Decide, don't option**: PMs must decide; "make it configurable" leads to combinatorics and unclear product point of view.
+- **Can't agree to disagree**: After a decision, bring people along; avoid "agree to disagree" which creates passive-aggressive dynamics.
+- **Strategy before execution**: Get the strategy right before investing in flawless execution; don't waste team time on a flawed strategy.
+
+## Frameworks
+
+Strategic frameworks for PRD creation:
+
+**DHM model**: Product strategy = delighting customers in hard-to-copy, margin-enhancing ways. Ask: (1) How will this delight customers? (2) What makes it hard to copy? (3) What's the business model?
+
+**Probabilistic thinking**: Evaluate decisions by process and probability, not just outcome; good decisions can produce bad results.
 
 ## Product Leader Persona
 

@@ -212,6 +212,26 @@ When discovery is complete:
 3. Log key learnings to `.arete/memory/items/learnings.md`
 4. Use `finalize-project` skill to archive
 
+## Anti-patterns
+
+Common mistakes to avoid in discovery:
+
+- **Don't pitch your idea**: Talk about their life and experience; avoid describing or pitching your solution, which contaminates feedback
+- **Past behavior over hypotheticals**: Ask "Tell me about the last time…" not "Would you use…"; specific stories over opinions
+- **Compliments are lies**: Generic praise ("This is great!") is unreliable; dig for specifics ("What's the last time you struggled with X?")
+- **Solution-first discovery**: Starting with a solution and seeking confirming evidence is a common failure mode; start with the problem space and let solutions emerge from research
+- **Behaviors over stated preferences**: Focus on what users actually do, not what they say they'll do; past behavior predicts future action better than hypothetical intentions
+
+## Frameworks
+
+Strategic frameworks for discovery:
+
+**Jobs-to-be-done**: Frame discovery around the job users hire the product to do. Use the job statement template: *When [situation], I want to [motivation], so I can [outcome]*. Focus on the job's functional, emotional, and social dimensions.
+
+**Build-Measure-Learn loop**: Minimize total time through the loop—not just build time. Run small experiments to test hypotheses; use validated learning to decide next steps (pivot or persevere).
+
+**Rachleff's Law (Product/Market Fit)**: A great team with a bad market fails. A bad team with a great market often succeeds. Signals of PMF: users spontaneously tell others, usage grows organically, press wants to cover you without you pitching. If you have to ask whether you have PMF, you don't.
+
 ## Research Best Practices
 
 **During Interviews**:

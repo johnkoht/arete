@@ -101,6 +101,10 @@ List all potential initiatives in `inputs/initiatives/`:
 
 ### 4. Prioritization Framework
 
+#### Quick Pre-Mortem
+
+Use the `light_pre_mortem` pattern before committing priorities.
+
 Default to **RICE** scoring:
 
 | Factor | Description | Scale |
@@ -218,6 +222,7 @@ Before finalizing:
 3. **Validate with stakeholders**: Major objections?
 4. **Document trade-offs**: What we're NOT doing
 5. **Risk assessment**: What could derail this?
+6. **Argue the opposite**: Have someone play devil's advocate and argue against the roadmap priorities. What would we do if we couldn't build any of these? What's the contrarian view?
 
 ### 8. Final Output
 
@@ -269,7 +274,11 @@ Create `outputs/roadmap.md`:
 - YYYY-MM-DD: [Change made]
 ```
 
-### 9. Context Update
+### 9. Confirm and Close
+
+Before closing, ask: "How could we accomplish this in half the time?" There's always a way to ship faster—challenge the team to find it.
+
+### 10. Context Update
 
 After finalizing:
 
@@ -284,3 +293,9 @@ After finalizing:
 - **Living document**: Update regularly, note changes
 - **Communication tool**: Tailor for audience
 - **Not a commitment**: Plans change, that's okay
+
+## Anti-patterns
+
+Common mistakes to avoid:
+
+- **Ruthless prioritization**: Every yes is a no to something else. Say no to good ideas to say yes to great ones. "Everything is important" means nothing is.
