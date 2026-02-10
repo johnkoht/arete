@@ -111,7 +111,7 @@ PMs have meeting notes and people data after propagation, but no structured way 
 
 ## 5. Dependencies & References
 
-- **Meeting Propagation PRD**: `.cursor/build/prds/meeting-propagation/prd.md`
+- **Meeting Propagation PRD**: `dev/prds/meeting-propagation/prd.md`
 - **People System**, **Meetings**, **Planning**, **Projects**: See AGENTS.md
 
 ---

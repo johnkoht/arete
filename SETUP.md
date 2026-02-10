@@ -98,10 +98,10 @@ If you're contributing to or building Areté itself:
 - Future concepts and design decisions
 
 **Build vs Product separation**:
-- `.cursor/build/` = Internal development tooling (NOT shipped to users)
+- `dev/` = Internal development tooling (NOT shipped to users)
 - Everything else = Product code/content shipped via npm
 
-**Autonomous development**: `.cursor/build/autonomous/` contains a Ralph-inspired autonomous agent loop for building Areté features. See [`.cursor/build/autonomous/README.md`](.cursor/build/autonomous/README.md) for details.
+**Autonomous development**: `dev/autonomous/` contains a Ralph-inspired autonomous agent loop for building Areté features. See [`dev/autonomous/README.md`](dev/autonomous/README.md) for details.
 
 ## Quick Start
 
@@ -372,7 +372,7 @@ Create → Work → Synthesize → Finalize → Archive
 If you're building Areté itself (not just using it):
 
 1. **Read AGENTS.md** - Comprehensive architecture and context document
-2. **Check build memory** - `.cursor/build/MEMORY.md` for recent changes
+2. **Check build memory** - `dev/MEMORY.md` for recent changes
 3. **Follow patterns** - Established in existing code
 4. **Write tests** - All new functionality requires tests (see `.cursor/rules/testing.mdc`)
 5. **Update docs** - Keep AGENTS.md current with new patterns
@@ -383,6 +383,6 @@ Areté has an autonomous agent loop for building features:
 - Create PRD → Convert to JSON → Execute autonomously
 - Fresh Task subagent per task for clean context
 - Automatic testing and committing
-- See `.cursor/build/autonomous/README.md` for full workflow
+- See `dev/autonomous/README.md` for full workflow
 
 This is **internal tooling only** - not shipped to Areté users.

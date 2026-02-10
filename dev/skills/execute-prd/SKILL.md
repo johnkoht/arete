@@ -19,8 +19,8 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
 
 ## Prerequisites
 
-- PRD exists at `.cursor/build/prds/{feature-name}/prd.md`
-- Task breakdown exists in `.cursor/build/autonomous/prd.json`
+- PRD exists at `dev/prds/{feature-name}/prd.md`
+- Task breakdown exists in `dev/autonomous/prd.json`
 - Working branch created: `feature/{feature-name}`
 
 ## Workflow
@@ -28,8 +28,8 @@ Autonomously execute a PRD by spawning subagents for each task, reviewing their 
 ### Phase 0: Understand the PRD
 
 1. **Read the PRD**
-   - Read `.cursor/build/prds/{feature-name}/prd.md`
-   - Read `.cursor/build/autonomous/prd.json` (task breakdown)
+   - Read `dev/prds/{feature-name}/prd.md`
+   - Read `dev/autonomous/prd.json` (task breakdown)
    - Understand dependencies between tasks (A1→A2→A3→B1...)
 
 2. **Identify Completed Work**
@@ -121,8 +121,8 @@ For each pending task (in dependency order):
    1. Run npm run typecheck (must pass)
    2. Run npm test (must pass)
    3. Commit with message: "[type]([scope]): [description]"
-   4. Update .cursor/build/autonomous/prd.json
-   5. Update .cursor/build/autonomous/progress.txt
+   4. Update dev/autonomous/prd.json
+   5. Update dev/autonomous/progress.txt
    
    Proceed with implementation.
    ```
@@ -233,7 +233,7 @@ For each pending task (in dependency order):
 
 17. **Update Builder Memory**
     
-    Create entry: `.cursor/build/entries/YYYY-MM-DD_[prd-name]-learnings.md`
+    Create entry: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
     
     Include:
     - Pre-mortem analysis (risks, mitigations, effectiveness)
@@ -242,7 +242,7 @@ For each pending task (in dependency order):
     - Recommendations for future PRDs
     - Metrics (tasks completed, success rate, iterations, context used)
     
-    Add line to `.cursor/build/MEMORY.md`.
+    Add line to `dev/MEMORY.md`.
 
 18. **Deliver Final Report**
     
@@ -363,6 +363,6 @@ Proceed with implementation.
 
 ## References
 
-- **Learnings**: `.cursor/build/entries/2026-02-09_builder-orchestration-learnings.md`
-- **PRD Template**: `.cursor/build/prds/intelligence-and-calendar/prd.md`
-- **Task Schema**: `.cursor/build/autonomous/prd.json`
+- **Learnings**: `dev/entries/2026-02-09_builder-orchestration-learnings.md`
+- **PRD Template**: `dev/prds/intelligence-and-calendar/prd.md`
+- **Task Schema**: `dev/autonomous/prd.json`

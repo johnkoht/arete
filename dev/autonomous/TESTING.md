@@ -12,15 +12,15 @@
 ### Step 1: Convert Test PRD to JSON
 
 ```
-Load the prd-to-json skill from .cursor/build/autonomous/skills/prd-to-json/ and convert .cursor/build/autonomous/test-prd.md to prd.json
+Load the prd-to-json skill from dev/autonomous/skills/prd-to-json/ and convert dev/autonomous/test-prd.md to prd.json
 ```
 
-**Expected result**: Creates `.cursor/build/autonomous/prd.json` with 3 tasks (all status: "pending")
+**Expected result**: Creates `dev/autonomous/prd.json` with 3 tasks (all status: "pending")
 
 ### Step 2: Verify prd.json
 
 ```bash
-cat .cursor/build/autonomous/prd.json | jq '.userStories[] | {id, title, status}'
+cat dev/autonomous/prd.json | jq '.userStories[] | {id, title, status}'
 ```
 
 **Expected output**:
@@ -45,7 +45,7 @@ cat .cursor/build/autonomous/prd.json | jq '.userStories[] | {id, title, status}
 ### Step 3: Execute the PRD
 
 ```
-Load the execute-prd skill from .cursor/build/autonomous/skills/execute-prd/ and execute the PRD
+Load the execute-prd skill from dev/autonomous/skills/execute-prd/ and execute the PRD
 ```
 
 **Expected behavior**:
@@ -85,7 +85,7 @@ All tests should pass (including new ones).
 
 **Check progress log:**
 ```bash
-cat .cursor/build/autonomous/progress.txt
+cat dev/autonomous/progress.txt
 ```
 
 Should have 3 entries (one per task) with learnings.
@@ -93,7 +93,7 @@ Should have 3 entries (one per task) with learnings.
 **Check archive:**
 After completion, check:
 ```bash
-ls -la .cursor/build/autonomous/archive/
+ls -la dev/autonomous/archive/
 ```
 
 Should have a directory like `2026-02-06-build-version-utility/` with:
@@ -158,10 +158,10 @@ Document your test results:
 
 ```bash
 # Remove test prd.json
-rm .cursor/build/autonomous/prd.json
+rm dev/autonomous/prd.json
 
 # Remove test progress.txt
-rm .cursor/build/autonomous/progress.txt
+rm dev/autonomous/progress.txt
 
 # Optionally reset the test commits
 git reset --hard HEAD~3  # If you want to undo test commits
@@ -192,7 +192,7 @@ The test is successful if:
 
 ## Next Steps After Successful Test
 
-1. Document any issues in `.cursor/build/entries/2026-02-06_autonomous-agent-loop.md`
+1. Document any issues in `dev/entries/2026-02-06_autonomous-agent-loop.md`
 2. Update skills if improvements needed
 3. Use the system for real Areté feature development!
 4. Consider adding to build memory system for future reference

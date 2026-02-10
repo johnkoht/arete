@@ -217,6 +217,6 @@ $ arete prd status --json
 
 ## Related
 
-- **prd.json**: `.cursor/build/autonomous/prd.json` (data source)
-- **progress.txt**: `.cursor/build/autonomous/progress.txt` (timing data)
+- **prd.json**: `dev/autonomous/prd.json` (data source)
+- **progress.txt**: `dev/autonomous/progress.txt` (timing data)
 - **execute-prd**: Could integrate status updates during execution

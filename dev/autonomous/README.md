@@ -45,7 +45,7 @@ This creates a PRD in `projects/active/{name}/outputs/prd-{name}.md`.
 Load the prd-to-json skill and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
 ```
 
-This creates `.cursor/build/autonomous/prd.json` with structured tasks.
+This creates `dev/autonomous/prd.json` with structured tasks.
 
 ### 3. Execute Autonomously
 
@@ -108,7 +108,7 @@ Each subagent has access to multiple sources of knowledge:
    - Implementation decisions and gotchas
    - Advice for subsequent tasks
 
-3. **MEMORY.md** (`.cursor/build/MEMORY.md`) - Build memory across past work
+3. **MEMORY.md** (`dev/MEMORY.md`) - Build memory across past work
    - Recent architectural decisions and refactors
    - Established patterns and migrations
    - Gotchas and fixes worth following
@@ -154,7 +154,7 @@ Tasks should be small enough to complete in one context window:
 ## Directory Structure
 
 ```
-.cursor/build/autonomous/
+dev/autonomous/
 ├── schema.ts                    # TypeScript types for PRD/Task
 ├── prd.json.example             # Example PRD format
 ├── progress.txt.template        # Example progress log format
@@ -213,7 +213,7 @@ Output: projects/active/slack-integration/outputs/prd-slack-integration.md
 ```
 User: "Load prd-to-json and convert that PRD"
 Agent: [Parses markdown, extracts tasks]
-Output: .cursor/build/autonomous/prd.json with 5 tasks
+Output: dev/autonomous/prd.json with 5 tasks
 ```
 
 **Step 3: Execute**
@@ -257,7 +257,7 @@ npm test
 
 Check `prd.json` for task notes:
 ```bash
-cat .cursor/build/autonomous/prd.json | jq '.userStories[] | select(.status == "failed")'
+cat dev/autonomous/prd.json | jq '.userStories[] | select(.status == "failed")'
 ```
 
 Review `progress.txt` for patterns. Manually fix if needed, commit, update `prd.json`, resume.
@@ -364,10 +364,10 @@ This is internal tooling. If you're an Areté maintainer and need help:
 1. Review this README
 2. Check example files (`prd.json.example`, `progress.txt.template`)
 3. Read the skill files for detailed workflows
-4. Review `.cursor/build/MEMORY.md` for historical context
+4. Review `dev/MEMORY.md` for historical context
 
 ## References
 
 - **Ralph**: https://github.com/snarktank/ralph
 - **Agent Skills Standard**: https://agentskills.io
-- **Areté Build Memory**: `.cursor/build/MEMORY.md`
+- **Areté Build Memory**: `dev/MEMORY.md`

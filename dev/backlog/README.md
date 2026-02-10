@@ -1,6 +1,10 @@
 # Backlog - Areté Features & Improvements
 
-Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prds/`.
+Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
+
+**Structure**: Use subfolders — do not put files in the root.
+- `features/` — new capabilities (progress-dashboard, google-calendar-provider)
+- `improvements/` — enhancements to existing functionality (automated-code-review, skills-enhancement)
 
 ---
 
@@ -8,8 +12,8 @@ Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prd
 
 1. **Capture ideas here** (or start in scratchpad, move here when mature)
 2. **Flesh out details** (what, why, effort, dependencies)
-3. **When ready**: Convert to full PRD in `.cursor/build/prds/{feature-name}/prd.md`
-4. **Execute**: Use `.cursor/build/skills/execute-prd/SKILL.md`
+3. **When ready**: Convert to full PRD in `dev/prds/{feature-name}/prd.md`
+4. **Execute**: Use `dev/skills/execute-prd/SKILL.md`
 
 ---
 
@@ -104,6 +108,7 @@ Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prd
 
 ## Recently Completed
 
+- ✅ **Skills Evaluation & Enhancement Backlog** (2026-02-10) - Evaluated 5 runtime skills vs skills.sh alternatives; kept all native (integration is the moat); identified Top 20 improvements (frameworks, examples, anti-patterns, scaffolding) in `dev/backlog/improvements/skills-enhancement.md`
 - ✅ **Intelligence & Calendar Integration** (2026-02-09) - SearchProvider abstraction, CalendarProvider, ical-buddy integration
 - ✅ **Execute PRD Skill** (2026-02-09) - Orchestration system with pre-mortem
 
@@ -112,10 +117,10 @@ Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prd
 ## Moving Items from Scratchpad
 
 **Process**:
-1. Quick idea → capture in root `scratchpad.md`
-2. Idea matures → create file in `backlog/` with details
-3. Ready to build → convert to PRD in `prds/`
+1. Raw or underdeveloped idea → capture in root `scratchpad.md` (e.g. "we should eventually build onboarding")
+2. Idea is discussed and gains a plan → create file in `dev/backlog/` with details
+3. Ready to build → convert to PRD in `dev/prds/`
 4. Execute → use execute-prd skill
 
-**Scratchpad should contain**: Quick capture, active work, parking lot  
-**Backlog should contain**: Mature ideas with enough detail to become PRDs
+**Scratchpad**: Raw ideas, quick capture, parking lot, active work-in-progress  
+**Backlog**: Mature ideas with enough detail to become PRDs (what, why, effort, dependencies)

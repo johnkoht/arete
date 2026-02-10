@@ -68,13 +68,13 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 
 ### Implementation
 
-✅ **Created**: `.cursor/build/skills/execute-prd/SKILL.md`
+✅ **Created**: `dev/skills/execute-prd/SKILL.md`
 - Includes mandatory pre-mortem as Phase 1
 - Structured risk identification (8 categories)
 - Actionable mitigation format
 - Post-mortem analysis
 
-✅ **Created**: `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md`
+✅ **Created**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
 - Standalone template for quick reference
 - Example risks from this session
 - Post-mortem table format
@@ -92,7 +92,7 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 
 #### **1. Create `execute-prd` Skill** ✅ DONE
 
-**File**: `.cursor/build/skills/execute-prd/SKILL.md`
+**File**: `dev/skills/execute-prd/SKILL.md`
 
 **What it does**:
 - Phase 0: Understand PRD and dependencies
@@ -252,6 +252,6 @@ For next PRD execution with execute-prd skill:
 ---
 
 **File References**:
-- Execute PRD Skill: `.cursor/build/skills/execute-prd/SKILL.md`
-- Pre-Mortem Template: `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md`
-- Orchestration Learnings: `.cursor/build/entries/2026-02-09_builder-orchestration-learnings.md`
+- Execute PRD Skill: `dev/skills/execute-prd/SKILL.md`
+- Pre-Mortem Template: `dev/templates/PRE-MORTEM-TEMPLATE.md`
+- Orchestration Learnings: `dev/entries/2026-02-09_builder-orchestration-learnings.md`

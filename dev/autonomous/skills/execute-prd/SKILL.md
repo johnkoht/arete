@@ -18,7 +18,7 @@ Orchestrate autonomous execution of PRD tasks by spawning fresh Task subagents f
 
 ## Prerequisites
 
-- `prd.json` exists at `.cursor/build/autonomous/prd.json`
+- `prd.json` exists at `dev/autonomous/prd.json`
 - Git repository is clean (or user acknowledges dirty state)
 - Tests and typecheck are working (`npm run typecheck`, `npm test`)
 
@@ -64,8 +64,8 @@ Default settings (user can override):
 {
   maxIterations: 20,        // Stop after N tasks
   maxRetries: 2,            // Retry failed tasks up to N times
-  prdPath: '.cursor/build/autonomous/prd.json',
-  progressPath: '.cursor/build/autonomous/progress.txt'
+  prdPath: 'dev/autonomous/prd.json',
+  progressPath: 'dev/autonomous/progress.txt'
 }
 ```
 
@@ -76,7 +76,7 @@ Default settings (user can override):
 1. **Check prerequisites**:
    ```bash
    # Verify prd.json exists
-   ls -la .cursor/build/autonomous/prd.json
+   ls -la dev/autonomous/prd.json
    
    # Check git status
    git status
@@ -88,7 +88,7 @@ Default settings (user can override):
 2. **Read prd.json**:
    ```typescript
    import fs from 'fs';
-   const prd = JSON.parse(fs.readFileSync('.cursor/build/autonomous/prd.json', 'utf8'));
+   const prd = JSON.parse(fs.readFileSync('dev/autonomous/prd.json', 'utf8'));
    ```
 
 3. **Set up progress tracking**:
@@ -157,7 +157,7 @@ You are a Task subagent completing ONE task from an Areté feature PRD.
 Key points:
 - Areté is a PM workspace tool for context, workflows, and institutional memory
 - End users are Product Managers working at tech companies
-- Build system (`.cursor/build/`) vs Product (shipped to users) - keep these separate
+- Build system (`dev/`) vs Product (shipped to users) - keep these separate
 - Tech stack: TypeScript (NodeNext), Node.js, ES modules with `.js` extensions
 
 ### Codebase
@@ -168,10 +168,10 @@ Key points:
 - **Conventions**: See AGENTS.md files in the repo
 
 ### Previous Work
-Read `.cursor/build/autonomous/progress.txt` for learnings from previous tasks in this PRD run.
+Read `dev/autonomous/progress.txt` for learnings from previous tasks in this PRD run.
 
 ### Build Memory
-Read `.cursor/build/MEMORY.md` for recent architectural decisions, refactors, and gotchas across past work. Entries document migrations, pattern changes, and fixes worth following. Use this to avoid repeating mistakes and to align with established patterns.
+Read `dev/MEMORY.md` for recent architectural decisions, refactors, and gotchas across past work. Entries document migrations, pattern changes, and fixes worth following. Use this to avoid repeating mistakes and to align with established patterns.
 
 ### PRD Goal
 {prd.goal}
@@ -201,7 +201,7 @@ git commit -m "[PRD: {prd.name}] Task {task.id}: {task.title}"
 ### 4. Update PRD Status
 **IMPORTANT**: Do this automatically without asking for permission.
 
-Edit `.cursor/build/autonomous/prd.json`:
+Edit `dev/autonomous/prd.json`:
 - Set `passes: true`
 - Set `status: "complete"`
 - Add `commitSha: "<sha>"` (from git log)
@@ -209,7 +209,7 @@ Edit `.cursor/build/autonomous/prd.json`:
 ### 5. Log Learnings
 **IMPORTANT**: Do this automatically without asking for permission.
 
-Append to `.cursor/build/autonomous/progress.txt`:
+Append to `dev/autonomous/progress.txt`:
 
 ```
 ## Task {task.id}: {task.title}
@@ -321,9 +321,9 @@ When all tasks are done (or stopped):
 
 3. **Archive the PRD**:
    ```bash
-   mkdir -p .cursor/build/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}
-   cp .cursor/build/autonomous/prd.json .cursor/build/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}/
-   cp .cursor/build/autonomous/progress.txt .cursor/build/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}/
+   mkdir -p dev/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}
+   cp dev/autonomous/prd.json dev/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}/
+   cp dev/autonomous/progress.txt dev/autonomous/archive/$(date +%Y-%m-%d)-{prd.name}/
    ```
 
 4. **Output completion token**:
@@ -372,10 +372,10 @@ User can check status at any time:
 
 ```bash
 # View prd.json
-cat .cursor/build/autonomous/prd.json | jq '.userStories[] | {id, title, status, passes}'
+cat dev/autonomous/prd.json | jq '.userStories[] | {id, title, status, passes}'
 
 # View progress log
-tail -n 50 .cursor/build/autonomous/progress.txt
+tail -n 50 dev/autonomous/progress.txt
 
 # View commits
 git log --oneline
@@ -409,7 +409,7 @@ If parent context grows large after many iterations:
 ```
 User: "Execute the PRD"
 
-Agent: [Reads .cursor/build/autonomous/prd.json]
+Agent: [Reads dev/autonomous/prd.json]
 Agent: 🚀 Starting autonomous execution: slack-integration
 Agent: Feature branch: feature/slack-integration
 Agent: Total tasks: 3
@@ -480,8 +480,8 @@ For each task to be considered successful:
 ## Integration with Build Memory
 
 After successful PRD execution, consider:
-1. Adding entry to `.cursor/build/MEMORY.md`
-2. Creating `.cursor/build/entries/YYYY-MM-DD_{feature}.md`
+1. Adding entry to `dev/MEMORY.md`
+2. Creating `dev/entries/YYYY-MM-DD_{feature}.md`
 3. Documenting patterns discovered in AGENTS.md
 
 (These are manual steps, not automated by this skill)

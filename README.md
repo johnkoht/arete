@@ -88,7 +88,7 @@ If you're building features for Areté itself, we have an autonomous agent loop 
 3. Execute autonomously with `execute-prd` skill
 4. Review commits and merge
 
-See [`.cursor/build/autonomous/README.md`](.cursor/build/autonomous/README.md) for full documentation.
+See [`dev/autonomous/README.md`](dev/autonomous/README.md) for full documentation.
 
 ---
 
@@ -132,8 +132,8 @@ Projects are however YOU want to organize your work. Not everything needs a proj
 
 ### For Developers (Areté Maintainers)
 - `AGENTS.md` - Architecture, patterns, and context for AI agents building Areté
-- `.cursor/build/` - Internal build system and autonomous development tools
-- `.cursor/build/MEMORY.md` - Build history and architectural decisions
+- `dev/` - Internal build system and autonomous development tools
+- `dev/MEMORY.md` - Build history and architectural decisions
 
 ## Contributing
 

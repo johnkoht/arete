@@ -6,7 +6,7 @@
  * pattern in action: Areté prepares context before any skill and captures
  * output after.
  *
- * See: .cursor/build/prds/product-os/skill-interface.md §1 (Primitive Briefing)
+ * See: dev/prds/product-os/skill-interface.md §1 (Primitive Briefing)
  */
 
 import { getRelevantContext } from './context-injection.js';

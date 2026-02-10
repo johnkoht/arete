@@ -16,7 +16,21 @@ Standards for building and changing Arete. **Testing** is covered in `testing.md
 - **MEMORY.md**: `dev/MEMORY.md` — index of significant build/architecture changes.
 - **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
 - **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
+- **Backlog**: `dev/backlog/` — future work and enhancements. Use subfolders:
+  - `features/` — new capabilities (e.g., progress-dashboard, google-calendar-provider)
+  - `improvements/` — enhancements to existing functionality (e.g., automated-code-review, skills-enhancement)
+  - Do not put backlog items in `dev/backlog/` root; always use `features/` or `improvements/`.
 - **PRDs for Areté features**: Put PRDs in `dev/prds/{feature-name}/prd.md`, not in `projects/active/`. `projects/active/` is for PMs *using* Areté; `dev/` is internal build tooling.
+
+### Entries vs scratchpad vs backlog
+
+| Content | Location | Examples |
+|---------|----------|----------|
+| **What happened** — decisions, changes, learnings | `dev/entries/` | Refactors, architectural decisions, methodology findings |
+| **Raw or underdeveloped ideas** | `scratchpad.md` (root) | "We should eventually build onboarding"; quick capture, parking lot |
+| **Mature future work** — discussed, with a plan | `dev/backlog/` | Idea + general plan, enough detail to become a PRD |
+
+**Do not** put backlog items or future work in entries. Entries record what was decided or done; scratchpad and backlog record what might be done. If an entry documents an analysis that produces a prioritized backlog, put the backlog in `dev/backlog/features/` or `dev/backlog/improvements/` (not in the root, not in entries).
 
 **Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: “Should I add this to build memory (dev/MEMORY.md)?” If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
 

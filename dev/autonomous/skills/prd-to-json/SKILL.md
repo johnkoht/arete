@@ -18,14 +18,14 @@ Convert a markdown PRD into structured JSON format (`prd.json`) for use with the
 
 ## Prerequisites
 
-- A markdown PRD exists (prefer `.cursor/build/prds/{name}/prd.md`; legacy: `projects/active/{name}/outputs/prd-*.md`)
+- A markdown PRD exists (prefer `dev/prds/{name}/prd.md`; legacy: `projects/active/{name}/outputs/prd-*.md`)
 - PRD has clear tasks/user stories with acceptance criteria
 
 ## Workflow
 
 ### 1. Read Build Memory (Context)
 
-**Before converting**, read `.cursor/build/MEMORY.md` and optionally the most recent entry files in `.cursor/build/entries/`. This provides:
+**Before converting**, read `dev/MEMORY.md` and optionally the most recent entry files in `dev/entries/`. This provides:
 
 - Recent architectural decisions and refactors
 - Established patterns (e.g. integration structure, workspace backfill)
@@ -40,7 +40,7 @@ Ask the user for the PRD file path, or search for recent PRDs:
 
 ```bash
 # Find PRDs (preferred location)
-ls -la .cursor/build/prds/*/prd.md
+ls -la dev/prds/*/prd.md
 
 # Legacy: projects/active
 find projects/active -name "prd-*.md" -type f 2>/dev/null
@@ -78,7 +78,7 @@ Ask user to confirm or customize.
 
 ### 6. Build PRD Object
 
-Create the JSON structure following the schema in `.cursor/build/autonomous/schema.ts`:
+Create the JSON structure following the schema in `dev/autonomous/schema.ts`:
 
 ```typescript
 {
@@ -117,17 +117,17 @@ Ensure:
 - Status is "pending" for all tasks
 - attemptCount is 0 for all tasks
 
-Reference `.cursor/build/autonomous/schema.ts` for validation functions.
+Reference `dev/autonomous/schema.ts` for validation functions.
 
 ### 8. Write prd.json
 
-Write the JSON to `.cursor/build/autonomous/prd.json`:
+Write the JSON to `dev/autonomous/prd.json`:
 
 ```typescript
 import fs from 'fs';
 import path from 'path';
 
-const outputPath = '.cursor/build/autonomous/prd.json';
+const outputPath = 'dev/autonomous/prd.json';
 fs.writeFileSync(outputPath, JSON.stringify(prd, null, 2));
 ```
 
@@ -137,11 +137,11 @@ Create or clear the progress log:
 
 ```bash
 # Copy template if it doesn't exist
-cp .cursor/build/autonomous/progress.txt.template .cursor/build/autonomous/progress.txt
+cp dev/autonomous/progress.txt.template dev/autonomous/progress.txt
 
 # Or create empty with header
-echo "# Progress Log - $(date)" > .cursor/build/autonomous/progress.txt
-echo "" >> .cursor/build/autonomous/progress.txt
+echo "# Progress Log - $(date)" > dev/autonomous/progress.txt
+echo "" >> dev/autonomous/progress.txt
 ```
 
 ### 10. Confirm with User
@@ -159,7 +159,7 @@ Tasks:
 2. {task-2-title}
 ...
 
-Output: .cursor/build/autonomous/prd.json
+Output: dev/autonomous/prd.json
 
 Ready to execute? Say: "Execute the PRD"
 ```
@@ -286,5 +286,5 @@ If no acceptance criteria found:
 ## Next Step
 
 After successful conversion, user can:
-1. Review/edit `.cursor/build/autonomous/prd.json` manually if needed
+1. Review/edit `dev/autonomous/prd.json` manually if needed
 2. Invoke the execute-prd skill to begin autonomous execution

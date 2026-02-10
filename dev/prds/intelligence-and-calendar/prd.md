@@ -328,8 +328,8 @@ integrations: {
 - Update `src/integrations/registry.ts`: add apple-calendar with status available
 - Update AGENTS.md: add Search Provider system and Calendar system sections
 - Update SETUP.md with calendar setup instructions
-- Create build memory entry `.cursor/build/entries/2026-02-09_intelligence-and-calendar.md`
-- Add line to `.cursor/build/MEMORY.md`
+- Create build memory entry `dev/entries/2026-02-09_intelligence-and-calendar.md`
+- Add line to `dev/MEMORY.md`
 
 ---
 
