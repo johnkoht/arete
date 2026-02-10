@@ -55,6 +55,14 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 **Effort**: Small (2-3 tasks: command, status computation, formatting)  
 **Dependencies**: prd.json schema stable ✅  
 
+### Competitive Analysis Skill Enhancement
+**Status**: Backlog / Needs design  
+**File**: `improvements/competitive-analysis-enhancement.md`  
+**What**: Improve competitive-analysis skill (methodology depth and/or orchestrator + parallel research + synthesis)  
+**Why**: Single-agent sequential flow is slow and has no explicit review/synthesis of multiple research outputs; methodology can be richer (see skills-enhancement)  
+**Effort**: TBD (Small if methodology only; Medium if execution model)  
+**Dependencies**: None  
+
 ### prd-task Subagent Type
 **Status**: Needs research  
 **File**: `tech-debt/prd-task-subagent.md`  

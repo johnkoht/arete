@@ -61,6 +61,8 @@ dist/
 # CLI-managed / workspace directories (consumer workspaces only)
 # Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.
 .agents/
+.cursor/integrations/
+.cursor/tools/
 context/
 now/
 goals/
@@ -78,6 +80,14 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Deprecated: build assets moved to dev/ (2026-02-09). Remove if present.
+.cursor/build/
+
+# Deprecated: skills unified into .agents/skills/ (2026-02-09). Remove if present.
+.cursor/skills/
+.cursor/skills-core/
+.cursor/skills-local/
 
 # Autonomous execution system (runtime files)
 dev/autonomous/prd.json
