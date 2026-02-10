@@ -17,10 +17,13 @@ import { getDefaultConfig } from '../core/config.js';
 import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
 import { success, error, warn, info, header, listItem, formatPath } from '../core/utils.js';
 import { getAdapter } from '../core/adapters/index.js';
+import type { IDETarget } from '../core/ide-adapter.js';
+import { transpileRules } from '../core/rule-transpiler.js';
 import type { CommandOptions, InstallResults } from '../types.js';
 
 export interface InstallOptions extends CommandOptions {
   source?: string;
+  ide?: string;
 }
 
 /**
@@ -84,6 +87,18 @@ export async function installCommand(directory: string | undefined, options: Ins
     process.exit(1);
   }
   
+  // Validate and get IDE adapter
+  const ide = (options.ide || 'cursor') as string;
+  if (ide !== 'cursor' && ide !== 'claude') {
+    if (json) {
+      console.log(JSON.stringify({ success: false, error: `Invalid IDE target: ${ide}. Must be 'cursor' or 'claude'` }));
+    } else {
+      error(`Invalid IDE target: ${ide}. Must be 'cursor' or 'claude'`);
+    }
+    process.exit(1);
+  }
+  const adapter = getAdapter(ide as IDETarget);
+  
   // Check if already a workspace
   if (isAreteWorkspace(targetDir)) {
     if (json) {
@@ -123,8 +138,6 @@ export async function installCommand(directory: string | undefined, options: Ins
   // Create workspace directories
   if (!json) info('Creating workspace structure...');
   
-  // Get adapter (defaults to Cursor for new installations)
-  const adapter = getAdapter('cursor');
   const allDirs = [...BASE_WORKSPACE_DIRS, ...adapter.getIDEDirs()];
   
   for (const dir of allDirs) {
@@ -163,7 +176,7 @@ export async function installCommand(directory: string | undefined, options: Ins
     templates: join(sourceInfo.path, 'runtime', 'templates')
   } : getSourcePaths();
   
-  const workspacePaths = getWorkspacePaths(targetDir);
+  const workspacePaths = getWorkspacePaths(targetDir, adapter);
   const useSymlinks = sourceInfo.type === 'symlink';
   
   // Copy/symlink skills to .agents/skills
@@ -178,30 +191,36 @@ export async function installCommand(directory: string | undefined, options: Ins
     results.skills = skillsCopied.map(p => basename(p));
   }
   
-  // Copy/symlink only product rules (exclude build-only: dev.mdc, testing.mdc)
-  if (!json) info(`${useSymlinks ? 'Linking' : 'Copying'} rules...`);
+  // Transpile rules to IDE-specific format
+  if (!json) info('Transpiling rules...');
   
   if (existsSync(sourcePaths.rules)) {
-    const allowed = new Set(PRODUCT_RULES_ALLOW_LIST);
-    const items = readdirSync(sourcePaths.rules, { withFileTypes: true });
-    const rulesCopied: string[] = [];
-    for (const item of items) {
-      if (!item.isFile() || !allowed.has(item.name)) continue;
-      const srcPath = join(sourcePaths.rules, item.name);
-      const destPath = join(workspacePaths.rules, item.name);
-      if (existsSync(destPath)) continue;
-      try {
-        if (useSymlinks) {
-          symlinkSync(srcPath, destPath);
-        } else {
-          cpSync(srcPath, destPath);
-        }
-        rulesCopied.push(destPath);
-      } catch (err) {
-        results.errors.push({ type: 'file', path: item.name, error: (err as Error).message });
-      }
-    }
-    results.rules = rulesCopied.map(p => basename(p));
+    // Create a temporary manifest for transpilation (full manifest created later)
+    const tempManifest = {
+      schema: 1,
+      version: '0.1.0',
+      source: source,
+      agent_mode: 'guide' as const,
+      created: new Date().toISOString().split('T')[0],
+      ide_target: adapter.target,
+      skills: { core: [], overrides: [] },
+      tools: [],
+      integrations: {},
+      settings: getDefaultConfig().settings
+    };
+    
+    const transpileResults = transpileRules(
+      sourcePaths.rules,
+      workspacePaths.rules,
+      adapter,
+      tempManifest,
+      PRODUCT_RULES_ALLOW_LIST
+    );
+    
+    results.rules = transpileResults.added.map(p => basename(p));
+    
+    // Note: transpileRules handles errors internally and logs them
+    // We don't need to track individual file errors here
   }
   
   // Copy integration configs (always copy, not symlink)
@@ -231,6 +250,7 @@ export async function installCommand(directory: string | undefined, options: Ins
     version: '0.1.0',
     source: source,
     agent_mode: 'guide' as const,
+    ide_target: adapter.target,
     created: new Date().toISOString().split('T')[0],
     skills: {
       core: results.skills,
@@ -257,6 +277,16 @@ export async function installCommand(directory: string | undefined, options: Ins
   
   writeFileSync(manifestPath, manifestYaml, 'utf8');
   results.files.push('arete.yaml');
+  
+  // Generate IDE-specific root files (e.g., CLAUDE.md for Claude)
+  if (!json) info('Generating IDE-specific files...');
+  
+  const rootFiles = adapter.generateRootFiles(manifest, targetDir);
+  for (const [filename, content] of Object.entries(rootFiles)) {
+    const filePath = join(targetDir, filename);
+    writeFileSync(filePath, content, 'utf-8');
+    results.files.push(filename);
+  }
   
   // Output results
   if (json) {
