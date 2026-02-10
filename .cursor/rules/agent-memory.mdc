@@ -16,7 +16,7 @@ In BUILDER mode, memory about the developer goes to `dev/`:
 | Collaboration observations (in entry Learnings section) | `dev/entries/YYYY-MM-DD_slug.md` |
 | Synthesized builder collaboration profile | `dev/collaboration.md` |
 | Index of all entries | `dev/MEMORY.md` |
-| "Park this for later" | `now/scratchpad.md` |
+| "Park this for later" | `scratchpad.md` (repo root) |
 
 **Do not** write to `memory/items/` or `.arete/memory/` in BUILDER mode — those are product templates for end users.
 
@@ -148,7 +148,8 @@ Session context is captured in build entries. No separate session file needed �
 
 ## Scratchpad Usage
 
-The scratchpad (`now/scratchpad.md`) is a **shared working space** for both user/builder and agent. Same in both modes.
+- **BUILDER mode**: `scratchpad.md` at repo root — build ideas, questions, parking lot for the arete repo.
+- **GUIDE mode**: `now/scratchpad.md` in the end-user workspace — quick capture for the PM.
 
 ### When to Add to Scratchpad
 

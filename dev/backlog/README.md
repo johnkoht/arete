@@ -112,7 +112,7 @@ Ideas for future PRDs. When ready to build, convert to PRD in `.cursor/build/prd
 ## Moving Items from Scratchpad
 
 **Process**:
-1. Quick idea → capture in `now/scratchpad.md`
+1. Quick idea → capture in root `scratchpad.md`
 2. Idea matures → create file in `backlog/` with details
 3. Ready to build → convert to PRD in `prds/`
 4. Execute → use execute-prd skill
