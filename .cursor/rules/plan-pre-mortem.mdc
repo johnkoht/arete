@@ -1,6 +1,6 @@
 ---
 description: When in Plan Mode or multi-step plans, conduct a pre-mortem before execution
-globs: ["src/**/*", "test/**/*", ".cursor/build/**/*"]
+globs: ["src/**/*", "test/**/*", "dev/**/*"]
 alwaysApply: true
 ---
 
@@ -23,7 +23,7 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 **After** you have a draft plan and **before** you start executing it:
 
 1. **Run a pre-mortem** using the same process as the execute-prd skill:
-   - Read `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md` for the format and risk categories.
+   - Read `dev/templates/PRE-MORTEM-TEMPLATE.md` for the format and risk categories.
    - Consider the **8 risk categories**: Context Gaps, Test Patterns, Integration, Scope Creep, Code Quality, Dependencies, Platform Issues, State Tracking.
    - For each relevant risk: **Problem** (what could go wrong), **Mitigation** (concrete action), **Verification** (how to check it was applied).
 
@@ -35,9 +35,9 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 
 ## References
 
-- **Template and categories**: `.cursor/build/templates/PRE-MORTEM-TEMPLATE.md`
-- **Rationale and examples**: `.cursor/build/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
-- **Full workflow (PRD execution)**: `.cursor/build/skills/execute-prd/SKILL.md`
+- **Template and categories**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
+- **Rationale and examples**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
+- **Full workflow (PRD execution)**: `dev/skills/execute-prd/SKILL.md`
 
 ## Why This Matters
 

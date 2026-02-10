@@ -233,7 +233,7 @@ arete/
 ### Key Concepts
 
 **Build System vs Product:**
-- `dev/` = Internal tooling for developing Areté (NEVER shipped; was `.cursor/build/`)
+- `dev/` = Internal tooling for developing Areté (NEVER shipped; formerly the build directory)
 - Everything else = Product shipped to users via npm
 
 **Memory Layers:**
@@ -525,7 +525,7 @@ integrations:
 
 **Purpose**: Systematic execution of multi-task PRDs using an orchestrator + subagent pattern. Enables autonomous development with pre-mortem risk mitigation, detailed prompts, and continuous verification.
 
-**Location**: `.cursor/build/skills/execute-prd/SKILL.md` (orchestration skill) + `.cursor/agents/prd-task.md` (subagent instructions)
+**Location**: `dev/skills/execute-prd/SKILL.md` (orchestration skill) + `dev/agents/prd-task.md` (subagent instructions)
 
 **Status**: Production-ready. First execution (intelligence-and-calendar PRD) achieved 100% success: 12/12 tasks complete, 0 iterations required, 0/8 pre-mortem risks materialized.
 

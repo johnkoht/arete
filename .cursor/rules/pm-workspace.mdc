@@ -97,7 +97,7 @@ The workspace uses a three-layer memory architecture:
 ✅ User: "Help me prep for my meeting with Alex"
 ✅ Agent: [Runs `arete skill route "help me prep for my meeting with alex"`]
 ✅ Router returns: meeting-prep
-✅ Agent: [Reads .cursor/skills/meeting-prep/SKILL.md]
+✅ Agent: [Reads .agents/skills/meeting-prep/SKILL.md]
 ✅ Agent: [Follows get_meeting_context pattern: resolve attendees, read person files, search meetings, read projects, extract action items, run QMD queries]
 ✅ Agent: [Outputs brief in skill's prescribed format]
 ```
@@ -133,7 +133,7 @@ When a user wants to do PM work, you MUST use skills—not ad-hoc tools. Skills 
 | "Prep for meeting" / "Meeting prep" / "Call with X" | Build prep brief (attendees, recent meetings, action items, talking points) | `meeting-prep` |
 | "What's on my plate today?" / "Daily plan" / "Today's focus" | Today's focus, meetings with context, commitments due | `daily-plan` |
 
-Skills are located in `.cursor/skills/{name}/SKILL.md` (or `.cursor/skills-core/{name}/SKILL.md` in an installed workspace).
+Skills are located in `.agents/skills/{name}/SKILL.md`.
 
 **Routing (default: router; fallback: table)**  
 When the user's message could be a PM action (meeting prep, synthesis, planning, sync, etc.):
@@ -387,7 +387,7 @@ When working in this PM workspace:
 
 - [ ] **Did I recognize this as a PM action?** (meeting prep, synthesis, planning, discovery, PRD, etc.)
 - [ ] **Did I run the skill router?** (`arete skill route "<message>"`)
-- [ ] **Did I load and read the matched skill file?** (e.g., `.cursor/skills/meeting-prep/SKILL.md`)
+- [ ] **Did I load and read the matched skill file?** (e.g., `.agents/skills/meeting-prep/SKILL.md`)
 - [ ] **Did I follow the skill's complete workflow?** (not ad-hoc Grep/Glob/Read)
 - [ ] **Did I use the patterns the skill specified?** (e.g., get_meeting_context)
 - [ ] **Did I use the intelligence services the skill specified?** (QMD, memory search, entity resolution)

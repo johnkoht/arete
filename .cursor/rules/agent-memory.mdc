@@ -8,14 +8,14 @@ You are an AI assistant that learns and adapts through a structured memory syste
 
 ### BUILDER mode (Areté source repo)
 
-In BUILDER mode, memory about the developer goes to `.cursor/build/`:
+In BUILDER mode, memory about the developer goes to `dev/`:
 
 | Content | Location |
 |---------|----------|
-| Architecture decisions, refactors, tooling changes | `.cursor/build/entries/YYYY-MM-DD_slug.md` |
-| Collaboration observations (in entry Learnings section) | `.cursor/build/entries/YYYY-MM-DD_slug.md` |
-| Synthesized builder collaboration profile | `.cursor/build/collaboration.md` |
-| Index of all entries | `.cursor/build/MEMORY.md` |
+| Architecture decisions, refactors, tooling changes | `dev/entries/YYYY-MM-DD_slug.md` |
+| Collaboration observations (in entry Learnings section) | `dev/entries/YYYY-MM-DD_slug.md` |
+| Synthesized builder collaboration profile | `dev/collaboration.md` |
+| Index of all entries | `dev/MEMORY.md` |
 | "Park this for later" | `now/scratchpad.md` |
 
 **Do not** write to `memory/items/` or `.arete/memory/` in BUILDER mode — those are product templates for end users.
@@ -103,20 +103,20 @@ The same triggers apply (feedback, corrections, patterns, preferences), but obse
 
 ### How to Record (BUILDER mode)
 
-- Include a **Learnings** section in the current build entry (`.cursor/build/entries/YYYY-MM-DD_slug.md`)
+- Include a **Learnings** section in the current build entry (`dev/entries/YYYY-MM-DD_slug.md`)
 - Learnings can include: collaboration observations, builder preferences, corrections, working patterns
 - Format: `- [Observation] → [Implication]`
 - Always tell the builder when you're noting a collaboration observation
 
 ### Synthesis Triggers (→ collaboration.md)
 
-Offer to update `.cursor/build/collaboration.md` when:
+Offer to update `dev/collaboration.md` when:
 
 1. **Several entries** have accumulated learnings about collaboration
 2. **After a major build phase** completes
 3. **Builder asks** to review or update the profile
 
-Synthesize by reviewing Learnings sections across recent entries, updating `.cursor/build/collaboration.md`, noting the date, and asking the builder to review.
+Synthesize by reviewing Learnings sections across recent entries, updating `dev/collaboration.md`, noting the date, and asking the builder to review.
 
 ---
 
@@ -168,7 +168,7 @@ The scratchpad (`now/scratchpad.md`) is a **shared working space** for both user
    - "I have several new observations. Would you like me to update the collaboration profile?"
 
 3. **Ask if work should be added to memory**
-   - After substantive work (refactors, decisions, bug fixes, migrations), **ask**: "Should I add this to memory?" — and specify which: **build memory** (`.cursor/build/MEMORY.md` + entries) or **PM workspace memory** (`.arete/memory/items/`). Don't add without confirming unless the user has already asked you to record it.
+   - After substantive work (refactors, decisions, bug fixes, migrations), **ask**: "Should I add this to memory?" — and specify which: **build memory** (`dev/MEMORY.md` + entries) or **PM workspace memory** (`.arete/memory/items/`). Don't add without confirming unless the user has already asked you to record it.
 
 4. **Corrections become new observations**
    - If user corrects your synthesis, log it as a new observation (in the appropriate location for the current mode), don't silently edit
@@ -210,6 +210,6 @@ I'll update collaboration.md when a few more observations accumulate.
 ## Memory Maintenance
 
 - **GUIDE**: Review `agent-observations.md` periodically for patterns; synthesize into `collaboration.md`
-- **BUILDER**: Review Learnings across entries; synthesize into `.cursor/build/collaboration.md`
+- **BUILDER**: Review Learnings across entries; synthesize into `dev/collaboration.md`
 - Keep observations atomic — split compound observations
 - Archive old session history if it grows too long

@@ -116,7 +116,7 @@ Offer to update `dev/collaboration.md` when:
 2. **After a major build phase** completes
 3. **Builder asks** to review or update the profile
 
-Synthesize by reviewing Learnings sections across recent entries, updating `.cursor/build/collaboration.md`, noting the date, and asking the builder to review.
+Synthesize by reviewing Learnings sections across recent entries, updating `dev/collaboration.md`, noting the date, and asking the builder to review.
 
 ---
 

@@ -23,7 +23,7 @@ To change how a default skill works:
 
 1. **Override** the skill (copies it into your workspace):  
    `arete skill override <name>`
-2. Edit the files in `.cursor/skills-local/<name>/`.
+2. Edit the files in `.agents/skills/<name>/`.
 3. Your version is used instead of the default. Done.
 
 To **reset** back to the default:  

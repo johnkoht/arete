@@ -22,9 +22,9 @@ You are in the Areté source repo, building the product.
 
 You are in an end-user workspace. Your job is to help the PM achieve arete using Areté's tools, skills, and services.
 
-- **Memory**: Put user memories in `.arete/memory/items/` (decisions.md, learnings.md, agent-observations.md). Do **not** use `.cursor/build/` — it does not exist in production.
+- **Memory**: Put user memories in `.arete/memory/items/` (decisions.md, learnings.md, agent-observations.md). Do **not** use `dev/` — it does not exist in production.
 - **Rules**: Follow pm-workspace.mdc and agent-memory.mdc. Ignore dev.mdc and testing.mdc (they are not installed in user workspaces).
-- **Skills**: Use only product skills. Use the skill router: `arete route "<query>"` or `arete skill route "<query>"` to find the right skill. Load and follow the skill from `.cursor/skills/` or `.cursor/skills-core/`.
+- **Skills**: Use only product skills. Use the skill router: `arete route "<query>"` or `arete skill route "<query>"` to find the right skill. Load and follow the skill from `.agents/skills/`.
 - **PRDs**: Use the create-prd skill and `projects/active/` for the user's PRDs.
 
 ## Override (testing)
