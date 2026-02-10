@@ -63,24 +63,21 @@ export interface IDEAdapter {
   
   /**
    * Get the rules directory path
-   * @param workspaceRoot - Absolute path to workspace root
-   * @returns Absolute path to rules directory
+   * @returns Relative path to rules directory
    */
-  rulesDir(workspaceRoot: string): string;
+  rulesDir(): string;
   
   /**
    * Get the tools directory path
-   * @param workspaceRoot - Absolute path to workspace root
-   * @returns Absolute path to tools directory
+   * @returns Relative path to tools directory
    */
-  toolsDir(workspaceRoot: string): string;
+  toolsDir(): string;
   
   /**
    * Get the integrations directory path
-   * @param workspaceRoot - Absolute path to workspace root
-   * @returns Absolute path to integrations directory
+   * @returns Relative path to integrations directory
    */
-  integrationsDir(workspaceRoot: string): string;
+  integrationsDir(): string;
   
   /**
    * Format a canonical rule for this IDE
@@ -99,11 +96,11 @@ export interface IDEAdapter {
   
   /**
    * Generate IDE-specific root files (e.g., AGENTS.md)
-   * @param workspaceRoot - Absolute path to workspace root
    * @param config - Areté configuration
+   * @param workspaceRoot - Absolute path to workspace root
    * @returns Map of filename to file content
    */
-  generateRootFiles(workspaceRoot: string, config: AreteConfig): Record<string, string>;
+  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string>;
   
   /**
    * Detect if this IDE's configuration exists in the workspace
