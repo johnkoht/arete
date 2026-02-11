@@ -169,13 +169,15 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     }
   }
   
-  // Check rules
+  // Check rules (map source .mdc filenames to IDE-specific dest filenames for comparison)
   if (existsSync(sourcePaths.rules)) {
-    const srcRules = getDirContents(sourcePaths.rules);
+    const srcRules = getDirContents(sourcePaths.rules).filter((f) => f.endsWith('.mdc'));
     const destRules = getDirContents(paths.rules);
-    
+
     for (const rule of srcRules) {
-      if (destRules.includes(rule)) {
+      const baseName = rule.replace(/\.mdc$/, '');
+      const destFilename = `${baseName}${adapter.ruleExtension}`;
+      if (destRules.includes(destFilename)) {
         results.rules.updated.push(rule);
       } else {
         results.rules.added.push(rule);
@@ -258,7 +260,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   );
   
   // Regenerate IDE-specific root files (e.g., CLAUDE.md with updated timestamp)
-  const rootFiles = adapter.generateRootFiles(config, workspaceRoot);
+  const rootFiles = adapter.generateRootFiles(config, workspaceRoot, sourcePaths.rules);
   for (const [filename, content] of Object.entries(rootFiles)) {
     writeFileSync(join(workspaceRoot, filename), content, 'utf-8');
   }

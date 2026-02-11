@@ -98,9 +98,14 @@ export interface IDEAdapter {
    * Generate IDE-specific root files (e.g., AGENTS.md)
    * @param config - Areté configuration
    * @param workspaceRoot - Absolute path to workspace root
+   * @param sourceRulesDir - Optional path to canonical rules directory (for reading routing-mandatory.mdc)
    * @returns Map of filename to file content
    */
-  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string>;
+  generateRootFiles(
+    config: AreteConfig,
+    workspaceRoot: string,
+    sourceRulesDir?: string
+  ): Record<string, string>;
   
   /**
    * Detect if this IDE's configuration exists in the workspace

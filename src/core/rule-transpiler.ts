@@ -193,10 +193,15 @@ export function transpileRules(
     preserved: [],
     removed: [],
   };
-  
+
+  // Verify source exists before touching destination (avoid wiping rules if source unavailable)
+  if (!existsSync(srcDir)) {
+    return results;
+  }
+
   // Create allowList set for O(1) lookup
   const allowedSet = new Set(allowList);
-  
+
   // Clear existing transpiled rules in destination
   // Remove all files matching the adapter's rule extension
   if (existsSync(destDir)) {
@@ -208,12 +213,6 @@ export function transpileRules(
         results.removed.push(destPath);
       }
     }
-  }
-  
-  // Parse and transpile each rule in allowList
-  if (!existsSync(srcDir)) {
-    // Source directory doesn't exist - nothing to transpile
-    return results;
   }
   
   const sourceFiles = readdirSync(srcDir);

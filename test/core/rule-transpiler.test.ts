@@ -414,6 +414,21 @@ This should not be transpiled.`);
         assert.equal(results.added.length, 0);
         assert.equal(results.removed.length, 0);
       });
+
+      it('does not delete destination rules when source directory is missing', () => {
+        // Pre-populate dest with a rule file
+        const existingRulePath = join(destDir, 'routing-mandatory.mdc');
+        writeFileSync(existingRulePath, '<!-- existing -->\n# Existing rule content');
+
+        const nonExistentSrc = join(tmpDir, 'nonexistent');
+        const results = transpileRules(nonExistentSrc, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
+
+        // Should not delete or add anything
+        assert.equal(results.added.length, 0);
+        assert.equal(results.removed.length, 0);
+        // Pre-existing file must remain
+        assert.ok(existsSync(existingRulePath), 'Existing rules must not be deleted when source is missing');
+      });
     });
 
     describe('with ClaudeAdapter', () => {

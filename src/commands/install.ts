@@ -281,7 +281,7 @@ export async function installCommand(directory: string | undefined, options: Ins
   // Generate IDE-specific root files (e.g., CLAUDE.md for Claude)
   if (!json) info('Generating IDE-specific files...');
   
-  const rootFiles = adapter.generateRootFiles(manifest, targetDir);
+  const rootFiles = adapter.generateRootFiles(manifest, targetDir, sourcePaths.rules);
   for (const [filename, content] of Object.entries(rootFiles)) {
     const filePath = join(targetDir, filename);
     writeFileSync(filePath, content, 'utf-8');

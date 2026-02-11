@@ -108,15 +108,20 @@ export class CursorAdapter implements IDEAdapter {
 
   /**
    * Generate Cursor-specific root files
-   * 
+   *
    * Cursor uses the canonical AGENTS.md and doesn't require
    * IDE-specific root files.
-   * 
+   *
    * @param config - Areté configuration (unused)
    * @param workspaceRoot - Workspace root path (unused)
+   * @param _sourceRulesDir - Optional source rules dir (unused by Cursor)
    * @returns Empty object (no files to generate)
    */
-  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string> {
+  generateRootFiles(
+    config: AreteConfig,
+    workspaceRoot: string,
+    _sourceRulesDir?: string
+  ): Record<string, string> {
     return {};
   }
 

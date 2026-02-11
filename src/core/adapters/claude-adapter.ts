@@ -126,7 +126,7 @@ export class ClaudeAdapter implements IDEAdapter {
 
   /**
    * Generate Claude-specific root files
-   * 
+   *
    * Creates CLAUDE.md with:
    * 1. Project overview (what Areté is)
    * 2. Mandatory routing workflow (inlined from routing-mandatory.mdc)
@@ -135,12 +135,17 @@ export class ClaudeAdapter implements IDEAdapter {
    * 5. Memory management
    * 6. Key CLI commands
    * 7. Version and timestamp
-   * 
+   *
    * @param config - Areté configuration (for version)
-   * @param workspaceRoot - Workspace root path (for reading routing-mandatory.mdc)
+   * @param workspaceRoot - Workspace root path (unused; kept for interface)
+   * @param sourceRulesDir - Optional path to canonical rules dir (runtime/rules or dist/rules)
    * @returns Map with CLAUDE.md content
    */
-  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string> {
+  generateRootFiles(
+    config: AreteConfig,
+    workspaceRoot: string,
+    sourceRulesDir?: string
+  ): Record<string, string> {
     const timestamp = new Date().toISOString();
     const version = config.version || '1.0.0';
 
@@ -178,14 +183,15 @@ Proceed with normal tools.
 **You WILL be asked to verify you followed this. If you skipped the router and skill, you FAILED the task.**`;
 
     let routingContent = fallbackRouting;
-    
+
     try {
-      const routingPath = join(workspaceRoot, 'runtime/rules/routing-mandatory.mdc');
-      if (existsSync(routingPath)) {
-        const fullContent = readFileSync(routingPath, 'utf-8');
-        // Strip frontmatter if present
-        const contentWithoutFrontmatter = fullContent.replace(/^---[\s\S]*?---\n\n/, '');
-        routingContent = contentWithoutFrontmatter.trim();
+      if (sourceRulesDir) {
+        const routingPath = join(sourceRulesDir, 'routing-mandatory.mdc');
+        if (existsSync(routingPath)) {
+          const fullContent = readFileSync(routingPath, 'utf-8');
+          const contentWithoutFrontmatter = fullContent.replace(/^---[\s\S]*?---\n\n/, '');
+          routingContent = contentWithoutFrontmatter.trim();
+        }
       }
     } catch (error) {
       // Use fallback on error (already set above)
