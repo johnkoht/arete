@@ -243,11 +243,11 @@ async function addIntegration(options: IntegrationOptions): Promise<void> {
 }
 
 /**
- * Check if ical-buddy is installed
+ * Check if icalBuddy is installed (binary name; Homebrew formula is ical-buddy)
  */
 function isIcalBuddyInstalled(): boolean {
   try {
-    execSync('which ical-buddy', { stdio: 'pipe' });
+    execSync('which icalBuddy', { stdio: 'pipe' });
     return true;
   } catch {
     return false;
@@ -255,11 +255,11 @@ function isIcalBuddyInstalled(): boolean {
 }
 
 /**
- * Get list of available calendars from ical-buddy
+ * Get list of available calendars from icalBuddy
  */
 function listCalendars(): string[] {
   try {
-    const output = execSync('ical-buddy calendars', { encoding: 'utf8' });
+    const output = execSync('icalBuddy calendars', { encoding: 'utf8' });
     return output
       .split('\n')
       .map(line => line.trim())
@@ -285,17 +285,17 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     process.exit(1);
   }
   
-  // Check if ical-buddy is installed
+  // Check if icalBuddy is installed (binary; install via brew install ical-buddy)
   if (!isIcalBuddyInstalled()) {
     if (json) {
       console.log(JSON.stringify({ 
         success: false, 
-        error: 'ical-buddy not found. Install with: brew install ical-buddy' 
+        error: 'icalBuddy not found. Install with: brew install ical-buddy' 
       }));
     } else {
-      error('ical-buddy not found');
+      error('icalBuddy not found');
       console.log('');
-      console.log('Install ical-buddy with:');
+      console.log('Install icalBuddy with:');
       console.log(`  ${chalk.cyan('brew install ical-buddy')}`);
       console.log('');
     }

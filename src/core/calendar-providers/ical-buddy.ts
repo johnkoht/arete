@@ -1,6 +1,7 @@
 /**
- * IcalBuddy calendar provider — macOS Calendar integration via ical-buddy CLI.
- * Reads events from macOS Calendar app using the ical-buddy command-line tool.
+ * IcalBuddy calendar provider — macOS Calendar integration via icalBuddy CLI.
+ * Reads events from macOS Calendar app using the icalBuddy command-line tool.
+ * Note: Homebrew formula is "ical-buddy" but the installed binary is "icalBuddy" (camelCase).
  */
 
 import { execFile, spawnSync } from 'child_process';
@@ -146,14 +147,14 @@ export function parseIcalBuddyOutput(stdout: string, defaultCalendar: string = '
 }
 
 /**
- * IcalBuddy-backed calendar provider. isAvailable() checks for ical-buddy binary.
- * getTodayEvents() and getUpcomingEvents() run ical-buddy and parse output.
+ * IcalBuddy-backed calendar provider. isAvailable() checks for icalBuddy binary.
+ * getTodayEvents() and getUpcomingEvents() run icalBuddy and parse output.
  * Optional testDeps for unit tests (inject mocks).
  */
 export function getProvider(
   testDeps?: IcalBuddyTestDeps
 ): CalendarProvider {
-  const whichSyncImpl = testDeps?.whichSync ?? (() => spawnSync('which', ['ical-buddy'], { encoding: 'utf8' }));
+  const whichSyncImpl = testDeps?.whichSync ?? (() => spawnSync('which', ['icalBuddy'], { encoding: 'utf8' }));
   const execFileAsyncImpl =
     testDeps?.execFileAsync ??
     (async (file: string, args: string[], opts: { timeout: number; maxBuffer: number }) =>
@@ -169,7 +170,7 @@ export function getProvider(
       }
 
       const { stdout } = await execFileAsyncImpl(
-        'ical-buddy',
+        'icalBuddy',
         finalArgs,
         { timeout: DEFAULT_TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 }
       );

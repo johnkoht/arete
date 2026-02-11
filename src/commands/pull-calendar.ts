@@ -150,17 +150,17 @@ export async function pullCalendar(options: PullCalendarOptions): Promise<void> 
     process.exit(1);
   }
 
-  // Check if provider is available (e.g. ical-buddy installed)
+  // Check if provider is available (e.g. icalBuddy installed)
   const available = await provider.isAvailable();
   if (!available) {
     if (json) {
       console.log(JSON.stringify({
         success: false,
-        error: 'ical-buddy not installed',
+        error: 'icalBuddy not installed',
         message: 'Run: brew install ical-buddy'
       }));
     } else {
-      error('ical-buddy not installed');
+      error('icalBuddy not installed');
       info('Run: brew install ical-buddy');
     }
     process.exit(1);
