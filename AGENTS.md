@@ -274,8 +274,14 @@ updateMeetingsIndex(workspaceRoot: string, filename: string): void
 
 **Meeting Intelligence**:
 - **meeting-prep** — Build a prep brief for an upcoming (or past) meeting: attendee details, recent meetings, related projects, open action items, suggested talking points. Uses get_meeting_context pattern (read people, meetings, projects; aggregate).
+- **prepare-meeting-agenda** — Create a **structured meeting agenda** (sections, optional time allocation) for an upcoming meeting. User picks or infers meeting type (leadership, customer, dev team, 1:1, other); template is loaded from package defaults or workspace overrides in `.arete/templates/meeting-agendas/`. Optionally uses get_meeting_context to suggest items. Agendas save to `now/agendas/` (or project folder / clipboard). Use when the user says "create meeting agenda" or "prepare agenda"; use **meeting-prep** when they say "prep for my meeting with Jane" (prep brief, not agenda document).
 - **daily-plan** — Today's focus, week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, carry-over. User supplies today's meetings (no calendar in v1).
-- Both skills use the **get_meeting_context** pattern: resolve attendees → read people → search meetings → read projects → extract action items.
+- Both meeting-prep and prepare-meeting-agenda use the **get_meeting_context** pattern when gathering context; prepare-meeting-agenda also uses **template system** (see below).
+
+**Template system (meeting agendas)**:
+- **List templates**: `arete template list meeting-agendas` — shows default (package) and custom (workspace) templates in two groups.
+- **View template**: `arete template view meeting-agenda --type <name>` — e.g. `--type leadership` to see structure, sections, and time allocation.
+- **Custom overrides**: Add or override templates by placing `.md` files in `.arete/templates/meeting-agendas/` (e.g. `board-meeting.md`, `leadership.md`). Custom files take precedence over package defaults for the same type.
 
 ### 2. Integrations System
 
