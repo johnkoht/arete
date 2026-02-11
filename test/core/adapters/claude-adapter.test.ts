@@ -206,8 +206,26 @@ describe('ClaudeAdapter', () => {
       assert.ok(!result.includes('.cursor/'));
     });
 
+    it('transforms .mdc rule extensions to .md', () => {
+      const content = 'See .cursor/rules/agent-memory.mdc for details.';
+      const result = adapter.transformRuleContent(content);
+      assert.equal(result, 'See .claude/rules/agent-memory.md for details.');
+    });
+
+    it('transforms bare rule filename references', () => {
+      const content = 'check `arete-context.mdc` to determine mode';
+      const result = adapter.transformRuleContent(content);
+      assert.equal(result, 'check `arete-context.md` to determine mode');
+    });
+
+    it('transforms multiple .mdc references in same content', () => {
+      const content = 'Follow dev.mdc and testing.mdc. See pm-workspace.mdc.';
+      const result = adapter.transformRuleContent(content);
+      assert.equal(result, 'Follow dev.md and testing.md. See pm-workspace.md.');
+    });
+
     it('does not modify other content', () => {
-      const content = 'Some other content without cursor paths';
+      const content = 'Some other content without cursor paths or rule refs';
       const result = adapter.transformRuleContent(content);
       assert.equal(result, content);
     });

@@ -110,18 +110,22 @@ export class ClaudeAdapter implements IDEAdapter {
 
   /**
    * Transform rule content for Claude Code
-   * 
-   * Replaces all .cursor/ path references with .claude/ equivalents.
-   * 
+   *
+   * 1. Replaces .cursor/skills/ with .agents/skills/ (skills live in shared dir)
+   * 2. Replaces remaining .cursor/ path references with .claude/
+   * 3. Replaces .mdc rule file extensions with .md (Claude uses .md for rules)
+   *
+   * Cross-references like "See .cursor/rules/agent-memory.mdc" become
+   * "See .claude/rules/agent-memory.md" so links work in Claude workspaces.
+   *
    * @param content - Original rule content
-   * @returns Transformed content with .claude/ paths
+   * @returns Transformed content with .claude/ paths and .md extensions
    */
   transformRuleContent(content: string): string {
     return content
-      .replace(/\.cursor\/tools\//g, '.claude/tools/')
-      .replace(/\.cursor\/integrations\//g, '.claude/integrations/')
-      .replace(/\.cursor\/rules\//g, '.claude/rules/')
-      .replace(/\.cursor\/skills\//g, '.agents/skills/');
+      .replace(/\.cursor\/skills\//g, '.agents/skills/')
+      .replace(/\.cursor\//g, '.claude/')
+      .replace(/\.mdc\b/g, '.md');
   }
 
   /**
