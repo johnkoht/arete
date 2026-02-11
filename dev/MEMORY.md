@@ -18,6 +18,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-10 [Multi-IDE documentation updates](entries/2026-02-10_multi-ide-documentation-updates.md) — README, SETUP, AGENTS, ONBOARDING, self-guided-onboarding backlog updated for `arete install --ide claude`; IDE selection section; path fixes (.agents/skills/).
 - 2026-02-10 [PM Wisdom Integration Complete](entries/2026-02-10_pm-wisdom-integration-complete.md) — Top 25 high-priority concepts from 16 articles + 17 books implemented across 5 skills; light_pre_mortem pattern in PATTERNS.md; wisdom registry at dev/wisdom-registry.md; remaining 44 medium-priority on hold.
 - 2026-02-10 [Auto-capture corrections without asking](entries/2026-02-10_auto-capture-corrections.md) — When builder corrects you: auto-add to Learnings + collaboration.md Corrections; no asking. Backlog subfolders (features/, improvements/) in dev.mdc; incident: put backlog in entries, then in backlog root.
 - 2026-02-10 [Memory boundaries and path cleanup](entries/2026-02-10_memory-boundaries-and-path-cleanup.md) — Entries vs scratchpad vs backlog conventions explicit; replaced .cursor/build/ with dev/ in active docs and skills.

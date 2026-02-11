@@ -4,7 +4,7 @@
 
 ## Context: BUILDER vs GUIDE
 
-**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc`.
+**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc` (Cursor) or `.claude/rules/` + `CLAUDE.md` (Claude Code).
 
 - **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here.
 - **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
@@ -95,7 +95,7 @@ A **structured workspace** with:
 ### CLI Interface
 
 `arete` CLI for workspace management:
-- `arete install` - Initialize workspace
+- `arete install [directory] --ide cursor|claude` - Initialize workspace (default: cursor)
 - `arete status` - Check workspace health
 - `arete pull` - Sync from integrations
 - `arete seed` - Import historical data from integrations
@@ -129,7 +129,7 @@ When the user sends a message in Cursor (chat or composer), the agent typically 
 
 | Layer | What's included | Source |
 |-------|-----------------|--------|
-| **Rules** | pm-workspace.mdc (alwaysApply), arete-vision, testing, dev, etc. | `.cursor/rules/*.mdc` |
+| **Rules** | pm-workspace (alwaysApply), arete-vision, etc. | `.cursor/rules/*.mdc` (Cursor) or `.claude/rules/*.md` + `CLAUDE.md` (Claude) |
 | **Architecture** | AGENTS.md (this file) | Root |
 | **Workspace layout** | Open files, recent files; workspace is the Areté root | Cursor |
 | **Tools** | read_file, grep, run_terminal_cmd, list_dir, etc. | Cursor |
@@ -308,7 +308,7 @@ findWorkspaceRoot(startDir: string): string | null
 
 **Update backfill**: `arete update` ensures missing workspace dirs and default files exist (single source of truth in `src/core/workspace-structure.ts`). Never overwrites existing files. Lets existing workspaces get new structure (e.g. `people/`) when features ship.
 
-**Config**: `arete.yaml` (global + workspace-specific)
+**Config**: `arete.yaml` (global + workspace-specific). Includes `ide_target: 'cursor' | 'claude'` — drives which adapter is used for rules and root files (`.cursor/` vs `.claude/`, `CLAUDE.md`).
 
 ### 4. Skills System
 

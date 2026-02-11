@@ -1,6 +1,6 @@
 # Areté
 
-A Cursor-native workspace for product managers to maintain context, run structured workflows, and build institutional memory.
+A workspace for Cursor and Claude Code that helps product managers maintain context, run structured workflows, and build institutional memory.
 
 > **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" or "virtue" - the pursuit of fulfilling one's purpose to the highest degree.
 
@@ -19,8 +19,10 @@ This is a **GitHub template repository**. To use it:
 
 1. Click **"Use this template"** → **"Create a new repository"**
 2. Name your repo (e.g., `my-company-pm`) and set it to **Private**
-3. Clone your new repo and open in Cursor
+3. Clone your new repo and open in Cursor (or Claude Code)
 4. Start filling in your context files
+
+*For Claude Code: Use `arete install --ide claude` in a new directory to create a Claude workspace, then add your context.*
 
 Your personal/company data stays in your private repo. This template stays public and generic.
 
@@ -36,10 +38,10 @@ Your personal/company data stays in your private repo. This template stays publi
 
 ```
 arete/
-├── .cursor/
-│   ├── rules/           # Cursor rules
-│   ├── skills/          # Stateless workflows (discovery, PRD, etc.)
+├── .cursor/ or .claude/ # IDE config (Cursor or Claude Code, set by install)
+│   ├── rules/           # Rules for your IDE
 │   └── tools/           # Lifecycle-based capabilities (onboarding, etc.)
+├── .agents/skills/      # PM workflows (discovery, PRD, etc.) — shared by both IDEs
 ├── context/             # Business context (source of truth)
 ├── projects/            # Active and archived projects
 ├── memory/              # Decisions, learnings, activity log
@@ -72,7 +74,7 @@ Tools are different from skills - they have phases, track progress, and eventual
 |------|---------|--------------|
 | Onboarding | 30/60/90 day plan for thriving at a new job | "Start onboarding tool" or "Help me with my 30/60/90 day plan" |
 
-See `.cursor/tools/README.md` for more about the tools framework.
+See `.cursor/tools/README.md` or `.claude/tools/README.md` for more about the tools framework (path depends on IDE).
 
 ---
 
@@ -127,8 +129,9 @@ Projects are however YOU want to organize your work. Not everything needs a proj
 
 ### For Users
 - `SETUP.md` - Detailed setup, QMD configuration, troubleshooting
-- `.cursor/rules/` - Cursor rules for PM workflows
-- `.cursor/skills/` - Available PM skills and workflows
+- `.cursor/rules/` or `.claude/rules/` - IDE rules for PM workflows (depends on install)
+- `.agents/skills/` - Available PM skills and workflows
+- Use `arete install --ide claude` for Claude Code; default is Cursor
 
 ### For Developers (Areté Maintainers)
 - `AGENTS.md` - Architecture, patterns, and context for AI agents building Areté
