@@ -4,7 +4,7 @@
 
 ## Context: BUILDER vs GUIDE
 
-**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc`.
+**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc` (Cursor) or `.claude/rules/` + `CLAUDE.md` (Claude Code).
 
 - **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here.
 - **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
@@ -95,7 +95,7 @@ A **structured workspace** with:
 ### CLI Interface
 
 `arete` CLI for workspace management:
-- `arete install` - Initialize workspace
+- `arete install [directory] --ide cursor|claude` - Initialize workspace (default: cursor)
 - `arete status` - Check workspace health
 - `arete pull` - Sync from integrations
 - `arete seed` - Import historical data from integrations
@@ -129,7 +129,7 @@ When the user sends a message in Cursor (chat or composer), the agent typically 
 
 | Layer | What's included | Source |
 |-------|-----------------|--------|
-| **Rules** | pm-workspace.mdc (alwaysApply), arete-vision, testing, dev, etc. | `.cursor/rules/*.mdc` |
+| **Rules** | pm-workspace (alwaysApply), arete-vision, etc. | `.cursor/rules/*.mdc` (Cursor) or `.claude/rules/*.md` + `CLAUDE.md` (Claude) |
 | **Architecture** | AGENTS.md (this file) | Root |
 | **Workspace layout** | Open files, recent files; workspace is the Areté root | Cursor |
 | **Tools** | read_file, grep, run_terminal_cmd, list_dir, etc. | Cursor |
@@ -308,7 +308,7 @@ findWorkspaceRoot(startDir: string): string | null
 
 **Update backfill**: `arete update` ensures missing workspace dirs and default files exist (single source of truth in `src/core/workspace-structure.ts`). Never overwrites existing files. Lets existing workspaces get new structure (e.g. `people/`) when features ship.
 
-**Config**: `arete.yaml` (global + workspace-specific)
+**Config**: `arete.yaml` (global + workspace-specific). Includes `ide_target: 'cursor' | 'claude'` — drives which adapter is used for rules and root files (`.cursor/` vs `.claude/`, `CLAUDE.md`).
 
 ### 4. Skills System
 
@@ -681,6 +681,8 @@ Every prompt includes:
 
 **Skills**:
 - `dev/skills/execute-prd/SKILL.md` — Full orchestration workflow
+- `dev/skills/prd-post-mortem/SKILL.md` — Systematic post-mortem after PRD completion (metrics, pre-mortem review, memory entry)
+- `dev/skills/synthesize-collaboration-profile/SKILL.md` — Update `dev/collaboration.md` from entries' Learnings/Corrections; run after post-mortem or when several entries have learnings (see agent-memory.mdc)
 - `dev/agents/prd-task.md` — Subagent instructions (for Task tool)
 
 **Memory**:
@@ -738,12 +740,34 @@ Every prompt includes:
 When building Areté features:
 
 1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
-2. **Read this file first** for architecture understanding
-3. **Check build memory** (`dev/MEMORY.md`) for recent changes
+2. **Read this file first** for architecture understanding.
+3. **Leverage build memory before acting** (see `.cursor/rules/agent-memory.mdc` § Leverage build memory):
+   - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
+   - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don’t repeat past mistakes.
 4. **Follow patterns** established in existing code
 5. **Write tests** for all new functionality
 6. **Update AGENTS.md** with new patterns or gotchas discovered
 7. **Use TypeScript strictly** - no `any`, proper types
+8. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
+
+### Documentation Planning Checklist
+
+When creating plans that touch code/features/structure, ask: **"Does this need doc updates?"**
+
+**Scope Check:**
+- [ ] All root docs: README, SETUP, AGENTS, ONBOARDING, scratchpad
+- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
+
+**Search Strategy:**
+- [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
+- [ ] Concept audit: If feature changes paths/structure (e.g. `.cursor/` → `.agents/`), grep old paths in all `.md` files
+- [ ] Related workflows: Check files that reference setup, install, or getting started
+
+**Verification:**
+- [ ] Re-read any backlog items found in scope check for explicit doc requirements
+- [ ] List all affected files BEFORE drafting plan; don't assume scope
+
+**Anti-pattern:** Do not assume "documentation" = README + SETUP + AGENTS. ONBOARDING, scratchpad, and backlog frequently need updates.
 
 ## Common Patterns
 
@@ -806,6 +830,61 @@ const __dirname = dirname(__filename);
 ## Test Data (Development Only)
 
 For local testing, `arete seed test-data` copies fixture data (meetings, people, plans, projects, memory) into the workspace. Requires the package to be linked (`npm link`) or installed with `--source symlink`; the `test-data/` directory is not published to npm. After seeding, `TEST-SCENARIOS.md` in the workspace root lists prompts for meeting-prep, daily-plan, process-meetings, and other flows.
+
+### 12. Multi-IDE Support Architecture
+
+**Purpose**: Abstract IDE-specific behavior so Areté can produce IDE-specific output for multiple IDEs from a single canonical workspace.
+
+**Location**: `src/core/ide-adapter.ts` (interface) + `src/core/adapters/` (implementations)
+
+**Interface**: `IDEAdapter`
+```typescript
+interface IDEAdapter {
+  readonly target: IDETarget; // 'cursor' | 'claude'
+  readonly configDirName: string; // '.cursor' | '.claude'
+  readonly ruleExtension: string; // '.mdc' | '.md'
+  getIDEDirs(): string[]; // IDE-specific directories to create
+  rulesDir(): string; // Relative path to rules directory
+  toolsDir(): string; // Relative path to tools directory
+  integrationsDir(): string; // Relative path to integrations directory
+  formatRule(rule: CanonicalRule, config: AreteConfig): string; // Format to IDE-specific rule format
+  transformRuleContent(content: string): string; // Transform paths (.cursor/ → .claude/)
+  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string>; // Generate IDE root files
+  detectInWorkspace(workspaceRoot: string): boolean; // Check if IDE dir exists
+}
+```
+
+**Implementations**:
+- **CursorAdapter** (`src/core/adapters/cursor-adapter.ts`) — Preserves current behavior: `.cursor/`, `.mdc` files, no path transforms, no root file generation
+- **ClaudeAdapter** (`src/core/adapters/claude-adapter.ts`) — Claude Code support: `.claude/`, `.md` files, path transforms (`.cursor/` → `.claude/`), generates `CLAUDE.md` with mandatory routing workflow
+
+**Transpilation System** (`src/core/rule-transpiler.ts`):
+- `parseRule()` — Reads canonical `.mdc` with YAML frontmatter
+- `transpileRule()` — Converts to target IDE format via adapter
+- `transpileRules()` — Batch processes all product rules from allowList
+
+**Detection Priority**:
+1. `arete.yaml` → `ide_target` field (explicit config)
+2. Detected from workspace (`.cursor/` or `.claude/` exists)
+3. Default: `cursor` (backward compatibility)
+
+**CLI Integration**:
+- `arete install --ide cursor|claude` — Creates IDE-specific workspace
+- `arete update` — Regenerates rules and root files for configured IDE
+- `arete status` — Shows IDE target, warns when both `.cursor/` and `.claude/` exist without explicit config
+
+**Adding a New IDE**:
+1. Create `src/core/adapters/{name}-adapter.ts` implementing `IDEAdapter`
+2. Add to `IDETarget` union type in `src/core/ide-adapter.ts`
+3. Add case to `getAdapter()` in `src/core/adapters/index.ts`
+4. Write tests in `test/core/adapters/{name}-adapter.test.ts`
+5. No changes needed to core workspace or command logic
+
+**Key Design Decisions**:
+- Rules are always transpiled from canonical source (never edited in-place)
+- Transpiled files include auto-generated header warning users
+- IDE-specific behavior fully isolated in adapters
+- Backward compatibility maintained (Cursor workspaces work identically)
 
 ## Additional Resources
 

@@ -407,7 +407,7 @@ async function installSkill(options: SkillOptions): Promise<void> {
         success: true,
         source: normalizedSource,
         originalSource: source !== normalizedSource ? source : undefined,
-        message: 'Skill installed via skills.sh. Metadata added if skill was found under .cursor/skills.',
+        message: 'Skill installed via skills.sh. Metadata added if skill was found under .agents/skills.',
         path: installedPath ?? undefined,
       }, null, 2));
     } else if (!installedPath) {

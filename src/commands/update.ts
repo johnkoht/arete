@@ -2,13 +2,15 @@
  * Update command - pull latest from source
  */
 
-import { existsSync, readdirSync, rmSync, cpSync, symlinkSync } from 'fs';
+import { existsSync, readdirSync, rmSync, cpSync, symlinkSync, writeFileSync } from 'fs';
 import { join, basename } from 'path';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths, getSourcePaths, parseSourceType } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
-import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure } from '../core/workspace-structure.js';
+import { ensureWorkspaceStructure, migrateLegacyWorkspaceStructure, PRODUCT_RULES_ALLOW_LIST } from '../core/workspace-structure.js';
 import { success, error, info, header, listItem, formatPath } from '../core/utils.js';
+import { getAdapterFromConfig } from '../core/adapters/index.js';
+import { transpileRules } from '../core/rule-transpiler.js';
 import type { CommandOptions, SyncResults } from '../types.js';
 
 export interface UpdateOptions extends CommandOptions {
@@ -91,8 +93,12 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
   
-  const paths = getWorkspacePaths(workspaceRoot);
   const config = loadConfig(workspaceRoot);
+  
+  // Load adapter from config (auto-detects if ide_target not set)
+  const adapter = getAdapterFromConfig(config, workspaceRoot);
+  
+  const paths = getWorkspacePaths(workspaceRoot, adapter);
   
   // Determine source
   const source = config.source || 'npm';
@@ -143,7 +149,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
 
   // Ensure workspace structure (missing dirs and default files — never overwrites)
-  const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check });
+  const structureResult = ensureWorkspaceStructure(workspaceRoot, { dryRun: check, adapter });
   results.structure.directoriesAdded = structureResult.directoriesAdded;
   results.structure.filesAdded = structureResult.filesAdded;
 
@@ -163,13 +169,18 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     }
   }
   
-  // Check rules
+  // Check rules (map source .mdc filenames to IDE-specific dest filenames for comparison)
+  // Only consider rules in PRODUCT_RULES_ALLOW_LIST — matches what transpileRules actually processes
   if (existsSync(sourcePaths.rules)) {
-    const srcRules = getDirContents(sourcePaths.rules);
+    const srcRules = getDirContents(sourcePaths.rules)
+      .filter((f) => f.endsWith('.mdc'))
+      .filter((f) => PRODUCT_RULES_ALLOW_LIST.includes(f));
     const destRules = getDirContents(paths.rules);
-    
+
     for (const rule of srcRules) {
-      if (destRules.includes(rule)) {
+      const baseName = rule.replace(/\.mdc$/, '');
+      const destFilename = `${baseName}${adapter.ruleExtension}`;
+      if (destRules.includes(destFilename)) {
         results.rules.updated.push(rule);
       } else {
         results.rules.added.push(rule);
@@ -242,33 +253,44 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     preserve: localOverrides
   });
   
-  // Update rules
-  const rulesResult = syncDirectory(sourcePaths.rules, paths.rules, {
-    symlink: useSymlinks
-  });
+  // Transpile rules to IDE-specific format (always regenerate)
+  const rulesResult = transpileRules(
+    sourcePaths.rules,
+    paths.rules,
+    adapter,
+    config,
+    PRODUCT_RULES_ALLOW_LIST
+  );
+  
+  // Regenerate IDE-specific root files (e.g., CLAUDE.md with updated timestamp)
+  const rootFiles = adapter.generateRootFiles(config, workspaceRoot, sourcePaths.rules);
+  for (const [filename, content] of Object.entries(rootFiles)) {
+    writeFileSync(join(workspaceRoot, filename), content, 'utf-8');
+  }
   
   // Summary
   if (!json) {
     console.log('');
     success('Update complete!');
-    
-    const totalAdded = skillsResult.added.length + rulesResult.added.length;
-    const totalUpdated = skillsResult.updated.length + rulesResult.updated.length;
+    const skillsAdded = skillsResult.added.length;
+    const skillsUpdated = skillsResult.updated.length;
+    if (skillsAdded > 0 || skillsUpdated > 0) {
+      const parts: string[] = [];
+      if (skillsAdded > 0) parts.push(`${skillsAdded} added`);
+      if (skillsUpdated > 0) parts.push(`${skillsUpdated} updated`);
+      listItem('Skills', parts.join(', '));
+    }
+    const rulesCount = rulesResult.added.length;
+    if (rulesCount > 0) {
+      listItem('Rules', `${rulesCount} transpiled`);
+    }
     const structureAdded = results.structure.directoriesAdded.length + results.structure.filesAdded.length;
-
     if (structureAdded > 0) {
       listItem('Structure (new dirs/files)', structureAdded.toString());
-    }
-    if (totalAdded > 0) {
-      listItem('Skills/rules added', totalAdded.toString());
-    }
-    if (totalUpdated > 0) {
-      listItem('Skills/rules updated', totalUpdated.toString());
     }
     if (skillsResult.preserved.length > 0) {
       listItem('Preserved (overrides)', skillsResult.preserved.join(', '));
     }
-    
     console.log('');
   }
 }

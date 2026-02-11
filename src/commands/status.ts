@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
+import { getAdapterFromConfig } from '../core/adapters/index.js';
 import { success, error, info, header, section, listItem, formatPath } from '../core/utils.js';
 import type { CommandOptions } from '../types.js';
 
@@ -110,8 +111,9 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
     process.exit(1);
   }
   
-  const paths = getWorkspacePaths(workspaceRoot);
   const config = loadConfig(workspaceRoot);
+  const adapter = getAdapterFromConfig(config, workspaceRoot);
+  const paths = getWorkspacePaths(workspaceRoot, adapter);
   
   // Gather status info
   const skillsList = getSkillsList(paths.agentSkills);
@@ -120,7 +122,8 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
       path: workspaceRoot,
       version: config.version || 'unknown',
       source: config.source || 'unknown',
-      created: config.created || 'unknown'
+      created: config.created || 'unknown',
+      ide: config.ide_target || 'cursor'
     },
     skills: {
       list: skillsList,
@@ -153,6 +156,7 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   listItem('Path', formatPath(workspaceRoot));
   listItem('Version', status.workspace.version);
   listItem('Source', status.workspace.source);
+  listItem('IDE', status.workspace.ide);
   
   // Skills
   section('Skills');
@@ -199,6 +203,14 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
   }
   
   console.log('');
+  
+  // Check for ambiguous IDE setup
+  const hasCursor = existsSync(join(workspaceRoot, '.cursor'));
+  const hasClaude = existsSync(join(workspaceRoot, '.claude'));
+  if (hasCursor && hasClaude && !config.ide_target) {
+    console.log(chalk.yellow('⚠️  Both .cursor/ and .claude/ directories exist. Set \'ide_target\' in arete.yaml to avoid ambiguity.'));
+    console.log('');
+  }
 }
 
 export default statusCommand;

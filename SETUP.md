@@ -2,13 +2,15 @@
 
 ## Overview
 
-Areté is a Product Management workspace for Cursor that helps you:
+Areté is a Product Management workspace for Cursor and Claude Code that helps you:
 - Maintain business and product context
 - Run project-based PM workflows (discovery, PRDs, competitive analysis, roadmaps)
 - Build institutional memory (decisions, learnings)
 - Search across all content with QMD
 
 ## Workspace Structure
+
+The IDE config directory is `.cursor/` for Cursor or `.claude/` for Claude Code, depending on how you installed. Skills live in `.agents/skills/` for both.
 
 ```
 arete/
@@ -47,7 +49,8 @@ arete/
 │   └── activity/            # Activity log
 │
 ├── .credentials/            # API keys and tokens (gitignored)
-├── .cursor/                 # Rules, skills, tools, integrations
+├── .cursor/ or .claude/     # IDE config (rules, tools, integrations)
+├── .agents/skills/          # PM skills (shared by both IDEs)
 ├── people/                  # People (internal, customers, users)
 ├── scripts/                 # Setup and utility scripts
 └── templates/               # Document templates
@@ -63,17 +66,24 @@ arete/
 
 **Meeting intelligence**: Use **meeting-prep** to build a prep brief before a meeting (attendees, recent meetings, action items, talking points). Use **daily-plan** to see today's focus, week priorities, and meeting context for each of today's meetings (you supply the meeting list; no calendar integration in v1).
 
+## Choosing Your IDE
+
+Areté supports Cursor and Claude Code. Choose at install time:
+
+- **Cursor** (default): `arete install` or `arete install --ide cursor` — creates `.cursor/` with `.mdc` rules
+- **Claude Code**: `arete install --ide claude` — creates `.claude/` with `.md` rules and root `CLAUDE.md`
+
+The `ide_target` field in `arete.yaml` stores your choice; `arete update` uses it when regenerating rules. One IDE per workspace. If both `.cursor/` and `.claude/` exist without explicit `ide_target`, `arete status` will warn — set `ide_target` in `arete.yaml` to remove the warning.
+
 ## Customizing Skills
 
-Skills are workflows (discovery, PRD, meeting prep, etc.) that ship in `.cursor/skills-core/`. You can customize them, add third-party skills, or choose a different skill for a given role.
+Skills are workflows (discovery, PRD, meeting prep, etc.) that ship in `.agents/skills/`. You can customize them by editing files there, add third-party skills, or choose a different skill for a given role.
 
-- **Override a skill**: `arete skill override <name>` — copies the default into `.cursor/skills-local/` so you can edit it.
-- **Reset**: `arete skill reset <name>` — remove your override and use the default again.
-- **Install from skills.sh or a path**: `arete skill install owner/repo` or `arete skill install ./path/to/skill`.
-- **Use a different skill for a role**: `arete skill set-default <skill-name> --for <role>` (e.g. use a community PRD skill for the "create-prd" role).
+- **Install from skills.sh or a path**: `arete skill install owner/repo` or `arete skill install ./path/to/skill`
+- **Use a different skill for a role**: `arete skill set-default <skill-name> --for <role>` (e.g. use a community PRD skill for the "create-prd" role)
 - **View defaults**: `arete skill defaults`
 
-See [.cursor/skills/README.md](.cursor/skills/README.md) for full skill management docs.
+See [.agents/skills/README.md](.agents/skills/README.md) for full skill management docs.
 
 ## Understanding the Architecture
 
@@ -83,8 +93,8 @@ When you use Areté, you interact with:
 - **Context files** (`context/`) - Your business and product knowledge
 - **Projects** (`projects/`) - Your active and archived PM work
 - **Memory** (`.arete/memory/`) - Decisions, learnings, institutional knowledge
-- **Skills** (`.cursor/skills/`) - PM workflows like discovery, PRD creation
-- **Tools** (`.cursor/tools/`) - Lifecycle features like onboarding
+- **Skills** (`.agents/skills/`) - PM workflows like discovery, PRD creation
+- **Tools** (`.cursor/tools/` or `.claude/tools/`) - Lifecycle features like onboarding
 
 ### For Developers (Areté Maintainers)
 
@@ -113,8 +123,11 @@ Use the `arete` CLI to check dependencies and set up the workspace:
 # Check what's installed
 ./arete setup
 
-# Install missing dependencies
+# Install workspace (Cursor by default)
 ./arete install
+
+# Or for Claude Code:
+./arete install --ide claude
 
 # Initialize workspace (create directories, credentials)
 ./arete init
@@ -333,10 +346,15 @@ Create → Work → Synthesize → Finalize → Archive
 
 ## Troubleshooting
 
-**Rules not loading?**
+**Rules not loading (Cursor)?**
 - Ensure `.cursor/rules/` folder exists
 - Check that `.mdc` files are properly formatted
 - Try reloading the Cursor window
+
+**Rules not loading (Claude Code)?**
+- Ensure you ran `arete install --ide claude`
+- Check `.claude/rules/` and root `CLAUDE.md` exist
+- Run `arete update` to regenerate rules if needed
 
 **QMD installation fails on Apple Silicon?**
 - Error: "llama.cpp is not supported under Rosetta"

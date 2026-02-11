@@ -281,6 +281,7 @@ You've imported meetings! Let's verify:
     - Update ONBOARDING.md with `arete onboard` flow
     - Update SETUP.md to reference onboarding command
     - AGENTS.md section on onboarding system
+    - Ensure ONBOARDING.md, SETUP.md, and onboarding flow are IDE-aware (paths, `ide_target`, `.cursor/` vs `.claude/`)
     - Acceptance: Comprehensive tests, docs updated
 
 ---
@@ -358,15 +359,20 @@ You've imported meetings! Let's verify:
    - Collect feedback at end of onboarding?
    - Recommendation: **Optional anonymous feedback** (helps refine paths)
 
+7. **Multi-IDE support?**
+   - `arete onboard` should respect `ide_target` and reference correct paths (`.cursor/` vs `.claude/`)
+   - Onboarding flow may need to surface which IDE the user chose
+   - Recommendation: **IDE-aware** — use `ide_target` from config, avoid hardcoded `.cursor/` paths
+
 ---
 
 ## Related
 
 - **Existing**: `arete install` (creates workspace), `arete setup` (needs enhancement)
-- **Tools Framework**: `.cursor/tools/README.md` (onboarding would be a tool)
+- **Tools Framework**: `.cursor/tools/README.md` or `.claude/tools/README.md` (path depends on `ide_target`; onboarding would be a tool)
 - **Planning System**: `goals/`, `now/week.md`, `now/today.md` (used by onboarding)
 - **Skills**: meeting-prep, synthesize, process-meetings (triggered during onboarding)
-- **Docs**: ONBOARDING.md (simple checklist, would reference `arete onboard`)
+- **Docs**: ONBOARDING.md (simple checklist, would reference `arete onboard`). When implementing, ensure ONBOARDING.md references IDE-appropriate paths and `arete install --ide`.
 
 ---
 

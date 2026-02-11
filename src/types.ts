@@ -2,8 +2,13 @@
  * Shared type definitions for Areté CLI
  */
 
+import type { IDETarget } from './core/ide-adapter.js';
+
 /** Agent mode: builder = building Areté; guide = leading/empowering the user (end-product) */
 export type AgentMode = 'builder' | 'guide';
+
+/** IDE target type (re-exported from ide-adapter for convenience) */
+export type { IDETarget };
 
 /** Shape of the resolved config object */
 export interface AreteConfig {
@@ -13,6 +18,8 @@ export interface AreteConfig {
   created?: string;
   /** Agent mode: builder (building Areté) or guide (end-user workspace). Used by rules and CLI. */
   agent_mode?: AgentMode;
+  /** Target IDE: cursor or claude. When undefined, adapter is auto-detected from workspace structure. */
+  ide_target?: IDETarget;
   /** Internal email domain for classifying meeting attendees (e.g. "acme.com") */
   internal_email_domain?: string;
   skills: {
@@ -59,7 +66,7 @@ export interface Person {
 export interface WorkspacePaths {
   root: string;
   manifest: string;
-  cursor: string;
+  ideConfig: string;
   rules: string;
   /** Single skills location: .agents/skills (last-in-wins) */
   agentSkills: string;

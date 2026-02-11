@@ -16,6 +16,8 @@ Standards for building and changing Arete. **Testing** is covered in `testing.md
 - **MEMORY.md**: `dev/MEMORY.md` — index of significant build/architecture changes.
 - **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
 - **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
+
+**Leverage before acting**: Read `dev/collaboration.md` and scan `dev/MEMORY.md` at the start of substantive build work; before adding backlog, running seed, placing PRDs, or starting PRD/plan execution, read the relevant entry or collaboration.md so you don’t repeat past mistakes. See `agent-memory.mdc` § Leverage build memory.
 - **Backlog**: `dev/backlog/` — future work and enhancements. Use subfolders:
   - `features/` — new capabilities (e.g., progress-dashboard, google-calendar-provider)
   - `improvements/` — enhancements to existing functionality (e.g., automated-code-review, skills-enhancement)

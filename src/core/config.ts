@@ -14,6 +14,7 @@ const DEFAULT_CONFIG: AreteConfig = {
   version: null,
   source: 'npm',
   agent_mode: undefined,
+  ide_target: undefined,
   skills: {
     core: [],
     overrides: [],

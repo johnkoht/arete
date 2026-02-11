@@ -12,7 +12,7 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ## ⚠️ CRITICAL: Skill-Based Workflow Required
 
-**Before responding to ANY PM action** (meeting prep, synthesis, planning, discovery, PRD, etc.):
+**Before responding to ANY PM action** (including tour/orientation, meeting prep, synthesis, planning, discovery, PRD, etc.):
 
 1. **ROUTE**: `arete skill route "<user message>"`
 2. **LOAD**: Read the matched skill's SKILL.md file
@@ -78,18 +78,22 @@ The workspace uses a three-layer memory architecture:
 
 ## ⚠️ STOP AND CHECK: Is This a PM Action?
 
-**Before responding to ANY user request that could be PM work** (meeting prep, synthesis, planning, research, etc.), you MUST:
+**Before responding to ANY user request that could be PM work** (e.g. **tour/orientation** — "give me a tour", "how does this work"; meeting prep, synthesis, planning, research, etc.), you MUST:
 
 1. ✅ **Check**: Does this match a PM action in the Skills table below?
 2. ✅ **Route**: Run `arete skill route "<user message>"` to find the right skill
 3. ✅ **Load**: Read the matched skill's SKILL.md file into context
 4. ✅ **Execute**: Follow the skill's complete workflow (don't improvise)
 
-**Anti-Pattern Example** (what NOT to do):
+**Anti-Pattern Examples** (what NOT to do):
 ```
 ❌ User: "Help me prep for my meeting with Alex"
 ❌ Agent: [Runs Glob to find Alex's file, Grep for meetings, Read several files, creates custom brief]
 ❌ Problem: Bypassed the meeting-prep skill and get_meeting_context pattern entirely
+
+❌ User: "Can you give me a tour of the workspace?" / "How does this work?"
+❌ Agent: [Lists directories, reads arete.yaml, context/, goals/, and explains from file tree]
+❌ Problem: Bypassed the workspace-tour skill. Tour/orientation requests are PM actions — route first, then load and follow workspace-tour; do not improvise by exploring the repo.
 ```
 
 **Correct Pattern**:
@@ -100,6 +104,16 @@ The workspace uses a three-layer memory architecture:
 ✅ Agent: [Reads .agents/skills/meeting-prep/SKILL.md]
 ✅ Agent: [Follows get_meeting_context pattern: resolve attendees, read person files, search meetings, read projects, extract action items, run QMD queries]
 ✅ Agent: [Outputs brief in skill's prescribed format]
+```
+
+**Correct Pattern (tour)**:
+```
+✅ User: "Can you give me a tour of the workspace?"
+✅ Agent: [Runs `arete skill route "can you give me a tour of the workspace"`]
+✅ Router returns: workspace-tour
+✅ Agent: [Reads .agents/skills/workspace-tour/SKILL.md]
+✅ Agent: [Follows the skill's Tour Flow: Overview → Context → Projects → Memory → Scratchpad → How to Work → QMD → What to Do First]
+✅ Agent: [Outputs in the skill's prescribed format; does NOT improvise by listing directories]
 ```
 
 **If you catch yourself about to use ad-hoc Grep/Glob/Read for PM work, STOP and route to the skill first.**
@@ -282,7 +296,7 @@ These patterns are referenced by skills. When a skill says "use the get_meeting_
 Run through this checklist for EVERY user request:
 
 **[ ] Step 1: Is this a PM action?** 
-- Meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, etc.
+- **Tour/orientation** ("give me a tour", "how does this work", "what can I do here"), meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, etc.
 - If YES → Go to Step 2
 - If NO → Skip to supplemental context-gathering below
 
@@ -385,7 +399,7 @@ When working in this PM workspace:
 
 **Before sending your response for ANY PM action**, verify you followed the required workflow:
 
-- [ ] **Did I recognize this as a PM action?** (meeting prep, synthesis, planning, discovery, PRD, etc.)
+- [ ] **Did I recognize this as a PM action?** (tour/orientation, meeting prep, synthesis, planning, discovery, PRD, etc.)
 - [ ] **Did I run the skill router?** (`arete skill route "<message>"`)
 - [ ] **Did I load and read the matched skill file?** (e.g., `.agents/skills/meeting-prep/SKILL.md`)
 - [ ] **Did I follow the skill's complete workflow?** (not ad-hoc Grep/Glob/Read)

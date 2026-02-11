@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
-  WORKSPACE_DIRS,
+  BASE_WORKSPACE_DIRS,
   DEFAULT_FILES,
   ensureWorkspaceStructure,
   migrateLegacyWorkspaceStructure,
@@ -25,28 +25,34 @@ describe('workspace-structure', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  describe('WORKSPACE_DIRS', () => {
+  describe('BASE_WORKSPACE_DIRS', () => {
     it('includes people and category subdirs', () => {
-      assert.ok(WORKSPACE_DIRS.includes('people'));
-      assert.ok(WORKSPACE_DIRS.includes('people/internal'));
-      assert.ok(WORKSPACE_DIRS.includes('people/customers'));
-      assert.ok(WORKSPACE_DIRS.includes('people/users'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('people'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('people/internal'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('people/customers'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('people/users'));
     });
 
     it('includes core workspace dirs', () => {
-      assert.ok(WORKSPACE_DIRS.includes('context'));
-      assert.ok(WORKSPACE_DIRS.includes('projects'));
-      assert.ok(WORKSPACE_DIRS.includes('resources'));
-      assert.ok(WORKSPACE_DIRS.includes('now'));
-      assert.ok(WORKSPACE_DIRS.includes('goals'));
-      assert.ok(WORKSPACE_DIRS.includes('.arete'));
-      assert.ok(WORKSPACE_DIRS.includes('.arete/memory'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('context'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('projects'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('resources'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('now'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('goals'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('.arete'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('.arete/memory'));
     });
 
     it('includes planning dirs', () => {
-      assert.ok(WORKSPACE_DIRS.includes('goals'));
-      assert.ok(WORKSPACE_DIRS.includes('goals/archive'));
-      assert.ok(WORKSPACE_DIRS.includes('templates/plans'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('goals'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('goals/archive'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('templates/plans'));
+    });
+
+    it('does not include IDE-specific dirs', () => {
+      assert.ok(!BASE_WORKSPACE_DIRS.includes('.cursor'));
+      assert.ok(!BASE_WORKSPACE_DIRS.includes('.cursor/rules'));
+      assert.ok(!BASE_WORKSPACE_DIRS.includes('.cursor/tools'));
     });
   });
 

@@ -6,6 +6,8 @@ import { existsSync } from 'fs';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import type { WorkspacePaths, SourceType, SourcePaths } from '../types.js';
+import type { IDEAdapter } from './ide-adapter.js';
+import { detectAdapter } from './adapters/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,7 +26,7 @@ export function getPackageRoot(): string {
 export function isAreteWorkspace(dir: string): boolean {
   // Check for arete.yaml (new format) or characteristic directories
   const hasManifest = existsSync(join(dir, 'arete.yaml'));
-  const hasCursorDir = existsSync(join(dir, '.cursor'));
+  const hasCursorDir = existsSync(join(dir, '.cursor')) || existsSync(join(dir, '.claude'));
   const hasContext = existsSync(join(dir, 'context'));
   const hasMemory = existsSync(join(dir, '.arete', 'memory')) || existsSync(join(dir, 'memory'));
   
@@ -50,15 +52,17 @@ export function findWorkspaceRoot(startDir: string = process.cwd()): string | nu
 /**
  * Get workspace paths
  */
-export function getWorkspacePaths(workspaceRoot: string): WorkspacePaths {
+export function getWorkspacePaths(workspaceRoot: string, adapter?: IDEAdapter): WorkspacePaths {
+  const adp = adapter || detectAdapter(workspaceRoot);
+  
   return {
     root: workspaceRoot,
     manifest: join(workspaceRoot, 'arete.yaml'),
-    cursor: join(workspaceRoot, '.cursor'),
-    rules: join(workspaceRoot, '.cursor', 'rules'),
+    ideConfig: join(workspaceRoot, adp.configDirName),
+    rules: join(workspaceRoot, adp.rulesDir()),
     agentSkills: join(workspaceRoot, '.agents', 'skills'),
-    tools: join(workspaceRoot, '.cursor', 'tools'),
-    integrations: join(workspaceRoot, '.cursor', 'integrations'),
+    tools: join(workspaceRoot, adp.toolsDir()),
+    integrations: join(workspaceRoot, adp.integrationsDir()),
     context: join(workspaceRoot, 'context'),
     memory: join(workspaceRoot, '.arete', 'memory'),
     now: join(workspaceRoot, 'now'),

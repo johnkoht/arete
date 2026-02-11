@@ -98,8 +98,10 @@ people/       → Colleagues, customers, users
 ## Next Steps
 
 - [ ] Read **SETUP.md** for comprehensive setup (QMD, calendar, MCP integrations)
-- [ ] Explore **`.cursor/skills/`** to see available workflows
+- [ ] Explore **`.agents/skills/`** to see available workflows
 - [ ] Check **`README.md`** for full feature list
+
+*If you installed with `arete install --ide claude`, open this workspace in Claude Code.*
 
 ---
 

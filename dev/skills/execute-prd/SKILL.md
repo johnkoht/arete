@@ -84,6 +84,7 @@ The Reviewer acts as a sr. engineer in two moments:
    | **Dependencies** | Are dependencies clear? | "Can't do B1 until A3 is done" |
    | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
    | **State Tracking** | How to track progress? | "Update prd.json after each task" |
+   | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, backlog items with doc tasks" |
 
 5. **Document Mitigations**
    
@@ -95,6 +96,16 @@ The Reviewer acts as a sr. engineer in two moments:
    **Mitigation**: [Specific action to prevent it]
    **Verification**: [How to check mitigation was applied]
    ```
+
+   **Documentation Impact Mitigation:**
+
+   If the PRD changes user-facing behavior, paths, or setup:
+   1. Run documentation checklist (see AGENTS.md § Documentation Planning Checklist).
+   2. If docs are affected: Add a doc-update task to prd.json (last task, depends on all implementation tasks).
+   3. Provide the doc subagent with: feature changes summary, documentation checklist, and search results (which files reference affected concepts).
+   4. Doc subagent runs checklist, updates files, commits.
+
+   **Pattern:** Orchestrator spawns doc subagent after all implementation tasks complete. Subagent has full context of what changed and runs systematic audit.
 
 6. **Share Pre-Mortem with User**
    
@@ -115,7 +126,7 @@ For each pending task (in dependency order):
 
 8. **Craft Subagent Prompt** (Orchestrator)
    
-   Use this template:
+   Use this template (scale reflection based on task complexity):
    
    ```markdown
    You are implementing Task [ID] from [prd-name] PRD.
@@ -157,6 +168,20 @@ For each pending task (in dependency order):
    4. Update dev/autonomous/prd.json
    5. Update dev/autonomous/progress.txt
    
+   **Post-Task Reflection** (include in your completion report):
+   
+   [FOR SMALL TASKS (<20 lines, 1-2 files):]
+   - What helped: Which rule/memory item guided you?
+   - Token estimate: e.g., "~5K tokens"
+   Format: 1-2 sentences
+   
+   [FOR MEDIUM/LARGE TASKS (multiple files, new systems):]
+   1. Memory impact: Did learnings from progress.txt/MEMORY.md/collaboration.md affect your approach? What specifically?
+   2. Rule effectiveness: Which rules helped? Which created confusion?
+   3. Suggestions: Improvements to task prompt or workflow?
+   4. Token estimate: e.g., "~25K tokens"
+   Format: 3-5 sentences
+   
    Proceed with implementation.
    ```
    
@@ -187,7 +212,31 @@ For each pending task (in dependency order):
 11. **Reviewer: Code Review** (Sr. Engineer)
 
    After the subagent completes, perform a thorough code review as a sr. engineer: validate the work, acceptance criteria, and tests. Ensure the agent wrote quality code, tested their work, and used DRY/KISS and the best solution given context and constraints.
-   
+
+   **11.0 File Deletion Review**
+
+   Before conducting the code review, check for deleted files:
+
+   ```bash
+   git diff HEAD --name-status | grep '^D'
+   ```
+
+   **If files were deleted:**
+
+   1. **Was it specified in the plan?** (e.g., "remove old fathom.py, superseded by fathom.ts")
+      - If yes → Proceed to 11a.
+      - If no → Continue to step 2.
+
+   2. **Ask subagent to justify:** What file was deleted? Why? What replaced it (if anything)? Was it intentional or accidental?
+
+   3. **Validate justification:**
+      - **Good:** "Deleted scripts/fathom.py; superseded by src/integrations/fathom/ (TypeScript). Old Python client no longer needed."
+      - **Bad:** Silence, or "cleanup", or no justification.
+
+   4. **If justification is unclear or missing:** Reject the work. Ask subagent to either restore the file or provide clear rationale. Do not accept until justified or restored.
+
+   **Special attention:** Build-only files (`.cursor/rules/*.mdc`, `dev/*`, `test/*`, `scripts/*`) should RARELY be deleted unless explicitly planned or obviously superseded.
+
    **11a. Technical Review**
    
    - [ ] Uses `.js` extensions in imports (NodeNext module resolution)
@@ -284,6 +333,7 @@ For each pending task (in dependency order):
 
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
    - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
+   - **Documentation check**: Should AGENTS.md, README.md, or other docs be updated? If so, create a quick follow-up task or note for the builder.
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
    - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then spawn, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.
 
@@ -320,24 +370,64 @@ For each pending task (in dependency order):
     Create entry: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
     
     Include:
-    - Pre-mortem analysis (risks, mitigations, effectiveness)
-    - What worked / what didn't
-    - Collaboration patterns observed
-    - Recommendations for future PRDs
-    - Metrics (tasks completed, success rate, iterations, context used)
-    - Refactor backlog items added (count and paths)
+    - **Metrics**: Tasks completed, success rate, iterations, tests added, token usage
+    - **Pre-mortem analysis**: Risks vs outcomes (table), which mitigations were effective
+    - **What worked well**: Patterns to repeat (be specific: "Show-don't-tell with line ranges")
+    - **What didn't work**: Patterns to avoid or issues encountered
+    - **Subagent insights**: Synthesize reflections across all tasks (what helped them most, common suggestions)
+    - **Collaboration patterns**: How did builder respond? What did they prefer?
+    - **Recommendations for next PRD**: Specific improvements (prompts, workflow, rules)
+    - **Refactor backlog items**: Count and paths (if any)
+    - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
     
     Add line to `dev/MEMORY.md`.
 
 21. **Deliver Final Report to Builder** (Orchestrator)
 
-   Present to the builder:
-    - **Status**: X/Y tasks complete, all tests passing
-    - **Quality**: Success rate (first-attempt vs iterations)
-    - **Pre-mortem review**: How many risks materialized
-    - **Refactor items added to backlog**: Count and list (so user can triage later)
-    - **Key learnings**: Top 3-5 takeaways
-    - **Recommendations**: What to improve for next time
+   Present to the builder (ONE comprehensive report, not repetitive sections):
+    
+    **Format**:
+    ```markdown
+    # 🎉 PRD Complete: [prd-name]
+    
+    **Status**: ✅ [X]/[Y] tasks complete
+    **Quality**: [Z]% first-attempt success | [N] iterations required
+    **Tests**: [Total] passing (+[New] added)
+    **Pre-mortem**: [A]/[B] risks materialized
+    **Commits**: [N] commits
+    **Token usage**: ~[X]K total (~[Y]K orchestrator + ~[Z]K subagents)
+    
+    ## Deliverables
+    - [Feature 1] — Brief description
+    - [Feature 2] — Brief description
+    
+    ## Key Learnings (Top 3-5)
+    1. [Learning] — [Evidence]
+    2. [Learning] — [Evidence]
+    
+    ## Pre-Mortem Review
+    [Brief table: Risk | Materialized | Effective]
+    
+    ## Refactor Backlog Items (if any)
+    - `dev/backlog/improvements/[file].md` — [One-line summary]
+    
+    ## Recommendations
+    - **Continue**: [3-5 patterns that worked]
+    - **Stop**: [2-3 patterns to change]
+    - **Start**: [3-5 new practices to adopt]
+    
+    ## Documentation Updates Needed
+    - [ ] AGENTS.md § X — [what to add]
+    - [ ] README.md — [what to update]
+    
+    ## Next Steps
+    1. Review and merge
+    2. Create memory entry (or run prd-post-mortem skill)
+    3. Update AGENTS.md
+    4. Address refactor backlog (if any)
+    ```
+    
+    **Keep it concise** — 1-2 pages max, no repetition. The memory entry has full details.
 
 ## Output Format
 
