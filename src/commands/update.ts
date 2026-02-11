@@ -272,6 +272,18 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   if (!json) {
     console.log('');
     success('Update complete!');
+    const skillsAdded = skillsResult.added.length;
+    const skillsUpdated = skillsResult.updated.length;
+    if (skillsAdded > 0 || skillsUpdated > 0) {
+      const parts: string[] = [];
+      if (skillsAdded > 0) parts.push(`${skillsAdded} added`);
+      if (skillsUpdated > 0) parts.push(`${skillsUpdated} updated`);
+      listItem('Skills', parts.join(', '));
+    }
+    const rulesCount = rulesResult.added.length;
+    if (rulesCount > 0) {
+      listItem('Rules', `${rulesCount} transpiled`);
+    }
     const structureAdded = results.structure.directoriesAdded.length + results.structure.filesAdded.length;
     if (structureAdded > 0) {
       listItem('Structure (new dirs/files)', structureAdded.toString());
