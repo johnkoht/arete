@@ -3,6 +3,12 @@ name: workspace-tour
 description: Orient users to the Areté PM workspace. Use when the user asks for a tour, how the workspace works, what they can do, or says they're new.
 work_type: operations
 category: essential
+triggers:
+  - give me a tour
+  - tour of
+  - how does this work
+  - what can I do here
+  - I'm new here
 ---
 
 # Workspace Tour Skill

@@ -31,7 +31,16 @@ describe('skill-router', () => {
       primitives: ['Problem', 'User', 'Solution'],
       work_type: 'analysis',
       category: 'default',
-    }
+    },
+    {
+      id: 'workspace-tour',
+      name: 'workspace-tour',
+      description: 'Orient users to the Areté PM workspace. Use when the user asks for a tour, how the workspace works, what they can do, or says they\'re new.',
+      path: '/ws/.agents/skills/workspace-tour',
+      triggers: ['give me a tour', 'tour of', 'how does this work', 'what can I do here', "I'm new here"],
+      work_type: 'operations',
+      category: 'essential',
+    },
   ];
 
   it('routes "prep me for my meeting with Jane" to meeting-prep', () => {
@@ -63,6 +72,20 @@ describe('skill-router', () => {
     const r = routeToSkill('synthesize findings', skills);
     assert.ok(r);
     assert.equal(r!.skill, 'synthesize');
+  });
+
+  it('routes tour/orientation queries to workspace-tour', () => {
+    const queries = [
+      'Can you give me a tour of arete workspace?',
+      'give me a tour of the workspace',
+      'how does this work',
+      'what can I do here',
+    ];
+    for (const q of queries) {
+      const r = routeToSkill(q, skills);
+      assert.ok(r, `Expected a match for: ${q}`);
+      assert.equal(r!.skill, 'workspace-tour', `Expected workspace-tour for: ${q}`);
+    }
   });
 
   it('returns null for empty query', () => {
