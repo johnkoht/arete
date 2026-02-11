@@ -72,6 +72,8 @@ resources/
 templates/
 memory/
 .arete/
+# Exception: package runtime templates (shipped with CLI) are committed
+!runtime/templates/
 
 # Logs
 *.log

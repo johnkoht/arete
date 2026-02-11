@@ -43,6 +43,17 @@ describe('meeting-agenda-templates', () => {
       assert.equal(result.custom.length, 0);
     });
 
+    it('returns five default templates when package default dir exists', async () => {
+      const result = await listMeetingAgendaTemplates(workspaceRoot);
+      assert.ok(result.default.length >= 5, 'expected at least 5 default templates');
+      const types = result.default.map((t) => t.type);
+      assert.ok(types.includes('leadership'));
+      assert.ok(types.includes('customer'));
+      assert.ok(types.includes('dev-team'));
+      assert.ok(types.includes('one-on-one'));
+      assert.ok(types.includes('other'));
+    });
+
     it('returns custom templates when .arete/templates/meeting-agendas has markdown files', async () => {
       const customDir = join(workspaceRoot, '.arete', 'templates', 'meeting-agendas');
       mkdirSync(customDir, { recursive: true });
