@@ -21,6 +21,7 @@
 - Confirms decisions quickly when options are clear (e.g. scope, synthesis approach, defer to scratchpad).
 - Before spawning subagents: if builder asks about constraints (e.g. install-count filtering) or access (e.g. "do subagents have Task tool?"), add those to the plan/prompts and confirm before proceeding; "no Task tool visible" should trigger tool introspection.
 - Prefers fast/cheaper models for subagents when the task is structured and doesn't require heavy reasoning.
+- **CLI: established patterns over bare minimum** (2026-02-11): When updating or adding CLI features, use **established design patterns and experience** (e.g. setup, seed) rather than the bare minimum or whatever the agent wants. Check how similar flows work first; match their UX (checkbox, copy, pageSize). Don't invent a lesser experience. After meaningful fixes—especially when the user had to report a gap—add a dated entry and a Learnings section.
 
 ---
 
@@ -76,6 +77,7 @@ Things the builder has corrected — important context for avoiding repeat mista
 - **Report format** (2026-02-10): Produce ONE comprehensive report organized by theme, not separate sections per request that duplicate content.
 - **Reflection scaling** (2026-02-10): Scale reflection requests by task complexity—small tasks 1-2 sentences; large tasks 3-5 with specific insights.
 - **Documentation timing** (2026-02-10): For large architectural changes, update AGENTS.md mid-execution (after core phase) rather than post-execution.
+- **Entries and learnings after meaningful fixes** (2026-02-11): Calendar integration was fixed (icalBuddy binary, list parsing, checkbox UX) but no entry or learnings were added. When you fix a meaningful gap—especially after the user reports it—add a dated entry and a Learnings section. Otherwise the same kind of miss (subpar UX, no institutional memory) can repeat.
 
 ---
 
