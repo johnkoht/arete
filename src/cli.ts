@@ -43,6 +43,7 @@ import {
   resolveCommand,
   briefCommand
 } from './commands/intelligence.js';
+import { templateListCommand, templateViewCommand } from './commands/template.js';
 
 // Configure program
 program
@@ -245,6 +246,24 @@ meetingCmd
   .option('--stdin', 'Read JSON from stdin')
   .option('--json', 'Output as JSON')
   .action((opts) => meetingAddCommand(opts));
+
+// Template commands (meeting agendas, etc.)
+const templateCmd = program
+  .command('template')
+  .description('List and view templates');
+
+templateCmd
+  .command('list <kind>')
+  .description('List templates (e.g. meeting-agendas)')
+  .option('--json', 'Output as JSON')
+  .action((kind, opts) => templateListCommand(kind, opts));
+
+templateCmd
+  .command('view <kind>')
+  .description('View a template by type (e.g. meeting-agenda --type leadership)')
+  .requiredOption('--type <name>', 'Template type (e.g. leadership, customer)')
+  .option('--json', 'Output as JSON')
+  .action((kind, opts) => templateViewCommand(kind, opts));
 
 // People management
 const peopleCmd = program
