@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { loadConfig } from '../core/config.js';
+import { getAdapterFromConfig } from '../core/adapters/index.js';
 import { success, error, info, header, section, listItem, formatPath } from '../core/utils.js';
 import type { CommandOptions } from '../types.js';
 
@@ -110,8 +111,9 @@ export async function statusCommand(options: CommandOptions): Promise<void> {
     process.exit(1);
   }
   
-  const paths = getWorkspacePaths(workspaceRoot);
   const config = loadConfig(workspaceRoot);
+  const adapter = getAdapterFromConfig(config, workspaceRoot);
+  const paths = getWorkspacePaths(workspaceRoot, adapter);
   
   // Gather status info
   const skillsList = getSkillsList(paths.agentSkills);
