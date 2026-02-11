@@ -118,11 +118,11 @@ The same triggers apply (feedback, corrections, patterns, preferences), but obse
 
 Offer to update `dev/collaboration.md` when:
 
-1. **Several entries** have accumulated learnings about collaboration
-2. **After a major build phase** completes
+1. **Several entries** have accumulated learnings about collaboration (e.g. 5+ with Learnings since last synthesis)
+2. **After a major build phase** completes (e.g. PRD execution, large feature)
 3. **Builder asks** to review or update the profile
 
-Synthesize by reviewing Learnings sections across recent entries, updating `dev/collaboration.md`, noting the date, and asking the builder to review.
+**How to synthesize**: Use the **synthesize-collaboration-profile** skill for a systematic pass: `dev/skills/synthesize-collaboration-profile/SKILL.md`. It reads entries (since last synthesis or last N), extracts Learnings and Corrections, merges into profile sections without duplication, and updates "Last Synthesized". Alternatively, review Learnings sections manually, update `dev/collaboration.md`, note the date, and ask the builder to review.
 
 ---
 
