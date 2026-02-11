@@ -4,12 +4,15 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'path';
-import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync, cpSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { installCommand } from '../../src/commands/install.js';
 import { updateCommand } from '../../src/commands/update.js';
+import { PRODUCT_RULES_ALLOW_LIST } from '../../src/core/workspace-structure.js';
 
 // Helpers
 function createTmpDir(): string {
@@ -274,6 +277,54 @@ describe('update command', () => {
         // Verify no .cursor/ created
         assert.ok(!existsSync(join(tmpDir, '.cursor')), '.cursor should NOT be created');
       });
+    });
+  });
+
+  describe('rules check (PRODUCT_RULES_ALLOW_LIST)', () => {
+    it('only reports rules in PRODUCT_RULES_ALLOW_LIST, excluding dev-only .mdc files', async () => {
+      // Setup: Install workspace, then point to a custom source with an extra dev-only .mdc
+      const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
+      const canonicalRulesDir = join(repoRoot, 'runtime', 'rules');
+      const customSourceDir = join(tmpdir(), `arete-test-rules-source-${Date.now()}`);
+      const customRulesDir = join(customSourceDir, 'runtime', 'rules');
+
+      mkdirSync(customRulesDir, { recursive: true });
+      cpSync(canonicalRulesDir, customRulesDir, { recursive: true });
+      writeFileSync(join(customRulesDir, 'dev-only.mdc'), '---\n---\n# Dev-only rule (not in allow list)\n', 'utf-8');
+
+      await installCommand(tmpDir, { json: true, ide: 'cursor' });
+
+      const configPath = join(tmpDir, 'arete.yaml');
+      const config = parseYaml(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+      config.source = `local:${customSourceDir}`;
+      writeFileSync(configPath, stringifyYaml(config), 'utf-8');
+
+      let captured = '';
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => {
+        captured = String(args[0]);
+      };
+
+      const originalCwd = process.cwd();
+      process.chdir(tmpDir);
+      try {
+        await updateCommand({ check: true, json: true });
+      } finally {
+        process.chdir(originalCwd);
+        console.log = originalLog;
+        rmSync(customSourceDir, { recursive: true, force: true });
+      }
+
+      const result = JSON.parse(captured);
+      const reportedRules = [
+        ...(result.updates?.rules?.added ?? []),
+        ...(result.updates?.rules?.updated ?? [])
+      ];
+
+      assert.ok(!reportedRules.includes('dev-only.mdc'), 'dev-only.mdc must not be reported (not in allow list)');
+      for (const rule of reportedRules) {
+        assert.ok(PRODUCT_RULES_ALLOW_LIST.includes(rule), `Reported rule ${rule} must be in PRODUCT_RULES_ALLOW_LIST`);
+      }
     });
   });
 });

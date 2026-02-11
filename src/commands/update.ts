@@ -170,8 +170,11 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
   
   // Check rules (map source .mdc filenames to IDE-specific dest filenames for comparison)
+  // Only consider rules in PRODUCT_RULES_ALLOW_LIST — matches what transpileRules actually processes
   if (existsSync(sourcePaths.rules)) {
-    const srcRules = getDirContents(sourcePaths.rules).filter((f) => f.endsWith('.mdc'));
+    const srcRules = getDirContents(sourcePaths.rules)
+      .filter((f) => f.endsWith('.mdc'))
+      .filter((f) => PRODUCT_RULES_ALLOW_LIST.includes(f));
     const destRules = getDirContents(paths.rules);
 
     for (const rule of srcRules) {
