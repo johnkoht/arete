@@ -191,29 +191,32 @@ export async function installCommand(directory: string | undefined, options: Ins
     results.skills = skillsCopied.map(p => basename(p));
   }
   
+  // Single manifest used for transpilation, arete.yaml, and IDE root files
+  const manifest = {
+    schema: 1,
+    version: '0.1.0',
+    source: source,
+    agent_mode: 'guide' as const,
+    created: new Date().toISOString().split('T')[0],
+    ide_target: adapter.target,
+    skills: {
+      core: results.skills,
+      overrides: [] as string[]
+    },
+    tools: [] as string[],
+    integrations: {},
+    settings: getDefaultConfig().settings
+  };
+  
   // Transpile rules to IDE-specific format
   if (!json) info('Transpiling rules...');
   
   if (existsSync(sourcePaths.rules)) {
-    // Create a temporary manifest for transpilation (full manifest created later)
-    const tempManifest = {
-      schema: 1,
-      version: '0.1.0',
-      source: source,
-      agent_mode: 'guide' as const,
-      created: new Date().toISOString().split('T')[0],
-      ide_target: adapter.target,
-      skills: { core: [], overrides: [] },
-      tools: [],
-      integrations: {},
-      settings: getDefaultConfig().settings
-    };
-    
     const transpileResults = transpileRules(
       sourcePaths.rules,
       workspacePaths.rules,
       adapter,
-      tempManifest,
+      manifest,
       PRODUCT_RULES_ALLOW_LIST
     );
     
@@ -242,24 +245,8 @@ export async function installCommand(directory: string | undefined, options: Ins
     }
   }
   
-  // Create arete.yaml manifest
+  // Write arete.yaml manifest
   if (!json) info('Creating manifest...');
-  
-  const manifest = {
-    schema: 1,
-    version: '0.1.0',
-    source: source,
-    agent_mode: 'guide' as const,
-    ide_target: adapter.target,
-    created: new Date().toISOString().split('T')[0],
-    skills: {
-      core: results.skills,
-      overrides: [] as string[]
-    },
-    tools: [] as string[],
-    integrations: {},
-    settings: getDefaultConfig().settings
-  };
   
   const manifestPath = join(targetDir, 'arete.yaml');
   let manifestYaml = stringifyYaml(manifest);
