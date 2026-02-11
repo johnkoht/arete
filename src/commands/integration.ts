@@ -255,7 +255,8 @@ function isIcalBuddyInstalled(): boolean {
 }
 
 /**
- * Get list of available calendars from icalBuddy
+ * Parse icalBuddy "calendars" output. Each calendar is a line starting with "• " (bullet + space);
+ * following lines like "type: CalDAV" and "UID: ..." are metadata, not calendar names.
  */
 function listCalendars(): string[] {
   try {
@@ -263,7 +264,9 @@ function listCalendars(): string[] {
     return output
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0);
+      .filter(line => line.startsWith('• '))
+      .map(line => line.slice(2).trim()) // drop "• "
+      .filter(name => name.length > 0);
   } catch (err) {
     throw new Error(`Failed to list calendars: ${(err as Error).message}`);
   }
@@ -324,37 +327,25 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     process.exit(1);
   }
   
-  if (!json) {
-    console.log('');
-    console.log(chalk.bold('Available calendars:'));
-    calendars.forEach((cal, i) => console.log(`  ${i + 1}. ${cal}`));
-    console.log('');
-  }
-  
-  // Prompt user to select calendars
+  // Prompt user to select calendars (checkbox like integrations setup)
   let selectedCalendars: string[];
   if (json) {
-    // In JSON mode, default to all calendars
     selectedCalendars = calendars;
   } else {
-    const { selection } = await inquirer.prompt([
+    const { selected } = await inquirer.prompt([
       {
-        type: 'input',
-        name: 'selection',
-        message: 'Select calendars (comma-separated numbers, or "all"):',
-        default: 'all'
+        type: 'checkbox',
+        name: 'selected',
+        message: 'Which calendars should Areté include?',
+        pageSize: 12,
+        choices: calendars.map((name, i) => ({
+          name,
+          value: i,
+          checked: true
+        }))
       }
     ]);
-    
-    if (selection.toLowerCase() === 'all') {
-      selectedCalendars = calendars;
-    } else {
-      const indices = selection
-        .split(',')
-        .map((s: string) => parseInt(s.trim(), 10) - 1)
-        .filter((i: number) => i >= 0 && i < calendars.length);
-      selectedCalendars = indices.map((i: number) => calendars[i]);
-    }
+    selectedCalendars = selected.map((i: number) => calendars[i]);
   }
   
   if (selectedCalendars.length === 0) {
