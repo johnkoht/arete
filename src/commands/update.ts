@@ -269,24 +269,13 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   if (!json) {
     console.log('');
     success('Update complete!');
-    
-    const totalAdded = skillsResult.added.length + rulesResult.added.length;
-    const totalUpdated = skillsResult.updated.length + rulesResult.updated.length;
     const structureAdded = results.structure.directoriesAdded.length + results.structure.filesAdded.length;
-
     if (structureAdded > 0) {
       listItem('Structure (new dirs/files)', structureAdded.toString());
-    }
-    if (totalAdded > 0) {
-      listItem('Skills/rules added', totalAdded.toString());
-    }
-    if (totalUpdated > 0) {
-      listItem('Skills/rules updated', totalUpdated.toString());
     }
     if (skillsResult.preserved.length > 0) {
       listItem('Preserved (overrides)', skillsResult.preserved.join(', '));
     }
-    
     console.log('');
   }
 }
