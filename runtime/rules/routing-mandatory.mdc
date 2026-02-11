@@ -10,7 +10,7 @@ Before responding to ANY user request in this Areté workspace:
 
 ## Is this a PM action?
 
-Tour/orientation ("give me a tour", "how does this work", "what can I do here"), meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, process meetings, etc.
+Tour/orientation ("give me a tour", "how does this work", "what can I do here"), agenda creation ("create/prepare a meeting agenda"), meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, process meetings, etc.
 
 ## If YES, follow this EXACT sequence:
 
@@ -20,7 +20,7 @@ arete skill route "<user's exact message>"
 
 # 2. LOAD (MANDATORY)  
 # Read the skill file it returns, e.g.:
-# .agents/skills/meeting-prep/SKILL.md
+# .agents/skills/meeting-prep/SKILL.md  or  .agents/skills/prepare-meeting-agenda/SKILL.md
 
 # 3. EXECUTE (MANDATORY)
 # Follow the skill's complete workflow

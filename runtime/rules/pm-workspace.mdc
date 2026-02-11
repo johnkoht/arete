@@ -12,7 +12,7 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ## ⚠️ CRITICAL: Skill-Based Workflow Required
 
-**Before responding to ANY PM action** (including tour/orientation, meeting prep, synthesis, planning, discovery, PRD, etc.):
+**Before responding to ANY PM action** (including tour/orientation, meeting prep, **agenda creation**, synthesis, planning, discovery, PRD, etc.):
 
 1. **ROUTE**: `arete skill route "<user message>"`
 2. **LOAD**: Read the matched skill's SKILL.md file
@@ -78,7 +78,7 @@ The workspace uses a three-layer memory architecture:
 
 ## ⚠️ STOP AND CHECK: Is This a PM Action?
 
-**Before responding to ANY user request that could be PM work** (e.g. **tour/orientation** — "give me a tour", "how does this work"; meeting prep, synthesis, planning, research, etc.), you MUST:
+**Before responding to ANY user request that could be PM work** (e.g. **tour/orientation** — "give me a tour", "how does this work"; **agenda creation** — "create/prepare a meeting agenda"; meeting prep, synthesis, planning, research, etc.), you MUST:
 
 1. ✅ **Check**: Does this match a PM action in the Skills table below?
 2. ✅ **Route**: Run `arete skill route "<user message>"` to find the right skill
@@ -116,6 +116,16 @@ The workspace uses a three-layer memory architecture:
 ✅ Agent: [Outputs in the skill's prescribed format; does NOT improvise by listing directories]
 ```
 
+**Correct Pattern (create/prepare meeting agenda)**:
+```
+✅ User: "Prepare a meeting agenda" / "Create an agenda for my 1:1" / "Help me create an agenda"
+✅ Agent: [Runs `arete skill route "prepare a meeting agenda"` (or user's exact phrase)]
+✅ Router returns: prepare-meeting-agenda
+✅ Agent: [Reads .agents/skills/prepare-meeting-agenda/SKILL.md]
+✅ Agent: [Follows skill workflow: identify meeting, infer type, choose template (arete template list/view), optional get_meeting_context, build agenda, save to now/agendas/]
+✅ Agent: [Does NOT just edit an existing file; uses the skill's template-based workflow]
+```
+
 **If you catch yourself about to use ad-hoc Grep/Glob/Read for PM work, STOP and route to the skill first.**
 
 ## PM Actions Available
@@ -145,9 +155,10 @@ When a user wants to do PM work, you MUST use skills—not ad-hoc tools. Skills 
 | "Sync my meetings" / "Pull from Fathom" | Manual integration sync | `sync` |
 | "Process my meetings" / "Update people from meetings" / "Extract decisions" | Propagate meetings to people and memory | `process-meetings` |
 | "Prep for meeting" / "Meeting prep" / "Call with X" | Build prep brief (attendees, recent meetings, action items, talking points) | `meeting-prep` |
+| "Create meeting agenda" / "Prepare agenda" / "Build agenda for meeting" | Create structured agenda (template, sections, save to now/agendas) | `prepare-meeting-agenda` |
 | "What's on my plate today?" / "Daily plan" / "Today's focus" | Today's focus, meetings with context, commitments due | `daily-plan` |
 
-Skills are located in `.agents/skills/{name}/SKILL.md`.
+Skills are located in `.agents/skills/{name}/SKILL.md`. For agenda creation, route first so the agent loads `.agents/skills/prepare-meeting-agenda/SKILL.md` and follows its workflow (identify meeting, pick type, use template, optional context, save to now/agendas).
 
 **Routing (default: router; fallback: table)**  
 When the user's message could be a PM action (meeting prep, synthesis, planning, sync, etc.):
@@ -258,7 +269,7 @@ These patterns are referenced by skills. When a skill says "use the get_meeting_
 
 **Purpose**: Given a meeting (title and/or attendees), assemble full context: people, prior meetings, related projects, outstanding action items.
 
-**Used by**: meeting-prep, daily-plan
+**Used by**: meeting-prep, daily-plan, prepare-meeting-agenda (optional)
 
 **Inputs**: Meeting title (optional), attendee names or slugs.
 
@@ -296,7 +307,7 @@ These patterns are referenced by skills. When a skill says "use the get_meeting_
 Run through this checklist for EVERY user request:
 
 **[ ] Step 1: Is this a PM action?** 
-- **Tour/orientation** ("give me a tour", "how does this work", "what can I do here"), meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, etc.
+- **Tour/orientation** ("give me a tour", "how does this work", "what can I do here"), **agenda creation** ("create/prepare a meeting agenda", "build an agenda"), meeting prep, planning, synthesis, discovery, PRD, roadmap, competitive analysis, etc.
 - If YES → Go to Step 2
 - If NO → Skip to supplemental context-gathering below
 
@@ -399,7 +410,7 @@ When working in this PM workspace:
 
 **Before sending your response for ANY PM action**, verify you followed the required workflow:
 
-- [ ] **Did I recognize this as a PM action?** (tour/orientation, meeting prep, synthesis, planning, discovery, PRD, etc.)
+- [ ] **Did I recognize this as a PM action?** (tour/orientation, agenda creation, meeting prep, synthesis, planning, discovery, PRD, etc.)
 - [ ] **Did I run the skill router?** (`arete skill route "<message>"`)
 - [ ] **Did I load and read the matched skill file?** (e.g., `.agents/skills/meeting-prep/SKILL.md`)
 - [ ] **Did I follow the skill's complete workflow?** (not ad-hoc Grep/Glob/Read)
