@@ -159,9 +159,9 @@ describe('IcalBuddy Calendar Provider', () => {
 
   describe('getProvider', () => {
     describe('isAvailable', () => {
-      it('should return true when ical-buddy is installed', async () => {
+      it('should return true when icalBuddy is installed', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => ({ stdout: '', stderr: '' }),
         };
         
@@ -172,7 +172,7 @@ describe('IcalBuddy Calendar Provider', () => {
         assert.strictEqual(available, true);
       });
 
-      it('should return false when ical-buddy is not installed', async () => {
+      it('should return false when icalBuddy is not installed', async () => {
         const testDeps: IcalBuddyTestDeps = {
           whichSync: () => ({ status: 1, stdout: '' }),
           execFileAsync: async () => ({ stdout: '', stderr: '' }),
@@ -206,9 +206,9 @@ describe('IcalBuddy Calendar Provider', () => {
     attendees: Jane Doe <jane@example.com>`;
 
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async (file, args) => {
-            assert.strictEqual(file, 'ical-buddy');
+            assert.strictEqual(file, 'icalBuddy');
             assert.ok(args.includes('eventsToday'));
             return { stdout: mockOutput, stderr: '' };
           },
@@ -225,9 +225,9 @@ describe('IcalBuddy Calendar Provider', () => {
 
       it('should apply calendar filter', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async (file, args) => {
-            assert.strictEqual(file, 'ical-buddy');
+            assert.strictEqual(file, 'icalBuddy');
             assert.ok(args.includes('-ic'));
             assert.ok(args.includes('Work,Personal'));
             return { stdout: '', stderr: '' };
@@ -240,7 +240,7 @@ describe('IcalBuddy Calendar Provider', () => {
 
       it('should return empty array on error', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => {
             throw new Error('Command failed');
           },
@@ -254,7 +254,7 @@ describe('IcalBuddy Calendar Provider', () => {
 
       it('should return empty array for no events', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => ({ stdout: '', stderr: '' }),
         };
         
@@ -271,9 +271,9 @@ describe('IcalBuddy Calendar Provider', () => {
     2026-02-10 at 10:00 - 11:00`;
 
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async (file, args) => {
-            assert.strictEqual(file, 'ical-buddy');
+            assert.strictEqual(file, 'icalBuddy');
             assert.ok(args.includes('eventsFrom:today'));
             assert.ok(args.some(arg => arg.startsWith('to:')));
             return { stdout: mockOutput, stderr: '' };
@@ -289,9 +289,9 @@ describe('IcalBuddy Calendar Provider', () => {
 
       it('should apply calendar filter', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async (file, args) => {
-            assert.strictEqual(file, 'ical-buddy');
+            assert.strictEqual(file, 'icalBuddy');
             assert.ok(args.includes('-ic'));
             assert.ok(args.includes('Work'));
             return { stdout: '', stderr: '' };
@@ -304,7 +304,7 @@ describe('IcalBuddy Calendar Provider', () => {
 
       it('should return empty array on error', async () => {
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => {
             throw new Error('Command failed');
           },
@@ -323,7 +323,7 @@ describe('IcalBuddy Calendar Provider', () => {
     2026-02-09 at 09:00 - 09:30`;
 
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => ({ stdout: mockOutput, stderr: '' }),
         };
         
@@ -339,7 +339,7 @@ describe('IcalBuddy Calendar Provider', () => {
     2026-02-09 at 14:00 - 15:00`;
 
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => ({ stdout: mockOutput, stderr: '' }),
         };
         
@@ -356,7 +356,7 @@ not valid event format
 random text`;
 
         const testDeps: IcalBuddyTestDeps = {
-          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/ical-buddy\n' }),
+          whichSync: () => ({ status: 0, stdout: '/usr/local/bin/icalBuddy\n' }),
           execFileAsync: async () => ({ stdout: mockOutput, stderr: '' }),
         };
         
