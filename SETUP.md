@@ -267,20 +267,15 @@ arete pull calendar --today --json
 
 MCP (Model Context Protocol) integrations extend the workspace with external tools. These are optional but unlock additional capabilities.
 
-#### Mockup Generation (Lovable or Vercel v0)
+#### Prototype prompts (Lovable)
 
-The `generate-mockup` skill can create interactive prototypes from PRDs and discovery findings. Requires one of:
+The `generate-prototype-prompt` skill creates a **Knowledge file** and **implementation prompt** from a PRD, plan, or short conversation. You paste both into [Lovable](https://lovable.dev) to build the prototype. No MCP or API required.
 
-**Lovable MCP** (recommended for full prototypes):
-- [Setup docs](https://docs.lovable.dev/integrations/mcp-servers)
-- Generates interactive, shareable prototypes
-- Can read from Notion, Linear, etc. for additional context
+- **Input:** PRD, plan file, or 4–5 quick questions
+- **Output:** `prototypes/YYYY-MM-DD_[name]/` with `knowledge.md`, `implementation.md`, and `README.md`
+- **Next step:** Create a project at lovable.dev, paste Knowledge and implementation prompt, then build
 
-**Vercel v0**:
-- Good for individual UI components and screens
-- Lighter weight than full prototypes
-
-Without an MCP configured, the skill generates a detailed prompt you can paste into your preferred tool.
+See [Lovable best practices](https://docs.lovable.dev/tips-tricks/best-practice) and [from idea to app](https://docs.lovable.dev/tips-tricks/from-idea-to-app) for best results.
 
 #### Other MCP Options
 

@@ -27,7 +27,7 @@ When user wants to start new work:
 2. Create project folder: `projects/active/[project-name]/`
 3. Create README.md with project details
 4. Suggest appropriate template from `templates/projects/`
-5. Create subfolders: `inputs/`, `working/`, `outputs/`
+5. Create subfolders: `inputs/`, `working/`, `outputs/`. Optionally `prototypes/` when using the generate-prototype-prompt skill (Lovable prompt outputs).
 
 ### Project README Template
 
@@ -93,6 +93,11 @@ Final deliverables go in `outputs/`:
 - Final analyses
 - Recommendations
 - Presentations
+
+### Prototypes (optional)
+When using the **generate-prototype-prompt** skill, Lovable prompt outputs go in `prototypes/`:
+- `prototypes/YYYY-MM-DD_[feature-slug]/` — dated folder per generation
+- Contains `knowledge.md`, `implementation.md`, and `README.md` for pasting into [Lovable](https://lovable.dev)
 
 ## Project Status Updates
 

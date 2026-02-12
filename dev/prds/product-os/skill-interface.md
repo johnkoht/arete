@@ -242,12 +242,14 @@ projects/active/[project-name]/
 ├── README.md          # Updated status, completion notes
 ├── inputs/            # Raw inputs captured during the skill
 ├── working/           # Drafts, synthesis, iterations
-└── outputs/           # Final deliverables
+├── outputs/           # Final deliverables
+└── prototypes/        # Optional: Lovable prompt outputs (generate-prototype-prompt)
 ```
 
 **Conventions**:
 - Final deliverables in `outputs/` with descriptive names (e.g., `prd-feature-name.md`, `findings.md`, `competitive-analysis.md`)
 - Working documents in `working/` (e.g., `synthesis.md`, `draft-roadmap.md`)
+- Prototype prompts in `prototypes/YYYY-MM-DD_[feature-slug]/` (e.g., `knowledge.md`, `implementation.md`, `README.md`) when using generate-prototype-prompt
 - All files are markdown with clear headers and metadata
 
 ### 3.2 Memory Items
@@ -402,7 +404,7 @@ project_template: discovery  # Which project template to use (maps to templates/
 |-----------|-------------|----------------|
 | `discovery` | Understanding problems, validating assumptions, research | discovery, competitive-analysis |
 | `definition` | Defining solutions, requirements, specifications | create-prd |
-| `delivery` | Shipping, launching, communicating results | construct-roadmap, generate-mockup |
+| `delivery` | Shipping, launching, communicating results | construct-roadmap, generate-prototype-prompt |
 | `analysis` | Researching, comparing, evaluating | competitive-analysis, synthesize |
 | `planning` | Setting goals, priorities, schedules | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
 | `operations` | Workspace management, lifecycle, data flow | save-meeting, sync, finalize-project, process-meetings, periodic-review, workspace-tour |
@@ -509,7 +511,7 @@ To illustrate the contract, here's how a third-party PRD skill from skills.sh wo
 5. **After** (Areté handles):
    - Captures PRD output to `projects/active/search-prd/outputs/`
    - Runs `extract_decisions_learnings` on the PRD content
-   - Suggests: "Want to generate a mockup? Run competitive analysis on search alternatives?"
+   - Suggests: "Want to generate a Lovable prototype prompt from this PRD?"
 
 The third-party skill never reads `context/` files or `.arete/memory/` directly. Areté's intelligence layer provides everything through the briefing, and captures everything through the output contract.
 

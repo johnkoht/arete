@@ -42,7 +42,7 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 
 - [2026-01-27] **Subagents for Competitive Research**: When analyzing 2+ competitors, spawn parallel subagents to research each competitor simultaneously. Each subagent gathers pricing, features, positioning, then main agent synthesizes into comparison matrix. Could extend to other parallel tasks (market research, multi-source discovery).
 
-- [2026-01-27] **Mockup/Prototype Generation via Lovable MCP**: Create a skill that generates interactive prototypes from PRDs, discovery findings, or feature ideas. Use Lovable's MCP integration to build UI mockups directly from PM artifacts. Could also explore Vercel v0 as alternative.
+- [2026-01-27] **Mockup/Prototype Generation via Lovable** (implemented 2026-02): Replaced generate-mockup with **generate-prototype-prompt**. Skill outputs a Lovable Knowledge file + implementation prompt from PRD, plan, or conversation; user pastes into lovable.dev. No MCP—prompt output only. Vercel v0 left as future option.
 
 ---
 
@@ -64,7 +64,7 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 ## Questions to Explore
 <!-- Questions that came up that we should investigate -->
 
-- [2026-02-05] **Generate Mockup skill dependencies**: We have a generate-mockup skill — do we need a dedicated tool or integration for Vercel v0 and/or Lovable? Or does the skill handle it sufficiently on its own?
+- [2026-02-05] **Generate Mockup skill dependencies** (resolved 2026-02): Replaced generate-mockup with generate-prototype-prompt. No dedicated Lovable/v0 integration; skill generates prompt files (knowledge.md + implementation.md) for user to paste into Lovable. Sufficient for v1.
 
 ---
 

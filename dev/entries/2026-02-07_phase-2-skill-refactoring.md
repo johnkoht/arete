@@ -29,7 +29,7 @@ Implemented Phase 2 of the Product OS vision: slimmed default skills, extracted 
 Added where applicable: `primitives`, `work_type`, `category`, `intelligence`, `creates_project`, `project_template`, `requires_briefing`.
 
 - **Essential (category: essential)**: meeting-prep, daily-plan, process-meetings, save-meeting, finalize-project, workspace-tour, sync, goals-alignment, quarter-plan, week-plan, week-review, periodic-review, synthesize.
-- **Default (category: default)**: create-prd, discovery, competitive-analysis, construct-roadmap, generate-mockup.
+- **Default (category: default)**: create-prd, discovery, competitive-analysis, construct-roadmap, generate-prototype-prompt.
 
 Path fixes: workspace-tour and periodic-review now reference `goals/strategy.md`; finalize-project context checklist and activity log path updated.
 
@@ -48,4 +48,4 @@ Per vision: skills are methods; value is the intelligence underneath. Duplicated
 - `.cursor/skills/finalize-project/SKILL.md`
 - `.cursor/skills/workspace-tour/SKILL.md`
 - `.cursor/skills/periodic-review/SKILL.md`
-- All other skills: frontmatter only (save-meeting, goals-alignment, quarter-plan, week-plan, week-review, create-prd, discovery, competitive-analysis, construct-roadmap, generate-mockup)
+- All other skills: frontmatter only (save-meeting, goals-alignment, quarter-plan, week-plan, week-review, create-prd, discovery, competitive-analysis, construct-roadmap, generate-prototype-prompt)

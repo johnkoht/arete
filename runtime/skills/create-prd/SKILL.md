@@ -157,6 +157,7 @@ After creating the PRD:
    - "Should we update any context files?"
    - "Are there strategic frameworks that could strengthen this?"
    - "What's the review/approval process?"
+   - **Prototype prompt:** "Want me to generate a Lovable prototype prompt from this PRD? It will create a Knowledge file and implementation prompt you can paste into Lovable to build a prototype."
 
 5. **Note open questions**: Highlight areas needing more info
 
