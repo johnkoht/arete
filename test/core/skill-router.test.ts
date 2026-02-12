@@ -41,6 +41,16 @@ describe('skill-router', () => {
       work_type: 'operations',
       category: 'essential',
     },
+    {
+      id: 'prepare-meeting-agenda',
+      name: 'prepare-meeting-agenda',
+      description: 'Create a structured meeting agenda with type-based sections. Use when the user wants to build an agenda document.',
+      path: '/ws/.agents/skills/prepare-meeting-agenda',
+      triggers: ['meeting agenda', 'create agenda', 'prepare agenda', 'agenda for', 'build agenda', 'create meeting agenda', 'prepare meeting agenda'],
+      primitives: ['User', 'Problem', 'Solution'],
+      work_type: 'planning',
+      category: 'essential',
+    },
   ];
 
   it('routes "prep me for my meeting with Jane" to meeting-prep', () => {
@@ -109,6 +119,26 @@ describe('skill-router', () => {
       assert.ok(r, `Expected a match for: ${q}`);
       assert.equal(r!.skill, 'meeting-prep', `Expected meeting-prep for: ${q}`);
     }
+  });
+
+  it('routes "create meeting agenda" and "prepare agenda" to prepare-meeting-agenda', () => {
+    const agendaQueries = [
+      'create meeting agenda',
+      'prepare agenda for the leadership sync',
+      'create an agenda for my 1:1 with Jane',
+      'build agenda for customer call',
+    ];
+    for (const q of agendaQueries) {
+      const r = routeToSkill(q, skills);
+      assert.ok(r, `Expected a match for: ${q}`);
+      assert.equal(r!.skill, 'prepare-meeting-agenda', `Expected prepare-meeting-agenda for: ${q}`);
+    }
+  });
+
+  it('routes "prep for meeting with X" to meeting-prep not prepare-meeting-agenda', () => {
+    const r = routeToSkill('prep for meeting with Jane', skills);
+    assert.ok(r);
+    assert.equal(r!.skill, 'meeting-prep');
   });
 
   // Phase 3: Extended frontmatter tests

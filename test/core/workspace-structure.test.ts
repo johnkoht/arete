@@ -49,6 +49,11 @@ describe('workspace-structure', () => {
       assert.ok(BASE_WORKSPACE_DIRS.includes('templates/plans'));
     });
 
+    it('includes now/agendas and .arete/templates/meeting-agendas', () => {
+      assert.ok(BASE_WORKSPACE_DIRS.includes('now/agendas'));
+      assert.ok(BASE_WORKSPACE_DIRS.includes('.arete/templates/meeting-agendas'));
+    });
+
     it('does not include IDE-specific dirs', () => {
       assert.ok(!BASE_WORKSPACE_DIRS.includes('.cursor'));
       assert.ok(!BASE_WORKSPACE_DIRS.includes('.cursor/rules'));
@@ -94,6 +99,8 @@ describe('workspace-structure', () => {
       assert.ok(result.directoriesAdded.includes('people'));
       assert.ok(existsSync(join(tmpDir, 'people')));
       assert.ok(existsSync(join(tmpDir, 'people/internal')));
+      assert.ok(existsSync(join(tmpDir, 'now/agendas')));
+      assert.ok(existsSync(join(tmpDir, '.arete/templates/meeting-agendas')));
     });
 
     it('creates missing default files', () => {

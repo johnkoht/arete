@@ -19,6 +19,7 @@ import { detectAdapter } from './adapters/index.js';
  */
 export const BASE_WORKSPACE_DIRS = [
   'now',
+  'now/agendas',
   'goals',
   'goals/archive',
   'context',
@@ -29,6 +30,7 @@ export const BASE_WORKSPACE_DIRS = [
   '.arete/memory/summaries',
   '.arete/activity',
   '.arete/config',
+  '.arete/templates/meeting-agendas',
   'projects',
   'projects/active',
   'projects/archive',

@@ -365,26 +365,32 @@ For each pending task (in dependency order):
     - **Collaboration patterns**: How did builder respond? What did they prefer?
     - **System improvements**: What would make next PRD execution smoother?
 
-20. **Update Builder Memory**
+20. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
     
-    Create entry: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
+    **This is a required orchestrator task.** Do not deliver the final report (step 21) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
     
-    Include:
-    - **Metrics**: Tasks completed, success rate, iterations, tests added, token usage
-    - **Pre-mortem analysis**: Risks vs outcomes (table), which mitigations were effective
-    - **What worked well**: Patterns to repeat (be specific: "Show-don't-tell with line ranges")
-    - **What didn't work**: Patterns to avoid or issues encountered
-    - **Subagent insights**: Synthesize reflections across all tasks (what helped them most, common suggestions)
-    - **Collaboration patterns**: How did builder respond? What did they prefer?
-    - **Recommendations for next PRD**: Specific improvements (prompts, workflow, rules)
-    - **Refactor backlog items**: Count and paths (if any)
-    - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
+    1. **Create entry**: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
+       
+       Include:
+       - **Metrics**: Tasks completed, success rate, iterations, tests added, token usage
+       - **Pre-mortem analysis**: Risks vs outcomes (table), which mitigations were effective
+       - **What worked well**: Patterns to repeat (be specific: "Show-don't-tell with line ranges")
+       - **What didn't work**: Patterns to avoid or issues encountered
+       - **Subagent insights**: Synthesize reflections across all tasks (what helped them most, common suggestions)
+       - **Collaboration patterns**: How did builder respond? What did they prefer?
+       - **Recommendations for next PRD**: Specific improvements (prompts, workflow, rules)
+       - **Refactor backlog items**: Count and paths (if any)
+       - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
     
-    Add line to `dev/MEMORY.md`.
+    2. **Add index line** to `dev/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
+    
+    **Verification before step 21**: Entry file exists; MEMORY.md contains a new line pointing to it.
 
 21. **Deliver Final Report to Builder** (Orchestrator)
 
    Present to the builder (ONE comprehensive report, not repetitive sections):
+    
+    **Prerequisite**: Step 20 (Update Builder Memory) must be complete. Do not deliver the report until the entry exists and MEMORY.md is updated.
     
     **Format**:
     ```markdown
@@ -396,6 +402,7 @@ For each pending task (in dependency order):
     **Pre-mortem**: [A]/[B] risks materialized
     **Commits**: [N] commits
     **Token usage**: ~[X]K total (~[Y]K orchestrator + ~[Z]K subagents)
+    **Build memory**: ✅ Entry `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md` created; MEMORY.md updated
     
     ## Deliverables
     - [Feature 1] — Brief description
@@ -422,10 +429,11 @@ For each pending task (in dependency order):
     
     ## Next Steps
     1. Review and merge
-    2. Create memory entry (or run prd-post-mortem skill)
-    3. Update AGENTS.md
-    4. Address refactor backlog (if any)
+    2. Update AGENTS.md (if documentation gaps noted)
+    3. Address refactor backlog (if any)
     ```
+    
+    (Build memory is already updated in step 20; do not list "create memory entry" as a next step.)
     
     **Keep it concise** — 1-2 pages max, no repetition. The memory entry has full details.
 

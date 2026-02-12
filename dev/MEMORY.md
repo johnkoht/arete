@@ -18,6 +18,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-11 [Meeting Agenda Skill PRD learnings](entries/2026-02-11_meeting-agenda-skill-learnings.md) — 9/9 tasks, single-agent execution, prepare-meeting-agenda skill + template system; discoverability fix (skills table + PM action lists); post-completion dev entry was skipped → recommendation: mandatory Phase 3 step 20 checklist.
 - 2026-02-11 [Calendar integration UX and learnings](entries/2026-02-11_calendar-integration-ux-and-learnings.md) — icalBuddy binary name fix, calendar list parsing (bullet lines only), checkbox + pageSize:12; entry added because fix was meaningful and learnings (UX parity, entries after fixes) were not captured initially.
 - 2026-02-10 [Multi-IDE Support](entries/2026-02-10_multi-ide-support-learnings.md) — Adapter pattern for Cursor & Claude Code: canonical workspace with IDE-specific transpilation. Zero regressions, 50 new tests, 100% first-attempt success (19/20 tasks). Pre-mortem mitigations → 0/8 risks materialized. Learnings: show-don't-tell prompts + mandatory full test suite + sequential memory (progress.txt) = high quality with minimal iterations.
 - 2026-02-10 [Doc completeness and file deletion safety](entries/2026-02-10_doc-completeness-and-file-deletion-safety.md) — Documentation Planning Checklist in AGENTS.md; Documentation pre-mortem risk + mitigation in execute-prd; File Deletion Review (orchestrator) and File Deletion Policy (prd-task) to prevent undocumented deletions.
