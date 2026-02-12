@@ -208,15 +208,19 @@ So: **rules + chosen skill + data the skill fetches**. The agent should not dump
 
 ```
 arete/
-├── .cursor/
-│   ├── build/           # BUILD SYSTEM (internal, not shipped)
-│   │   ├── autonomous/  # Autonomous agent loop for development
-│   │   ├── entries/     # Build memory and decisions
-│   │   └── MEMORY.md    # Index of build changes
-│   ├── rules/           # Cursor rules (dev.mdc, testing.mdc, etc.)
-│   ├── skills/          # PM skills (shipped to users)
-│   ├── tools/           # PM tools (shipped to users)
-│   └── integrations/    # Integration configs (shipped)
+├── dev/                  # BUILD SYSTEM (internal, not shipped)
+│   ├── autonomous/       # Agent loop: prd.json, schema, archive (build skills in dev/skills/)
+│   ├── entries/         # Build memory and decisions
+│   ├── MEMORY.md        # Index of build changes
+│   ├── skills/          # Build skills (execute-prd, plan-to-prd, prd-to-json, etc.)
+│   ├── agents/          # Subagent instructions (e.g. prd-task.md)
+│   ├── backlog/         # Future work
+│   └── prds/            # Feature PRDs and EXECUTE handoffs
+├── runtime/              # Product assets (shipped to users via install/update)
+│   ├── skills/          # PM skills (shipped as .agents/skills)
+│   ├── rules/           # Cursor/Claude rules
+│   ├── tools/           # PM tools
+│   └── integrations/    # Integration configs
 ├── src/                 # TypeScript source code
 │   ├── cli.ts           # Main CLI entry
 │   ├── commands/        # CLI commands
@@ -689,6 +693,8 @@ Every prompt includes:
 
 **Skills**:
 - `dev/skills/execute-prd/SKILL.md` — Full orchestration workflow
+- `dev/skills/plan-to-prd/SKILL.md` — Convert approved plan to PRD, prd.json, and EXECUTE.md handoff
+- `dev/skills/prd-to-json/SKILL.md` — Convert markdown PRD to dev/autonomous/prd.json for autonomous execution
 - `dev/skills/prd-post-mortem/SKILL.md` — Systematic post-mortem after PRD completion (metrics, pre-mortem review, memory entry)
 - `dev/skills/synthesize-collaboration-profile/SKILL.md` — Update `dev/collaboration.md` from entries' Learnings/Corrections; run after post-mortem or when several entries have learnings (see agent-memory.mdc)
 - `dev/agents/prd-task.md` — Subagent instructions (for Task tool)

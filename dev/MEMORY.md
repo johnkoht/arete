@@ -18,6 +18,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-12 [Build skills consolidation and AGENTS.md directory structure](entries/2026-02-12_build-skills-consolidation-and-agents-dir.md) — Removed duplicate execute-prd from dev/autonomous/skills/; moved prd-to-json to dev/skills/. All build skills now in dev/skills/. Updated AGENTS.md Directory Structure tree to dev/ + runtime/ (was .cursor/build/).
 - 2026-02-11 [Calendar provider macos alias and config alignment](entries/2026-02-11_calendar-provider-macos-alias.md) — Bug: configure wrote provider 'macos', pull expected 'ical-buddy'. Fix: factory accepts both. Regression test in pull-calendar; learning: config producer–consumer alignment, trace config flow, test at boundary.
 - 2026-02-11 [Meeting Agenda Skill PRD learnings](entries/2026-02-11_meeting-agenda-skill-learnings.md) — 9/9 tasks, single-agent execution, prepare-meeting-agenda skill + template system; discoverability fix (skills table + PM action lists); post-completion dev entry was skipped → recommendation: mandatory Phase 3 step 20 checklist.
 - 2026-02-11 [Calendar integration UX and learnings](entries/2026-02-11_calendar-integration-ux-and-learnings.md) — icalBuddy binary name fix, calendar list parsing (bullet lines only), checkbox + pageSize:12; entry added because fix was meaningful and learnings (UX parity, entries after fixes) were not captured initially.
