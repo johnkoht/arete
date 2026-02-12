@@ -1,6 +1,14 @@
 ---
 name: week-plan
 description: Plan the week and set weekly priorities. Use when the user wants to plan the week or set top weekly outcomes linked to quarter goals.
+triggers:
+  - weekly plan
+  - plan my week
+  - plan the week
+  - week planning
+  - set weekly priorities
+  - prepare a weekly plan
+  - prepare weekly plan
 primitives:
   - Problem
   - Solution

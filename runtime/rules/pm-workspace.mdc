@@ -116,6 +116,16 @@ The workspace uses a three-layer memory architecture:
 ✅ Agent: [Outputs in the skill's prescribed format; does NOT improvise by listing directories]
 ```
 
+**Correct Pattern (weekly planning)**:
+```
+✅ User: "Can you prepare a weekly plan for me?" / "Plan my week" / "Weekly priorities"
+✅ Agent: [Runs `arete skill route "can you prepare a weekly plan for me"` (or user's exact phrase)]
+✅ Router returns: week-plan
+✅ Agent: [Reads .agents/skills/week-plan/SKILL.md]
+✅ Agent: [Follows skill workflow: gather context (quarter, last week, projects, scratchpad, calendar), week's meetings, guide to outcomes, write now/week.md]
+✅ Agent: [Does NOT improvise by reading week.md and presenting a summary; uses the skill's structured workflow]
+```
+
 **Correct Pattern (create/prepare meeting agenda)**:
 ```
 ✅ User: "Prepare a meeting agenda" / "Create an agenda for my 1:1" / "Help me create an agenda"
@@ -145,7 +155,7 @@ When a user wants to do PM work, you MUST use skills—not ad-hoc tools. Skills 
 | "Build/update roadmap" | Roadmap project | `construct-roadmap` |
 | "View goals" / "Compare to org" | View alignment of PM goals to org | `goals-alignment` |
 | "Set quarter goals" / "Plan the quarter" | Quarter goals aligned to org | `quarter-plan` |
-| "Plan the week" / "Weekly priorities" | Set week outcomes linked to quarter | `week-plan` |
+| "Plan the week" / "Weekly priorities" / "Prepare a weekly plan" / "Prepare my week" | Set week outcomes linked to quarter | `week-plan` |
 | "Review the week" / "Close the week" | Mark done/partial/carried, quarter progress | `week-review` |
 | "Process my notes/feedback" | Synthesize within project | `synthesize` |
 | "Save this meeting" / Paste meeting content | Save to resources/meetings | `save-meeting` |

@@ -201,6 +201,8 @@ integrationCmd
   .command('configure <name>')
   .description('Configure an integration')
   .option('--json', 'Output as JSON')
+  .option('--calendars <list>', 'Calendar names to include, comma-separated (calendar only; for non-interactive use e.g. Claude Code)')
+  .option('--all', 'Include all calendars (calendar only; for non-interactive use)')
   .action((name, opts) => integrationCommand('configure', { name, ...opts }));
 
 integrationCmd

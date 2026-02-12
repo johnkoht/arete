@@ -16,6 +16,10 @@ import type { CommandOptions } from '../types.js';
 
 export interface IntegrationOptions extends CommandOptions {
   name?: string;
+  /** Comma-separated calendar names (for configure calendar; non-interactive) */
+  calendars?: string;
+  /** Include all calendars (for configure calendar; non-interactive) */
+  all?: boolean;
 }
 
 /**
@@ -274,10 +278,12 @@ function listCalendars(): string[] {
 
 /**
  * Configure calendar integration (macOS)
+ * Supports non-interactive use (e.g. Claude Code) via --calendars "A,B" or --all.
  */
-async function configureCalendar(options: CommandOptions): Promise<void> {
-  const { json } = options;
-  
+async function configureCalendar(options: IntegrationOptions): Promise<void> {
+  const { json, calendars: calendarsOpt, all: allOpt } = options;
+  const isInteractive = process.stdin.isTTY === true;
+
   const workspaceRoot = findWorkspaceRoot();
   if (!workspaceRoot) {
     if (json) {
@@ -287,13 +293,13 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     }
     process.exit(1);
   }
-  
+
   // Check if icalBuddy is installed (binary; install via brew install ical-buddy)
   if (!isIcalBuddyInstalled()) {
     if (json) {
-      console.log(JSON.stringify({ 
-        success: false, 
-        error: 'icalBuddy not found. Install with: brew install ical-buddy' 
+      console.log(JSON.stringify({
+        success: false,
+        error: 'icalBuddy not found. Install with: brew install ical-buddy'
       }));
     } else {
       error('icalBuddy not found');
@@ -304,7 +310,7 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     }
     process.exit(1);
   }
-  
+
   // List available calendars
   let calendars: string[];
   try {
@@ -317,7 +323,7 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     }
     process.exit(1);
   }
-  
+
   if (calendars.length === 0) {
     if (json) {
       console.log(JSON.stringify({ success: false, error: 'No calendars found' }));
@@ -326,11 +332,49 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     }
     process.exit(1);
   }
-  
-  // Prompt user to select calendars (checkbox like integrations setup)
+
+  // Resolve selected calendars: --calendars, --all, --json (all), interactive prompt, or non-TTY hint
   let selectedCalendars: string[];
-  if (json) {
+  if (calendarsOpt !== undefined && calendarsOpt !== '') {
+    const requested = calendarsOpt.split(',').map((s) => s.trim()).filter(Boolean);
+    const valid = new Set(calendars);
+    selectedCalendars = requested.filter((name) => valid.has(name));
+    const unknown = requested.filter((name) => !valid.has(name));
+    if (unknown.length > 0) {
+      if (json) {
+        console.log(JSON.stringify({
+          success: false,
+          error: `Unknown calendar(s): ${unknown.join(', ')}. Available: ${calendars.join(', ')}`
+        }));
+      } else {
+        warn(`Unknown calendar(s): ${unknown.join(', ')}`);
+        info(`Available: ${calendars.join(', ')}`);
+      }
+      if (selectedCalendars.length === 0) process.exit(1);
+    }
+  } else if (allOpt || json) {
     selectedCalendars = calendars;
+  } else if (!isInteractive) {
+    if (json) {
+      console.log(JSON.stringify({
+        success: false,
+        error: 'Non-interactive environment. Use --calendars "Name1,Name2" or --all',
+        calendars
+      }));
+    } else {
+      info('Calendar integration (non-interactive environment)');
+      console.log('');
+      console.log('Available calendars:');
+      for (const name of calendars) {
+        console.log(`  • ${name}`);
+      }
+      console.log('');
+      info('Re-run with one of:');
+      console.log(`  arete integration configure calendar --all`);
+      console.log(`  arete integration configure calendar --calendars "${calendars.slice(0, 2).join(', ')}"`);
+      console.log('');
+    }
+    process.exit(1);
   } else {
     const { selected } = await inquirer.prompt([
       {
@@ -347,7 +391,7 @@ async function configureCalendar(options: CommandOptions): Promise<void> {
     ]);
     selectedCalendars = selected.map((i: number) => calendars[i]);
   }
-  
+
   if (selectedCalendars.length === 0) {
     if (json) {
       console.log(JSON.stringify({ success: false, error: 'No calendars selected' }));

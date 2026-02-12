@@ -121,6 +121,26 @@ describe('skill-router', () => {
     }
   });
 
+  it('routes "weekly plan" and "plan my week" to week-plan', () => {
+    const skillsWithWeekPlan: SkillCandidate[] = [
+      ...skills,
+      {
+        id: 'week-plan',
+        name: 'week-plan',
+        description: 'Plan the week and set weekly priorities.',
+        path: '/ws/.agents/skills/week-plan',
+        triggers: ['weekly plan', 'plan my week', 'plan the week', 'week planning'],
+        work_type: 'planning',
+        category: 'essential',
+      },
+    ];
+    for (const q of ['weekly plan', 'plan my week', 'plan the week']) {
+      const r = routeToSkill(q, skillsWithWeekPlan);
+      assert.ok(r, `Expected a match for: ${q}`);
+      assert.equal(r!.skill, 'week-plan', `Expected week-plan for: ${q}`);
+    }
+  });
+
   it('routes "create meeting agenda" and "prepare agenda" to prepare-meeting-agenda', () => {
     const agendaQueries = [
       'create meeting agenda',
