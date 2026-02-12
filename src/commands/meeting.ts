@@ -26,6 +26,8 @@ interface MeetingInput {
   company?: string;
   pillar?: string;
   duration_minutes?: number;
+  /** Topics/themes for the index (keywords or 1–2 sentences). If omitted, derived from summary/highlights when saving. */
+  topics?: string;
 }
 
 function normalizeMeetingInput(raw: MeetingInput): MeetingForSave {
@@ -65,6 +67,7 @@ function normalizeMeetingInput(raw: MeetingInput): MeetingForSave {
     company,
     pillar,
     url: raw.url?.trim() ?? '',
+    topics: typeof raw.topics === 'string' ? raw.topics.trim() || undefined : undefined,
   };
 }
 

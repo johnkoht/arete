@@ -117,7 +117,7 @@ describe('updateMeetingsIndex', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('creates index when missing', () => {
+  it('creates index when missing with table format', () => {
     updateMeetingsIndex(tmpDir, {
       filename: '2026-02-05-product-review.md',
       title: 'Product Review',
@@ -127,6 +127,7 @@ describe('updateMeetingsIndex', () => {
     assert.ok(existsSync(indexPath));
     const content = readFileSync(indexPath, 'utf8');
     assert.ok(content.includes('## Recent Meetings'));
+    assert.ok(content.includes('| Date | Title | Attendees | Recording | Topics |'));
     assert.ok(content.includes('[Product Review](2026-02-05-product-review.md)'));
   });
 
@@ -170,8 +171,48 @@ None yet.
     });
     const content = readFileSync(join(tmpDir, 'index.md'), 'utf8');
     assert.ok(content.includes('Standup Updated'));
-    const entries = content.match(/^- \[.+\]\(.+\)/gm);
-    assert.equal(entries?.length, 2);
+    assert.ok(content.includes('| Date | Title | Attendees | Recording | Topics |'));
+    const tableRows = content.match(/\|\s*2026-\d{2}-\d{2}\s*\|/g);
+    assert.equal(tableRows?.length, 2);
+  });
+
+  it('includes attendees, recording URL, and topics when provided', () => {
+    updateMeetingsIndex(tmpDir, {
+      filename: '2026-02-06-sprint-planning.md',
+      title: 'Sprint Planning',
+      date: '2026-02-06',
+      attendees: 'Jane, Bob',
+      recording_url: 'https://fathom.video/share/abc',
+      topics: 'Q1 roadmap; feature X prioritization',
+    });
+    const content = readFileSync(join(tmpDir, 'index.md'), 'utf8');
+    assert.ok(content.includes('Jane, Bob'));
+    assert.ok(content.includes('[recording](https://fathom.video/share/abc)'));
+    assert.ok(content.includes('Q1 roadmap; feature X prioritization'));
+  });
+
+  it('parses legacy bullet list and re-outputs as table', () => {
+    writeFileSync(
+      join(tmpDir, 'index.md'),
+      `# Meetings Index
+
+## Recent Meetings
+
+- [Old Meeting](2026-02-01-old.md) – 2026-02-01
+`,
+      'utf8'
+    );
+    updateMeetingsIndex(tmpDir, {
+      filename: '2026-02-02-new.md',
+      title: 'New Meeting',
+      date: '2026-02-02',
+    });
+    const content = readFileSync(join(tmpDir, 'index.md'), 'utf8');
+    assert.ok(content.includes('| Date | Title | Attendees | Recording | Topics |'));
+    assert.ok(content.includes('2026-02-02'));
+    assert.ok(content.includes('2026-02-01'));
+    assert.ok(content.includes('New Meeting'));
+    assert.ok(content.includes('Old Meeting'));
   });
 });
 

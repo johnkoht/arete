@@ -16,7 +16,7 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 1. **Resolve attendees** — Match names to people slugs (search `people/index.md` or `people/**/*.md` by name; or use slug directly). Optionally `qmd query "[attendee name] person"`.
 2. **Read person files** — For each attendee: `people/{internal|customers|users}/{slug}.md`. Extract name, role, company, recent notes.
-3. **Search meetings** — List `resources/meetings/*.md`. Filter by frontmatter `attendee_ids` or body/attendees. Sort by date descending; take 1–3 most recent.
+3. **Search meetings** — Prefer scanning `resources/meetings/index.md` (table: Date | Title | Attendees | Recording | Topics). Match by Topics column or attendee names, then open the linked file(s). Alternatively list `resources/meetings/*.md` and filter by frontmatter `attendee_ids` or body/attendees; sort by date descending; take 1–3 most recent.
 4. **Read projects** — Scan `projects/active/*/README.md` for `stakeholders` or body mentions of attendee names/slugs.
 5. **Extract action items** — From recent meetings: "## Action Items" or similar; collect unchecked `- [ ] ...`. Prefer items referencing the attendee or "For me" / "Follow up".
 6. **QMD (optional)** — `qmd query "decisions or learnings involving [attendee] or [company]"`, `qmd query "meetings or notes about [topic]"`. Incorporate into brief.

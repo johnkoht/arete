@@ -253,12 +253,12 @@ arete/
 
 **Storage**: `resources/meetings/YYYY-MM-DD-title-slug.md`
 
-**Index**: `resources/meetings/index.md` (auto-updated)
+**Index**: `resources/meetings/index.md` (auto-updated). Rendered as a markdown table: **Date | Title | Attendees | Recording | Topics**. Topics/themes are derived from summary or highlights (or optional `topics` field) so the agent can scan the index for matches, then load the linked file.
 
 **Service**: `src/core/meetings.ts`
 ```typescript
 saveMeeting(meeting: MeetingForSave, workspaceRoot: string): SaveMeetingResult
-updateMeetingsIndex(workspaceRoot: string, filename: string): void
+updateMeetingsIndex(workspaceRoot: string, newEntry: MeetingIndexNewEntry): void
 ```
 
 **Format**: Markdown with YAML frontmatter: `title`, `date`, `source`, `attendees`, `attendee_ids`, `company`, `pillar`. Body: summary, key points, action items, decisions, transcript.

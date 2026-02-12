@@ -45,6 +45,7 @@ Parse the pasted content to extract:
 | transcript | Yes* | Full or partial transcript |
 | url | No | Recording/share link if present |
 | action_items | No | Array of strings |
+| topics | No | Keywords or 1–2 sentences for the index; helps the agent scan and load relevant meetings. If omitted, derived from summary. |
 
 **Parsing tips:**
 - Look for section headers: "Summary", "Transcript", "Action Items"
@@ -79,7 +80,7 @@ Ensure at least **title** and (**summary** or **transcript**) are present. If cr
 
 3. If in an Areté workspace, the command will:
    - Save the meeting to `resources/meetings/YYYY-MM-DD-slug.md`
-   - Update `resources/meetings/index.md`
+   - Update `resources/meetings/index.md` (table: Date | Title | Attendees | Recording | Topics). The agent can scan the index for topics/themes, then open the linked file.
 
 ### 5. Confirm
 

@@ -26,6 +26,8 @@ export interface MeetingForSave {
   pillar?: string;
   url: string;
   share_url?: string;
+  /** Optional topics/themes for the index (keywords or 1–2 sentences). If omitted, derived from summary/highlights. */
+  topics?: string;
 }
 
 export interface SaveMeetingOptions {
@@ -40,6 +42,7 @@ export interface SaveMeetingResult {
 
 const INDEX_MAX_ENTRIES = 20;
 const INDEX_ENTRY_REGEX = /^-\s+\[([^\]]+)\]\(([^)]+)\)\s+[–-]\s+(.+)$/;
+const INDEX_TOPICS_MAX_LEN = 120;
 
 function slugify(s: string): string {
   return s
@@ -171,45 +174,111 @@ export function saveMeetingFile(
   return fullPath;
 }
 
-interface IndexEntry {
+export interface MeetingIndexEntry {
   title: string;
   filename: string;
   date: string;
+  attendees?: string;
+  recording_url?: string;
+  topics?: string;
 }
 
-function parseIndexEntries(content: string): IndexEntry[] {
-  const entries: IndexEntry[] = [];
+function deriveTopics(meeting: MeetingForSave): string {
+  if (meeting.topics?.trim()) return meeting.topics.trim().slice(0, INDEX_TOPICS_MAX_LEN);
+  if (meeting.summary?.trim()) {
+    const first = meeting.summary.trim().split(/[.!?]\s+/)[0]?.trim() ?? meeting.summary.trim();
+    return first.slice(0, INDEX_TOPICS_MAX_LEN);
+  }
+  if (meeting.highlights?.length) {
+    return meeting.highlights.slice(0, 3).map((h) => (typeof h === 'string' ? h : '').trim()).filter(Boolean).join('; ').slice(0, INDEX_TOPICS_MAX_LEN);
+  }
+  return '';
+}
+
+function parseIndexEntries(content: string): MeetingIndexEntry[] {
+  const entries: MeetingIndexEntry[] = [];
   const lines = content.split('\n');
   let inSection = false;
+  let inTable = false;
   for (const line of lines) {
     if (line.startsWith('## Recent Meetings')) {
       inSection = true;
+      inTable = false;
       continue;
     }
-    if (inSection) {
-      if (line.startsWith('## ')) break; // Next section
-      const m = line.match(INDEX_ENTRY_REGEX);
-      if (m) {
-        entries.push({ title: m[1], filename: m[2], date: m[3] });
+    if (inSection && line.startsWith('## ')) break;
+    if (!inSection) continue;
+
+    const bulletMatch = line.match(INDEX_ENTRY_REGEX);
+    if (bulletMatch) {
+      entries.push({ title: bulletMatch[1], filename: bulletMatch[2], date: bulletMatch[3] });
+      continue;
+    }
+
+    const tableRow = line.trim().startsWith('|') && line.trim().endsWith('|');
+    if (tableRow) {
+      const cells = line.split('|').map((c) => c.trim()).filter((_, i) => i > 0 && i < 6);
+      if (cells.length >= 3 && cells[0] !== 'Date' && !/^[-—]+$/.test(cells[0])) {
+        const date = cells[0];
+        const titleCell = cells[1] ?? '';
+        const linkMatch = titleCell.match(/\[([^\]]*)\]\(([^)]+)\)/);
+        const title = linkMatch ? linkMatch[1] : titleCell;
+        const filename = linkMatch ? linkMatch[2] : '';
+        const attendees = cells[2] ?? '';
+        const recording = cells[3] ?? '';
+        const recordingUrl = recording.startsWith('[') ? recording.match(/\]\((https?:[^)]+)\)/)?.[1] : undefined;
+        const topics = cells[4] ?? '';
+        if (filename && date) {
+          entries.push({
+            title,
+            filename,
+            date,
+            attendees: attendees && attendees !== '—' ? attendees : undefined,
+            recording_url: recordingUrl || (recording && recording !== '—' ? recording : undefined),
+            topics: topics && topics !== '—' ? topics : undefined,
+          });
+        }
       }
     }
   }
   return entries;
 }
 
-function formatIndexEntries(entries: IndexEntry[]): string {
+function escapeTableCell(s: string): string {
+  return s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+function formatIndexEntries(entries: MeetingIndexEntry[]): string {
   if (entries.length === 0) return 'None yet.';
-  return entries
-    .map((e) => `- [${e.title}](${e.filename}) – ${e.date}`)
-    .join('\n');
+  const header = '| Date | Title | Attendees | Recording | Topics |';
+  const separator = '| --- | --- | --- | --- | --- |';
+  const rows = entries.map((e) => {
+    const title = `[${escapeTableCell(e.title)}](${e.filename})`;
+    const attendees = e.attendees ? escapeTableCell(e.attendees) : '—';
+    const recording = e.recording_url ? `[recording](${e.recording_url})` : '—';
+    const topics = e.topics ? escapeTableCell(e.topics) : '—';
+    return `| ${e.date} | ${title} | ${attendees} | ${recording} | ${topics} |`;
+  });
+  return [header, separator, ...rows].join('\n');
+}
+
+/** New index entry shape (optional fields for backward compatibility with callers that only pass filename/title/date). */
+export interface MeetingIndexNewEntry {
+  filename: string;
+  title: string;
+  date: string;
+  attendees?: string;
+  recording_url?: string;
+  topics?: string;
 }
 
 /**
  * Update the meetings index with a new entry. Merges, dedupes by filename, sorts by date desc, limits.
+ * Index is rendered as a markdown table: Date | Title | Attendees | Recording | Topics.
  */
 export function updateMeetingsIndex(
   meetingsDir: string,
-  newEntry: { filename: string; title: string; date: string }
+  newEntry: MeetingIndexNewEntry
 ): void {
   const indexPath = join(meetingsDir, 'index.md');
   let content: string;
@@ -218,7 +287,7 @@ export function updateMeetingsIndex(
   } else {
     content = `# Meetings Index
 
-Meeting notes and transcripts organized by date.
+Meeting notes and transcripts organized by date. Scan the table for topics/themes, then open the linked file for details.
 
 ## Recent Meetings
 
@@ -232,6 +301,9 @@ None yet.
     title: newEntry.title,
     filename: newEntry.filename,
     date: newEntry.date,
+    attendees: newEntry.attendees,
+    recording_url: newEntry.recording_url,
+    topics: newEntry.topics,
   });
   const merged = Array.from(byFilename.values());
   merged.sort((a, b) => b.date.localeCompare(a.date));
@@ -266,10 +338,14 @@ export function saveMeeting(
   if (!savedPath) {
     return { saved: false, path: null };
   }
+  const dateStr = meeting.date?.includes('T') ? meeting.date.slice(0, 10) : meeting.date;
   updateMeetingsIndex(outputDir, {
     filename: meetingFilename(meeting),
     title: meeting.title,
-    date: meeting.date,
+    date: dateStr,
+    attendees: formatAttendees(meeting.attendees ?? []).slice(0, 80) || undefined,
+    recording_url: meeting.url?.trim() || meeting.share_url?.trim() || undefined,
+    topics: deriveTopics(meeting) || undefined,
   });
   return { saved: true, path: savedPath };
 }

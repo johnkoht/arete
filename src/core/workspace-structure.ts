@@ -742,7 +742,7 @@ None yet.
 `,
   'resources/meetings/index.md': `# Meetings Index
 
-Meeting notes and transcripts organized by date.
+Meeting notes and transcripts organized by date. Scan the table for topics/themes, then open the linked file for details.
 
 ## Recent Meetings
 
