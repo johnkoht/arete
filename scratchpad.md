@@ -171,6 +171,20 @@ Explore automating meeting capture via Fathom API/webhook:
 
 ---
 
+### Google & capability-based integrations (scope later)
+*Added: 2026-02-12*
+
+Integrations are **capability-first** (calendar, meeting-recordings, notes). Multiple Google (or Microsoft) products = separate integrations; scope each when ready.
+
+**To scope later:**
+- **Google Drive / file store** — Different capability (e.g. `documents` or `file-store`): list/sync docs, get content, optional "notepad" style export to workspace. Providers: Google Drive, OneDrive, Dropbox. Notion is already `notes`; decide if file-store is same or sibling capability.
+- **Gmail / email** — Separate capability (e.g. `email`): threads, search, "pull this thread into context." Different skills and UX from calendar or file store. Provider: Gmail (later Outlook, etc.).
+- **Shared Google OAuth** — One Google Cloud project / OAuth client can expose multiple scopes (Calendar, Drive, Gmail). Each integration (google-calendar, future google-drive, future gmail) stays a separate registry entry; they may share credentials under `.credentials/` or config when we add more. Implementation detail, not a single "Google" integration.
+
+**Current:** Google Calendar provider is scoped as its own PRD (calendar capability only). See `dev/backlog/features/google-calendar-provider.md`.
+
+---
+
 ### MCP Integrations
 When MCP integrations are added, consider these use cases:
 

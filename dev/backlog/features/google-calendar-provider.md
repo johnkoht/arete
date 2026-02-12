@@ -2,21 +2,21 @@
 
 **Status**: Ready for PRD  
 **Priority**: High  
-**Effort**: Medium (4-6 tasks)  
+**Effort**: Medium (4–6 tasks)  
 **Owner**: TBD
 
 ---
 
 ## Overview
 
-Add GoogleCalendarProvider to the calendar system to enable cross-platform calendar access via Google Calendar API. This removes the macOS/ical-buddy dependency and provides direct API control.
+Add `GoogleCalendarProvider` to the calendar system to enable cross-platform calendar access via the Google Calendar API. This removes the macOS/ical-buddy-only limitation and provides direct API control for users on Windows, Linux, or macOS who use Google Calendar.
 
 ---
 
 ## Problem
 
 Current calendar integration:
-- ✅ Works great on macOS via ical-buddy
+- ✅ Works on macOS via ical-buddy (Apple Calendar)
 - ❌ Requires macOS + ical-buddy installed
 - ❌ No Windows/Linux support
 - ❌ Indirect access (ical-buddy → Calendar.app → synced calendars)
@@ -24,100 +24,117 @@ Current calendar integration:
 Many PMs use:
 - Windows/Linux machines
 - Google Calendar as primary calendar
-- Want direct API access for reliability
+- Want direct API access for reliability and cross-platform use
 
 ---
 
 ## Solution
 
-Implement `GoogleCalendarProvider` behind the existing `CalendarProvider` interface:
+Implement `GoogleCalendarProvider` behind the existing `CalendarProvider` interface in `src/core/calendar.ts`. The integration registry already has a `google-calendar` entry (`src/integrations/registry.ts`) with `implements: ['calendar']`, `auth: { type: 'oauth' }`, and `status: 'planned'`. This feature implements the provider and wires it into the calendar factory and configure flow.
+
+**Provider shape** (matches existing interface):
 
 ```typescript
-// Reuses existing interface from src/core/calendar.ts
-class GoogleCalendarProvider implements CalendarProvider {
-  name = 'google-calendar';
-  async isAvailable(): Promise<boolean> { /* check OAuth token */ }
-  async getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ }
-  async getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ }
+// src/core/calendar-providers/google-calendar.ts
+// Reuses CalendarProvider from src/core/calendar.ts
+function getProvider(options?: GoogleCalendarProviderOptions): CalendarProvider {
+  return {
+    name: 'google-calendar',
+    async isAvailable(): Promise<boolean> { /* valid OAuth token present */ },
+    async getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ },
+    async getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ },
+  };
 }
 ```
 
-**Key features**:
-- OAuth2 authentication (consent screen, token storage in `.credentials/`)
-- Token refresh handling
-- Calendar filtering (match ical-buddy behavior)
-- Person matching (attendee emails → workspace people files)
-- Error handling (API rate limits, network issues, invalid token)
+**Key behaviors**:
+- OAuth2 authentication (consent screen; token storage under `.credentials/`)
+- Token refresh handling (transparent to callers)
+- Calendar filtering via `CalendarOptions.calendars` (match ical-buddy semantics)
+- Person matching: attendee emails → workspace people (same as existing `pull-calendar` behavior)
+- Graceful degradation and clear errors (rate limits, network, invalid/expired token)
+
+---
+
+## Current State (for implementation)
+
+- **Calendar factory** (`src/core/calendar.ts`): Today accepts `provider: 'ical-buddy' | 'macos'`. Add a branch for `provider === 'google'` (or `'google-calendar'`) that dynamic-imports the Google provider and returns it iff `isAvailable()`.
+- **Configure calendar** (`src/commands/integration.ts`): Currently macOS-only — checks icalBuddy, calls `listCalendars()`, writes `provider: 'macos'` and `calendars: [...]`. Must be extended to support provider selection (macOS vs Google); for Google: OAuth flow → fetch calendar list from API → user selects calendars → write `provider: 'google'` and `calendars: [...]`.
+- **Pull calendar** (`src/commands/pull-calendar.ts`): Uses `getCalendarProvider(config)`; no change needed once the factory returns the Google provider for `integrations.calendar.provider: 'google'`.
+- **Credentials**: Existing pattern is `.credentials/credentials.yaml` for API keys (e.g. Fathom); workspace has `.credentials/README.md` and `.gitignore` for `credentials.yaml`. OAuth tokens can live in the same file under a key (e.g. `google_calendar`) or in a dedicated file (e.g. `.credentials/google-calendar.json`); decide in PRD.
 
 ---
 
 ## Tasks (Draft)
 
-1. **OAuth2 Flow Implementation**
-   - Google Cloud Project setup instructions
-   - OAuth2 consent screen + credentials
-   - Token acquisition and storage
-   - Token refresh logic
+1. **OAuth2 flow**
+   - Google Cloud Project setup (doc or in-repo instructions)
+   - OAuth2 consent screen + client ID/secret (or env)
+   - Token acquisition (CLI: open browser, paste code / redirect callback)
+   - Token persistence and refresh logic
+   - Where to store tokens: `.credentials/` (see Open Questions)
 
-2. **Google Calendar API Client**
-   - API client wrapper
-   - getTodayEvents implementation
-   - getUpcomingEvents implementation
-   - Calendar list/filtering
+2. **Google Calendar API client**
+   - Thin wrapper around Google Calendar API (e.g. `googleapis` package)
+   - Map API responses to `CalendarEvent` / `CalendarAttendee`
+   - `getTodayEvents(options?)` and `getUpcomingEvents(days, options?)`
+   - Calendar list and filtering by `options.calendars`
 
-3. **Provider Integration**
-   - Implement CalendarProvider interface
-   - Add to getCalendarProvider() factory
-   - Config schema update (integrations.calendar.provider: 'google')
+3. **Provider integration**
+   - Implement `CalendarProvider` in `src/core/calendar-providers/google-calendar.ts` (e.g. `getProvider()` returning the interface).
+   - In `getCalendarProvider()`: when `integrations.calendar.provider === 'google'` (or `'google-calendar'`), load Google provider and return it if `isAvailable()`.
+   - Config already supports `integrations.calendar.provider` and `calendars`; no schema change required.
 
-4. **Configuration Command**
-   - `arete integration configure calendar` enhancement
-   - Detect Google Calendar option
-   - OAuth flow initiation
-   - Credentials validation
+4. **Configuration command**
+   - Extend `configureCalendar()` to support provider choice: **macOS Calendar** vs **Google Calendar** (or first prompt “Which provider?” then branch).
+   - For Google: run OAuth flow, persist tokens, fetch calendar list via API, prompt for which calendars to include (or support `--calendars "A,B"` / `--all` for non-interactive).
+   - Write `integrations.calendar.provider: 'google'` and `calendars: [...]` to `arete.yaml`.
+   - Follow existing CLI patterns (see `dev/collaboration.md`: established patterns over bare minimum; match setup/seed UX where applicable).
 
-5. **Testing & Documentation**
-   - Tests with mocked Google API
-   - SETUP.md update (Google Calendar setup)
-   - AGENTS.md update (add Google provider to Calendar System section)
+5. **Testing and documentation**
+   - Unit tests with mocked Google API (or mocked wrapper) so we don’t call the real API in CI. Mirror patterns from `test/core/calendar.test.ts` and ical-buddy provider tests (testDeps / injectable deps).
+   - **Docs**: SETUP.md (Google Calendar setup steps); AGENTS.md §10 Calendar System (provider table already has “(Future) GoogleCalendarProvider” — update when implemented; “Adding a new provider” steps are already correct); ONBOARDING.md if Google becomes a first-class config option.
 
-6. **Error Handling & Edge Cases**
-   - Rate limiting
-   - Token expiration
-   - Network failures
-   - Permission errors
+6. **Error handling and edge cases**
+   - Rate limiting (backoff or clear message)
+   - Token expired / revoked (re-auth guidance)
+   - Network failures (graceful message)
+   - Permission errors (scope or consent guidance)
 
 ---
 
 ## Dependencies
 
-- ✅ Calendar system complete (CalendarProvider interface exists)
-- ✅ Integration framework stable
-- ⚠️ Need: Google Cloud Project (can provide instructions)
-- ⚠️ Need: OAuth2 library decision (use googleapis npm package?)
+- ✅ Calendar system and `CalendarProvider` interface
+- ✅ Integration registry entry for `google-calendar`
+- ✅ Pull calendar and skills use `getCalendarProvider(config)` — no change for callers
+- ⚠️ Google Cloud Project (user or org creates project; we document or script)
+- ⚠️ OAuth library: e.g. `googleapis` (or minimal OAuth2 + Calendar API); decide in PRD
 
 ---
 
 ## Benefits
 
-- **Cross-platform**: Works on Windows, Linux, macOS
-- **Direct access**: No ical-buddy dependency
-- **Reliable**: Direct API control, better error handling
-- **Extensible**: Pattern for other calendar providers (Microsoft, etc.)
+- **Cross-platform**: Windows, Linux, macOS
+- **Direct API**: No ical-buddy dependency for Google users
+- **Reliable**: Explicit error handling and token refresh
+- **Extensible**: Same pattern for future providers (e.g. Microsoft Graph)
 
 ---
 
-## Open Questions
+## Open Questions (for PRD)
 
-1. **OAuth flow UX**: CLI-based (open browser, paste code) or server-based?
-2. **Credentials storage**: `.credentials/google-calendar.json` or integrate with system keychain?
-3. **Multi-account**: Support multiple Google accounts?
-4. **Shared calendars**: How to handle calendar ownership/sharing?
+1. **OAuth UX**: CLI out-of-band (open browser, paste auth code) vs local redirect server. Out-of-band is common for CLIs and avoids binding to a port; document in PRD.
+2. **Credentials storage**: Single file (e.g. `.credentials/credentials.yaml` key) vs dedicated `.credentials/google-calendar.json`. Keychain/OS credential store can be a follow-up.
+3. **Multi-account**: Support multiple Google accounts in one workspace (e.g. profile or named credential)? Defer to “single account first” unless we have a clear use case.
+4. **Shared calendars**: Include shared calendars in list and filter by name like owned calendars; document behavior in PRD.
 
 ---
 
 ## Related
 
-- **Existing**: IcalBuddy provider (`src/core/calendar-providers/ical-buddy.ts`)
-- **Next**: Microsoft Calendar provider (similar pattern)
-- **Integration**: Uses existing entity resolution for person matching
+- **Existing**: IcalBuddy provider `src/core/calendar-providers/ical-buddy.ts` (pattern: `getProvider()`, testDeps for tests).
+- **AGENTS.md**: §10 Calendar System, “Adding a new provider” steps.
+- **Registry**: `src/integrations/registry.ts` — `google-calendar` entry already present.
+- **Next**: Microsoft Calendar provider (same interface, different OAuth/API).
+- **Person matching**: Same as today — `pull-calendar` and skills use attendee emails; no change required.
