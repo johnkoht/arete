@@ -12,7 +12,7 @@
 ### Step 1: Convert Test PRD to JSON
 
 ```
-Load the prd-to-json skill from dev/autonomous/skills/prd-to-json/ and convert dev/autonomous/test-prd.md to prd.json
+Load the prd-to-json skill from dev/skills/prd-to-json/ and convert dev/autonomous/test-prd.md to prd.json
 ```
 
 **Expected result**: Creates `dev/autonomous/prd.json` with 3 tasks (all status: "pending")
@@ -45,7 +45,7 @@ cat dev/autonomous/prd.json | jq '.userStories[] | {id, title, status}'
 ### Step 3: Execute the PRD
 
 ```
-Load the execute-prd skill from dev/autonomous/skills/execute-prd/ and execute the PRD
+Load the execute-prd skill from dev/skills/execute-prd/ and execute the PRD
 ```
 
 **Expected behavior**:

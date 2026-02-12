@@ -1,7 +1,7 @@
 # PRD: Multi-IDE Support
 
 **Version**: 1.0  
-**Status**: Draft  
+**Status**: Implemented (2026-02-10)  
 **Date**: 2026-02-10  
 **Branch**: `feature/multi-ide-support`  
 **Depends on**: Existing workspace and rule infrastructure

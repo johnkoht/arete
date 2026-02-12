@@ -42,7 +42,7 @@ This creates a PRD in `projects/active/{name}/outputs/prd-{name}.md`.
 ### 2. Convert PRD to JSON
 
 ```
-Load the prd-to-json skill and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
+Load the prd-to-json skill from dev/skills/prd-to-json/ and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
 ```
 
 This creates `dev/autonomous/prd.json` with structured tasks.
@@ -50,7 +50,7 @@ This creates `dev/autonomous/prd.json` with structured tasks.
 ### 3. Execute Autonomously
 
 ```
-Load the execute-prd skill and execute the PRD
+Load the execute-prd skill from dev/skills/execute-prd/ and execute the PRD
 ```
 
 The orchestrator will:
@@ -158,11 +158,6 @@ dev/autonomous/
 ├── schema.ts                    # TypeScript types for PRD/Task
 ├── prd.json.example             # Example PRD format
 ├── progress.txt.template        # Example progress log format
-├── skills/
-│   ├── prd-to-json/
-│   │   └── SKILL.md            # Conversion skill
-│   └── execute-prd/
-│       └── SKILL.md            # Orchestrator skill
 ├── archive/                     # Completed PRD runs
 │   └── YYYY-MM-DD-{name}/
 │       ├── prd.json
@@ -172,6 +167,8 @@ dev/autonomous/
 └── README.md                    # This file
 ```
 
+Build skills (prd-to-json, execute-prd) live in **dev/skills/**.
+
 ## File Descriptions
 
 | File | Purpose | Committed? |
@@ -179,7 +176,6 @@ dev/autonomous/
 | `schema.ts` | TypeScript types and validation | ✅ Yes |
 | `prd.json.example` | Example PRD format | ✅ Yes |
 | `progress.txt.template` | Example progress format | ✅ Yes |
-| `skills/*/SKILL.md` | Agent skills | ✅ Yes |
 | `prd.json` | Working task list | ❌ No (runtime) |
 | `progress.txt` | Working progress log | ❌ No (runtime) |
 | `archive/*/` | Completed PRD runs | ✅ Yes |

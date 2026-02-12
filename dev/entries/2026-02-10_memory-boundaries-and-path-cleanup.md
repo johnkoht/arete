@@ -46,3 +46,5 @@
 - `src/core/briefing.ts` (comment)
 
 **Not updated**: `dev/entries/*` (historical record; MEMORY.md note explains mapping), `dev/MEMORY.md` index lines (historical summaries).
+
+**Subsequent cleanup**: Removed duplicate `dev/autonomous/skills/execute-prd/` (canonical is `dev/skills/execute-prd/`). Moved `dev/autonomous/skills/prd-to-json/` to `dev/skills/prd-to-json/` so all build skills live in `dev/skills/`.
