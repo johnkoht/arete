@@ -105,6 +105,7 @@ program
   .command('pull [integration]')
   .description('Fetch latest data from integrations or calendar')
   .option('--days <n>', 'Number of days to fetch', '7')
+  .option('--id <id>', 'Fetch a single Fathom recording by ID (Fathom only)')
   .option('--today', 'Fetch only today\'s events (calendar only)')
   .option('--json', 'Output as JSON')
   .action((integration, opts) => {

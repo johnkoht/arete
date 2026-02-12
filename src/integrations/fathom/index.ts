@@ -207,14 +207,25 @@ async function fetchRecordings(options: FathomOptions): Promise<void> {
   }
 }
 
+/** Reject placeholder IDs like "<id>" or "<recording_id>"; return valid numeric id or null. */
+function normalizeRecordingId(id: string | undefined): string | null {
+  if (!id || !id.trim()) return null;
+  const t = id.trim();
+  if (/^<.*>$/.test(t) || t === 'recording_id' || t === 'id') return null;
+  if (/^\d+$/.test(t)) return t;
+  return t;
+}
+
 /**
  * Get a single recording by ID (fetch summary + transcript, then save or print).
  */
 async function getRecording(options: FathomOptions): Promise<void> {
   const { id, json } = options;
-  if (!id) {
+  const recordingId = normalizeRecordingId(id);
+  if (!recordingId) {
     error('Recording ID required');
     info('Usage: arete fathom get <recording_id>');
+    info('Use a numeric ID from Fathom (e.g. arete fathom get 12345). List IDs with: arete fathom list --days 30');
     process.exit(1);
   }
 
@@ -233,14 +244,14 @@ async function getRecording(options: FathomOptions): Promise<void> {
   const client = new FathomClient(apiKey);
 
   try {
-    const { summary, transcript } = await client.fetchRecording(id);
+    const { summary, transcript } = await client.fetchRecording(recordingId);
     const paths = workspaceRoot ? getWorkspacePaths(workspaceRoot) : null;
     const outputDir = paths ? `${paths.resources}/meetings` : 'resources/meetings';
 
     const meeting: MeetingForSave = {
-      title: `Recording ${id}`,
+      title: `Recording ${recordingId}`,
       date: new Date().toISOString().slice(0, 10),
-      recording_id: Number(id) || 0,
+      recording_id: Number(recordingId) || 0,
       duration_minutes: 0,
       summary,
       transcript,
@@ -264,7 +275,7 @@ async function getRecording(options: FathomOptions): Promise<void> {
     } else {
       info(`Skipped (already exists): ${meetingFilename(meeting)}`);
     }
-  } catch (err) {
+  } catch (err: unknown) {
     if (json) {
       console.log(JSON.stringify({ success: false, error: (err as Error).message }));
     } else {
@@ -309,6 +320,61 @@ export async function pullFathom(days: number, json: boolean): Promise<{ success
   try {
     await doFetchRecordings(workspaceRoot, days, json);
     return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Fetch a single Fathom recording by ID and save to workspace (used by arete pull fathom --id <id>).
+ */
+export async function pullFathomById(
+  id: string,
+  json: boolean
+): Promise<{ success: boolean; path?: string; error?: string }> {
+  const recordingId = normalizeRecordingId(id);
+  if (!recordingId) {
+    return {
+      success: false,
+      error: 'Provide a numeric recording ID (e.g. from "arete fathom list --days 30")',
+    };
+  }
+
+  const workspaceRoot = findWorkspaceRoot();
+  if (!workspaceRoot) {
+    return { success: false, error: 'Not in an Areté workspace' };
+  }
+  const apiKey = loadFathomApiKey(workspaceRoot);
+  if (!apiKey) {
+    return { success: false, error: 'Fathom API key not found' };
+  }
+
+  const client = new FathomClient(apiKey);
+  const paths = getWorkspacePaths(workspaceRoot);
+  const outputDir = `${paths.resources}/meetings`;
+
+  try {
+    const { summary, transcript } = await client.fetchRecording(recordingId);
+    const meeting: MeetingForSave = {
+      title: `Recording ${recordingId}`,
+      date: new Date().toISOString().slice(0, 10),
+      recording_id: Number(recordingId) || 0,
+      duration_minutes: 0,
+      summary,
+      transcript,
+      action_items: [],
+      highlights: [],
+      attendees: [],
+      url: '',
+    };
+    const result = saveMeeting(meeting, outputDir, paths, {
+      integration: 'Fathom',
+      force: true,
+    });
+    if (result.saved && result.path) {
+      return { success: true, path: result.path };
+    }
+    return { success: true, path: result.path ?? undefined };
   } catch (err) {
     return { success: false, error: (err as Error).message };
   }

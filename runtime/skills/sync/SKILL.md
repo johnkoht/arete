@@ -5,6 +5,13 @@ work_type: operations
 category: essential
 intelligence:
   - synthesis
+triggers:
+  - sync my meetings
+  - pull from fathom
+  - fathom integration
+  - fetch fathom
+  - fathom recording
+  - pull fathom
 ---
 
 # Sync Skill
@@ -18,6 +25,7 @@ Manually synchronize data between the Areté workspace and connected external in
 - "Push this update to Slack"
 - "Get my calendar for next week"
 - "Import today's meeting notes"
+- "Fetch summaries and transcripts for all meetings in resources/meetings/ with a Fathom recording URL" (backfill existing files)
 
 ## When NOT to Use
 
@@ -189,18 +197,25 @@ If sync fails:
 
 **API Script** (for agent execution):
 ```bash
-# List meetings from last 7 days
+# List meetings from last 7 days (use output to get recording IDs)
 arete fathom list --days 7
+# Or list more: arete fathom list --days 30
 
-# List meetings in date range
-arete fathom list --days 7
-
-# Fetch and save specific meeting
+# Fetch and save a single recording by ID (use numeric ID from list)
 arete fathom get <recording_id>
+# Or via integration: arete pull fathom --id <recording_id>
 
-# Batch fetch and save all meetings
+# Batch fetch and save all meetings in a date range
 arete fathom fetch --days 7
+# Or: arete pull fathom --days 7
 ```
+Use a **numeric** recording ID (e.g. `12345`), not the literal `<recording_id>`. Get IDs from `arete fathom list --days 30`.
+
+**Backfill existing meeting files**: When the user wants to fetch summaries/transcripts for meetings already in `resources/meetings/` that have a Fathom recording URL or `recording_id` in frontmatter:
+1. List meeting files in `resources/meetings/` (exclude `index.md`).
+2. For each file, read frontmatter for `recording_id` or a Fathom URL (e.g. `fathom.video`, `share_url`); extract recording ID from URL if needed.
+3. For each meeting with a Fathom ID, run `arete fathom get <recording_id>`. The integration fetches summary and transcript and saves (overwrites/updates the file); the meetings service updates `resources/meetings/index.md` automatically.
+4. After all fetches, run post-sync actions (registry, extract decisions/learnings if applicable).
 
 ### Calendar
 

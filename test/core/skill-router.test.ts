@@ -155,6 +155,12 @@ describe('skill-router', () => {
     }
   });
 
+  it('routes "prepare a meeting agenda for the kickoff call" to prepare-meeting-agenda not meeting-prep', () => {
+    const r = routeToSkill('prepare a meeting agenda for the kickoff call tomorrow', skills);
+    assert.ok(r);
+    assert.equal(r!.skill, 'prepare-meeting-agenda', 'agenda creation should route to prepare-meeting-agenda, not meeting-prep');
+  });
+
   it('routes "prep for meeting with X" to meeting-prep not prepare-meeting-agenda', () => {
     const r = routeToSkill('prep for meeting with Jane', skills);
     assert.ok(r);

@@ -8,7 +8,7 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 **Purpose**: Given a meeting (title and/or attendees), assemble full context: people, prior meetings, related projects, outstanding action items.
 
-**Used by**: meeting-prep, daily-plan
+**Used by**: meeting-prep, daily-plan, prepare-meeting-agenda (for suggested agenda items; gather when meeting has specific purpose, named attendees, or relevant plan files—see skill step 4)
 
 **Inputs**: Meeting title (optional), attendee names or slugs.
 

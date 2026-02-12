@@ -53,4 +53,29 @@ describe('fathom command', () => {
     }
     assert.equal(exitCode, 1);
   });
+
+  it('exits with code 1 for get with placeholder id', async () => {
+    const { fathomCommand } = await import('../../src/integrations/fathom/index.js');
+    try {
+      await fathomCommand('get', { id: '<id>' });
+    } catch {
+      // Expected EXIT_1
+    }
+    assert.equal(exitCode, 1);
+  });
+});
+
+describe('pullFathomById', () => {
+  it('returns error when id is a placeholder', async () => {
+    const { pullFathomById } = await import('../../src/integrations/fathom/index.js');
+    const r = await pullFathomById('<recording_id>', false);
+    assert.equal(r.success, false);
+    assert.ok(r.error?.includes('numeric'));
+  });
+
+  it('returns error when id is empty', async () => {
+    const { pullFathomById } = await import('../../src/integrations/fathom/index.js');
+    const r = await pullFathomById('', false);
+    assert.equal(r.success, false);
+  });
 });

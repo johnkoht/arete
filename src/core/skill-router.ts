@@ -61,6 +61,7 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
   const qTokens = tokenize(q);
   if (qTokens.length === 0) return 0;
 
+  const qTokenSet = new Set(qTokens);
   const id = (skill.id || skill.name || '').toLowerCase().replace(/-/g, ' ');
   const desc = (skill.description || '').toLowerCase();
   const triggerPhrases = (skill.triggers || []).map(t => t.toLowerCase());
@@ -75,9 +76,13 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
     score += 15;
   }
 
-  // Trigger phrases (from frontmatter triggers)
+  // Trigger phrases (from frontmatter triggers). Use whole-word matching so
+  // "meeting prep" does not match "prepare a meeting agenda" (prep in "prepare").
   for (const phrase of triggerPhrases) {
-    if (q.includes(phrase) || phrase.split(/\s+/).every(w => q.includes(w))) {
+    const phraseWords = phrase.split(/\s+/).filter(w => w.length > 0);
+    const exactMatch = q.includes(phrase);
+    const wholeWordMatch = phraseWords.length > 0 && phraseWords.every(w => qTokenSet.has(w));
+    if (exactMatch || wholeWordMatch) {
       score += 18;
     }
   }

@@ -6,7 +6,7 @@
 
 **Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc` (Cursor) or `.claude/rules/` + `CLAUDE.md` (Claude Code).
 
-- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here.
+- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here. **Do not run `arete install` or `arete update` in this directory** — it is the source tree, not a target workspace.
 - **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
 
 **Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
@@ -749,14 +749,15 @@ When building Areté features:
 
 1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
 2. **Read this file first** for architecture understanding.
-3. **Leverage build memory before acting** (see `.cursor/rules/agent-memory.mdc` § Leverage build memory):
+3. **Do not run `arete install` or `arete update` in this repo** — the workspace root is the source tree; those commands are for end-user workspaces only.
+4. **Leverage build memory before acting** (see `.cursor/rules/agent-memory.mdc` § Leverage build memory):
    - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
    - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don’t repeat past mistakes.
-4. **Follow patterns** established in existing code
-5. **Write tests** for all new functionality
-6. **Update AGENTS.md** with new patterns or gotchas discovered
-7. **Use TypeScript strictly** - no `any`, proper types
-8. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
+5. **Follow patterns** established in existing code
+6. **Write tests** for all new functionality
+7. **Update AGENTS.md** with new patterns or gotchas discovered
+8. **Use TypeScript strictly** - no `any`, proper types
+9. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
 
 ### Documentation Planning Checklist
 

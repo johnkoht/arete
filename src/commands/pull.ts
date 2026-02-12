@@ -6,18 +6,19 @@ import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
 import { success, error, warn, info, header, listItem } from '../core/utils.js';
 import { findIntegrationScript, runIntegrationScript, getIntegrationStatus } from '../core/scripts.js';
 import { PULLABLE_INTEGRATIONS } from '../integrations/registry.js';
-import { pullFathom } from '../integrations/fathom/index.js';
+import { pullFathom, pullFathomById } from '../integrations/fathom/index.js';
 import type { CommandOptions, ScriptableIntegration } from '../types.js';
 
 export interface PullOptions extends CommandOptions {
   days?: number;
+  id?: string;
 }
 
 /**
  * Pull command handler
  */
 export async function pullCommand(integration: string | undefined, options: PullOptions): Promise<void> {
-  const { days = 7, json } = options;
+  const { days = 7, id: recordingId, json } = options;
 
   // Find workspace
   const workspaceRoot = findWorkspaceRoot();
@@ -102,11 +103,14 @@ export async function pullCommand(integration: string | undefined, options: Pull
     // Fathom: native Node implementation (no Python script)
     if (int.name === 'fathom') {
       try {
-        const result = await pullFathom(days, json ?? false);
+        const result = recordingId
+          ? await pullFathomById(recordingId, json ?? false)
+          : await pullFathom(days, json ?? false);
         if (result.success) {
-          results.push({ integration: int.name, success: true, days });
+          results.push({ integration: int.name, success: true, days: recordingId ? undefined : days });
           if (!json) {
-            success(`${int.displayName} pull complete!`);
+            const path = 'path' in result ? result.path : undefined;
+            success(recordingId ? `Saved: ${path ?? 'recording'}` : `${int.displayName} pull complete!`);
           }
         } else {
           results.push({ integration: int.name, success: false, error: result.error ?? 'Unknown error' });

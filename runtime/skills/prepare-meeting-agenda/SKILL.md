@@ -24,7 +24,7 @@ requires_briefing: false
 
 # Prepare Meeting Agenda Skill
 
-Produce a **structured meeting agenda** (sections, optional time allocation) for an upcoming meeting. Choose or infer meeting type, load a template, optionally pull in context for suggested items, then build and save the agenda.
+Produce a **structured meeting agenda** (sections, optional time allocation) for an upcoming meeting. Choose or infer meeting type, load a template, gather context when it adds value (see step 4), then build and save the agenda.
 
 ## When to Use
 
@@ -65,10 +65,24 @@ Use the **context inference rules** below to suggest a type. User can override.
 - To list all: run `arete template list meeting-agendas`. To view a template: `arete template view meeting-agenda --type <type>`.
 - If user wants a different type, switch and reload template.
 
-### 4. Optionally Gather Context
+### 4. Gather Context When It Adds Value
 
-- For suggested agenda items: run the **get_meeting_context** pattern (see [PATTERNS.md](../PATTERNS.md)) with the meeting’s attendees.
-- Use outputs (recent meetings, open action items, related projects) to suggest bullets under the template sections. Do not reimplement calendar or context logic; use existing commands and patterns only.
+**Default: gather context** so the agenda can include suggested items (recent topics, open action items, related projects).
+
+- Run the **get_meeting_context** pattern (see [PATTERNS.md](../PATTERNS.md)) with the meeting's attendees and use its outputs to suggest bullets under the template sections.
+- **Meetings index** — Read `resources/meetings/index.md` for high-level themes: recent meeting titles and dates often surface recurring topics, priorities, or follow-ups to include as agenda ideas.
+- **Latest meetings** — Read the latest 2–3 meeting files (by filename date) for summaries and key points; use them to suggest agenda items (e.g. follow-ups, open threads, decisions to revisit).
+
+**Gather context when** (proactive; don't wait for the user to ask):
+- The meeting has a specific purpose (e.g. kickoff, strategic planning, two teams meeting, "get things in motion").
+- The user named attendees or teams — resolve them and pull their context.
+- Multiple attendees or cross-group meeting — context is especially valuable.
+- Planning/strategy files are relevant (e.g. `goals/quarter.md`, `now/week.md` open or referenced) — read them and align suggested items.
+- The user gave more than a generic "create an agenda" (e.g. "agenda for the Acme kickoff tomorrow").
+
+**Skip context only when**: No attendees are identified and the user explicitly wants a blank template, or the user says they only want the template structure with no suggested items.
+
+Do not reimplement calendar or context logic; use existing commands and patterns only.
 
 ### 5. Build Agenda
 
@@ -111,6 +125,7 @@ Use template section names and optional time from template’s `time_allocation`
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context (for suggested items)
+- **Meetings**: `resources/meetings/index.md` (high-level themes); latest 2–3 files in `resources/meetings/` (summaries, key points for agenda ideas)
 - **Calendar**: `arete pull calendar --today --json` or `--days N`
 - **Templates**: `arete template list meeting-agendas`, `arete template view meeting-agenda --type <type>`
 - **Save location**: `now/agendas/` (primary); project folder or clipboard as alternatives
