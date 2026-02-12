@@ -65,7 +65,7 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 
 ### prd-task Subagent Type
 **Status**: Needs research  
-**File**: `tech-debt/prd-task-subagent.md`  
+**File**: (no dedicated backlog file yet)  
 **What**: Implement prd-task in Task tool enum (currently documented but not available)  
 **Why**: Cleaner prompts, less boilerplate, optimized for PRD execution  
 **Effort**: Unknown (depends on Cursor API - might need feature request to Cursor team)  
@@ -116,6 +116,8 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 
 ## Recently Completed
 
+- ✅ **Prepare Meeting Agenda Skill** (2026-02-11) - Skill + template system (meeting type, get_meeting_context, save to now/agendas); PRD `dev/prds/meeting-agenda-skill/`
+- ✅ **Multi-IDE Support** (2026-02-10) - Adapter pattern for Cursor & Claude Code; `arete install --ide claude`; rule transpilation, CLAUDE.md; PRD `dev/prds/multi-ide-support/`
 - ✅ **Skills Evaluation & Enhancement Backlog** (2026-02-10) - Evaluated 5 runtime skills vs skills.sh alternatives; kept all native (integration is the moat); identified Top 20 improvements (frameworks, examples, anti-patterns, scaffolding) in `dev/backlog/improvements/skills-enhancement.md`
 - ✅ **Intelligence & Calendar Integration** (2026-02-09) - SearchProvider abstraction, CalendarProvider, ical-buddy integration
 - ✅ **Execute PRD Skill** (2026-02-09) - Orchestration system with pre-mortem

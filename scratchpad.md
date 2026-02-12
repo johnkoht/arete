@@ -28,6 +28,14 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 ## Ideas
 <!-- Quick ideas - date them so you know when they came up -->
 
+### High priority (user voice)
+
+- [2026-02-12] **User voice / writing style from uploads** — *User voice:* "I'd like the user to be able to upload emails, PRDs, documents, etc. to help define and shape their voice for the agent. Not sure what this looks like." Explore: let users upload sample artifacts (emails, PRDs, docs) so the agent can learn and mirror their tone, structure, and style. Shape could be: a "voice" or "style" context folder, a briefing step that injects style cues, or a dedicated onboarding flow. Needs product exploration.
+
+---
+
+- [2026-02-12] **Meeting agendas shouldn't be so robust** — Simplify prepare-meeting-agenda / meeting agenda output; avoid over-engineered or overly detailed agendas.
+
 - **Can Areté use [find-skills](https://skills.sh/vercel-labs/skills/find-skills) to find and recommend skills when a user is trying to accomplish something that is not built in?** — The Skills CLI (`npx skills find [query]`) lets users search the open agent skills ecosystem. When the router returns no match (or the user's intent isn't covered by a default skill), Areté could run `npx skills find <query>` and suggest installable skills (e.g. `npx skills add vercel-labs/skills@find-skills`). Explore: integrate find-skills workflow into skill routing / "no match" path, or add a dedicated "suggest skills" step in GUIDE mode.
 
 - [2026-02-10] **find-skills product decision (deferred)** — After skills.sh evaluation (5 runtime skills evaluated, all kept native), decide: (a) add find-skills to default skill set so users can discover OSS skills via agent, (b) document only in `runtime/skills/README.md` ("run `npx skills find` to discover more skills"), or (c) leave for later. Recommendation from evaluation: install as optional skill (`arete skill install vercel-labs/skills --skill find-skills`), document in README under "Adding new capabilities," but don't ship in core 19 skills. Useful for discovery, not for core workflow replacement.
