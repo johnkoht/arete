@@ -181,6 +181,16 @@ When MCP integrations are added, consider these use cases:
 - Create tickets from PRD requirements
 - Track sprint progress
 
+**Jira Confluence**
+- Pull docs/pages as context for PRDs and discovery
+- Sync strategy or requirements to Confluence spaces
+- Link PRD outputs or decisions to Confluence pages
+
+**Dovetail**
+- Pull research projects, insights, and tags as inputs for discovery/PRDs
+- Map themes and findings to problem/solution framing
+- Export synthesis or decisions back for traceability
+
 **Slack**
 - Import meeting summaries as inputs
 - Capture feedback from channels
@@ -195,6 +205,11 @@ When MCP integrations are added, consider these use cases:
 - Pull design context for PRDs
 - Reference designs in competitive analysis
 - Link mockups to requirements
+
+**Metrics / analytics (Mixpanel, Amplitude, etc.)** *Added: 2026-02-11*
+- **Pull**: Events, funnels, retention, user segments → inject into context for PRDs, discovery, or briefings (e.g. "how is feature X performing?"). Could power a "metrics brief" alongside memory/context.
+- **Push**: Optional — tag goals/outcomes in workspace so metrics tools can track corresponding events or dashboards; or one-way sync of "success criteria" from PRD to analytics.
+- **Shape**: Likely read-heavy (pull reports/summaries or key metrics); full two-way would require product-specific mapping (events ↔ workspace primitives). Start with pull-only: fetch funnel/retention for a feature or time range, drop into `context/` or briefing.
 
 ---
 

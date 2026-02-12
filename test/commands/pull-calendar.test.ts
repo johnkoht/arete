@@ -151,6 +151,34 @@ Engineering Lead at Example Corp.
   });
 
   describe('error handling', () => {
+    it('regression: provider "macos" (written by configure) is accepted, not "Calendar not configured"', async () => {
+      // arete integration configure calendar writes provider: 'macos'; getCalendarProvider must accept it.
+      writeFileSync(
+        join(tmpWorkspace, 'arete.yaml'),
+        `version: 1
+integrations:
+  calendar:
+    provider: macos
+    calendars:
+      - Work
+`
+      );
+
+      try {
+        await pullCalendar({ json: true });
+      } catch (e) {
+        assert.ok((e as Error).message.includes('exit'));
+      }
+
+      const output = consoleOutput.join('\n');
+      // Regression: configure writes provider 'macos'; factory must accept it (must NOT say "Calendar not configured")
+      assert.ok(
+        !output.includes('Calendar not configured'),
+        'provider "macos" must be accepted by calendar factory so pull works after configure'
+      );
+      // Either success (icalBuddy installed) or exit 1 with "icalBuddy not installed" in CI
+    });
+
     it('fails when not in workspace', async () => {
       process.chdir(tmpdir());
 

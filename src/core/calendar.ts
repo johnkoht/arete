@@ -67,8 +67,9 @@ export async function getCalendarProvider(config: AreteConfig): Promise<Calendar
     return null;
   }
 
-  // Check for ical-buddy provider
-  if (calendarConfig.provider === 'ical-buddy') {
+  // ical-buddy powers macOS Calendar. arete integration configure calendar writes "macos"; accept both so pull works after configure.
+  const useIcalBuddy = calendarConfig.provider === 'ical-buddy' || calendarConfig.provider === 'macos';
+  if (useIcalBuddy) {
     const { getProvider } = await import('./calendar-providers/ical-buddy.js');
     const provider = getProvider();
     

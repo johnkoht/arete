@@ -514,7 +514,9 @@ integrations:
 
 **Person Matching**: The calendar system matches event attendees to workspace people by email. When an attendee email matches a person file (`people/internal/` or `people/customers/`), the CLI output shows the person's slug and file path for easy context lookup.
 
-**Integration with Skills**: The **daily-plan** skill uses `arete pull calendar --today --json` to fetch today's events, then builds context for each meeting using the **get_meeting_context** pattern (see Meetings System §1).
+**Recurrence**: icalBuddy's output does not include whether an event is recurring (no RRULE/repeat in its property list). Skills that need to call out meeting types (e.g. QBR, monthly review) use **event title** (and notes) only. A future provider (e.g. Google Calendar API) could expose recurrence.
+
+**Integration with Skills**: The **daily-plan** skill uses `arete pull calendar --today --json` to fetch today's events, then builds context for each meeting using the **get_meeting_context** pattern (see Meetings System §1). The **week-plan** skill uses `arete pull calendar --days 7 --json` to list the week's meetings, call out likely high-prep types from titles (QBR, monthly review, stakeholder, etc.), and ask which meetings to prepare for.
 
 **Adding a new provider**:
 1. Create `src/core/calendar-providers/{name}.ts` implementing `CalendarProvider`

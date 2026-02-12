@@ -66,6 +66,22 @@ describe('calendar', () => {
       // If ical-buddy is installed, it will return the provider
       assert.ok(provider === null || provider.name === 'ical-buddy');
     });
+
+    // Regression: arete integration configure calendar writes provider: 'macos'; factory must accept it.
+    it('accepts provider "macos" as alias for ical-buddy (configure writes macos)', async () => {
+      const config: AreteConfig = {
+        ...getDefaultConfig(),
+        integrations: {
+          calendar: {
+            provider: 'macos',
+            calendars: ['Work', 'Home'],
+          },
+        },
+      };
+      const provider = await getCalendarProvider(config);
+      // Same behavior as ical-buddy: null if not installed, else ical-buddy provider
+      assert.ok(provider === null || provider.name === 'ical-buddy');
+    });
   });
 
   describe('types', () => {

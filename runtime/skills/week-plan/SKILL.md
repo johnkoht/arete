@@ -29,8 +29,25 @@ Guide the PM to define the top 3–5 outcomes for the week, linked to quarter go
 - **Read** last week file: `now/week.md` for carry-over and continuity.
 - **Read** `projects/active/` (README or key files) for commitments tied to projects.
 - **Read** `now/scratchpad.md` for ad-hoc commitments or "due this week" items.
+- **Try Calendar (if configured)**: Run `arete pull calendar --days 7 --json`. If the command succeeds and returns events (`success: true` and non-empty `events`), use them to list the week’s meetings (by day). If the command fails, returns no events, or is not configured, skip calendar and rely on the user for meeting context.
 
-### 2. Guide to Top 3–5 Outcomes
+### 2. Week’s Meetings and Prep
+
+If you have calendar events from step 1:
+
+- **List** the week’s meetings by day (title, time, attendees if useful).
+- **Call out** meetings that look like ones that often need prep. Use the meeting title (and notes if present) to flag types such as:
+  - **QBR / Quarterly business review** — e.g. "QBR", "quarterly business review", "quarterly review"
+  - **Monthly / product review** — e.g. "monthly product review", "product review", "monthly review"
+  - **Stakeholder / leadership** — e.g. "stakeholder", "leadership", "exec review", "board"
+  - **Product update / launch** — e.g. "product update", "launch review", "release review"
+  - **Customer / external** — e.g. "customer", "customer review", "partner"
+  - **Recurring cadences** — e.g. "all-hands", "all hands", "standup", "sync", "1:1" (optional; call out if the user cares about prep)
+- **Propose or ask**: "Which of these meetings do you want to prepare for this week?" Suggest adding any that need prep to **Commitments due this week** or to a short "Meetings to prep" list. If the user names others (e.g. no calendar), add those too.
+
+If you have no calendar data, briefly ask: "Any key meetings this week you want to plan prep for?" and fold the answer into commitments or outcomes as appropriate.
+
+### 3. Guide to Top 3–5 Outcomes
 
 Ask the PM to choose **3–5 outcomes** for the week. For each outcome capture:
 
@@ -41,10 +58,10 @@ Ask the PM to choose **3–5 outcomes** for the week. For each outcome capture:
 
 Also capture:
 
-- **Commitments due this week** — From meetings, stakeholders, or scratchpad.
+- **Commitments due this week** — From meetings, stakeholders, scratchpad, and any "meetings to prep" from step 2.
 - **Carried over from last week** — Incomplete items from the previous week file.
 
-### 3. Write Week File
+### 4. Write Week File
 
 - **File**: `now/week.md`.
 - **Structure**: Use the template at `templates/plans/week-priorities.md`:
@@ -54,7 +71,7 @@ Also capture:
   - Carried over from last week
   - Optional "End of week review" section (filled during **week-review**).
 
-### 4. Confirm and Close
+### 5. Confirm and Close
 
 - Summarize the week’s focus and quarter links.
 - Suggest **week-review** at the end of the week to close out and carry over.
@@ -66,6 +83,11 @@ Also capture:
 - **Output**: `now/week.md`
 - **Template**: `templates/plans/week-priorities.md`
 - **Context**: `projects/active/`, `now/scratchpad.md`
+- **Calendar**: `arete pull calendar --days 7 --json` (optional; same as daily-plan)
+
+## Notes
+
+- **Recurrence**: The calendar integration (icalBuddy) does not expose whether an event is recurring. Meeting-type callouts (QBR, monthly review, etc.) are based on **event title** (and notes) only. A future provider (e.g. Google Calendar API) could add recurrence if needed.
 
 ## Error Handling
 
