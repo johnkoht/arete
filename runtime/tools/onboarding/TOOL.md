@@ -419,6 +419,7 @@ projects/active/onboarding/
 ├── plan/
 │   ├── 30-60-90.md              # High-level phase plan
 │   ├── 30-day-detailed.md       # Detailed first 30 days
+│   ├── situational-playback.md  # NEW: Prep for situational conversation with manager
 │   └── weekly/                  # Week-by-week plans
 │       ├── week-01.md
 │       ├── week-02.md
@@ -434,11 +435,34 @@ projects/active/onboarding/
 │   │   ├── products-services.md
 │   │   └── ...
 │   ├── questions.md             # Open questions to answer
-│   └── stakeholders.md          # People/org map
+│   ├── stakeholders.md          # People/org map
+│   ├── learning-backlog.md      # NEW: 4-category learning tracker
+│   ├── relationship-backlog.md  # NEW: Stakeholder relationship map
+│   ├── burning-problems.md      # NEW: Problems to diagnose
+│   └── quick-wins.md            # NEW: Quick win opportunities tracker
 └── outputs/
     ├── context/                 # Finalized context files (to promote)
-    └── wins.md                  # Documented wins and contributions
+    ├── wins.md                  # Documented wins and contributions
+    └── leverage-docs/           # NEW: Documentation created during onboarding
 ```
+
+### New Files in This Enhancement
+
+The enhanced onboarding tool includes new working files to support tactical best practices:
+
+**Plan Files:**
+- `situational-playback.md` — Prep for situational conversation (playback what you learned to validate understanding). Used at end of Phase 1.
+
+**Working Files:**
+- `learning-backlog.md` — 4-category matrix (PM Craft, Product, Market, Business) for tracking what you need to learn
+- `relationship-backlog.md` — Stakeholder relationship tracker with cadence, strategy, and next touch planning
+- `burning-problems.md` — Tracker for 2-3 burning problems identified by manager/eng lead/design for diagnosis
+- `quick-wins.md` — Opportunity tracker with criteria check (Fast, Visible, Low-risk, Unowned)
+
+**Output Directories:**
+- `leverage-docs/` — Documentation you create during onboarding (data dictionaries, process maps, guides) that provides leverage for the team
+
+See "Working File Templates" section for templates to populate these files.
 
 ## Activation Workflow
 
