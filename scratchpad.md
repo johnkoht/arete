@@ -49,6 +49,8 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 ## TODOs
 <!-- Action items that don't belong to a specific project yet -->
 
+- [ ] **Organize PRD directory structure** (2026-02-13): Currently all PRDs live in `dev/prds/` flat structure with completed PRDs mixed with active ones. Consider adding `dev/prds/archive/` or year-based organization (e.g. `dev/prds/2026/`) to better separate completed work. The README table tracks "Implemented" vs others, but filesystem could be clearer. Could also archive execution artifacts (`prd.json`, `progress.txt`) to `dev/autonomous/archive/YYYY-MM-DD-{prd-name}/` after each PRD completes.
+
 - [ ] **Skill customization documentation**: Create user-facing docs explaining how to override/customize skills. Cover: (1) when to use default vs customize, (2) how to override just a template vs entire skill, (3) examples of common customizations, (4) how overrides merge with core. Should be part of skill onboarding flow.
 
 - [ ] **Evaluate arete-context.mdc for end users** (2026-02-13): Currently `runtime/rules/arete-context.mdc` ships to end users and contains BUILDER mode content (dev/entries, dev/MEMORY.md, etc.) that's irrelevant to them. Question: Do we need this rule at all for end users? In user workspaces, the agent should always be in GUIDE mode—there's no `src/cli.ts` or `dev/` directory. Consider: (a) remove from PRODUCT_RULES_ALLOW_LIST entirely, (b) simplify to GUIDE-only content, or (c) leave as-is if auto-detection works well enough. Related to rules-architecture-refactor PRD.
