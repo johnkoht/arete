@@ -483,9 +483,34 @@ When user activates this tool:
    - Create detailed 30-day plan
    - Create Week 1 plan
 
+4.5. **Create enhanced working files**:
+
+   Create in `working/`:
+   
+   - `learning-backlog.md` — Use 4-category matrix template (PM Craft, Product, Market, Business)
+   - `relationship-backlog.md` — Include week 1-2 hit list:
+     - Week 1-2 (Essential): Manager, key peers, HR/People partner
+     - Week 2-4 (Important): Skip-level, cross-functional partners (Eng, Design, Data)
+     - Week 4-8 (Valuable): Customers (if possible), other PMs, tenured employees
+   - `burning-problems.md` — Include prompt: "Ask your manager, eng lead, and design lead: 'Is there a burning problem I can investigate and diagnose (not solve)? 2-3 would be ideal.'"
+   - `quick-wins.md` — Empty tracker, to populate in Phase 2
+   
+   Create in `plan/`:
+   
+   - `situational-playback.md` — Template for end-of-Phase-1 situational conversation
+   
+   Create in `outputs/`:
+   
+   - `leverage-docs/` — Directory for documentation created during onboarding
+
 5. **Populate starter questions**: Add common onboarding questions to `working/questions.md`
 
-6. **Guide first actions**: Help schedule initial 1:1s, identify key readings
+6. **Guide first actions**: 
+   - Schedule **walking 1:1s** (not sitting ones) with manager, key peers, HR in week 1-2
+   - Use **"What can I do to make your life easier?"** in every 1:1
+   - Ask manager, eng lead, design lead: **"Is there a burning problem I can investigate and diagnose?"** (aim for 2-3)
+   - Start **documenting what you learn as you learn it** (data dictionaries, process maps) — save in `outputs/leverage-docs/`
+   - Focus on **breadth over depth** — resist rabbit holes, use fresh eyes window
 
 ## Progress Tracking
 
