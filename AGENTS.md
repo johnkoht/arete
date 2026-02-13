@@ -2,14 +2,22 @@
 
 > **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" - the pursuit of fulfilling one's purpose to the highest degree.
 
-## Context: BUILDER vs GUIDE
+## Context
 
-**Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc` (Cursor) or `.claude/rules/` + `CLAUDE.md` (Claude Code).
+This is the Areté development repository. For build practices, see `.cursor/rules/dev.mdc`. For architecture, continue reading.
 
-- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here. **Do not run `arete install` or `arete update` in this directory** — it is the source tree, not a target workspace.
-- **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
+## Rules Architecture
 
-**Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
+After the rules refactor, BUILDER and GUIDE rules are separated:
+
+| Location | Purpose | Files |
+|----------|---------|-------|
+| `.cursor/rules/` | BUILDER rules for dev repo | 6 files: dev.mdc, testing.mdc, plan-pre-mortem.mdc, arete-vision.mdc, agent-memory.mdc, arete-context.mdc |
+| `runtime/rules/` | GUIDE rules shipped to users | 8 files (pm-workspace.mdc, routing-mandatory.mdc, etc.) |
+
+`arete-vision.mdc` exists in both locations (small, rarely changes, applies to both contexts).
+
+For build practices (quality gates, code review, memory capture), see `.cursor/rules/dev.mdc`.
 
 ## What Areté Is
 
@@ -116,9 +124,9 @@ A **structured workspace** with:
 ### Skill and tool management
 
 **Skills**: All skills live in `.agents/skills/` (last-in-wins; single location). Shipped with the package and copied on `arete install`.
-- **Role defaults** (`skills.defaults` in arete.yaml): Maps a *role* (default skill name, e.g. `create-prd`) to a *preferred skill* (e.g. `netflix-prd`). After the router matches a skill, the command layer applies this mapping and returns the preferred skill’s path (and `resolvedFrom` when a preference was applied). Commands: `arete skill defaults`, `arete skill set-default <skill> --for <role>`, `arete skill unset-default <role>`.
+- **Role defaults** (`skills.defaults` in arete.yaml): Maps a *role* (default skill name, e.g. `create-prd`) to a *preferred skill* (e.g. `netflix-prd`). After the router matches a skill, the command layer applies this mapping and returns the preferred skill's path (and `resolvedFrom` when a preference was applied). Commands: `arete skill defaults`, `arete skill set-default <skill> --for <role>`, `arete skill unset-default <role>`.
 - **Install**: `arete skill install <source>` — if source looks like `owner/repo`, runs `npx skills add <source>` (skills.sh); if source is a local path, copies the skill into `.agents/skills/<name>/`. After install, Areté generates a `.arete-meta.yaml` sidecar (category: community, requires_briefing: true, best-guess work_type/primitives) and may prompt to set the skill as default for an overlapping role.
-- **Sidecar metadata** (`.arete-meta.yaml`): For third-party skills that lack Areté’s extended frontmatter, the sidecar supplies category, requires_briefing, work_type, primitives, triggers, etc. `getSkillInfo()` in `src/commands/skill.ts` reads the sidecar and merges it into skill info so the router and list get correct metadata. Users can edit the sidecar without touching SKILL.md.
+- **Sidecar metadata** (`.arete-meta.yaml`): For third-party skills that lack Areté's extended frontmatter, the sidecar supplies category, requires_briefing, work_type, primitives, triggers, etc. `getSkillInfo()` in `src/commands/skill.ts` reads the sidecar and merges it into skill info so the router and list get correct metadata. Users can edit the sidecar without touching SKILL.md.
 - **Docs**: `.agents/skills/README.md` (shipped in package as `dist/skills/README.md`) describes what skills are and how to install and set role defaults.
 
 **Tools**:
@@ -128,117 +136,6 @@ A **structured workspace** with:
 - **Activation**: When a tool is activated, it creates a project in `projects/active/[tool-name]/` with status tracking.
 - Commands: `arete tool list`, `arete tool show <name>`.
 - **Docs**: `.cursor/tools/README.md` (or `.claude/tools/README.md`) describes what tools are and how to use them.
-
-## How the System Operates (Production Flow)
-
-This section describes how the Cursor agent should behave when a user asks for PM work in an Areté workspace: what gets loaded into context, how routing and skills fit in, and the top-to-bottom flow.
-
-### What Is In Context by Default
-
-When the user sends a message in Cursor (chat or composer), the agent typically has:
-
-| Layer | What's included | Source |
-|-------|-----------------|--------|
-| **Rules** | pm-workspace (alwaysApply), arete-vision, etc. | `.cursor/rules/*.mdc` (Cursor) or `.claude/rules/*.md` + `CLAUDE.md` (Claude) |
-| **Architecture** | AGENTS.md (this file) | Root |
-| **Workspace layout** | Open files, recent files; workspace is the Areté root | Cursor |
-| **Tools** | read_file, grep, run_terminal_cmd, list_dir, etc. | Cursor |
-
-The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions live in **pm-workspace.mdc**. The agent does **not** automatically have the full text of every skill file in context until it loads one. So the flow is: recognize or resolve intent → load the right skill file → execute it.
-
-### Flow: "Help me prep for my meeting with Jane"
-
-1. **User message**  
-   User says: *"Help me prep for my meeting with jane"* (or similar).
-
-2. **Intent match**  
-   Per pm-workspace: **default to the router**, then fall back to the table if no match.  
-   - Agent runs: `arete skill route "help me prep for my meeting with jane"`  
-   - Response (e.g. JSON or stdout): `skill: meeting-prep`, `path: ...`. Agent now knows which skill to run.  
-   - If the router had returned no match, the agent would use the intent table in the rule to pick a skill or ask the user to clarify.
-
-3. **Load the skill**  
-   Agent **reads** the skill file:  
-   `.agents/skills/meeting-prep/SKILL.md`.  
-   That file is now in context. It contains: Agent Instructions, When to Use, **Get Meeting Context** pattern (steps 1–6), Workflow (Identify meeting → Gather context → Build brief → Close), and output format.
-
-4. **Execute the workflow**  
-   - **Identify meeting**: Attendee = Jane → resolve to a person slug (e.g. search `people/` or use `people/index.md`; slug e.g. `jane-doe`).  
-   - **Gather context** (get_meeting_context):  
-     - Read `people/internal/jane-doe.md` (or the path for that slug).  
-     - List/filter `resources/meetings/*.md` by `attendee_ids` or body containing Jane; read 1–3 most recent.  
-     - Scan `projects/active/*/README.md` for Jane as stakeholder; read matching projects.  
-     - Extract unchecked action items from those meetings (and person file if any).  
-     - **QMD**: Run e.g. `qmd query "decisions or learnings involving Jane or Acme"`, `qmd query "meetings or notes about onboarding"` (if relevant); use results in the brief.  
-   - **Build brief**: Emit markdown: Attendees, Recent meetings, Related projects, Open action items, Suggested talking points (and optional Related context from QMD).  
-   - **Close**: Offer to save the brief; suggest process-meetings after the meeting.
-
-5. **Response**  
-   Agent replies with the prep brief. If the user asks *"What did you use?"*, the agent reports: **meeting-prep** skill, get_meeting_context pattern, reads of person/meeting/project files, and QMD queries.
-
-**Context pulled in during execution** (not all in context at once): the chosen skill file; then, via tools, the specific person file(s), 1–3 meeting files, relevant project READMEs, and QMD result snippets. So context is **skill + workspace data the skill asks for**.
-
-### Flow: "Help me analyze this data"
-
-1. **User message**  
-   User says: *"Help me analyze this data"* (and may attach or point to a file/selection).
-
-2. **Intent match**  
-   Default to the router; fall back to the table.  
-   - Agent runs: `arete skill route "help me analyze this data"`. Router may return **synthesize** or no match.  
-   - If no match: use the table ("Process my notes/feedback" → synthesize; "I need to understand a problem" → discovery) or ask for clarification.  
-
-3. **Load the skill**  
-   If the agent chose **synthesize**: read `.agents/skills/synthesize/SKILL.md`. It specifies: inventory project `inputs/`, use QMD to search inputs, read and extract, pattern recognition, create synthesis document.
-
-4. **Execute**  
-   - Determine project: if user said "this data", check for an active project or attached file. Synthesize skill expects work inside a project’s `inputs/`. If there’s no project, agent may create one or ask which project.  
-   - Follow the skill: inventory inputs, QMD search, read files, extract facts/interpretations/questions, find patterns, produce synthesis doc.  
-   - If the agent chose **discovery** instead: load discovery skill and run its workflow (problem framing, research, validation).
-
-5. **Response**  
-   Agent delivers the synthesis (or discovery output). If asked what it used: **synthesize** (or discovery) skill, project inputs, QMD.
-
-**Context pulled in**: the skill file; then project `inputs/` (and optionally `context/`, `.arete/memory/items/` via QMD). For ad-hoc "analyze this" with no skill match, the agent may just read the attached/referenced data and analyze it without a formal skill.
-
-### Flow: "I'm starting a new job" (Tool Activation)
-
-1. **User message**  
-   User says: *"I'm starting a new job"* (or similar).
-
-2. **Intent match**  
-   Default to the router.  
-   - Agent runs: `arete skill route "I'm starting a new job"` or `arete route "I'm starting a new job" --json`.  
-   - Response: `skill: onboarding`, `type: tool`, `action: activate`, `lifecycle: time-bound`. Agent now knows to **activate** (not just load).
-
-3. **Read the tool**  
-   Agent reads `.cursor/tools/onboarding/TOOL.md` (or `.claude/tools/onboarding/TOOL.md`).  
-   That file contains: Tool definition, phases (Learn, Contribute, Lead), scope options (comprehensive vs streamlined), activation workflow, project structure, graduation criteria.
-
-4. **Activate the tool**  
-   - Ask about scope: "Would you like comprehensive (full 90-day) or streamlined (focused 30-day) onboarding?"  
-   - Gather context: company/role, start date, what user knows, goals/concerns.  
-   - **Create project structure**: `projects/active/onboarding/` with `README.md` (status, progress), `plan/`, `inputs/`, `working/`, `outputs/`.  
-   - Initialize plans: create `plan/30-60-90.md`, `plan/30-day-detailed.md`, `plan/weekly/week-01.md`.  
-   - Populate starter questions in `working/questions.md`.  
-   - Guide first actions: help schedule initial 1:1s, identify key readings.
-
-5. **Response**  
-   Agent confirms tool is activated, shows project location, and guides user through Phase 1 (Learn). Tool remains active until graduation criteria are met.
-
-**Context pulled in during activation**: the tool file; then, as user progresses, meeting notes (`resources/meetings/`), person files (`people/`), project work. Tools are stateful—agent checks `projects/active/onboarding/README.md` for progress and phase.
-
-### Summary: What Should Be Included in Context
-
-| When | What to include |
-|------|------------------|
-| **Always (from rules)** | pm-workspace.mdc (intent table, "Using skills", "Skill router"); AGENTS.md for architecture. |
-| **After routing / intent** | The **single skill or tool file** for the chosen skill (e.g. meeting-prep skill or onboarding tool). |
-| **During skill execution** | Only what the skill asks for: specific person files, meeting files, project READMEs, QMD query results. Not the entire workspace. |
-| **During tool activation/use** | Tool file + project structure (`projects/active/[tool-name]/`) + workspace data tool requests. |
-| **Optional first step** | Output of `arete skill route "<user message>"` or `arete route "<message>" --json` (skill/tool id + path + type + action; and model tier if using route). |
-
-So: **rules + chosen skill/tool + data the skill/tool fetches**. The agent should not dump the whole repo into context; it should follow the skill or tool’s steps and pull only the files and search results needed for that workflow.
 
 ## Architecture
 
@@ -579,8 +476,6 @@ integrations:
 
 **Status**: Production-ready. First execution (intelligence-and-calendar PRD) achieved 100% success: 12/12 tasks complete, 0 iterations required, 0/8 pre-mortem risks materialized.
 
-> **Note**: The quality practices used here (pre-mortem, code review, quality gates, memory capture) apply broadly to all development work—not just PRD execution. See § "Quality Practices for Any Execution" above for guidance on using these practices in direct execution.
-
 #### Pattern Overview
 
 The system uses a two-layer architecture:
@@ -750,6 +645,61 @@ Every prompt includes:
 - Build/Development System (§8) for context on `dev/` structure
 - Testing Guide (`.cursor/rules/testing.mdc`) for test requirements referenced in verification
 
+### 12. Multi-IDE Support Architecture
+
+**Purpose**: Abstract IDE-specific behavior so Areté can produce IDE-specific output for multiple IDEs from a single canonical workspace.
+
+**Location**: `src/core/ide-adapter.ts` (interface) + `src/core/adapters/` (implementations)
+
+**Interface**: `IDEAdapter`
+```typescript
+interface IDEAdapter {
+  readonly target: IDETarget; // 'cursor' | 'claude'
+  readonly configDirName: string; // '.cursor' | '.claude'
+  readonly ruleExtension: string; // '.mdc' | '.md'
+  getIDEDirs(): string[]; // IDE-specific directories to create
+  rulesDir(): string; // Relative path to rules directory
+  toolsDir(): string; // Relative path to tools directory
+  integrationsDir(): string; // Relative path to integrations directory
+  formatRule(rule: CanonicalRule, config: AreteConfig): string; // Format to IDE-specific rule format
+  transformRuleContent(content: string): string; // Transform paths (.cursor/ → .claude/)
+  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string>; // Generate IDE root files
+  detectInWorkspace(workspaceRoot: string): boolean; // Check if IDE dir exists
+}
+```
+
+**Implementations**:
+- **CursorAdapter** (`src/core/adapters/cursor-adapter.ts`) — Preserves current behavior: `.cursor/`, `.mdc` files, no path transforms, no root file generation
+- **ClaudeAdapter** (`src/core/adapters/claude-adapter.ts`) — Claude Code support: `.claude/`, `.md` files, path transforms (`.cursor/` → `.claude/`), generates `CLAUDE.md` with mandatory routing workflow
+
+**Transpilation System** (`src/core/rule-transpiler.ts`):
+- `parseRule()` — Reads canonical `.mdc` with YAML frontmatter
+- `transpileRule()` — Converts to target IDE format via adapter
+- `transpileRules()` — Batch processes all product rules from allowList
+
+**Detection Priority**:
+1. `arete.yaml` → `ide_target` field (explicit config)
+2. Detected from workspace (`.cursor/` or `.claude/` exists)
+3. Default: `cursor` (backward compatibility)
+
+**CLI Integration**:
+- `arete install --ide cursor|claude` — Creates IDE-specific workspace
+- `arete update` — Regenerates rules and root files for configured IDE
+- `arete status` — Shows IDE target, warns when both `.cursor/` and `.claude/` exist without explicit config
+
+**Adding a New IDE**:
+1. Create `src/core/adapters/{name}-adapter.ts` implementing `IDEAdapter`
+2. Add to `IDETarget` union type in `src/core/ide-adapter.ts`
+3. Add case to `getAdapter()` in `src/core/adapters/index.ts`
+4. Write tests in `test/core/adapters/{name}-adapter.test.ts`
+5. No changes needed to core workspace or command logic
+
+**Key Design Decisions**:
+- Rules are always transpiled from canonical source (never edited in-place)
+- Transpiled files include auto-generated header warning users
+- IDE-specific behavior fully isolated in adapters
+- Backward compatibility maintained (Cursor workspaces work identically)
+
 ## Technology Stack
 
 **Language**: TypeScript (strict mode, NodeNext)  
@@ -788,195 +738,6 @@ Every prompt includes:
 **Purpose**: Switch between multiple PM workspaces  
 **Method**: Workspace registry in global config  
 **Use Case**: Consultants working with multiple clients
-
-## For Autonomous Development
-
-When building Areté features:
-
-1. **Apply the product philosophy** in `.cursor/rules/arete-vision.mdc`: when defining or building features, ask whether they help the product builder achieve arete.
-2. **Read this file first** for architecture understanding.
-3. **Do not run `arete install` or `arete update` in this repo** — the workspace root is the source tree; those commands are for end-user workspaces only.
-4. **Leverage build memory before acting** (see `.cursor/rules/agent-memory.mdc` § Leverage build memory):
-   - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
-   - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don’t repeat past mistakes.
-5. **Follow patterns** established in existing code
-6. **Check Multi-IDE consistency** - Before editing `runtime/rules/` or `runtime/tools/`, see § Quality Practices item 6 (Multi-IDE Consistency Check)
-7. **Write tests** for all new functionality
-8. **Update AGENTS.md** with new patterns or gotchas discovered
-9. **Use TypeScript strictly** - no `any`, proper types
-10. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
-
-### Execution Path Decision Tree
-
-When you approve a plan (in Plan Mode or otherwise), follow this decision tree:
-
-```
-User approves plan
-     |
-     ├─ Tiny (1-2 simple steps: fix typo, add comment, update string)
-     |  → Direct execution
-     |  → Quality gates (typecheck + test) ✓
-     |  → Skip pre-mortem, skip memory capture
-     |
-     ├─ Small (2-3 moderate steps: add function + tests, refactor module)
-     |  → Ask: "Run pre-mortem first? (Recommended for new features)"
-     |  → Direct execution (with optional pre-mortem)
-     |  → Quality gates ✓
-     |  → Offer: "Capture learnings?" at end
-     |
-     └─ Medium/Large (3+ steps OR complex: new system, integration, refactor)
-        → Strongly recommend: "PRD path or direct execution?"
-        → If PRD: Load dev/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
-        → If direct: Apply pre-mortem + quality gates + memory capture
-```
-
-**Examples:**
-
-| User Request | Size | Path | Why |
-|-------------|------|------|-----|
-| "Fix typo in README" | Tiny | Direct, no pre-mortem | Single file, trivial change |
-| "Add validation to email field" | Small | Ask about pre-mortem | 2-3 files, clear scope |
-| "Add retry logic with exponential backoff" | Small→Medium | Pre-mortem recommended | 2-3 files but touches error handling patterns |
-| "Add calendar integration" | Large | Recommend PRD | New system, 5+ tasks, integration risk |
-| "Refactor skill router to support tools" | Large | Recommend PRD | Architectural, multiple components |
-
-**Borderline cases** (use judgment):
-- "Add retry logic" — Sounds small but touches error handling across callers → lean toward pre-mortem
-- "Update CLI help text for 5 commands" — Multiple files but mechanical → direct execution
-
-**Anti-patterns (don't trigger PRD for these):**
-- ❌ "Fix 3 typos" — Even if 3 steps, trivial work
-- ❌ "Update 5 docs" — Multiple files but low complexity
-
-**When in doubt**: Offer both paths and let builder choose.
-
-### Quality Practices for Any Execution
-
-These practices apply to **all development work**, not just PRD execution. Scale them based on work size.
-
-#### 1. Pre-Mortem (Recommended for 3+ Steps or Complex Work)
-
-**When**: Before starting work that has risk (new systems, integrations, refactors, 3+ dependent tasks)
-
-**How**:
-- Use standalone skill: `dev/skills/run-pre-mortem/SKILL.md`
-- Or use template directly: `dev/templates/PRE-MORTEM-TEMPLATE.md`
-- Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
-- Create concrete mitigations for each risk
-- Reference mitigations during execution
-
-**Output**: Risks table with Problem + Mitigation + Verification for each risk
-
-**Skip when**: Single-file changes, trivial updates, well-understood patterns
-
-#### 2. Quality Gates (Mandatory for ALL Commits)
-
-Before any commit, these **must pass**:
-
-```bash
-npm run typecheck  # Must pass
-npm test           # Must pass (full suite, not just new tests)
-```
-
-If the work touches Python (`scripts/integrations/`), also run:
-```bash
-npm run test:py
-```
-
-**No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
-
-#### 3. Code Review Checklist (For Any Substantial Change)
-
-Apply this 6-point checklist before committing:
-
-- [ ] **Uses `.js` extensions** in imports (NodeNext module resolution)
-- [ ] **No `any` types** (strict TypeScript)
-- [ ] **Proper error handling** (try/catch with graceful fallback)
-- [ ] **Tests for happy path and edge cases**
-- [ ] **Backward compatibility preserved** (function signatures unchanged unless explicitly breaking)
-- [ ] **Follows project patterns** (see existing code, `dev.mdc`)
-
-If any item fails, fix before committing.
-
-#### 4. Build Memory Capture (After Substantial Work)
-
-**When**: After work that meets any of these criteria:
-- Modifies 3+ files
-- Takes substantial time
-- Introduces new patterns or architectural changes
-- Encounters surprising issues or learnings
-
-**How**:
-1. Create entry: `dev/entries/YYYY-MM-DD_[short-name]-learnings.md`
-2. Include:
-   - What changed (brief summary)
-   - What worked well (patterns to repeat)
-   - What didn't work (patterns to avoid)
-   - Learnings for next time
-   - Corrections (if builder corrected you, document under "Learnings / Corrections")
-   - **Execution path used** (see below)
-3. Add index line to `dev/MEMORY.md` (top of Index section)
-
-**Format**: See existing entries in `dev/entries/` for examples
-
-**Skip when**: Trivial changes (typo fixes, comment updates), no learnings to capture
-
-**Agent behavior**: After substantial work completes, prompt: "Capture learnings in dev/MEMORY.md?"
-
-**Tracking execution path**: In each memory entry, include a brief "Execution Path" section:
-```markdown
-## Execution Path
-- **Size assessed**: Small / Medium / Large
-- **Path taken**: Direct / Direct + pre-mortem / PRD
-- **Decision tree followed?**: Yes / No / Partially
-- **Notes**: (e.g., "Builder chose direct over recommended PRD", "Skipped pre-mortem, should have done one")
-```
-This creates a lightweight audit trail. If entries consistently show "Decision tree followed: No" or missing execution path sections, that signals the guidance isn't being applied.
-
-#### 5. Reuse and Avoid Duplication
-
-Before implementing new helpers, services, or abstractions:
-- Check if equivalent functionality exists in `src/core/`, `src/integrations/`, or existing modules
-- Search AGENTS.md for existing patterns (search providers, CLI helpers, workspace utilities)
-- Apply DRY (Don't Repeat Yourself) — use existing code where it fits
-- Apply KISS (Keep It Simple) — simplest solution that meets requirements
-
-If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
-
-#### 6. Multi-IDE Consistency Check (For Rule and Config Changes)
-
-**When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or any path that affects both Cursor and Claude installations.
-
-**Why**: Areté supports multiple IDEs via adapters. Canonical rules use `.cursor/` paths that get transformed to `.claude/` during transpilation. Incorrect patterns break one IDE or the other.
-
-**Checklist**:
-- [ ] **No "either/or" paths**: Don't write `.cursor/X or .claude/X` — use only `.cursor/X` (adapter transforms it)
-- [ ] **No hardcoded IDE names in content**: Use `.cursor/` paths; the adapter handles `.claude/` conversion
-- [ ] **Check adapter transforms**: Claude adapter does `.cursor/` → `.claude/` and `.mdc` → `.md`
-- [ ] **Test mentally**: "If this path is transformed, does it still make sense?"
-
-**Common mistake**: Writing "See `.cursor/tools/X` or `.claude/tools/X`" in canonical source. After Claude transformation, this becomes "See `.claude/tools/X` or `.claude/tools/X`" (broken).
-
-**Reference**: `src/core/adapters/claude-adapter.ts` → `transformRuleContent()`
-
-### Documentation Planning Checklist
-
-When creating plans that touch code/features/structure, ask: **"Does this need doc updates?"**
-
-**Scope Check:**
-- [ ] All root docs: README, SETUP, AGENTS, ONBOARDING, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
-
-**Search Strategy:**
-- [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
-- [ ] Concept audit: If feature changes paths/structure (e.g. `.cursor/` → `.agents/`), grep old paths in all `.md` files
-- [ ] Related workflows: Check files that reference setup, install, or getting started
-
-**Verification:**
-- [ ] Re-read any backlog items found in scope check for explicit doc requirements
-- [ ] List all affected files BEFORE drafting plan; don't assume scope
-
-**Anti-pattern:** Do not assume "documentation" = README + SETUP + AGENTS. ONBOARDING, scratchpad, and backlog frequently need updates.
 
 ## Common Patterns
 
@@ -1039,65 +800,3 @@ const __dirname = dirname(__filename);
 ## Test Data (Development Only)
 
 For local testing, `arete seed test-data` copies fixture data (meetings, people, plans, projects, memory) into the workspace. Requires the package to be linked (`npm link`) or installed with `--source symlink`; the `test-data/` directory is not published to npm. After seeding, `TEST-SCENARIOS.md` in the workspace root lists prompts for meeting-prep, daily-plan, process-meetings, and other flows.
-
-### 12. Multi-IDE Support Architecture
-
-**Purpose**: Abstract IDE-specific behavior so Areté can produce IDE-specific output for multiple IDEs from a single canonical workspace.
-
-**Location**: `src/core/ide-adapter.ts` (interface) + `src/core/adapters/` (implementations)
-
-**Interface**: `IDEAdapter`
-```typescript
-interface IDEAdapter {
-  readonly target: IDETarget; // 'cursor' | 'claude'
-  readonly configDirName: string; // '.cursor' | '.claude'
-  readonly ruleExtension: string; // '.mdc' | '.md'
-  getIDEDirs(): string[]; // IDE-specific directories to create
-  rulesDir(): string; // Relative path to rules directory
-  toolsDir(): string; // Relative path to tools directory
-  integrationsDir(): string; // Relative path to integrations directory
-  formatRule(rule: CanonicalRule, config: AreteConfig): string; // Format to IDE-specific rule format
-  transformRuleContent(content: string): string; // Transform paths (.cursor/ → .claude/)
-  generateRootFiles(config: AreteConfig, workspaceRoot: string): Record<string, string>; // Generate IDE root files
-  detectInWorkspace(workspaceRoot: string): boolean; // Check if IDE dir exists
-}
-```
-
-**Implementations**:
-- **CursorAdapter** (`src/core/adapters/cursor-adapter.ts`) — Preserves current behavior: `.cursor/`, `.mdc` files, no path transforms, no root file generation
-- **ClaudeAdapter** (`src/core/adapters/claude-adapter.ts`) — Claude Code support: `.claude/`, `.md` files, path transforms (`.cursor/` → `.claude/`), generates `CLAUDE.md` with mandatory routing workflow
-
-**Transpilation System** (`src/core/rule-transpiler.ts`):
-- `parseRule()` — Reads canonical `.mdc` with YAML frontmatter
-- `transpileRule()` — Converts to target IDE format via adapter
-- `transpileRules()` — Batch processes all product rules from allowList
-
-**Detection Priority**:
-1. `arete.yaml` → `ide_target` field (explicit config)
-2. Detected from workspace (`.cursor/` or `.claude/` exists)
-3. Default: `cursor` (backward compatibility)
-
-**CLI Integration**:
-- `arete install --ide cursor|claude` — Creates IDE-specific workspace
-- `arete update` — Regenerates rules and root files for configured IDE
-- `arete status` — Shows IDE target, warns when both `.cursor/` and `.claude/` exist without explicit config
-
-**Adding a New IDE**:
-1. Create `src/core/adapters/{name}-adapter.ts` implementing `IDEAdapter`
-2. Add to `IDETarget` union type in `src/core/ide-adapter.ts`
-3. Add case to `getAdapter()` in `src/core/adapters/index.ts`
-4. Write tests in `test/core/adapters/{name}-adapter.test.ts`
-5. No changes needed to core workspace or command logic
-
-**Key Design Decisions**:
-- Rules are always transpiled from canonical source (never edited in-place)
-- Transpiled files include auto-generated header warning users
-- IDE-specific behavior fully isolated in adapters
-- Backward compatibility maintained (Cursor workspaces work identically)
-
-## Additional Resources
-
-- **Build Memory**: `dev/MEMORY.md` - Recent changes and decisions
-- **Testing Guide**: `.cursor/rules/testing.mdc` - How to write tests
-- **Dev Practices**: `.cursor/rules/dev.mdc` - Coding standards
-- **README**: `README.md` - User-facing documentation

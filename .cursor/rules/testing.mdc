@@ -1,7 +1,6 @@
 ---
 description: Testing requirements - all code changes must include tests
 globs: ["src/**/*", "scripts/**/*", "bin/**/*", "test/**/*"]
-alwaysApply: true
 ---
 
 # Testing Requirements

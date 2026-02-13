@@ -1,7 +1,6 @@
 ---
 description: When in Plan Mode or multi-step plans, conduct a pre-mortem before execution
 globs: ["src/**/*", "test/**/*", "dev/**/*"]
-alwaysApply: true
 ---
 
 # Plan Mode: Pre-Mortem Required

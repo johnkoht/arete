@@ -10,7 +10,7 @@
 
 ### What BUILD Does
 
-- **Leverage build memory before acting** (AGENTS.md § For Autonomous Development):
+- **Leverage build memory before acting** (dev.mdc § Quality Practices):
   - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
   - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don't repeat past mistakes.
 - **Entries + index**: Dated entries (`dev/entries/YYYY-MM-DD_slug.md`) with a **Learnings** section; index in `dev/MEMORY.md`.
@@ -65,7 +65,7 @@
 
 ### Collaboration profile as first-class context
 
-- BUILD: Read `dev/collaboration.md` at start of substantive work (AGENTS.md).
+- BUILD: Read `dev/collaboration.md` at start of substantive work (dev.mdc).
 - GUIDE: collaboration.md exists but no rule says "read it first." Adding "Leverage workspace memory" (above) fixes this.
 
 ### Session continuity
@@ -106,4 +106,4 @@
 - BUILD PRD flow: `dev/skills/execute-prd/SKILL.md`, `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/entries/2026-02-09_builder-orchestration-learnings.md`
 - GUIDE memory: `.cursor/rules/agent-memory.mdc` (mode-aware), `src/core/workspace-structure.ts` (default files)
 - GUIDE create-prd: `runtime/skills/create-prd/SKILL.md`, `runtime/skills/PATTERNS.md` (light_pre_mortem)
-- AGENTS.md § For Autonomous Development (Leverage build memory)
+- dev.mdc § Quality Practices (Leverage build memory)
