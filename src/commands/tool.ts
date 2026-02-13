@@ -2,7 +2,7 @@
  * Tool management commands
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { findWorkspaceRoot, getWorkspacePaths } from '../core/workspace.js';
@@ -69,11 +69,20 @@ function getToolsList(dir: string): ToolInfo[] {
   const tools: ToolInfo[] = [];
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    const fullPath = join(dir, entry.name);
+    
     // Skip template and hidden dirs
     if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+    
+    // Check if it's a directory (or a symlink to a directory)
+    try {
+      const stats = statSync(fullPath);
+      if (!stats.isDirectory()) continue;
+    } catch {
+      continue; // Skip if we can't stat it
+    }
 
-    const toolPath = join(dir, entry.name);
+    const toolPath = fullPath;
     const info = getToolInfo(toolPath);
     tools.push(info);
   }
