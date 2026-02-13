@@ -247,4 +247,95 @@ describe('skill-router', () => {
     assert.ok(r);
     assert.equal(r!.requires_briefing, true);
   });
+
+  // Phase 4: Tool routing tests
+
+  const tools: SkillCandidate[] = [
+    {
+      id: 'onboarding',
+      name: 'onboarding',
+      description: '30/60/90 day plan for thriving at a new job - learn, contribute, lead',
+      path: '/ws/.cursor/tools/onboarding',
+      type: 'tool',
+      lifecycle: 'time-bound',
+      duration: '90-150 days',
+      triggers: ["I'm starting a new job", 'onboarding', '30/60/90', 'new role', 'ramp up'],
+      work_type: 'planning',
+      category: 'default',
+    },
+    {
+      id: 'seed-context',
+      name: 'seed-context',
+      description: 'Bootstrap workspace context by importing historical data from connected integrations',
+      path: '/ws/.cursor/tools/seed-context',
+      type: 'tool',
+      lifecycle: 'one-time',
+      duration: 'Single session (minutes to hours depending on data volume)',
+      triggers: ['seed my context', 'backfill', 'import history', 'bootstrap context'],
+      work_type: 'operations',
+      category: 'default',
+    },
+  ];
+
+  it("routes \"I'm starting a new job\" to onboarding tool", () => {
+    const r = routeToSkill("I'm starting a new job", tools);
+    assert.ok(r);
+    assert.equal(r!.skill, 'onboarding');
+    assert.equal(r!.type, 'tool');
+    assert.equal(r!.action, 'activate');
+    assert.equal(r!.lifecycle, 'time-bound');
+    assert.equal(r!.duration, '90-150 days');
+  });
+
+  it('routes "seed my context" to seed-context tool', () => {
+    const r = routeToSkill('seed my context', tools);
+    assert.ok(r);
+    assert.equal(r!.skill, 'seed-context');
+    assert.equal(r!.type, 'tool');
+    assert.equal(r!.action, 'activate');
+    assert.equal(r!.lifecycle, 'one-time');
+  });
+
+  it('routes "30/60/90 plan" to onboarding tool via trigger', () => {
+    const r = routeToSkill('help me with my 30/60/90 plan', tools);
+    assert.ok(r);
+    assert.equal(r!.skill, 'onboarding');
+  });
+
+  it('routes "backfill meeting history" to seed-context tool', () => {
+    const r = routeToSkill('backfill my meeting history', tools);
+    assert.ok(r);
+    assert.equal(r!.skill, 'seed-context');
+  });
+
+  it('routes skills and tools together without conflicts', () => {
+    const combined = [...skills, ...tools];
+    
+    // Skill query should match skill
+    const skillResult = routeToSkill('prep for meeting with Jane', combined);
+    assert.ok(skillResult);
+    assert.equal(skillResult!.skill, 'meeting-prep');
+    assert.equal(skillResult!.type, 'skill');
+    assert.equal(skillResult!.action, 'load');
+    
+    // Tool query should match tool
+    const toolResult = routeToSkill("I'm starting a new job", combined);
+    assert.ok(toolResult);
+    assert.equal(toolResult!.skill, 'onboarding');
+    assert.equal(toolResult!.type, 'tool');
+    assert.equal(toolResult!.action, 'activate');
+  });
+
+  it('returns null for tools when score is too low', () => {
+    const r = routeToSkill('random unrelated query xyz', tools);
+    assert.equal(r, null);
+  });
+
+  it('skill routing response includes type=skill and action=load', () => {
+    const r = routeToSkill('daily plan', skills);
+    assert.ok(r);
+    assert.equal(r!.type, 'skill');
+    assert.equal(r!.action, 'load');
+    assert.equal(r!.lifecycle, undefined); // Skills don't have lifecycle
+  });
 });

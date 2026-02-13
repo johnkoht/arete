@@ -769,13 +769,16 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
 
   const paths = getWorkspacePaths(workspaceRoot);
   const config = loadConfig(workspaceRoot);
+  
+  // Get skills
   const skills = getMergedSkillsForRouting(paths);
-  const candidates = skills.map(s => ({
+  const skillCandidates = skills.map(s => ({
     id: s.id,
     name: s.name,
     description: s.description,
     path: s.path,
     triggers: s.triggers,
+    type: 'skill' as const,
     // Extended frontmatter (Phase 3)
     primitives: s.primitives as import('../types.js').ProductPrimitive[] | undefined,
     work_type: s.work_type as import('../types.js').WorkType | undefined,
@@ -785,6 +788,25 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
     creates_project: s.creates_project,
     project_template: s.project_template,
   }));
+  
+  // Get tools (Phase 4: Tool Routing)
+  const { getMergedToolsForRouting } = await import('./tool.js');
+  const tools = getMergedToolsForRouting(paths);
+  const toolCandidates = tools.map(t => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    path: t.path,
+    triggers: t.triggers,
+    type: 'tool' as const,
+    lifecycle: t.lifecycle,
+    duration: t.duration,
+    work_type: t.work_type,
+    category: t.category,
+  }));
+  
+  // Merge candidates
+  const candidates = [...skillCandidates, ...toolCandidates];
 
   let routed = routeToSkill(query, candidates);
   routed = applySkillDefaults(routed, skills, config.skills?.defaults);
@@ -798,11 +820,15 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
             skill: routed.skill,
             path: routed.path,
             reason: routed.reason,
+            type: routed.type,
+            action: routed.action,
             primitives: routed.primitives,
             work_type: routed.work_type,
             category: routed.category,
             requires_briefing: routed.requires_briefing,
             resolvedFrom: routed.resolvedFrom,
+            lifecycle: routed.lifecycle,
+            duration: routed.duration,
           }
         : null
     }, null, 2));
@@ -810,17 +836,29 @@ async function routeSkill(options: SkillOptions & { query?: string }): Promise<v
   }
 
   if (routed) {
-    success(`Route to skill: ${routed.skill}`);
+    const isSkill = routed.type === 'skill';
+    success(`Route to ${isSkill ? 'skill' : 'tool'}: ${routed.skill}`);
     if (routed.resolvedFrom) {
       listItem('Default for role', `${routed.resolvedFrom} → ${routed.skill}`);
     }
     listItem('Path', formatPath(routed.path));
+    listItem('Action', routed.action === 'load' ? 'Load and execute' : 'Activate (creates project)');
+    if (routed.lifecycle) {
+      listItem('Lifecycle', routed.lifecycle);
+    }
+    if (routed.duration) {
+      listItem('Duration', routed.duration);
+    }
     listItem('Reason', routed.reason);
     console.log('');
-    info('Load and execute: .agents/skills/' + routed.skill + '/SKILL.md');
+    if (isSkill) {
+      info('Load and execute: .agents/skills/' + routed.skill + '/SKILL.md');
+    } else {
+      info('Activate tool: ' + routed.path + '/TOOL.md');
+    }
   } else {
-    warn('No matching skill');
-    info('Try: arete skill list');
+    warn('No matching skill or tool');
+    info('Try: arete skill list or arete tool list');
   }
 }
 

@@ -1,8 +1,12 @@
 ---
 name: [tool-name]
 description: [One-line description of what this tool does]
-lifecycle: [time-bound | condition-bound | cyclical]
+lifecycle: [time-bound | condition-bound | cyclical | one-time]
 duration: [Expected duration, e.g., "90 days", "until launch", "quarterly"]
+triggers:
+  - "[Trigger phrase 1]"
+  - "[Trigger phrase 2]"
+  - "[Trigger phrase 3]"
 ---
 
 # [Tool Name] Tool

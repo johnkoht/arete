@@ -3,6 +3,12 @@ name: onboarding
 description: 30/60/90 day plan for thriving at a new job - learn, contribute, lead
 lifecycle: time-bound
 duration: 90-150 days
+triggers:
+  - "I'm starting a new job"
+  - "onboarding"
+  - "30/60/90"
+  - "new role"
+  - "ramp up"
 ---
 
 # Onboarding Tool

@@ -253,6 +253,14 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     preserve: localOverrides
   });
   
+  // Update tools (IDE-specific directory)
+  if (existsSync(sourcePaths.tools)) {
+    syncDirectory(sourcePaths.tools, paths.tools, {
+      symlink: useSymlinks,
+      preserve: [] // No tool overrides yet
+    });
+  }
+  
   // Transpile rules to IDE-specific format (always regenerate)
   const rulesResult = transpileRules(
     sourcePaths.rules,

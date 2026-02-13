@@ -25,6 +25,7 @@ import { updateCommand } from './commands/update.js';
 import { statusCommand } from './commands/status.js';
 import { skillCommand } from './commands/skill.js';
 import { routeCommand } from './commands/route.js';
+import { listTools, showTool } from './commands/tool.js';
 import { integrationCommand } from './commands/integration.js';
 import { fathomCommand } from './integrations/fathom/index.js';
 import { seedCommand } from './commands/seed.js';
@@ -180,6 +181,23 @@ program
   .description('Route query to skill and suggest model tier (skill + model in one call)')
   .option('--json', 'Output as JSON')
   .action((query, opts) => routeCommand(query, opts));
+
+// Tool Management
+const toolCmd = program
+  .command('tool')
+  .description('Manage tools');
+
+toolCmd
+  .command('list')
+  .description('List available tools')
+  .option('--json', 'Output as JSON')
+  .action((opts) => listTools(opts));
+
+toolCmd
+  .command('show <name>')
+  .description('Show details for a specific tool')
+  .option('--json', 'Output as JSON')
+  .action((name, opts) => showTool(name, opts));
 
 // Integration Management
 const integrationCmd = program

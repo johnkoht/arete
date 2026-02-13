@@ -103,21 +103,31 @@ A **structured workspace** with:
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show a person
 - `arete people index` - Regenerate people/index.md
-- `arete skill route "<query>"` - Route a user message to the best-matching skill (for agents; use before loading a skill)
-- `arete route "<query>"` - Route to skill and suggest model tier (fast/balanced/powerful) in one call; `--json` for machine-readable output
+- `arete skill route "<query>"` - Route a user message to the best-matching skill or tool (for agents; use before loading)
+- `arete route "<query>"` - Route to skill/tool and suggest model tier (fast/balanced/powerful) in one call; `--json` for machine-readable output
+- `arete tool list` - List available tools
+- `arete tool show <name>` - Show details for a specific tool
 
-### Skill and model routers
+### Skill/tool router and model router
 
-- **Skill router** (`src/core/skill-router.ts`): Maps a free-form user message to a skill id and path using skill descriptions and optional `triggers` in skill frontmatter. Used by `arete skill route` and `arete route`. Agents can run `arete skill route "prep me for Jane"` to get `meeting-prep` and then load that skill.
+- **Skill/tool router** (`src/core/skill-router.ts`): Maps a free-form user message to a skill or tool id and path using descriptions and optional `triggers` in frontmatter. Used by `arete skill route` and `arete route`. Returns `type: 'skill' | 'tool'` and `action: 'load' | 'activate'`. Agents can run `arete skill route "I'm starting a new job"` to get `onboarding` tool, then activate it (creates project).
 - **Model router** (`src/core/model-router.ts`): Suggests task complexity tier (fast / balanced / powerful) from prompt content—e.g. simple lookups → fast, analysis/planning/writing → powerful. Areté does not switch models programmatically (no Cursor/IDE API); the suggestion is for the user or for tooling that can set the model (Dex-style).
 
-### Skill management
+### Skill and tool management
 
-- **Skills**: All skills live in `.agents/skills/` (last-in-wins; single location). Shipped with the package and copied on `arete install`.
+**Skills**: All skills live in `.agents/skills/` (last-in-wins; single location). Shipped with the package and copied on `arete install`.
 - **Role defaults** (`skills.defaults` in arete.yaml): Maps a *role* (default skill name, e.g. `create-prd`) to a *preferred skill* (e.g. `netflix-prd`). After the router matches a skill, the command layer applies this mapping and returns the preferred skill’s path (and `resolvedFrom` when a preference was applied). Commands: `arete skill defaults`, `arete skill set-default <skill> --for <role>`, `arete skill unset-default <role>`.
 - **Install**: `arete skill install <source>` — if source looks like `owner/repo`, runs `npx skills add <source>` (skills.sh); if source is a local path, copies the skill into `.agents/skills/<name>/`. After install, Areté generates a `.arete-meta.yaml` sidecar (category: community, requires_briefing: true, best-guess work_type/primitives) and may prompt to set the skill as default for an overlapping role.
 - **Sidecar metadata** (`.arete-meta.yaml`): For third-party skills that lack Areté’s extended frontmatter, the sidecar supplies category, requires_briefing, work_type, primitives, triggers, etc. `getSkillInfo()` in `src/commands/skill.ts` reads the sidecar and merges it into skill info so the router and list get correct metadata. Users can edit the sidecar without touching SKILL.md.
 - **Docs**: `.agents/skills/README.md` (shipped in package as `dist/skills/README.md`) describes what skills are and how to install and set role defaults.
+
+**Tools**:
+- All tools live in IDE-specific directories (`.cursor/tools/` or `.claude/tools/`). Shipped with the package and copied on `arete install` and `arete update`.
+- Tools are lifecycle-based, stateful capabilities (onboarding, seed-context) with phases, graduation criteria, and project creation.
+- **Routing**: Tools are discoverable via the same router as skills. Router returns `type: 'tool'`, `action: 'activate'`, and lifecycle metadata.
+- **Activation**: When a tool is activated, it creates a project in `projects/active/[tool-name]/` with status tracking.
+- Commands: `arete tool list`, `arete tool show <name>`.
+- **Docs**: `.cursor/tools/README.md` (or `.claude/tools/README.md`) describes what tools are and how to use them.
 
 ## How the System Operates (Production Flow)
 
@@ -190,6 +200,33 @@ The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions
    Agent delivers the synthesis (or discovery output). If asked what it used: **synthesize** (or discovery) skill, project inputs, QMD.
 
 **Context pulled in**: the skill file; then project `inputs/` (and optionally `context/`, `.arete/memory/items/` via QMD). For ad-hoc "analyze this" with no skill match, the agent may just read the attached/referenced data and analyze it without a formal skill.
+
+### Flow: "I'm starting a new job" (Tool Activation)
+
+1. **User message**  
+   User says: *"I'm starting a new job"* (or similar).
+
+2. **Intent match**  
+   Default to the router.  
+   - Agent runs: `arete skill route "I'm starting a new job"` or `arete route "I'm starting a new job" --json`.  
+   - Response: `skill: onboarding`, `type: tool`, `action: activate`, `lifecycle: time-bound`. Agent now knows to **activate** (not just load).
+
+3. **Read the tool**  
+   Agent reads `.cursor/tools/onboarding/TOOL.md` (or `.claude/tools/onboarding/TOOL.md`).  
+   That file contains: Tool definition, phases (Learn, Contribute, Lead), scope options (comprehensive vs streamlined), activation workflow, project structure, graduation criteria.
+
+4. **Activate the tool**  
+   - Ask about scope: "Would you like comprehensive (full 90-day) or streamlined (focused 30-day) onboarding?"  
+   - Gather context: company/role, start date, what user knows, goals/concerns.  
+   - **Create project structure**: `projects/active/onboarding/` with `README.md` (status, progress), `plan/`, `inputs/`, `working/`, `outputs/`.  
+   - Initialize plans: create `plan/30-60-90.md`, `plan/30-day-detailed.md`, `plan/weekly/week-01.md`.  
+   - Populate starter questions in `working/questions.md`.  
+   - Guide first actions: help schedule initial 1:1s, identify key readings.
+
+5. **Response**  
+   Agent confirms tool is activated, shows project location, and guides user through Phase 1 (Learn). Tool remains active until graduation criteria are met.
+
+**Context pulled in during activation**: the tool file; then, as user progresses, meeting notes (`resources/meetings/`), person files (`people/`), project work. Tools are stateful—agent checks `projects/active/onboarding/README.md` for progress and phase.
 
 ### Summary: What Should Be Included in Context
 

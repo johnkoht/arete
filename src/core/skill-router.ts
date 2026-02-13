@@ -31,6 +31,10 @@ export type SkillCandidate = {
   requires_briefing?: boolean;
   creates_project?: boolean;
   project_template?: string;
+  // Tool-specific fields (Phase 4: Tool Routing)
+  type?: 'skill' | 'tool';
+  lifecycle?: 'time-bound' | 'condition-bound' | 'cyclical' | 'one-time';
+  duration?: string;
 };
 
 const STOP_WORDS = new Set([
@@ -129,8 +133,8 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
 }
 
 /**
- * Route a user message to the best-matching skill, if any.
- * Returns the skill id, path, reason, and intelligence metadata; or null if no good match.
+ * Route a user message to the best-matching skill or tool, if any.
+ * Returns the skill/tool id, path, reason, and intelligence metadata; or null if no good match.
  */
 export function routeToSkill(query: string, skills: SkillCandidate[]): RoutedSkill | null {
   if (!query?.trim() || skills.length === 0) return null;
@@ -155,6 +159,8 @@ export function routeToSkill(query: string, skills: SkillCandidate[]): RoutedSki
     ? 'Strong match from intent keywords or triggers'
     : 'Match from skill description';
 
+  const isTool = best.skill.type === 'tool';
+
   return {
     skill: best.skill.id || best.skill.name || '',
     path,
@@ -164,5 +170,10 @@ export function routeToSkill(query: string, skills: SkillCandidate[]): RoutedSki
     work_type: best.skill.work_type,
     category: best.skill.category,
     requires_briefing: best.skill.requires_briefing,
+    // Phase 4: tool routing metadata
+    type: isTool ? 'tool' : 'skill',
+    action: isTool ? 'activate' : 'load',
+    lifecycle: isTool ? best.skill.lifecycle : undefined,
+    duration: isTool ? best.skill.duration : undefined,
   };
 }

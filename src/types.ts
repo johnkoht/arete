@@ -289,4 +289,12 @@ export interface ExtendedRoutedSkill {
   requires_briefing?: boolean;
   /** Set when skills.defaults redirected to a different skill */
   resolvedFrom?: string;
+  /** Type of matched item (skill or tool) */
+  type: 'skill' | 'tool';
+  /** Action to take: load (skill) or activate (tool) */
+  action: 'load' | 'activate';
+  /** Tool lifecycle (only for tools) */
+  lifecycle?: 'time-bound' | 'condition-bound' | 'cyclical' | 'one-time';
+  /** Tool duration (only for tools) */
+  duration?: string;
 }

@@ -191,6 +191,17 @@ export async function installCommand(directory: string | undefined, options: Ins
     results.skills = skillsCopied.map(p => basename(p));
   }
   
+  // Copy/symlink tools to IDE-specific tools directory
+  if (!json) info(`${useSymlinks ? 'Linking' : 'Copying'} tools...`);
+  
+  if (existsSync(sourcePaths.tools)) {
+    copyDirectoryContents(
+      sourcePaths.tools,
+      workspacePaths.tools,
+      { symlink: useSymlinks }
+    );
+  }
+  
   // Single manifest used for transpilation, arete.yaml, and IDE root files
   const manifest = {
     schema: 1,

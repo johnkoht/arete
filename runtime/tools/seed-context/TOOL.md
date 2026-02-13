@@ -3,6 +3,11 @@ name: seed-context
 description: Bootstrap workspace context by importing historical data from connected integrations
 lifecycle: one-time
 duration: Single session (minutes to hours depending on data volume)
+triggers:
+  - "seed my context"
+  - "backfill"
+  - "import history"
+  - "bootstrap context"
 ---
 
 # Seed Context Tool
