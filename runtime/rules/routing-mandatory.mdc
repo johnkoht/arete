@@ -29,7 +29,7 @@ arete skill route "<user's exact message>"
 
 # 3b. IF TOOL (type: 'tool', action: 'activate'):
 # Read the tool file, e.g.:
-# .cursor/tools/onboarding/TOOL.md or .claude/tools/onboarding/TOOL.md
+# .cursor/tools/onboarding/TOOL.md
 # Then ACTIVATE the tool (see tool activation pattern in pm-workspace.mdc)
 ```
 
@@ -60,7 +60,7 @@ Proceed with normal tools.
 ✅ User: "I'm starting a new job"
 ✅ Agent: [Runs `arete skill route "I'm starting a new job"`]
 ✅ Agent: [Router returns: onboarding, type: tool, action: activate]
-✅ Agent: [Reads tool file from IDE config dir: .cursor/tools/onboarding/TOOL.md or .claude/tools/onboarding/TOOL.md]
+✅ Agent: [Reads .cursor/tools/onboarding/TOOL.md]
 ✅ Agent: [Activates tool: asks scope, creates project, guides Phase 1]
 ```
 
