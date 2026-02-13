@@ -6,7 +6,7 @@
 
 **Which mode are you in?** Check `agent_mode` in `arete.yaml` (or `AGENT_MODE` env). Source of truth: `.cursor/rules/arete-context.mdc` (Cursor) or `.claude/rules/` + `CLAUDE.md` (Claude Code).
 
-- **BUILDER** (this repo): You are building Areté. Follow § "For Autonomous Development" and § "Coding Conventions" below. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here. **Do not run `arete install` or `arete update` in this directory** — it is the source tree, not a target workspace.
+- **BUILDER** (this repo): You are building Areté. Follow dev.mdc and testing.mdc. Put build memories in `dev/entries/` and MEMORY.md; PRDs in `dev/prds/`. Do not run `arete seed test-data` here. **Do not run `arete install` or `arete update` in this directory** — it is the source tree, not a target workspace.
 - **GUIDE** (end-user workspace): You are helping the PM achieve arete. Use only product skills, skill router, and tools. Put user memories in `.arete/memory/items/`. Do not use build rules or `dev/`.
 
 **Override**: Set `AGENT_MODE=BUILDER` or `AGENT_MODE=GUIDE` to force a mode (e.g. test GUIDE behavior in the repo). `arete route --json` includes `agent_mode` in the output.
@@ -636,7 +636,7 @@ When the user creates a plan in **Plan Mode** (Cursor's plan-before-execute flow
 - Creates `dev/prds/{feature-name}/EXECUTE.md` with a prompt to paste into a new chat
 - User starts new chat, pastes prompt → agent loads execute-prd and runs full workflow
 
-**Rule**: The scope check and PRD offer are defined in § "Execution Path Decision Tree" above.
+**Rule**: `plan-pre-mortem.mdc` defines the scope check and PRD offer. See also `dev.mdc` for Plan → PRD path guidance.
 
 #### Key Success Factors
 
@@ -748,7 +748,7 @@ Every prompt includes:
 
 **See also**:
 - Build/Development System (§8) for context on `dev/` structure
-- Testing: See `test/` directory for patterns; run `npm test` before commits
+- Testing Guide (`.cursor/rules/testing.mdc`) for test requirements referenced in verification
 
 ## Technology Stack
 
@@ -894,7 +894,7 @@ Apply this 6-point checklist before committing:
 - [ ] **Proper error handling** (try/catch with graceful fallback)
 - [ ] **Tests for happy path and edge cases**
 - [ ] **Backward compatibility preserved** (function signatures unchanged unless explicitly breaking)
-- [ ] **Follows project patterns** (see existing code, § "Coding Conventions")
+- [ ] **Follows project patterns** (see existing code, `dev.mdc`)
 
 If any item fails, fix before committing.
 
@@ -1098,6 +1098,6 @@ interface IDEAdapter {
 ## Additional Resources
 
 - **Build Memory**: `dev/MEMORY.md` - Recent changes and decisions
-- **Testing**: See `test/` directory for test patterns and examples
-- **Dev Practices**: See § "For Autonomous Development" above and § "Coding Conventions"
+- **Testing Guide**: `.cursor/rules/testing.mdc` - How to write tests
+- **Dev Practices**: `.cursor/rules/dev.mdc` - Coding standards
 - **README**: `README.md` - User-facing documentation
