@@ -63,6 +63,8 @@ dist/
 .agents/
 .cursor/integrations/
 .cursor/tools/
+# NOTE: .cursor/rules/ is NOT ignored — it's the working copy of rules for this dev repo.
+# Keep .cursor/rules/ in sync with runtime/rules/ (canonical source).
 context/
 now/
 goals/
