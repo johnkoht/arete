@@ -1,12 +1,34 @@
 ---
 description: Dev practices for Arete — lint, format, conventions, build memory
-globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*"]
+globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", "dev/skills/**/*", "runtime/skills/**/*", "runtime/rules/**/*"]
 alwaysApply: true
 ---
 
 # Dev practices (Arete build)
 
 Standards for building and changing Arete. **Testing** is covered in `testing.mdc`; this rule covers the rest.
+
+## Build skills
+
+Build skills live in `dev/skills/` and are **not shipped to users**. They're for developing Areté itself. Read and follow these skills when doing the corresponding work.
+
+| Skill | Path | When to use |
+|-------|------|-------------|
+| **execute-prd** | `dev/skills/execute-prd/SKILL.md` | Executing multi-task PRDs autonomously |
+| **plan-to-prd** | `dev/skills/plan-to-prd/SKILL.md` | Converting an approved plan to a PRD |
+| **prd-to-json** | `dev/skills/prd-to-json/SKILL.md` | Generating `prd.json` from a PRD for autonomous execution |
+| **prd-post-mortem** | `dev/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
+| **review-plan** | `dev/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
+| **run-pre-mortem** | `dev/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
+| **synthesize-collaboration-profile** | `dev/skills/synthesize-collaboration-profile/SKILL.md` | Update `dev/collaboration.md` from entry learnings |
+
+**How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
+
+**Skill triggers**:
+- Plan review requested → read `dev/skills/review-plan/SKILL.md`
+- PRD execution starting → read `dev/skills/execute-prd/SKILL.md`
+- Pre-mortem needed → read `dev/skills/run-pre-mortem/SKILL.md`
+- PRD completed → read `dev/skills/prd-post-mortem/SKILL.md`
 
 ## Build memory
 
@@ -198,7 +220,24 @@ Before implementing new helpers, services, or abstractions:
 
 If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
 
-### 7. Multi-IDE consistency check (for rule and config changes)
+### 7. Skill and rule changes (mandatory review)
+
+**When**: Before creating or modifying any skill or rule file:
+- `dev/skills/**/*.md` — build skills
+- `runtime/skills/**/*.md` — product skills (shipped to users)
+- `.cursor/rules/*.mdc` — build rules
+- `runtime/rules/*.mdc` — product rules (shipped to users)
+
+**Checklist**:
+- [ ] **Re-read this file (`dev.mdc`)** before making changes — ensure you understand current patterns
+- [ ] **Audience check**: Is this for BUILD (dev/, .cursor/) or PRODUCT (runtime/)?
+- [ ] **Skill table**: If adding a build skill, add it to the "Build skills" table above
+- [ ] **AGENTS.md**: If the skill/rule changes architecture or workflows, update AGENTS.md
+- [ ] **Cross-references**: Search for references to the skill/rule being changed; update them
+
+**Why**: Skills and rules define agent behavior. Changes propagate widely. A quick review of dev.mdc prevents pattern drift and ensures consistency.
+
+### 8. Multi-IDE consistency check (for rule and config changes)
 
 **When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or any path that affects both Cursor and Claude installations.
 
