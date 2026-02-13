@@ -1,9 +1,11 @@
 /**
- * Skill router: map user query to the best-matching Areté skill.
- * Used by CLI `arete skill route` and optionally by agents to decide which skill to load.
+ * Skill/tool router: map user query to the best-matching Areté skill or tool.
+ * Used by CLI `arete skill route` and optionally by agents to decide which skill/tool to load/activate.
  *
  * Enhanced in Phase 3 to read extended frontmatter (primitives, work_type, category)
  * and include intelligence metadata in routing responses.
+ *
+ * Phase 4: Extended to support lifecycle-based tools with type/action/lifecycle metadata.
  */
 
 import type {

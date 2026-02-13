@@ -10,21 +10,27 @@ Before responding to ANY user request in this Areté workspace:
 
 ## Is this a PM action?
 
-Tour/orientation ("give me a tour", "how does this work", "what can I do here"), agenda creation ("create/prepare a meeting agenda"), meeting prep, planning ("plan the week", "prepare a weekly plan", "weekly priorities"), synthesis, discovery, PRD, roadmap, competitive analysis, process meetings, etc.
+Tour/orientation ("give me a tour", "how does this work", "what can I do here"), agenda creation ("create/prepare a meeting agenda"), meeting prep, planning ("plan the week", "prepare a weekly plan", "weekly priorities"), synthesis, discovery, PRD, roadmap, competitive analysis, process meetings, **onboarding** ("I'm starting a new job", "30/60/90"), **seed context** ("import my meetings", "backfill history"), etc.
 
 ## If YES, follow this EXACT sequence:
 
 ```bash
 # 1. ROUTE (MANDATORY)
 arete skill route "<user's exact message>"
+# or: arete route "<user's message>"
 
-# 2. LOAD (MANDATORY)  
-# Read the skill file it returns, e.g.:
-# .agents/skills/meeting-prep/SKILL.md  or  .agents/skills/prepare-meeting-agenda/SKILL.md
+# 2. CHECK TYPE (MANDATORY)
+# Router returns type: 'skill' or 'tool'
 
-# 3. EXECUTE (MANDATORY)
-# Follow the skill's complete workflow
-# Do NOT improvise with Grep/Glob/Read
+# 3a. IF SKILL (type: 'skill', action: 'load'):
+# Read the skill file, e.g.:
+# .agents/skills/meeting-prep/SKILL.md
+# Then EXECUTE the skill's complete workflow
+
+# 3b. IF TOOL (type: 'tool', action: 'activate'):
+# Read the tool file, e.g.:
+# .cursor/tools/onboarding/TOOL.md
+# Then ACTIVATE the tool (see tool activation pattern in pm-workspace.mdc)
 ```
 
 ## If NO:
@@ -40,13 +46,22 @@ Proceed with normal tools.
 ❌ Problem: Skipped router, skipped skill, improvised workflow
 ```
 
-**Correct Pattern**:
+**Correct Pattern (Skill)**:
 ```
 ✅ User: "Help me prep for my meeting with Alex"
 ✅ Agent: [Runs `arete skill route "help me prep for my meeting with alex"`]
-✅ Agent: [Router returns: meeting-prep]
+✅ Agent: [Router returns: meeting-prep, type: skill, action: load]
 ✅ Agent: [Reads .agents/skills/meeting-prep/SKILL.md]
 ✅ Agent: [Follows the skill's complete workflow]
+```
+
+**Correct Pattern (Tool)**:
+```
+✅ User: "I'm starting a new job"
+✅ Agent: [Runs `arete skill route "I'm starting a new job"`]
+✅ Agent: [Router returns: onboarding, type: tool, action: activate]
+✅ Agent: [Reads .cursor/tools/onboarding/TOOL.md]
+✅ Agent: [Activates tool: asks scope, creates project, guides Phase 1]
 ```
 
 ---

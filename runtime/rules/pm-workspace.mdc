@@ -12,13 +12,18 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ## ⚠️ CRITICAL: Skill-Based Workflow Required
 
-**Before responding to ANY PM action** (including tour/orientation, meeting prep, **agenda creation**, synthesis, planning, discovery, PRD, etc.):
+**Before responding to ANY PM action** (including tour/orientation, meeting prep, **agenda creation**, synthesis, planning, discovery, PRD, onboarding, etc.):
 
-1. **ROUTE**: `arete skill route "<user message>"`
-2. **LOAD**: Read the matched skill's SKILL.md file
-3. **EXECUTE**: Follow the skill's complete workflow
+1. **ROUTE**: `arete skill route "<user message>"` or `arete route "<user message>"`
+2. **CHECK TYPE**: Router returns `type: 'skill'` or `type: 'tool'`
+3. **For skills** (`type: 'skill'`, `action: 'load'`):
+   - **LOAD**: Read the matched skill's SKILL.md file
+   - **EXECUTE**: Follow the skill's complete workflow
+4. **For tools** (`type: 'tool'`, `action: 'activate'`):
+   - **READ**: Load the tool's TOOL.md file
+   - **ACTIVATE**: Follow the tool activation pattern (see Tools section below)
 
-**Do NOT use ad-hoc Grep/Glob/Read for PM actions. Skills are mandatory.**
+**Do NOT use ad-hoc Grep/Glob/Read for PM actions. Skills and tools are mandatory.**
 
 See routing-mandatory.mdc for details. The full workflow and patterns are below.
 
@@ -189,14 +194,34 @@ The table remains the catalog of available skills and the fallback when the rout
 
 ### Tools (Lifecycle-Based Capabilities)
 
-Tools are different from skills - they have phases, track progress over time, and eventually complete/deprecate.
+Tools are different from skills - they have phases, track progress over time, and eventually complete/deprecate. **Tools are now discoverable via the router** - the system automatically routes tool-related queries.
 
 | User Intent | Action | Tool |
 |-------------|--------|------|
 | "I'm starting a new job" / "30/60/90 plan" | Start onboarding | `onboarding` |
 | "Seed my context" / "Import meeting history" | Bootstrap from integrations | `seed-context` |
 
-Tools are located in `.cursor/tools/`. When activated, tools create a project in `projects/active/` to track state and progress. See `.cursor/tools/README.md` for framework details.
+**Tool Activation Pattern:**
+
+When the router returns `type: 'tool'` and `action: 'activate'`:
+
+1. **Read the tool file**: `.cursor/tools/[tool-name]/TOOL.md` (e.g., `.cursor/tools/onboarding/TOOL.md`)
+2. **Ask about scope** (if applicable): Many tools offer comprehensive vs streamlined modes
+3. **Gather tool-specific context**: Company/role details, preferences, goals (varies by tool)
+4. **Create project structure**: `projects/active/[tool-name]/` with subdirectories:
+   - `README.md` (status, current phase, progress tracking)
+   - `plan/` (plans and schedules)
+   - `inputs/` (raw inputs during tool lifecycle)
+   - `working/` (in-progress work)
+   - `outputs/` (deliverables and outcomes)
+5. **Initialize phase-specific files**: Follow tool's activation workflow (varies by tool)
+6. **Guide through first phase**: Help user start the tool's workflow
+
+**Key differences from skills:**
+- Skills: **Load and execute** immediately (stateless, one-time)
+- Tools: **Activate and track** over time (stateful, multi-phase, eventual graduation)
+
+Tools are located in `.cursor/tools/`. When activated, tools create a project in `projects/active/` to track state and progress. The tool remains active until graduation criteria are met (see tool's TOOL.md for specifics). See `.cursor/tools/README.md` for framework details.
 
 ### Integrations
 
