@@ -1,0 +1,84 @@
+---
+description: Dev practices for Arete — lint, format, conventions, build memory
+globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*"]
+alwaysApply: true
+---
+
+# Dev practices (Arete build)
+
+**Only when in Build Context (BUILDER mode).** See `arete-context.mdc`. If `agent_mode` is `guide` or you are in an end-user workspace, ignore this rule.
+
+Standards for building and changing Arete. **Testing** is covered in `testing.mdc`; this rule covers the rest.
+
+## Build memory
+
+- **USER.md** (root, gitignored): User-specific context. Copy from `USER.md.example` and fill in local env, preferences, reminders.
+- **MEMORY.md**: `dev/MEMORY.md` — index of significant build/architecture changes.
+- **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
+
+**Leverage before acting**: Read `dev/collaboration.md` and scan `dev/MEMORY.md` at the start of substantive build work; before adding backlog, running seed, placing PRDs, or starting PRD/plan execution, read the relevant entry or collaboration.md so you don’t repeat past mistakes. See `agent-memory.mdc` § Leverage build memory.
+- **Backlog**: `dev/backlog/` — future work and enhancements. Use subfolders:
+  - `features/` — new capabilities (e.g., progress-dashboard, google-calendar-provider)
+  - `improvements/` — enhancements to existing functionality (e.g., automated-code-review, skills-enhancement)
+  - Do not put backlog items in `dev/backlog/` root; always use `features/` or `improvements/`.
+- **PRDs for Areté features**: Put PRDs in `dev/prds/{feature-name}/prd.md`, not in `projects/active/`. `projects/active/` is for PMs *using* Areté; `dev/` is internal build tooling.
+
+### Entries vs scratchpad vs backlog
+
+| Content | Location | Examples |
+|---------|----------|----------|
+| **What happened** — decisions, changes, learnings | `dev/entries/` | Refactors, architectural decisions, methodology findings |
+| **Raw or underdeveloped ideas** | `scratchpad.md` (root) | "We should eventually build onboarding"; quick capture, parking lot |
+| **Mature future work** — discussed, with a plan | `dev/backlog/` | Idea + general plan, enough detail to become a PRD |
+
+**Do not** put backlog items or future work in entries. Entries record what was decided or done; scratchpad and backlog record what might be done. If an entry documents an analysis that produces a prioritized backlog, put the backlog in `dev/backlog/features/` or `dev/backlog/improvements/` (not in the root, not in entries).
+
+**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: “Should I add this to build memory (dev/MEMORY.md)?” If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
+
+## Pre-mortem for complex work
+
+For **multi-step work** (PRD execution, large refactors, new systems, integration work)—and **when using Plan Mode**—conduct a pre-mortem before execution.
+
+- **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
+- **How**: Use `dev/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
+- **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
+- **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `dev/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
+- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/skills/execute-prd/SKILL.md`, `dev/skills/plan-to-prd/SKILL.md`.
+
+## TypeScript / Node.js
+
+- **Config**: `tsconfig.json` (NodeNext, strict). Tests: `tsconfig.test.json`.
+- **Imports**: Use `.js` extensions for local modules (NodeNext resolution). Use `import type` when a symbol is only used as a type.
+- **Style**: Prefer `const`/`let`; avoid `var`. Use strict equality. No unused vars. Use optional chaining and nullish coalescing (`??`) where they clarify intent.
+- **Types**: Prefer `type` over `interface` except for public API contracts. Avoid `any` and `unknown`; avoid `as` or `!` unless necessary (e.g. known-safe casts after validation).
+- **Functions**: Use the `function` keyword for top-level/named functions; arrow functions for callbacks and short inline use. Descriptive names (verbs + nouns, e.g. `getUserData`). Use default parameters and destructuring where it improves readability.
+- **Naming**: PascalCase for types/classes; camelCase for variables, functions, methods; UPPERCASE for constants and env-related names. Files/dirs: kebab-case.
+- **Structure**: Prefer functional, declarative code; avoid classes unless stateful encapsulation is needed. Use constants for magic numbers and repeated values. Iterate and modularize rather than duplicating.
+- **Async**: Prefer `async`/`await` over raw Promises.
+- **Security**: Use environment variables (or `.credentials`/config) for secrets; validate and sanitize CLI inputs and file paths; avoid executing user-controlled strings as shell commands.
+- **Tests**: `node:test` + `node:assert/strict`; see `testing.mdc`.
+
+## Python
+
+- **Location**: `scripts/integrations/`. Tests: `test_*.py` in same directory.
+- **Style**: unittest; mock external I/O. See `testing.mdc` for runner and patterns.
+
+## Linting / formatting
+
+- No ESLint or Prettier in the repo yet. For now:
+  - Match existing style in the file (indent, quotes, semicolons).
+  - Run `npm run typecheck` and `npm test` / `npm run test:all` before committing.
+- If you add ESLint or Prettier, document config and scripts here and in MEMORY.
+
+## Before committing
+
+1. `npm run typecheck`
+2. `npm run test:all` (or `npm test` + `npm run test:py`)
+3. New code → new/updated tests (see `testing.mdc`)
+
+## References
+
+- **Testing**: `.cursor/rules/testing.mdc`
+- **Build memory**: `dev/MEMORY.md`, `USER.md.example`
+- **Node/TS conventions**: Informed by [Cursor Directory Node.js rules](https://cursor.directory/rules/node.js); Payload/Vue/Mongo-specific parts omitted.
