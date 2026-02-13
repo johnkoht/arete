@@ -68,14 +68,33 @@ Focused 30-day plan with essential tracking.
 
 **Mindset**: Curiosity over contribution. Your job is to absorb, not to fix.
 
-**Key Activities**:
-- [ ] Schedule 1:1s with key stakeholders (manager, peers, cross-functional partners)
-- [ ] Read all available documentation (PRDs, strategy docs, wikis)
+#### Two Traps to Avoid
+
+Before diving into activities, be aware of two common pitfalls:
+
+1. **The Documentation Hole**: Spending weeks reading documentation without talking to people. Context lives in conversations, not wikis. Documentation is a starting point, not the full picture. Balance reading with relationship-building from day one.
+
+2. **Coming In Hot**: Proposing solutions in weeks 1-2 before you understand the problem space. Resist the urge to "add value" through suggestions too early. Your fresh perspective is valuable, but only after you've earned the context to wield it effectively.
+
+#### Key Activities
+
+- [ ] Schedule **walking 1:1s** (not sitting ones) with key stakeholders (manager, peers, cross-functional partners)
+- [ ] Use **The 9 Magic Words** in every 1:1: "What can I do to make your life easier?" — This opens doors and builds relationships faster than any other question
+- [ ] Ask your manager, eng lead, and design lead: **"Is there a burning problem I can investigate and diagnose?"** (not solve) — Aim for 2-3 problems to deeply understand
+- [ ] Read all available documentation (PRDs, strategy docs, wikis) — but don't fall into the documentation hole
 - [ ] Shadow customer calls or review recordings
 - [ ] Understand the product deeply (use it, break it, question it)
 - [ ] Map the organization and decision-making processes
 - [ ] Identify the "unwritten rules" and cultural norms
-- [ ] Build draft context files as you learn
+- [ ] **Document as you learn** — Create data dictionaries, process maps, and guides as you understand them. Triple benefit: deepens your learning, creates a reference for your future self, and provides leverage for the team
+
+#### Breadth Over Depth
+
+During your first 30 days, resist the temptation to dive deep into rabbit holes. You have a **fresh eyes window** — a limited time when your beginner's mind reveals opportunities, dysfunctions, and questions that others have stopped seeing. Use this window wisely:
+
+- **Survey broadly before specializing** — Touch every part of the business, product, and team before deep-diving any one area
+- **Capture fresh observations** — Write down what surprises you, what seems obvious but isn't documented, what feels harder than it should be
+- **"Because vs Despite" lens** — Businesses thrive **despite** problems, not because everything is perfect. Observe what's working and why, not just what's broken. This lens helps you choose your battles wisely.
 
 **Questions to Answer**:
 - What problem does the company solve? For whom?
@@ -97,6 +116,7 @@ Focused 30-day plan with essential tracking.
 - You've met with all key stakeholders at least once
 - Draft context files exist for core areas
 - You have a clear picture of current priorities
+- **You've held a situational conversation with your manager** — You can play back what you've learned and validate your understanding ("Here's what I understand about our strategy/customers/priorities. What am I missing?")
 
 ---
 
