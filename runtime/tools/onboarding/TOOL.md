@@ -126,6 +126,50 @@ During your first 30 days, resist the temptation to dive deep into rabbit holes.
 
 **Mindset**: Helpful contributor. Look for ways to add value without overreaching.
 
+#### Quick Win Finder
+
+Your first 30 days built understanding. Now it's time to prove you can deliver. Quick wins are the bridge between observation and ownership—they build your trust battery and earn you credibility for bigger initiatives.
+
+**What makes a good quick win?**
+
+- **Fast**: Completable in 2-3 weeks (not months)
+- **Visible**: Others see the impact (not invisible infrastructure)
+- **Low-risk**: Won't break critical systems if you're still learning
+- **Unowned**: Nobody else is already working on it (unclaimed territory)
+
+**Why quick wins matter**: Every small commitment you deliver charges your trust battery. Quick wins prove competence, demonstrate your ability to ship, and earn you the credibility to tackle bigger problems later. They're not just tasks—they're trust-building exercises.
+
+**Tactical Quick Win Examples**:
+
+- **Demo the product internally** — Build a presentation or workshop that showcases the product to new employees or other teams. Proves you understand it deeply by weeks 4-6.
+- **Run a retro on a recent release** — Your outsider perspective is an asset here. Ask the "dumb" questions about what worked and what didn't. Team gets insights, you get context.
+- **Fix a small visible problem hiding in plain sight** — That annoying onboarding flow bug? The confusing error message? The outdated screenshot in docs? Small fixes with visible impact.
+- **Audit an existing workflow for low-hanging fruit** — Review a conversion funnel, user onboarding flow, or internal process. Identify 3-5 quick improvements with minimal engineering lift.
+- **Create or improve a recurring artifact** — Design a better template for PRDs, status updates, roadmap formats, or sprint planning. Something the team will use repeatedly.
+
+#### Trust Battery
+
+Trust isn't binary—it's not "trusted" vs "untrusted." It's a battery that charges (or drains) with every interaction. You start your new role with a neutral battery. Every commitment kept, every deadline met, every "I'll follow up" that actually gets followed up—these charge the battery. Every missed commitment, every overpromise, every "I'll get back to you" that never happens—these drain it.
+
+**How to charge your trust battery:**
+
+- **Make small commitments and keep them** — "I'll send you that doc by Friday" → send it Thursday. Trust grows through consistency, not grand gestures.
+- **Track your Say/Do Ratio** — What you say you'll do vs what you actually do. A 100% Say/Do Ratio is the fastest way to build credibility. Keep a running list in your notes: commitments made → commitments delivered.
+- **Make progress visible** — Share what you're working on, even if it's not done. "Here's what I'm thinking so far" invites feedback and shows you're moving forward.
+- **Deliver incrementally** — Don't disappear for 3 weeks and emerge with a finished artifact. Share drafts early, get feedback often, iterate publicly.
+
+#### Navigating Imposter Syndrome
+
+If you're feeling some version of "I don't know what I'm doing" or "They're going to figure out I don't belong here"—welcome to the club. Imposter syndrome is nearly universal in new roles, especially high-performing ones. Here's the truth: your fresh perspective is valuable, not a liability.
+
+You're not supposed to know everything yet. You're 30-60 days in. What you're supposed to do is:
+- Ask good questions (you're doing this)
+- Learn quickly (you're doing this)
+- Deliver on small commitments (this is what Phase 2 is for)
+- Show up consistently (keep showing up)
+
+Focus on contribution, not perfection. Nobody expects you to be the expert yet. They expect you to be curious, reliable, and helpful. You're already doing the work—now give yourself permission to be a beginner who's learning fast.
+
 **Key Activities**:
 - [ ] Join active projects in a supporting role
 - [ ] Take on small, well-scoped tasks and deliver them well
@@ -402,6 +446,8 @@ When graduation criteria are met:
 - How am I doing so far? Any feedback?
 - Where do you see opportunities I could help with?
 - What's blocking you that I might be able to address?
+- What's one thing I could take off your plate?
+- Are there any quick wins you've been meaning to tackle but haven't had time for?
 
 **Phase 3 - Lead**:
 - What do you think I should focus on long-term?
