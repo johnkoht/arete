@@ -100,7 +100,7 @@ The Reviewer acts as a sr. engineer in two moments:
    **Documentation Impact Mitigation:**
 
    If the PRD changes user-facing behavior, paths, or setup:
-   1. Run documentation checklist (see AGENTS.md § Documentation Planning Checklist).
+   1. Run documentation checklist (see dev.mdc § Documentation planning checklist).
    2. If docs are affected: Add a doc-update task to prd.json (last task, depends on all implementation tasks).
    3. Provide the doc subagent with: feature changes summary, documentation checklist, and search results (which files reference affected concepts).
    4. Doc subagent runs checklist, updates files, commits.
