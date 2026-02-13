@@ -12,6 +12,8 @@ Index of PRDs for Areté development. Execution is tracked via `dev/autonomous/p
 | [intelligence-and-calendar](intelligence-and-calendar/prd.md) | 2026-02-09 | Search providers, calendar integration |
 | [multi-ide-support](multi-ide-support/prd.md) | 2026-02-10 | IDE adapter, Cursor & Claude Code |
 | [meeting-agenda-skill](meeting-agenda-skill/README.md) | 2026-02-11 | prepare-meeting-agenda skill, template system |
+| [rules-architecture-refactor](rules-architecture-refactor/prd.md) | 2026-02-12 | Separated BUILDER/GUIDE rules, consolidated build practices in dev.mdc |
+| [enhance-onboarding-tool](enhance-onboarding-tool/prd.md) | 2026-02-13 | Added tactical best practices, templates, anti-patterns to onboarding tool |
 
 ## Active / vision (not task-executed)
 
