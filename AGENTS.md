@@ -800,10 +800,11 @@ When building Areté features:
    - At start of substantive work: read **`dev/collaboration.md`** (patterns, preferences, Corrections) and scan **`dev/MEMORY.md`** for relevant entries.
    - Before adding backlog, running seed, placing PRDs, or starting PRD/plan execution: read the related entry or collaboration.md so you don’t repeat past mistakes.
 5. **Follow patterns** established in existing code
-6. **Write tests** for all new functionality
-7. **Update AGENTS.md** with new patterns or gotchas discovered
-8. **Use TypeScript strictly** - no `any`, proper types
-9. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
+6. **Check Multi-IDE consistency** - Before editing `runtime/rules/` or `runtime/tools/`, see § Quality Practices item 6 (Multi-IDE Consistency Check)
+7. **Write tests** for all new functionality
+8. **Update AGENTS.md** with new patterns or gotchas discovered
+9. **Use TypeScript strictly** - no `any`, proper types
+10. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
 
 ### Execution Path Decision Tree
 
@@ -941,6 +942,22 @@ Before implementing new helpers, services, or abstractions:
 - Apply KISS (Keep It Simple) — simplest solution that meets requirements
 
 If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
+
+#### 6. Multi-IDE Consistency Check (For Rule and Config Changes)
+
+**When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or any path that affects both Cursor and Claude installations.
+
+**Why**: Areté supports multiple IDEs via adapters. Canonical rules use `.cursor/` paths that get transformed to `.claude/` during transpilation. Incorrect patterns break one IDE or the other.
+
+**Checklist**:
+- [ ] **No "either/or" paths**: Don't write `.cursor/X or .claude/X` — use only `.cursor/X` (adapter transforms it)
+- [ ] **No hardcoded IDE names in content**: Use `.cursor/` paths; the adapter handles `.claude/` conversion
+- [ ] **Check adapter transforms**: Claude adapter does `.cursor/` → `.claude/` and `.mdc` → `.md`
+- [ ] **Test mentally**: "If this path is transformed, does it still make sense?"
+
+**Common mistake**: Writing "See `.cursor/tools/X` or `.claude/tools/X`" in canonical source. After Claude transformation, this becomes "See `.claude/tools/X` or `.claude/tools/X`" (broken).
+
+**Reference**: `src/core/adapters/claude-adapter.ts` → `transformRuleContent()`
 
 ### Documentation Planning Checklist
 
