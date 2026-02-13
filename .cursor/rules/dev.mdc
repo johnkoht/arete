@@ -107,7 +107,24 @@ These practices apply to **all development work**, not just PRD execution. Scale
 
 **Skip when**: Single-file changes, trivial updates, well-understood patterns
 
-### 2. Quality gates (mandatory for ALL commits)
+### 2. Second opinion review (optional, for plans and PRDs)
+
+**When**: Before executing a plan or PRD, especially when:
+- The work is complex or high-stakes
+- You want a different agent/model to review before proceeding
+- Audience (builder vs user) isn't obvious
+
+**How**:
+- Use skill: `dev/skills/review-plan/SKILL.md`
+- Reviewer applies a checklist (scope, risks, dependencies, patterns, backward compatibility, completeness)
+- Reviewer provides **devil's advocate** perspective: "If this fails, it will be because..." and "The worst outcome would be..."
+- Output: Concerns, Strengths, Devil's Advocate, Verdict (Approve / Approve with suggestions / Revise)
+
+**Key check**: Is the audience clear? Flag if you can't tell whether work is for the builder (dev/) or the user (runtime/, src/).
+
+**Skip when**: Trivial changes, well-understood work, time-sensitive fixes
+
+### 3. Quality gates (mandatory for ALL commits)
 
 Before any commit, these **must pass**:
 
@@ -123,7 +140,7 @@ npm run test:py
 
 **No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
 
-### 3. Code review checklist (for any substantial change)
+### 4. Code review checklist (for any substantial change)
 
 Apply this 6-point checklist before committing:
 
@@ -136,7 +153,7 @@ Apply this 6-point checklist before committing:
 
 If any item fails, fix before committing.
 
-### 4. Build memory capture (after substantial work)
+### 5. Build memory capture (after substantial work)
 
 **When**: After work that meets any of these criteria:
 - Modifies 3+ files
@@ -171,7 +188,7 @@ If any item fails, fix before committing.
 ```
 This creates a lightweight audit trail. If entries consistently show "Decision tree followed: No" or missing execution path sections, that signals the guidance isn't being applied.
 
-### 5. Reuse and avoid duplication
+### 6. Reuse and avoid duplication
 
 Before implementing new helpers, services, or abstractions:
 - Check if equivalent functionality exists in `src/core/`, `src/integrations/`, or existing modules
@@ -181,7 +198,7 @@ Before implementing new helpers, services, or abstractions:
 
 If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
 
-### 6. Multi-IDE consistency check (for rule and config changes)
+### 7. Multi-IDE consistency check (for rule and config changes)
 
 **When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or any path that affects both Cursor and Claude installations.
 
