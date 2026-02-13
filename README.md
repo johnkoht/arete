@@ -68,11 +68,12 @@ arete/
 
 ### Tools (Lifecycle-Based Capabilities)
 
-Tools are different from skills - they have phases, track progress, and eventually complete.
+Tools are different from skills - they have phases, track progress, and eventually complete. **Tools are now discoverable via the router** - just describe what you need and the system routes you to the right tool.
 
 | Tool | Purpose | How to Start |
 |------|---------|--------------|
-| Onboarding | 30/60/90 day plan for thriving at a new job | "Start onboarding tool" or "Help me with my 30/60/90 day plan" |
+| Onboarding | 30/60/90 day plan for thriving at a new job | "I'm starting a new job" or "Help me onboard" |
+| Seed Context | Bootstrap workspace from historical data | "Seed my context" or "Import my meeting history" |
 
 See `.cursor/tools/README.md` or `.claude/tools/README.md` for more about the tools framework (path depends on IDE).
 

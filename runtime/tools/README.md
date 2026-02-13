@@ -99,17 +99,21 @@ Tools don't just expire—they **graduate**. Each tool defines clear graduation 
 
 ## Using a Tool
 
-To activate a tool, tell the assistant:
+Tools are now **discoverable via the router**. Just describe what you want to do, and the system will automatically route you to the right tool:
 
-- "Start onboarding tool"
-- "I'm starting a new job, help me onboard"
-- "Activate [tool-name]"
+- "I'm starting a new job"
+- "Help me onboard at my new role"
+- "Seed my context from Fathom"
+- "Import my meeting history"
 
 The assistant will:
-1. Read the tool definition
-2. Ask about scope preference (if applicable)
-3. Create the project structure
-4. Guide you through the first phase
+1. Route to the appropriate tool (via `arete route` or `arete skill route`)
+2. Read the tool definition
+3. Ask about scope preference (if applicable)
+4. Create the project structure in `projects/active/[tool-name]/`
+5. Guide you through the first phase
+
+You can also activate a tool explicitly by saying "Start [tool-name] tool" or "Activate [tool-name]".
 
 ## Creating New Tools
 

@@ -233,11 +233,12 @@ The PM **Skills table** and **"Using skills"** / **"Skill router"** instructions
 | When | What to include |
 |------|------------------|
 | **Always (from rules)** | pm-workspace.mdc (intent table, "Using skills", "Skill router"); AGENTS.md for architecture. |
-| **After routing / intent** | The **single skill file** for the chosen skill (e.g. meeting-prep or synthesize). |
+| **After routing / intent** | The **single skill or tool file** for the chosen skill (e.g. meeting-prep skill or onboarding tool). |
 | **During skill execution** | Only what the skill asks for: specific person files, meeting files, project READMEs, QMD query results. Not the entire workspace. |
-| **Optional first step** | Output of `arete skill route "<user message>"` or `arete route "<message>" --json` (skill id + path; and model tier if using route). |
+| **During tool activation/use** | Tool file + project structure (`projects/active/[tool-name]/`) + workspace data tool requests. |
+| **Optional first step** | Output of `arete skill route "<user message>"` or `arete route "<message>" --json` (skill/tool id + path + type + action; and model tier if using route). |
 
-So: **rules + chosen skill + data the skill fetches**. The agent should not dump the whole repo into context; it should follow the skill’s steps and pull only the files and search results needed for that workflow.
+So: **rules + chosen skill/tool + data the skill/tool fetches**. The agent should not dump the whole repo into context; it should follow the skill or tool’s steps and pull only the files and search results needed for that workflow.
 
 ## Architecture
 
