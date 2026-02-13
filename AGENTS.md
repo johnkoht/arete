@@ -579,6 +579,8 @@ integrations:
 
 **Status**: Production-ready. First execution (intelligence-and-calendar PRD) achieved 100% success: 12/12 tasks complete, 0 iterations required, 0/8 pre-mortem risks materialized.
 
+> **Note**: The quality practices used here (pre-mortem, code review, quality gates, memory capture) apply broadly to all development work—not just PRD execution. See § "Quality Practices for Any Execution" above for guidance on using these practices in direct execution.
+
 #### Pattern Overview
 
 The system uses a two-layer architecture:
@@ -802,6 +804,143 @@ When building Areté features:
 7. **Update AGENTS.md** with new patterns or gotchas discovered
 8. **Use TypeScript strictly** - no `any`, proper types
 9. **Consider documentation impact** - When planning features or refactors, run the documentation checklist before finalizing
+
+### Execution Path Decision Tree
+
+When you approve a plan (in Plan Mode or otherwise), follow this decision tree:
+
+```
+User approves plan
+     |
+     ├─ Tiny (1-2 simple steps: fix typo, add comment, update string)
+     |  → Direct execution
+     |  → Quality gates (typecheck + test) ✓
+     |  → Skip pre-mortem, skip memory capture
+     |
+     ├─ Small (2-3 moderate steps: add function + tests, refactor module)
+     |  → Ask: "Run pre-mortem first? (Recommended for new features)"
+     |  → Direct execution (with optional pre-mortem)
+     |  → Quality gates ✓
+     |  → Offer: "Capture learnings?" at end
+     |
+     └─ Medium/Large (3+ steps OR complex: new system, integration, refactor)
+        → Strongly recommend: "PRD path or direct execution?"
+        → If PRD: Load dev/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
+        → If direct: Apply pre-mortem + quality gates + memory capture
+```
+
+**Examples:**
+
+| User Request | Size | Path | Why |
+|-------------|------|------|-----|
+| "Fix typo in README" | Tiny | Direct, no pre-mortem | Single file, trivial change |
+| "Add validation to email field" | Small | Ask about pre-mortem | 2-3 files, clear scope |
+| "Add retry logic with exponential backoff" | Small→Medium | Pre-mortem recommended | 2-3 files but touches error handling patterns |
+| "Add calendar integration" | Large | Recommend PRD | New system, 5+ tasks, integration risk |
+| "Refactor skill router to support tools" | Large | Recommend PRD | Architectural, multiple components |
+
+**Borderline cases** (use judgment):
+- "Add retry logic" — Sounds small but touches error handling across callers → lean toward pre-mortem
+- "Update CLI help text for 5 commands" — Multiple files but mechanical → direct execution
+
+**Anti-patterns (don't trigger PRD for these):**
+- ❌ "Fix 3 typos" — Even if 3 steps, trivial work
+- ❌ "Update 5 docs" — Multiple files but low complexity
+
+**When in doubt**: Offer both paths and let builder choose.
+
+### Quality Practices for Any Execution
+
+These practices apply to **all development work**, not just PRD execution. Scale them based on work size.
+
+#### 1. Pre-Mortem (Recommended for 3+ Steps or Complex Work)
+
+**When**: Before starting work that has risk (new systems, integrations, refactors, 3+ dependent tasks)
+
+**How**:
+- Use standalone skill: `dev/skills/run-pre-mortem/SKILL.md`
+- Or use template directly: `dev/templates/PRE-MORTEM-TEMPLATE.md`
+- Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
+- Create concrete mitigations for each risk
+- Reference mitigations during execution
+
+**Output**: Risks table with Problem + Mitigation + Verification for each risk
+
+**Skip when**: Single-file changes, trivial updates, well-understood patterns
+
+#### 2. Quality Gates (Mandatory for ALL Commits)
+
+Before any commit, these **must pass**:
+
+```bash
+npm run typecheck  # Must pass
+npm test           # Must pass (full suite, not just new tests)
+```
+
+If the work touches Python (`scripts/integrations/`), also run:
+```bash
+npm run test:py
+```
+
+**No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
+
+#### 3. Code Review Checklist (For Any Substantial Change)
+
+Apply this 6-point checklist before committing:
+
+- [ ] **Uses `.js` extensions** in imports (NodeNext module resolution)
+- [ ] **No `any` types** (strict TypeScript)
+- [ ] **Proper error handling** (try/catch with graceful fallback)
+- [ ] **Tests for happy path and edge cases**
+- [ ] **Backward compatibility preserved** (function signatures unchanged unless explicitly breaking)
+- [ ] **Follows project patterns** (see existing code, `dev.mdc`)
+
+If any item fails, fix before committing.
+
+#### 4. Build Memory Capture (After Substantial Work)
+
+**When**: After work that meets any of these criteria:
+- Modifies 3+ files
+- Takes substantial time
+- Introduces new patterns or architectural changes
+- Encounters surprising issues or learnings
+
+**How**:
+1. Create entry: `dev/entries/YYYY-MM-DD_[short-name]-learnings.md`
+2. Include:
+   - What changed (brief summary)
+   - What worked well (patterns to repeat)
+   - What didn't work (patterns to avoid)
+   - Learnings for next time
+   - Corrections (if builder corrected you, document under "Learnings / Corrections")
+   - **Execution path used** (see below)
+3. Add index line to `dev/MEMORY.md` (top of Index section)
+
+**Format**: See existing entries in `dev/entries/` for examples
+
+**Skip when**: Trivial changes (typo fixes, comment updates), no learnings to capture
+
+**Agent behavior**: After substantial work completes, prompt: "Capture learnings in dev/MEMORY.md?"
+
+**Tracking execution path**: In each memory entry, include a brief "Execution Path" section:
+```markdown
+## Execution Path
+- **Size assessed**: Small / Medium / Large
+- **Path taken**: Direct / Direct + pre-mortem / PRD
+- **Decision tree followed?**: Yes / No / Partially
+- **Notes**: (e.g., "Builder chose direct over recommended PRD", "Skipped pre-mortem, should have done one")
+```
+This creates a lightweight audit trail. If entries consistently show "Decision tree followed: No" or missing execution path sections, that signals the guidance isn't being applied.
+
+#### 5. Reuse and Avoid Duplication
+
+Before implementing new helpers, services, or abstractions:
+- Check if equivalent functionality exists in `src/core/`, `src/integrations/`, or existing modules
+- Search AGENTS.md for existing patterns (search providers, CLI helpers, workspace utilities)
+- Apply DRY (Don't Repeat Yourself) — use existing code where it fits
+- Apply KISS (Keep It Simple) — simplest solution that meets requirements
+
+If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
 
 ### Documentation Planning Checklist
 
