@@ -51,6 +51,69 @@ program
   .name('arete')
   .description('Areté - Product Management Workspace CLI')
   .version(packageJson.version, '-v, --version', 'Show version number')
+  .addHelpText('after', `
+${chalk.bold('Setup & Workspace')}
+  install [directory]              Initialize workspace (--ide cursor|claude)
+  setup                            Configure API keys and credentials
+  update                           Update skills, tools, and integrations
+  status                           Check workspace health and versions
+
+${chalk.bold('Intelligence Services')}
+  context --for "query"            Get relevant workspace files for task
+  memory search "query"            Search decisions, learnings, observations
+  resolve "reference"              Resolve person, meeting, or project
+  brief --for "query" [--skill]    Assemble briefing before skill execution
+  route "query"                    Route to skill with model suggestion
+
+${chalk.bold('Skills & Tools')}
+  skill list                       List available skills
+  skill route "query"              Route to best-matching skill
+  skill install <source>           Install from skills.sh (owner/repo) or path
+  skill set-default <skill> --for <role>  Set preferred skill for role
+  skill defaults                   Show role assignments
+  tool list                        List available tools
+  tool show <name>                 Show tool details and lifecycle
+
+${chalk.bold('Templates')}
+  template list meeting-agendas    List meeting agenda templates
+  template view meeting-agenda --type <name>  View template structure
+
+${chalk.bold('People')}
+  people list [--category]         List people (internal, customers, users)
+  people show <slug|email>         Show person details
+  people index                     Regenerate people/index.md
+
+${chalk.bold('Meetings')}
+  meeting add --file <path>        Add meeting from JSON
+
+${chalk.bold('Integrations')}
+  integration configure <name>     Configure integration
+  pull calendar [--today|--days N] Pull calendar events
+  pull fathom [--days N]           Pull Fathom recordings
+  seed [source]                    Import historical data
+
+${chalk.bold('Examples')}
+  ${chalk.dim('# Install new workspace')}
+  arete install ~/my-pm-workspace
+
+  ${chalk.dim('# Find right skill for task')}
+  arete route "create meeting agenda"
+  arete skill route "help me prep for my meeting"
+
+  ${chalk.dim('# Search for past decisions')}
+  arete memory search "pricing strategy"
+
+  ${chalk.dim('# Get context for discovery work')}
+  arete context --for "user onboarding improvements"
+
+  ${chalk.dim('# List meeting agenda templates')}
+  arete template list meeting-agendas
+
+  ${chalk.dim('# Pull today\'s calendar')}
+  arete pull calendar --today
+
+${chalk.dim('For complete documentation, see GUIDE.md in your workspace after install.')}
+`)
   .hook('preAction', (thisCommand) => {
     // Don't print header for --json output or version/help
     const opts = thisCommand.opts();

@@ -1,9 +1,0 @@
-schema: 1
-version: '0.1.0'
-source: npm
-agent_mode: builder
-skills:
-  core: []
-  overrides: []
-tools: []
-integrations: {}

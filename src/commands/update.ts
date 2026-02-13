@@ -276,6 +276,22 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     writeFileSync(join(workspaceRoot, filename), content, 'utf-8');
   }
   
+  // Copy GUIDE.md to workspace root (copy-if-missing, never overwrite)
+  // Source: runtime/GUIDE.md (dev) or dist/GUIDE.md (installed)
+  const guideSource = sourceInfo.path 
+    ? join(sourceInfo.path, 'runtime', 'GUIDE.md')
+    : join(sourcePaths.skills, '..', 'GUIDE.md'); // dist/GUIDE.md when installed
+  const guideDest = join(workspaceRoot, 'GUIDE.md');
+  
+  if (!existsSync(guideDest) && existsSync(guideSource)) {
+    try {
+      cpSync(guideSource, guideDest);
+      results.structure.filesAdded.push('GUIDE.md');
+    } catch (err) {
+      // Silently skip if copy fails (not critical for update)
+    }
+  }
+  
   // Summary
   if (!json) {
     console.log('');

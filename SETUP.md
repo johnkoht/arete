@@ -1,152 +1,55 @@
 # Areté Setup Guide
 
-## Overview
+> **For usage documentation and workflows**, see [GUIDE.md](GUIDE.md) in your workspace after install.
+> This guide covers installation and integration setup only.
 
-Areté is a Product Management workspace for Cursor and Claude Code that helps you:
-- Maintain business and product context
-- Run project-based PM workflows (discovery, PRDs, competitive analysis, roadmaps)
-- Build institutional memory (decisions, learnings)
-- Search across all content with QMD
+---
 
-## Workspace Structure
+## Installation
 
-The IDE config directory is `.cursor/` for Cursor or `.claude/` for Claude Code, depending on how you installed. Skills live in `.agents/skills/` for both.
-
-```
-arete/
-├── arete                    # CLI entry point (./arete help)
-├── now/                     # Current focus (start here)
-│   ├── scratchpad.md        # Quick capture, parking lot
-│   ├── week.md              # This week's priorities
-│   └── today.md             # Today's focus (daily-plan)
-│
-├── goals/                   # Strategy and goals
-│   ├── strategy.md          # Org strategy, OKRs, pillars
-│   ├── quarter.md           # Current quarter goals
-│   ├── initiatives.md       # Strategic bets
-│   └── archive/             # Alignment snapshots
-│
-├── context/                 # Core context (source of truth)
-│   ├── business-overview.md
-│   ├── business-model.md
-│   ├── competitive-landscape.md
-│   ├── products-services.md
-│   ├── users-personas.md
-│   └── _history/            # Archived context versions
-│
-├── projects/                # Project workspaces
-│   ├── active/              # Currently in progress
-│   └── archive/             # Completed projects
-│
-├── resources/               # Raw inputs
-│   ├── meetings/            # Meeting notes and transcripts
-│   └── notes/               # Standalone notes
-│
-├── .arete/                  # System-managed (not user-edited directly)
-│   ├── memory/              # Institutional knowledge
-│   │   ├── items/           # Atomic facts (decisions, learnings)
-│   │   └── summaries/       # Synthesized context
-│   └── activity/            # Activity log
-│
-├── .credentials/            # API keys and tokens (gitignored)
-├── .cursor/ or .claude/     # IDE config (rules, tools, integrations)
-├── .agents/skills/          # PM skills (shared by both IDEs)
-├── people/                  # People (internal, customers, users)
-├── scripts/                 # Setup and utility scripts
-└── templates/               # Document templates
-    ├── plans/               # Plan templates (goals, week)
-    ├── projects/            # Project templates
-    ├── inputs/              # Input templates
-    └── outputs/             # Output templates (PRDs, etc.)
-```
-
-**Planning structure**: `now/`, `goals/`, and `templates/plans/` are created by `arete install` and backfilled by `arete update`. Existing workspaces are migrated automatically on `arete update`.
-
-**Meeting propagation**: After saving or syncing meetings, run the **process-meetings** skill to update people and memory. Optional: set `internal_email_domain` in `arete.yaml` (e.g. `internal_email_domain: "acme.com"`) so attendees from your org are classified as internal.
-
-**Meeting intelligence**: Use **meeting-prep** to build a prep brief before a meeting (attendees, recent meetings, action items, talking points). Use **daily-plan** to see today's focus, week priorities, and meeting context for each of today's meetings (you supply the meeting list; no calendar integration in v1).
-
-## Choosing Your IDE
-
-Areté supports Cursor and Claude Code. Choose at install time:
-
-- **Cursor** (default): `arete install` or `arete install --ide cursor` — creates `.cursor/` with `.mdc` rules
-- **Claude Code**: `arete install --ide claude` — creates `.claude/` with `.md` rules and root `CLAUDE.md`
-
-The `ide_target` field in `arete.yaml` stores your choice; `arete update` uses it when regenerating rules. One IDE per workspace. If both `.cursor/` and `.claude/` exist without explicit `ide_target`, `arete status` will warn — set `ide_target` in `arete.yaml` to remove the warning.
-
-## Customizing Skills
-
-Skills are workflows (discovery, PRD, meeting prep, etc.) that ship in `.agents/skills/`. You can customize them by editing files there, add third-party skills, or choose a different skill for a given role.
-
-- **Install from skills.sh or a path**: `arete skill install owner/repo` or `arete skill install ./path/to/skill`
-- **Use a different skill for a role**: `arete skill set-default <skill-name> --for <role>` (e.g. use a community PRD skill for the "create-prd" role)
-- **View defaults**: `arete skill defaults`
-
-See [.agents/skills/README.md](.agents/skills/README.md) for full skill management docs.
-
-## Understanding the Architecture
-
-### For Users (Product Managers)
-
-When you use Areté, you interact with:
-- **Context files** (`context/`) - Your business and product knowledge
-- **Projects** (`projects/`) - Your active and archived PM work
-- **Memory** (`.arete/memory/`) - Decisions, learnings, institutional knowledge
-- **Skills** (`.agents/skills/`) - PM workflows like discovery, PRD creation
-- **Tools** (`.cursor/tools/` or `.claude/tools/`) - Lifecycle features like onboarding
-
-### For Developers (Areté Maintainers)
-
-If you're contributing to or building Areté itself:
-
-**Read `AGENTS.md` first** - This file contains comprehensive context for AI agents and developers:
-- What Areté is and who uses it
-- High-level architecture and patterns
-- Key systems (meetings, integrations, workspace)
-- Coding conventions and common patterns
-- Future concepts and design decisions
-
-**Build vs Product separation**:
-- `dev/` = Internal development tooling (NOT shipped to users)
-- Everything else = Product code/content shipped via npm
-
-**Autonomous development**: `dev/autonomous/` contains a Ralph-inspired autonomous agent loop for building Areté features. See [`dev/autonomous/README.md`](dev/autonomous/README.md) for details.
-
-## Quick Start
-
-### 0. Run Setup
-
-Use the `arete` CLI to check dependencies and set up the workspace:
+### Quick Start
 
 ```bash
-# Check what's installed
-./arete setup
+# Install globally
+npm install -g @arete/cli
 
-# Install workspace (Cursor by default)
-./arete install
+# Create new workspace
+arete install ~/my-pm-workspace
 
-# Or for Claude Code:
-./arete install --ide claude
+# Or for Claude Code
+arete install ~/my-pm-workspace --ide claude
 
-# Initialize workspace (create directories, credentials)
-./arete init
-
-# Full setup (install + init)
-./arete setup all
-
-# See all available commands
-./arete help
+# Check workspace status
+cd ~/my-pm-workspace
+arete status
 ```
 
-### 1. Populate Context (Priority Order)
+### Choosing Your IDE
 
-Start with the most important context files:
+Areté supports **Cursor** and **Claude Code**. Choose at install time:
 
-**High Priority** (do first):
-1. `context/business-overview.md` - Company basics
-2. `context/users-personas.md` - Target users
-3. `context/products-services.md` - What you're building
+- **Cursor** (default): `arete install` or `arete install --ide cursor`
+  - Creates `.cursor/` with `.mdc` rules
+- **Claude Code**: `arete install --ide claude`
+  - Creates `.claude/` with `.md` rules and root `CLAUDE.md`
+
+The `ide_target` field in `arete.yaml` stores your choice. `arete update` uses it when regenerating rules.
+
+**Note**: One IDE per workspace. If both `.cursor/` and `.claude/` exist without explicit `ide_target`, `arete status` will warn—set `ide_target` in `arete.yaml` to resolve.
+
+---
+
+## Initial Workspace Setup
+
+After installation, fill in your context files (priority order):
+
+1. **context/business-overview.md** - Company basics
+2. **context/users-personas.md** - Target users
+3. **context/products-services.md** - What you're building
+
+See [GUIDE.md](GUIDE.md) § Getting Started for complete onboarding checklist.
+
+---
 
 **Medium Priority** (do next):
 4. `context/business-model.md` - How you make money
@@ -307,53 +210,21 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 - "Finalize this project"
 - Context will be updated, decisions logged, project archived
 
-## How It Works
-
-### Project Lifecycle
-
-```
-Create → Work → Synthesize → Finalize → Archive
-```
-
-1. **Create**: Start a project with a clear goal
-2. **Work**: Add inputs, iterate on drafts
-3. **Synthesize**: Pull learnings together
-4. **Finalize**: Commit changes to context, archive project
-
-### Context Management
-
-- Context files are the source of truth
-- Only update context when finalizing a project
-- Old versions are archived to `context/_history/`
-
-### Memory System
-
-- **decisions.md**: Key decisions with rationale
-- **learnings.md**: Insights for future reference
-- **activity-log.md**: What happened when
-
-## Tips
-
-- **Search first**: Use QMD to find related past work before starting
-- **Use scratchpad**: Capture quick notes, move to projects later
-- **Keep context current**: Review and update after major changes
-- **Log decisions**: Future you will thank present you
+---
 
 ## Troubleshooting
 
-**Rules not loading (Cursor)?**
-- Ensure `.cursor/rules/` folder exists
-- Check that `.mdc` files are properly formatted
-- Try reloading the Cursor window
+### Rules Not Loading
 
-**Rules not loading (Claude Code)?**
-- Ensure you ran `arete install --ide claude`
-- Check `.claude/rules/` and root `CLAUDE.md` exist
-- Run `arete update` to regenerate rules if needed
+**Cursor**: Check that `.cursor/rules/` exists and contains `.mdc` files. Run `arete update` to regenerate. Try reloading the Cursor window.
 
-**QMD installation fails on Apple Silicon?**
+**Claude Code**: Check that `.claude/rules/` exists and contains `.md` files, and `CLAUDE.md` exists at root. Run `arete update` to regenerate.
+
+### QMD Issues
+
+**Installation fails on Apple Silicon**:
 - Error: "llama.cpp is not supported under Rosetta"
-- Solution: Use native arm64 Node.js, not x64/Rosetta
+- Solution: Use native arm64 Node.js (not x64/Rosetta)
   ```bash
   # Check architecture (should show arm64)
   node -p "process.arch"
@@ -366,36 +237,24 @@ Create → Work → Synthesize → Finalize → Archive
   npm install -g https://github.com/tobi/qmd
   ```
 
-**QMD not finding content?**
-- Run `qmd update` to re-index
-- Run `qmd embed` to regenerate embeddings
-- Check `qmd status` to see collection health
+**QMD not finding content**: Run `qmd update` to re-index and `qmd embed` to regenerate embeddings.
 
-**QMD search seems slow?**
-- First search after `qmd embed` loads models (takes ~30s)
-- Subsequent searches are fast
-- `qmd search` (keyword) is faster than `qmd query` (hybrid)
+**QMD search seems slow**: First search after `qmd embed` loads models (~30s). Subsequent searches are fast.
 
-**Context feels outdated?**
-- Check "Last Updated" dates in context files
-- Create a project to update specific context
+### Calendar Not Working (macOS)
 
-## For Contributors & Developers
+**icalBuddy not found**: Install with `brew install ical-buddy`.
 
-If you're building Areté itself (not just using it):
+**No events showing**: Check that `arete integration configure calendar` selected calendars.
 
-1. **Read AGENTS.md** - Comprehensive architecture and context document
-2. **Check build memory** - `dev/MEMORY.md` for recent changes
-3. **Follow patterns** - Established in existing code
-4. **Write tests** - All new functionality requires tests (see `.cursor/rules/testing.mdc`)
-5. **Update docs** - Keep AGENTS.md current with new patterns
+**Permission denied**: Grant terminal (iTerm, Terminal.app) access to Calendar in System Settings → Privacy & Security → Calendar.
 
-### Autonomous Development
+### Common Errors
 
-Areté has an autonomous agent loop for building features:
-- Create PRD → Convert to JSON → Execute autonomously
-- Fresh Task subagent per task for clean context
-- Automatic testing and committing
-- See `dev/autonomous/README.md` for full workflow
+**"Workspace not found"**: Run `arete status` to check workspace validity. Ensure `arete.yaml` exists.
 
-This is **internal tooling only** - not shipped to Areté users.
+**"Integration not configured"**: Run `arete integration configure <name>` to set up integration.
+
+---
+
+For complete usage documentation, see [GUIDE.md](GUIDE.md) in your workspace.

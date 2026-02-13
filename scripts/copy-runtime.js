@@ -34,4 +34,12 @@ for (const dir of DIRS) {
   cpSync(src, dest, { recursive: true });
 }
 
+// Copy GUIDE.md to dist root
+const guideSrc = join(runtime, 'GUIDE.md');
+const guideDest = join(dist, 'GUIDE.md');
+if (existsSync(guideSrc)) {
+  cpSync(guideSrc, guideDest);
+  console.log('Copied GUIDE.md to dist/');
+}
+
 console.log('Copied runtime/ to dist/');

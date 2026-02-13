@@ -1,147 +1,258 @@
-# Areté
+# Areté - Product Management Workspace
 
-A workspace for Cursor and Claude Code that helps product managers maintain context, run structured workflows, and build institutional memory.
+> **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" - the pursuit of fulfilling one's purpose to the highest degree.
 
-> **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" or "virtue" - the pursuit of fulfilling one's purpose to the highest degree.
+An AI-native workspace for Cursor and Claude Code that helps product managers maintain context, run structured workflows, and build institutional memory.
 
-## What This Is
+---
 
-A structured system for PM work:
-- **Context Management** - Maintain business and product context as source of truth
-- **Project-Based Workflows** - Discovery, PRDs, competitive analysis, roadmaps
-- **Institutional Memory** - Capture decisions and learnings for future reference
-- **People** - Track internal colleagues, customers, and users; link to meetings and projects
-- **Semantic Search** - Find relevant content with QMD integration
+## What It Is
 
-## Use This Template
+Areté is a Product Management operating system designed for AI-augmented work:
 
-This is a **GitHub template repository**. To use it:
+- **Context Management** - Maintain business, product, and customer knowledge as source of truth
+- **Intelligence Services** - Automatically inject relevant context into any workflow
+- **Structured Workflows** - Run discovery, PRDs, competitive analysis, and roadmaps with consistency
+- **Institutional Memory** - Capture decisions and learnings that persist beyond individual projects
+- **Meeting Intelligence** - Prep for meetings, process notes, extract insights
 
-1. Click **"Use this template"** → **"Create a new repository"**
-2. Name your repo (e.g., `my-company-pm`) and set it to **Private**
-3. Clone your new repo and open in Cursor (or Claude Code)
-4. Start filling in your context files
+Built for **Cursor** and **Claude Code** IDEs, optimized for collaboration with AI agents.
 
-*For Claude Code: Use `arete install --ide claude` in a new directory to create a Claude workspace, then add your context.*
+---
 
-Your personal/company data stays in your private repo. This template stays public and generic.
+## Why Use It
+
+Product builders face three persistent problems:
+
+1. **Context Loss** - Business knowledge scattered across docs, meetings, and memory
+2. **Inconsistent Process** - PM workflows done differently each time
+3. **Institutional Amnesia** - Decisions and learnings lost when people leave
+
+**Areté solves these** by providing structure without bureaucracy—a system that helps you work better with AI while building knowledge that compounds over time.
+
+---
 
 ## Quick Start
 
-### First 5 Minutes
+### Installation
+
+```bash
+# Install globally
+npm install -g @arete/cli
+
+# Create new workspace
+arete install ~/my-pm-workspace
+
+# Or for Claude Code
+arete install ~/my-pm-workspace --ide claude
+
+# Start working
+cd ~/my-pm-workspace
+# Open in Cursor (or Claude Code)
+# Ask: "Give me a tour"
+```
+
+### First 15 Minutes
 
 1. Open `context/business-overview.md` and fill in your company basics
-2. (Optional) Set up QMD for semantic search - see `SETUP.md`
-3. Ask the agent: "Give me a tour" or "What can I do here?"
-
-### Structure
-
-```
-arete/
-├── .cursor/ or .claude/ # IDE config (Cursor or Claude Code, set by install)
-│   ├── rules/           # Rules for your IDE
-│   └── tools/           # Lifecycle-based capabilities (onboarding, etc.)
-├── .agents/skills/      # PM workflows (discovery, PRD, etc.) — shared by both IDEs
-├── context/             # Business context (source of truth)
-├── projects/            # Active and archived projects
-├── memory/              # Decisions, learnings, activity log
-├── people/              # People (internal, customers, users)
-├── templates/           # Project, input, and output templates
-├── scratchpad.md        # Quick capture
-└── SETUP.md             # Detailed setup guide
-```
-
-## Available Actions
-
-### Skills (Stateless Workflows)
-
-| Action | How to Start |
-|--------|--------------|
-| Workspace Tour | "Give me a tour" |
-| Discovery | "Start a discovery project for [topic]" |
-| PRD Creation | "Create a PRD for [feature]" |
-| Competitive Analysis | "Do competitive analysis on [competitors]" |
-| Roadmap Planning | "Build roadmap for [period]" |
-| Synthesize | "Synthesize what we've learned" |
-| Finalize | "Finalize this project" |
-| Periodic Review | "Quarterly review" |
-
-### Tools (Lifecycle-Based Capabilities)
-
-Tools are different from skills - they have phases, track progress, and eventually complete. **Tools are now discoverable via the router** - just describe what you need and the system routes you to the right tool.
-
-| Tool | Purpose | How to Start |
-|------|---------|--------------|
-| Onboarding | 30/60/90 day plan for thriving at a new job | "I'm starting a new job" or "Help me onboard" |
-| Seed Context | Bootstrap workspace from historical data | "Seed my context" or "Import my meeting history" |
-
-See `.cursor/tools/README.md` or `.claude/tools/README.md` for more about the tools framework (path depends on IDE).
+2. Open `context/users.md` and describe your users
+3. Ask the AI: "Give me a tour" or "What can I do here?"
+4. (Optional) Set up QMD for semantic search - see [SETUP.md](SETUP.md)
 
 ---
 
-## Autonomous Development (Maintainers Only)
+## Core Capabilities
 
-⚠️ **For Areté developers only** - Not a user-facing feature.
+### Context Management
 
-If you're building features for Areté itself, we have an autonomous agent loop system that can execute PRD tasks sequentially with fresh context per task. This is inspired by [Ralph](https://github.com/snarktank/ralph) but adapted for Cursor-native execution.
+Your **source of truth** for business context:
+- **Business** - Company overview, market, competitive landscape
+- **Users** - User personas, needs, behaviors
+- **Products** - What you're building and why
+- **Strategy** - Goals, OKRs, strategic initiatives
 
-**Quick overview:**
-1. Create a markdown PRD for an Areté feature
-2. Convert it to JSON task list with `prd-to-json` skill
-3. Execute autonomously with `execute-prd` skill
-4. Review commits and merge
+Lives in `context/` directory. AI reads this before starting work.
 
-See [`dev/autonomous/README.md`](dev/autonomous/README.md) for full documentation.
+### Project Workflows
+
+Structured PM work with consistent quality:
+
+| Workflow | Purpose |
+|----------|---------|
+| **Discovery** | Understand problems before building |
+| **PRD Creation** | Document what to build and why |
+| **Competitive Analysis** | Analyze competitors systematically |
+| **Roadmap Planning** | Plan quarters and releases |
+| **Synthesis** | Extract insights from research |
+
+Start with: "Start a discovery project for [topic]" or "Create a PRD for [feature]"
+
+### Meeting Intelligence
+
+Never lose track of what was discussed:
+- **Meeting Prep** - Brief with attendee context, recent meetings, action items
+- **Save Meetings** - Capture notes and transcripts
+- **Process Meetings** - Extract decisions and learnings to memory
+- **Daily Plan** - Today's focus with meeting context
+
+Start with: "Help me prep for my meeting with [person]"
+
+### Institutional Memory
+
+Capture knowledge that outlasts projects:
+- **Decisions** - Key decisions with rationale
+- **Learnings** - User insights, market observations, process improvements
+- **Observations** - How you work best with AI
+
+Memory is searchable and automatically surfaced in relevant contexts.
+
+### Planning System
+
+Align work from quarter to day:
+- **Quarter Goals** - Set goals aligned to org strategy
+- **Week Outcomes** - Plan week outcomes linked to quarter goals
+- **Daily Focus** - Today's priorities and meeting prep
+
+Start with: "Plan my week" or "What's on my plate today?"
 
 ---
-
-## What's a Project?
-
-A **project** is a flexible container for any bounded PM work:
-- A 2-week discovery effort
-- A single PRD for a feature
-- A competitive analysis sprint
-- A quarterly roadmap cycle
-- A large multi-month initiative
-
-Projects are however YOU want to organize your work. Not everything needs a project - use `scratchpad.md` for quick notes.
-
-## Example Prompts
-
-**Starting work:**
-- "Start a discovery project for improving user onboarding"
-- "I need to write a PRD for a new checkout flow"
-- "Help me analyze our top 3 competitors"
-
-**During a project:**
-- "Add these meeting notes to the current project"
-- "What have we learned so far?"
-- "Synthesize the user feedback we've collected"
-
-**Wrapping up:**
-- "Finalize this project"
-- "Log this decision: we chose Stripe because..."
-
-**Quick questions:**
-- "What do we know about [topic]?"
-- "Why did we decide to [decision]?"
 
 ## Documentation
 
-### For Users
-- `SETUP.md` - Detailed setup, QMD configuration, troubleshooting
-- `.cursor/rules/` or `.claude/rules/` - IDE rules for PM workflows (depends on install)
-- `.agents/skills/` - Available PM skills and workflows
-- Use `arete install --ide claude` for Claude Code; default is Cursor
+### For Users (Product Builders)
+
+- **[GUIDE.md](runtime/GUIDE.md)** - Comprehensive user reference (shipped to workspace)
+- **[SETUP.md](SETUP.md)** - Installation, integrations, troubleshooting
+- **[ONBOARDING.md](ONBOARDING.md)** - First-time setup checklist
 
 ### For Developers (Areté Maintainers)
-- `AGENTS.md` - Architecture, patterns, and context for AI agents building Areté
-- `dev/` - Internal build system and autonomous development tools
-- `dev/MEMORY.md` - Build history and architectural decisions
+
+- **[DEVELOPER.md](DEVELOPER.md)** - Architecture, systems, contribution guide
+- **[AGENTS.md](AGENTS.md)** - Architecture reference for AI agents (supplementary)
+- **dev/** - Build system, PRDs, and change log
+
+---
+
+## Example Workflows
+
+**Starting a discovery project:**
+```
+You: "Start a discovery project for improving user onboarding"
+AI: [Creates project structure, gathers context, guides through discovery]
+```
+
+**Writing a PRD:**
+```
+You: "Create a PRD for a new checkout flow"
+AI: [Creates PRD project, asks clarifying questions, drafts PRD]
+```
+
+**Meeting prep:**
+```
+You: "Help me prep for my 1:1 with Sarah"
+AI: [Finds Sarah's context, recent meetings, action items, suggests topics]
+```
+
+**Quick questions:**
+```
+You: "What do we know about mobile conversion?"
+AI: [Searches context + memory, synthesizes answer with sources]
+```
+
+---
+
+## Key Features
+
+### Intelligence Services
+
+Areté provides intelligence that powers any workflow:
+
+- **Context Injection** - Find relevant files for any task
+- **Memory Retrieval** - Search past decisions and learnings
+- **Entity Resolution** - Match ambiguous names to people, meetings, projects
+- **Briefing Assembly** - Gather context before complex work
+
+These services run automatically during skills, or manually via CLI:
+
+```bash
+arete context --for "mobile app redesign"
+arete memory search "pricing decisions"
+arete resolve "Jane"
+arete brief --for "competitive analysis"
+```
+
+### Templates & Customization
+
+Customize workflows to match your team:
+
+- **Meeting Agendas** - 5 default templates (leadership, customer, dev-team, 1:1, other)
+- **Project Templates** - Customize discovery, PRD, analysis templates
+- **Custom Skills** - Install third-party skills or write your own
+
+See GUIDE.md § Templates for customization details.
+
+### Multi-IDE Support
+
+Works with both **Cursor** and **Claude Code**:
+
+```bash
+# Install for Cursor (default)
+arete install ~/workspace
+
+# Install for Claude Code
+arete install ~/workspace --ide claude
+
+# Switch between IDEs
+# (workspace is IDE-agnostic, rules adapt)
+```
+
+### Integrations
+
+Connect to external tools:
+
+- **Calendar** (macOS) - Pull events for meeting prep and planning
+- **Fathom** - Import meeting recordings and transcripts
+- (Future: Google Calendar, Slack, Linear, Notion)
+
+See SETUP.md for configuration.
+
+---
+
+## Philosophy
+
+Areté is built on a simple question: **Does it help the product builder achieve excellence?**
+
+Every feature is evaluated against whether it helps you:
+- Gain clarity
+- Navigate ambiguity
+- Automate the mundane
+- Move faster
+- Unlock opportunity
+- Think better
+- Be constructively challenged
+
+We optimize for **product builders operating at their highest level**, not busyness or compliance.
+
+---
+
+## Community & Support
+
+- **Documentation**: See GUIDE.md in your workspace after install
+- **GitHub**: [github.com/yourusername/arete](https://github.com/yourusername/arete)
+- **Issues**: Report bugs or request features
+- **Discussions**: Ask questions, share workflows
+
+---
 
 ## Contributing
 
-Contributions welcome! This is an open-source template. If you have improvements, please open a PR.
+We welcome contributions! See [DEVELOPER.md](DEVELOPER.md) for:
+- Architecture overview
+- Development workflow
+- Testing requirements
+- How to add features
+
+---
 
 ## License
 

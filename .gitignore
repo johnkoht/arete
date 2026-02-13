@@ -75,8 +75,13 @@ resources/
 templates/
 memory/
 .arete/
+arete.yaml
+scratchpad.md
+GUIDE.md
 # Exception: package runtime templates (shipped with CLI) are committed
 !runtime/templates/
+# Exception: runtime/GUIDE.md is the source (shipped with CLI)
+!runtime/GUIDE.md
 
 # Logs
 *.log

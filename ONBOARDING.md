@@ -1,5 +1,7 @@
 # Getting Started with Areté
 
+> **Quick Start Checklist** - For detailed documentation, see [GUIDE.md](GUIDE.md) in your workspace.
+
 A quick checklist to get you up and running.
 
 > **Note**: We're building an `arete onboard` command that will guide you through a personalized onboarding plan. For now, follow this checklist.

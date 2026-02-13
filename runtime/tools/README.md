@@ -1,5 +1,7 @@
 # Areté Tools
 
+> **For complete documentation** on tools and lifecycle workflows, see [GUIDE.md](../../GUIDE.md).
+
 Tools are **lifecycle-based, stateful capabilities** that complement the Skills system. While Skills are stateless procedures you can invoke anytime, Tools have phases, track progress, and eventually complete or deprecate.
 
 ## Tools vs Skills

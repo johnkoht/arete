@@ -2,7 +2,7 @@
  * Install command - scaffold a new Areté workspace
  */
 
-import { existsSync, mkdirSync, writeFileSync, symlinkSync, cpSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, symlinkSync, cpSync, readdirSync, copyFileSync } from 'fs';
 import { join, resolve, basename } from 'path';
 import { stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
@@ -284,6 +284,39 @@ export async function installCommand(directory: string | undefined, options: Ins
     const filePath = join(targetDir, filename);
     writeFileSync(filePath, content, 'utf-8');
     results.files.push(filename);
+  }
+  
+  // Copy GUIDE.md to workspace root (copy-if-missing, never overwrite)
+  if (!json) info('Copying user guide...');
+  
+  const guideDest = join(targetDir, 'GUIDE.md');
+  
+  if (!existsSync(guideDest)) {
+    // Try multiple possible source locations
+    const possibleSources = [
+      sourceInfo.path ? join(sourceInfo.path, 'runtime', 'GUIDE.md') : null,
+      join(sourcePaths.skills, '..', 'GUIDE.md'), // dist/GUIDE.md
+      join(getPackageRoot(), 'runtime', 'GUIDE.md'), // runtime/GUIDE.md in dev
+      join(getPackageRoot(), 'dist', 'GUIDE.md') // dist/GUIDE.md in built package
+    ].filter(Boolean) as string[];
+    
+    let copied = false;
+    for (const guideSource of possibleSources) {
+      if (existsSync(guideSource)) {
+        try {
+          copyFileSync(guideSource, guideDest);
+          results.files.push('GUIDE.md');
+          copied = true;
+          break;
+        } catch (err) {
+          // Try next source
+        }
+      }
+    }
+    
+    if (!copied && !json) {
+      warn('GUIDE.md not found in package (run npm run build)');
+    }
   }
   
   // Output results

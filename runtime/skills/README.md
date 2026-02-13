@@ -1,5 +1,7 @@
 # Areté Skills
 
+> **For complete documentation** on skills, workflows, and customization, see [GUIDE.md](../../GUIDE.md).
+
 ## What are skills?
 
 Skills are reusable workflows that help you (and your AI) get things done in Areté—discovery, PRDs, meeting prep, synthesis, planning, and more. Each skill is a procedure (steps, patterns, and output format) that the agent follows when you ask for that kind of work.
