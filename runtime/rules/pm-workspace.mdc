@@ -54,7 +54,7 @@ product-workspace/
 │   └── users/         # Product users
 ├── templates/         # Project, input, and output templates
 ├── .credentials/      # API keys and tokens (gitignored)
-├── .cursor/
+├── .cursor/ or .claude/  # IDE config (depends on installation)
 │   ├── rules/         # Workspace behavior rules
 │   ├── skills/        # Stateless procedures (discovery, PRD, etc.)
 │   ├── tools/         # Lifecycle-based capabilities (onboarding, etc.)
@@ -205,7 +205,7 @@ Tools are different from skills - they have phases, track progress over time, an
 
 When the router returns `type: 'tool'` and `action: 'activate'`:
 
-1. **Read the tool file**: `.cursor/tools/[tool-name]/TOOL.md` (e.g., `.cursor/tools/onboarding/TOOL.md`)
+1. **Read the tool file**: `.cursor/tools/[tool-name]/TOOL.md` or `.claude/tools/[tool-name]/TOOL.md` (e.g., `.cursor/tools/onboarding/TOOL.md`)
 2. **Ask about scope** (if applicable): Many tools offer comprehensive vs streamlined modes
 3. **Gather tool-specific context**: Company/role details, preferences, goals (varies by tool)
 4. **Create project structure**: `projects/active/[tool-name]/` with subdirectories:
@@ -221,7 +221,7 @@ When the router returns `type: 'tool'` and `action: 'activate'`:
 - Skills: **Load and execute** immediately (stateless, one-time)
 - Tools: **Activate and track** over time (stateful, multi-phase, eventual graduation)
 
-Tools are located in `.cursor/tools/`. When activated, tools create a project in `projects/active/` to track state and progress. The tool remains active until graduation criteria are met (see tool's TOOL.md for specifics). See `.cursor/tools/README.md` for framework details.
+Tools are located in `.cursor/tools/` or `.claude/tools/` (depends on IDE). When activated, tools create a project in `projects/active/` to track state and progress. The tool remains active until graduation criteria are met (see tool's TOOL.md for specifics). See the tools README in your IDE config directory for framework details.
 
 ### Integrations
 
@@ -229,15 +229,15 @@ Integrations connect Areté to external tools (calendar, meeting recorders, Slac
 
 | User Intent | Action | Resource |
 |-------------|--------|----------|
-| "What integrations are available?" | View integration status | `.cursor/integrations/registry.md` |
-| "Configure Fathom" / "Set up calendar" | Configure integration | `.cursor/integrations/configs/` |
+| "What integrations are available?" | View integration status | `.cursor/integrations/registry.md` or `.claude/integrations/registry.md` |
+| "Configure Fathom" / "Set up calendar" | Configure integration | IDE integrations config directory |
 
 Integrations support three data flows:
 - **Pull**: Read data from external systems (meetings, events, messages)
 - **Push**: Write updates to external systems (Slack posts, calendar events)
 - **Seed**: Bulk historical import to bootstrap context
 
-See `.cursor/integrations/README.md` for framework details.
+See the integrations README in your IDE config directory for framework details.
 
 ## Intelligence Services
 
@@ -428,7 +428,7 @@ After significant actions, log to the appropriate memory file:
 - `resources/meetings/`: Meeting notes and transcripts
 - `resources/notes/`: Standalone notes
 
-See `.cursor/rules/agent-memory.mdc` for detailed guidance on when and how to update memory.
+See the agent-memory rule in your IDE config directory for detailed guidance on when and how to update memory.
 
 ## Response Style
 
