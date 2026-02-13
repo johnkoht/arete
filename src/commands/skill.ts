@@ -378,6 +378,17 @@ async function installSkill(options: SkillOptions): Promise<void> {
   const isLikelySkillsSh = parsed.type === 'skillssh';
 
   if (isLikelySkillsSh) {
+    // Capture existing skills before running npx skills add
+    const existingSkills = new Set<string>();
+    if (existsSync(paths.agentSkills)) {
+      const entries = readdirSync(paths.agentSkills, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.isDirectory() || e.isSymbolicLink()) {
+          existingSkills.add(e.name);
+        }
+      }
+    }
+    
     // npx skills add <source> [--skill <name>]
     const normalizedSource = parsed.type === 'skillssh' ? parsed.normalized : source;
     const args = ['skills', 'add', normalizedSource];
@@ -405,44 +416,48 @@ async function installSkill(options: SkillOptions): Promise<void> {
       }
       process.exit(1);
     }
-    // Only add .arete-meta.yaml to the newly installed skill under .agents/skills
-    const candidates = [paths.agentSkills].filter(d => d && existsSync(d));
+    
+    // Find the newly installed skill(s) by comparing before/after
+    const newlyInstalledSkills: string[] = [];
+    if (existsSync(paths.agentSkills)) {
+      const entries = readdirSync(paths.agentSkills, { withFileTypes: true });
+      for (const e of entries) {
+        if ((e.isDirectory() || e.isSymbolicLink()) && !existingSkills.has(e.name)) {
+          newlyInstalledSkills.push(e.name);
+        }
+      }
+    }
+    
+    // Only add .arete-meta.yaml to the newly installed skill(s)
     let installedPath: string | null = null;
     let installedSkillName: string | null = null;
     
-    // First pass: find the newly installed skill (the one without metadata yet)
-    for (const dir of candidates) {
-      if (!existsSync(dir)) continue;
-      const entries = readdirSync(dir, { withFileTypes: true });
-      for (const e of entries) {
-        if (!e.isDirectory() && !e.isSymbolicLink()) continue;
-        const skillDir = join(dir, e.name);
-        const skillFile = join(skillDir, 'SKILL.md');
-        const metaFile = join(skillDir, ARETE_META_FILENAME);
-        
-        if (existsSync(skillFile) && !existsSync(metaFile)) {
-          // This is likely the newly installed skill - add metadata
-          const skillInfo = getSkillInfo(skillDir);
-          const meta: Record<string, unknown> = {
-            category: 'community',
-            requires_briefing: true,
-          };
-          const wt = guessWorkTypeFromDescription(skillInfo.description ?? '');
-          if (wt) meta.work_type = wt;
-          const prims = guessPrimitivesFromDescription(skillInfo.description ?? '');
-          if (prims.length) meta.primitives = prims;
-          writeAreteMeta(skillDir, meta);
-          installedPath = skillDir;
-          installedSkillName = e.name;
-          if (!json) {
-            success(`Added Areté metadata: ${e.name}`);
-            listItem('Skill', skillInfo.name ?? e.name);
-            if (skillInfo.description) listItem('Description', skillInfo.description);
-          }
-          break; // Only process one skill (the newly installed one)
+    for (const skillName of newlyInstalledSkills) {
+      const skillDir = join(paths.agentSkills, skillName);
+      const skillFile = join(skillDir, 'SKILL.md');
+      const metaFile = join(skillDir, ARETE_META_FILENAME);
+      
+      if (existsSync(skillFile) && !existsSync(metaFile)) {
+        const skillInfo = getSkillInfo(skillDir);
+        const meta: Record<string, unknown> = {
+          category: 'community',
+          requires_briefing: true,
+        };
+        const wt = guessWorkTypeFromDescription(skillInfo.description ?? '');
+        if (wt) meta.work_type = wt;
+        const prims = guessPrimitivesFromDescription(skillInfo.description ?? '');
+        if (prims.length) meta.primitives = prims;
+        writeAreteMeta(skillDir, meta);
+        installedPath = skillDir;
+        installedSkillName = skillName;
+        if (!json) {
+          success(`Added Areté metadata: ${skillName}`);
+          listItem('Skill', skillInfo.name ?? skillName);
+          if (skillInfo.description) listItem('Description', skillInfo.description);
         }
+        // Only process the first newly installed skill for the role prompt
+        break;
       }
-      if (installedPath) break;
     }
     if (json) {
       console.log(JSON.stringify({

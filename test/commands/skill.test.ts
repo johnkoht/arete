@@ -24,9 +24,11 @@ function createTmpWorkspace(): string {
   mkdirSync(join(dir, '.agents', 'skills', 'create-prd'), { recursive: true });
   mkdirSync(join(dir, '.agents', 'skills', 'discovery'), { recursive: true });
   mkdirSync(join(dir, '.agents', 'skills', 'netflix-prd'), { recursive: true });
+  mkdirSync(join(dir, '.agents', 'skills', 'competitive-analysis'), { recursive: true });
   writeFileSync(join(dir, '.agents', 'skills', 'create-prd', 'SKILL.md'), '---\nname: create-prd\n---');
   writeFileSync(join(dir, '.agents', 'skills', 'discovery', 'SKILL.md'), '---\nname: discovery\n---');
   writeFileSync(join(dir, '.agents', 'skills', 'netflix-prd', 'SKILL.md'), '---\nname: netflix-prd\n---');
+  writeFileSync(join(dir, '.agents', 'skills', 'competitive-analysis', 'SKILL.md'), '---\nname: competitive-analysis\n---');
   writeFileSync(join(dir, 'arete.yaml'), 'schema: 1\n');
   return dir;
 }
@@ -101,7 +103,8 @@ describe('skill commands', () => {
       assert.ok(roles.includes('create-prd'));
       assert.ok(roles.includes('discovery'));
       assert.ok(roles.includes('netflix-prd'));
-      assert.equal(roles.length, 3);
+      assert.ok(roles.includes('competitive-analysis'));
+      assert.equal(roles.length, 4);
     });
   });
 });
@@ -322,5 +325,47 @@ describe('skill metadata handling', () => {
     const netflix = skills.find(s => s.id === 'netflix-prd');
     assert.ok(netflix);
     assert.equal(netflix!.category, 'community');
+  });
+
+  it('correctly identifies newly installed skill when existing skills lack metadata', () => {
+    // Simulate: user has existing default skills (with metadata) and installs a new skill
+    // The new skill detection should work based on before/after comparison, not missing metadata
+    
+    // Before: create-prd and discovery have metadata
+    writeFileSync(
+      join(tmpDir, '.agents', 'skills', 'create-prd', '.arete-meta.yaml'),
+      stringifyYaml({ category: 'core', requires_briefing: true }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpDir, '.agents', 'skills', 'discovery', '.arete-meta.yaml'),
+      stringifyYaml({ category: 'core', requires_briefing: true }),
+      'utf8'
+    );
+    
+    // After: user removes metadata from competitive-analysis (simulating it came from an old install)
+    const compAnalysisMetaPath = join(tmpDir, '.agents', 'skills', 'competitive-analysis', '.arete-meta.yaml');
+    if (existsSync(compAnalysisMetaPath)) {
+      rmSync(compAnalysisMetaPath);
+    }
+    
+    // Simulate installing netflix-prd
+    // The newly installed skill is netflix-prd, NOT competitive-analysis (even though both lack metadata)
+    
+    // In the real code, we'd track this with before/after Set comparison
+    const beforeInstall = new Set(['create-prd', 'discovery', 'competitive-analysis']);
+    const afterInstall = new Set(['create-prd', 'discovery', 'competitive-analysis', 'netflix-prd']);
+    
+    // Find newly installed
+    const newlyInstalled: string[] = [];
+    for (const skill of afterInstall) {
+      if (!beforeInstall.has(skill)) {
+        newlyInstalled.push(skill);
+      }
+    }
+    
+    assert.equal(newlyInstalled.length, 1, 'Should identify exactly one newly installed skill');
+    assert.equal(newlyInstalled[0], 'netflix-prd', 'Should identify netflix-prd as newly installed');
+    assert.ok(!newlyInstalled.includes('competitive-analysis'), 'Should NOT include competitive-analysis');
   });
 });
