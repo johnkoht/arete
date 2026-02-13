@@ -18,6 +18,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-13 [Multi-IDE Path Fix](entries/2026-02-13_multi-ide-path-fix.md) — Fixed "either/or" path patterns in canonical rules that broke after Claude adapter transformation. Added Multi-IDE Consistency checklist to Quality Practices. **Key pattern**: Use only `.cursor/` paths in canonical source; adapter transforms them.
+
 - 2026-02-13 [Quality Practices Abstraction](entries/2026-02-13_quality-practices-abstraction.md) — Abstracted quality practices (pre-mortem, review, memory, quality gates) from PRD execution to all development work; decision tree for execution path selection; standalone run-pre-mortem skill. Pre-mortem: 7/8 risks prevented.
 
 - 2026-02-13 [Tool Routing System](entries/2026-02-13_tool-routing-system.md) — Extended skill router to support lifecycle-based tools (onboarding, seed-context) with type/action/lifecycle metadata. Pre-mortem: 0/8 risks materialized. Symlink fix discovery. 465 tests passing.
