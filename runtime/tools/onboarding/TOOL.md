@@ -206,6 +206,51 @@ Focus on contribution, not perfection. Nobody expects you to be the expert yet. 
 
 **Mindset**: Confident owner. You've earned the right to lead.
 
+#### Navigate Sacred Cows
+
+You've been here 60 days. You see inefficiencies, legacy decisions, and processes that don't make sense. Before you charge in to fix them, slow down. Most "obvious problems" exist for reasons you don't yet understand. The person who built what you want to change had context you don't have yet.
+
+**Reframe your approach:**
+
+Instead of asking "What's broken?" ask "**What's working, and how do we do more of it?**" This subtle shift changes you from critic to collaborator. It opens doors instead of closing them.
+
+**Know-Why-Before-How:**
+
+Before proposing changes to existing systems, processes, or decisions, **talk to the people who built them**. Ask: "Help me understand the context when this was created. What problem were you solving?" You'll often discover the "obvious fix" was already tried, or the constraint you don't see is what drove the original decision.
+
+Earn the right to challenge by first demonstrating you understand. Once you understand the why, you can propose better solutions that respect the context. Or you might discover the sacred cow isn't actually sacred—it's just legacy that everyone forgot to revisit.
+
+#### Peacetime vs Wartime Context
+
+Not all organizational contexts are the same. Some companies are in **peacetime** (optimizing, growing steadily, building for the long term). Others are in **wartime** (survival mode, existential threat, urgent pivots required).
+
+**Why this matters:**
+
+- **Peacetime** rewards consensus-building, stakeholder alignment, and thoughtful process. Take time to get buy-in. Build coalitions. Document decisions.
+- **Wartime** rewards bias to action, speed, and decisive moves. Consensus is a luxury you might not have. Move fast, course-correct as you go.
+
+**How to know which mode you're in:**
+
+Ask your manager or a trusted peer: "**What mode are we in right now? What does that mean for how I should operate?**" The answer will shape your approach. If you're building consensus in wartime, you'll be seen as slow. If you're moving unilaterally in peacetime, you'll be seen as reckless.
+
+Most orgs exist somewhere on the spectrum. Calibrate your approach accordingly.
+
+#### Share Your POV
+
+By day 60, you've earned the right to have opinions. Your fresh eyes are valuable—you see things the team has stopped seeing. But how you share your perspective matters.
+
+**Back it with evidence:**
+
+Don't rely on intuition alone. Use data, customer evidence, competitive context. "I've noticed in the last 5 customer calls, 3 mentioned [pain point]" is stronger than "I think we should focus on [feature]."
+
+**Frame as hypothesis, not proclamation:**
+
+Instead of "We should do X," try "**I'm thinking we should do X because [reasoning]. What am I missing?**" This invites collaboration instead of defensiveness. You're opening a conversation, not closing one.
+
+**Invite challenge:**
+
+End proposals with "**What would change your mind?**" or "**What am I not seeing?**" This signals intellectual humility and makes it safe for others to disagree. The goal is to get to the right answer, not to be right.
+
 **Key Activities**:
 - [ ] Lead a project or initiative (not just support)
 - [ ] Propose ideas and improvements based on your learnings
@@ -450,9 +495,11 @@ When graduation criteria are met:
 - Are there any quick wins you've been meaning to tackle but haven't had time for?
 
 **Phase 3 - Lead**:
-- What do you think I should focus on long-term?
+- What should I focus on long-term? What does success look like in this role?
 - How can we work together most effectively?
 - What would make you see me as successful in this role?
+- Where do you see opportunities I could own or lead?
+- What's your vision for this area in the next 6-12 months?
 
 ## Resources
 
