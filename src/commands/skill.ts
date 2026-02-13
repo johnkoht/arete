@@ -223,8 +223,11 @@ async function listSkills(options: SkillOptions): Promise<void> {
   console.log('');
 }
 
-/** Best-guess work_type from description (for third-party skills) */
-function guessWorkTypeFromDescription(description: string): string | undefined {
+/** 
+ * Best-guess work_type from description (for third-party skills)
+ * Exported for testing.
+ */
+export function guessWorkTypeFromDescription(description: string): string | undefined {
   const d = description.toLowerCase();
   if (/\b(prd|requirements?|spec|specification|define)\b/.test(d)) return 'definition';
   if (/\b(discover|research|explore|investigate|understand)\b/.test(d)) return 'discovery';
@@ -253,24 +256,58 @@ function writeAreteMeta(skillPath: string, meta: Record<string, unknown>): void 
   writeFileSync(metaFile, stringifyYaml(meta), 'utf8');
 }
 
-/** Detect if installed skill overlaps a default role (by work_type or description keywords) */
-function detectOverlapRole(
+/** 
+ * Detect if installed skill overlaps a default role (by work_type or description keywords)
+ * Exported for testing.
+ */
+export function detectOverlapRole(
   installedSkill: SkillInfo,
   _paths: ReturnType<typeof getWorkspacePaths>
 ): string | undefined {
   const sourcePaths = getSourcePaths();
   const defaultSkills = getSkillsList(sourcePaths.skills);
   const desc = (installedSkill.description ?? '').toLowerCase();
+  const skillId = (installedSkill.id ?? '').toLowerCase();
   const workType = installedSkill.work_type ?? guessWorkTypeFromDescription(installedSkill.description ?? '');
+  
+  // Priority 1: Exact skill name match (e.g., "prd" → "create-prd")
   for (const def of defaultSkills) {
     if (!def.id) continue;
-    if (workType && def.work_type === workType) return def.id;
-    const defDesc = (def.description ?? '').toLowerCase();
-    const defName = (def.id ?? '').toLowerCase().replace(/-/g, ' ');
-    if (defName && (desc.includes(defName) || desc.includes(def.id ?? ''))) return def.id;
-    if (def.work_type === 'definition' && /\bprd\b/.test(desc)) return def.id;
-    if (def.work_type === 'discovery' && /\bdiscover|research\b/.test(desc)) return def.id;
+    const defId = def.id.toLowerCase();
+    if (skillId === defId || skillId === defId.replace('create-', '') || skillId === defId.replace(/-/g, '')) {
+      return def.id;
+    }
   }
+  
+  // Priority 2: Description contains skill name (e.g., "PRD" in description → "create-prd")
+  for (const def of defaultSkills) {
+    if (!def.id) continue;
+    const defName = (def.id ?? '').toLowerCase().replace(/-/g, ' ');
+    if (defName && (desc.includes(defName) || desc.includes(def.id ?? ''))) {
+      return def.id;
+    }
+  }
+  
+  // Priority 3: Specific keyword matches (avoid false positives)
+  if (/\b(prd|product requirements)\b/i.test(desc)) {
+    const prdSkill = defaultSkills.find(s => s.id === 'create-prd');
+    if (prdSkill) return prdSkill.id;
+  }
+  if (/\b(discover|discovery|research)\b/i.test(desc)) {
+    const discSkill = defaultSkills.find(s => s.id === 'discovery');
+    if (discSkill) return discSkill.id;
+  }
+  
+  // Priority 4: Work type match (but only if it's not too generic)
+  if (workType && workType !== 'operations' && workType !== 'planning') {
+    for (const def of defaultSkills) {
+      if (!def.id) continue;
+      if (def.work_type === workType) {
+        return def.id;
+      }
+    }
+  }
+  
   return undefined;
 }
 
@@ -368,9 +405,12 @@ async function installSkill(options: SkillOptions): Promise<void> {
       }
       process.exit(1);
     }
-    // Only add .arete-meta.yaml under .agents/skills (user space)
+    // Only add .arete-meta.yaml to the newly installed skill under .agents/skills
     const candidates = [paths.agentSkills].filter(d => d && existsSync(d));
     let installedPath: string | null = null;
+    let installedSkillName: string | null = null;
+    
+    // First pass: find the newly installed skill (the one without metadata yet)
     for (const dir of candidates) {
       if (!existsSync(dir)) continue;
       const entries = readdirSync(dir, { withFileTypes: true });
@@ -378,29 +418,31 @@ async function installSkill(options: SkillOptions): Promise<void> {
         if (!e.isDirectory() && !e.isSymbolicLink()) continue;
         const skillDir = join(dir, e.name);
         const skillFile = join(skillDir, 'SKILL.md');
-        if (existsSync(skillFile)) {
-          const metaFile = join(skillDir, ARETE_META_FILENAME);
-          if (!existsSync(metaFile)) {
-            const skillInfo = getSkillInfo(skillDir);
-            const meta: Record<string, unknown> = {
-              category: 'community',
-              requires_briefing: true,
-            };
-            const wt = guessWorkTypeFromDescription(skillInfo.description ?? '');
-            if (wt) meta.work_type = wt;
-            const prims = guessPrimitivesFromDescription(skillInfo.description ?? '');
-            if (prims.length) meta.primitives = prims;
-            writeAreteMeta(skillDir, meta);
-            installedPath = skillDir;
-            if (!json) {
-              success(`Added Areté metadata: ${e.name}`);
-              listItem('Skill', skillInfo.name ?? e.name);
-              if (skillInfo.description) listItem('Description', skillInfo.description);
-            }
+        const metaFile = join(skillDir, ARETE_META_FILENAME);
+        
+        if (existsSync(skillFile) && !existsSync(metaFile)) {
+          // This is likely the newly installed skill - add metadata
+          const skillInfo = getSkillInfo(skillDir);
+          const meta: Record<string, unknown> = {
+            category: 'community',
+            requires_briefing: true,
+          };
+          const wt = guessWorkTypeFromDescription(skillInfo.description ?? '');
+          if (wt) meta.work_type = wt;
+          const prims = guessPrimitivesFromDescription(skillInfo.description ?? '');
+          if (prims.length) meta.primitives = prims;
+          writeAreteMeta(skillDir, meta);
+          installedPath = skillDir;
+          installedSkillName = e.name;
+          if (!json) {
+            success(`Added Areté metadata: ${e.name}`);
+            listItem('Skill', skillInfo.name ?? e.name);
+            if (skillInfo.description) listItem('Description', skillInfo.description);
           }
-          if (!installedPath) installedPath = skillDir;
+          break; // Only process one skill (the newly installed one)
         }
       }
+      if (installedPath) break;
     }
     if (json) {
       console.log(JSON.stringify({
@@ -418,9 +460,13 @@ async function installSkill(options: SkillOptions): Promise<void> {
       const installedSkillInfo = getSkillInfo(installedPath);
       const role = detectOverlapRole(installedSkillInfo, paths);
       if (role) {
+        console.log('');
+        info(`This skill appears similar to the default "${role}" skill.`);
+        info(`If you set it as default, routing will use your new skill instead.`);
+        console.log('');
         const rl = createInterface({ input: process.stdin, output: process.stdout });
         const answer = await new Promise<string>((res) => {
-          rl.question(`Use this skill for role "${role}"? [y/N] `, res);
+          rl.question(`Replace "${role}" with "${installedSkillName ?? basename(installedPath)}" for routing? [y/N] `, res);
         });
         rl.close();
         if (answer.trim().toLowerCase() === 'y' || answer.trim().toLowerCase() === 'yes') {

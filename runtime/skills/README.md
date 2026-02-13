@@ -23,16 +23,21 @@ Run `arete skill list` to see all available skills.
 
 To change how a default skill works:
 
-1. **Override** the skill (copies it into your workspace):  
-   `arete skill override <name>`
-2. Edit the files in `.agents/skills/<name>/`.
-3. Your version is used instead of the default. Done.
+1. **Edit the skill** directly in `.agents/skills/<name>/`
+2. **Protect your changes** by adding the skill to `arete.yaml`:
+   ```yaml
+   skills:
+     overrides:
+       - daily-plan
+   ```
+3. Your version will be preserved during `arete update`
 
-To **reset** back to the default:  
-`arete skill reset <name>` (removes your override)
+To **restore the default**:
+1. Remove the skill from the `overrides` list in `arete.yaml`
+2. Delete the skill folder: `rm -rf .agents/skills/<name>`
+3. Run `arete update` to restore the default version
 
-To **see what you changed**:  
-`arete skill diff <name>`
+**Tip**: Keep a backup in `.agents/skills/<name>.backup/` before making changes, or version control your workspace.
 
 ## Adding third-party skills
 
@@ -69,9 +74,11 @@ Shows which roles have a custom skill and which use the Areté default.
 
 ## Resetting to default
 
-- **Reset a customized skill** (remove your override, use the shipped version):  
-  `arete skill reset <name>`
-- **Restore Areté default for a role**:  
+- **Restore default skill** (remove your customization):  
+  1. Remove the skill from `skills.overrides` in `arete.yaml`
+  2. Delete the skill folder: `rm -rf .agents/skills/<name>`
+  3. Run `arete update` to restore the default
+- **Restore Areté default for a role** (when using `set-default`):  
   `arete skill unset-default <role>`
 
 ## Creating your own skill

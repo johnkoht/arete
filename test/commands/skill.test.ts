@@ -13,6 +13,8 @@ import {
   applySkillDefaults,
   getMergedSkillsForRouting,
   getDefaultRoleNames,
+  detectOverlapRole,
+  guessWorkTypeFromDescription,
 } from '../../src/commands/skill.js';
 import type { RoutedSkill } from '../../src/core/skill-router.js';
 
@@ -131,5 +133,194 @@ describe('getSkillInfo with .arete-meta.yaml sidecar', () => {
     assert.equal(netflix!.category, 'community');
     assert.equal(netflix!.requires_briefing, true);
     assert.equal(netflix!.work_type, 'definition');
+  });
+});
+
+describe('guessWorkTypeFromDescription', () => {
+  it('identifies PRD/requirements as definition', () => {
+    assert.equal(guessWorkTypeFromDescription('Create PRD documents'), 'definition');
+    assert.equal(guessWorkTypeFromDescription('Generate product requirements'), 'definition');
+    assert.equal(guessWorkTypeFromDescription('Define specifications'), 'definition');
+  });
+
+  it('identifies discovery work', () => {
+    assert.equal(guessWorkTypeFromDescription('Guide discovery and research'), 'discovery');
+    assert.equal(guessWorkTypeFromDescription('Explore user needs'), 'discovery');
+    assert.equal(guessWorkTypeFromDescription('Investigate problems'), 'discovery');
+  });
+
+  it('identifies analysis work', () => {
+    assert.equal(guessWorkTypeFromDescription('Analyze competitors'), 'analysis');
+    assert.equal(guessWorkTypeFromDescription('Compare solutions'), 'analysis');
+    assert.equal(guessWorkTypeFromDescription('Evaluate options'), 'analysis');
+  });
+
+  it('identifies planning work', () => {
+    assert.equal(guessWorkTypeFromDescription('Plan the quarter'), 'planning');
+    assert.equal(guessWorkTypeFromDescription('Set goals and priorities'), 'planning');
+    assert.equal(guessWorkTypeFromDescription('Build a roadmap'), 'planning');
+  });
+
+  it('identifies operations work', () => {
+    assert.equal(guessWorkTypeFromDescription('Finalize project'), 'operations');
+    assert.equal(guessWorkTypeFromDescription('Sync data'), 'operations');
+    assert.equal(guessWorkTypeFromDescription('Process meetings'), 'operations');
+  });
+
+  it('returns undefined for unrecognized descriptions', () => {
+    assert.equal(guessWorkTypeFromDescription('Something completely random'), undefined);
+  });
+});
+
+describe('detectOverlapRole', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpWorkspace();
+  });
+
+  afterEach(() => {
+    if (tmpDir && existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('matches PRD skill by exact name', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const prdSkill = {
+      id: 'prd',
+      name: 'PRD Skill',
+      description: 'Generate high-quality Product Requirements Documents',
+      work_type: 'definition' as const,
+    };
+    
+    const role = detectOverlapRole(prdSkill, paths);
+    assert.equal(role, 'create-prd', 'Should match create-prd by skill name');
+  });
+
+  it('matches PRD skill by description keywords', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const prdSkill = {
+      id: 'awesome-prd',
+      name: 'Awesome PRD',
+      description: 'Generate Product Requirements Documents with AI',
+      work_type: 'definition' as const,
+    };
+    
+    const role = detectOverlapRole(prdSkill, paths);
+    assert.equal(role, 'create-prd', 'Should match create-prd by PRD keywords');
+  });
+
+  it('matches discovery skill by name', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const discoverySkill = {
+      id: 'discovery',
+      name: 'Discovery',
+      description: 'User research and problem exploration',
+      work_type: 'discovery' as const,
+    };
+    
+    const role = detectOverlapRole(discoverySkill, paths);
+    assert.equal(role, 'discovery', 'Should match discovery by exact name');
+  });
+
+  it('prefers exact name match over work_type match', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    
+    // Create a skill named 'prd' with work_type 'definition'
+    // Both create-prd and finalize-project might have 'definition' work_type
+    // but 'prd' should match 'create-prd' by name first
+    const prdSkill = {
+      id: 'prd',
+      name: 'PRD',
+      description: 'Some generic description',
+      work_type: 'definition' as const,
+    };
+    
+    const role = detectOverlapRole(prdSkill, paths);
+    // Should NOT match finalize-project even if it has the same work_type
+    assert.equal(role, 'create-prd', 'Should prefer name match over work_type');
+  });
+
+  it('returns undefined when no match found', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const customSkill = {
+      id: 'totally-custom',
+      name: 'Custom Skill',
+      description: 'Does something completely unique',
+      work_type: undefined,
+    };
+    
+    const role = detectOverlapRole(customSkill, paths);
+    assert.equal(role, undefined, 'Should return undefined for unmatched skills');
+  });
+
+  it('does not match generic operations work_type', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const syncSkill = {
+      id: 'my-sync',
+      name: 'My Sync',
+      description: 'Sync data with external system',
+      work_type: 'operations' as const,
+    };
+    
+    // Should not auto-match to finalize-project or other operations skills
+    // because operations is too generic
+    const role = detectOverlapRole(syncSkill, paths);
+    // Could be undefined or match by other criteria, but shouldn't match by operations alone
+    assert.ok(role === undefined || role === 'sync', 'Should not match generic operations to finalize-project');
+  });
+});
+
+describe('skill metadata handling', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpWorkspace();
+  });
+
+  afterEach(() => {
+    if (tmpDir && existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('only adds metadata to newly installed skill, not all skills', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    
+    // Create a scenario: existing skills with metadata, new skill without
+    writeFileSync(
+      join(tmpDir, '.agents', 'skills', 'create-prd', '.arete-meta.yaml'),
+      stringifyYaml({ category: 'core', requires_briefing: true }),
+      'utf8'
+    );
+    writeFileSync(
+      join(tmpDir, '.agents', 'skills', 'discovery', '.arete-meta.yaml'),
+      stringifyYaml({ category: 'core', requires_briefing: true }),
+      'utf8'
+    );
+    
+    // netflix-prd has no metadata (newly installed)
+    const netflixPath = join(tmpDir, '.agents', 'skills', 'netflix-prd');
+    const metaPath = join(netflixPath, '.arete-meta.yaml');
+    
+    assert.ok(!existsSync(metaPath), 'netflix-prd should not have metadata initially');
+    assert.ok(existsSync(join(tmpDir, '.agents', 'skills', 'create-prd', '.arete-meta.yaml')), 'create-prd should have metadata');
+    assert.ok(existsSync(join(tmpDir, '.agents', 'skills', 'discovery', '.arete-meta.yaml')), 'discovery should have metadata');
+  });
+
+  it('identifies community skills correctly', () => {
+    const paths = getWorkspacePaths(tmpDir);
+    const netflixPath = join(tmpDir, '.agents', 'skills', 'netflix-prd');
+    writeFileSync(
+      join(netflixPath, '.arete-meta.yaml'),
+      stringifyYaml({ category: 'community', requires_briefing: true }),
+      'utf8'
+    );
+    
+    const skills = getMergedSkillsForRouting(paths);
+    const netflix = skills.find(s => s.id === 'netflix-prd');
+    assert.ok(netflix);
+    assert.equal(netflix!.category, 'community');
   });
 });

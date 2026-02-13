@@ -323,23 +323,26 @@ Run `arete skill list` to see all available skills.
 
 ### Customizing Skills
 
-**Override a skill** (make your own version):
-```bash
-arete skill override <name>
-```
-- Copies skill into your workspace
-- Edit files in `.agents/skills/<name>/`
-- Your version is used instead of default
+**Customize a skill** (make your own version):
+
+1. Edit files directly in `.agents/skills/<name>/`
+2. Protect your changes by adding to `arete.yaml`:
+   ```yaml
+   skills:
+     overrides:
+       - daily-plan
+       - create-prd
+   ```
+3. Run `arete update` safely — your customized skills are preserved
 
 **Reset to default**:
-```bash
-arete skill reset <name>
-```
+1. Remove the skill name from `skills.overrides` in `arete.yaml`
+2. Delete the skill folder: `rm -rf .agents/skills/<name>`
+3. Run `arete update` to restore the default version
 
-**See what you changed**:
-```bash
-arete skill diff <name>
-```
+**Track your changes**:
+- Use `git diff` if your workspace is version controlled
+- Or keep a backup in `.agents/skills/<name>.backup/` before editing
 
 ### Installing Third-Party Skills
 
@@ -622,14 +625,14 @@ arete route "query" [--json]          # Route to skill/tool with model suggestio
 ### Skills & Tools
 
 ```bash
-arete skill list [--category]         # List available skills
+arete skill list [--verbose]          # List available skills (--verbose shows primitives, work_type, category)
 arete skill route "query"             # Route query to skill
 arete skill install <source>          # Install skill (skills.sh or path)
+arete skill add <source>              # Install skill (alias for install)
 arete skill set-default <skill> --for <role>  # Set preferred skill for role
 arete skill defaults                  # Show role defaults
-arete skill override <name>           # Copy skill to workspace for editing
-arete skill reset <name>              # Restore default skill
-arete skill diff <name>               # Show changes from default
+arete skill unset-default <role>      # Restore Areté default for role
+arete skill remove <name>             # Remove a skill (not fully implemented)
 
 arete tool list                       # List available tools
 arete tool show <name>                # Show tool details
