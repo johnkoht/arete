@@ -62,6 +62,74 @@ Focused 30-day plan with essential tracking.
 
 ## The Three Phases
 
+## Universal Principles (All Phases)
+
+These principles apply throughout your entire onboarding journey. They're not phase-specific—they're foundational approaches that will serve you from day one through day 90 and beyond.
+
+#### 1. Relationships Are the Job
+
+Product management is influence work, not authority work. You rarely have direct authority over the people you need to get things done—engineering, design, marketing, sales. Your effectiveness comes from relationships, trust, and credibility.
+
+This means relationships aren't separate from "the work"—they **are** the work. Every conversation, every commitment kept, every interaction is either building trust or eroding it. Start building relationships before you need them. The best time to form a connection is before you have a request to make.
+
+Remember: every interaction charges or drains the trust battery (see Phase 2). Make deposits early and often—small acts of helpfulness, reliability, and follow-through compound over time.
+
+#### 2. Listen More Than Talk
+
+Your listening-to-talking ratio should evolve as you gain context and credibility:
+
+- **Month 1 (Days 1-30): 80/20 ratio** — Listen 80%, talk 20%. Your job is to absorb, not to prescribe. Ask questions, take notes, resist the urge to add value through suggestions.
+- **Month 2 (Days 31-60): 70/30 ratio** — You're starting to contribute, but you're still learning. Listen more than you talk, but start sharing observations and asking strategic questions.
+- **Month 3 (Days 61-90): 50/50 ratio** — You've earned the right to be a balanced contributor. Listen and speak equally. Your perspective is valuable now because it's grounded in context.
+
+The fresh-eyes window is short. Use your beginner's mind to ask the questions others have stopped asking, but don't mistake newness for insight. Listen first, contribute second.
+
+#### 3. Share Your Plan Widely
+
+Don't just share your 30/60/90 plan with your manager—share it with your team, your cross-functional partners, and key stakeholders. Deb Liu (Meta, Ancestry) advocates for publishing your onboarding plan openly because:
+
+- **Transparency builds trust** — People see you're intentional about ramping up, not winging it
+- **Surfaces blind spots early** — Others will spot gaps or misunderstandings in your plan that you can't see yet
+- **Invites collaboration** — Stakeholders can suggest who to meet, what to read, what matters most
+- **Creates accountability** — When your plan is visible, you're more likely to follow through
+
+Share your plan in week 1 or 2, before you're too invested in it. Invite feedback: "Here's what I'm thinking. What am I missing?" Let others shape your approach while you're still flexible.
+
+#### 4. Be a Sponge, Not a Know-It-All
+
+You were hired for your expertise, but resist the urge to prove it too early. Context matters. Every company has reasons for their current state—constraints you don't see, history you don't know, trade-offs you don't understand yet.
+
+Before you propose solutions, earn the right to challenge through curiosity and understanding. Ask "**Why did you do it that way?**" before "**Have you considered...?**" When you understand the why, you can propose better solutions that respect the context. Or you might discover the "obvious fix" was already tried.
+
+Your fresh perspective is valuable, but only after you've built the context to wield it effectively. Be a sponge first. Absorb the culture, the constraints, the history. Once you understand deeply, then you can suggest meaningfully.
+
+#### 5. Seek Feedback Early
+
+Vulnerability builds trust. Don't wait for formal 30/60/90 reviews to ask how you're doing. Create a feedback loop by asking early and often:
+
+- **Week 2**: "How am I doing so far? Any early feedback?"
+- **Week 4**: "What's one thing I could be doing better?"
+- **Week 6**: "Am I focusing on the right things?"
+- **Week 8**: "How can I be more effective?"
+
+This does two things: First, it signals humility and openness to learning. Second, it gives you time to course-correct before small issues become big problems.
+
+When you receive feedback, close the loop. Report back on what you adjusted based on their input. This shows you're coachable and that their feedback matters. People will give you more feedback when they see you act on it.
+
+#### 6. "Because vs Despite"
+
+Most businesses thrive **despite** problems, not because everything is perfect. Every company has dysfunctions, legacy decisions, and inefficiencies. Your fresh eyes will see them immediately. Resist the urge to fix everything.
+
+Instead, ask: **"Is this company successful because of this, or despite this?"**
+
+If the company is thriving **despite** the problem, it might not be the right battle to fight. Save your energy for what multiplies impact, not what's merely broken.
+
+Not every dysfunction is worth fixing. Some problems are load-bearing—they exist because removing them would create bigger problems. Some are just annoying but low-impact. Focus on what matters: what unlocks growth, removes critical blockers, or multiplies your team's effectiveness.
+
+Choose your battles wisely. You have limited credibility and energy. Spend them on things that matter.
+
+---
+
 ### Phase 1: Learn (Days 1-30)
 
 **Goal**: Build deep understanding of the business, product, users, and team
