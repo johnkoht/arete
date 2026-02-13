@@ -348,6 +348,67 @@ End proposals with "**What would change your mind?**" or "**What am I not seeing
 
 ---
 
+## Landmines to Avoid
+
+You've read the positive guidance—here's what doesn't work. These are common mistakes that can derail your onboarding. Learn from others' missteps so you don't have to learn from your own.
+
+### Common Mistakes
+
+| Mistake | Why It's Bad | What to Do Instead |
+|---------|-------------|-------------------|
+| Dumping user feedback list on team in week 1 | You don't understand context yet; feedback without synthesis adds noise, not insight | Synthesize patterns after 30 days of listening (see Phase 1 → Fresh Eyes Window) |
+| Assigning action items in early 1:1s | You haven't earned trust yet; comes across as presumptuous and undermines relationship-building | Ask questions, offer help with "The 9 Magic Words," listen first (see Universal Principles → Relationships Are the Job) |
+| Making proclamations before understanding context | Erodes credibility fast; reveals you don't understand the "why" behind decisions | Ask "Why did you do it that way?" before suggesting changes (see Universal Principles → Be a Sponge, Not a Know-It-All) |
+| Trying to fix everything you see | Overwhelms you and the team; dilutes focus and drains trust battery on low-impact work | Choose 1-2 high-impact quick wins in Phase 2 (see Phase 2 → Quick Win Finder) |
+| Projecting previous company playbook | Every company is different; what worked there may not work here due to different context and constraints | Observe, adapt, then apply lessons learned elsewhere (see Phase 1 → Breadth Over Depth) |
+| Ignoring informal power structure | Formal org chart ≠ real influence; missing key stakeholders means your initiatives will stall | Map informal power via "Who do people go to for X?" questions (see Phase 1 → Map the organization) |
+
+### Phase-Specific Anti-Patterns
+
+#### Phase 1 Anti-Patterns (Days 1-30)
+
+**Documentation hole**: Spending weeks reading documentation without talking to people. Context lives in conversations, not wikis. Documentation is a starting point, not the full picture. You'll miss the "why" behind decisions and the informal dynamics that make things work.
+
+→ *See Phase 1 → Two Traps to Avoid: Balance reading with relationship-building from day one.*
+
+**Coming in hot**: Proposing solutions in weeks 1-2 before you understand the problem space. You don't have the context yet. What seems "obvious" to you often has history, constraints, or trade-offs you can't see.
+
+→ *See Phase 1 → Two Traps to Avoid and Universal Principles → Be a Sponge, Not a Know-It-All.*
+
+**Rabbit hole diving**: Deep-diving one area at the expense of breadth. Your fresh eyes window is short—once you've been there 60 days, you'll stop seeing what others have normalized. Use this window to survey broadly, not specialize prematurely.
+
+→ *See Phase 1 → Breadth Over Depth: Survey broadly before specializing.*
+
+#### Phase 2 Anti-Patterns (Days 31-60)
+
+**Big swings too early**: Trying to lead a major initiative before proving competence on smaller wins. You haven't charged your trust battery enough yet. Start with quick wins that demonstrate you can deliver before taking on high-stakes projects.
+
+→ *See Phase 2 → Quick Win Finder and Trust Battery: Build credibility through small, visible wins first.*
+
+**Ghost mode**: Contributing quietly without making your work visible. If nobody sees what you're delivering, your trust battery isn't charging. Share progress early, share drafts, make your contributions known.
+
+→ *See Phase 2 → Trust Battery: Make progress visible.*
+
+**Imposter paralysis**: Waiting until you feel "ready" to contribute because you don't feel like an expert yet. You'll never feel fully ready. Your job in Phase 2 isn't to be the expert—it's to be curious, reliable, and helpful while delivering on small commitments.
+
+→ *See Phase 2 → Navigating Imposter Syndrome: Focus on contribution, not perfection.*
+
+#### Phase 3 Anti-Patterns (Days 61-90)
+
+**Sacred cow slaughter**: Attacking established practices or decisions without understanding their history. Most "obvious problems" exist for reasons you don't see yet. The person who built what you want to change had context you don't have.
+
+→ *See Phase 3 → Navigate Sacred Cows: Talk to the people who built it and ask "Why?" before proposing changes.*
+
+**Lone wolf leadership**: Leading initiatives without building coalitions or getting buy-in from key stakeholders. Product management is influence work—you need allies to get things done. Leading without coalition-building means your initiative will stall.
+
+→ *See Phase 3 → Navigate Sacred Cows and Peacetime vs Wartime Context: Build consensus in peacetime, move decisively in wartime, but never go it alone.*
+
+**Opinion without evidence**: Sharing your point of view based on intuition alone, without backing it with data, customer evidence, or competitive context. By day 60 you've earned the right to have opinions—but you need to back them up.
+
+→ *See Phase 3 → Share Your POV: Back opinions with evidence, frame as hypothesis not proclamation.*
+
+---
+
 ## Project Structure
 
 When activated, create this structure in `projects/active/onboarding/`:
