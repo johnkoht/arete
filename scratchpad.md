@@ -51,6 +51,8 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 
 - [ ] **Skill customization documentation**: Create user-facing docs explaining how to override/customize skills. Cover: (1) when to use default vs customize, (2) how to override just a template vs entire skill, (3) examples of common customizations, (4) how overrides merge with core. Should be part of skill onboarding flow.
 
+- [ ] **Evaluate arete-context.mdc for end users** (2026-02-13): Currently `runtime/rules/arete-context.mdc` ships to end users and contains BUILDER mode content (dev/entries, dev/MEMORY.md, etc.) that's irrelevant to them. Question: Do we need this rule at all for end users? In user workspaces, the agent should always be in GUIDE mode—there's no `src/cli.ts` or `dev/` directory. Consider: (a) remove from PRODUCT_RULES_ALLOW_LIST entirely, (b) simplify to GUIDE-only content, or (c) leave as-is if auto-detection works well enough. Related to rules-architecture-refactor PRD.
+
 ---
 
 ## Notes
