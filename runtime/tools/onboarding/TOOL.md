@@ -526,9 +526,125 @@ When graduation criteria are met:
 
 ### Plan Adjustments
 - [Any changes to the overall plan]
+
+### Say/Do Ratio Check
+- Commitments made this week: [List]
+- Commitments delivered: [List]
+- In progress (on track): [List]
+
+### Quick Wins (Phase 2)
+- Opportunities identified: [Fast, Visible, Low-risk, Unowned?]
+- Quick win in progress: [Status]
+
+### Fresh Perspective Captured
+- What did beginner's mind reveal this week?
+- What's working that others might take for granted?
 ```
 
+## Working File Templates
+
+These are optional working files you can create in the `working/` directory to support your onboarding process. They align with the tactical guidance in each phase and help you track key activities systematically.
+
+### Learning Backlog
+
+Track what you need to learn and how you'll learn it. Create as `working/learning-backlog.md`:
+
+```markdown
+## PM Craft
+- What do I need to learn?
+- Why?
+- Who can teach me?
+- How will I get it?
+
+## The Product
+- What do I need to learn?
+- Why?
+- Who can teach me?
+- How will I get it?
+
+## The Market
+- What do I need to learn?
+- Why?
+- Who can teach me?
+- How will I get it?
+
+## The Business
+- What do I need to learn?
+- Why?
+- Who can teach me?
+- How will I get it?
+```
+
+Use this to prioritize learning and identify mentors early. Update weekly as new gaps emerge.
+
+### Relationship Backlog
+
+Track relationship-building cadence and strategy. Create as `working/relationship-backlog.md`:
+
+```markdown
+| Name | Role | Importance | Relationship Strategy | Cadence | Next Touch |
+|------|------|------------|----------------------|---------|------------|
+| [Person] | [Title] | Essential/Important/Valuable | [How to build rapport] | Weekly/Bi-weekly/Monthly | [Date] |
+```
+
+This helps you maintain the **Relationship Maintenance Cadence** from 1:1 Guidance. Use it to track when you last connected and when you should reach out again. Include notes on how to build rapport with each person (their communication style, what they care about, what you can help them with).
+
+### Burning Problems Tracker
+
+Track problems you're investigating in Phase 1. Create as `working/burning-problems.md`:
+
+```markdown
+| Problem | Flagged By | Investigation Notes | Diagnosis | Recommendation Timing |
+|---------|-----------|--------------------|-----------|--------------------|
+| [Problem description] | [Name] | [What you learned] | [Root cause] | [When to share] |
+```
+
+Use this when stakeholders flag **burning problems** (see Phase 1). Track your investigation notes, root cause analysis, and when/how you'll share recommendations. Remember: diagnose, don't solve (yet).
+
+### Quick Win Tracker
+
+Identify and track quick win opportunities in Phase 2. Create as `working/quick-wins.md`:
+
+```markdown
+| Opportunity | Effort (days) | Visibility | Risk | Owner Status | Criteria Met? |
+|------------|--------------|-----------|------|--------------|---------------|
+| [Description] | [2-3 weeks?] | High/Med/Low | Low? | Unowned? | Fast/Visible/Low-risk/Unowned |
+```
+
+This helps you apply the **Quick Win Finder** criteria from Phase 2: Fast (2-3 weeks), Visible (impact is seen), Low-risk (won't break things), Unowned (nobody else is working on it). Track opportunities and evaluate them systematically.
+
+### Situational Playback
+
+Prepare for your situational conversation with your manager (Phase 1 graduation). Create as `plan/situational-playback.md`:
+
+```markdown
+## What I Learned
+
+### Business & Strategy
+- [Key points about business model, strategy, goals]
+
+### Product & Users
+- [Key points about product, customers, use cases]
+
+### Team & Dynamics
+- [Key points about team structure, culture, decision-making]
+
+## Gaps in Understanding
+- [What I still don't know or need to validate]
+
+## Questions for Validation
+- [Questions to confirm my understanding is correct]
+```
+
+Use this to organize your thoughts before your **situational conversation** (see Phase 1 graduation criteria). Play back what you've learned, surface gaps, and validate your understanding. This proves you've absorbed the context and can articulate it clearly.
+
 ## 1:1 Guidance
+
+### The 9 Magic Words
+
+In every 1:1, ask: **"What can I do to make your life easier?"**
+
+This question opens doors and builds relationships faster than any other. It signals you're there to help, not just to extract information or make requests. Use it in every conversation, especially in Phase 1.
 
 ### Who to Meet With
 
@@ -549,25 +665,50 @@ When graduation criteria are met:
 
 ### 1:1 Questions by Phase
 
-**Phase 1 - Learn**:
+**Phase 1 - Learn (Days 1-30)**:
+
+Use these questions to build understanding through **situational conversation** (see Phase 1):
+
+- **The 9 Magic Words**: "What can I do to make your life easier?"
 - What should I know that's not written down?
 - What do you wish you knew when you started?
 - What are the biggest challenges right now?
-- How can I be most helpful to you?
+- **Burning problems**: "Is there a problem you're wrestling with that I could investigate and help diagnose?" (Not solve—investigate)
+- What's working well that I should understand?
+- Why did you approach [decision/system/process] that way? (Know-Why-Before-How)
 
-**Phase 2 - Contribute**:
+**Phase 2 - Contribute (Days 31-60)**:
+
+Focus on **quick wins** and **trust battery** building:
+
 - How am I doing so far? Any feedback?
 - Where do you see opportunities I could help with?
 - What's blocking you that I might be able to address?
 - What's one thing I could take off your plate?
-- Are there any quick wins you've been meaning to tackle but haven't had time for?
+- Are there any quick wins you've been meaning to tackle but haven't had time for? (Fast, Visible, Low-risk, Unowned)
+- What commitments have I made that I should follow up on?
 
-**Phase 3 - Lead**:
+**Phase 3 - Lead (Days 61-90)**:
+
+Position for **ownership** and **long-term impact**:
+
 - What should I focus on long-term? What does success look like in this role?
 - How can we work together most effectively?
 - What would make you see me as successful in this role?
 - Where do you see opportunities I could own or lead?
 - What's your vision for this area in the next 6-12 months?
+- **POV sharing**: "I'm thinking we should do X because [reasoning]. What am I missing?"
+- What mode are we in—peacetime or wartime? What does that mean for how I should operate?
+
+### Relationship Maintenance Cadence
+
+Track your 1:1 frequency to ensure relationships stay warm and you maintain visibility:
+
+- **Essential contacts** (manager, key peers, critical stakeholders): Weekly or bi-weekly 1:1s
+- **Important contacts** (cross-functional partners, skip-level, other PMs): Bi-weekly or monthly check-ins
+- **Valuable contacts** (customers, tenured employees, network): Monthly or quarterly conversations
+
+Use the Relationship Backlog template (see Working File Templates below) to track cadence, next touch dates, and relationship strategy for each person.
 
 ## Resources
 
