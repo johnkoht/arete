@@ -384,7 +384,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Key files**:
 - `dev/skills/execute-prd/SKILL.md` - PRD execution orchestrator
 - `dev/skills/prd-to-json/SKILL.md` - Convert PRD to task list
-- `dev/skills/review-plan/SKILL.md` - Review execution plan
+- `.agents/skills/review-plan/SKILL.md` - Review execution plan
 - `dev/autonomous/README.md` - Full documentation
 
 **How it works**:
