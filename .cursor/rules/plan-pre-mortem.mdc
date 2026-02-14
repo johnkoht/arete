@@ -34,7 +34,7 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 > 1. **Convert to PRD** — I'll create prd.md and prd.json, then give you a handoff prompt for a new agent to execute via execute-prd.
 > 2. **Proceed with plan** — I'll run a pre-mortem and execute this plan directly."
 
-- **If user chooses "Convert to PRD"**: Load `dev/skills/plan-to-prd/SKILL.md` and follow its workflow. Do not execute the plan.
+- **If user chooses "Convert to PRD"**: Load `.agents/skills/plan-to-prd/SKILL.md` and follow its workflow. Do not execute the plan.
 - **If user chooses "Proceed with plan"**: Continue with the pre-mortem below.
 
 **If plan does not meet the threshold**: Skip the PRD offer and go directly to the pre-mortem.
@@ -56,10 +56,10 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 
 ## References
 
-- **PRD gateway skill**: `dev/skills/plan-to-prd/SKILL.md`
+- **PRD gateway skill**: `.agents/skills/plan-to-prd/SKILL.md`
 - **Template and categories**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
 - **Rationale and examples**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
-- **Full workflow (PRD execution)**: `dev/skills/execute-prd/SKILL.md`
+- **Full workflow (PRD execution)**: `.agents/skills/execute-prd/SKILL.md`
 
 ## Why This Matters
 

@@ -15,7 +15,7 @@ I want to execute a PRD using the new orchestration system we built.
 - This will be the first test of that new system
 
 **Your task**:
-1. Read dev/skills/execute-prd/SKILL.md (the execution workflow)
+1. Read .agents/skills/execute-prd/SKILL.md (the execution workflow)
 2. Read dev/QUICK-START-ORCHESTRATION.md (quick reference)
 3. Read dev/entries/2026-02-09_builder-orchestration-learnings.md (what worked last time)
 4. Find the next PRD to execute (check dev/prds/ for candidates)
@@ -55,7 +55,7 @@ Create a simple 2-3 task PRD for testing the orchestration system. Something lik
 - Task 2: Add tests for that function
 - Task 3: Update documentation
 
-Then execute it using dev/skills/execute-prd/SKILL.md with:
+Then execute it using .agents/skills/execute-prd/SKILL.md with:
 - Mandatory pre-mortem (even though it's simple - this is a test)
 - Full orchestration workflow
 - Post-mortem analysis

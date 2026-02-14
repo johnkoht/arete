@@ -50,7 +50,7 @@ This creates `dev/autonomous/prd.json` with structured tasks.
 ### 3. Execute Autonomously
 
 ```
-Load the execute-prd skill from dev/skills/execute-prd/ and execute the PRD
+Load the execute-prd skill from .agents/skills/execute-prd/ and execute the PRD
 ```
 
 The orchestrator will:
@@ -167,7 +167,7 @@ dev/autonomous/
 └── README.md                    # This file
 ```
 
-Build skills (prd-to-json, execute-prd) live in **dev/skills/**.
+Build skills (prd-to-json, execute-prd) live in **.agents/skills/**.
 
 ## File Descriptions
 

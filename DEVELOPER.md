@@ -59,7 +59,7 @@ Areté uses a build-and-copy architecture:
 1. **BUILDER mode** - Building Areté itself (this repo)
    - Memory in `memory/entries/` indexed by `memory/MEMORY.md`
    - PRDs in `dev/prds/{feature}/prd.md`
-   - Build skills in `dev/skills/`
+   - Build skills in `.agents/skills/`
    - Use `AGENT_MODE=BUILDER` to force this mode
 
 2. **GUIDE mode** - End-user PM workspace
@@ -382,9 +382,9 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Execute PRD tasks sequentially with fresh context per task.
 
 **Key files**:
-- `dev/skills/execute-prd/SKILL.md` - PRD execution orchestrator
+- `.agents/skills/execute-prd/SKILL.md` - PRD execution orchestrator
 - `.agents/skills/prd-to-json/SKILL.md` - Convert PRD to task list
-- `dev/skills/review-plan/SKILL.md` - Review execution plan
+- `.agents/skills/review-plan/SKILL.md` - Review execution plan
 - `dev/autonomous/README.md` - Full documentation
 
 **How it works**:
@@ -747,7 +747,7 @@ From `.cursor/rules/testing.mdc`:
 ### Autonomous Development
 
 - **dev/autonomous/README.md** - PRD execution system documentation
-- **dev/skills/execute-prd/** - PRD execution orchestrator
+- **.agents/skills/execute-prd/** - PRD execution orchestrator
 - **.agents/skills/prd-to-json/** - PRD to task list converter
 
 ---

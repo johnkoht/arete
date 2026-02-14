@@ -45,7 +45,7 @@ cat dev/autonomous/prd.json | jq '.userStories[] | {id, title, status}'
 ### Step 3: Execute the PRD
 
 ```
-Load the execute-prd skill from dev/skills/execute-prd/ and execute the PRD
+Load the execute-prd skill from .agents/skills/execute-prd/ and execute the PRD
 ```
 
 **Expected behavior**:

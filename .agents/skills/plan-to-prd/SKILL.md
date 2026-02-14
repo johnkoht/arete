@@ -57,7 +57,7 @@ Execute this PRD using the autonomous agent loop.
 
 ---
 
-Execute the {feature-name} PRD. Load the execute-prd skill from `dev/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/{feature-name}/prd.md` and the task list is at `dev/autonomous/prd.json`. Run the full workflow: pre-mortem → task execution loop → post-mortem.
+Execute the {feature-name} PRD. Load the execute-prd skill from `.agents/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/{feature-name}/prd.md` and the task list is at `dev/autonomous/prd.json`. Run the full workflow: pre-mortem → task execution loop → post-mortem.
 
 ---
 ```
@@ -90,5 +90,5 @@ When converting plan steps to PRD tasks:
 
 - **PRD example**: `dev/prds/intelligence-and-calendar/prd.md`
 - **prd-to-json skill**: `.agents/skills/prd-to-json/SKILL.md`
-- **execute-prd skill**: `dev/skills/execute-prd/SKILL.md`
+- **execute-prd skill**: `.agents/skills/execute-prd/SKILL.md`
 - **Schema**: `dev/autonomous/schema.ts`

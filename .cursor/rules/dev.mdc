@@ -1,6 +1,6 @@
 ---
 description: Dev practices for Arete — lint, format, conventions, build memory
-globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", "dev/skills/**/*", "runtime/skills/**/*", "runtime/rules/**/*"]
+globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", ".agents/skills/**/*", "runtime/skills/**/*", "runtime/rules/**/*"]
 alwaysApply: true
 ---
 
@@ -10,25 +10,25 @@ Standards for building and changing Arete. **Testing** is covered in `testing.md
 
 ## Build skills
 
-Build skills live in `dev/skills/` and are **not shipped to users**. They're for developing Areté itself. Read and follow these skills when doing the corresponding work.
+Build skills live in `.agents/skills/` and are **not shipped to users**. They're for developing Areté itself. Read and follow these skills when doing the corresponding work.
 
 | Skill | Path | When to use |
 |-------|------|-------------|
-| **execute-prd** | `dev/skills/execute-prd/SKILL.md` | Executing multi-task PRDs autonomously |
-| **plan-to-prd** | `dev/skills/plan-to-prd/SKILL.md` | Converting an approved plan to a PRD |
+| **execute-prd** | `.agents/skills/execute-prd/SKILL.md` | Executing multi-task PRDs autonomously |
+| **plan-to-prd** | `.agents/skills/plan-to-prd/SKILL.md` | Converting an approved plan to a PRD |
 | **prd-to-json** | `.agents/skills/prd-to-json/SKILL.md` | Generating `prd.json` from a PRD for autonomous execution |
-| **prd-post-mortem** | `dev/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
-| **review-plan** | `dev/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
+| **prd-post-mortem** | `.agents/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
+| **review-plan** | `.agents/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
 | **run-pre-mortem** | `.agents/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
 | **synthesize-collaboration-profile** | `.agents/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
 
 **How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
 
 **Skill triggers**:
-- Plan review requested → read `dev/skills/review-plan/SKILL.md`
-- PRD execution starting → read `dev/skills/execute-prd/SKILL.md`
+- Plan review requested → read `.agents/skills/review-plan/SKILL.md`
+- PRD execution starting → read `.agents/skills/execute-prd/SKILL.md`
 - Pre-mortem needed → read `.agents/skills/run-pre-mortem/SKILL.md`
-- PRD completed → read `dev/skills/prd-post-mortem/SKILL.md`
+- PRD completed → read `.agents/skills/prd-post-mortem/SKILL.md`
 
 ## Build memory
 
@@ -63,8 +63,8 @@ For **multi-step work** (PRD execution, large refactors, new systems, integratio
 - **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
 - **How**: Use `dev/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
 - **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
-- **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `dev/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
-- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/skills/execute-prd/SKILL.md`, `dev/skills/plan-to-prd/SKILL.md`.
+- **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `.agents/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
+- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `.agents/skills/execute-prd/SKILL.md`, `.agents/skills/plan-to-prd/SKILL.md`.
 
 ## Execution path decision tree
 
@@ -86,7 +86,7 @@ User approves plan
      |
      └─ Medium/Large (3+ steps OR complex: new system, integration, refactor)
         → Strongly recommend: "PRD path or direct execution?"
-        → If PRD: Load dev/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
+        → If PRD: Load .agents/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
         → If direct: Apply pre-mortem + quality gates + memory capture
 ```
 
@@ -119,7 +119,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 **When**: Before starting work that has risk (new systems, integrations, refactors, 3+ dependent tasks)
 
 **How**:
-- Use standalone skill: `dev/skills/run-pre-mortem/SKILL.md`
+- Use standalone skill: `.agents/skills/run-pre-mortem/SKILL.md`
 - Or use template directly: `dev/templates/PRE-MORTEM-TEMPLATE.md`
 - Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
 - Create concrete mitigations for each risk
@@ -137,7 +137,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 - Audience (builder vs user) isn't obvious
 
 **How**:
-- Use skill: `dev/skills/review-plan/SKILL.md`
+- Use skill: `.agents/skills/review-plan/SKILL.md`
 - Reviewer applies a checklist (scope, risks, dependencies, patterns, backward compatibility, completeness)
 - Reviewer provides **devil's advocate** perspective: "If this fails, it will be because..." and "The worst outcome would be..."
 - Output: Concerns, Strengths, Devil's Advocate, Verdict (Approve / Approve with suggestions / Revise)
@@ -223,7 +223,7 @@ If you find repetitive logic that isn't abstracted, create a refactor backlog it
 ### 7. Skill and rule changes (mandatory review)
 
 **When**: Before creating or modifying any skill or rule file:
-- `dev/skills/**/*.md` — build skills
+- `.agents/skills/**/*.md` — build skills
 - `runtime/skills/**/*.md` — product skills (shipped to users)
 - `.cursor/rules/*.mdc` — build rules
 - `runtime/rules/*.mdc` — product rules (shipped to users)

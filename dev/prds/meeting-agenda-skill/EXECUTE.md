@@ -47,7 +47,7 @@ You are the orchestrator. You will:
 **Key files to understand before starting:**
 - dev/prds/meeting-agenda-skill/prd.md (full PRD with requirements and pre-mortem)
 - dev/autonomous/prd.json (task manifest)
-- dev/skills/execute-prd/SKILL.md (orchestration workflow)
+- .agents/skills/execute-prd/SKILL.md (orchestration workflow)
 - dev/agents/prd-task.md (subagent instructions)
 - src/core/workspace-structure.ts (BASE_WORKSPACE_DIRS pattern for A3)
 - runtime/skills/meeting-prep/SKILL.md (skill structure for C1)

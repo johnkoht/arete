@@ -47,7 +47,7 @@ You are the orchestrator. You will:
 - dev/prds/multi-ide-support/prd.md (full PRD with all requirements)
 - dev/autonomous/prd.json (task manifest)
 - dev/autonomous/schema.ts (task schema)
-- dev/skills/execute-prd/SKILL.md (orchestration workflow)
+- .agents/skills/execute-prd/SKILL.md (orchestration workflow)
 - dev/agents/prd-task.md (subagent instructions)
 
 **Success criteria:**

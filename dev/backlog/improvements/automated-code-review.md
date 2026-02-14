@@ -156,6 +156,6 @@ Then orchestrator:
 
 ## Related
 
-- **execute-prd skill**: `dev/skills/execute-prd/SKILL.md` (Phase 2, step 9)
+- **execute-prd skill**: `.agents/skills/execute-prd/SKILL.md` (Phase 2, step 9)
 - **dev.mdc**: `.cursor/rules/dev.mdc` (coding conventions reference)
 - **Learnings**: `dev/entries/2026-02-09_builder-orchestration-learnings.md` (code review checklist origin)

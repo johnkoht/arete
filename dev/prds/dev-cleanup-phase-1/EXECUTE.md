@@ -6,7 +6,7 @@ Execute this PRD using the autonomous agent loop.
 
 ---
 
-Execute the dev-cleanup-phase-1 PRD. Load the execute-prd skill from `dev/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/dev-cleanup-phase-1/prd.md` and the task list is at `dev/autonomous/prd.json`. Run the full workflow: pre-mortem → task execution loop → post-mortem.
+Execute the dev-cleanup-phase-1 PRD. Load the execute-prd skill from `.agents/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/dev-cleanup-phase-1/prd.md` and the task list is at `dev/autonomous/prd.json`. Run the full workflow: pre-mortem → task execution loop → post-mortem.
 
 ---
 
@@ -25,4 +25,4 @@ See PRD Section 2 "CRITICAL: Orchestrator Instructions" for detailed protocols.
 - **PRD**: `dev/prds/dev-cleanup-phase-1/prd.md`
 - **Task list**: `dev/autonomous/prd.json` (15 tasks)
 - **Progress log**: `dev/autonomous/progress.txt`
-- **Skill**: `dev/skills/execute-prd/SKILL.md`
+- **Skill**: `.agents/skills/execute-prd/SKILL.md`

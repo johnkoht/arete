@@ -10,7 +10,7 @@
 I want to execute the [PRD-NAME] PRD using the orchestration system.
 
 Please:
-1. Read dev/skills/execute-prd/SKILL.md (the execution workflow)
+1. Read .agents/skills/execute-prd/SKILL.md (the execution workflow)
 2. Read dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md (context from last PRD)
 3. Read dev/entries/2026-02-09_builder-orchestration-learnings.md (what worked)
 4. Follow the execute-prd skill workflow:

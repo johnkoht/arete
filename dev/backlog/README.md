@@ -13,7 +13,7 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 1. **Capture ideas here** (or start in scratchpad, move here when mature)
 2. **Flesh out details** (what, why, effort, dependencies)
 3. **When ready**: Convert to full PRD in `dev/prds/{feature-name}/prd.md`
-4. **Execute**: Use `dev/skills/execute-prd/SKILL.md`
+4. **Execute**: Use `.agents/skills/execute-prd/SKILL.md`
 
 ---
 

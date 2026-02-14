@@ -24,5 +24,5 @@ Add a **Prepare Meeting Agenda** skill that produces a structured agenda documen
 
 - **Full PRD**: [prd.md](prd.md)
 - **Backlog**: [dev/backlog/features/meeting-agenda-skill.md](../../backlog/features/meeting-agenda-skill.md)
-- **Execute-PRD skill**: [dev/skills/execute-prd/SKILL.md](../../skills/execute-prd/SKILL.md)
+- **Execute-PRD skill**: [.agents/skills/execute-prd/SKILL.md](../../../.agents/skills/execute-prd/SKILL.md)
 - **Plan (enhancements)**: Cursor plan "Enhance Meeting Agenda Backlog" (template management, workflow detail, inference rules)
