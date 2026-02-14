@@ -57,7 +57,6 @@ export const BASE_WORKSPACE_DIRS = [
  */
 export const PRODUCT_RULES_ALLOW_LIST = [
   'routing-mandatory.mdc',
-  'arete-context.mdc',
   'arete-vision.mdc',
   'pm-workspace.mdc',
   'agent-memory.mdc',

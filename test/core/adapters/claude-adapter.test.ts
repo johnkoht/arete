@@ -213,9 +213,9 @@ describe('ClaudeAdapter', () => {
     });
 
     it('transforms bare rule filename references', () => {
-      const content = 'check `arete-context.mdc` to determine mode';
+      const content = 'check `agent-memory.mdc` for routing';
       const result = adapter.transformRuleContent(content);
-      assert.equal(result, 'check `arete-context.md` to determine mode');
+      assert.equal(result, 'check `agent-memory.md` for routing');
     });
 
     it('transforms multiple .mdc references in same content', () => {

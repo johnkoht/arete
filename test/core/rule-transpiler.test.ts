@@ -104,7 +104,7 @@ describe('rule-transpiler', () => {
       assert.equal(parsed.frontmatter.description, undefined);
     });
 
-    it('parses all 8 rules in PRODUCT_RULES_ALLOW_LIST without errors', () => {
+    it('parses all 7 rules in PRODUCT_RULES_ALLOW_LIST without errors', () => {
       const runtimeRulesPath = getRuntimeRulesPath();
       
       for (const ruleFile of PRODUCT_RULES_ALLOW_LIST) {
@@ -331,15 +331,15 @@ References to .cursor/tools/ and .cursor/integrations/ and .cursor/rules/ and .c
     describe('with CursorAdapter', () => {
       const adapter = new CursorAdapter();
 
-      it('creates 8 .mdc files in destination', () => {
+      it('creates 7 .mdc files in destination', () => {
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Verify 8 files were added
-        assert.equal(results.added.length, 8);
+        // Verify 7 files were added
+        assert.equal(results.added.length, 7);
 
         // Verify all files exist and have .mdc extension
         const destFiles = readdirSync(destDir);
-        assert.equal(destFiles.length, 8);
+        assert.equal(destFiles.length, 7);
         
         for (const file of destFiles) {
           assert.ok(file.endsWith('.mdc'), `File ${file} should have .mdc extension`);
@@ -366,8 +366,8 @@ References to .cursor/tools/ and .cursor/integrations/ and .cursor/rules/ and .c
       it('returns correct SyncResults', () => {
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Initial run: 8 added, 0 removed
-        assert.equal(results.added.length, 8);
+        // Initial run: 7 added, 0 removed
+        assert.equal(results.added.length, 7);
         assert.equal(results.updated.length, 0);
         assert.equal(results.removed.length, 0);
         assert.equal(results.preserved.length, 0);
@@ -376,13 +376,13 @@ References to .cursor/tools/ and .cursor/integrations/ and .cursor/rules/ and .c
       it('removes existing files on re-run', () => {
         // First run
         const results1 = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
-        assert.equal(results1.added.length, 8);
+        assert.equal(results1.added.length, 7);
         assert.equal(results1.removed.length, 0);
 
-        // Second run - should remove 8 old files and add 8 new ones
+        // Second run - should remove 7 old files and add 7 new ones
         const results2 = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
-        assert.equal(results2.removed.length, 8);
-        assert.equal(results2.added.length, 8);
+        assert.equal(results2.removed.length, 7);
+        assert.equal(results2.added.length, 7);
       });
 
       it('only processes files in allowList', () => {
@@ -398,8 +398,8 @@ This should not be transpiled.`);
 
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Should still only transpile 8 files (not 9)
-        assert.equal(results.added.length, 8);
+        // Should still only transpile 7 files (not 8)
+        assert.equal(results.added.length, 7);
         
         // Extra rule should not exist in destination
         const extraDestPath = join(destDir, 'extra-rule.mdc');
@@ -434,15 +434,15 @@ This should not be transpiled.`);
     describe('with ClaudeAdapter', () => {
       const adapter = new ClaudeAdapter();
 
-      it('creates 8 .md files in destination', () => {
+      it('creates 7 .md files in destination', () => {
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Verify 8 files were added
-        assert.equal(results.added.length, 8);
+        // Verify 7 files were added
+        assert.equal(results.added.length, 7);
 
         // Verify all files exist and have .md extension
         const destFiles = readdirSync(destDir);
-        assert.equal(destFiles.length, 8);
+        assert.equal(destFiles.length, 7);
         
         for (const file of destFiles) {
           assert.ok(file.endsWith('.md'), `File ${file} should have .md extension`);
@@ -469,8 +469,8 @@ This should not be transpiled.`);
       it('returns correct SyncResults', () => {
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Initial run: 8 added, 0 removed
-        assert.equal(results.added.length, 8);
+        // Initial run: 7 added, 0 removed
+        assert.equal(results.added.length, 7);
         assert.equal(results.updated.length, 0);
         assert.equal(results.removed.length, 0);
         assert.equal(results.preserved.length, 0);
@@ -487,11 +487,11 @@ This should not be transpiled.`);
         
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
-        // Should only transpile the 8 files in allowList
-        assert.equal(results.added.length, 8);
+        // Should only transpile the 7 files in allowList
+        assert.equal(results.added.length, 7);
         
         const destFiles = readdirSync(destDir);
-        assert.equal(destFiles.length, 8);
+        assert.equal(destFiles.length, 7);
         
         // Verify extra files were not transpiled
         assert.ok(!existsSync(join(destDir, 'extra-1.mdc')));
@@ -507,7 +507,7 @@ This should not be transpiled.`);
         const results = transpileRules(srcDir, destDir, adapter, mockConfig, PRODUCT_RULES_ALLOW_LIST);
 
         // Should only transpile .mdc files
-        assert.equal(results.added.length, 8);
+        assert.equal(results.added.length, 7);
         
         // README should not be in destination
         assert.ok(!existsSync(join(destDir, 'README.md')));

@@ -5,7 +5,7 @@ globs: ["src/**/*", "test/**/*", "dev/**/*"]
 
 # Plan Mode: Pre-Mortem Required
 
-**Only when in Build Context (BUILDER mode).** See `arete-context.mdc`. Ignore in GUIDE mode or end-user workspaces.
+**Only when in Build Context (BUILDER mode).** Ignore in GUIDE mode or end-user workspaces.
 
 ## When This Applies
 

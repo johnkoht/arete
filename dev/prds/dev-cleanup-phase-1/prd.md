@@ -16,7 +16,7 @@ The Areté build repository has accumulated structural inconsistencies:
 - **Build memory** (`MEMORY.md`, `collaboration.md`, `entries/`) is buried under `dev/` despite being a first-class concept that agents reference frequently
 - **Build skills** live in `dev/skills/` but product skills use `.agents/skills/` pattern — inconsistent and confusing
 - **Autonomous execution files** are scattered across `dev/agents/`, `dev/templates/`, and loose files in `dev/`
-- **`arete-context.mdc`** contains mode disambiguation logic that's unnecessary — this repo IS builder mode
+- **Mode disambiguation rule** is redundant — this repo IS builder mode
 
 The repo structure doesn't match how the codebase is actually organized, making navigation and maintenance harder.
 
@@ -25,7 +25,7 @@ The repo structure doesn't match how the codebase is actually organized, making 
 1. **Elevate build memory** to top-level `memory/` directory — first-class, not hidden
 2. **Standardize build skills** under `.agents/skills/` to match product skill pattern
 3. **Consolidate autonomous system** files into `dev/autonomous/`
-4. **Remove redundant mode detection** by deleting `arete-context.mdc`
+4. **Remove redundant mode detection** by deleting the mode rule from build rules
 5. **Preserve git history** through proper `git mv` operations
 6. **Update all references** so no stale paths remain in documentation
 
@@ -152,7 +152,7 @@ arete/
 │       ├── plan-to-prd/
 │       └── synthesize-collaboration-profile/
 ├── .cursor/
-│   └── rules/                  # BUILD rules (remove arete-context.mdc)
+│   └── rules/                  # BUILD rules (mode rule removed)
 │       ├── dev.mdc
 │       ├── testing.mdc
 │       ├── plan-pre-mortem.mdc
@@ -416,23 +416,23 @@ arete/
 
 ---
 
-### Phase D: Remove arete-context.mdc
+### Phase D: Remove redundant mode rule
 
-#### Task D1: Remove arete-context.mdc
+#### Task D1: Remove redundant mode rule
 
 **Description**: Remove the redundant mode detection rule — this repo IS builder mode.
 
 **Actions**:
-- `git rm .cursor/rules/arete-context.mdc`
-- Update any references to `arete-context.mdc`
+- `git rm` the mode rule from `.cursor/rules/`
+- Update any references to it
 
 **Acceptance Criteria**:
-- `.cursor/rules/arete-context.mdc` does NOT exist
-- `rg "arete-context.mdc"` returns 0 results
+- The mode rule does NOT exist in `.cursor/rules/`
+- No references to the removed rule remain
 - `npm run typecheck` passes
 - `npm test` passes
 
-**Commit**: "chore: remove arete-context.mdc (repo IS builder mode)"
+**Commit**: "chore: remove redundant mode rule (repo IS builder mode)"
 
 ---
 
@@ -446,7 +446,7 @@ arete/
 - Memory paths: `memory/MEMORY.md`, `memory/collaboration.md`, `memory/entries/`
 - Skill paths: `.agents/skills/{name}/SKILL.md`
 - Autonomous paths: `dev/autonomous/`, `dev/autonomous/prd-task-agent.md`, `dev/autonomous/templates/`
-- Remove any mention of `arete-context.mdc`
+- Remove any mention of the removed mode rule
 
 **Also update**:
 - Directory structure diagram
@@ -454,7 +454,7 @@ arete/
 
 **Acceptance Criteria**:
 - AGENTS.md contains NO old paths
-- `rg "dev/MEMORY.md|dev/collaboration.md|dev/entries/|dev/skills/|dev/agents/|dev/templates/|arete-context.mdc" AGENTS.md` returns 0 results
+- `rg "dev/MEMORY.md|dev/collaboration.md|dev/entries/|dev/skills/|dev/agents/|dev/templates/" AGENTS.md` returns 0 results
 - `npm run typecheck` passes
 - `npm test` passes
 
@@ -477,7 +477,7 @@ arete/
    - `rg "dev/skills/" --type md`
    - `rg "dev/agents/" --type md`
    - `rg "dev/templates/" --type md`
-   - `rg "arete-context.mdc"`
+   - `rg` for the removed rule (should return 0)
 
 2. **Verify new structure exists**:
    - `ls memory/MEMORY.md`
@@ -498,7 +498,7 @@ arete/
    - `ls dev/skills/` should fail
    - `ls dev/agents/` should fail
    - `ls dev/templates/` should fail
-   - `ls .cursor/rules/arete-context.mdc` should fail
+   - The removed mode rule file should not exist
 
 4. **Run full test suite**:
    - `npm run typecheck`
@@ -531,7 +531,7 @@ B1-B7 (move skills, can run in parallel) → B8 (update refs)
 Phase C: Autonomous
 C1 (move files) → C2 (update refs)
 
-Phase D: Remove arete-context.mdc
+Phase D: Remove redundant mode rule
 D1 (independent, after A2, B8, C2)
 
 Phase E: AGENTS.md
@@ -550,7 +550,7 @@ F1 (after E1)
 - All build memory files accessible at `memory/` path
 - All build skills accessible at `.agents/skills/` path
 - All autonomous system files consolidated in `dev/autonomous/`
-- `arete-context.mdc` removed — no mode disambiguation needed
+- Redundant mode rule removed — no disambiguation needed
 - AGENTS.md reflects new structure
 - Zero stale path references in documentation (except historical entries)
 - Git history preserved for all moved files

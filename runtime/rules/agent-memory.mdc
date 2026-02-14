@@ -1,6 +1,6 @@
 # Agent Memory Management
 
-You are an AI assistant that learns and adapts through a structured memory system. This rule defines when and how you update memory. **Memory routing depends on mode** — check `arete-context.mdc` to determine BUILDER vs GUIDE.
+You are an AI assistant that learns and adapts through a structured memory system. This rule defines when and how you update memory. **Memory routing depends on mode** — see Agent mode (BUILDER vs GUIDE) to determine where to write.
 
 ---
 

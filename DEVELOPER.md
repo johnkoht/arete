@@ -730,7 +730,6 @@ From `.cursor/rules/testing.mdc`:
 
 - **.cursor/rules/dev.mdc** - Development quality practices
 - **.cursor/rules/testing.mdc** - Test requirements and patterns
-- **.cursor/rules/arete-context.mdc** - BUILDER vs GUIDE mode
 
 ### Build Memory
 

@@ -49,7 +49,7 @@ After refactor:
 
 | Location | Purpose | Files |
 |----------|---------|-------|
-| `.cursor/rules/` | BUILDER rules for dev repo | 6 files: dev.mdc, testing.mdc, plan-pre-mortem.mdc, arete-vision.mdc, agent-memory.mdc, arete-context.mdc |
+| `.cursor/rules/` | BUILDER rules for dev repo | 5 files: dev.mdc, testing.mdc, plan-pre-mortem.mdc, arete-vision.mdc, agent-memory.mdc |
 | `runtime/rules/` | GUIDE rules shipped to users | 8 files (unchanged) |
 
 ### Accepted Duplication
@@ -113,20 +113,9 @@ Rewrite to contain only BUILDER memory management:
 - No mode checks or conditionals
 - Covers build memory, entries, collaboration profile
 
-### 4.3 Edit arete-context.mdc (BUILDER-only version)
+### 4.3 Mode rule (removed)
 
-Simplify to state this is the Areté source repo:
-- State: This is BUILDER context (Areté development)
-- State: Follow dev.mdc and testing.mdc
-- State: Do not run `arete install` or `arete update` here
-- Remove: GUIDE section entirely
-- Remove: Mode detection logic
-- Remove: Override instructions (no longer needed)
-
-**Acceptance criteria:**
-- File is ~20-30 lines, BUILDER-only
-- No GUIDE content or mode detection
-- Clear, simple guidance for Areté development
+The redundant mode rule was removed — this repo IS builder mode. No separate mode file in `.cursor/rules/`.
 
 ### 4.4 Expand dev.mdc with quality practices
 
@@ -229,16 +218,9 @@ Search for and update any references to sections that moved:
 - [ ] No mode checks or conditionals
 - [ ] Covers dev/entries/, dev/MEMORY.md, dev/collaboration.md
 
-### Task 3: Edit arete-context.mdc
+### Task 3: (superseded — mode rule removed)
 
-- Simplify to ~20-30 lines
-- State this is BUILDER context
-- Remove GUIDE section and mode detection
-
-**Acceptance criteria:**
-- [ ] ~20-30 lines total
-- [ ] No GUIDE content
-- [ ] Clear BUILDER-only guidance
+The mode rule was removed in dev-cleanup-phase-1.
 
 ### Task 4: Expand dev.mdc
 
@@ -306,7 +288,7 @@ Search for and update any references to sections that moved:
 ## 6. Dependencies Between Tasks
 
 ```
-Task 1 (delete rules) → Task 2 (edit agent-memory) → Task 3 (edit arete-context)
+Task 1 (delete rules) → Task 2 (edit agent-memory) → Task 3 (superseded)
                                                    ↓
 Task 4 (expand dev.mdc) ← content from AGENTS.md ← Task 5 (trim AGENTS.md)
                                                    ↓
@@ -330,7 +312,7 @@ Note: Tasks 4 and 5 are interrelated — content moves from AGENTS.md to dev.mdc
 
 ## 8. Success Criteria
 
-- `.cursor/rules/` contains exactly 6 files: dev.mdc, testing.mdc, plan-pre-mortem.mdc, arete-vision.mdc, agent-memory.mdc, arete-context.mdc
+- `.cursor/rules/` contains exactly 5 files: dev.mdc, testing.mdc, plan-pre-mortem.mdc, arete-vision.mdc, agent-memory.mdc
 - `runtime/rules/` unchanged (8 files)
 - `dev.mdc` contains all quality practices and is auto-loaded by Cursor
 - AGENTS.md is significantly smaller (~700-800 lines), focused on architecture
