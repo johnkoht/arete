@@ -44,7 +44,7 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 **After** you have a draft plan and **before** you start executing it (and after the PRD gateway, if applicable):
 
 1. **Run a pre-mortem** using the same process as the execute-prd skill:
-   - Read `dev/templates/PRE-MORTEM-TEMPLATE.md` for the format and risk categories.
+   - Read `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` for the format and risk categories.
    - Consider the **8 risk categories**: Context Gaps, Test Patterns, Integration, Scope Creep, Code Quality, Dependencies, Platform Issues, State Tracking.
    - For each relevant risk: **Problem** (what could go wrong), **Mitigation** (concrete action), **Verification** (how to check it was applied).
 
@@ -57,8 +57,8 @@ If the work is a single, well-understood task, a pre-mortem is optional.
 ## References
 
 - **PRD gateway skill**: `.agents/skills/plan-to-prd/SKILL.md`
-- **Template and categories**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
-- **Rationale and examples**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
+- **Template and categories**: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
+- **Rationale and examples**: `dev/autonomous/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`
 - **Full workflow (PRD execution)**: `.agents/skills/execute-prd/SKILL.md`
 
 ## Why This Matters

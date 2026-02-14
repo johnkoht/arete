@@ -143,6 +143,6 @@ This section is required. Don't skip it — adversarial thinking surfaces concer
 
 ## References
 
-- **Risk categories**: See `dev/templates/PRE-MORTEM-TEMPLATE.md` for the 8 pre-mortem risk categories
+- **Risk categories**: See `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` for the 8 pre-mortem risk categories
 - **Code quality checklist**: See `.cursor/rules/dev.mdc` for the 6-point code review checklist
 - **Related skills**: `.agents/skills/run-pre-mortem/SKILL.md` (risk identification before execution)

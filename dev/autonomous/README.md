@@ -60,7 +60,7 @@ The orchestrator will:
 - Track progress in `progress.txt`
 - Continue until all tasks complete (or max iterations)
 
-If the Task tool is not available in your environment, the execute-prd skill allows fallback. A custom subagent at `.cursor/agents/prd-task.md` gives fresh context per task when Cursor exposes it as a tool (see [Subagents](https://cursor.com/docs/context/subagents); Cursor Plus/usage-based have them on by default): the same agent executes each task in sequence (one task at a time, same quality gates and prd/progress updates). See the skill’s Step 3 for details.
+If the Task tool is not available in your environment, the execute-prd skill allows fallback. A custom subagent at `dev/autonomous/prd-task-agent.md` gives fresh context per task when Cursor exposes it as a tool (see [Subagents](https://cursor.com/docs/context/subagents); Cursor Plus/usage-based have them on by default): the same agent executes each task in sequence (one task at a time, same quality gates and prd/progress updates). See the skill’s Step 3 for details.
 
 ### 4. Review and Merge
 
@@ -127,7 +127,7 @@ This multi-layer context ensures each subagent has both architectural understand
 
 Each task executes in a **fresh Task subagent** with clean context. The orchestrator parent agent only coordinates (reads JSON, spawns subagents, updates status). This prevents context pollution and ensures quality.
 
-**Cursor subagents:** This repo ships a custom subagent at `.cursor/agents/prd-task.md`. Cursor automatically adds files in `.cursor/agents/` as tools the main Agent can invoke. When you run "Execute the PRD", the orchestrator should see a **prd-task** (or similar) tool and can launch it once per task so each task gets a new context window. On usage-based plans (e.g. Cursor Plus) subagents are on by default; on legacy request-based plans enable [Max Mode](https://cursor.com/docs/context/max-mode). Details: [Cursor Subagents](https://cursor.com/docs/context/subagents). If no subagent tool appears, the execute-prd skill falls back to the same agent doing each task in sequence (Step 3).
+**Cursor subagents:** This repo ships a custom subagent at `dev/autonomous/prd-task-agent.md`. Cursor automatically adds files in `.cursor/agents/` as tools the main Agent can invoke. When you run "Execute the PRD", the orchestrator should see a **prd-task** (or similar) tool and can launch it once per task so each task gets a new context window. On usage-based plans (e.g. Cursor Plus) subagents are on by default; on legacy request-based plans enable [Max Mode](https://cursor.com/docs/context/max-mode). Details: [Cursor Subagents](https://cursor.com/docs/context/subagents). If no subagent tool appears, the execute-prd skill falls back to the same agent doing each task in sequence (Step 3).
 
 ### Progress Tracking
 

@@ -74,7 +74,7 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 - Actionable mitigation format
 - Post-mortem analysis
 
-✅ **Created**: `dev/templates/PRE-MORTEM-TEMPLATE.md`
+✅ **Created**: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
 - Standalone template for quick reference
 - Example risks from this session
 - Post-mortem table format
@@ -253,5 +253,5 @@ For next PRD execution with execute-prd skill:
 
 **File References**:
 - Execute PRD Skill: `.agents/skills/execute-prd/SKILL.md`
-- Pre-Mortem Template: `dev/templates/PRE-MORTEM-TEMPLATE.md`
-- Orchestration Learnings: `dev/entries/2026-02-09_builder-orchestration-learnings.md`
+- Pre-Mortem Template: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
+- Orchestration Learnings: `memory/entries/2026-02-09_builder-orchestration-learnings.md`

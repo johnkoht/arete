@@ -61,7 +61,7 @@ Build skills live in `.agents/skills/` and are **not shipped to users**. They're
 For **multi-step work** (PRD execution, large refactors, new systems, integration work)—and **when using Plan Mode**—conduct a pre-mortem before execution.
 
 - **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
-- **How**: Use `dev/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
+- **How**: Use `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
 - **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
 - **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `.agents/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
 - **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `.agents/skills/execute-prd/SKILL.md`, `.agents/skills/plan-to-prd/SKILL.md`.
@@ -120,7 +120,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 
 **How**:
 - Use standalone skill: `.agents/skills/run-pre-mortem/SKILL.md`
-- Or use template directly: `dev/templates/PRE-MORTEM-TEMPLATE.md`
+- Or use template directly: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
 - Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
 - Create concrete mitigations for each risk
 - Reference mitigations during execution

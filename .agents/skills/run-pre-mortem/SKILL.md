@@ -28,7 +28,7 @@ Run a structured pre-mortem risk analysis before starting multi-step development
 
 ### 1. Load the Template
 
-Read `dev/templates/PRE-MORTEM-TEMPLATE.md` — this is the source of truth for risk categories and format.
+Read `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` — this is the source of truth for risk categories and format.
 
 ### 2. Review the 8 Risk Categories
 
@@ -131,10 +131,10 @@ Categories covered: [List]
 
 ## Example
 
-See `dev/templates/PRE-MORTEM-TEMPLATE.md` for full examples from the intelligence-and-calendar PRD execution (8 risks, 0 materialized).
+See `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` for full examples from the intelligence-and-calendar PRD execution (8 risks, 0 materialized).
 
 ## References
 
-- **Template**: `dev/templates/PRE-MORTEM-TEMPLATE.md` (8 risk categories, examples)
+- **Template**: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` (8 risk categories, examples)
 - **Example session**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
 - **Used by**: `.agents/skills/execute-prd/SKILL.md` (Phase 1: mandatory pre-mortem)

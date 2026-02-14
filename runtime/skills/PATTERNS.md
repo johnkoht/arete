@@ -80,4 +80,4 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 **Outputs**: 2-3 risk-mitigation pairs; optional inclusion in deliverable.
 
-**Note**: For higher-stakes decisions (PRD execution, large refactors), use the full pre-mortem template at `dev/templates/PRE-MORTEM-TEMPLATE.md` with 8 risk categories.
+**Note**: For higher-stakes decisions (PRD execution, large refactors), use the full pre-mortem template at `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` with 8 risk categories.
