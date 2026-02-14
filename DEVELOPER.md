@@ -412,7 +412,7 @@ Before starting substantial features:
 3. Design mitigations for each
 4. Include in PRD or execution plan
 
-Use `dev/skills/run-pre-mortem/SKILL.md` for standalone pre-mortems.
+Use `.agents/skills/run-pre-mortem/SKILL.md` for standalone pre-mortems.
 
 #### 2. Testing Requirements
 

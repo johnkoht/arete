@@ -137,7 +137,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 - Audience (builder vs user) isn't obvious
 
 **How**:
-- Use skill: `.agents/skills/review-plan/SKILL.md`
+- Use skill: `dev/skills/review-plan/SKILL.md`
 - Reviewer applies a checklist (scope, risks, dependencies, patterns, backward compatibility, completeness)
 - Reviewer provides **devil's advocate** perspective: "If this fails, it will be because..." and "The worst outcome would be..."
 - Output: Concerns, Strengths, Devil's Advocate, Verdict (Approve / Approve with suggestions / Revise)
