@@ -331,7 +331,11 @@ Natural language triggers preserved (not abbreviated); structure compressed via 
 
 ## Corrections (for collaboration.md)
 
-None during this execution. Orchestrator and subagents followed PRD and pre-mortem mitigations effectively. Builder approved without requiring corrections.
+**Post-completion correction**: Builder caught multi-IDE consistency issue in `.agents/sources/shared/workspace-structure.md` (line 16 had `.cursor/ or .claude/`). Fixed to use only `.cursor/` path per dev.mdc § 8. 
+
+**Root cause**: Orchestrator and subagents didn't apply multi-IDE consistency checklist during Task 2 (shared source files creation). The checklist exists in dev.mdc § 8 but wasn't referenced in Task 2 pre-mortem mitigations.
+
+**Prevention**: Task prompts for source file creation should explicitly reference multi-IDE checklist when creating `shared/` or `runtime/` content.
 
 ---
 

@@ -25,6 +25,7 @@ Consider these when brainstorming risks:
 | **Integration** | How will pieces fit together? | "B2 async change might break callers" |
 | **Scope Creep** | How to prevent over-implementation? | "Strict acceptance criteria adherence" |
 | **Code Quality** | What patterns must be followed? | ".js imports, no any, error handling" |
+| **Multi-IDE Consistency** | Does this affect both Cursor and Claude? | "Source files must use .cursor/ only (not .cursor/ or .claude/)" |
 | **Dependencies** | Are task dependencies clear? | "Can't do B1 until A3 is done" |
 | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
 | **State Tracking** | How to track progress across sessions? | "Update prd.json after each task" |

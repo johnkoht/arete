@@ -108,6 +108,33 @@ Source files should be:
 
 The build script handles compression, so write source files for **clarity** not brevity.
 
+## Multi-IDE Consistency
+
+When editing source files (especially `shared/` and `guide/` which ship to users), follow multi-IDE rules:
+
+### Critical Rules
+
+- ✅ **Use `.cursor/` paths only** — Never write `.cursor/ or .claude/`
+- ✅ **Adapter transforms automatically** — `.cursor/` becomes `.claude/` in Claude installations
+- ✅ **Don't hardcode IDE names** — Let the adapter handle IDE-specific paths
+- ❌ **Never use "either/or" patterns** — `".cursor/ or .claude/"` breaks after transformation
+
+### Why This Matters
+
+Areté supports multiple IDEs (Cursor, Claude) via adapters. The canonical source uses `.cursor/` paths, and the Claude adapter transforms them to `.claude/` during installation. If you write "either/or" paths, the transformation produces broken output like `".claude/ or .claude/"`.
+
+### Before Committing
+
+Check for violations:
+```bash
+# Find multi-IDE violations in source files
+rg "\.cursor.*or.*\.claude|\.claude.*or.*\.cursor" .agents/sources/ runtime/
+```
+
+### Reference
+
+See `.cursor/rules/dev.mdc` § 8 for the full multi-IDE consistency checklist and `src/core/adapters/claude-adapter.ts` for transformation logic.
+
 ## When to Rebuild
 
 Rebuild AGENTS.md whenever:

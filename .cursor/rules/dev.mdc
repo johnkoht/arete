@@ -268,6 +268,17 @@ See `.agents/sources/README.md` for detailed editing workflow and source file st
 
 **Common mistake**: Writing "See `.cursor/tools/X` or `.claude/tools/X`" in canonical source. After Claude transformation, this becomes "See `.claude/tools/X` or `.claude/tools/X`" (broken).
 
+**Pre-commit check** (check for violations before committing):
+```bash
+# Find multi-IDE violations in source files and runtime
+rg "\.cursor.*or.*\.claude|\.claude.*or.*\.cursor" .agents/sources/ runtime/
+```
+
+**Applies to**:
+- `runtime/rules/`, `runtime/tools/` (shipped to users)
+- `.agents/sources/shared/`, `.agents/sources/guide/` (compiled into GUIDE AGENTS.md)
+- Any content that appears in both Cursor and Claude installations
+
 **Reference**: `src/core/adapters/claude-adapter.ts` → `transformRuleContent()`
 
 ## Documentation planning checklist

@@ -58,6 +58,7 @@ Use the appropriate checklist based on review type.
 | Risks | Are there unidentified risks? (See pre-mortem categories) |
 | Dependencies | Are task dependencies clear and correctly ordered? |
 | Patterns | Does it follow existing patterns or introduce unnecessary novelty? |
+| Multi-IDE | Does work touch `runtime/`, `.agents/sources/`, or multi-IDE content? |
 | Backward compatibility | Will this break existing functionality? |
 | Completeness | Are there missing steps or implicit assumptions? |
 
@@ -71,6 +72,7 @@ Use the appropriate checklist based on review type.
 | Edge cases | Are edge cases and error states covered? |
 | Scope boundaries | Is out-of-scope clearly defined? |
 | Dependencies | Are external dependencies identified? |
+| Multi-IDE | Will changes affect both Cursor and Claude installations? |
 | Test coverage | Are test requirements clear? |
 
 **Implementation Review** (post-execution):
@@ -81,6 +83,7 @@ Use the appropriate checklist based on review type.
 | Intent match | Does the work match the original plan/PRD intent? |
 | Acceptance criteria | Are all criteria met? |
 | Code quality | Patterns followed, proper error handling, no shortcuts? |
+| Multi-IDE | Did changes to `runtime/` or `.agents/sources/` follow consistency rules? |
 | Test coverage | Are happy path and edge cases tested? |
 | Backward compatibility | Did existing functionality survive? |
 | Documentation | Are changes reflected in docs if needed? |

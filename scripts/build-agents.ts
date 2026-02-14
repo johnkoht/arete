@@ -368,6 +368,42 @@ function compressWorkflows(content: string): string {
 }
 
 /**
+ * Validate source files for common issues before building
+ */
+async function validateSources(sourceFiles: string[]): Promise<void> {
+  const errors: string[] = [];
+  
+  for (const file of sourceFiles) {
+    const filePath = join(sourcesDir, file);
+    
+    if (!existsSync(filePath)) {
+      continue; // Already handled in readSourceFiles
+    }
+    
+    const content = await readFile(filePath, 'utf-8');
+    
+    // Check 1: Multi-IDE violations (either/or patterns)
+    const eitherOrPattern = /\.cursor.*or.*\.claude|\.claude.*or.*\.cursor/i;
+    if (eitherOrPattern.test(content)) {
+      errors.push(`${file}: Contains "either/or" IDE path pattern (use only .cursor/ - adapter transforms it)`);
+    }
+    
+    // Check 2: Direct .claude/ references (should use .cursor/ instead)
+    const directClaudePattern = /\.claude\//;
+    if (directClaudePattern.test(content) && !content.includes('adapter') && !content.includes('transform')) {
+      errors.push(`${file}: Contains direct .claude/ reference (use .cursor/ instead - adapter transforms it)`);
+    }
+  }
+  
+  if (errors.length > 0) {
+    console.error('\n❌ Validation failed:\n');
+    errors.forEach(err => console.error(`  - ${err}`));
+    console.error('\nFix these issues before building. See .agents/sources/README.md § Multi-IDE Consistency.\n');
+    process.exit(1);
+  }
+}
+
+/**
  * Build AGENTS.md for the specified target
  */
 async function buildAgents(target: Target): Promise<void> {
@@ -377,6 +413,9 @@ async function buildAgents(target: Target): Promise<void> {
   const config = getConfig(target);
   console.log(`Output: ${config.outputPath}`);
   console.log(`Source files: ${config.sourceFiles.length}`);
+  
+  // Validate source files before building
+  await validateSources(config.sourceFiles);
 
   // Ensure output directory exists
   const outputDir = dirname(config.outputPath);
