@@ -256,7 +256,14 @@ describe('install command', () => {
 
       // Run update (simulating workspace update) - should NOT overwrite
       const { updateCommand } = await import('../../src/commands/update.js');
-      await updateCommand({ json: true });
+      const originalCwd = process.cwd();
+      process.chdir(tmpDir);
+
+      try {
+        await updateCommand({ json: true });
+      } finally {
+        process.chdir(originalCwd);
+      }
 
       const afterContent = readFileSync(guidePath, 'utf8');
       assert.equal(afterContent, customContent, 'GUIDE.md should not be overwritten on update');

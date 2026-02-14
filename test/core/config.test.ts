@@ -191,11 +191,11 @@ describe('config', () => {
       assert.equal(getAgentMode(tmpDir), 'guide');
     });
 
-    it('returns builder when workspace has dev/MEMORY.md and src/cli.ts', () => {
+    it('returns builder when workspace has memory/MEMORY.md and src/cli.ts', () => {
       delete process.env.AGENT_MODE;
-      mkdirSync(join(tmpDir, 'dev'), { recursive: true });
+      mkdirSync(join(tmpDir, 'memory'), { recursive: true });
       mkdirSync(join(tmpDir, 'src'), { recursive: true });
-      writeFileSync(join(tmpDir, 'dev', 'MEMORY.md'), '');
+      writeFileSync(join(tmpDir, 'memory', 'MEMORY.md'), '');
       writeFileSync(join(tmpDir, 'src', 'cli.ts'), '');
       assert.equal(getAgentMode(tmpDir), 'builder');
     });
