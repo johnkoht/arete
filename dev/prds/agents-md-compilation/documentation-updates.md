@@ -12,7 +12,7 @@ Verified and updated **12 files** per the PRD documentation checklist. All requi
 
 ### Key Changes
 
-- ✅ **scratchpad.md** - Marked Phase 2 deferred item as complete
+- ✅ **scratchpad.md** - Marked Phase 2 deferred item as complete (local file, gitignored)
 - ✅ **DEVELOPER.md** - Added comprehensive "AGENTS.md Compilation" section
 - ✅ **.cursor/rules/dev.mdc** - Added rebuild instructions and workflow
 - ✅ **README.md** - Updated AGENTS.md reference to note it's generated
@@ -38,7 +38,9 @@ Verified and updated **12 files** per the PRD documentation checklist. All requi
 - [x] **Deferred: AGENTS.md rearchitecture (Phase 2)** (2026-02-13, completed 2026-02-14): Implemented AGENTS.md compilation system. Source files in `.agents/sources/` (`builder/`, `guide/`, `shared/`), `build-agents.ts` script, compressed pipe-delimited output. See `dev/prds/agents-md-compilation/prd.md` and `.agents/sources/README.md`.
 ```
 
-**Status**: ✅ Updated
+**Note**: scratchpad.md is gitignored (local working file), so this change is not committed. The file was updated for the user's awareness.
+
+**Status**: ✅ Updated (not committed)
 
 ---
 
@@ -316,7 +318,7 @@ grep -i "agents.md" runtime/GUIDE.md  # No matches
 | config/agents/ | Remove placeholder | ⏭️ Task 15 | Separate cleanup task |
 
 **Total files checked**: 12  
-**Total files updated**: 4 (scratchpad.md, DEVELOPER.md, dev.mdc, README.md)  
+**Total files updated**: 4 (3 committed: DEVELOPER.md, dev.mdc, README.md; 1 local: scratchpad.md)  
 **Total files verified clean**: 5 (AGENTS.md, .agents/sources/README.md, SETUP.md, ONBOARDING.md, runtime/GUIDE.md, package.json)  
 **Deferred to other tasks**: 2 (memory/MEMORY.md → Task 14, config/agents/ → Task 15)
 
