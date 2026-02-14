@@ -20,7 +20,7 @@ Build skills live in `dev/skills/` and are **not shipped to users**. They're for
 | **prd-post-mortem** | `dev/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
 | **review-plan** | `dev/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
 | **run-pre-mortem** | `.agents/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
-| **synthesize-collaboration-profile** | `dev/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
+| **synthesize-collaboration-profile** | `.agents/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
 
 **How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
 

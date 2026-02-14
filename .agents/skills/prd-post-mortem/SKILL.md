@@ -142,7 +142,7 @@ Add line to `memory/MEMORY.md`:
 
 ### 9. Update Collaboration Profile
 
-Run the **synthesize-collaboration-profile** skill (`dev/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry (and any other recent entries) into `memory/collaboration.md`. If the builder prefers to defer, end with: "Consider running **synthesize-collaboration-profile** when convenient to update the profile from entry learnings."
+Run the **synthesize-collaboration-profile** skill (`.agents/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry (and any other recent entries) into `memory/collaboration.md`. If the builder prefers to defer, end with: "Consider running **synthesize-collaboration-profile** when convenient to update the profile from entry learnings."
 
 ## Output Format
 

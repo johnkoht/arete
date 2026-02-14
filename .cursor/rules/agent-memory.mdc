@@ -130,7 +130,7 @@ Offer to update `memory/collaboration.md` when:
    - Update "Last Synthesized" date and sources
 4. Ask the builder to review
 
-Use the skill: `dev/skills/synthesize-collaboration-profile/SKILL.md`
+Use the skill: `.agents/skills/synthesize-collaboration-profile/SKILL.md`
 
 ---
 
@@ -186,4 +186,4 @@ I'll offer to update memory/collaboration.md when a few more observations accumu
 
 - Review Learnings across entries periodically; synthesize into `memory/collaboration.md`
 - Keep observations atomic — split compound observations
-- Run `dev/skills/synthesize-collaboration-profile/SKILL.md` after major phases
+- Run `.agents/skills/synthesize-collaboration-profile/SKILL.md` after major phases
