@@ -308,11 +308,14 @@ function compressContent(content: string, filename: string): string {
     return compressConventions(content);
   }
   
-  // Intelligence and workflows - moderate compression
-  if (filename.includes('intelligence.md') || filename.includes('workflows.md')) {
-    return content
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+  // Intelligence - compress heavily
+  if (filename.includes('intelligence.md')) {
+    return compressIntelligence(content);
+  }
+  
+  // Workflows - compress heavily
+  if (filename.includes('workflows.md')) {
+    return compressWorkflows(content);
   }
   
   // Default: minimal compression
@@ -333,6 +336,35 @@ function compressConventions(content: string): string {
 |tests:node:test + node:assert/strict
 |quality:npm run typecheck && npm test before commit
 |execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended`;
+}
+
+/**
+ * Compress intelligence services section
+ */
+function compressIntelligence(content: string): string {
+  return `[Intelligence]|context+memory+resolution+briefing+routing
+||context:arete context --for "query" → map primitives (Problem/User/Solution/Market/Risk) to workspace files
+||memory:arete memory search "query" → search .arete/memory/ items (decisions, learnings); token or semantic (QMD)
+||resolution:arete resolve "reference" → fuzzy match people, meetings, projects
+||briefing:arete brief --for "query" → combine context+memory+entities
+||routing:arete route "query" → match skill/tool, suggest tier (fast/balanced/powerful)
+||synthesis:extract patterns/contradictions from project inputs
+||inline_review:extract decisions during skill execution, immediate user approval before memory write
+||qmd:optional semantic search via QMD (qmd search, vsearch, query)`;
+}
+
+/**
+ * Compress workflows section
+ */
+function compressWorkflows(content: string): string {
+  return `[Workflows]|common PM patterns
+||week_start:quarter-plan → week-plan → daily-plan
+||meeting:meeting-prep (before) → save-meeting (after) → process-meetings (extract)
+||discovery:discovery skill → competitive-analysis → synthesize → create-prd
+||project:create-prd → [work] → finalize-project → memory update
+||review:periodic-review (workspace audit) → week-review (progress) → quarter retrospective
+||onboard:onboarding tool (30/60/90) → learn/contribute/lead phases
+||context:seed-context (bootstrap) → sync (ongoing) → pull (integrations)`;
 }
 
 /**
