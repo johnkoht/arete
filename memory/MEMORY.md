@@ -18,6 +18,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-13 [Dev Cleanup Phase 1 Learnings](entries/2026-02-13_dev-cleanup-phase-1-learnings.md) — Reorganized build structure: memory to top-level, skills to .agents/skills/, autonomous to dev/autonomous/, removed arete-context.mdc. 15/15 tasks, 100% first-attempt, 0/8 pre-mortem risks materialized. **Key pattern**: Path mapping tables in refactor prompts; parallel subagent execution for simple moves; AGENTS.md gets ONE dedicated task.
+
 - 2026-02-13 [Enhance Onboarding Tool Learnings](entries/2026-02-13_enhance-onboarding-tool-learnings.md) — Enhanced onboarding tool with best practices (9 Magic Words, Quick Win Finder, Trust Battery, Sacred Cows, anti-patterns). 9/9 tasks, 0/8 pre-mortem risks materialized, ~600 lines added. **Key patterns**: Sequential dependencies (tasks 1-3→5→8→9), show-don't-tell prompts, verification task as final gate.
 
 - 2026-02-12 [Rules Architecture Refactor Learnings](entries/2026-02-12_rules-architecture-refactor-learnings.md) — Separated BUILDER and GUIDE rules; consolidated build practices in dev.mdc; trimmed AGENTS.md from 1,103 to 802 lines. 8/8 tasks, 0/8 pre-mortem risks materialized. **Key change**: `.cursor/rules/` now has only 6 BUILDER files; no overlap with `runtime/rules/`.
