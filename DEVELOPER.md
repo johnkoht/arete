@@ -52,6 +52,58 @@ Areté uses a build-and-copy architecture:
   - `npm test` - Run test suite
   - `npm run lint` - Check code style
 
+### AGENTS.md Compilation
+
+**AGENTS.md is a generated file** — do not edit it directly. It's compiled from modular source files in `.agents/sources/`.
+
+**Why?** Following [Vercel's research](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals), compressed documentation in the agent's context (AGENTS.md) achieves better results (100% pass rate) than active skill retrieval (79% pass rate).
+
+**How it works:**
+1. **Source files** in `.agents/sources/` are human-readable markdown
+2. **Build script** (`scripts/build-agents.ts`) compiles sources into compressed output
+3. **Two outputs**: BUILD (`AGENTS.md` at root) and GUIDE (`dist/AGENTS.md` for users)
+
+**Directory structure:**
+```
+.agents/sources/
+├── shared/       # Content for both BUILD and GUIDE
+│   ├── vision.md
+│   ├── workspace-structure.md
+│   └── cli-commands.md
+├── builder/      # BUILD-specific (this repo)
+│   ├── skills-index.md
+│   ├── rules-index.md
+│   ├── conventions.md
+│   └── memory.md
+└── guide/        # GUIDE-specific (shipped to users)
+    ├── skills-index.md
+    ├── tools-index.md
+    ├── intelligence.md
+    └── workflows.md
+```
+
+**When to rebuild:**
+- After adding/removing skills or tools
+- After changing skill triggers or descriptions
+- After modifying any source file in `.agents/sources/`
+- Before committing changes to skills, rules, or workspace structure
+
+**Commands:**
+```bash
+# Rebuild BUILD AGENTS.md (for this repo)
+npm run build:agents:dev
+
+# Rebuild GUIDE AGENTS.md (for npm package)
+npm run build
+
+# Both
+npm run build:agents:dev && npm run build
+```
+
+**See also:** `.agents/sources/README.md` for detailed editing workflow.
+
+---
+
 ### Dev vs Product Separation
 
 **Two modes of operation**:
@@ -721,7 +773,7 @@ From `.cursor/rules/testing.mdc`:
 
 ### Key Documentation
 
-- **AGENTS.md** - Architecture reference for AI agents (supplementary)
+- **AGENTS.md** - Generated architecture reference for AI agents (see AGENTS.md Compilation above)
 - **GUIDE.md** (runtime/) - Comprehensive user guide (shipped to workspace)
 - **README.md** - End-user discovery (repo only)
 - **SETUP.md** - Installation and integrations (repo only)

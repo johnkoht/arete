@@ -232,8 +232,25 @@ If you find repetitive logic that isn't abstracted, create a refactor backlog it
 - [ ] **Re-read this file (`dev.mdc`)** before making changes — ensure you understand current patterns
 - [ ] **Audience check**: Is this for BUILD (dev/, .cursor/) or PRODUCT (runtime/)?
 - [ ] **Skill table**: If adding a build skill, add it to the "Build skills" table above
-- [ ] **AGENTS.md**: If the skill/rule changes architecture or workflows, update AGENTS.md
+- [ ] **AGENTS.md source files**: If the skill/rule changes architecture or workflows, update `.agents/sources/` and rebuild
 - [ ] **Cross-references**: Search for references to the skill/rule being changed; update them
+
+**AGENTS.md is generated** — do not edit it directly. Update source files in `.agents/sources/` and rebuild:
+
+**When to rebuild AGENTS.md:**
+- After adding/removing skills (update `builder/skills-index.md` or `guide/skills-index.md`)
+- After adding/removing rules (update `builder/rules-index.md`)
+- After changing skill triggers or descriptions
+- After modifying CLI commands, workspace structure, or conventions
+- Before committing changes that affect agent workflows
+
+**How to rebuild:**
+```bash
+npm run build:agents:dev  # Rebuild BUILD AGENTS.md
+npm run build             # Rebuild GUIDE AGENTS.md (included in package build)
+```
+
+See `.agents/sources/README.md` for detailed editing workflow and source file structure.
 
 **Why**: Skills and rules define agent behavior. Changes propagate widely. A quick review of dev.mdc prevents pattern drift and ensures consistency.
 

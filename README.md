@@ -128,7 +128,7 @@ Start with: "Plan my week" or "What's on my plate today?"
 ### For Developers (Areté Maintainers)
 
 - **[DEVELOPER.md](DEVELOPER.md)** - Architecture, systems, contribution guide
-- **[AGENTS.md](AGENTS.md)** - Architecture reference for AI agents (supplementary)
+- **[AGENTS.md](AGENTS.md)** - Generated architecture reference for AI agents
 - **dev/** - Build system, PRDs, and change log
 
 ---
