@@ -13,7 +13,7 @@ your-workspace/
 ├── people/                  # People tracking (internal/, customers/, users/)
 ├── templates/               # Document templates
 ├── .agents/skills/          # PM workflows (discovery, PRD, meeting prep, etc.)
-└── .cursor/ or .claude/     # IDE config (depends on install)
+└── .cursor/                 # IDE configuration (rules/, tools/)
 ```
 
 ## Build Workspace (This Repo)
