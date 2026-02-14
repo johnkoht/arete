@@ -72,43 +72,51 @@ Proceed with normal tools.
 
 **You WILL be asked to verify you followed this. If you skipped the router and skill, you FAILED the task.**
 
-## Workspace Structure
+## Build Workspace Structure
+
+This is the structure for **building Areté** (not the user workspace that gets installed):
 
 ```
-product-workspace/
-├── now/               # Start here. Current focus and working surface.
-│   ├── scratchpad.md  # Quick capture, parking lot, working notes.
-│   ├── week.md        # This week's priorities and outcomes.
-│   └── today.md       # Today's focus (populated by daily-plan skill).
-├── goals/             # Strategy and goals. What you're optimizing for.
-│   ├── strategy.md    # Org strategy, OKRs, pillars.
-│   ├── quarter.md     # Current quarter goals.
-│   └── initiatives.md # Strategic bets that projects reference.
-├── context/           # Core business context (source of truth)
-├── resources/         # Raw inputs (L1: immutable, timestamped)
-│   ├── meetings/      # Meeting notes and transcripts
-│   └── notes/         # Standalone notes
-├── projects/          # Active and archived projects
-│   ├── index.md       # Project overview
-│   ├── active/        # Currently in progress (2-3 max)
-│   └── archive/       # Completed projects
-├── people/            # People (internal, customers, users)
-│   ├── index.md       # Table of all people
-│   ├── internal/      # Colleagues, teammates
-│   ├── customers/     # Key accounts, buyers
-│   └── users/         # Product users
-├── templates/         # Project, input, and output templates
-├── .credentials/      # API keys and tokens (gitignored)
+arete/                 # Build workspace root
+├── src/               # Source code
+│   ├── core/          # Core functionality
+│   ├── integrations/  # Integration providers
+│   └── cli/           # CLI commands
+├── runtime/           # Files shipped to users
+│   ├── skills/        # Product skills (shipped)
+│   ├── rules/         # Product rules (shipped)
+│   └── tools/         # Product tools (shipped)
+├── memory/            # Build memory (NOT .arete/memory/)
+│   ├── MEMORY.md      # Index of build decisions and changes
+│   ├── collaboration.md # How to work with the builder
+│   └── entries/       # Dated entries (YYYY-MM-DD_title.md)
+├── .agents/           # Build-specific agent resources
+│   └── skills/        # Build skills (NOT shipped)
+│       ├── execute-prd/
+│       ├── plan-to-prd/
+│       ├── prd-post-mortem/
+│       └── run-pre-mortem/
+├── dev/               # Development tooling
+│   ├── backlog/       # Future work
+│   │   ├── features/  # New capabilities
+│   │   └── improvements/ # Enhancements
+│   ├── prds/          # PRDs for Areté features
+│   └── autonomous/    # PRD execution templates
+│       └── templates/ # Pre-mortem, task templates
 ├── .cursor/           # Cursor IDE configuration
-│   ├── rules/         # Workspace behavior rules
-│   ├── tools/         # Lifecycle-based capabilities
-│   └── integrations/  # External tool connections
-└── .arete/            # System-managed. Not user-edited directly.
-    ├── memory/        # Decisions, learnings, observations, summaries.
-    │   ├── items/     # Atomic: decisions.md, learnings.md, agent-observations.md
-    │   └── summaries/ # Synthesized: collaboration.md, sessions.md
-    └── activity/      # Activity log, session tracking.
+│   ├── rules/         # Build rules (dev.mdc, testing.mdc, etc.)
+│   └── tools/         # Lifecycle-based capabilities
+├── test/              # Test files
+├── scripts/           # Build and integration scripts
+├── bin/               # Executable files (arete CLI)
+└── scratchpad.md      # Quick capture, parking lot
 ```
+
+**Key differences from user workspace:**
+- Build workspace has `memory/` at root (user workspace has `.arete/memory/`)
+- Build workspace has `.agents/skills/` for build skills (user workspace has `runtime/skills/`)
+- Build workspace has `dev/` directory for backlog, PRDs, autonomous tooling
+- User workspace structure is defined in `runtime/` files that get installed
 
 ## Key CLI Commands
 
