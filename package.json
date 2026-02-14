@@ -15,7 +15,9 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
-    "build": "tsc && node scripts/copy-runtime.js",
+    "build": "npm run build:agents:dev && npm run build:agents:prod && tsc && node scripts/copy-runtime.js",
+    "build:agents:dev": "tsx scripts/build-agents.ts dev",
+    "build:agents:prod": "tsx scripts/build-agents.ts prod",
     "typecheck": "tsc --noEmit",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
