@@ -69,7 +69,7 @@ function getConfig(target: Target): BuildConfig {
 }
 
 /**
- * Read and concatenate source files
+ * Read and concatenate source files with compression
  */
 async function readSourceFiles(sourceFiles: string[]): Promise<string> {
   const contents: string[] = [];
@@ -84,7 +84,8 @@ async function readSourceFiles(sourceFiles: string[]): Promise<string> {
 
     try {
       const content = await readFile(filePath, 'utf-8');
-      contents.push(content.trim());
+      const compressed = compressContent(content, file);
+      contents.push(compressed);
     } catch (error) {
       console.error(`Error reading ${file}:`, error);
       throw error;
@@ -95,7 +96,7 @@ async function readSourceFiles(sourceFiles: string[]): Promise<string> {
 }
 
 /**
- * Generate header with metadata
+ * Generate header with metadata and HOW TO USE section
  */
 function generateHeader(sourceFiles: string[]): string {
   const timestamp = new Date().toISOString();
@@ -110,7 +111,228 @@ ${fileList}
 -->
 
 ---
+
+## HOW TO USE THIS INDEX
+
+When a user asks for help with a PM task:
+1. Scan the [Skills] section below for matching triggers
+2. Read the skill file at the path shown
+3. Follow the skill's workflow
+
+Example: User says "help me prep for my meeting" → find meeting-prep in [Skills] → read .agents/skills/meeting-prep/SKILL.md
+
+---
 `;
+}
+
+/**
+ * Compress skills table to pipe-delimited format
+ */
+function compressSkillsTable(content: string, rootPath: string): string {
+  const lines = content.split('\n');
+  const compressed: string[] = [`[Skills]|root:${rootPath}`];
+  
+  let inTable = false;
+  for (const line of lines) {
+    // Detect table start (header row)
+    if (line.startsWith('| Skill |') || line.startsWith('||')) {
+      inTable = true;
+      continue;
+    }
+    
+    // Skip separator row
+    if (line.startsWith('|---')) {
+      continue;
+    }
+    
+    // Detect table end
+    if (inTable && !line.startsWith('|')) {
+      inTable = false;
+      continue;
+    }
+    
+    // Process table rows
+    if (inTable && line.startsWith('|')) {
+      const cells = line.split('|').map(c => c.trim()).filter(c => c);
+      if (cells.length >= 4) {
+        const [skill, , description, triggers] = cells;
+        // Clean up markdown formatting
+        const cleanSkill = skill.replace(/\*\*/g, '');
+        const cleanDesc = description.replace(/\s+/g, ' ').trim();
+        const cleanTriggers = triggers.replace(/"/g, '').trim();
+        
+        compressed.push(`|${cleanSkill}:{triggers:"${cleanTriggers}",does:"${cleanDesc}"}`);
+      }
+    }
+  }
+  
+  return compressed.join('\n');
+}
+
+/**
+ * Compress rules/tools list to pipe-delimited format
+ */
+function compressRulesList(content: string, rootPath: string, sectionName: string): string {
+  const lines = content.split('\n');
+  const compressed: string[] = [`[${sectionName}]|auto-applied:${rootPath}`];
+  
+  let inTable = false;
+  for (const line of lines) {
+    // Detect table start
+    if (line.startsWith('| Rule |') || line.startsWith('|---')) {
+      inTable = true;
+      continue;
+    }
+    
+    // Detect table end
+    if (inTable && !line.startsWith('|')) {
+      inTable = false;
+      continue;
+    }
+    
+    // Process table rows
+    if (inTable && line.startsWith('|')) {
+      const cells = line.split('|').map(c => c.trim()).filter(c => c);
+      if (cells.length >= 3) {
+        const [rule, , purpose] = cells;
+        const cleanRule = rule.replace(/\*\*/g, '');
+        const cleanPurpose = purpose.replace(/\s+/g, ' ').trim();
+        
+        compressed.push(`|${cleanRule}:${cleanPurpose}`);
+      }
+    }
+  }
+  
+  return compressed.join('\n');
+}
+
+/**
+ * Compress memory section
+ */
+function compressMemorySection(content: string): string {
+  return `[Memory]|entry:memory/MEMORY.md
+|before_work:scan MEMORY.md + collaboration.md
+|after_work:add entry to memory/entries/, update index
+|synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion`;
+}
+
+/**
+ * Compress CLI commands section
+ */
+function compressCLICommands(content: string): string {
+  const lines = content.split('\n');
+  const compressed: string[] = ['[CLI]'];
+  
+  let currentSection = '';
+  for (const line of lines) {
+    // Detect section headers
+    if (line.startsWith('## ')) {
+      currentSection = line.replace('## ', '').trim();
+      continue;
+    }
+    
+    // Capture command lines
+    if (line.startsWith('- `arete ')) {
+      const match = line.match(/`([^`]+)`\s*-\s*(.+)/);
+      if (match) {
+        const [, cmd, desc] = match;
+        compressed.push(`|${cmd}:${desc.trim()}`);
+      }
+    }
+  }
+  
+  return compressed.join('\n');
+}
+
+/**
+ * Compress vision section
+ */
+function compressVision(content: string): string {
+  return `[Vision]|Excellence (ἀρετή) for product builders
+|question:"Does it help the product builder achieve arete?"
+|achieve:gain clarity → navigate ambiguity → automate mundane → move faster → unlock opportunity → think better → challenge constructively`;
+}
+
+/**
+ * Compress workspace structure
+ */
+function compressWorkspaceStructure(content: string): string {
+  return `[Workspace]|two contexts: USER (installed) vs BUILD (this repo)
+|user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .agents/skills/
+|build:src/ runtime/ memory/ .agents/ dev/ .cursor/ test/ scripts/ bin/
+|key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .agents/skills/ = build skills (BUILD) vs product skills (USER)`;
+}
+
+/**
+ * Apply compression to content based on section
+ */
+function compressContent(content: string, filename: string): string {
+  // Skills index - compress heavily
+  if (filename.includes('skills-index.md')) {
+    const rootPath = filename.includes('builder') ? '.agents/skills' : 'runtime/skills';
+    return compressSkillsTable(content, rootPath);
+  }
+  
+  // Rules index - compress
+  if (filename.includes('rules-index.md')) {
+    return compressRulesList(content, '.cursor/rules/', 'Rules');
+  }
+  
+  // Tools index - compress
+  if (filename.includes('tools-index.md')) {
+    return compressRulesList(content, 'runtime/tools/', 'Tools');
+  }
+  
+  // Memory section - compress
+  if (filename.includes('memory.md')) {
+    return compressMemorySection(content);
+  }
+  
+  // CLI commands - compress
+  if (filename.includes('cli-commands.md')) {
+    return compressCLICommands(content);
+  }
+  
+  // Vision - compress heavily
+  if (filename.includes('vision.md')) {
+    return compressVision(content);
+  }
+  
+  // Workspace structure - compress heavily
+  if (filename.includes('workspace-structure.md')) {
+    return compressWorkspaceStructure(content);
+  }
+  
+  // Conventions - compress heavily
+  if (filename.includes('conventions.md')) {
+    return compressConventions(content);
+  }
+  
+  // Intelligence and workflows - moderate compression
+  if (filename.includes('intelligence.md') || filename.includes('workflows.md')) {
+    return content
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  
+  // Default: minimal compression
+  return content.trim();
+}
+
+/**
+ * Compress conventions section
+ */
+function compressConventions(content: string): string {
+  return `[Conventions]|TypeScript/Node.js build standards
+|config:tsconfig.json (NodeNext, strict) + tsconfig.test.json
+|imports:use .js extensions; import type for type-only
+|types:prefer type over interface; no any/unknown; avoid as/!
+|functions:function for top-level; arrow for callbacks
+|naming:PascalCase (types), camelCase (vars/fns), UPPERCASE (constants), kebab-case (files)
+|async:prefer async/await over Promises
+|tests:node:test + node:assert/strict
+|quality:npm run typecheck && npm test before commit
+|execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended`;
 }
 
 /**
