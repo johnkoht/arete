@@ -63,6 +63,8 @@ dist/
 .agents/*
 !.agents/skills/
 !.agents/skills/**
+!.agents/sources/
+!.agents/sources/**
 .cursor/integrations/
 .cursor/tools/
 # .cursor/rules/ contains BUILDER-only rules for this dev repo.
