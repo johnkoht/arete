@@ -108,7 +108,7 @@ Each subagent has access to multiple sources of knowledge:
    - Implementation decisions and gotchas
    - Advice for subsequent tasks
 
-3. **MEMORY.md** (`dev/MEMORY.md`) - Build memory across past work
+3. **MEMORY.md** (`memory/MEMORY.md`) - Build memory across past work
    - Recent architectural decisions and refactors
    - Established patterns and migrations
    - Gotchas and fixes worth following
@@ -360,10 +360,10 @@ This is internal tooling. If you're an Areté maintainer and need help:
 1. Review this README
 2. Check example files (`prd.json.example`, `progress.txt.template`)
 3. Read the skill files for detailed workflows
-4. Review `dev/MEMORY.md` for historical context
+4. Review `memory/MEMORY.md` for historical context
 
 ## References
 
 - **Ralph**: https://github.com/snarktank/ralph
 - **Agent Skills Standard**: https://agentskills.io
-- **Areté Build Memory**: `dev/MEMORY.md`
+- **Areté Build Memory**: `memory/MEMORY.md`

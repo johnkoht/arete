@@ -255,11 +255,11 @@ product-workspace/
 
 Areté operates in two modes based on the \`agent_mode\` setting in \`arete.yaml\` (or \`AGENT_MODE\` environment variable):
 
-- **BUILDER**: You are building Areté itself. Follow dev.mdc and testing.mdc. Put build memories in \`dev/entries/\` and MEMORY.md; PRDs in \`dev/prds/\`. Do not run \`arete seed test-data\` in this repo.
+- **BUILDER**: You are building Areté itself. Follow dev.mdc and testing.mdc. Put build memories in \`memory/entries/\` and MEMORY.md; PRDs in \`dev/prds/\`. Do not run \`arete seed test-data\` in this repo.
   
 - **GUIDE**: You are helping a PM achieve arete. Use only product skills, skill router, and tools. Put user memories in \`.arete/memory/items/\`. Do not use build rules or \`dev/\`.
 
-**If neither is set**: Infer from workspace structure (workspace with \`src/cli.ts\` and \`dev/MEMORY.md\` = builder; otherwise = guide).
+**If neither is set**: Infer from workspace structure (workspace with \`src/cli.ts\` and \`memory/MEMORY.md\` = builder; otherwise = guide).
 
 ## Memory Management
 

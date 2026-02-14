@@ -369,7 +369,7 @@ For each pending task (in dependency order):
     
     **This is a required orchestrator task.** Do not deliver the final report (step 21) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
     
-    1. **Create entry**: `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md`
+    1. **Create entry**: `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md`
        
        Include:
        - **Metrics**: Tasks completed, success rate, iterations, tests added, token usage
@@ -382,7 +382,7 @@ For each pending task (in dependency order):
        - **Refactor backlog items**: Count and paths (if any)
        - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
     
-    2. **Add index line** to `dev/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
+    2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
     
     **Verification before step 21**: Entry file exists; MEMORY.md contains a new line pointing to it.
 
@@ -402,7 +402,7 @@ For each pending task (in dependency order):
     **Pre-mortem**: [A]/[B] risks materialized
     **Commits**: [N] commits
     **Token usage**: ~[X]K total (~[Y]K orchestrator + ~[Z]K subagents)
-    **Build memory**: ✅ Entry `dev/entries/YYYY-MM-DD_[prd-name]-learnings.md` created; MEMORY.md updated
+    **Build memory**: ✅ Entry `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md` created; MEMORY.md updated
     
     ## Deliverables
     - [Feature 1] — Brief description
@@ -597,6 +597,6 @@ After fixing, run npm run typecheck and npm test again. Update prd.json and prog
 
 ## References
 
-- **Learnings**: `dev/entries/2026-02-09_builder-orchestration-learnings.md`
+- **Learnings**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
 - **PRD Template**: `dev/prds/intelligence-and-calendar/prd.md`
 - **Task Schema**: `dev/autonomous/prd.json`

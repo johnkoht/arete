@@ -78,7 +78,7 @@ Identify:
 
 ### 7. Create Memory Entry
 
-Write `dev/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
+Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 
 ```markdown
 # {Feature Name} - PRD Execution Learnings
@@ -135,14 +135,14 @@ Write `dev/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 
 ### 8. Update Build Memory Index
 
-Add line to `dev/MEMORY.md`:
+Add line to `memory/MEMORY.md`:
 ```markdown
-- YYYY-MM-DD: {Feature name} — {one-line summary}. See dev/entries/YYYY-MM-DD_{feature-name}-learnings.md
+- YYYY-MM-DD: {Feature name} — {one-line summary}. See memory/entries/YYYY-MM-DD_{feature-name}-learnings.md
 ```
 
 ### 9. Update Collaboration Profile
 
-Run the **synthesize-collaboration-profile** skill (`dev/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry (and any other recent entries) into `dev/collaboration.md`. If the builder prefers to defer, end with: "Consider running **synthesize-collaboration-profile** when convenient to update the profile from entry learnings."
+Run the **synthesize-collaboration-profile** skill (`dev/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry (and any other recent entries) into `memory/collaboration.md`. If the builder prefers to defer, end with: "Consider running **synthesize-collaboration-profile** when convenient to update the profile from entry learnings."
 
 ## Output Format
 
@@ -153,7 +153,7 @@ Show progress briefly (don't repeat entire workflow).
 ```markdown
 # Post-Mortem Complete: {Feature Name}
 
-**Memory entry created**: dev/entries/{date}_{name}-learnings.md
+**Memory entry created**: memory/entries/{date}_{name}-learnings.md
 **MEMORY.md updated**: Added entry line
 **Collaboration**: [Ran synthesize-collaboration-profile — profile updated | Consider running synthesize-collaboration-profile to update profile from entry learnings]
 

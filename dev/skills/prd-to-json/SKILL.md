@@ -25,7 +25,7 @@ Convert a markdown PRD into structured JSON format (`prd.json`) for use with the
 
 ### 1. Read Build Memory (Context)
 
-**Before converting**, read `dev/MEMORY.md` and optionally the most recent entry files in `dev/entries/`. This provides:
+**Before converting**, read `memory/MEMORY.md` and optionally the most recent entry files in `memory/entries/`. This provides:
 
 - Recent architectural decisions and refactors
 - Established patterns (e.g. integration structure, workspace backfill)

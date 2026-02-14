@@ -57,7 +57,7 @@ Areté uses a build-and-copy architecture:
 **Two modes of operation**:
 
 1. **BUILDER mode** - Building Areté itself (this repo)
-   - Memory in `dev/entries/` indexed by `dev/MEMORY.md`
+   - Memory in `memory/entries/` indexed by `memory/MEMORY.md`
    - PRDs in `dev/prds/{feature}/prd.md`
    - Build skills in `dev/skills/`
    - Use `AGENT_MODE=BUILDER` to force this mode
@@ -68,7 +68,7 @@ Areté uses a build-and-copy architecture:
    - Product skills in `.agents/skills/`
    - Use `AGENT_MODE=GUIDE` to force this mode
 
-The system auto-detects: if `src/cli.ts` and `dev/MEMORY.md` exist → BUILDER; otherwise → GUIDE.
+The system auto-detects: if `src/cli.ts` and `memory/MEMORY.md` exist → BUILDER; otherwise → GUIDE.
 
 ---
 
@@ -437,7 +437,7 @@ const sampleMeeting = loadFixture('meetings/sample-meeting.md');
 
 #### 3. Build Memory
 
-After significant changes, add entry to `dev/MEMORY.md`:
+After significant changes, add entry to `memory/MEMORY.md`:
 
 ```markdown
 ## Index
@@ -445,7 +445,7 @@ After significant changes, add entry to `dev/MEMORY.md`:
 - YYYY-MM-DD [Title](entries/YYYY-MM-DD_slug.md) — one-line summary.
 ```
 
-**Entry format** (`dev/entries/YYYY-MM-DD_slug.md`):
+**Entry format** (`memory/entries/YYYY-MM-DD_slug.md`):
 ```markdown
 # Title
 
@@ -734,9 +734,9 @@ From `.cursor/rules/testing.mdc`:
 
 ### Build Memory
 
-- **dev/MEMORY.md** - Index of significant changes
-- **dev/entries/** - Detailed change log entries
-- **dev/collaboration.md** - Synthesized working patterns
+- **memory/MEMORY.md** - Index of significant changes
+- **memory/entries/** - Detailed change log entries
+- **memory/collaboration.md** - Synthesized working patterns
 
 ### PRDs & Backlog
 
@@ -757,7 +757,7 @@ From `.cursor/rules/testing.mdc`:
 We welcome contributions! To get started:
 
 1. Read this guide and AGENTS.md
-2. Review dev/MEMORY.md for recent changes
+2. Review memory/MEMORY.md for recent changes
 3. Check dev/backlog/ for open work
 4. Follow quality practices (pre-mortem, testing, memory)
 5. Submit PR with clear description

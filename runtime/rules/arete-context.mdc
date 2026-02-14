@@ -6,13 +6,13 @@ alwaysApply: true
 
 # Agent mode: BUILDER vs GUIDE
 
-Determine which mode you are in and behave accordingly. Mode is set in `arete.yaml` as `agent_mode: builder` or `agent_mode: guide`, or overridden by the `AGENT_MODE` environment variable (e.g. `AGENT_MODE=GUIDE` for testing). If neither is set, infer: workspace with `src/cli.ts` and `dev/MEMORY.md` = builder; otherwise = guide.
+Determine which mode you are in and behave accordingly. Mode is set in `arete.yaml` as `agent_mode: builder` or `agent_mode: guide`, or overridden by the `AGENT_MODE` environment variable (e.g. `AGENT_MODE=GUIDE` for testing). If neither is set, infer: workspace with `src/cli.ts` and `memory/MEMORY.md` = builder; otherwise = guide.
 
 ## BUILDER (building Areté)
 
 You are in the Areté source repo, building the product.
 
-- **Memory**: Put build memories in `dev/entries/` and add a line to `dev/MEMORY.md`. Do **not** use `memory/items/` for build decisions or learnings.
+- **Memory**: Put build memories in `memory/entries/` and add a line to `memory/MEMORY.md`. Do **not** use `memory/items/` for build decisions or learnings.
 - **PRDs**: Areté feature PRDs go in `dev/prds/{feature-name}/prd.md`, not in `projects/active/`.
 - **Rules**: Follow dev.mdc and testing.mdc. Use AGENTS.md for architecture.
 - **Skills**: Product skills (meeting-prep, create-prd, etc.) exist here for development; build skills (execute-prd, prd-to-json, plan-to-prd) under `dev/` are available. Do not run `arete seed test-data` in this repo.

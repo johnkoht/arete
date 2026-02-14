@@ -1,6 +1,6 @@
 ---
 name: synthesize-collaboration-profile
-description: Review build entries' Learnings and Corrections, merge into dev/collaboration.md, and update the builder collaboration profile. Use when the builder asks to update the profile, after a major build phase or PRD post-mortem, or when several entries with learnings have accumulated.
+description: Review build entries' Learnings and Corrections, merge into memory/collaboration.md, and update the builder collaboration profile. Use when the builder asks to update the profile, after a major build phase or PRD post-mortem, or when several entries with learnings have accumulated.
 category: build
 work_type: synthesis
 primitives: []
@@ -9,7 +9,7 @@ requires_briefing: false
 
 # Synthesize Collaboration Profile Skill
 
-Systematically update `dev/collaboration.md` from **Learnings** and **Corrections** sections in `dev/entries/`. Produces a single, non-repetitive profile that future agents read at conversation start.
+Systematically update `memory/collaboration.md` from **Learnings** and **Corrections** sections in `memory/entries/`. Produces a single, non-repetitive profile that future agents read at conversation start.
 
 ## When to Use (Triggers)
 
@@ -27,8 +27,8 @@ Systematically update `dev/collaboration.md` from **Learnings** and **Correction
 
 ### 1. Determine Scope
 
-- Read `dev/collaboration.md` and note the **Last Synthesized** date at the bottom.
-- List entries in `dev/entries/` (by date, newest first). Optionally limit to:
+- Read `memory/collaboration.md` and note the **Last Synthesized** date at the bottom.
+- List entries in `memory/entries/` (by date, newest first). Optionally limit to:
   - **Since last synthesis**: Only entries dated after "Last Synthesized"
   - **Last N entries**: e.g. last 15 entries (default if no "Last Synthesized" or builder wants full pass)
 - If builder said "since X" or "last N", use that scope.
@@ -37,7 +37,7 @@ Systematically update `dev/collaboration.md` from **Learnings** and **Correction
 
 For each entry in scope:
 
-- Open `dev/entries/YYYY-MM-DD_slug.md`.
+- Open `memory/entries/YYYY-MM-DD_slug.md`.
 - Extract:
   - **Learnings** section — collaboration observations, process preferences, what worked/didn't, builder preferences
   - **Corrections (for collaboration.md)** section — explicit corrections to apply (if present)
@@ -55,7 +55,7 @@ Build a working list:
 
 ### 3. Map to Profile Sections
 
-`dev/collaboration.md` has these sections (keep this structure):
+`memory/collaboration.md` has these sections (keep this structure):
 
 - **Working Patterns** — How the builder likes to work (planning, review, handoffs)
 - **Design Philosophy** — Preferences on design, scope, integrations
@@ -101,7 +101,7 @@ Output:
 - Corrections: [N] new item(s) added
 **Last Synthesized**: [date] — [summary]
 
-Review `dev/collaboration.md` and edit if anything is off. No need to re-run unless more entries with learnings accumulate.
+Review `memory/collaboration.md` and edit if anything is off. No need to re-run unless more entries with learnings accumulate.
 ```
 
 If **nothing new** to add (all learnings already in profile):

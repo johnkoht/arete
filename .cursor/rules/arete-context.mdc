@@ -10,7 +10,7 @@ This is the Areté development repository. You are building Areté itself, not u
 
 ## Guidelines
 
-- **Memory**: Put build memories in `dev/entries/` and add a line to `dev/MEMORY.md`. Do **not** use `memory/items/` for build decisions or learnings.
+- **Memory**: Put build memories in `memory/entries/` and add a line to `memory/MEMORY.md`. Do **not** use `memory/items/` for build decisions or learnings.
 - **PRDs**: Areté feature PRDs go in `dev/prds/{feature-name}/prd.md`, not in `projects/active/`.
 - **Rules**: Follow dev.mdc and testing.mdc. Use AGENTS.md for architecture.
 - **Skills**: Product skills (meeting-prep, create-prd, etc.) exist here for development; build skills (execute-prd, prd-to-json, plan-to-prd) under `dev/` are available. Do not run `arete seed test-data` in this repo.

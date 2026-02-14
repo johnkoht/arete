@@ -136,5 +136,5 @@ See `dev/templates/PRE-MORTEM-TEMPLATE.md` for full examples from the intelligen
 ## References
 
 - **Template**: `dev/templates/PRE-MORTEM-TEMPLATE.md` (8 risk categories, examples)
-- **Example session**: `dev/entries/2026-02-09_builder-orchestration-learnings.md`
+- **Example session**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
 - **Used by**: `dev/skills/execute-prd/SKILL.md` (Phase 1: mandatory pre-mortem)

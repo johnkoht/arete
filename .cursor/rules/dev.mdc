@@ -20,7 +20,7 @@ Build skills live in `dev/skills/` and are **not shipped to users**. They're for
 | **prd-post-mortem** | `dev/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
 | **review-plan** | `dev/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
 | **run-pre-mortem** | `dev/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
-| **synthesize-collaboration-profile** | `dev/skills/synthesize-collaboration-profile/SKILL.md` | Update `dev/collaboration.md` from entry learnings |
+| **synthesize-collaboration-profile** | `dev/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
 
 **How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
 
@@ -33,11 +33,11 @@ Build skills live in `dev/skills/` and are **not shipped to users**. They're for
 ## Build memory
 
 - **USER.md** (root, gitignored): User-specific context. Copy from `USER.md.example` and fill in local env, preferences, reminders.
-- **MEMORY.md**: `dev/MEMORY.md` — index of significant build/architecture changes.
-- **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
-- **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
+- **MEMORY.md**: `memory/MEMORY.md` — index of significant build/architecture changes.
+- **Entries**: `memory/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `memory/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
 
-**Leverage before acting**: Read `dev/collaboration.md` and scan `dev/MEMORY.md` at the start of substantive build work; before adding backlog, running seed, placing PRDs, or starting PRD/plan execution, read the relevant entry or collaboration.md so you don't repeat past mistakes. See `agent-memory.mdc` § Leverage build memory.
+**Leverage before acting**: Read `memory/collaboration.md` and scan `memory/MEMORY.md` at the start of substantive build work; before adding backlog, running seed, placing PRDs, or starting PRD/plan execution, read the relevant entry or collaboration.md so you don't repeat past mistakes. See `agent-memory.mdc` § Leverage build memory.
 - **Backlog**: `dev/backlog/` — future work and enhancements. Use subfolders:
   - `features/` — new capabilities (e.g., progress-dashboard, google-calendar-provider)
   - `improvements/` — enhancements to existing functionality (e.g., automated-code-review, skills-enhancement)
@@ -48,13 +48,13 @@ Build skills live in `dev/skills/` and are **not shipped to users**. They're for
 
 | Content | Location | Examples |
 |---------|----------|----------|
-| **What happened** — decisions, changes, learnings | `dev/entries/` | Refactors, architectural decisions, methodology findings |
+| **What happened** — decisions, changes, learnings | `memory/entries/` | Refactors, architectural decisions, methodology findings |
 | **Raw or underdeveloped ideas** | `scratchpad.md` (root) | "We should eventually build onboarding"; quick capture, parking lot |
 | **Mature future work** — discussed, with a plan | `dev/backlog/` | Idea + general plan, enough detail to become a PRD |
 
 **Do not** put backlog items or future work in entries. Entries record what was decided or done; scratchpad and backlog record what might be done. If an entry documents an analysis that produces a prioritized backlog, put the backlog in `dev/backlog/features/` or `dev/backlog/improvements/` (not in the root, not in entries).
 
-**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: "Should I add this to build memory (dev/MEMORY.md)?" If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
+**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: "Should I add this to build memory (memory/MEMORY.md)?" If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
 
 ## Pre-mortem for complex work
 
@@ -184,7 +184,7 @@ If any item fails, fix before committing.
 - Encounters surprising issues or learnings
 
 **How**:
-1. Create entry: `dev/entries/YYYY-MM-DD_[short-name]-learnings.md`
+1. Create entry: `memory/entries/YYYY-MM-DD_[short-name]-learnings.md`
 2. Include:
    - What changed (brief summary)
    - What worked well (patterns to repeat)
@@ -192,13 +192,13 @@ If any item fails, fix before committing.
    - Learnings for next time
    - Corrections (if builder corrected you, document under "Learnings / Corrections")
    - **Execution path used** (see below)
-3. Add index line to `dev/MEMORY.md` (top of Index section)
+3. Add index line to `memory/MEMORY.md` (top of Index section)
 
-**Format**: See existing entries in `dev/entries/` for examples
+**Format**: See existing entries in `memory/entries/` for examples
 
 **Skip when**: Trivial changes (typo fixes, comment updates), no learnings to capture
 
-**Agent behavior**: After substantial work completes, prompt: "Capture learnings in dev/MEMORY.md?"
+**Agent behavior**: After substantial work completes, prompt: "Capture learnings in memory/MEMORY.md?"
 
 **Tracking execution path**: In each memory entry, include a brief "Execution Path" section:
 ```markdown
@@ -306,5 +306,5 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 ## References
 
 - **Testing**: `.cursor/rules/testing.mdc`
-- **Build memory**: `dev/MEMORY.md`, `USER.md.example`
+- **Build memory**: `memory/MEMORY.md`, `USER.md.example`
 - **Node/TS conventions**: Informed by [Cursor Directory Node.js rules](https://cursor.directory/rules/node.js); Payload/Vue/Mongo-specific parts omitted.
