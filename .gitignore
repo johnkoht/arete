@@ -60,7 +60,9 @@ dist/
 
 # CLI-managed / workspace directories (consumer workspaces only)
 # Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.
-.agents/
+.agents/*
+!.agents/skills/
+!.agents/skills/**
 .cursor/integrations/
 .cursor/tools/
 # .cursor/rules/ contains BUILDER-only rules for this dev repo.

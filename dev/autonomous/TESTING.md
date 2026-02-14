@@ -12,7 +12,7 @@
 ### Step 1: Convert Test PRD to JSON
 
 ```
-Load the prd-to-json skill from dev/skills/prd-to-json/ and convert dev/autonomous/test-prd.md to prd.json
+Load the prd-to-json skill from .agents/skills/prd-to-json/ and convert dev/autonomous/test-prd.md to prd.json
 ```
 
 **Expected result**: Creates `dev/autonomous/prd.json` with 3 tasks (all status: "pending")

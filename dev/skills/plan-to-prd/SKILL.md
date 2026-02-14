@@ -42,7 +42,7 @@ Reference `dev/prds/intelligence-and-calendar/prd.md` for format. Ensure each ta
 
 ### 3. Run prd-to-json
 
-Load `dev/skills/prd-to-json/SKILL.md` and follow its workflow to convert the PRD to `dev/autonomous/prd.json`. Use the PRD you just created at `dev/prds/{feature-name}/prd.md`.
+Load `.agents/skills/prd-to-json/SKILL.md` and follow its workflow to convert the PRD to `dev/autonomous/prd.json`. Use the PRD you just created at `dev/prds/{feature-name}/prd.md`.
 
 ### 4. Create Handoff File
 
@@ -89,6 +89,6 @@ When converting plan steps to PRD tasks:
 ## References
 
 - **PRD example**: `dev/prds/intelligence-and-calendar/prd.md`
-- **prd-to-json skill**: `dev/skills/prd-to-json/SKILL.md`
+- **prd-to-json skill**: `.agents/skills/prd-to-json/SKILL.md`
 - **execute-prd skill**: `dev/skills/execute-prd/SKILL.md`
 - **Schema**: `dev/autonomous/schema.ts`

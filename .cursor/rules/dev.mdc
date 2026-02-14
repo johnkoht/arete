@@ -16,16 +16,16 @@ Build skills live in `dev/skills/` and are **not shipped to users**. They're for
 |-------|------|-------------|
 | **execute-prd** | `dev/skills/execute-prd/SKILL.md` | Executing multi-task PRDs autonomously |
 | **plan-to-prd** | `dev/skills/plan-to-prd/SKILL.md` | Converting an approved plan to a PRD |
-| **prd-to-json** | `dev/skills/prd-to-json/SKILL.md` | Generating `prd.json` from a PRD for autonomous execution |
+| **prd-to-json** | `.agents/skills/prd-to-json/SKILL.md` | Generating `prd.json` from a PRD for autonomous execution |
 | **prd-post-mortem** | `dev/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
-| **review-plan** | `.agents/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
+| **review-plan** | `dev/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
 | **run-pre-mortem** | `.agents/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
 | **synthesize-collaboration-profile** | `dev/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
 
 **How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
 
 **Skill triggers**:
-- Plan review requested → read `.agents/skills/review-plan/SKILL.md`
+- Plan review requested → read `dev/skills/review-plan/SKILL.md`
 - PRD execution starting → read `dev/skills/execute-prd/SKILL.md`
 - Pre-mortem needed → read `.agents/skills/run-pre-mortem/SKILL.md`
 - PRD completed → read `dev/skills/prd-post-mortem/SKILL.md`

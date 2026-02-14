@@ -42,7 +42,7 @@ This creates a PRD in `projects/active/{name}/outputs/prd-{name}.md`.
 ### 2. Convert PRD to JSON
 
 ```
-Load the prd-to-json skill from dev/skills/prd-to-json/ and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
+Load the prd-to-json skill from .agents/skills/prd-to-json/ and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
 ```
 
 This creates `dev/autonomous/prd.json` with structured tasks.
