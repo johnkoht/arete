@@ -76,6 +76,7 @@ export type {
 export type {
   BriefingRequest,
   Briefing,
+  PrimitiveBriefing,
   SkillContext,
   Suggestion,
 } from './intelligence.js';

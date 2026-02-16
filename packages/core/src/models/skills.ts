@@ -50,6 +50,10 @@ export type SkillCandidate = {
   requires_briefing?: boolean;
   creates_project?: boolean;
   project_template?: string;
+  /** Tool-specific fields (Phase 4) */
+  type?: 'skill' | 'tool';
+  lifecycle?: 'time-bound' | 'condition-bound' | 'cyclical' | 'one-time';
+  duration?: string;
 };
 
 /** Routed skill result (maps to ExtendedRoutedSkill) */

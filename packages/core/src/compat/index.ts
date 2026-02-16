@@ -5,6 +5,8 @@
 
 export { getRelevantContext } from './context.js';
 export { searchMemory } from './memory.js';
+export { assembleBriefing, routeToSkill } from './intelligence.js';
+export type { BriefingOptions } from './intelligence.js';
 export {
   resolveEntity,
   resolveEntities,

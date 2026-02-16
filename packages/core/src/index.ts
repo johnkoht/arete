@@ -20,6 +20,8 @@ export * from './utils/index.js';
 export {
   getRelevantContext,
   searchMemory,
+  assembleBriefing,
+  routeToSkill,
   resolveEntity,
   resolveEntities,
   listPeople,
@@ -29,4 +31,4 @@ export {
   slugifyPersonName,
   PEOPLE_CATEGORIES,
 } from './compat/index.js';
-export type { ListPeopleOptions } from './compat/index.js';
+export type { ListPeopleOptions, BriefingOptions } from './compat/index.js';

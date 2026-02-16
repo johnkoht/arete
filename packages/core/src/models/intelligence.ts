@@ -7,13 +7,15 @@
 
 import type { ProductPrimitive, WorkType } from './common.js';
 import type { ContextBundle } from './context.js';
-import type { MemoryResult } from './memory.js';
+import type { MemoryResult, MemorySearchResult } from './memory.js';
 import type { ResolvedEntity } from './entities.js';
 import type { SkillCandidate } from './skills.js';
+import type { WorkspacePaths } from './workspace.js';
 
 /** Request for assembling a briefing */
 export type BriefingRequest = {
   task: string;
+  paths: WorkspacePaths;
   skillName?: string;
   primitives?: ProductPrimitive[];
   workType?: WorkType;
@@ -22,7 +24,19 @@ export type BriefingRequest = {
   includeContext?: boolean;
 };
 
-/** Assembled briefing for a skill or task */
+/** Full primitive briefing (matches legacy assembleBriefing output) */
+export type PrimitiveBriefing = {
+  task: string;
+  skill?: string;
+  assembledAt: string;
+  confidence: 'High' | 'Medium' | 'Low';
+  context: ContextBundle;
+  memory: MemorySearchResult;
+  entities: ResolvedEntity[];
+  markdown: string;
+};
+
+/** Assembled briefing for a skill or task (simplified, used by prepareForSkill) */
 export type Briefing = {
   task: string;
   context?: ContextBundle;
