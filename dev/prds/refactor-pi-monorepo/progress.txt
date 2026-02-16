@@ -18,7 +18,7 @@
 - [x] phase-3f-service-container: Create ServiceContainer factory and verify core isolation (done 2026-02-16)
 - [x] phase-4a-cli-rebuild: Rebuild CLI as thin service wrapper (done 2026-02-16)
 - [x] phase-4b-golden-tests: Golden file tests and behavioral parity verification (done 2026-02-16, 2 tests skipped: brief/context JSON in workspace)
-- [ ] phase-5-runtime: Migrate runtime content and skills
+- [x] phase-5-runtime: Migrate runtime content and skills (done 2026-02-16)
 - [ ] phase-6a-temporal: Temporal intelligence
 - [ ] phase-6b-proactive: Proactive context assembly
 - [ ] phase-6c-relationships: Entity relationships

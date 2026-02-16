@@ -30,7 +30,7 @@ function getWorkspaceRoot(): string {
 }
 
 function getRuntimeRulesPath(): string {
-  return join(getWorkspaceRoot(), 'runtime', 'rules');
+  return join(getWorkspaceRoot(), 'packages', 'runtime', 'rules', 'cursor');
 }
 
 const mockConfig: AreteConfig = {

@@ -10,9 +10,9 @@ import {
   getPackageRoot,
   getAdapter,
 } from '@arete/core';
+import { join, resolve } from 'path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { resolve } from 'path';
 import {
   success,
   error,
@@ -99,19 +99,21 @@ export function registerInstallCommand(program: Command): void {
 
         const packageRoot = getPackageRoot();
         const useRuntime = !packageRoot.includes('node_modules');
-        const sourcePaths = getSourcePaths(packageRoot, useRuntime);
+        const basePaths = getSourcePaths(packageRoot, useRuntime);
+        const rulesSubdir = ide === 'cursor' ? 'cursor' : 'claude-code';
+        const sourcePaths = {
+          root: basePaths.root,
+          skills: basePaths.skills,
+          tools: basePaths.tools,
+          rules: join(basePaths.rules, rulesSubdir),
+          integrations: basePaths.integrations,
+          templates: basePaths.templates,
+        };
 
         const result = await services.workspace.create(targetDir, {
           ideTarget: ide,
           source: source,
-          sourcePaths: {
-            root: sourcePaths.root,
-            skills: sourcePaths.skills,
-            tools: sourcePaths.tools,
-            rules: sourcePaths.rules,
-            integrations: sourcePaths.integrations,
-            templates: sourcePaths.templates,
-          },
+          sourcePaths,
         });
 
         if (opts.json) {

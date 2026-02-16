@@ -114,14 +114,22 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
   
-  // Get source paths (runtime/ in dev/symlink, dist/ when compiled)
+  // Get source paths (packages/runtime in dev/symlink, dist when compiled)
+  const rulesSubdir = adapter.target === 'cursor' ? 'cursor' : 'claude-code';
   const sourcePaths = sourceInfo.path
     ? {
-        skills: join(sourceInfo.path, 'runtime', 'skills'),
-        rules: join(sourceInfo.path, 'runtime', 'rules'),
-        tools: join(sourceInfo.path, 'runtime', 'tools')
+        skills: join(sourceInfo.path, 'packages', 'runtime', 'skills'),
+        rules: join(sourceInfo.path, 'packages', 'runtime', 'rules', rulesSubdir),
+        tools: join(sourceInfo.path, 'packages', 'runtime', 'tools'),
       }
-    : getSourcePaths();
+    : (() => {
+        const base = getSourcePaths();
+        return {
+          skills: base.skills,
+          rules: join(base.rules, rulesSubdir),
+          tools: base.tools,
+        };
+      })();
   
   // Preserved skills (no longer used; kept for backward compat in config)
   const localOverrides = config.skills?.overrides || [];

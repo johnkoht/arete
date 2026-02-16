@@ -1,0 +1,178 @@
+---
+description: QMD search integration - how to use local semantic search
+globs: ["**/*"]
+---
+
+# QMD Search Integration
+
+[QMD](https://github.com/tobi/qmd) provides local semantic search across all workspace markdown files. Use it to find relevant content before starting work.
+
+## How to Use QMD
+
+**You should actively run QMD commands** via the shell to search for content. Don't just reference QMD - actually execute the searches.
+
+Example workflow:
+1. User asks to start a discovery project on "user onboarding"
+2. **Run**: `qmd query "user onboarding"` to find related past work
+3. Review results and reference relevant findings
+4. Proceed with creating the project
+
+```bash
+# Actually run this command via shell
+qmd query "user onboarding"
+```
+
+## When to Use QMD
+
+**Always search before:**
+- Starting a new project (find related past work)
+- Synthesis work (gather all relevant inputs)
+- Answering questions about past decisions
+- Building PRDs (find related context)
+- Updating context (check what exists)
+
+**Search when user asks about:**
+- Past decisions or rationale
+- Historical context
+- Related projects
+- Specific topics across the workspace
+
+## QMD Commands
+
+### Quick Reference
+
+```bash
+# Fast keyword search
+qmd search "user onboarding"
+
+# Semantic search (meaning-based)
+qmd vsearch "how do we handle authentication"
+
+# Hybrid search with reranking (best quality)
+qmd query "quarterly planning process"
+
+# Get specific document
+qmd get "memory/decisions.md"
+
+# Get by document ID (from search results)
+qmd get "#abc123"
+
+# Get multiple documents
+qmd multi-get "projects/archive/*.md"
+```
+
+### Which Command to Use
+
+| Need | Command | Example |
+|------|---------|---------|
+| Exact keyword match | `qmd search` | `qmd search "Stripe integration"` |
+| Conceptual/meaning search | `qmd vsearch` | `qmd vsearch "payment processing approach"` |
+| Best overall results | `qmd query` | `qmd query "how did we decide on pricing"` |
+| Retrieve known file | `qmd get` | `qmd get "context/business-model.md"` |
+| Multiple files | `qmd multi-get` | `qmd multi-get "projects/archive/2025*"` |
+
+## Search Patterns
+
+### Before Starting a Project
+
+```bash
+# Find related past projects
+qmd query "[topic] project"
+
+# Find relevant decisions
+qmd search "decision [topic]"
+
+# Find related context
+qmd vsearch "[problem area]"
+```
+
+### During Synthesis
+
+```bash
+# Gather all inputs on a topic
+qmd query "[topic]" --all --min-score 0.3
+
+# Find patterns across projects
+qmd vsearch "[theme or pattern]"
+```
+
+### Answering Questions
+
+```bash
+# Find decision rationale
+qmd query "why did we [decision]"
+
+# Find historical context
+qmd search "[specific term or name]"
+```
+
+## Interpreting Results
+
+QMD returns results with relevance scores:
+
+| Score | Meaning |
+|-------|---------|
+| 0.8 - 1.0 | Highly relevant - definitely read |
+| 0.5 - 0.8 | Moderately relevant - worth checking |
+| 0.2 - 0.5 | Somewhat relevant - skim if needed |
+| 0.0 - 0.2 | Low relevance - probably skip |
+
+## Output Formats
+
+For agent use, prefer structured output:
+
+```bash
+# JSON for processing
+qmd query "topic" --json -n 10
+
+# Files list for batch retrieval
+qmd query "topic" --files --min-score 0.4
+
+# Full content for reading
+qmd get "path/to/file.md" --full
+```
+
+## Keeping Index Updated
+
+### When to Prompt User to Run `qmd update`
+
+Prompt the user to run `qmd update` at these moments:
+
+1. **After finalizing a project**: "Now that the project is archived, run `qmd update` to index the new content."
+
+2. **Before major synthesis work**: "Before I search for related content, you may want to run `qmd update` if you've added new files recently."
+
+3. **After adding multiple inputs**: If user has added several files to a project, suggest: "Consider running `qmd update` to make these files searchable."
+
+4. **If search seems incomplete**: If results seem to be missing recent content, suggest updating.
+
+### Commands
+
+```bash
+# Re-index the workspace (fast, run frequently)
+qmd update
+
+# Re-generate embeddings (slower, run occasionally)
+qmd embed
+
+# Check index status
+qmd status
+```
+
+### Prompt Format
+
+When prompting user to update, use this format:
+
+```
+Before continuing, you may want to update the search index:
+  qmd update
+This ensures recent changes are searchable.
+```
+
+## Search Tips
+
+1. **Start broad, then narrow**: Begin with `qmd query` then use specific `qmd search` for exact terms
+2. **Use questions**: `qmd vsearch "how do we handle X"` often works better than keywords
+3. **Check archived projects**: Past projects contain valuable learnings
+4. **Search memory files**: Decisions and learnings are searchable too
+5. **Note search terms**: If you find good results, note the query for future use

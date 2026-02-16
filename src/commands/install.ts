@@ -167,14 +167,27 @@ export async function installCommand(directory: string | undefined, options: Ins
     }
   }
   
-  // Get source paths (runtime/ in dev, dist/ when compiled)
-  const sourcePaths = sourceInfo.path ? {
-    skills: join(sourceInfo.path, 'runtime', 'skills'),
-    tools: join(sourceInfo.path, 'runtime', 'tools'),
-    rules: join(sourceInfo.path, 'runtime', 'rules'),
-    integrations: join(sourceInfo.path, 'runtime', 'integrations'),
-    templates: join(sourceInfo.path, 'runtime', 'templates')
-  } : getSourcePaths();
+  // Get source paths (packages/runtime/ in dev, dist/ when compiled)
+  const rulesSubdir = adapter.target === 'cursor' ? 'cursor' : 'claude-code';
+  const baseSource = sourceInfo.path
+    ? join(sourceInfo.path, 'packages', 'runtime')
+    : null;
+  const sourcePaths = baseSource
+    ? {
+        root: sourceInfo.path!,
+        skills: join(baseSource, 'skills'),
+        tools: join(baseSource, 'tools'),
+        rules: join(baseSource, 'rules', rulesSubdir),
+        integrations: join(baseSource, 'integrations'),
+        templates: join(baseSource, 'templates'),
+      }
+    : (() => {
+        const base = getSourcePaths();
+        return {
+          ...base,
+          rules: join(base.rules, rulesSubdir),
+        };
+      })();
   
   const workspacePaths = getWorkspacePaths(targetDir, adapter);
   const useSymlinks = sourceInfo.type === 'symlink';
@@ -294,10 +307,10 @@ export async function installCommand(directory: string | undefined, options: Ins
   if (!existsSync(guideDest)) {
     // Try multiple possible source locations
     const possibleSources = [
-      sourceInfo.path ? join(sourceInfo.path, 'runtime', 'GUIDE.md') : null,
-      join(sourcePaths.skills, '..', 'GUIDE.md'), // dist/GUIDE.md
-      join(getPackageRoot(), 'runtime', 'GUIDE.md'), // runtime/GUIDE.md in dev
-      join(getPackageRoot(), 'dist', 'GUIDE.md') // dist/GUIDE.md in built package
+      sourceInfo.path ? join(sourceInfo.path, 'packages', 'runtime', 'GUIDE.md') : null,
+      join(sourcePaths.skills, '..', 'GUIDE.md'),
+      join(getPackageRoot(), 'packages', 'runtime', 'GUIDE.md'), // packages/runtime in dev
+      join(getPackageRoot(), 'dist', 'GUIDE.md') // dist when built
     ].filter(Boolean) as string[];
     
     let copied = false;

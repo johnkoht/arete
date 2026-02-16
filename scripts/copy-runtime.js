@@ -11,13 +11,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const runtime = join(root, 'runtime');
+const runtime = join(root, 'packages', 'runtime');
 const dist = join(root, 'dist');
 
 const DIRS = ['skills', 'tools', 'rules', 'integrations', 'templates'];
 
 if (!existsSync(runtime)) {
-  console.error('runtime/ not found; run from package root');
+  console.error('packages/runtime/ not found; run from package root');
   process.exit(1);
 }
 
@@ -42,4 +42,4 @@ if (existsSync(guideSrc)) {
   console.log('Copied GUIDE.md to dist/');
 }
 
-console.log('Copied runtime/ to dist/');
+console.log('Copied packages/runtime/ to dist/');

@@ -77,13 +77,15 @@ export function getWorkspacePaths(workspaceRoot: string, adapter?: IDEAdapter): 
 
 /**
  * Get source paths from CLI package.
- * When running from src/ (tsx dev), use runtime/. When running from dist/ (compiled), use dist/.
+ * When running from src/ (tsx dev), use packages/runtime/. When running from dist/ (compiled), use dist/.
  */
 export function getSourcePaths(): SourcePaths {
   const packageRoot = getPackageRoot();
   const __filenameForResolve = fileURLToPath(import.meta.url);
   const runningFromSrc = __filenameForResolve.includes(sep + 'src' + sep);
-  const base = runningFromSrc ? join(packageRoot, 'runtime') : join(packageRoot, 'dist');
+  const base = runningFromSrc
+    ? join(packageRoot, 'packages', 'runtime')
+    : join(packageRoot, 'dist');
 
   return {
     root: packageRoot,

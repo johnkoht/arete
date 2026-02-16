@@ -84,13 +84,15 @@ export function parseSourceType(
 
 /**
  * Get source paths. Requires packageRoot and whether to use runtime (dev) or dist (built).
+ * When useRuntime: content lives in packages/runtime/
+ * When !useRuntime: content was copied to dist/ during build
  */
 export function getSourcePaths(
   packageRoot: string,
   useRuntime: boolean = false
 ): SourcePaths {
   const base = useRuntime
-    ? join(packageRoot, 'runtime')
+    ? join(packageRoot, 'packages', 'runtime')
     : join(packageRoot, 'dist');
   return {
     root: packageRoot,

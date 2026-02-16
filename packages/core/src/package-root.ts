@@ -21,6 +21,9 @@ export function getPackageRoot(): string {
   }
 
   while (current !== dirname(current)) {
+    if (existsSync(join(current, 'packages', 'runtime'))) {
+      return current;
+    }
     if (existsSync(join(current, 'runtime'))) {
       return current;
     }

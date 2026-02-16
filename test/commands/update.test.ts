@@ -316,9 +316,9 @@ describe('update command', () => {
     it('only reports rules in PRODUCT_RULES_ALLOW_LIST, excluding dev-only .mdc files', async () => {
       // Setup: Install workspace, then point to a custom source with an extra dev-only .mdc
       const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
-      const canonicalRulesDir = join(repoRoot, 'runtime', 'rules');
+      const canonicalRulesDir = join(repoRoot, 'packages', 'runtime', 'rules', 'cursor');
       const customSourceDir = join(tmpdir(), `arete-test-rules-source-${Date.now()}`);
-      const customRulesDir = join(customSourceDir, 'runtime', 'rules');
+      const customRulesDir = join(customSourceDir, 'packages', 'runtime', 'rules', 'cursor');
 
       mkdirSync(customRulesDir, { recursive: true });
       cpSync(canonicalRulesDir, customRulesDir, { recursive: true });
