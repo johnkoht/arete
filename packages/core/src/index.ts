@@ -42,3 +42,7 @@ export type { ListPeopleOptions, BriefingOptions } from './compat/index.js';
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export type { IDEAdapter, IDETarget } from './adapters/index.js';
 export { getCalendarProvider } from './integrations/calendar/index.js';
+
+// Service container factory
+export { createServices } from './factory.js';
+export type { AreteServices, CreateServicesOptions } from './factory.js';
