@@ -12,10 +12,15 @@
     "bin/",
     "dist/"
   ],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "tsx src/cli.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
     "build": "npm run build:agents:dev && npm run build:agents:prod && tsc && node scripts/copy-runtime.js",
+    "build:legacy": "npm run build:agents:dev && npm run build:agents:prod && tsc && node scripts/copy-runtime.js",
+    "build:packages": "tsc -b packages/core packages/cli",
     "build:agents:dev": "tsx scripts/build-agents.ts dev",
     "build:agents:prod": "tsx scripts/build-agents.ts prod",
     "typecheck": "tsc --noEmit",

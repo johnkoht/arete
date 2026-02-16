@@ -1,0 +1,376 @@
+{
+  "name": "monorepo-intelligence-refactor",
+  "branchName": "refactor/monorepo-intelligence",
+  "goal": "Refactor Arete from a single-package repo into a monorepo (core, cli, runtime) with clean service boundaries, then enhance the intelligence layer with temporal, proactive, and relationship capabilities.",
+  "userStories": [
+    {
+      "id": "phase-1-scaffold",
+      "title": "Phase 1: Scaffold monorepo structure",
+      "description": "Set up the monorepo skeleton with npm workspaces. Create packages/core, packages/cli, packages/runtime with package.json and tsconfig.json for each. Use TypeScript project references for build ordering. CRITICAL: Do NOT modify existing src/, runtime/, bin/, or root package.json scripts. The old build must still work alongside the new structure. Add a 'build:legacy' script that preserves the current build path as a safety valve.\n\nFiles to read first: package.json, tsconfig.json, tsconfig.test.json\n\nPre-mortem mitigation (Risk 1 - dual structure): Keep old build working. Pre-mortem mitigation (Risk 6 - build ordering): Use TypeScript project references with tsc --build.",
+      "acceptanceCriteria": [
+        "Root package.json has workspaces config pointing to packages/*",
+        "tsconfig.base.json exists with shared compiler options (NodeNext, strict)",
+        "packages/core/package.json exists with name @arete/core",
+        "packages/cli/package.json exists with name @arete/cli and dependency on @arete/core",
+        "packages/runtime/package.json exists with name @arete/runtime",
+        "Each package has tsconfig.json extending tsconfig.base.json",
+        "TypeScript project references configured (cli references core)",
+        "npm install from root succeeds",
+        "npm run build from root succeeds (new packages build in correct order)",
+        "Old build still works: existing npm run build:legacy produces working dist/",
+        "npm run typecheck passes",
+        "npm test passes (existing tests unaffected)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
+    },
+    {
+      "id": "phase-2a-models",
+      "title": "Phase 2a: Create model type definitions",
+      "description": "Create all type definitions in packages/core/src/models/. These types are extracted from the current src/types.ts and split by domain. CRITICAL: Map the type dependency graph first to prevent circular imports. Leaf types (ProductPrimitive, WorkType, EntityType, MemoryItemType) go in their domain files. Create models/common.ts for truly shared primitives. Composite types (Briefing, SkillContext) go in models/intelligence.ts and import from domain files — never the reverse.\n\nFiles to read first: src/types.ts, dev/autonomous/schema.ts\n\nPre-mortem mitigation (Risk 3 - circular deps): Map dependency graph. Domain files import from common.ts only. Only intelligence.ts may import across domains.\n\nModel files to create:\n- common.ts — ProductPrimitive, WorkType, EntityType, MemoryItemType, DateRange\n- memory.ts — MemoryEntry, MemorySearchRequest, MemorySearchResult, CreateMemoryRequest, MemoryTimeline, MemoryIndex\n- context.ts — ContextFile, ContextBundle, ContextRequest, ContextGap, ContextInventory\n- workspace.ts — WorkspaceConfig, WorkspacePaths, WorkspaceStatus, CreateWorkspaceOptions, InstallResult, UpdateResult, IDETarget, AreteConfig\n- skills.ts — SkillDefinition, SkillMetadata, SkillCandidate, RoutedSkill, InstallSkillOptions, InstallSkillResult\n- entities.ts — Person, Meeting, Project, ResolvedEntity, EntityMention, EntityRelationship\n- intelligence.ts — BriefingRequest, Briefing, SkillContext, Suggestion (imports from other models)\n- integrations.ts — CalendarEvent, FathomTranscript, IntegrationConfig, PullOptions, PullResult, IntegrationStatus\n- prd.ts — PRD, Task, TaskStatus, validateTask, validatePRD (from dev/autonomous/schema.ts)",
+      "acceptanceCriteria": [
+        "All 9 model files exist in packages/core/src/models/",
+        "All types from src/types.ts are represented in the new model files",
+        "PRD/Task types migrated from dev/autonomous/schema.ts with validators",
+        "No circular imports between model files (verify with build)",
+        "common.ts contains only leaf types used by multiple domains",
+        "intelligence.ts is the only file that imports across domains",
+        "packages/core builds cleanly with no type errors",
+        "packages/core/src/index.ts exports all types"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-2b-stubs",
+      "title": "Phase 2b: Create service stubs, storage interface, and utility functions",
+      "description": "Create service class stubs in packages/core/src/services/ with correct method signatures but empty/throwing implementations. Create the StorageAdapter interface. Port utility functions from Python to TypeScript.\n\nFiles to read first: src/core/context-injection.ts, src/core/memory-retrieval.ts, src/core/entity-resolution.ts, src/core/briefing.ts, src/core/skill-router.ts, src/core/workspace.ts, src/core/search.ts, scripts/integrations/utils.py\n\nRefer to the Core Service Interfaces section of the PRD (dev/prds/refactor-pi-monorepo/prd.md) for exact method signatures.\n\nService stubs to create: ContextService, MemoryService, EntityService, IntelligenceService, WorkspaceService, SkillService, IntegrationService.\n\nUtility functions to port: slugify.ts, dates.ts, templates.ts, dedup.ts.\n\nPre-mortem mitigation (Risk 9 - storage assumptions): StorageAdapter interface with read/write/exists/delete/list/mkdir/search/getModified methods.",
+      "acceptanceCriteria": [
+        "7 service class files exist in packages/core/src/services/",
+        "Each service class has constructor accepting dependencies (StorageAdapter, SearchProvider, other services)",
+        "All methods from PRD interfaces are present with correct signatures",
+        "Stub methods throw 'Not implemented' (not silently return undefined)",
+        "StorageAdapter interface exists in packages/core/src/storage/adapter.ts",
+        "4 utility files exist in packages/core/src/utils/ with working implementations",
+        "Utility functions have tests ported from scripts/integrations/test_utils.py",
+        "packages/core builds cleanly",
+        "packages/core/src/index.ts exports all services, storage interface, and utilities"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3a-storage-search",
+      "title": "Phase 3a: Implement FileStorageAdapter and port SearchProvider",
+      "description": "Create the FileStorageAdapter implementing StorageAdapter. Port the SearchProvider interface and implementations (QMD + fallback) into packages/core/src/search/. These are the foundation that all services depend on.\n\nFiles to read first: packages/core/src/storage/adapter.ts, src/core/search.ts, src/core/search-providers/qmd.ts, src/core/search-providers/fallback.ts\n\nPre-mortem mitigation (Risk 9): FileStorageAdapter is the ONLY place that uses direct fs calls. All services use StorageAdapter.",
+      "acceptanceCriteria": [
+        "FileStorageAdapter implements all StorageAdapter methods",
+        "All file operations use fs-extra (consistent with existing codebase)",
+        "SearchProvider interface ported to packages/core/src/search/",
+        "QMD and fallback search providers ported with tests",
+        "getSearchProvider factory function ported",
+        "tokenize utility ported",
+        "Tests for FileStorageAdapter (read, write, exists, delete, list, mkdir, getModified)",
+        "Tests for search providers (ported from existing tests)",
+        "packages/core builds cleanly"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3b-context-memory",
+      "title": "Phase 3b: Migrate ContextService and MemoryService",
+      "description": "Implement ContextService and MemoryService by porting logic from src/core/context-injection.ts and src/core/memory-retrieval.ts. Create compatibility shims so existing CLI commands continue working without changes.\n\nFiles to read first: src/core/context-injection.ts, src/core/memory-retrieval.ts, test/core/context-injection.test.ts, test/core/memory-retrieval.test.ts, packages/core/src/services/context.ts (stub), packages/core/src/services/memory.ts (stub)\n\nPre-mortem mitigation (Risk 2 - function-to-class): Create compatibility shims — thin wrappers exposing old function signatures that delegate to the new service classes internally. Place shims in packages/core/src/compat/. This lets existing CLI work unchanged.\n\nPre-mortem mitigation (Risk 5 - test migration): Port tests alongside logic. Record test count before and after. New count must be >= old count.",
+      "acceptanceCriteria": [
+        "ContextService.getRelevantContext implements full logic from context-injection.ts",
+        "ContextService.getContextForSkill stub upgraded to basic implementation",
+        "ContextService.getContextInventory stub upgraded to basic implementation",
+        "MemoryService.search implements full logic from memory-retrieval.ts",
+        "MemoryService.create has basic implementation (write markdown entry)",
+        "MemoryService.getTimeline stub present (implemented in Phase 6)",
+        "Compatibility shim: getRelevantContext() function delegates to ContextService",
+        "Compatibility shim: searchMemory() function delegates to MemoryService",
+        "All existing context-injection tests pass via new service",
+        "All existing memory-retrieval tests pass via new service",
+        "No direct fs imports in service files (all through StorageAdapter)",
+        "packages/core builds and all tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3c-entity",
+      "title": "Phase 3c: Migrate EntityService",
+      "description": "Implement EntityService by porting logic from src/core/entity-resolution.ts and src/core/people.ts. Merge people management into EntityService. Create compatibility shims.\n\nFiles to read first: src/core/entity-resolution.ts, src/core/people.ts, test/core/entity-resolution.test.ts, test/core/people.test.ts, packages/core/src/services/entity.ts (stub)\n\nPre-mortem mitigations: Compatibility shims (Risk 2). Port tests alongside (Risk 5). No direct fs (Risk 9).",
+      "acceptanceCriteria": [
+        "EntityService.resolve implements full logic from entity-resolution.ts resolveEntity",
+        "EntityService.resolveAll implements full logic from resolveEntities",
+        "EntityService.findMentions stub present (implemented in Phase 6)",
+        "EntityService.getRelationships stub present (implemented in Phase 6)",
+        "People management functions (list, show, index) integrated into EntityService",
+        "Compatibility shims for resolveEntity and resolveEntities",
+        "All existing entity-resolution and people tests pass via new service",
+        "No direct fs imports in service file",
+        "packages/core builds and all tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3d-intelligence",
+      "title": "Phase 3d: Migrate IntelligenceService",
+      "description": "Implement IntelligenceService by porting logic from src/core/briefing.ts and moving skill routing from src/core/skill-router.ts. This service orchestrates ContextService, MemoryService, and EntityService. Create compatibility shims.\n\nFiles to read first: src/core/briefing.ts, src/core/skill-router.ts, test/core/briefing.test.ts, test/core/skill-router.test.ts, packages/core/src/services/intelligence.ts (stub), packages/core/src/services/context.ts (implemented), packages/core/src/services/memory.ts (implemented), packages/core/src/services/entity.ts (implemented)\n\nPre-mortem mitigations: Compatibility shims (Risk 2). Port tests (Risk 5). IntelligenceService constructor takes other services as dependencies (Risk 4).",
+      "acceptanceCriteria": [
+        "IntelligenceService.assembleBriefing implements full logic from briefing.ts",
+        "IntelligenceService.routeToSkill implements full logic from skill-router.ts",
+        "IntelligenceService.prepareForSkill stub present (implemented in Phase 6)",
+        "Constructor accepts ContextService, MemoryService, EntityService (dependency injection)",
+        "Compatibility shims for assembleBriefing and routeToSkill",
+        "All existing briefing and skill-router tests pass via new service",
+        "No direct fs imports",
+        "packages/core builds and all tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3e-workspace-skills-integrations",
+      "title": "Phase 3e: Migrate WorkspaceService, SkillService, and IntegrationService",
+      "description": "Migrate remaining services: WorkspaceService (from workspace.ts + workspace-structure.ts + config.ts), SkillService (from commands/skill.ts skill management logic), IntegrationService (from calendar.ts + meetings.ts + integrations/fathom/). Port IDE adapters to packages/core/src/adapters/. Port calendar providers to packages/core/src/integrations/calendar/.\n\nFiles to read first: src/core/workspace.ts, src/core/workspace-structure.ts, src/core/config.ts, src/core/ide-adapter.ts, src/core/adapters/, src/commands/skill.ts, src/core/calendar.ts, src/core/meetings.ts, src/integrations/fathom/\n\nPre-mortem mitigations: Compatibility shims (Risk 2). Port tests (Risk 5). No direct fs in services (Risk 9). Extract only business logic from commands/skill.ts — CLI-specific code (inquirer prompts, chalk output) stays in cli package.",
+      "acceptanceCriteria": [
+        "WorkspaceService implements: isWorkspace, findRoot, getPaths, create, update, getStatus",
+        "SkillService implements: list, get, install, getInfo",
+        "IntegrationService implements: pull, list, configure",
+        "IDE adapters ported to packages/core/src/adapters/",
+        "Calendar providers ported to packages/core/src/integrations/calendar/",
+        "Fathom integration ported to packages/core/src/integrations/fathom/",
+        "Compatibility shims for all migrated functions",
+        "SkillService has NO inquirer/chalk imports (CLI-only concerns)",
+        "All existing workspace, skill, calendar, meeting, fathom tests pass",
+        "No direct fs imports in service files",
+        "packages/core builds and all tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-3f-service-container",
+      "title": "Phase 3f: Create ServiceContainer factory and verify core isolation",
+      "description": "Create a createServices(workspaceRoot) factory function that wires up all services with correct dependencies. This is what CLI commands and future server will call. Verify that packages/core has zero CLI dependencies.\n\nFiles to read first: packages/core/src/services/*.ts, packages/core/src/storage/file.ts, packages/core/src/search/\n\nPre-mortem mitigation (Risk 4 - DI complexity): Single factory function creates all services, injects all dependencies. CLI commands never construct services directly.\n\nPre-mortem mitigation (Risk 5 - test count): Record final test count for packages/core. Must be >= pre-migration total.",
+      "acceptanceCriteria": [
+        "createServices(workspaceRoot) factory function exists in packages/core/src/index.ts",
+        "Factory creates FileStorageAdapter, SearchProvider, and all 7 services",
+        "Factory returns typed AreteServices object with all services accessible",
+        "Zero imports from packages/cli in packages/core (verify with grep)",
+        "Zero imports of commander, chalk, or inquirer in packages/core",
+        "Test count in packages/core >= pre-migration test count in test/core/",
+        "packages/core builds cleanly as a standalone package",
+        "All tests pass across the full repo (legacy + new)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-4a-cli-rebuild",
+      "title": "Phase 4a: Rebuild CLI as thin service wrapper",
+      "description": "Rebuild packages/cli/ as a thin client. Set up entry point with Commander, create command handlers that use createServices() factory and delegate to core services. Create formatters for CLI-specific output. Move scripts/setup.sh. Update bin/arete entry point.\n\nFiles to read first: src/cli.ts, src/commands/*.ts (all 18 files), packages/core/src/index.ts (createServices), bin/arete.js\n\nEach command handler follows the pattern: parse args → createServices(workspaceRoot) → call service method → format output with CLI formatters.\n\nPre-mortem mitigation (Risk 1 - dual structure): Update root package.json bin field to point to new packages/cli/bin/arete ONLY when all commands work.\n\nPre-mortem mitigation (Risk 8 - behavioral regression): Before this task, capture golden file outputs for key commands.",
+      "acceptanceCriteria": [
+        "packages/cli/src/index.ts is the CLI entry point with Commander setup",
+        "All existing CLI commands reimplemented as thin wrappers: install, context, memory, brief, resolve, route, skill, pull, setup, status, people, meeting, update, seed, template, tool, integration",
+        "Every command uses createServices() — no direct core logic in commands",
+        "CLI formatters handle tables, markdown, and colored output",
+        "scripts/setup.sh moved to packages/cli/scripts/setup.sh",
+        "bin/arete entry point works from packages/cli",
+        "Root package.json bin field updated to new location",
+        "All CLI commands produce functionally identical output to before",
+        "npm run typecheck passes",
+        "npm test passes (both legacy and new)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-4b-golden-tests",
+      "title": "Phase 4b: Golden file tests and behavioral parity verification",
+      "description": "Create a golden file test suite that captures CLI output for key commands and verifies the new CLI produces identical results. Test commands with known inputs and compare output patterns.\n\nFiles to read first: packages/cli/src/commands/*.ts, test/commands/*.ts\n\nPre-mortem mitigation (Risk 8): Golden file tests for arete context, arete brief, arete memory search, arete resolve, arete route, arete status. Use pattern matching for non-deterministic parts (timestamps, scores).\n\nAlso port existing command tests from test/commands/ to packages/cli/test/.",
+      "acceptanceCriteria": [
+        "Golden file test suite exists in packages/cli/test/golden/",
+        "Tests cover: context, brief, memory search, resolve, route, status commands",
+        "Non-deterministic output handled with pattern matching",
+        "All existing command tests ported from test/commands/",
+        "CLI test count >= pre-migration command test count",
+        "All golden file tests pass",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-5-runtime",
+      "title": "Phase 5: Migrate runtime content and skills",
+      "description": "Move all workspace content (skills, tools, templates, rules, GUIDE.md, integration configs) into packages/runtime/. Update CLI install command to copy from the new packages/runtime location. Remove old runtime/ directory and scripts/copy-runtime.js.\n\nFiles to read first: runtime/ (directory listing), packages/cli/src/commands/install.ts, scripts/copy-runtime.js, src/core/workspace.ts (getSourcePaths)\n\nPre-mortem mitigation (Risk 1): Keep old runtime/ accessible until install command is verified working from new location. Only delete old runtime/ after validation passes.\n\nPre-mortem mitigation (Risk 6 - multi-IDE): Ensure rule templates in packages/runtime/rules/cursor/ and rules/claude-code/ match current behavior. The adapter pattern must be preserved.",
+      "acceptanceCriteria": [
+        "All 23 skills moved to packages/runtime/skills/ with SKILL.md format preserved",
+        "All tools moved to packages/runtime/tools/",
+        "All templates moved to packages/runtime/templates/",
+        "IDE rule templates in packages/runtime/rules/cursor/ and rules/claude-code/",
+        "GUIDE.md moved to packages/runtime/",
+        "Integration configs moved to packages/runtime/integrations/",
+        "CLI install command copies from packages/runtime (not old runtime/)",
+        "getSourcePaths() updated to find content in packages/runtime",
+        "arete install ~/test-workspace --ide cursor produces working workspace",
+        "arete install ~/test-workspace --ide claude produces working workspace",
+        "Old runtime/ directory removed",
+        "scripts/copy-runtime.js removed",
+        "All skills discoverable and routable from installed workspace",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-6a-temporal",
+      "title": "Phase 6a: Temporal intelligence",
+      "description": "Implement temporal intelligence capabilities. This is the highest-priority intelligence enhancement.\n\n1. MemoryService.getTimeline: Query memory items related to a topic/entity over time. Extract recurring themes. Enable 'what do we know about X?' queries.\n2. Add temporal awareness to ContextService.getRelevantContext: Check meeting transcripts and memory for temporal patterns. Surface recency signals.\n3. CLI: arete memory timeline command.\n\nFiles to read first: packages/core/src/services/memory.ts, packages/core/src/services/context.ts, packages/core/src/models/memory.ts",
+      "acceptanceCriteria": [
+        "MemoryService.getTimeline returns items for a topic with relevance scores over a date range",
+        "getTimeline extracts recurring themes from matched entries",
+        "ContextService.getRelevantContext includes temporal signals in results",
+        "Temporal signals show recency: 'last discussed N days ago in [source]'",
+        "Meeting transcripts are searched as part of temporal queries",
+        "CLI command 'arete memory timeline <query>' works and shows temporal view",
+        "Tests for getTimeline with various date ranges and topic queries",
+        "Tests for temporal-aware context assembly",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-6b-proactive",
+      "title": "Phase 6b: Proactive context assembly",
+      "description": "Implement proactive context assembly — the intelligence layer searches ALL available sources automatically, not just the ones an agent thinks to check.\n\n1. Deep source search in IntelligenceService.assembleBriefing: Search context files, meeting transcripts, memory entries, project docs. Rank and deduplicate.\n2. ContextService.getContextInventory: Track file freshness, flag stale context, show coverage gaps per primitive.\n3. IntelligenceService.prepareForSkill: Skill-aware context preparation using metadata.\n4. CLI: arete context --inventory command.\n\nFiles to read first: packages/core/src/services/intelligence.ts, packages/core/src/services/context.ts, packages/core/src/models/context.ts, packages/core/src/models/intelligence.ts\n\nPre-mortem mitigation (Risk 7 - scope creep): prepareForSkill uses skill metadata to prioritize, not to build new inference capabilities. Keep it bounded.",
+      "acceptanceCriteria": [
+        "assembleBriefing searches ALL source types: context files, meeting transcripts, memory, project docs",
+        "Results are ranked by relevance and deduplicated across source types",
+        "getContextInventory returns freshness metadata for all context files",
+        "getContextInventory flags stale files (configurable threshold, default 30 days)",
+        "getContextInventory shows coverage gaps per ProductPrimitive",
+        "prepareForSkill uses skill primitives and work_type to prioritize context",
+        "prepareForSkill includes temporal patterns and recent memory",
+        "CLI command 'arete context --inventory' shows freshness dashboard",
+        "Tests for deep source search, inventory, and skill preparation",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-6c-relationships",
+      "title": "Phase 6c: Entity relationships",
+      "description": "Implement entity relationship tracking — the third intelligence enhancement priority.\n\n1. EntityService.findMentions: Scan context files, meeting notes, memory entries for entity name references.\n2. EntityService.getRelationships: Extract EXPLICIT relationships only (v1 scope limit). works_on from project README team section, attended from meeting attendees field, mentioned_in from findMentions. NO co-occurrence inference in v1.\n3. Update IntelligenceService.assembleBriefing to include relationships when entities are detected in the task.\n\nFiles to read first: packages/core/src/services/entity.ts, packages/core/src/services/intelligence.ts, packages/core/src/models/entities.ts\n\nPre-mortem mitigation (Risk 7 - scope creep): EntityRelationship.type is a union of EXACTLY 3 values: works_on | attended | mentioned_in. No inference logic. Only explicit metadata extraction.",
+      "acceptanceCriteria": [
+        "findMentions scans context, meetings, memory, and project files for entity name references",
+        "findMentions returns source path, source type, excerpt, and date for each mention",
+        "getRelationships extracts works_on from project README team/owner sections",
+        "getRelationships extracts attended from meeting attendees/attendee_ids fields",
+        "getRelationships extracts mentioned_in from findMentions results",
+        "EntityRelationship.type is exactly 'works_on' | 'attended' | 'mentioned_in' (no other types)",
+        "assembleBriefing includes entity relationships when entities detected in task",
+        "Briefing markdown shows relationship context: 'Sarah works on Project X'",
+        "Tests for findMentions, getRelationships, and relationship-enriched briefings",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-6d-tests-docs-cli",
+      "title": "Phase 6d: Intelligence integration tests, docs, and CLI exposure",
+      "description": "Integration tests that verify all Phase 6 capabilities work together. Update GUIDE.md. Ensure CLI commands expose all new features.\n\nFiles to read first: packages/core/src/services/*.ts, packages/runtime/GUIDE.md, packages/cli/src/commands/\n\nThis task ties together the intelligence enhancements and ensures they're accessible and documented.",
+      "acceptanceCriteria": [
+        "Integration test: arete brief produces briefing with temporal signals, proactive search results, and entity relationships",
+        "Integration test: arete memory timeline produces meaningful output with themes",
+        "Integration test: arete context --inventory shows complete freshness dashboard",
+        "GUIDE.md updated with intelligence features section (temporal, proactive, relationships)",
+        "All new CLI subcommands documented in --help output",
+        "Full test suite passes across all packages",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-7a-cleanup",
+      "title": "Phase 7a: Remove old directories and update build scripts",
+      "description": "Remove all migrated directories and files. Update build scripts for the new structure. This is the point of no return for the old structure.\n\nFiles to read first: Check that ALL functionality works from packages/ before deleting anything. Run full test suite first.\n\nDirectories to remove: src/, runtime/, bin/ (old), test/ (old, tests now in packages/), scripts/integrations/, scripts/copy-runtime.js\n\nUpdate: scripts/build-agents.ts (paths for new structure), scripts/dev-setup.sh (simplify or remove), root package.json (remove legacy build scripts).\n\nPre-mortem mitigation (Risk 1): Only delete old directories AFTER verifying all tests pass from the new structure. Remove build:legacy script last.",
+      "acceptanceCriteria": [
+        "Old src/ directory removed",
+        "Old runtime/ directory removed (if not already removed in Phase 5)",
+        "Old bin/ directory removed",
+        "Old test/ directory removed",
+        "scripts/integrations/ removed",
+        "scripts/copy-runtime.js removed",
+        "scripts/build-agents.ts updated for new paths",
+        "Root package.json cleaned up: no legacy scripts, correct bin path",
+        "Compatibility shims removed from packages/core/src/compat/",
+        "dev/autonomous/ remaining content moved to .agents/skills/ (what hasn't already been migrated)",
+        "npm run build works (new structure only)",
+        "npm run typecheck passes",
+        "npm test passes across all packages"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "phase-7b-docs-e2e",
+      "title": "Phase 7b: Update documentation and end-to-end verification",
+      "description": "Update all documentation for the new structure. Run comprehensive end-to-end tests. Verify briefing quality with real-world scenarios.\n\nFiles to update: AGENTS.md (rebuild from .agents/sources/), DEVELOPER.md, README.md\n\nPre-mortem mitigation (Risk 1 final check): Verify the complete user journey works: install → workspace creation → skill execution → context query → memory search → briefing → entity resolution.\n\nUpdate .agents/sources/ to reflect new workspace structure, then rebuild AGENTS.md.",
+      "acceptanceCriteria": [
+        ".agents/sources/ updated to reflect monorepo structure",
+        "AGENTS.md rebuilt with npm run build:agents:dev",
+        "DEVELOPER.md updated with monorepo development workflow",
+        "README.md updated with new architecture overview",
+        "End-to-end test: arete install creates working workspace",
+        "End-to-end test: arete brief produces intelligence-enriched briefing",
+        "End-to-end test: arete memory timeline produces temporal view",
+        "End-to-end test: arete context --inventory shows freshness",
+        "End-to-end test: arete skill install from skills.sh works",
+        "All tests pass: npm test across all packages",
+        "npm run typecheck passes",
+        "Clean git status (no untracked build artifacts)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-16T04:30:00Z",
+    "totalTasks": 18,
+    "completedTasks": 1,
+    "failedTasks": 0
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@arete/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.13.1",
+    "typescript": "^5.7.3"
+  }
+}

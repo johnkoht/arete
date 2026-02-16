@@ -57,6 +57,7 @@ package-lock.json
 
 # TypeScript build output
 dist/
+*.tsbuildinfo
 
 # CLI-managed / workspace directories (consumer workspaces only)
 # Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.
