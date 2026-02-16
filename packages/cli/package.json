@@ -2,15 +2,13 @@
   "name": "@arete/cli-next",
   "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
-  },
+  "bin": { "arete": "./bin/arete.js" },
+  "scripts": { "build": "tsc", "typecheck": "tsc --noEmit" },
   "dependencies": {
-    "@arete/core": "0.1.0",
+    "@arete/core": "workspace:*",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
-    "inquirer": "^9.2.0"
+    "yaml": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

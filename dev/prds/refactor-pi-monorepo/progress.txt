@@ -16,7 +16,7 @@
 - [x] phase-3d-intelligence: Migrate IntelligenceService (done 2026-02-16)
 - [x] phase-3e-workspace-skills-integrations: Migrate WorkspaceService, SkillService, and IntegrationService (done 2026-02-16)
 - [x] phase-3f-service-container: Create ServiceContainer factory and verify core isolation (done 2026-02-16)
-- [ ] phase-4a-cli-rebuild: Rebuild CLI as thin service wrapper
+- [x] phase-4a-cli-rebuild: Rebuild CLI as thin service wrapper (done 2026-02-16)
 - [ ] phase-4b-golden-tests: Golden file tests and behavioral parity verification
 - [ ] phase-5-runtime: Migrate runtime content and skills
 - [ ] phase-6a-temporal: Temporal intelligence
