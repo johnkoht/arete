@@ -51,13 +51,21 @@ export type ResolvedEntity = {
   score: number;
 };
 
+/** Source type classification for entity mentions */
+export type MentionSourceType = 'context' | 'meeting' | 'memory' | 'project';
+
 /** Mention of an entity in content */
 export type EntityMention = {
   entity: string;
   entityType: EntityType;
-  context: string;
-  source: string;
+  sourcePath: string;
+  sourceType: MentionSourceType;
+  excerpt: string;
+  date?: string;
 };
+
+/** Relationship type — exactly three types */
+export type RelationshipType = 'works_on' | 'attended' | 'mentioned_in';
 
 /** Relationship between two entities */
 export type EntityRelationship = {
@@ -65,6 +73,6 @@ export type EntityRelationship = {
   fromType: EntityType;
   to: string;
   toType: EntityType;
-  relationship: string;
-  strength?: number;
+  type: RelationshipType;
+  evidence?: string;
 };

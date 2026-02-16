@@ -21,6 +21,7 @@ import type {
   MemorySearchResult,
   MemoryResult,
   ResolvedEntity,
+  EntityRelationship,
   ContextFile,
   WorkspacePaths,
 } from '../models/index.js';
@@ -158,6 +159,12 @@ function extractEntityReferences(task: string): string[] {
   return [...new Set(refs)].filter(r => r.length > 1);
 }
 
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  works_on: 'works on',
+  attended: 'attended',
+  mentioned_in: 'mentioned in',
+};
+
 function formatBriefingMarkdown(
   task: string,
   skill: string | undefined,
@@ -165,6 +172,7 @@ function formatBriefingMarkdown(
   context: ContextBundle,
   memory: MemorySearchResult,
   entities: ResolvedEntity[],
+  relationships: EntityRelationship[],
   assembledAt: string,
 ): string {
   const lines: string[] = [];
@@ -271,6 +279,16 @@ function formatBriefingMarkdown(
     lines.push('');
   }
 
+  if (relationships.length > 0) {
+    lines.push('### Entity Relationships');
+    for (const rel of relationships) {
+      const label = RELATIONSHIP_LABELS[rel.type] ?? rel.type;
+      const evidence = rel.evidence ? ` (evidence: ${rel.evidence})` : '';
+      lines.push(`- ${rel.from} ${label} ${rel.to}${evidence}`);
+    }
+    lines.push('');
+  }
+
   if (context.gaps.length > 0) {
     lines.push('### Gaps');
     lines.push('**What\'s missing that this task might need:**');
@@ -349,7 +367,18 @@ export class IntelligenceService {
       }
     }
 
-    // 6. Rank all files by relevance and deduplicate
+    // 6. Gather entity relationships
+    const relationships: EntityRelationship[] = [];
+    for (const entity of entities) {
+      try {
+        const rels = await this.entities.getRelationships(entity, paths);
+        relationships.push(...rels);
+      } catch {
+        // Best-effort — don't fail briefing if relationship extraction fails
+      }
+    }
+
+    // 7. Rank all files by relevance and deduplicate
     mergedContext.files.sort((a, b) => {
       const scoreA = a.relevanceScore ?? 0;
       const scoreB = b.relevanceScore ?? 0;
@@ -364,6 +393,7 @@ export class IntelligenceService {
       mergedContext,
       memory,
       entities,
+      relationships,
       now,
     );
 
@@ -375,6 +405,7 @@ export class IntelligenceService {
       context: mergedContext,
       memory,
       entities,
+      relationships,
       markdown,
     };
   }

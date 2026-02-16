@@ -8,7 +8,7 @@
 import type { ProductPrimitive, WorkType } from './common.js';
 import type { ContextBundle } from './context.js';
 import type { MemoryResult, MemorySearchResult } from './memory.js';
-import type { ResolvedEntity } from './entities.js';
+import type { ResolvedEntity, EntityRelationship } from './entities.js';
 import type { SkillCandidate } from './skills.js';
 import type { WorkspacePaths } from './workspace.js';
 
@@ -33,6 +33,7 @@ export type PrimitiveBriefing = {
   context: ContextBundle;
   memory: MemorySearchResult;
   entities: ResolvedEntity[];
+  relationships: EntityRelationship[];
   markdown: string;
 };
 

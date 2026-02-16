@@ -70,7 +70,9 @@ export type {
   Meeting,
   Project,
   ResolvedEntity,
+  MentionSourceType,
   EntityMention,
+  RelationshipType,
   EntityRelationship,
 } from './entities.js';
 

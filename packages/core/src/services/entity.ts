@@ -13,6 +13,7 @@ import type {
   ResolvedEntity,
   EntityMention,
   EntityRelationship,
+  MentionSourceType,
   Person,
   PersonCategory,
   WorkspacePaths,
@@ -331,6 +332,48 @@ async function resolveProject(
 }
 
 // ---------------------------------------------------------------------------
+// Mention / relationship helpers
+// ---------------------------------------------------------------------------
+
+function getSourceType(filePath: string, paths: WorkspacePaths): MentionSourceType {
+  const meetingsDir = join(paths.resources, 'meetings');
+  if (filePath.startsWith(meetingsDir)) return 'meeting';
+  if (filePath.startsWith(paths.memory)) return 'memory';
+  if (filePath.startsWith(paths.projects)) return 'project';
+  return 'context';
+}
+
+function extractExcerpt(content: string, entityName: string, chars = 50): string {
+  const lowerContent = content.toLowerCase();
+  const lowerName = entityName.toLowerCase();
+  const idx = lowerContent.indexOf(lowerName);
+  if (idx === -1) return '';
+  const start = Math.max(0, idx - chars);
+  const end = Math.min(content.length, idx + entityName.length + chars);
+  let excerpt = content.slice(start, end).replace(/\r?\n/g, ' ').trim();
+  if (start > 0) excerpt = '...' + excerpt;
+  if (end < content.length) excerpt = excerpt + '...';
+  return excerpt;
+}
+
+function extractDateFromPath(filePath: string): string | undefined {
+  const match = filePath.match(/(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : undefined;
+}
+
+function extractDateFromContent(content: string): string | undefined {
+  const fmMatch = content.match(/^---[\s\S]*?date:\s*["']?(\d{4}-\d{2}-\d{2})["']?[\s\S]*?---/);
+  return fmMatch ? fmMatch[1] : undefined;
+}
+
+function contentContainsEntity(content: string, entityName: string, entitySlug?: string): boolean {
+  const lower = content.toLowerCase();
+  if (lower.includes(entityName.toLowerCase())) return true;
+  if (entitySlug && lower.includes(entitySlug.toLowerCase())) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // People management helpers
 // ---------------------------------------------------------------------------
 
@@ -461,12 +504,255 @@ export class EntityService {
     return candidates.slice(0, limit);
   }
 
-  async findMentions(_entity: ResolvedEntity): Promise<EntityMention[]> {
-    throw new Error('Not implemented');
+  async findMentions(entity: ResolvedEntity, workspacePaths: WorkspacePaths): Promise<EntityMention[]> {
+    const mentions: EntityMention[] = [];
+    const entityName = entity.name;
+    const entitySlug = entity.slug;
+
+    const scanDirs: Array<{ dir: string; recursive: boolean }> = [
+      { dir: workspacePaths.context, recursive: true },
+      { dir: join(workspacePaths.resources, 'meetings'), recursive: false },
+      { dir: join(workspacePaths.memory, 'items'), recursive: false },
+    ];
+
+    // Scan fixed directories
+    for (const { dir, recursive } of scanDirs) {
+      const exists = await this.storage.exists(dir);
+      if (!exists) continue;
+
+      const filePaths = await this.storage.list(dir, { extensions: ['.md'], recursive });
+      for (const filePath of filePaths) {
+        const content = await this.storage.read(filePath);
+        if (content == null) continue;
+        if (!contentContainsEntity(content, entityName, entitySlug)) continue;
+
+        const excerpt = extractExcerpt(content, entityName);
+        if (!excerpt) continue;
+
+        const sourceType = getSourceType(filePath, workspacePaths);
+        const date = extractDateFromPath(filePath) ?? extractDateFromContent(content);
+
+        mentions.push({
+          entity: entityName,
+          entityType: entity.type,
+          sourcePath: filePath,
+          sourceType,
+          excerpt,
+          date,
+        });
+      }
+    }
+
+    // Scan project directories (projects/active/*)
+    const activeDir = join(workspacePaths.projects, 'active');
+    const activeExists = await this.storage.exists(activeDir);
+    if (activeExists) {
+      const projectDirs = await this.storage.listSubdirectories(activeDir);
+      for (const projDir of projectDirs) {
+        const projFiles = await this.storage.list(projDir, { extensions: ['.md'], recursive: true });
+        for (const filePath of projFiles) {
+          const content = await this.storage.read(filePath);
+          if (content == null) continue;
+          if (!contentContainsEntity(content, entityName, entitySlug)) continue;
+
+          const excerpt = extractExcerpt(content, entityName);
+          if (!excerpt) continue;
+
+          const date = extractDateFromPath(filePath) ?? extractDateFromContent(content);
+
+          mentions.push({
+            entity: entityName,
+            entityType: entity.type,
+            sourcePath: filePath,
+            sourceType: 'project',
+            excerpt,
+            date,
+          });
+        }
+      }
+    }
+
+    // Sort by date (newest first), undated last
+    mentions.sort((a, b) => {
+      if (a.date && b.date) return b.date.localeCompare(a.date);
+      if (a.date) return -1;
+      if (b.date) return 1;
+      return 0;
+    });
+
+    return mentions;
   }
 
-  async getRelationships(_entity: ResolvedEntity): Promise<EntityRelationship[]> {
-    throw new Error('Not implemented');
+  async getRelationships(entity: ResolvedEntity, workspacePaths: WorkspacePaths): Promise<EntityRelationship[]> {
+    const relationships: EntityRelationship[] = [];
+    const entityName = entity.name;
+    const entitySlug = entity.slug;
+
+    // 1. works_on: Scan project README files for team/owner sections
+    const activeDir = join(workspacePaths.projects, 'active');
+    const activeExists = await this.storage.exists(activeDir);
+    if (activeExists) {
+      const projectDirs = await this.storage.listSubdirectories(activeDir);
+      for (const projDir of projectDirs) {
+        const readmePath = join(projDir, 'README.md');
+        const readmeExists = await this.storage.exists(readmePath);
+        if (!readmeExists) continue;
+
+        const content = await this.storage.read(readmePath);
+        if (content == null) continue;
+
+        const projName = projDir.split(/[/\\]/).pop() ?? '';
+        const titleMatch = content.match(/^#\s+(.+)/m);
+        const projectTitle = titleMatch ? titleMatch[1].trim() : projName;
+
+        if (this.matchesTeamOrOwner(content, entityName, entitySlug)) {
+          relationships.push({
+            from: entityName,
+            fromType: entity.type,
+            to: projectTitle,
+            toType: 'project',
+            type: 'works_on',
+            evidence: readmePath,
+          });
+        }
+      }
+    }
+
+    // 2. attended: Scan meeting files for attendees
+    const meetingsDir = join(workspacePaths.resources, 'meetings');
+    const meetingsExist = await this.storage.exists(meetingsDir);
+    if (meetingsExist) {
+      const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
+      for (const filePath of meetingFiles) {
+        const baseName = filePath.split(/[/\\]/).pop() ?? '';
+        if (baseName === 'index.md') continue;
+
+        const content = await this.storage.read(filePath);
+        if (content == null) continue;
+
+        const parsed = parseFrontmatter(content);
+        const meetingTitle = parsed?.frontmatter.title
+          ? String(parsed.frontmatter.title)
+          : baseName.replace(/\.md$/, '');
+
+        if (this.matchesAttendee(content, parsed, entityName, entitySlug)) {
+          relationships.push({
+            from: entityName,
+            fromType: entity.type,
+            to: meetingTitle,
+            toType: 'meeting',
+            type: 'attended',
+            evidence: filePath,
+          });
+        }
+      }
+    }
+
+    // 3. mentioned_in: Convert findMentions results to relationships
+    const mentions = await this.findMentions(entity, workspacePaths);
+    for (const mention of mentions) {
+      const sourceName = mention.sourcePath.split(/[/\\]/).pop()?.replace(/\.md$/, '') ?? mention.sourcePath;
+      relationships.push({
+        from: entityName,
+        fromType: entity.type,
+        to: sourceName,
+        toType: mention.sourceType === 'meeting' ? 'meeting' : 'project',
+        type: 'mentioned_in',
+        evidence: mention.sourcePath,
+      });
+    }
+
+    return relationships;
+  }
+
+  /**
+   * Check if content has team/owner sections mentioning the entity.
+   */
+  private matchesTeamOrOwner(content: string, entityName: string, entitySlug?: string): boolean {
+    const lower = content.toLowerCase();
+    const nameLower = entityName.toLowerCase();
+    const slugLower = entitySlug?.toLowerCase();
+
+    // Check frontmatter fields: owner, team
+    const parsed = parseFrontmatter(content);
+    if (parsed) {
+      const fm = parsed.frontmatter;
+      const owner = typeof fm.owner === 'string' ? fm.owner.toLowerCase() : '';
+      const team = typeof fm.team === 'string' ? fm.team.toLowerCase() : '';
+      if (owner && (owner.includes(nameLower) || (slugLower && owner.includes(slugLower)))) return true;
+      if (team && (team.includes(nameLower) || (slugLower && team.includes(slugLower)))) return true;
+    }
+
+    // Check for "Owner:" or "Team:" lines in body
+    const ownerPattern = /(?:^|\n)\s*(?:owner|lead):\s*(.+)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = ownerPattern.exec(content)) !== null) {
+      const value = match[1].toLowerCase();
+      if (value.includes(nameLower) || (slugLower && value.includes(slugLower))) return true;
+    }
+
+    const teamPattern = /(?:^|\n)##\s*team\b[^\n]*\n([\s\S]*?)(?=\n##\s|\n---|$)/gi;
+    while ((match = teamPattern.exec(content)) !== null) {
+      const section = match[1].toLowerCase();
+      if (section.includes(nameLower) || (slugLower && section.includes(slugLower))) return true;
+    }
+
+    // Check for "Team:" inline pattern
+    const teamLinePattern = /(?:^|\n)\s*team:\s*(.+)/gi;
+    while ((match = teamLinePattern.exec(content)) !== null) {
+      const value = match[1].toLowerCase();
+      if (value.includes(nameLower) || (slugLower && value.includes(slugLower))) return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if meeting content/frontmatter has this entity as an attendee.
+   */
+  private matchesAttendee(
+    content: string,
+    parsed: ParsedFrontmatter | null,
+    entityName: string,
+    entitySlug?: string,
+  ): boolean {
+    const nameLower = entityName.toLowerCase();
+    const slugLower = entitySlug?.toLowerCase();
+
+    // Check frontmatter attendees (string)
+    if (parsed) {
+      const fm = parsed.frontmatter;
+      const attendeesStr = typeof fm.attendees === 'string' ? fm.attendees.toLowerCase() : '';
+      if (attendeesStr && (attendeesStr.includes(nameLower) || (slugLower && attendeesStr.includes(slugLower)))) {
+        return true;
+      }
+
+      // Check frontmatter attendee_ids (array)
+      const attendeeIds = Array.isArray(fm.attendee_ids) ? fm.attendee_ids.map(String) : [];
+      for (const aid of attendeeIds) {
+        const aidLower = aid.toLowerCase();
+        if (aidLower === nameLower || aidLower === slugLower) return true;
+        if (aidLower.includes(nameLower) || (slugLower && aidLower.includes(slugLower))) return true;
+      }
+
+      // Check frontmatter attendees (array)
+      const attendeesList = Array.isArray(fm.attendees) ? fm.attendees.map(String) : [];
+      for (const att of attendeesList) {
+        const attLower = att.toLowerCase();
+        if (attLower === nameLower || attLower === slugLower) return true;
+        if (attLower.includes(nameLower) || (slugLower && attLower.includes(slugLower))) return true;
+      }
+    }
+
+    // Check for "Attendees:" line in body
+    const attendeePattern = /(?:^|\n)\s*attendees?:\s*(.+)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = attendeePattern.exec(content)) !== null) {
+      const value = match[1].toLowerCase();
+      if (value.includes(nameLower) || (slugLower && value.includes(slugLower))) return true;
+    }
+
+    return false;
   }
 
   async listPeople(
