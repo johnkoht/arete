@@ -33,6 +33,7 @@ arete/                 # Build workspace root
 │   ├── prds/          # PRDs for Areté features
 │   └── autonomous/    # PRD execution templates
 ├── .cursor/           # Cursor IDE configuration (rules/, tools/)
+├── .pi/               # Pi coding agent configuration (extensions/, skills/, agents/)
 └── scripts/           # Build and integration scripts
 ```
 

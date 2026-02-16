@@ -1,6 +1,6 @@
 # Build Rules
 
-Build rules in `.cursor/rules/` define standards and workflows for developing Areté itself.
+Build rules in `.cursor/rules/` define standards and workflows for developing Areté itself. **Dev agents**: Cursor (IDE) and Pi (terminal-native) are both supported; `.pi/` contains Pi configuration.
 
 | Rule | Path | Purpose |
 |------|------|---------|

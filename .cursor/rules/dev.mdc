@@ -147,3 +147,4 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 - **Testing**: `.cursor/rules/testing.mdc`
 - **Plan Mode**: `.cursor/rules/plan-pre-mortem.mdc`
 - **Build memory**: `memory/MEMORY.md`, `memory/collaboration.md`
+- **Pi workflow**: `.pi/` — Pi coding agent configuration for terminal-native development (alternative to Cursor)

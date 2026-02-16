@@ -5,6 +5,7 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 **Structure**: Use subfolders — do not put files in the root.
 - `features/` — new capabilities (progress-dashboard, google-calendar-provider)
 - `improvements/` — enhancements to existing functionality (automated-code-review, skills-enhancement)
+- `decisions/` — decision items for future review (cursor-vs-pi-dev-agent)
 
 ---
 
