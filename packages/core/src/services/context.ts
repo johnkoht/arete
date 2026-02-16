@@ -11,6 +11,7 @@ import type {
   ContextBundle,
   ContextInventory,
   ContextFile,
+  ContextFileFreshness,
   ContextGap,
   SkillDefinition,
   WorkspacePaths,
@@ -111,6 +112,16 @@ type TemporalMatch = {
   title: string;
   source: string;
 };
+
+/** Map a relative file path to the ProductPrimitive it serves (if any) */
+function determinePrimitive(relPath: string): ProductPrimitive | undefined {
+  if (relPath === 'context/business-overview.md') return 'Problem';
+  if (relPath === 'context/users-personas.md') return 'User';
+  if (relPath === 'context/products-services.md' || relPath === 'context/technology-overview.md') return 'Solution';
+  if (relPath === 'context/competitive-landscape.md') return 'Market';
+  if (relPath.startsWith('people/')) return 'User';
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // ContextService
@@ -357,6 +368,37 @@ export class ContextService {
     };
   }
 
+  /**
+   * Delegate to storage.listSubdirectories for use by IntelligenceService.
+   */
+  async listProjectSubdirs(dir: string): Promise<string[]> {
+    const exists = await this.storage.exists(dir);
+    if (!exists) return [];
+    return this.storage.listSubdirectories(dir);
+  }
+
+  /**
+   * List all .md files in a directory for proactive search.
+   */
+  async listProjectFiles(dir: string): Promise<string[]> {
+    const exists = await this.storage.exists(dir);
+    if (!exists) return [];
+    return this.storage.list(dir, { recursive: true, extensions: ['.md'] });
+  }
+
+  /**
+   * Read a single file — delegate to storage for IntelligenceService proactive search.
+   */
+  async readFile(filePath: string): Promise<string | null> {
+    try {
+      const exists = await this.storage.exists(filePath);
+      if (!exists) return null;
+      return await this.storage.read(filePath);
+    } catch {
+      return null;
+    }
+  }
+
   async getContextForSkill(
     skill: SkillDefinition,
     task: string,
@@ -372,42 +414,108 @@ export class ContextService {
     });
   }
 
-  async getContextInventory(paths: WorkspacePaths): Promise<ContextInventory> {
-    const now = new Date().toISOString();
+  async getContextInventory(
+    paths: WorkspacePaths,
+    options?: { staleThresholdDays?: number },
+  ): Promise<ContextInventory> {
+    const now = new Date();
+    const scannedAt = now.toISOString();
+    const staleThresholdDays = options?.staleThresholdDays ?? 30;
+
     const contextDirs = [
       join(paths.root, 'context'),
       join(paths.root, 'goals'),
       join(paths.root, 'projects', 'active'),
       paths.people,
     ];
+
+    // Also scan meetings and memory
+    const extraDirs = [
+      join(paths.resources, 'meetings'),
+      join(paths.memory, 'items'),
+    ];
+
     const allFiles: ContextFile[] = [];
     const byCategory: Record<string, number> = {};
-    for (const dir of contextDirs) {
+    const freshness: ContextFileFreshness[] = [];
+
+    const scanDir = async (dir: string): Promise<void> => {
       const exists = await this.storage.exists(dir);
-      if (!exists) continue;
+      if (!exists) return;
       const filePaths = await this.storage.list(dir, { recursive: true, extensions: ['.md'] });
       for (const filePath of filePaths) {
         const content = await this.storage.read(filePath);
         const relPath = relative(paths.root, filePath);
+
         let category: ContextFile['category'] = 'resources';
         if (relPath.startsWith('context/')) category = 'context';
         else if (relPath.startsWith('goals/')) category = 'goals';
         else if (relPath.startsWith('projects/')) category = 'projects';
         else if (relPath.startsWith('people/')) category = 'people';
+        else if (relPath.startsWith('.arete/memory/') || relPath.startsWith('resources/meetings')) category = 'memory';
+
+        const summary = content ? extractSummary(content) : undefined;
         allFiles.push({
           path: filePath,
           relativePath: relPath,
           category,
-          summary: content ? extractSummary(content) : undefined,
+          summary,
         });
         byCategory[category] = (byCategory[category] ?? 0) + 1;
+
+        // Freshness metadata
+        const modified = await this.storage.getModified(filePath);
+        const lastModified = modified ? modified.toISOString() : null;
+        const daysOldVal = modified
+          ? Math.floor((now.getTime() - modified.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        // Determine which primitive this file maps to
+        const primitive = determinePrimitive(relPath);
+
+        freshness.push({
+          relativePath: relPath,
+          category,
+          primitive,
+          lastModified,
+          daysOld: daysOldVal,
+          isStale: daysOldVal !== null && daysOldVal > staleThresholdDays,
+          summary,
+        });
+      }
+    };
+
+    for (const dir of [...contextDirs, ...extraDirs]) {
+      await scanDir(dir);
+    }
+
+    const staleFiles = freshness.filter(f => f.isStale);
+
+    // Coverage gap detection: check which primitives have no corresponding files
+    const coveredPrimitives = new Set<ProductPrimitive>();
+    for (const entry of freshness) {
+      if (entry.primitive) {
+        // Only count non-placeholder context files as coverage
+        const file = allFiles.find(f => f.relativePath === entry.relativePath);
+        if (file?.category === 'context') {
+          const content = await this.storage.read(file.path);
+          if (content && !isPlaceholder(content)) {
+            coveredPrimitives.add(entry.primitive);
+          }
+        }
       }
     }
+    const missingPrimitives = PRODUCT_PRIMITIVES.filter(p => !coveredPrimitives.has(p));
+
     return {
       files: allFiles,
       totalFiles: allFiles.length,
       byCategory,
-      scannedAt: now,
+      scannedAt,
+      freshness,
+      staleFiles,
+      missingPrimitives,
+      staleThresholdDays,
     };
   }
 }

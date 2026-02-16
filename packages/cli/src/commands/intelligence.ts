@@ -10,6 +10,7 @@ import {
   header,
   info,
   success,
+  warn,
   error,
   listItem,
 } from '../formatters.js';
@@ -27,26 +28,12 @@ export function registerContextCommand(program: Command): void {
   program
     .command('context')
     .description('Assemble relevant workspace context for a task')
-    .requiredOption('--for <query>', 'Task description')
+    .option('--for <query>', 'Task description')
+    .option('--inventory', 'Show context inventory with freshness dashboard')
+    .option('--stale-days <days>', 'Staleness threshold in days (default: 30)')
     .option('--primitives <list>', 'Comma-separated primitives')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { for?: string; primitives?: string; json?: boolean }) => {
-      const query = opts.for;
-      if (!query?.trim()) {
-        if (opts.json) {
-          console.log(
-            JSON.stringify({
-              success: false,
-              error: 'Missing --for. Usage: arete context --for "query"',
-            }),
-          );
-        } else {
-          error('Missing --for option');
-          info('Usage: arete context --for "create a PRD for search"');
-        }
-        process.exit(1);
-      }
-
+    .action(async (opts: { for?: string; inventory?: boolean; staleDays?: string; primitives?: string; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -59,6 +46,119 @@ export function registerContextCommand(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
+
+      // --inventory mode
+      if (opts.inventory) {
+        const staleDays = opts.staleDays ? parseInt(opts.staleDays, 10) : 30;
+        const inventory = await services.context.getContextInventory(paths, {
+          staleThresholdDays: isNaN(staleDays) ? 30 : staleDays,
+        });
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                totalFiles: inventory.totalFiles,
+                byCategory: inventory.byCategory,
+                staleThresholdDays: inventory.staleThresholdDays,
+                staleCount: inventory.staleFiles.length,
+                missingPrimitives: inventory.missingPrimitives,
+                freshness: inventory.freshness.map((f) => ({
+                  relativePath: f.relativePath,
+                  category: f.category,
+                  primitive: f.primitive,
+                  daysOld: f.daysOld,
+                  isStale: f.isStale,
+                })),
+                staleFiles: inventory.staleFiles.map((f) => ({
+                  relativePath: f.relativePath,
+                  daysOld: f.daysOld,
+                })),
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+
+        header('Context Inventory');
+        console.log(chalk.dim(`  Scanned: ${inventory.scannedAt.slice(0, 16).replace('T', ' ')}`));
+        console.log(chalk.dim(`  Total files: ${inventory.totalFiles}`));
+        console.log(chalk.dim(`  Stale threshold: ${inventory.staleThresholdDays} days`));
+        console.log('');
+
+        // File freshness list (context files first)
+        const contextFiles = inventory.freshness.filter(f => f.category === 'context');
+        const otherFiles = inventory.freshness.filter(f => f.category !== 'context');
+        const orderedFiles = [...contextFiles, ...otherFiles];
+
+        if (orderedFiles.length > 0) {
+          console.log(chalk.bold('  Files:'));
+          for (const f of orderedFiles) {
+            const age = f.daysOld !== null
+              ? (f.daysOld === 0 ? 'today' : f.daysOld === 1 ? '1 day old' : `${f.daysOld} days old`)
+              : 'unknown age';
+            const status = f.isStale
+              ? chalk.yellow('⚠ STALE')
+              : chalk.green('✓');
+            const primTag = f.primitive ? chalk.cyan(` [${f.primitive}]`) : '';
+            const maxPathLen = 45;
+            const paddedPath = f.relativePath.length < maxPathLen
+              ? f.relativePath + ' ' + chalk.dim('.'.repeat(maxPathLen - f.relativePath.length))
+              : f.relativePath;
+            console.log(`    ${paddedPath} ${chalk.dim(age)}  ${status}${primTag}`);
+          }
+          console.log('');
+        }
+
+        // Coverage gaps
+        if (inventory.missingPrimitives.length > 0) {
+          console.log(chalk.bold('  Coverage gaps:'));
+          for (const prim of inventory.missingPrimitives) {
+            const suggestion = GAP_SUGGESTIONS_CLI[prim];
+            console.log(`    ${chalk.yellow(prim)} — ${suggestion || 'No context file found'}`);
+          }
+          console.log('');
+        }
+
+        // Stale files
+        if (inventory.staleFiles.length > 0) {
+          console.log(chalk.bold(`  Stale context (>${inventory.staleThresholdDays} days):`));
+          for (const f of inventory.staleFiles) {
+            const age = f.daysOld !== null ? `Last updated ${f.daysOld} days ago` : 'Unknown age';
+            warn(`${f.relativePath} — ${age}`);
+          }
+          console.log('');
+        }
+
+        if (inventory.missingPrimitives.length === 0 && inventory.staleFiles.length === 0) {
+          success('All context files are fresh and all primitives are covered');
+          console.log('');
+        }
+
+        return;
+      }
+
+      // --for mode (original behavior)
+      const query = opts.for;
+      if (!query?.trim()) {
+        if (opts.json) {
+          console.log(
+            JSON.stringify({
+              success: false,
+              error: 'Missing --for. Usage: arete context --for "query"',
+            }),
+          );
+        } else {
+          error('Missing --for or --inventory option');
+          info('Usage: arete context --for "create a PRD for search"');
+          info('       arete context --inventory');
+        }
+        process.exit(1);
+      }
+
       const primitives = parsePrimitives(opts.primitives);
       const result = await services.context.getRelevantContext({
         query,
@@ -122,6 +222,14 @@ export function registerContextCommand(program: Command): void {
       }
     });
 }
+
+const GAP_SUGGESTIONS_CLI: Record<string, string> = {
+  Problem: 'No business overview — add context/business-overview.md',
+  User: 'No user/persona file — add context/users-personas.md',
+  Solution: 'No product details — add context/products-services.md',
+  Market: 'No competitive landscape — add context/competitive-landscape.md',
+  Risk: 'Risks are often in memory — use arete memory search',
+};
 
 export function registerMemoryCommand(program: Command): void {
   const memoryCmd = program

@@ -19,8 +19,10 @@ import type {
   RoutedSkill,
   ContextBundle,
   MemorySearchResult,
+  MemoryResult,
   ResolvedEntity,
   ContextFile,
+  WorkspacePaths,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -307,6 +309,7 @@ export class IntelligenceService {
     if (primitives) contextOptions.primitives = primitives;
     if (workType) contextOptions.workType = workType;
 
+    // 1. Context files (ContextService already searches context/, goals/, projects/, people/, memory/)
     const context = await this.context.getRelevantContext({
       query: task,
       paths,
@@ -314,31 +317,51 @@ export class IntelligenceService {
       workType: contextOptions.workType,
     });
 
+    // 2. Memory search (decisions, learnings, observations)
     const memory = await this.memory.search({
       query: task,
       paths,
-      limit: 5,
+      limit: 10,
     });
 
+    // 3. Proactive: also search meeting transcripts via memory timeline
+    //    This catches meeting content that ContextService's temporal signals may reference
+    //    but doesn't include as context files.
+    const meetingContext = await this.searchMeetingTranscripts(task, paths, context);
+
+    // 4. Proactive: search project docs beyond just README.md
+    const projectContext = await this.searchProjectDocs(task, paths, context);
+
+    // Merge proactive findings into context bundle (deduplicated)
+    const mergedContext = this.mergeProactiveResults(context, [...meetingContext, ...projectContext]);
+
+    // 5. Entity resolution
     const entityRefs = extractEntityReferences(task);
     const entities: ResolvedEntity[] = [];
-    const seenPaths = new Set<string>();
+    const seenEntityPaths = new Set<string>();
     for (const ref of entityRefs) {
       const resolved = await this.entities.resolveAll(ref, 'any', paths, 3);
       for (const entity of resolved) {
-        if (!seenPaths.has(entity.path)) {
-          seenPaths.add(entity.path);
+        if (!seenEntityPaths.has(entity.path)) {
+          seenEntityPaths.add(entity.path);
           entities.push(entity);
         }
       }
     }
 
-    const confidence = context.confidence;
+    // 6. Rank all files by relevance and deduplicate
+    mergedContext.files.sort((a, b) => {
+      const scoreA = a.relevanceScore ?? 0;
+      const scoreB = b.relevanceScore ?? 0;
+      return scoreB - scoreA;
+    });
+
+    const confidence = mergedContext.confidence;
     const markdown = formatBriefingMarkdown(
       task,
       skillName,
       confidence,
-      context,
+      mergedContext,
       memory,
       entities,
       now,
@@ -349,10 +372,115 @@ export class IntelligenceService {
       skill: skillName,
       assembledAt: now,
       confidence,
-      context,
+      context: mergedContext,
       memory,
       entities,
       markdown,
+    };
+  }
+
+  /**
+   * Proactively search meeting transcripts for content matching the task.
+   * Uses the memory timeline service to find meetings, then adds them as
+   * context files if not already present.
+   */
+  private async searchMeetingTranscripts(
+    task: string,
+    paths: WorkspacePaths,
+    existingContext: ContextBundle,
+  ): Promise<ContextFile[]> {
+    const results: ContextFile[] = [];
+    try {
+      const timeline = await this.memory.getTimeline(task, paths, {
+        start: undefined,
+        end: undefined,
+      });
+      const existingPaths = new Set(existingContext.files.map(f => f.path));
+      for (const item of timeline.items) {
+        if (item.type !== 'meeting') continue;
+        // Build a path for dedupe — meetings come from resources/meetings/
+        const meetingPath = item.source.includes('/')
+          ? item.source
+          : `resources/meetings/${item.source}`;
+        const fullPath = meetingPath.startsWith('/')
+          ? meetingPath
+          : `${paths.root}/${meetingPath}`;
+        if (existingPaths.has(fullPath)) continue;
+
+        results.push({
+          path: fullPath,
+          relativePath: meetingPath,
+          category: 'resources',
+          summary: `Meeting: ${item.title} (${item.date})`,
+          relevanceScore: item.relevanceScore * 0.8, // Slightly discount meeting content
+        });
+      }
+    } catch {
+      // Best-effort — don't fail briefing if meeting search fails
+    }
+    return results.slice(0, 5);
+  }
+
+  /**
+   * Proactively search project docs beyond README.md (e.g. PRDs, specs, notes).
+   */
+  private async searchProjectDocs(
+    task: string,
+    paths: WorkspacePaths,
+    existingContext: ContextBundle,
+  ): Promise<ContextFile[]> {
+    const results: ContextFile[] = [];
+    const existingPaths = new Set(existingContext.files.map(f => f.path));
+    const queryTokens = task.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    if (queryTokens.length === 0) return results;
+
+    try {
+      const activeDir = `${paths.projects}/active`;
+      const subdirs = await this.context.listProjectSubdirs(activeDir);
+      for (const projPath of subdirs) {
+        // List all .md files in the project (not just README)
+        const projFiles = await this.context.listProjectFiles(projPath);
+        for (const filePath of projFiles) {
+          if (existingPaths.has(filePath)) continue;
+          const content = await this.context.readFile(filePath);
+          if (!content) continue;
+          const lower = content.toLowerCase();
+          const matchCount = queryTokens.filter(t => lower.includes(t)).length;
+          if (matchCount === 0) continue;
+          const score = Math.min(matchCount / queryTokens.length, 1) * 0.6;
+          const baseName = filePath.split(/[/\\]/).pop() ?? '';
+          const relPath = filePath.replace(paths.root + '/', '');
+          results.push({
+            path: filePath,
+            relativePath: relPath,
+            category: 'projects',
+            summary: `Project doc: ${baseName}`,
+            relevanceScore: score,
+          });
+          existingPaths.add(filePath);
+        }
+      }
+    } catch {
+      // Best-effort
+    }
+    return results.slice(0, 5);
+  }
+
+  /**
+   * Merge proactive context results into the main context bundle, deduplicating by path.
+   */
+  private mergeProactiveResults(context: ContextBundle, additional: ContextFile[]): ContextBundle {
+    const existingPaths = new Set(context.files.map(f => f.path));
+    const merged = [...context.files];
+    for (const file of additional) {
+      if (!existingPaths.has(file.path)) {
+        existingPaths.add(file.path);
+        merged.push(file);
+      }
+    }
+    return {
+      ...context,
+      files: merged,
     };
   }
 
@@ -397,9 +525,79 @@ export class IntelligenceService {
   }
 
   async prepareForSkill(
-    _skill: SkillDefinition,
-    _task: string
+    skill: SkillDefinition,
+    task: string,
+    paths: WorkspacePaths,
   ): Promise<SkillContext> {
-    throw new Error('prepareForSkill not implemented (Phase 6)');
+    // 1. Build a briefing request using the skill's metadata
+    const primitives = skill.primitives && skill.primitives.length > 0
+      ? skill.primitives
+      : undefined;
+    const workType = skill.workType;
+
+    // 2. Assemble full briefing with proactive search
+    const briefing = await this.assembleBriefing({
+      task,
+      paths,
+      skillName: skill.name,
+      primitives,
+      workType,
+    });
+
+    // 3. Get temporal patterns related to the task
+    let recentMemory: MemoryResult[] = [];
+    try {
+      const timeline = await this.memory.getTimeline(task, paths, {
+        start: undefined,
+        end: undefined,
+      });
+      // Extract the most recent and relevant items as memory results
+      recentMemory = timeline.items.slice(0, 5).map(item => ({
+        content: item.content,
+        source: item.source,
+        type: item.type === 'meeting' ? 'observations' as const : item.type,
+        date: item.date,
+        relevance: `Timeline match (score: ${item.relevanceScore.toFixed(2)})`,
+        score: item.relevanceScore,
+      }));
+    } catch {
+      // Best-effort — timeline failure shouldn't block skill preparation
+    }
+
+    // 4. Build the skill candidate for the SkillContext
+    const skillCandidate: SkillCandidate = {
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      path: skill.path,
+      triggers: skill.triggers,
+      primitives: skill.primitives,
+      work_type: skill.workType,
+      category: skill.category,
+      intelligence: skill.intelligence,
+      requires_briefing: skill.requiresBriefing,
+      creates_project: skill.createsProject,
+      project_template: skill.projectTemplate,
+    };
+
+    // 5. Combine briefing memory with recent timeline memory (deduplicate)
+    const combinedMemory = [...briefing.memory.results];
+    const seenSources = new Set(combinedMemory.map(m => `${m.source}:${m.date ?? ''}`));
+    for (const item of recentMemory) {
+      const key = `${item.source}:${item.date ?? ''}`;
+      if (!seenSources.has(key)) {
+        seenSources.add(key);
+        combinedMemory.push(item);
+      }
+    }
+
+    return {
+      task,
+      context: briefing.context,
+      memory: combinedMemory,
+      entities: briefing.entities,
+      assembledAt: briefing.assembledAt,
+      skill: skillCandidate,
+    };
   }
 }

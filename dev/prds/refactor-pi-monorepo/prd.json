@@ -279,9 +279,9 @@
         "npm run typecheck passes",
         "npm test passes across all packages"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "done",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "phase-6c-relationships",

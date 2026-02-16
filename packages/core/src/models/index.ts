@@ -32,6 +32,7 @@ export type {
 // Context domain
 export type {
   ContextFile,
+  ContextFileFreshness,
   ContextGap,
   ContextBundle,
   ContextRequest,
