@@ -5,3 +5,14 @@
 
 export { getRelevantContext } from './context.js';
 export { searchMemory } from './memory.js';
+export {
+  resolveEntity,
+  resolveEntities,
+  listPeople,
+  getPersonBySlug,
+  getPersonByEmail,
+  updatePeopleIndex,
+  slugifyPersonName,
+  PEOPLE_CATEGORIES,
+} from './entity.js';
+export type { ListPeopleOptions } from './entity.js';

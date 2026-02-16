@@ -17,4 +17,16 @@ export * from './services/index.js';
 export * from './utils/index.js';
 
 // Compatibility shims (legacy function APIs)
-export { getRelevantContext, searchMemory } from './compat/index.js';
+export {
+  getRelevantContext,
+  searchMemory,
+  resolveEntity,
+  resolveEntities,
+  listPeople,
+  getPersonBySlug,
+  getPersonByEmail,
+  updatePeopleIndex,
+  slugifyPersonName,
+  PEOPLE_CATEGORIES,
+} from './compat/index.js';
+export type { ListPeopleOptions } from './compat/index.js';

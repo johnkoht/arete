@@ -48,7 +48,7 @@ export async function peopleListCommand(options: PeopleListOptions): Promise<voi
 
   const paths = getWorkspacePaths(workspaceRoot);
   const category = parseCategory(categoryOpt);
-  const people = listPeople(paths, category ? { category } : {});
+  const people = await listPeople(paths, category ? { category } : {});
 
   if (json) {
     console.log(JSON.stringify({ success: true, people, count: people.length }, null, 2));
@@ -100,12 +100,12 @@ export async function peopleShowCommand(
   let person = null;
 
   if (slugOrEmail.includes('@')) {
-    person = getPersonByEmail(paths, slugOrEmail);
+    person = await getPersonByEmail(paths, slugOrEmail);
   } else if (category) {
-    person = getPersonBySlug(paths, category, slugOrEmail);
+    person = await getPersonBySlug(paths, category, slugOrEmail);
   } else {
     for (const cat of PEOPLE_CATEGORIES) {
-      person = getPersonBySlug(paths, cat, slugOrEmail);
+      person = await getPersonBySlug(paths, cat, slugOrEmail);
       if (person) break;
     }
   }
@@ -153,8 +153,8 @@ export async function peopleIndexCommand(options: CommandOptions): Promise<void>
   }
 
   const paths = getWorkspacePaths(workspaceRoot);
-  updatePeopleIndex(paths);
-  const people = listPeople(paths);
+  await updatePeopleIndex(paths);
+  const people = await listPeople(paths);
 
   if (json) {
     console.log(

@@ -58,7 +58,7 @@ async function enrichAttendees(
     const enrichedAttendee: EnrichedAttendee = { ...attendee };
 
     if (attendee.email) {
-      const matches = resolveEntities(attendee.email, 'person', paths, 1);
+      const matches = await resolveEntities(attendee.email, 'person', paths, 1);
       if (matches.length > 0) {
         const match = matches[0];
         enrichedAttendee.personSlug = match.slug;

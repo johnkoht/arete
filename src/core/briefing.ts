@@ -293,7 +293,7 @@ export async function assembleBriefing(
   const entities: ResolvedEntity[] = [];
   const seenPaths = new Set<string>();
   for (const ref of entityRefs) {
-    const resolved = resolveEntities(ref, 'any', paths, 3);
+    const resolved = await resolveEntities(ref, 'any', paths, 3);
     for (const entity of resolved) {
       if (!seenPaths.has(entity.path)) {
         seenPaths.add(entity.path);

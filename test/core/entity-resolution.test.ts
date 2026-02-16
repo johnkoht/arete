@@ -18,7 +18,7 @@ function makePaths(root: string): WorkspacePaths {
   return {
     root,
     manifest: join(root, 'arete.yaml'),
-    cursor: join(root, '.cursor'),
+    ideConfig: join(root, '.cursor'),
     rules: join(root, '.cursor', 'rules'),
     agentSkills: join(root, '.agents', 'skills'),
     tools: join(root, '.cursor', 'tools'),
@@ -95,80 +95,80 @@ describe('entity-resolution', () => {
   });
 
   describe('person resolution', () => {
-    it('resolves "Jane Doe" to exact match', () => {
+    it('resolves "Jane Doe" to exact match', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         email: 'jane@acme.com',
         role: 'PM',
         category: 'internal',
       });
-      const result = resolveEntity('Jane Doe', 'person', paths);
+      const result = await resolveEntity('Jane Doe', 'person', paths);
       assert.ok(result);
       assert.equal(result!.type, 'person');
       assert.equal(result!.name, 'Jane Doe');
       assert.equal(result!.slug, 'jane-doe');
     });
 
-    it('resolves "jane" to partial match (case-insensitive)', () => {
+    it('resolves "jane" to partial match (case-insensitive)', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         email: 'jane@acme.com',
         category: 'internal',
       });
-      const result = resolveEntity('jane', 'person', paths);
+      const result = await resolveEntity('jane', 'person', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Jane Doe');
     });
 
-    it('resolves "jane-doe" slug form', () => {
+    it('resolves "jane-doe" slug form', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         email: 'jane@acme.com',
         category: 'internal',
       });
-      const result = resolveEntity('jane-doe', 'person', paths);
+      const result = await resolveEntity('jane-doe', 'person', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Jane Doe');
     });
 
-    it('resolves by email (exact, case-insensitive)', () => {
+    it('resolves by email (exact, case-insensitive)', async () => {
       writePersonFile(tmpDir, 'customers', 'bob-buyer', {
         name: 'Bob Buyer',
         email: 'bob@buyer.com',
         category: 'customers',
       });
-      const result = resolveEntity('bob@buyer.com', 'person', paths);
+      const result = await resolveEntity('bob@buyer.com', 'person', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Bob Buyer');
       assert.ok(result!.score >= 90, 'Email match should have high score');
     });
 
-    it('resolves by email (case-insensitive)', () => {
+    it('resolves by email (case-insensitive)', async () => {
       writePersonFile(tmpDir, 'customers', 'bob-buyer', {
         name: 'Bob Buyer',
         email: 'bob@buyer.com',
         category: 'customers',
       });
-      const result = resolveEntity('BOB@BUYER.COM', 'person', paths);
+      const result = await resolveEntity('BOB@BUYER.COM', 'person', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Bob Buyer');
     });
 
-    it('returns null for no match', () => {
+    it('returns null for no match', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         category: 'internal',
       });
-      const result = resolveEntity('xyz nobody', 'person', paths);
+      const result = await resolveEntity('xyz nobody', 'person', paths);
       assert.equal(result, null);
     });
 
-    it('returns null for empty reference', () => {
-      assert.equal(resolveEntity('', 'person', paths), null);
-      assert.equal(resolveEntity('   ', 'person', paths), null);
+    it('returns null for empty reference', async () => {
+      assert.equal(await resolveEntity('', 'person', paths), null);
+      assert.equal(await resolveEntity('   ', 'person', paths), null);
     });
 
-    it('picks the best match among multiple people', () => {
+    it('picks the best match among multiple people', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         email: 'jane@acme.com',
@@ -179,17 +179,17 @@ describe('entity-resolution', () => {
         email: 'janes@acme.com',
         category: 'internal',
       });
-      const result = resolveEntity('Jane Doe', 'person', paths);
+      const result = await resolveEntity('Jane Doe', 'person', paths);
       assert.ok(result);
       assert.equal(result!.slug, 'jane-doe');
     });
 
-    it('searches across all person categories', () => {
+    it('searches across all person categories', async () => {
       writePersonFile(tmpDir, 'customers', 'alice-wonderland', {
         name: 'Alice Wonderland',
         category: 'customers',
       });
-      const result = resolveEntity('Alice', 'person', paths);
+      const result = await resolveEntity('Alice', 'person', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Alice Wonderland');
       assert.equal(result!.metadata.category, 'customers');
@@ -201,52 +201,52 @@ describe('entity-resolution', () => {
   // -------------------------------------------------------------------------
 
   describe('meeting resolution', () => {
-    it('resolves meeting by title', () => {
+    it('resolves meeting by title', async () => {
       writeMeetingFile(tmpDir, '2026-02-05-product-review.md', {
         title: 'Product Review',
         date: '2026-02-05',
         attendees: 'Jane Doe, Bob Buyer',
       });
-      const result = resolveEntity('Product Review', 'meeting', paths);
+      const result = await resolveEntity('Product Review', 'meeting', paths);
       assert.ok(result);
       assert.equal(result!.type, 'meeting');
       assert.equal(result!.name, 'Product Review');
     });
 
-    it('resolves meeting by date', () => {
+    it('resolves meeting by date', async () => {
       writeMeetingFile(tmpDir, '2026-02-05-standup.md', {
         title: 'Standup',
         date: '2026-02-05',
       });
-      const result = resolveEntity('2026-02-05', 'meeting', paths);
+      const result = await resolveEntity('2026-02-05', 'meeting', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Standup');
     });
 
-    it('resolves meeting by attendee', () => {
+    it('resolves meeting by attendee', async () => {
       writeMeetingFile(tmpDir, '2026-02-05-strategy.md', {
         title: 'Strategy Session',
         date: '2026-02-05',
         attendees: 'Jane Doe, Alice Wonderland',
         attendee_ids: ['jane-doe', 'alice-wonderland'],
       });
-      const result = resolveEntity('jane', 'meeting', paths);
+      const result = await resolveEntity('jane', 'meeting', paths);
       assert.ok(result);
       assert.equal(result!.type, 'meeting');
     });
 
-    it('resolves meeting by partial title', () => {
+    it('resolves meeting by partial title', async () => {
       writeMeetingFile(tmpDir, '2026-02-05-onboarding-kickoff.md', {
         title: 'Onboarding Kickoff Meeting',
         date: '2026-02-05',
       });
-      const result = resolveEntity('onboarding', 'meeting', paths);
+      const result = await resolveEntity('onboarding', 'meeting', paths);
       assert.ok(result);
       assert.ok(result!.name.includes('Onboarding'));
     });
 
-    it('returns null when no meetings dir', () => {
-      const result = resolveEntity('any meeting', 'meeting', paths);
+    it('returns null when no meetings dir', async () => {
+      const result = await resolveEntity('any meeting', 'meeting', paths);
       assert.equal(result, null);
     });
   });
@@ -256,39 +256,39 @@ describe('entity-resolution', () => {
   // -------------------------------------------------------------------------
 
   describe('project resolution', () => {
-    it('resolves active project by directory name', () => {
+    it('resolves active project by directory name', async () => {
       writeProjectDir(tmpDir, 'active', 'search-discovery', '# Search Discovery\n\nDiscover search user needs.');
-      const result = resolveEntity('search-discovery', 'project', paths);
+      const result = await resolveEntity('search-discovery', 'project', paths);
       assert.ok(result);
       assert.equal(result!.type, 'project');
       assert.equal(result!.slug, 'search-discovery');
       assert.equal(result!.metadata.status, 'active');
     });
 
-    it('resolves project by README title', () => {
+    it('resolves project by README title', async () => {
       writeProjectDir(tmpDir, 'active', 'onboarding-prd', '# Onboarding PRD\n\nDefine onboarding requirements.');
-      const result = resolveEntity('Onboarding PRD', 'project', paths);
+      const result = await resolveEntity('Onboarding PRD', 'project', paths);
       assert.ok(result);
       assert.equal(result!.name, 'Onboarding PRD');
     });
 
-    it('resolves project by partial name', () => {
+    it('resolves project by partial name', async () => {
       writeProjectDir(tmpDir, 'active', 'search-discovery', '# Search Discovery\n\nDiscover search needs.');
-      const result = resolveEntity('search', 'project', paths);
+      const result = await resolveEntity('search', 'project', paths);
       assert.ok(result);
       assert.ok(result!.name.includes('Search'));
     });
 
-    it('resolves archived projects', () => {
+    it('resolves archived projects', async () => {
       writeProjectDir(tmpDir, 'archive', 'old-project', '# Old Project\n\nThis was completed.');
-      const result = resolveEntity('old project', 'project', paths);
+      const result = await resolveEntity('old project', 'project', paths);
       assert.ok(result);
       assert.equal(result!.metadata.status, 'archived');
     });
 
-    it('returns null when no matching project', () => {
+    it('returns null when no matching project', async () => {
       writeProjectDir(tmpDir, 'active', 'something-else', '# Something Else\n\nNot related.');
-      const result = resolveEntity('nonexistent', 'project', paths);
+      const result = await resolveEntity('nonexistent', 'project', paths);
       assert.equal(result, null);
     });
   });
@@ -298,7 +298,7 @@ describe('entity-resolution', () => {
   // -------------------------------------------------------------------------
 
   describe('any-type resolution', () => {
-    it('resolves across types with entityType "any"', () => {
+    it('resolves across types with entityType "any"', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         category: 'internal',
@@ -310,19 +310,19 @@ describe('entity-resolution', () => {
       writeProjectDir(tmpDir, 'active', 'strategy-work', '# Strategy Work\n\nStrategic planning.');
 
       // "Jane" should resolve to person
-      const jane = resolveEntity('Jane', 'any', paths);
+      const jane = await resolveEntity('Jane', 'any', paths);
       assert.ok(jane);
       assert.equal(jane!.type, 'person');
     });
 
-    it('returns best match across types', () => {
+    it('returns best match across types', async () => {
       writePersonFile(tmpDir, 'internal', 'alice-eng', {
         name: 'Alice Engineer',
         category: 'internal',
       });
       writeProjectDir(tmpDir, 'active', 'alice-project', '# Alice Project\n\nAlice leads this.');
 
-      const result = resolveEntity('Alice Engineer', 'any', paths);
+      const result = await resolveEntity('Alice Engineer', 'any', paths);
       assert.ok(result);
       // Person should score higher for exact name match
       assert.equal(result!.type, 'person');
@@ -334,7 +334,7 @@ describe('entity-resolution', () => {
   // -------------------------------------------------------------------------
 
   describe('resolveEntities', () => {
-    it('returns multiple matches ranked by score', () => {
+    it('returns multiple matches ranked by score', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', {
         name: 'Jane Doe',
         category: 'internal',
@@ -343,7 +343,7 @@ describe('entity-resolution', () => {
         name: 'Jane Smith',
         category: 'internal',
       });
-      const results = resolveEntities('jane', 'person', paths);
+      const results = await resolveEntities('jane', 'person', paths);
       assert.ok(results.length >= 2);
       // Both Janes should appear
       const slugs = results.map(r => r.slug);
@@ -351,21 +351,21 @@ describe('entity-resolution', () => {
       assert.ok(slugs.includes('jane-smith'));
     });
 
-    it('respects limit', () => {
+    it('respects limit', async () => {
       writePersonFile(tmpDir, 'internal', 'jane-doe', { name: 'Jane Doe', category: 'internal' });
       writePersonFile(tmpDir, 'internal', 'jane-smith', { name: 'Jane Smith', category: 'internal' });
       writePersonFile(tmpDir, 'internal', 'jane-jones', { name: 'Jane Jones', category: 'internal' });
-      const results = resolveEntities('jane', 'person', paths, 2);
+      const results = await resolveEntities('jane', 'person', paths, 2);
       assert.equal(results.length, 2);
     });
 
-    it('returns empty array for no matches', () => {
-      const results = resolveEntities('nobody', 'person', paths);
+    it('returns empty array for no matches', async () => {
+      const results = await resolveEntities('nobody', 'person', paths);
       assert.deepEqual(results, []);
     });
 
-    it('returns empty array for empty reference', () => {
-      assert.deepEqual(resolveEntities('', 'person', paths), []);
+    it('returns empty array for empty reference', async () => {
+      assert.deepEqual(await resolveEntities('', 'person', paths), []);
     });
   });
 });

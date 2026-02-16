@@ -288,7 +288,7 @@ export async function seedTestDataCommand(options: SeedTestDataOptions): Promise
   }
 
   // Update people index
-  updatePeopleIndex(paths);
+  await updatePeopleIndex(paths);
 
   if (json) {
     console.log(

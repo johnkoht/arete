@@ -214,7 +214,7 @@ export async function resolveCommand(
   const entityType = (options.type || 'any') as EntityType;
 
   if (options.all) {
-    const results = resolveEntities(reference, entityType, paths, 10);
+    const results = await resolveEntities(reference, entityType, paths, 10);
 
     if (json) {
       console.log(JSON.stringify({
@@ -253,7 +253,7 @@ export async function resolveCommand(
     return;
   }
 
-  const result = resolveEntity(reference, entityType, paths);
+  const result = await resolveEntity(reference, entityType, paths);
 
   if (json) {
     console.log(JSON.stringify({
