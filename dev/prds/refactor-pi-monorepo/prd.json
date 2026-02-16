@@ -300,9 +300,9 @@
         "npm run typecheck passes",
         "npm test passes across all packages"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "phase-6d-tests-docs-cli",
@@ -370,7 +370,7 @@
   "metadata": {
     "createdAt": "2026-02-16T04:30:00Z",
     "totalTasks": 18,
-    "completedTasks": 10,
+    "completedTasks": 11,
     "failedTasks": 0
   }
 }
