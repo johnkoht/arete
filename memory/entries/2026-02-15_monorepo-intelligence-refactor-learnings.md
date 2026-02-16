@@ -84,9 +84,47 @@
 - Track new test count separately from legacy test count during migration
 - Consider whether compat shims should be a permanent public API (with tests) or temporary (deleted in cleanup)
 
+## Structural Decisions
+
+### `dev/autonomous/` — Kept as reference
+
+The `dev/autonomous/` directory contains the **original documentation, templates, and examples** for the autonomous agent loop system. While the *code* (`schema.ts`) was migrated to `packages/core/src/models/prd.ts` and the *workflow* is now captured in `.agents/skills/execute-prd/SKILL.md`, the directory retains valuable reference material:
+
+- `README.md` — Original autonomous execution design and rationale
+- `PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md` — Lessons from early orchestration experiments
+- `TESTING.md` — Testing philosophy for autonomous execution
+- `QUICK-START-ORCHESTRATION.md` — Quick-start guide for the pattern
+- `prd.json.example`, `progress.txt.template` — Templates for new PRD runs
+- `archive/` — Historical PRD execution records
+- `prd-task-agent.md` — Original subagent prompt design
+
+This directory is **not active code** — nothing imports from it. It's historical documentation that informed the current skill-based system. Keeping it preserves the design lineage and templates that may be useful when onboarding new contributors or revisiting the execution pattern.
+
+### `.cursor/rules/` vs `packages/runtime/rules/` — Two different audiences
+
+These serve **different audiences** and should not be confused:
+
+- **`.cursor/rules/*.mdc`** (3 files: `dev.mdc`, `testing.mdc`, `plan-pre-mortem.mdc`) — **BUILD rules** for developing Arete itself. Applied when editing code in this repo. They enforce quality gates, testing requirements, and pre-mortem workflows. These are Cursor-specific and only relevant to contributors building Arete.
+
+- **`packages/runtime/rules/cursor/` and `packages/runtime/rules/claude-code/`** (7 rules each) — **PRODUCT rules** that get copied into end-user workspaces during `arete install`. They guide the AI agent on how to use Arete for product management work (routing, memory, context management). These are what PMs interact with.
+
+The `.cursor/rules/` globs need updating (still reference old `src/` and `test/` paths) — noted for follow-up.
+
+### Pi migration — Decoupled
+
+The PRD explicitly decoupled Pi/IDE migration from the monorepo refactor. The architecture is IDE-agnostic (adapters in `packages/core/src/adapters/`), so adding Pi support is a separate PRD involving: a Pi adapter, `packages/runtime/rules/pi/` templates, and `arete install --ide pi` support.
+
 ## Refactor Backlog Items
 
 None created during this PRD. The architecture is clean with no identified duplication patterns requiring extraction.
+
+## Follow-up Items
+
+- [ ] Update `.cursor/rules/*.mdc` glob patterns (still reference old `src/`, `test/` paths)
+- [ ] Port `seed test-data` command to new CLI (currently broken after removing legacy src/)
+- [ ] Consider adding a MIGRATION.md for anyone on an older branch
+- [ ] Test audit: verify edge-case coverage parity with pre-migration test suite
+- [ ] Pi IDE support (separate PRD)
 
 ## Documentation Gaps
 
@@ -94,4 +132,3 @@ None created during this PRD. The architecture is clean with no identified dupli
 - [x] DEVELOPER.md updated for monorepo
 - [x] README.md updated with architecture section
 - [x] GUIDE.md updated with intelligence features
-- [ ] Consider adding a MIGRATION.md for anyone on an older branch
