@@ -2,7 +2,11 @@
  * arete status — workspace health and versions
  */
 
-import { createServices } from '@arete/core';
+import {
+  createServices,
+  loadConfig,
+  getAdapterFromConfig,
+} from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { existsSync } from 'fs';
@@ -37,18 +41,23 @@ export function registerStatusCommand(program: Command): void {
       }
 
       const status = await services.workspace.getStatus(root);
-      const paths = services.workspace.getPaths(root);
-
-      const skillsList = getSkillsList(paths.agentSkills);
-      const integrations = getIntegrationStatus(
-        join(paths.integrations, 'configs'),
+      const basePaths = services.workspace.getPaths(root);
+      const config = await loadConfig(services.storage, root);
+      const adapter = getAdapterFromConfig(config, root);
+      const integrationsConfigsDir = join(
+        root,
+        adapter.integrationsDir(),
+        'configs',
       );
+
+      const skillsList = getSkillsList(basePaths.agentSkills);
+      const integrations = getIntegrationStatus(integrationsConfigsDir);
       const directories = {
-        context: existsSync(paths.context),
-        memory: existsSync(paths.memory),
-        projects: existsSync(paths.projects),
-        people: existsSync(paths.people),
-        resources: existsSync(paths.resources),
+        context: existsSync(basePaths.context),
+        memory: existsSync(basePaths.memory),
+        projects: existsSync(basePaths.projects),
+        people: existsSync(basePaths.people),
+        resources: existsSync(basePaths.resources),
       };
 
       const payload = {
@@ -56,7 +65,7 @@ export function registerStatusCommand(program: Command): void {
         workspace: {
           path: root,
           version: status.version,
-          ide: status.ideTarget ?? 'cursor',
+          ide: config.ide_target ?? status.ideTarget ?? 'cursor',
         },
         skills: { list: skillsList, count: skillsList.length },
         integrations,

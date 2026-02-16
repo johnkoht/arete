@@ -27,8 +27,8 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "start": "node bin/arete.js",
-    "test": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts'",
-    "test:js": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts'",
+    "test": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
+    "test:js": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
     "test:py": "python3 -m unittest scripts/integrations/test_utils.py",
     "test:all": "npm run typecheck && npm run test:js && npm run test:py"
   },
