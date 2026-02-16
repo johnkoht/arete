@@ -1,0 +1,93 @@
+/**
+ * Integrations domain types.
+ *
+ * Imports from common.ts ONLY.
+ */
+
+/** Calendar event from integration */
+export type CalendarEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  attendees?: string[];
+  location?: string;
+  description?: string;
+  calendarId?: string;
+};
+
+/** Fathom transcript from integration */
+export type FathomTranscript = {
+  id: string;
+  title: string;
+  date: string;
+  duration?: number;
+  summary?: string;
+  transcriptPath?: string;
+  meetingId?: string;
+};
+
+/** Integration configuration (maps to IntegrationDefinition) */
+export type IntegrationConfig = {
+  name: string;
+  displayName: string;
+  description: string;
+  implements: string[];
+  auth: IntegrationAuth;
+  status: 'available' | 'planned';
+};
+
+/** Integration auth configuration */
+export type IntegrationAuth = {
+  type: 'api_key' | 'oauth' | 'none';
+  envVar?: string;
+  configKey?: string;
+  instructions?: string;
+};
+
+/** Integration definition */
+export type IntegrationDefinition = {
+  name: string;
+  displayName: string;
+  description: string;
+  implements: string[];
+  auth: IntegrationAuth;
+  status: 'available' | 'planned';
+};
+
+/** Seedable/pullable integration config */
+export type ScriptableIntegration = {
+  name: string;
+  displayName: string;
+  description: string;
+  defaultDays: number;
+  maxDays?: number;
+  script: string;
+  command: string;
+};
+
+/** Result from running an integration script */
+export type ScriptResult = {
+  stdout: string;
+  stderr: string;
+  code?: number;
+};
+
+/** Options for pull operations */
+export type PullOptions = {
+  integration: string;
+  days?: number;
+  force?: boolean;
+};
+
+/** Result of a pull operation */
+export type PullResult = {
+  integration: string;
+  itemsProcessed: number;
+  itemsCreated: number;
+  itemsUpdated: number;
+  errors: string[];
+};
+
+/** Integration status from config file */
+export type IntegrationStatus = 'active' | 'inactive' | 'error' | null;

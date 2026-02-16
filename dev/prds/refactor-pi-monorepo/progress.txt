@@ -8,7 +8,7 @@
 
 ## Tasks
 - [x] phase-1-scaffold: Scaffold monorepo structure (done 2026-02-15)
-- [ ] phase-2a-models: Create model type definitions
+- [x] phase-2a-models: Create model type definitions (done 2026-02-15)
 - [ ] phase-2b-stubs: Create service stubs, storage interface, and utility functions
 - [ ] phase-3a-storage-search: Implement FileStorageAdapter and port SearchProvider
 - [ ] phase-3b-context-memory: Migrate ContextService and MemoryService
