@@ -19,7 +19,7 @@
 - [x] phase-4a-cli-rebuild: Rebuild CLI as thin service wrapper (done 2026-02-16)
 - [x] phase-4b-golden-tests: Golden file tests and behavioral parity verification (done 2026-02-16, 2 tests skipped: brief/context JSON in workspace)
 - [x] phase-5-runtime: Migrate runtime content and skills (done 2026-02-16)
-- [ ] phase-6a-temporal: Temporal intelligence
+- [x] phase-6a-temporal: Temporal intelligence (done 2026-02-16, 14 new tests, 658 total passing)
 - [ ] phase-6b-proactive: Proactive context assembly
 - [ ] phase-6c-relationships: Entity relationships
 - [ ] phase-6d-tests-docs-cli: Intelligence integration tests, docs, and CLI exposure
