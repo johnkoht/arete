@@ -432,6 +432,29 @@ Tools don't expire—they **graduate**. Each tool defines clear criteria for com
 
 Intelligence services provide context, search, and resolution capabilities that make skills and workflows dramatically more effective.
 
+### Intelligence Features
+
+#### Temporal Intelligence
+Query what Areté knows about any topic over time.
+- `arete memory timeline "onboarding"` — See when a topic was discussed and themes over time
+- Briefings automatically include recency signals: "last discussed 3 days ago in [meeting]"
+
+#### Proactive Context Assembly
+Areté searches ALL available sources automatically when assembling briefings:
+- Context files, meeting transcripts, memory entries, project docs
+- No source left unsearched — you don't need to tell it where to look
+
+#### Context Inventory
+Track the freshness and completeness of your workspace context:
+- `arete context --inventory` — See which context files are stale or missing
+- Coverage gaps show which product primitives lack content
+
+#### Entity Relationships
+Areté tracks relationships between people, projects, and meetings:
+- Who works on which projects (from project READMEs)
+- Who attended which meetings (from meeting notes)
+- Where entities are mentioned across your workspace
+
 ### Context Injection
 
 **Command**: `arete context --for "query"`
@@ -475,7 +498,7 @@ Returns matching person files, meeting references, project mentions.
 
 **Command**: `arete brief --for "query"`
 
-**Purpose**: Combine all services into a comprehensive briefing (context + memory + resolved entities).
+**Purpose**: Combine all services into a comprehensive briefing with context files, memory search results, resolved entities, entity relationships, and temporal signals (recency of topic discussions).
 
 **Example**:
 ```bash
@@ -616,9 +639,11 @@ arete status                                      # Check workspace health
 
 ```bash
 arete context --for "query"           # Inject context for query
+arete context --inventory             # Freshness dashboard & coverage gaps
 arete memory search "query"           # Search memory
+arete memory timeline "query"         # Temporal view for topic
 arete resolve "reference"             # Resolve entity
-arete brief --for "query"             # Assemble briefing
+arete brief --for "query"             # Assemble briefing (context + memory + entities + relationships + temporal)
 arete route "query" [--json]          # Route to skill/tool with model suggestion
 ```
 

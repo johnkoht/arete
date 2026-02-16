@@ -52,9 +52,11 @@ ${chalk.bold('Setup & Workspace')}
 
 ${chalk.bold('Intelligence')}
   context --for "query"            Get relevant workspace files
+  context --inventory              Show freshness dashboard & coverage gaps
   memory search "query"           Search decisions, learnings
+  memory timeline "query"         Show temporal view for topic
   resolve "reference"             Resolve person, meeting, project
-  brief --for "query" [--skill]   Assemble briefing
+  brief --for "query" [--skill]   Assemble briefing (context + memory + entities + relationships + temporal)
   route "query"                   Route to skill + model suggestion
 
 ${chalk.bold('Skills & Tools')}
