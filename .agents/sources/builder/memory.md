@@ -162,7 +162,6 @@ See `memory/entries/` for real examples of well-structured entries:
 
 ## References
 
-- **Full memory guidance:** `.cursor/rules/agent-memory.mdc`
 - **Memory index:** `memory/MEMORY.md`
 - **Collaboration profile:** `memory/collaboration.md`
 - **Synthesize skill:** `.agents/skills/synthesize-collaboration-profile/SKILL.md`

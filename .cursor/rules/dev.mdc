@@ -1,72 +1,36 @@
 ---
-description: Dev practices for Arete — lint, format, conventions, build memory
-globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", ".agents/skills/**/*", "runtime/skills/**/*", "runtime/rules/**/*"]
+description: Dev practices for Arete — quality gates, checklists, procedural workflows
+globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", ".agents/**/*", "runtime/**/*"]
 alwaysApply: true
 ---
 
 # Dev practices (Arete build)
 
-Standards for building and changing Arete. **Testing** is covered in `testing.mdc`; this rule covers the rest.
+Standards for building and changing Arete. For conventions, memory usage, skills index, and CLI reference, see **AGENTS.md** (the compressed, always-loaded context).
 
-## Build skills
+**Testing** is covered in `testing.mdc`; **Plan Mode pre-mortem** is in `plan-pre-mortem.mdc`.
 
-Build skills live in `.agents/skills/` and are **not shipped to users**. They're for developing Areté itself. Read and follow these skills when doing the corresponding work.
+---
 
-| Skill | Path | When to use |
-|-------|------|-------------|
-| **execute-prd** | `.agents/skills/execute-prd/SKILL.md` | Executing multi-task PRDs autonomously |
-| **plan-to-prd** | `.agents/skills/plan-to-prd/SKILL.md` | Converting an approved plan to a PRD |
-| **prd-to-json** | `.agents/skills/prd-to-json/SKILL.md` | Generating `prd.json` from a PRD for autonomous execution |
-| **prd-post-mortem** | `.agents/skills/prd-post-mortem/SKILL.md` | After PRD completion: metrics, learnings, memory entry |
-| **review-plan** | `.agents/skills/review-plan/SKILL.md` | Second-opinion review before executing a plan or PRD |
-| **run-pre-mortem** | `.agents/skills/run-pre-mortem/SKILL.md` | Standalone pre-mortem for complex work |
-| **synthesize-collaboration-profile** | `.agents/skills/synthesize-collaboration-profile/SKILL.md` | Update `memory/collaboration.md` from entry learnings |
+## Quality Gates (mandatory for ALL commits)
 
-**How to use**: Read the skill file with the Read tool, then follow its workflow. These skills are not in the `<available_skills>` list because they're workspace-specific (not user-global).
+Before any commit, these **must pass**:
 
-**Skill triggers**:
-- Plan review requested → read `.agents/skills/review-plan/SKILL.md`
-- PRD execution starting → read `.agents/skills/execute-prd/SKILL.md`
-- Pre-mortem needed → read `.agents/skills/run-pre-mortem/SKILL.md`
-- PRD completed → read `.agents/skills/prd-post-mortem/SKILL.md`
+```bash
+npm run typecheck  # Must pass
+npm test           # Must pass (full suite, not just new tests)
+```
 
-## Build memory
+If the work touches Python (`scripts/integrations/`), also run:
+```bash
+npm run test:py
+```
 
-- **USER.md** (root, gitignored): User-specific context. Copy from `USER.md.example` and fill in local env, preferences, reminders.
-- **MEMORY.md**: `memory/MEMORY.md` — index of significant build/architecture changes.
-- **Entries**: `memory/entries/YYYY-MM-DD_short-title.md` — one file per change; add when refactoring, changing tooling, or making decisions worth remembering. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
-- **Collaboration**: `memory/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Reviewed and updated periodically. See `agent-memory.mdc` for when to synthesize.
+**No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
 
-**Leverage before acting**: Read `memory/collaboration.md` and scan `memory/MEMORY.md` at the start of substantive build work; before adding backlog, running seed, placing PRDs, or starting PRD/plan execution, read the relevant entry or collaboration.md so you don't repeat past mistakes. See `agent-memory.mdc` § Leverage build memory.
-- **Backlog**: `dev/backlog/` — future work and enhancements. Use subfolders:
-  - `features/` — new capabilities (e.g., progress-dashboard, google-calendar-provider)
-  - `improvements/` — enhancements to existing functionality (e.g., automated-code-review, skills-enhancement)
-  - Do not put backlog items in `dev/backlog/` root; always use `features/` or `improvements/`.
-- **PRDs for Areté features**: Put PRDs in `dev/prds/{feature-name}/prd.md`, not in `projects/active/`. `projects/active/` is for PMs *using* Areté; `dev/` is internal build tooling.
+---
 
-### Entries vs scratchpad vs backlog
-
-| Content | Location | Examples |
-|---------|----------|----------|
-| **What happened** — decisions, changes, learnings | `memory/entries/` | Refactors, architectural decisions, methodology findings |
-| **Raw or underdeveloped ideas** | `scratchpad.md` (root) | "We should eventually build onboarding"; quick capture, parking lot |
-| **Mature future work** — discussed, with a plan | `dev/backlog/` | Idea + general plan, enough detail to become a PRD |
-
-**Do not** put backlog items or future work in entries. Entries record what was decided or done; scratchpad and backlog record what might be done. If an entry documents an analysis that produces a prioritized backlog, put the backlog in `dev/backlog/features/` or `dev/backlog/improvements/` (not in the root, not in entries).
-
-**Prompt to add**: After a notable refactor, tooling change, architectural decision, or fix worth remembering (e.g. URL bugs, migration from one stack to another), **ask the user**: "Should I add this to build memory (memory/MEMORY.md)?" If yes, create a dated entry and add a line to the index. If you noticed collaboration patterns during the session, include them in the entry's Learnings section.
-
-## Pre-mortem for complex work
-
-For **multi-step work** (PRD execution, large refactors, new systems, integration work)—and **when using Plan Mode**—conduct a pre-mortem before execution.
-
-- **When**: After the plan is drafted, before executing it. Use for PRDs, refactors touching many files, new systems, integration work. Skip for single, well-understood tasks.
-- **How**: Use `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` (risk categories, format). For each risk: Problem → Mitigation → Verification. Present to user; get approval; apply mitigations during execution.
-- **Plan Mode**: The rule `plan-pre-mortem.mdc` requires a pre-mortem when the agent is in Plan Mode or has created a multi-step plan. Follow it so Plan Mode runs get the same risk mitigation as execute-prd.
-- **Plan → PRD path**: For large plans (3+ steps, new systems, integrations), `plan-pre-mortem.mdc` offers a **PRD path**: convert the plan to a PRD, generate prd.json, and hand off to a new agent via `.agents/skills/plan-to-prd/SKILL.md`. Prefer this path for multi-task work that would benefit from the execute-prd workflow.
-- **References**: `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `.agents/skills/execute-prd/SKILL.md`, `.agents/skills/plan-to-prd/SKILL.md`.
-
-## Execution path decision tree
+## Execution Path Decision Tree
 
 When you approve a plan (in Plan Mode or otherwise), follow this decision tree:
 
@@ -96,73 +60,14 @@ User approves plan
 |-------------|------|------|-----|
 | "Fix typo in README" | Tiny | Direct, no pre-mortem | Single file, trivial change |
 | "Add validation to email field" | Small | Ask about pre-mortem | 2-3 files, clear scope |
-| "Add retry logic with exponential backoff" | Small→Medium | Pre-mortem recommended | 2-3 files but touches error handling patterns |
+| "Add retry logic with exponential backoff" | Small→Medium | Pre-mortem recommended | 2-3 files but touches error handling |
 | "Add calendar integration" | Large | Recommend PRD | New system, 5+ tasks, integration risk |
-| "Refactor skill router to support tools" | Large | Recommend PRD | Architectural, multiple components |
-
-**Borderline cases** (use judgment):
-- "Add retry logic" — Sounds small but touches error handling across callers → lean toward pre-mortem
-- "Update CLI help text for 5 commands" — Multiple files but mechanical → direct execution
-
-**Anti-patterns (don't trigger PRD for these):**
-- ❌ "Fix 3 typos" — Even if 3 steps, trivial work
-- ❌ "Update 5 docs" — Multiple files but low complexity
 
 **When in doubt**: Offer both paths and let builder choose.
 
-## Quality practices for any execution
+---
 
-These practices apply to **all development work**, not just PRD execution. Scale them based on work size.
-
-### 1. Pre-mortem (recommended for 3+ steps or complex work)
-
-**When**: Before starting work that has risk (new systems, integrations, refactors, 3+ dependent tasks)
-
-**How**:
-- Use standalone skill: `.agents/skills/run-pre-mortem/SKILL.md`
-- Or use template directly: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
-- Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
-- Create concrete mitigations for each risk
-- Reference mitigations during execution
-
-**Output**: Risks table with Problem + Mitigation + Verification for each risk
-
-**Skip when**: Single-file changes, trivial updates, well-understood patterns
-
-### 2. Second opinion review (optional, for plans and PRDs)
-
-**When**: Before executing a plan or PRD, especially when:
-- The work is complex or high-stakes
-- You want a different agent/model to review before proceeding
-- Audience (builder vs user) isn't obvious
-
-**How**:
-- Use skill: `.agents/skills/review-plan/SKILL.md`
-- Reviewer applies a checklist (scope, risks, dependencies, patterns, backward compatibility, completeness)
-- Reviewer provides **devil's advocate** perspective: "If this fails, it will be because..." and "The worst outcome would be..."
-- Output: Concerns, Strengths, Devil's Advocate, Verdict (Approve / Approve with suggestions / Revise)
-
-**Key check**: Is the audience clear? Flag if you can't tell whether work is for the builder (dev/) or the user (runtime/, src/).
-
-**Skip when**: Trivial changes, well-understood work, time-sensitive fixes
-
-### 3. Quality gates (mandatory for ALL commits)
-
-Before any commit, these **must pass**:
-
-```bash
-npm run typecheck  # Must pass
-npm test           # Must pass (full suite, not just new tests)
-```
-
-If the work touches Python (`scripts/integrations/`), also run:
-```bash
-npm run test:py
-```
-
-**No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
-
-### 4. Code review checklist (for any substantial change)
+## Code Review Checklist (for any substantial change)
 
 Apply this 6-point checklist before committing:
 
@@ -171,168 +76,74 @@ Apply this 6-point checklist before committing:
 - [ ] **Proper error handling** (try/catch with graceful fallback)
 - [ ] **Tests for happy path and edge cases**
 - [ ] **Backward compatibility preserved** (function signatures unchanged unless explicitly breaking)
-- [ ] **Follows project patterns** (see existing code, this rule)
+- [ ] **Follows project patterns** (see existing code, AGENTS.md conventions)
 
 If any item fails, fix before committing.
 
-### 5. Build memory capture (after substantial work)
+---
 
-**When**: After work that meets any of these criteria:
-- Modifies 3+ files
-- Takes substantial time
-- Introduces new patterns or architectural changes
-- Encounters surprising issues or learnings
+## Skill and Rule Changes (mandatory review)
 
-**How**:
-1. Create entry: `memory/entries/YYYY-MM-DD_[short-name]-learnings.md`
-2. Include:
-   - What changed (brief summary)
-   - What worked well (patterns to repeat)
-   - What didn't work (patterns to avoid)
-   - Learnings for next time
-   - Corrections (if builder corrected you, document under "Learnings / Corrections")
-   - **Execution path used** (see below)
-3. Add index line to `memory/MEMORY.md` (top of Index section)
-
-**Format**: See existing entries in `memory/entries/` for examples
-
-**Skip when**: Trivial changes (typo fixes, comment updates), no learnings to capture
-
-**Agent behavior**: After substantial work completes, prompt: "Capture learnings in memory/MEMORY.md?"
-
-**Tracking execution path**: In each memory entry, include a brief "Execution Path" section:
-```markdown
-## Execution Path
-- **Size assessed**: Small / Medium / Large
-- **Path taken**: Direct / Direct + pre-mortem / PRD
-- **Decision tree followed?**: Yes / No / Partially
-- **Notes**: (e.g., "Builder chose direct over recommended PRD", "Skipped pre-mortem, should have done one")
-```
-This creates a lightweight audit trail. If entries consistently show "Decision tree followed: No" or missing execution path sections, that signals the guidance isn't being applied.
-
-### 6. Reuse and avoid duplication
-
-Before implementing new helpers, services, or abstractions:
-- Check if equivalent functionality exists in `src/core/`, `src/integrations/`, or existing modules
-- Search AGENTS.md for existing patterns (search providers, CLI helpers, workspace utilities)
-- Apply DRY (Don't Repeat Yourself) — use existing code where it fits
-- Apply KISS (Keep It Simple) — simplest solution that meets requirements
-
-If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/refactor-[name].md` — but don't block on it.
-
-### 7. Skill and rule changes (mandatory review)
-
-**When**: Before creating or modifying any skill or rule file:
-- `.agents/skills/**/*.md` — build skills
-- `runtime/skills/**/*.md` — product skills (shipped to users)
-- `.cursor/rules/*.mdc` — build rules
-- `runtime/rules/*.mdc` — product rules (shipped to users)
+**When**: Before creating or modifying any skill or rule file.
 
 **Checklist**:
-- [ ] **Re-read this file (`dev.mdc`)** before making changes — ensure you understand current patterns
-- [ ] **Audience check**: Is this for BUILD (dev/, .cursor/) or PRODUCT (runtime/)?
-- [ ] **Skill table**: If adding a build skill, add it to the "Build skills" table above
-- [ ] **AGENTS.md source files**: If the skill/rule changes architecture or workflows, update `.agents/sources/` and rebuild
+- [ ] **Audience check**: Is this for BUILD (dev/, .cursor/, .agents/) or PRODUCT (runtime/)?
+- [ ] **AGENTS.md sources**: If the skill/rule changes workflows, update `.agents/sources/` and rebuild
 - [ ] **Cross-references**: Search for references to the skill/rule being changed; update them
 
 **AGENTS.md is generated** — do not edit it directly. Update source files in `.agents/sources/` and rebuild:
 
-**When to rebuild AGENTS.md:**
-- After adding/removing skills (update `builder/skills-index.md` or `guide/skills-index.md`)
-- After adding/removing rules (update `builder/rules-index.md`)
-- After changing skill triggers or descriptions
-- After modifying CLI commands, workspace structure, or conventions
-- Before committing changes that affect agent workflows
-
-**How to rebuild:**
 ```bash
 npm run build:agents:dev  # Rebuild BUILD AGENTS.md
 npm run build             # Rebuild GUIDE AGENTS.md (included in package build)
 ```
 
-See `.agents/sources/README.md` for detailed editing workflow and source file structure.
+See `.agents/sources/README.md` for detailed editing workflow.
 
-**Why**: Skills and rules define agent behavior. Changes propagate widely. A quick review of dev.mdc prevents pattern drift and ensures consistency.
+---
 
-### 8. Multi-IDE consistency check (for rule and config changes)
+## Multi-IDE Consistency Check
 
-**When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or any path that affects both Cursor and Claude installations.
-
-**Why**: Areté supports multiple IDEs via adapters. Canonical rules use `.cursor/` paths that get transformed to `.claude/` during transpilation. Incorrect patterns break one IDE or the other.
+**When**: Before editing files in `runtime/rules/`, `runtime/tools/`, or `.agents/sources/guide/`.
 
 **Checklist**:
 - [ ] **No "either/or" paths**: Don't write `.cursor/X or .claude/X` — use only `.cursor/X` (adapter transforms it)
 - [ ] **No hardcoded IDE names in content**: Use `.cursor/` paths; the adapter handles `.claude/` conversion
-- [ ] **Check adapter transforms**: Claude adapter does `.cursor/` → `.claude/` and `.mdc` → `.md`
-- [ ] **Test mentally**: "If this path is transformed, does it still make sense?"
 
-**Common mistake**: Writing "See `.cursor/tools/X` or `.claude/tools/X`" in canonical source. After Claude transformation, this becomes "See `.claude/tools/X` or `.claude/tools/X`" (broken).
-
-**Pre-commit check** (check for violations before committing):
+**Pre-commit check**:
 ```bash
-# Find multi-IDE violations in source files and runtime
 rg "\.cursor.*or.*\.claude|\.claude.*or.*\.cursor" .agents/sources/ runtime/
 ```
 
-**Applies to**:
-- `runtime/rules/`, `runtime/tools/` (shipped to users)
-- `.agents/sources/shared/`, `.agents/sources/guide/` (compiled into GUIDE AGENTS.md)
-- Any content that appears in both Cursor and Claude installations
+---
 
-**Reference**: `src/core/adapters/claude-adapter.ts` → `transformRuleContent()`
-
-## Documentation planning checklist
+## Documentation Planning Checklist
 
 When creating plans that touch code/features/structure, ask: **"Does this need doc updates?"**
 
 **Scope Check:**
-- [ ] All root docs: README, SETUP, AGENTS, ONBOARDING, scratchpad
+- [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
 - [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
-- [ ] Concept audit: If feature changes paths/structure (e.g. `.cursor/` → `.agents/`), grep old paths in all `.md` files
-- [ ] Related workflows: Check files that reference setup, install, or getting started
+- [ ] Concept audit: If feature changes paths/structure, grep old paths in all `.md` files
 
-**Verification:**
-- [ ] Re-read any backlog items found in scope check for explicit doc requirements
-- [ ] List all affected files BEFORE drafting plan; don't assume scope
+**Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and backlog frequently need updates.
 
-**Anti-pattern:** Do not assume "documentation" = README + SETUP + AGENTS. ONBOARDING, scratchpad, and backlog frequently need updates.
+---
 
-## TypeScript / Node.js
-
-- **Config**: `tsconfig.json` (NodeNext, strict). Tests: `tsconfig.test.json`.
-- **Imports**: Use `.js` extensions for local modules (NodeNext resolution). Use `import type` when a symbol is only used as a type.
-- **Style**: Prefer `const`/`let`; avoid `var`. Use strict equality. No unused vars. Use optional chaining and nullish coalescing (`??`) where they clarify intent.
-- **Types**: Prefer `type` over `interface` except for public API contracts. Avoid `any` and `unknown`; avoid `as` or `!` unless necessary (e.g. known-safe casts after validation).
-- **Functions**: Use the `function` keyword for top-level/named functions; arrow functions for callbacks and short inline use. Descriptive names (verbs + nouns, e.g. `getUserData`). Use default parameters and destructuring where it improves readability.
-- **Naming**: PascalCase for types/classes; camelCase for variables, functions, methods; UPPERCASE for constants and env-related names. Files/dirs: kebab-case.
-- **Structure**: Prefer functional, declarative code; avoid classes unless stateful encapsulation is needed. Use constants for magic numbers and repeated values. Iterate and modularize rather than duplicating.
-- **Async**: Prefer `async`/`await` over raw Promises.
-- **Security**: Use environment variables (or `.credentials`/config) for secrets; validate and sanitize CLI inputs and file paths; avoid executing user-controlled strings as shell commands.
-- **Tests**: `node:test` + `node:assert/strict`; see `testing.mdc`.
-
-## Python
-
-- **Location**: `scripts/integrations/`. Tests: `test_*.py` in same directory.
-- **Style**: unittest; mock external I/O. See `testing.mdc` for runner and patterns.
-
-## Linting / formatting
-
-- No ESLint or Prettier in the repo yet. For now:
-  - Match existing style in the file (indent, quotes, semicolons).
-  - Run `npm run typecheck` and `npm test` / `npm run test:all` before committing.
-- If you add ESLint or Prettier, document config and scripts here and in MEMORY.
-
-## Before committing
+## Before Committing
 
 1. `npm run typecheck`
 2. `npm run test:all` (or `npm test` + `npm run test:py`)
 3. New code → new/updated tests (see `testing.mdc`)
 
+---
+
 ## References
 
+- **AGENTS.md**: Conventions, skills index, memory guidance, CLI reference (compressed, always-loaded)
 - **Testing**: `.cursor/rules/testing.mdc`
-- **Build memory**: `memory/MEMORY.md`, `USER.md.example`
-- **Node/TS conventions**: Informed by [Cursor Directory Node.js rules](https://cursor.directory/rules/node.js); Payload/Vue/Mongo-specific parts omitted.
+- **Plan Mode**: `.cursor/rules/plan-pre-mortem.mdc`
+- **Build memory**: `memory/MEMORY.md`, `memory/collaboration.md`

@@ -133,7 +133,7 @@ If **nothing new** to add (all learnings already in profile):
 |--------|-----|
 | **Manual** | Builder says "synthesize collaboration profile" or "update collaboration from entries". Agent loads this skill and runs the workflow. |
 | **After prd-post-mortem** | prd-post-mortem skill ends with: "Consider running **synthesize-collaboration-profile** to push learnings into collaboration.md." Builder or next agent can run it. |
-| **After entries accumulate** | agent-memory.mdc says to offer synthesis when "several entries have accumulated learnings". Agent offers: "Several entries have Learnings. Should I run the synthesize-collaboration-profile skill?" |
+| **After entries accumulate** | AGENTS.md [Memory] section says to offer synthesis when 5+ entries have accumulated learnings. Agent offers: "Several entries have Learnings. Should I run the synthesize-collaboration-profile skill?" |
 | **Periodic** | Builder schedules (e.g. monthly) or sets a reminder. No automatic trigger; skill is always on-demand or offered. |
 
 **No automatic/scheduled execution** — the skill runs when the builder (or an agent following the rules) explicitly runs it or is prompted to offer it.
