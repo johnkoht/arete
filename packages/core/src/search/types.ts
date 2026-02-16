@@ -2,13 +2,24 @@
  * Search provider interface for semantic and keyword search.
  */
 
+export type SearchMatchType = 'keyword' | 'semantic' | 'hybrid';
+
 export interface SearchResult {
   path: string;
+  content: string;
   score: number;
-  excerpt?: string;
+  matchType: SearchMatchType;
+}
+
+export interface SearchOptions {
+  limit?: number;
+  paths?: string[];
+  minScore?: number;
 }
 
 export interface SearchProvider {
-  search(query: string, directory: string): Promise<SearchResult[]>;
-  semanticSearch(query: string, directory: string): Promise<SearchResult[]>;
+  name: string;
+  isAvailable(): Promise<boolean>;
+  search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+  semanticSearch(query: string, options?: SearchOptions): Promise<SearchResult[]>;
 }
