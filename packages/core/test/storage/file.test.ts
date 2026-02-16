@@ -114,6 +114,27 @@ describe('FileStorageAdapter', () => {
     });
   });
 
+  describe('listSubdirectories', () => {
+    it('returns subdirectory paths excluding . and _ prefix', async () => {
+      await withTempDir(async (dir, storage) => {
+        await storage.mkdir(join(dir, 'valid'));
+        await storage.mkdir(join(dir, '.hidden'));
+        await storage.mkdir(join(dir, '_private'));
+        const subdirs = await storage.listSubdirectories(dir);
+        assert.ok(subdirs.some(d => d.endsWith('valid')));
+        assert.ok(!subdirs.some(d => d.includes('.hidden')));
+        assert.ok(!subdirs.some(d => d.includes('_private')));
+      });
+    });
+
+    it('returns empty array for non-existent dir', async () => {
+      await withTempDir(async (dir, storage) => {
+        const subdirs = await storage.listSubdirectories(join(dir, 'nope'));
+        assert.deepStrictEqual(subdirs, []);
+      });
+    });
+  });
+
   describe('mkdir', () => {
     it('creates directory recursively', async () => {
       await withTempDir(async (dir, storage) => {

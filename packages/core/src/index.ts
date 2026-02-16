@@ -15,3 +15,6 @@ export * from './services/index.js';
 
 // Utilities
 export * from './utils/index.js';
+
+// Compatibility shims (legacy function APIs)
+export { getRelevantContext, searchMemory } from './compat/index.js';

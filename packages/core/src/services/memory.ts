@@ -2,8 +2,10 @@
  * MemoryService — manages memory entries and search.
  */
 
+import { join } from 'node:path';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
+import { tokenize } from '../search/tokenize.js';
 import type {
   MemorySearchRequest,
   MemorySearchResult,
@@ -12,7 +14,136 @@ import type {
   MemoryTimeline,
   MemoryIndex,
   DateRange,
+  WorkspacePaths,
+  MemoryItemType,
 } from '../models/index.js';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const DEFAULT_LIMIT = 10;
+
+const MEMORY_FILES: Record<MemoryItemType, string> = {
+  decisions: 'decisions.md',
+  learnings: 'learnings.md',
+  observations: 'agent-observations.md',
+};
+
+const RECENCY_30_DAYS = 30;
+const RECENCY_90_DAYS = 90;
+const RECENCY_30_BOOST = 0.2;
+const RECENCY_90_BOOST = 0.1;
+
+// ---------------------------------------------------------------------------
+// Parsing and scoring
+// ---------------------------------------------------------------------------
+
+interface MemorySection {
+  title: string;
+  date?: string;
+  body: string;
+  raw: string;
+}
+
+function parseMemorySections(content: string): MemorySection[] {
+  const sections: MemorySection[] = [];
+  const lines = content.split('\n');
+  let current: { title: string; date?: string; bodyLines: string[]; rawLines: string[] } | null = null;
+  for (const line of lines) {
+    const headingMatch = line.match(/^###\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?(.+)/);
+    if (headingMatch) {
+      if (current) {
+        sections.push({
+          title: current.title,
+          date: current.date,
+          body: current.bodyLines.join('\n').trim(),
+          raw: current.rawLines.join('\n').trim(),
+        });
+      }
+      current = {
+        title: headingMatch[2].trim(),
+        date: headingMatch[1] || undefined,
+        bodyLines: [],
+        rawLines: [line],
+      };
+    } else if (current) {
+      current.bodyLines.push(line);
+      current.rawLines.push(line);
+    }
+  }
+  if (current) {
+    sections.push({
+      title: current.title,
+      date: current.date,
+      body: current.bodyLines.join('\n').trim(),
+      raw: current.rawLines.join('\n').trim(),
+    });
+  }
+  return sections;
+}
+
+function calculateRecencyBoost(dateStr?: string): number {
+  if (!dateStr) return 0;
+  try {
+    const itemDate = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - itemDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return 0;
+    if (diffDays <= RECENCY_30_DAYS) return RECENCY_30_BOOST;
+    if (diffDays <= RECENCY_90_DAYS) return RECENCY_90_BOOST;
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+function applyRecencyBoost(score: number, dateStr?: string): number {
+  const boost = calculateRecencyBoost(dateStr);
+  return score * (1 + boost);
+}
+
+function scoreSection(section: MemorySection, queryTokens: string[]): number {
+  if (queryTokens.length === 0) return 0;
+  const titleLower = section.title.toLowerCase();
+  const bodyLower = section.body.toLowerCase();
+  const combined = titleLower + ' ' + bodyLower;
+  let score = 0;
+  for (const token of queryTokens) {
+    if (titleLower.includes(token)) score += 3;
+    else if (bodyLower.includes(token)) score += 1;
+  }
+  const matchCount = queryTokens.filter(t => combined.includes(t)).length;
+  if (matchCount > 1) score += matchCount;
+  return score;
+}
+
+function buildRelevance(section: MemorySection, queryTokens: string[]): string {
+  const titleLower = section.title.toLowerCase();
+  const bodyLower = section.body.toLowerCase();
+  const titleMatches = queryTokens.filter(t => titleLower.includes(t));
+  const bodyMatches = queryTokens.filter(t => bodyLower.includes(t));
+  const parts: string[] = [];
+  if (titleMatches.length > 0) parts.push(`Title matches: ${titleMatches.join(', ')}`);
+  if (bodyMatches.length > 0) {
+    const unique = bodyMatches.filter(t => !titleMatches.includes(t));
+    if (unique.length > 0) parts.push(`Body matches: ${unique.join(', ')}`);
+  }
+  return parts.join('; ') || 'Token match';
+}
+
+function getMemoryTypeFromPath(filePath: string): MemoryItemType | null {
+  const fileName = filePath.split(/[/\\]/).pop() || '';
+  if (fileName === 'decisions.md') return 'decisions';
+  if (fileName === 'learnings.md') return 'learnings';
+  if (fileName === 'agent-observations.md') return 'observations';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// MemoryService
+// ---------------------------------------------------------------------------
 
 export class MemoryService {
   constructor(
@@ -21,21 +152,157 @@ export class MemoryService {
   ) {}
 
   async search(request: MemorySearchRequest): Promise<MemorySearchResult> {
-    throw new Error('Not implemented');
+    const { query, paths, types, limit = DEFAULT_LIMIT } = request;
+    const queryTokens = tokenize(query);
+    if (queryTokens.length === 0) {
+      return { query, results: [], total: 0 };
+    }
+    const memoryItemsDir = join(paths.memory, 'items');
+    const typesToSearch: MemoryItemType[] = types && types.length > 0
+      ? types
+      : ['decisions', 'learnings', 'observations'];
+    const memoryFileRelPaths: string[] = [];
+    for (const memType of typesToSearch) {
+      const fileName = MEMORY_FILES[memType];
+      const filePath = join(memoryItemsDir, fileName);
+      const exists = await this.storage.exists(filePath);
+      if (exists) {
+        memoryFileRelPaths.push(join('.arete', 'memory', 'items', fileName));
+      }
+    }
+    if (memoryFileRelPaths.length === 0) {
+      return { query, results: [], total: 0 };
+    }
+
+    let allResults: { content: string; source: string; type: MemoryItemType; date?: string; relevance: string; score?: number }[] = [];
+
+    try {
+      const searchResults = await this.searchProvider.semanticSearch(query, {
+        paths: memoryFileRelPaths,
+        limit: limit * 3,
+      });
+      if (searchResults.length > 0) {
+        for (const sr of searchResults) {
+          const memType = getMemoryTypeFromPath(sr.path);
+          if (!memType) continue;
+          const sections = parseMemorySections(sr.content);
+          const fileName = sr.path.split(/[/\\]/).pop() || '';
+          for (const section of sections) {
+            const boostedScore = applyRecencyBoost(sr.score, section.date);
+            allResults.push({
+              content: section.raw,
+              source: fileName,
+              type: memType,
+              date: section.date,
+              relevance: `Semantic match (score: ${sr.score.toFixed(2)})`,
+              score: boostedScore,
+            });
+          }
+        }
+      }
+    } catch {
+      // Fall through to token-based fallback
+    }
+
+    if (allResults.length === 0) {
+      const fallbackResults: { content: string; source: string; type: MemoryItemType; date?: string; relevance: string; _rawScore: number }[] = [];
+      for (const memType of typesToSearch) {
+        const fileName = MEMORY_FILES[memType];
+        const filePath = join(memoryItemsDir, fileName);
+        const exists = await this.storage.exists(filePath);
+        if (!exists) continue;
+        const content = await this.storage.read(filePath);
+        if (content === null) continue;
+        const sections = parseMemorySections(content);
+        for (const section of sections) {
+          const rawScore = scoreSection(section, queryTokens);
+          if (rawScore > 0) {
+            fallbackResults.push({
+              content: section.raw,
+              source: fileName,
+              type: memType,
+              date: section.date,
+              relevance: buildRelevance(section, queryTokens),
+              _rawScore: rawScore,
+            });
+          }
+        }
+      }
+      const maxRaw = fallbackResults.length > 0 ? Math.max(...fallbackResults.map(r => r._rawScore)) : 1;
+      allResults = fallbackResults.map(({ _rawScore, ...rest }) => {
+        const normalizedScore = maxRaw > 0 ? _rawScore / maxRaw : 0;
+        const boostedScore = applyRecencyBoost(normalizedScore, rest.date);
+        return { ...rest, score: boostedScore };
+      });
+    }
+
+    allResults.sort((a, b) => {
+      const scoreA = a.score ?? 0;
+      const scoreB = b.score ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    const total = allResults.length;
+    const results = allResults.slice(0, limit);
+    return { query, results, total };
   }
 
   async create(entry: CreateMemoryRequest): Promise<MemoryEntry> {
-    throw new Error('Not implemented');
+    const { type, title, content, paths, source } = entry;
+    const fileName = MEMORY_FILES[type];
+    const filePath = join(paths.memory, 'items', fileName);
+    const date = new Date().toISOString().slice(0, 10);
+    const heading = `### ${date}: ${title}\n\n`;
+    const block = heading + content.trim() + '\n\n';
+    const existing = await this.storage.read(filePath);
+    const newContent = existing ? existing + block : `# ${type.charAt(0).toUpperCase() + type.slice(1)}\n\n` + block;
+    await this.storage.mkdir(join(paths.memory, 'items'));
+    await this.storage.write(filePath, newContent);
+    return {
+      type,
+      title,
+      content,
+      date,
+      source: source ?? fileName,
+    };
   }
 
   async getTimeline(
-    query: string,
-    range?: DateRange
+    _query: string,
+    _range?: DateRange
   ): Promise<MemoryTimeline> {
-    throw new Error('Not implemented');
+    throw new Error('getTimeline not implemented (Phase 6)');
   }
 
-  async getIndex(): Promise<MemoryIndex> {
-    throw new Error('Not implemented');
+  async getIndex(paths: WorkspacePaths): Promise<MemoryIndex> {
+    const now = new Date().toISOString();
+    const memoryItemsDir = join(paths.memory, 'items');
+    const exists = await this.storage.exists(memoryItemsDir);
+    const decisions: MemoryEntry[] = [];
+    const learnings: MemoryEntry[] = [];
+    const observations: MemoryEntry[] = [];
+    if (!exists) {
+      return { decisions, learnings, observations, lastUpdated: now };
+    }
+    for (const [memType, fileName] of Object.entries(MEMORY_FILES)) {
+      const filePath = join(memoryItemsDir, fileName);
+      const content = await this.storage.read(filePath);
+      if (content === null) continue;
+      const sections = parseMemorySections(content);
+      const arr = memType === 'decisions' ? decisions : memType === 'learnings' ? learnings : observations;
+      for (const s of sections) {
+        arr.push({
+          type: memType as MemoryItemType,
+          title: s.title,
+          content: s.body,
+          date: s.date ?? '',
+          source: fileName,
+        });
+      }
+    }
+    return { decisions, learnings, observations, lastUpdated: now };
   }
 }

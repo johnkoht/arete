@@ -1,10 +1,11 @@
 /**
  * Memory domain types.
  *
- * Imports from common.ts ONLY.
+ * Imports from common.ts and workspace.ts.
  */
 
 import type { DateRange, MemoryItemType } from './common.js';
+import type { WorkspacePaths } from './workspace.js';
 
 export type { MemoryItemType } from './common.js';
 
@@ -31,6 +32,7 @@ export type MemoryResult = {
 /** Request to search memory */
 export type MemorySearchRequest = {
   query: string;
+  paths: WorkspacePaths;
   types?: MemoryItemType[];
   limit?: number;
   dateRange?: DateRange;
@@ -54,6 +56,7 @@ export type CreateMemoryRequest = {
   type: MemoryItemType;
   title: string;
   content: string;
+  paths: WorkspacePaths;
   source?: string;
   relatedEntities?: string[];
 };

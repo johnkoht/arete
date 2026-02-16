@@ -1,10 +1,11 @@
 /**
  * Context domain types.
  *
- * Imports from common.ts ONLY.
+ * Imports from common.ts and workspace.ts.
  */
 
 import type { ProductPrimitive, WorkType } from './common.js';
+import type { WorkspacePaths } from './workspace.js';
 
 /** A file reference with content assembled during context injection */
 export type ContextFile = {
@@ -37,6 +38,7 @@ export type ContextBundle = {
 /** Request for context assembly (replaces ContextInjectionOptions with richer API) */
 export type ContextRequest = {
   query: string;
+  paths: WorkspacePaths;
   primitives?: ProductPrimitive[];
   workType?: WorkType;
   maxFiles?: number;

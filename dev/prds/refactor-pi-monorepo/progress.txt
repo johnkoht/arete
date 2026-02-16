@@ -11,7 +11,7 @@
 - [x] phase-2a-models: Create model type definitions (done 2026-02-15)
 - [x] phase-2b-stubs: Create service stubs, storage interface, and utility functions (done 2026-02-15)
 - [x] phase-3a-storage-search: Implement FileStorageAdapter and port SearchProvider (done 2026-02-15)
-- [ ] phase-3b-context-memory: Migrate ContextService and MemoryService
+- [x] phase-3b-context-memory: Migrate ContextService and MemoryService (done 2026-02-16)
 - [ ] phase-3c-entity: Migrate EntityService
 - [ ] phase-3d-intelligence: Migrate IntelligenceService
 - [ ] phase-3e-workspace-skills-integrations: Migrate WorkspaceService, SkillService, and IntegrationService

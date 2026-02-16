@@ -67,6 +67,23 @@ export class FileStorageAdapter implements StorageAdapter {
     return results;
   }
 
+  async listSubdirectories(dir: string): Promise<string[]> {
+    try {
+      const stat = await fs.stat(dir);
+      if (!stat.isDirectory()) return [];
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      const subdirs: string[] = [];
+      for (const e of entries) {
+        if (e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('_')) {
+          subdirs.push(join(dir, e.name));
+        }
+      }
+      return subdirs;
+    } catch {
+      return [];
+    }
+  }
+
   async mkdir(dir: string): Promise<void> {
     await fs.ensureDir(dir);
   }

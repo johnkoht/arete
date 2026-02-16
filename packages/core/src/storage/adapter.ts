@@ -16,6 +16,8 @@ export interface StorageAdapter {
   exists(path: string): Promise<boolean>;
   delete(path: string): Promise<void>;
   list(dir: string, options?: ListOptions): Promise<string[]>;
+  /** List immediate subdirectories (full paths), excluding names starting with . or _ */
+  listSubdirectories(dir: string): Promise<string[]>;
   mkdir(dir: string): Promise<void>;
   getModified(path: string): Promise<Date | null>;
 }
