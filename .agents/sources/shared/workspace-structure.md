@@ -20,8 +20,10 @@ your-workspace/
 
 ```
 arete/                 # Build workspace root
-├── src/               # Source code (core/, integrations/, cli/)
-├── runtime/           # Files shipped to users (skills/, rules/, tools/)
+├── packages/          # Monorepo packages
+│   ├── core/          # @arete/core (services, adapters)
+│   ├── cli/           # @arete/cli (thin CLI over core)
+│   └── runtime/       # Skills, rules, tools, templates
 ├── memory/            # Build memory (MEMORY.md, collaboration.md, entries/)
 ├── .agents/           # Build-specific agent resources
 │   ├── skills/        # Build skills (execute-prd, plan-to-prd, etc.)
@@ -31,9 +33,7 @@ arete/                 # Build workspace root
 │   ├── prds/          # PRDs for Areté features
 │   └── autonomous/    # PRD execution templates
 ├── .cursor/           # Cursor IDE configuration (rules/, tools/)
-├── test/              # Test files
-├── scripts/           # Build and integration scripts
-└── bin/               # Executable files (arete CLI)
+└── scripts/           # Build and integration scripts
 ```
 
 **Key differences:**

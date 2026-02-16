@@ -4,33 +4,33 @@
   "description": "Areté - Product Management Workspace CLI",
   "type": "module",
   "bin": {
-    "arete": "./bin/arete.js"
+    "arete": "./packages/cli/bin/arete.js"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./packages/core/dist/index.js",
+  "types": "./packages/core/dist/index.d.ts",
   "files": [
-    "bin/",
+    "packages/cli/bin/",
+    "packages/core/dist/",
+    "packages/runtime/",
+    "AGENTS.md",
     "dist/"
   ],
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "dev": "tsx src/cli.ts",
+    "dev": "tsx packages/cli/src/index.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
-    "build": "npm run build:agents:dev && npm run build:agents:prod && tsc && node scripts/copy-runtime.js",
-    "build:legacy": "npm run build:agents:dev && npm run build:agents:prod && tsc && node scripts/copy-runtime.js",
+    "build": "npm run build:agents:dev && npm run build:agents:prod && npm run build:packages",
     "build:packages": "tsc -b packages/core packages/cli",
     "build:agents:dev": "tsx scripts/build-agents.ts dev",
     "build:agents:prod": "tsx scripts/build-agents.ts prod",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b packages/core packages/cli --noEmit",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
-    "start": "node bin/arete.js",
-    "test": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
-    "test:js": "tsx --test 'test/**/*.test.ts' 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
-    "test:py": "python3 -m unittest scripts/integrations/test_utils.py",
-    "test:all": "npm run typecheck && npm run test:js && npm run test:py"
+    "start": "node packages/cli/bin/arete.js",
+    "test": "tsx --test 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
+    "test:all": "npm run typecheck && npm test"
   },
   "keywords": [
     "product-management",

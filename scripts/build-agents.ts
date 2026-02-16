@@ -259,7 +259,7 @@ function compressVision(content: string): string {
 function compressWorkspaceStructure(content: string): string {
   return `[Workspace]|two contexts: USER (installed) vs BUILD (this repo)
 |user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .agents/skills/
-|build:src/ runtime/ memory/ .agents/ dev/ .cursor/ test/ scripts/ bin/
+|build:packages/ memory/ .agents/ dev/ .cursor/ scripts/
 |key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .agents/skills/ = build skills (BUILD) vs product skills (USER)`;
 }
 
