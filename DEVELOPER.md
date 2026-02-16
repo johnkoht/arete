@@ -42,15 +42,16 @@ npm test
 
 ### Build System
 
-Areté uses a build-and-copy architecture:
+Areté is organized as a **monorepo** with npm workspaces:
 
-- **Source**: `src/` (TypeScript) and `runtime/` (user-facing files)
-- **Build output**: `dist/` (compiled code) and `dist/` (copied runtime files)
+- **Source**: `packages/core/src/` (services), `packages/cli/src/` (commands), `packages/runtime/` (user-facing files)
+- **Build output**: `packages/core/dist/`, `packages/cli/dist/`
 - **Scripts**:
-  - `npm run build` - Compile TypeScript and copy runtime files
-  - `npm run dev` - Watch mode for development
-  - `npm test` - Run test suite
-  - `npm run lint` - Check code style
+  - `npm run build` - Build all packages (agents + TypeScript)
+  - `npm run build:packages` - Build TypeScript packages only
+  - `npm run dev` - Run CLI in dev mode via tsx
+  - `npm test` - Run test suite across all packages
+  - `npm run typecheck` - Type check all packages
 
 ### AGENTS.md Compilation
 
@@ -120,7 +121,7 @@ npm run build:agents:dev && npm run build
    - Product skills in `.agents/skills/`
    - Use `AGENT_MODE=GUIDE` to force this mode
 
-The system auto-detects: if `src/cli.ts` and `memory/MEMORY.md` exist → BUILDER; otherwise → GUIDE.
+The system auto-detects: if `packages/core/` and `memory/MEMORY.md` exist → BUILDER; otherwise → GUIDE.
 
 ---
 
@@ -144,35 +145,47 @@ Areté solves three fundamental problems for product managers:
 
 ```
 arete/
-├── src/                    # TypeScript source code
-│   ├── cli.ts              # CLI entry point
-│   ├── commands/           # CLI command implementations
-│   ├── core/               # Core systems (workspace, meetings, people, etc.)
-│   ├── integrations/       # External tool integrations (calendar, Fathom, etc.)
-│   └── utils/              # Shared utilities
-├── runtime/                # User-facing files (copied to workspace)
-│   ├── rules/              # IDE rules for PM workflows
-│   ├── skills/             # Default PM skills
-│   ├── tools/              # Lifecycle tools (onboarding, seed-context)
-│   ├── templates/          # Project and meeting templates
-│   ├── GUIDE.md            # Comprehensive user guide (shipped)
-│   └── integrations/       # Integration configs
+├── packages/
+│   ├── core/               # @arete/core — Intelligence and service layer
+│   │   ├── src/
+│   │   │   ├── services/   # ContextService, MemoryService, EntityService, etc.
+│   │   │   ├── models/     # Type definitions by domain
+│   │   │   ├── storage/    # StorageAdapter interface + FileStorageAdapter
+│   │   │   ├── search/     # SearchProvider (QMD + fallback)
+│   │   │   ├── adapters/   # IDE adapters (Cursor, Claude Code)
+│   │   │   ├── integrations/ # Calendar, Fathom, meetings
+│   │   │   ├── utils/      # Shared utilities (slugify, dates, templates, dedup)
+│   │   │   └── index.ts    # Public API + createServices() factory
+│   │   └── test/           # Core service tests
+│   ├── cli/                # @arete/cli — Thin CLI wrapper
+│   │   ├── src/
+│   │   │   ├── commands/   # CLI command handlers
+│   │   │   ├── formatters.ts # Output formatting (tables, markdown, color)
+│   │   │   └── index.ts    # Commander setup + entry point
+│   │   ├── bin/arete.js    # CLI entry point
+│   │   └── test/           # CLI tests + golden file tests
+│   └── runtime/            # @arete/runtime — Workspace content
+│       ├── skills/         # Default PM skills (23 skills)
+│       ├── tools/          # Lifecycle tools (onboarding, seed-context)
+│       ├── templates/      # Meeting and project templates
+│       ├── rules/          # IDE rules (cursor/, claude-code/)
+│       ├── integrations/   # Integration configs
+│       └── GUIDE.md        # Comprehensive user guide (shipped)
+├── memory/                 # Build memory (MEMORY.md, collaboration.md, entries/)
+├── .agents/                # Build-specific agent resources
+│   ├── skills/             # Build skills (execute-prd, plan-to-prd, etc.)
+│   └── sources/            # AGENTS.md source files
 ├── dev/                    # Developer-only files (not shipped)
-│   ├── MEMORY.md           # Build history index
-│   ├── entries/            # Detailed change log entries
-│   ├── skills/             # Build-only skills (execute-prd, prd-to-json, etc.)
 │   ├── prds/               # Feature PRDs
-│   ├── backlog/            # Improvement and feature backlog
-│   └── collaboration.md    # Synthesized working patterns with builder
-├── test/                   # Test suite
-├── dist/                   # Build output (gitignored)
-└── .cursor/                # IDE config for this repo
-    └── rules/              # Builder rules (dev.mdc, testing.mdc, etc.)
+│   └── backlog/            # Feature and improvement backlog
+├── .cursor/                # Cursor IDE configuration (rules/)
+└── scripts/                # Build and integration scripts
 ```
 
-**Build vs Runtime Separation**:
-- `src/` → compiles to `dist/`
-- `runtime/` → copies to `dist/` → installed to user workspace
+**Package Separation**:
+- `packages/core/` — All business logic, no CLI dependencies (zero chalk/commander/inquirer)
+- `packages/cli/` — Thin wrapper using `createServices()` factory, CLI-specific formatting
+- `packages/runtime/` — Static content (skills, tools, templates, rules), no TypeScript build
 - `dev/` → never shipped (build-only)
 
 ### Multi-IDE Support
@@ -194,29 +207,31 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Install and maintain the user's PM workspace structure.
 
 **Key files**:
-- `src/commands/install.ts` - Install workspace (`arete install`)
-- `src/commands/update.ts` - Update rules/skills (`arete update`)
-- `src/core/workspace-structure.ts` - Directory structure and default files
+- `packages/cli/src/commands/install.ts` - Install command handler
+- `packages/cli/src/commands/update.ts` - Update command handler
+- `packages/core/src/services/workspace.ts` - WorkspaceService (create, update, getPaths)
+- `packages/core/src/workspace-structure.ts` - Directory structure and default files
 
 **How it works**:
 1. User runs `arete install [directory]`
-2. System creates directory structure (context/, projects/, people/, etc.)
-3. Copies runtime files (rules, skills, tools, templates, GUIDE.md)
-4. Creates default files (context/, goals/, now/)
+2. CLI calls `WorkspaceService.create()` via `createServices()` factory
+3. System creates directory structure (context/, projects/, people/, etc.)
+4. Copies runtime files from `packages/runtime/` (rules, skills, tools, templates, GUIDE.md)
+5. Creates default files (context/, goals/, now/)
 
 **Key patterns**:
 - **Copy-if-missing**: GUIDE.md and templates never overwrite user edits
 - **Default files**: Small files are string-backed in `DEFAULT_FILES`
-- **Large files**: GUIDE.md (~900 lines) is copied from `dist/GUIDE.md`
+- **Service delegation**: CLI command handlers are thin — all logic is in core services
 
 ### 2. Skills System
 
 **Purpose**: Stateless PM workflows (discovery, PRD, meeting prep).
 
 **Key files**:
-- `runtime/skills/` - Product skills (meeting-prep, create-prd, discovery, etc.)
-- `src/commands/skill.ts` - Skill management CLI
-- `src/core/skill-router.ts` - Route user message to skill
+- `packages/runtime/skills/` - Product skills (meeting-prep, create-prd, discovery, etc.)
+- `packages/cli/src/commands/skill.ts` - Skill CLI command handler
+- `packages/core/src/services/skills.ts` - SkillService (list, get, install, route)
 
 **How it works**:
 1. User says "Help me prep for my meeting"
@@ -235,8 +250,8 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Lifecycle-based capabilities with phases and progress tracking.
 
 **Key files**:
-- `runtime/tools/` - Tools (onboarding, seed-context)
-- Tool router integrated into `src/core/skill-router.ts`
+- `packages/runtime/tools/` - Tools (onboarding, seed-context)
+- Tool router integrated into `packages/core/src/services/intelligence.ts`
 
 **How it works**:
 1. User says "I'm starting a new job"
@@ -259,8 +274,8 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Capture, process, and leverage meeting context.
 
 **Key files**:
-- `src/core/meetings.ts` - Meeting CRUD and processing
-- `src/commands/meeting.ts` - Meeting CLI
+- `packages/core/src/integrations/meetings.ts` - Meeting CRUD and processing
+- `packages/cli/src/commands/meeting.ts` - Meeting CLI command handler
 - Meeting-related skills: save-meeting, process-meetings, meeting-prep
 
 **How it works**:
@@ -279,8 +294,8 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Track internal colleagues, customers, and users.
 
 **Key files**:
-- `src/core/people.ts` - People CRUD and indexing
-- `src/commands/people.ts` - People CLI
+- `packages/core/src/services/entity.ts` - EntityService (people, resolution, relationships)
+- `packages/cli/src/commands/people.ts` - People CLI command handler
 - Person files: `people/{category}/{slug}.md`
 
 **How it works**:
@@ -299,9 +314,10 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Connect to external tools (calendar, Fathom, Slack).
 
 **Key files**:
-- `src/integrations/` - Integration implementations
-- `src/commands/integration.ts` - Integration CLI
-- `runtime/integrations/configs/` - Integration config templates
+- `packages/core/src/integrations/` - Integration implementations
+- `packages/core/src/services/integrations.ts` - IntegrationService
+- `packages/cli/src/commands/integration.ts` - Integration CLI command handler
+- `packages/runtime/integrations/configs/` - Integration config templates
 
 **How it works**:
 1. User configures integration: `arete integration configure calendar`
@@ -316,32 +332,41 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 
 ### 7. Intelligence Services
 
-**Purpose**: Assemble context, search memory, resolve entities.
+**Purpose**: Assemble context, search memory, resolve entities, track relationships, surface temporal patterns.
 
 **Key files**:
-- `src/commands/context.ts` - Context injection
-- `src/commands/memory.ts` - Memory search
-- `src/commands/resolve.ts` - Entity resolution
-- `src/commands/brief.ts` - Briefing assembly
+- `packages/core/src/services/context.ts` - ContextService (context injection, freshness inventory)
+- `packages/core/src/services/memory.ts` - MemoryService (search, create, timeline)
+- `packages/core/src/services/entity.ts` - EntityService (resolution, mentions, relationships)
+- `packages/core/src/services/intelligence.ts` - IntelligenceService (briefing, routing, skill preparation)
+- `packages/cli/src/commands/intelligence.ts` - CLI commands for context, memory, brief, resolve
 
 **How it works**:
 
 **Context injection**: `arete context --for "create PRD for search feature"`
 - Searches workspace files by semantic similarity
 - Returns relevant files (context/, projects/, resources/)
+- **New**: `--inventory` flag shows freshness dashboard with coverage gaps per ProductPrimitive
 
 **Memory search**: `arete memory search "onboarding decisions"`
 - Searches `.arete/memory/items/` (decisions, learnings, observations)
 - Returns matching items with source references
 
+**Memory timeline**: `arete memory timeline "onboarding" --days 90`
+- **New**: Temporal view of a topic showing how it evolves over time
+- Returns chronologically ordered items with recurring themes and recency signals
+
 **Entity resolution**: `arete resolve "Jane"`
 - Searches people, meetings, projects
 - Returns matched entities (person slug, meeting file, project path)
+- **New**: `EntityService.findMentions()` scans all sources for name references
+- **New**: `EntityService.getRelationships()` extracts works_on, attended, mentioned_in
 
 **Briefing assembly**: `arete brief --for "competitive analysis" --skill competitive-analysis`
-- Combines context + memory + entities
+- Combines context + memory + entities + **relationships**
+- Deep source search across ALL available sources (context, meetings, memory, projects)
 - Organizes by product primitive (Problem, User, Solution, Market, Risk)
-- Presented to user before skill execution
+- Includes temporal signals and entity relationship context
 
 ### 8. Planning System
 
@@ -384,7 +409,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Pluggable semantic search (currently QMD).
 
 **Key files**:
-- `src/core/search/` - Search provider abstraction
+- `packages/core/src/search/` - Search provider abstraction
 - QMD integration (shell commands to `qmd query`)
 
 **How it works**:
@@ -400,8 +425,8 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Pull calendar events for meeting prep and planning.
 
 **Key files**:
-- `src/integrations/calendar/` - Calendar providers (macOS, future: Google)
-- `src/commands/pull.ts` - Pull calendar data
+- `packages/core/src/integrations/calendar/` - Calendar providers (macOS, future: Google)
+- `packages/cli/src/commands/pull.ts` - Pull calendar data
 
 **How it works**:
 1. Configure: `arete integration configure calendar`
@@ -414,10 +439,9 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Customizable templates for meetings, projects, etc.
 
 **Key files**:
-- `runtime/templates/` - Default templates
+- `packages/runtime/templates/` - Default templates
 - `.arete/templates/` - User custom templates (in workspace)
-- `src/core/meeting-agenda-templates.ts` - Template loading
-- `src/commands/template.ts` - Template CLI
+- `packages/cli/src/commands/template.ts` - Template CLI command handler
 
 **How it works**:
 1. System ships default templates (leadership, customer, dev-team, one-on-one, other)
@@ -538,7 +562,7 @@ For complex features, use the PRD execution system:
 
 ### New Integration
 
-1. **Create provider** in `src/integrations/{name}/`
+1. **Create provider** in `packages/core/src/integrations/{name}/`
 2. **Implement interface**:
    ```typescript
    export interface Integration {
@@ -548,14 +572,14 @@ For complex features, use the PRD execution system:
      seed?(options: SeedOptions): Promise<SeedResult>;
    }
    ```
-3. **Add config template** in `runtime/integrations/configs/{name}.json`
-4. **Register** in `src/integrations/registry.ts`
-5. **Test**: Add tests in `test/integrations/{name}.test.ts`
+3. **Add config template** in `packages/runtime/integrations/configs/{name}.json`
+4. **Register** in `packages/core/src/integrations/registry.ts`
+5. **Test**: Add tests in `packages/core/test/integrations/{name}.test.ts`
 6. **Document**: Add section in GUIDE.md § Integrations
 
 ### New Skill
 
-1. **Create SKILL.md** in `runtime/skills/{name}/SKILL.md`
+1. **Create SKILL.md** in `packages/runtime/skills/{name}/SKILL.md`
 2. **Follow format**:
    ```markdown
    # Skill: {Name}
@@ -575,29 +599,36 @@ For complex features, use the PRD execution system:
    ## Intelligence Services
    Which services to use (QMD, memory, etc.).
    ```
-3. **Add to router** in `src/core/skill-router.ts` (category + keywords)
+3. **Add to router** in `packages/core/src/services/intelligence.ts` (category + keywords)
 4. **Test routing**: `arete skill route "test query"` returns your skill
 5. **Document**: Add row to skills table in GUIDE.md and pm-workspace.mdc
 
 ### New CLI Command
 
-1. **Create command file** in `src/commands/{name}.ts`
-2. **Implement handler**:
+1. **Create command file** in `packages/cli/src/commands/{name}.ts`
+2. **Implement handler** (thin wrapper over core service):
    ```typescript
-   export const {name}Command = program
-     .command('{name}')
-     .description('Description')
-     .action(async (options) => {
-       // Implementation
-     });
+   import { createServices } from '@arete/core';
+
+   export function register{Name}Command(program: Command) {
+     program
+       .command('{name}')
+       .description('Description')
+       .action(async (options) => {
+         const services = createServices(workspaceRoot);
+         const result = await services.{service}.{method}(options);
+         // Format and display result
+       });
+   }
    ```
-3. **Register** in `src/cli.ts`
-4. **Test**: Add tests in `test/commands/{name}.test.ts`
-5. **Document**: Add to CLI Reference in GUIDE.md
+3. **Register** in `packages/cli/src/index.ts`
+4. **Add service method** in `packages/core/src/services/{service}.ts` if needed
+5. **Test**: Add tests in `packages/cli/test/commands/{name}.test.ts`
+6. **Document**: Add to CLI Reference in GUIDE.md
 
 ### New Template Type
 
-1. **Create default templates** in `runtime/templates/{type}/`
+1. **Create default templates** in `packages/runtime/templates/{type}/`
 2. **Follow YAML + Markdown format**:
    ```markdown
    ---
@@ -615,7 +646,7 @@ For complex features, use the PRD execution system:
 
 ### New Search Provider
 
-1. **Create provider** in `src/core/search/providers/{name}.ts`
+1. **Create provider** in `packages/core/src/search/providers/{name}.ts`
 2. **Implement interface**:
    ```typescript
    export interface SearchProvider {
@@ -624,7 +655,7 @@ For complex features, use the PRD execution system:
      search(query: string): Promise<SearchResult[]>;
    }
    ```
-3. **Register** in `src/core/search/registry.ts`
+3. **Register** in `packages/core/src/search/factory.ts`
 4. **Test**: Mock search results, test ranking
 5. **Document**: Add to GUIDE.md § Intelligence Services
 
@@ -671,10 +702,10 @@ fs.readFile(path, (err, data) => {
 
 ### File Organization
 
-- **One feature per file**: `src/core/meetings.ts` for meeting system
-- **Separate concerns**: CLI in `commands/`, core logic in `core/`
-- **Colocate tests**: `test/core/meetings.test.ts` mirrors `src/core/meetings.ts`
-- **Export public API**: Use barrel exports (`index.ts`) for modules
+- **One feature per service**: `packages/core/src/services/memory.ts` for memory system
+- **Separate concerns**: CLI commands in `packages/cli/`, core logic in `packages/core/`
+- **Colocate tests**: `packages/core/test/services/memory.test.ts` mirrors service files
+- **Export public API**: `packages/core/src/index.ts` exports all public types and services
 
 ### Documentation
 
@@ -699,27 +730,31 @@ fs.readFile(path, (err, data) => {
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (core + cli)
 npm test
 
 # Run specific test file
-npm test -- test/commands/install.test.ts
+npm test -- packages/core/test/services/memory.test.ts
 
-# Run with coverage
-npm run test:coverage
+# Run all tests + typecheck
+npm run test:all
 
-# Run in watch mode
-npm run test:watch
+# Type check only
+npm run typecheck
 ```
 
 ### Test Organization
 
 ```
-test/
+packages/core/test/
+├── services/          # Core service tests
+├── storage/           # StorageAdapter tests
+├── search/            # Search provider tests
+├── utils/             # Utility function tests
+└── integration/       # Intelligence integration tests
+packages/cli/test/
 ├── commands/          # CLI command tests
-├── core/              # Core system tests
-├── integrations/      # Integration tests
-└── fixtures/          # Test data
+└── golden/            # Golden file output tests
 ```
 
 ### Test Patterns
@@ -749,13 +784,17 @@ const sampleMeeting = readFileSync(
 
 **Mock external dependencies**:
 ```typescript
-// Mock file system
-jest.mock('fs-extra');
+import { mock } from 'node:test';
 
-// Mock shell commands
-jest.mock('child_process', () => ({
-  execSync: jest.fn(() => 'mocked output')
-}));
+// Mock via StorageAdapter interface (preferred)
+const mockStorage = {
+  read: mock.fn(async () => '# Test content'),
+  exists: mock.fn(async () => true),
+  // ... other StorageAdapter methods
+};
+
+// Services accept StorageAdapter via constructor
+const service = new MemoryService(mockStorage, searchProvider);
 ```
 
 ### Coverage Requirements
@@ -774,7 +813,7 @@ From `.cursor/rules/testing.mdc`:
 ### Key Documentation
 
 - **AGENTS.md** - Generated architecture reference for AI agents (see AGENTS.md Compilation above)
-- **GUIDE.md** (runtime/) - Comprehensive user guide (shipped to workspace)
+- **GUIDE.md** (`packages/runtime/`) - Comprehensive user guide (shipped to workspace)
 - **README.md** - End-user discovery (repo only)
 - **SETUP.md** - Installation and integrations (repo only)
 

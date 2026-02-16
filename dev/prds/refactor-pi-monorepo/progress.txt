@@ -24,4 +24,4 @@
 - [x] phase-6c-relationships: Entity relationships (done 2026-02-16, 18 new tests, 695 total passing)
 - [x] phase-6d-tests-docs-cli: Intelligence integration tests, docs, and CLI exposure (done 2026-02-16, 3 new integration tests, 698 total passing)
 - [x] phase-7a-cleanup: Remove old directories and update build scripts (done 2026-02-16)
-- [ ] phase-7b-docs-e2e: Update documentation and end-to-end verification
+- [x] phase-7b-docs-e2e: Update documentation and end-to-end verification (done 2026-02-16, all docs updated, E2E verified: install, brief, timeline, inventory, skill install)

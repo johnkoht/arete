@@ -161,22 +161,43 @@ AI: [Searches context + memory, synthesizes answer with sources]
 
 ---
 
+## Architecture
+
+Areté is organized as a monorepo with three packages:
+
+- **@arete/core** — Intelligence and service layer (context, memory, entity, briefing)
+- **@arete/cli** — Command-line interface (thin wrapper over core services)
+- **@arete/runtime** — Workspace content (skills, tools, templates, rules)
+
+### Key Intelligence Features
+
+- **Temporal Intelligence** — Timeline queries, recency signals ("when was X last discussed?")
+- **Proactive Context** — Automatic deep source search across all workspace content with freshness tracking
+- **Entity Relationships** — Track who works on what, attended where, mentioned where
+- **Briefing Assembly** — Combine context + memory + entities + relationships into comprehensive briefings
+
+---
+
 ## Key Features
 
 ### Intelligence Services
 
 Areté provides intelligence that powers any workflow:
 
-- **Context Injection** - Find relevant files for any task
-- **Memory Retrieval** - Search past decisions and learnings
+- **Context Injection** - Find relevant files for any task, with freshness tracking
+- **Memory Retrieval** - Search past decisions and learnings, with temporal views
 - **Entity Resolution** - Match ambiguous names to people, meetings, projects
-- **Briefing Assembly** - Gather context before complex work
+- **Entity Relationships** - Track works_on, attended, mentioned_in relationships
+- **Briefing Assembly** - Gather context, memory, entities, and relationships before complex work
+- **Temporal Intelligence** - Timeline queries showing how topics evolve over time
 
 These services run automatically during skills, or manually via CLI:
 
 ```bash
 arete context --for "mobile app redesign"
+arete context --for "mobile app redesign" --inventory   # freshness dashboard
 arete memory search "pricing decisions"
+arete memory timeline "onboarding" --days 90            # temporal view
 arete resolve "Jane"
 arete brief --for "competitive analysis"
 ```

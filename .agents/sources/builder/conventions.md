@@ -15,7 +15,7 @@ Standards for building and changing Areté. Testing is covered in `testing.mdc`;
 **Imports:**
 - Use `.js` extensions for local modules (NodeNext resolution)
 - Use `import type` when a symbol is only used as a type
-- Example: `import { someFunction } from '../../src/core/module.js';`
+- Example: `import { someFunction } from '../services/module.js';`
 
 **Variables:**
 - Prefer `const`/`let`; avoid `var`
@@ -155,7 +155,7 @@ See `memory.md` for full memory workflow.
 ### 6. Reuse and avoid duplication
 
 Before implementing new helpers, services, or abstractions:
-- Check if equivalent functionality exists in `src/core/`, `src/integrations/`, or existing modules
+- Check if equivalent functionality exists in `packages/core/src/services/`, `packages/core/src/integrations/`, or existing modules
 - Search AGENTS.md for existing patterns
 - Apply DRY (Don't Repeat Yourself)
 - Apply KISS (Keep It Simple)
@@ -184,7 +184,7 @@ Before editing files in `runtime/rules/`, `runtime/tools/`, or any path affectin
 - [ ] No hardcoded IDE names in content
 - [ ] Check adapter transforms: Claude does `.cursor/` → `.claude/` and `.mdc` → `.md`
 
-**Reference:** `src/core/adapters/claude-adapter.ts`
+**Reference:** `packages/core/src/adapters/claude-adapter.ts`
 
 ## Execution Path Decision Tree
 

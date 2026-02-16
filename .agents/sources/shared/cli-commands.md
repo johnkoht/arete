@@ -4,9 +4,11 @@
 
 - `arete route "<query>"` - Route user message to best skill and suggest model tier
 - `arete skill route "<query>"` - Route to skill only (for agents before loading skill)
-- `arete brief --for "task" --skill <name>` - Assemble primitive briefing (context + memory + entities)
+- `arete brief --for "task" --skill <name>` - Assemble primitive briefing (context + memory + entities + relationships)
 - `arete context --for "query"` - Get relevant workspace files for a task
+- `arete context --for "query" --inventory` - Show context freshness dashboard with coverage gaps
 - `arete memory search "query"` - Search decisions, learnings, and observations
+- `arete memory timeline "query" [--days N] [--json]` - Temporal view of a topic with recurring themes
 - `arete resolve "reference"` - Resolve ambiguous names (people, meetings, projects)
 
 ## People & Entities
@@ -22,7 +24,9 @@
 
 ## Workspace Management
 
+- `arete install [directory] [--ide cursor|claude]` - Create new workspace
 - `arete status` - Check workspace health
 - `arete update` - Update structure and rules
 - `arete skill list` - List available skills
+- `arete skill install <url>` - Install skill from URL (e.g. skills.sh)
 - `arete tool list` - List available tools
