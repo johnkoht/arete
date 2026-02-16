@@ -79,8 +79,9 @@ export type RoutedSkill = {
 
 /** Options for installing a skill */
 export type InstallSkillOptions = {
-  name: string;
+  name?: string;
   source: string;
+  workspaceRoot: string;
   category?: SkillCategory;
   overwrite?: boolean;
 };

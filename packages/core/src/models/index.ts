@@ -88,6 +88,7 @@ export type {
   IntegrationConfig,
   IntegrationAuth,
   IntegrationDefinition,
+  IntegrationListEntry,
   ScriptableIntegration,
   ScriptResult,
   PullOptions,

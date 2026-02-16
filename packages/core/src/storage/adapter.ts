@@ -20,4 +20,6 @@ export interface StorageAdapter {
   listSubdirectories(dir: string): Promise<string[]>;
   mkdir(dir: string): Promise<void>;
   getModified(path: string): Promise<Date | null>;
+  /** Copy file or directory from src to dest. Optional - FileStorageAdapter implements it. */
+  copy?(src: string, dest: string, options?: { recursive?: boolean }): Promise<void>;
 }

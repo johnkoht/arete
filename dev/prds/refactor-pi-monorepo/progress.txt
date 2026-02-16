@@ -14,7 +14,7 @@
 - [x] phase-3b-context-memory: Migrate ContextService and MemoryService (done 2026-02-16)
 - [x] phase-3c-entity: Migrate EntityService (done 2026-02-16)
 - [x] phase-3d-intelligence: Migrate IntelligenceService (done 2026-02-16)
-- [ ] phase-3e-workspace-skills-integrations: Migrate WorkspaceService, SkillService, and IntegrationService
+- [x] phase-3e-workspace-skills-integrations: Migrate WorkspaceService, SkillService, and IntegrationService (done 2026-02-16)
 - [ ] phase-3f-service-container: Create ServiceContainer factory and verify core isolation
 - [ ] phase-4a-cli-rebuild: Rebuild CLI as thin service wrapper
 - [ ] phase-4b-golden-tests: Golden file tests and behavioral parity verification

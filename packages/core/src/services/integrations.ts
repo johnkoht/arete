@@ -2,14 +2,20 @@
  * IntegrationService — manages integration pull and configuration.
  */
 
+import { join } from 'path';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type {
   PullOptions,
   PullResult,
+  IntegrationListEntry,
   IntegrationStatus,
-  IntegrationConfig,
   AreteConfig,
 } from '../models/index.js';
+import { INTEGRATIONS } from '../integrations/registry.js';
+import { pullFathom } from '../integrations/fathom/index.js';
+import { getWorkspaceConfigPath } from '../config.js';
+import { getAdapterFromConfig } from '../adapters/index.js';
 
 export class IntegrationService {
   constructor(
@@ -18,20 +24,190 @@ export class IntegrationService {
   ) {}
 
   async pull(
+    workspaceRoot: string,
     integration: string,
     options: PullOptions
   ): Promise<PullResult> {
-    throw new Error('Not implemented');
+    const paths = this.getFullPaths(workspaceRoot);
+    const status = await this.getIntegrationStatus(workspaceRoot, integration);
+
+    if (status !== 'active') {
+      return {
+        integration,
+        itemsProcessed: 0,
+        itemsCreated: 0,
+        itemsUpdated: 0,
+        errors: [`Integration not active: ${integration}`],
+      };
+    }
+
+    if (integration === 'fathom') {
+      const days = options.days ?? 7;
+      const result = await pullFathom(
+        this.storage,
+        workspaceRoot,
+        paths,
+        days
+      );
+      return {
+        integration,
+        itemsProcessed: result.saved + result.errors.length,
+        itemsCreated: result.saved,
+        itemsUpdated: 0,
+        errors: result.errors,
+      };
+    }
+
+    return {
+      integration,
+      itemsProcessed: 0,
+      itemsCreated: 0,
+      itemsUpdated: 0,
+      errors: [`Unknown or unsupported integration: ${integration}`],
+    };
   }
 
-  async list(): Promise<IntegrationStatus[]> {
-    throw new Error('Not implemented');
+  async list(workspaceRoot: string): Promise<IntegrationListEntry[]> {
+    const paths = this.getPaths(workspaceRoot);
+    const configsDir = join(paths.integrations, 'configs');
+    const configsExist = await this.storage.exists(configsDir);
+
+    const configured: Record<string, IntegrationStatus> = {};
+    if (configsExist) {
+      const files = await this.storage.list(configsDir, {
+        extensions: ['.yaml'],
+      });
+      for (const filePath of files) {
+        const name = filePath.split(/[/\\]/).pop()?.replace(/\.yaml$/, '') ?? '';
+        const content = await this.storage.read(filePath);
+        if (content) {
+          try {
+            const parsed = parseYaml(content) as Record<string, string>;
+            configured[name] = (parsed.status as IntegrationStatus) ?? 'inactive';
+          } catch {
+            configured[name] = 'inactive';
+          }
+        }
+      }
+    }
+
+    const entries: IntegrationListEntry[] = [];
+    for (const int of Object.values(INTEGRATIONS)) {
+      const cfg = configured[int.name] ?? null;
+      entries.push({
+        name: int.name,
+        displayName: int.displayName,
+        description: int.description,
+        implements: int.implements,
+        status: int.status,
+        configured: cfg,
+        active: cfg === 'active',
+      });
+    }
+    return entries;
   }
 
   async configure(
+    workspaceRoot: string,
     integration: string,
-    config: IntegrationConfig
+    config: Record<string, unknown>
   ): Promise<void> {
-    throw new Error('Not implemented');
+    const configPath = getWorkspaceConfigPath(workspaceRoot);
+    let existing: Record<string, unknown> = { schema: 1 };
+    const exists = await this.storage.exists(configPath);
+    if (exists) {
+      const content = await this.storage.read(configPath);
+      if (content) {
+        try {
+          existing = (parseYaml(content) as Record<string, unknown>) ?? existing;
+        } catch {
+          // keep default
+        }
+      }
+    }
+
+    const integrations =
+      (existing.integrations as Record<string, unknown>) ?? {};
+    integrations[integration] = config;
+    existing.integrations = integrations;
+
+    await this.storage.write(configPath, stringifyYaml(existing));
+  }
+
+  private getPaths(workspaceRoot: string): {
+    root: string;
+    integrations: string;
+    resources: string;
+  } {
+    const adapter = getAdapterFromConfig(this.config, workspaceRoot);
+    return {
+      root: workspaceRoot,
+      integrations: join(workspaceRoot, adapter.integrationsDir()),
+      resources: join(workspaceRoot, 'resources'),
+    };
+  }
+
+  private getFullPaths(workspaceRoot: string): {
+    root: string;
+    manifest: string;
+    ideConfig: string;
+    rules: string;
+    agentSkills: string;
+    tools: string;
+    integrations: string;
+    context: string;
+    memory: string;
+    now: string;
+    goals: string;
+    projects: string;
+    resources: string;
+    people: string;
+    credentials: string;
+    templates: string;
+  } {
+    const adapter = getAdapterFromConfig(this.config, workspaceRoot);
+    return {
+      root: workspaceRoot,
+      manifest: join(workspaceRoot, 'arete.yaml'),
+      ideConfig: join(workspaceRoot, adapter.configDirName),
+      rules: join(workspaceRoot, adapter.rulesDir()),
+      agentSkills: join(workspaceRoot, '.agents', 'skills'),
+      tools: join(workspaceRoot, adapter.toolsDir()),
+      integrations: join(workspaceRoot, adapter.integrationsDir()),
+      context: join(workspaceRoot, 'context'),
+      memory: join(workspaceRoot, '.arete', 'memory'),
+      now: join(workspaceRoot, 'now'),
+      goals: join(workspaceRoot, 'goals'),
+      projects: join(workspaceRoot, 'projects'),
+      resources: join(workspaceRoot, 'resources'),
+      people: join(workspaceRoot, 'people'),
+      credentials: join(workspaceRoot, '.credentials'),
+      templates: join(workspaceRoot, 'templates'),
+    };
+  }
+
+  private async getIntegrationStatus(
+    workspaceRoot: string,
+    integration: string
+  ): Promise<IntegrationStatus> {
+    if (integration === 'fathom') {
+      const paths = this.getPaths(workspaceRoot);
+      const configPath = join(paths.integrations, 'configs', 'fathom.yaml');
+      const exists = await this.storage.exists(configPath);
+      if (exists) {
+        const content = await this.storage.read(configPath);
+        if (content) {
+          try {
+            const parsed = parseYaml(content) as Record<string, string>;
+            return (parsed.status as IntegrationStatus) ?? 'inactive';
+          } catch {
+            return 'inactive';
+          }
+        }
+      }
+      if (process.env.FATHOM_API_KEY) return 'active';
+      return null;
+    }
+    return null;
   }
 }

@@ -1,0 +1,103 @@
+/**
+ * Canonical workspace structure: directories and default files.
+ * Used by install (new workspaces) and update (backfill missing structure).
+ */
+
+/**
+ * Base directories that should exist in an Areté workspace (IDE-agnostic).
+ */
+export const BASE_WORKSPACE_DIRS = [
+  'now',
+  'now/agendas',
+  'goals',
+  'goals/archive',
+  'context',
+  'context/_history',
+  '.arete',
+  '.arete/memory',
+  '.arete/memory/items',
+  '.arete/memory/summaries',
+  '.arete/activity',
+  '.arete/config',
+  '.arete/templates/meeting-agendas',
+  'projects',
+  'projects/active',
+  'projects/archive',
+  'people',
+  'people/internal',
+  'people/customers',
+  'people/users',
+  'resources',
+  'resources/meetings',
+  'resources/notes',
+  'templates/plans',
+  '.agents',
+  '.agents/skills',
+  '.credentials',
+  'templates',
+  'templates/inputs',
+  'templates/outputs',
+  'templates/projects',
+];
+
+/**
+ * Rule files to copy on install (product rules only).
+ */
+export const PRODUCT_RULES_ALLOW_LIST = [
+  'routing-mandatory.mdc',
+  'arete-vision.mdc',
+  'pm-workspace.mdc',
+  'agent-memory.mdc',
+  'context-management.mdc',
+  'project-management.mdc',
+  'qmd-search.mdc',
+];
+
+/**
+ * Default files created when missing. Key = path relative to workspace root.
+ */
+export const DEFAULT_FILES: Record<string, string> = {
+  'context/README.md': `# Context
+
+Your business and product knowledge. Fill in business-overview.md, users-personas.md, etc.
+`,
+  'now/scratchpad.md': `# Scratchpad
+
+Quick capture space for notes and ideas.
+`,
+  'goals/strategy.md': `# Goals & Strategy
+
+Business goals and strategic direction.
+`,
+  'projects/index.md': `# Projects Index
+
+## Active Projects
+
+None yet.
+`,
+  'people/index.md': `# People Index
+
+| Name | Category | Email | Role |
+|------|----------|-------|------|
+| (none yet) | — | — | — |
+`,
+  '.credentials/README.md': `# Credentials
+
+API keys and tokens. Never commit credentials.yaml.
+`,
+  '.gitignore': `# Areté
+.credentials/credentials.yaml
+.agents/
+`,
+};
+
+export interface EnsureWorkspaceStructureResult {
+  directoriesAdded: string[];
+  filesAdded: string[];
+}
+
+export interface EnsureWorkspaceStructureOptions {
+  dryRun?: boolean;
+  /** IDE adapter for IDE-specific dirs (getIDEDirs). When omitted, only base dirs are used. */
+  getIDEDirs?: () => string[];
+}

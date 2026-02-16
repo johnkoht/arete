@@ -91,3 +91,14 @@ export type PullResult = {
 
 /** Integration status from config file */
 export type IntegrationStatus = 'active' | 'inactive' | 'error' | null;
+
+/** Entry returned by IntegrationService.list() */
+export type IntegrationListEntry = {
+  name: string;
+  displayName: string;
+  description: string;
+  implements: string[];
+  status: 'available' | 'planned';
+  configured: IntegrationStatus;
+  active: boolean;
+};

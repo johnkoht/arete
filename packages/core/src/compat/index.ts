@@ -3,6 +3,13 @@
  * These delegate to the new service classes.
  */
 
+export {
+  isAreteWorkspace,
+  findWorkspaceRoot,
+  getWorkspacePaths,
+  parseSourceType,
+  getSourcePaths,
+} from './workspace.js';
 export { getRelevantContext } from './context.js';
 export { searchMemory } from './memory.js';
 export { assembleBriefing, routeToSkill } from './intelligence.js';

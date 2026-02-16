@@ -1,7 +1,11 @@
 /**
  * WorkspaceService — manages workspace detection and lifecycle.
+ *
+ * Uses StorageAdapter for all file operations. No direct fs imports.
  */
 
+import { join, dirname, resolve } from 'path';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type {
   WorkspacePaths,
@@ -9,35 +13,309 @@ import type {
   CreateWorkspaceOptions,
   InstallResult,
   UpdateResult,
+  AreteConfig,
 } from '../models/index.js';
+import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
+import {
+  BASE_WORKSPACE_DIRS,
+  DEFAULT_FILES,
+  PRODUCT_RULES_ALLOW_LIST,
+  type EnsureWorkspaceStructureResult,
+} from '../workspace-structure.js';
+import { loadConfig, getDefaultConfig } from '../config.js';
 
 export class WorkspaceService {
   constructor(private storage: StorageAdapter) {}
 
-  isWorkspace(dir: string): boolean {
-    throw new Error('Not implemented');
+  async isWorkspace(dir: string): Promise<boolean> {
+    const manifestExists = await this.storage.exists(join(dir, 'arete.yaml'));
+    if (manifestExists) return true;
+
+    const hasCursor =
+      (await this.storage.exists(join(dir, '.cursor'))) ||
+      (await this.storage.exists(join(dir, '.claude')));
+    const hasContext = await this.storage.exists(join(dir, 'context'));
+    const hasMemory =
+      (await this.storage.exists(join(dir, '.arete', 'memory'))) ||
+      (await this.storage.exists(join(dir, 'memory')));
+
+    return !!(hasCursor && hasContext && hasMemory);
   }
 
-  findRoot(startDir?: string): string | null {
-    throw new Error('Not implemented');
+  async findRoot(startDir: string = process.cwd()): Promise<string | null> {
+    let current = resolve(startDir);
+    const root = dirname(current);
+    while (current !== root) {
+      const manifestExists = await this.storage.exists(
+        join(current, 'arete.yaml')
+      );
+      if (manifestExists) return current;
+
+      const hasCursor = await this.storage.exists(join(current, '.cursor'));
+      const hasClaude = await this.storage.exists(join(current, '.claude'));
+      const hasContext = await this.storage.exists(join(current, 'context'));
+      const hasAreteMemory = await this.storage.exists(
+        join(current, '.arete', 'memory')
+      );
+      const hasLegacyMemory = await this.storage.exists(
+        join(current, 'memory')
+      );
+      if (
+        (hasCursor || hasClaude) &&
+        hasContext &&
+        (hasAreteMemory || hasLegacyMemory)
+      ) {
+        return current;
+      }
+      current = dirname(current);
+    }
+    return null;
   }
 
   getPaths(workspaceRoot: string): WorkspacePaths {
-    throw new Error('Not implemented');
+    const adapter = detectAdapter(workspaceRoot);
+    return {
+      root: workspaceRoot,
+      manifest: join(workspaceRoot, 'arete.yaml'),
+      ideConfig: join(workspaceRoot, adapter.configDirName),
+      rules: join(workspaceRoot, adapter.rulesDir()),
+      agentSkills: join(workspaceRoot, '.agents', 'skills'),
+      tools: join(workspaceRoot, adapter.toolsDir()),
+      integrations: join(workspaceRoot, adapter.integrationsDir()),
+      context: join(workspaceRoot, 'context'),
+      memory: join(workspaceRoot, '.arete', 'memory'),
+      now: join(workspaceRoot, 'now'),
+      goals: join(workspaceRoot, 'goals'),
+      projects: join(workspaceRoot, 'projects'),
+      resources: join(workspaceRoot, 'resources'),
+      people: join(workspaceRoot, 'people'),
+      credentials: join(workspaceRoot, '.credentials'),
+      templates: join(workspaceRoot, 'templates'),
+    };
   }
 
   async create(
     targetDir: string,
     options: CreateWorkspaceOptions
   ): Promise<InstallResult> {
-    throw new Error('Not implemented');
+    const result: InstallResult = {
+      directories: [],
+      files: [],
+      skills: [],
+      rules: [],
+      errors: [],
+    };
+
+    const ideTarget = options.ideTarget ?? 'cursor';
+    const adapter = getAdapter(ideTarget);
+    const allDirs = [...BASE_WORKSPACE_DIRS, ...adapter.getIDEDirs()];
+
+    for (const dir of allDirs) {
+      const fullPath = join(targetDir, dir);
+      const exists = await this.storage.exists(fullPath);
+      if (!exists) {
+        try {
+          await this.storage.mkdir(fullPath);
+          result.directories.push(dir);
+        } catch (err) {
+          result.errors.push({
+            type: 'directory',
+            path: dir,
+            error: (err as Error).message,
+          });
+        }
+      }
+    }
+
+    for (const [filePath, content] of Object.entries(DEFAULT_FILES)) {
+      const fullPath = join(targetDir, filePath);
+      const exists = await this.storage.exists(fullPath);
+      if (!exists) {
+        try {
+          const parentDir = join(fullPath, '..');
+          await this.storage.mkdir(parentDir);
+          await this.storage.write(fullPath, content);
+          result.files.push(filePath);
+        } catch (err) {
+          result.errors.push({
+            type: 'file',
+            path: filePath,
+            error: (err as Error).message,
+          });
+        }
+      }
+    }
+
+    const sourcePaths = options.sourcePaths;
+    if (sourcePaths && this.storage.copy) {
+      const paths = this.getPaths(targetDir);
+
+      if (await this.storage.exists(sourcePaths.skills)) {
+        const subdirs = await this.storage.listSubdirectories(sourcePaths.skills);
+        for (const src of subdirs) {
+          const name = src.split(/[/\\]/).pop() ?? '';
+          const dest = join(paths.agentSkills, name);
+          const destExists = await this.storage.exists(dest);
+          if (!destExists) {
+            try {
+              await this.storage.mkdir(paths.agentSkills);
+              await this.storage.copy!(src, dest, { recursive: true });
+              result.skills.push(name);
+            } catch (err) {
+              result.errors.push({
+                type: 'skill',
+                path: name,
+                error: (err as Error).message,
+              });
+            }
+          }
+        }
+      }
+
+      if (await this.storage.exists(sourcePaths.rules)) {
+        const ruleFiles = await this.storage.list(sourcePaths.rules, {
+          extensions: ['.mdc'],
+        });
+        for (const src of ruleFiles) {
+          if (!PRODUCT_RULES_ALLOW_LIST.some((r) => src.endsWith(r))) continue;
+          const baseName = src.split(/[/\\]/).pop() ?? '';
+          const destName = baseName.replace(/\.mdc$/, adapter.ruleExtension);
+          const dest = join(paths.rules, destName);
+          const destExists = await this.storage.exists(dest);
+          if (!destExists) {
+            try {
+              await this.storage.mkdir(paths.rules);
+              const content = await this.storage.read(src);
+              if (content) {
+                await this.storage.write(dest, content);
+                result.rules.push(destName);
+              }
+            } catch (err) {
+              result.errors.push({
+                type: 'rule',
+                path: baseName,
+                error: (err as Error).message,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const manifest: AreteConfig = {
+      schema: 1,
+      version: '0.1.0',
+      source: options.source ?? 'npm',
+      agent_mode: 'guide',
+      created: new Date().toISOString().split('T')[0],
+      ide_target: ideTarget,
+      skills: { core: result.skills, overrides: [] },
+      tools: [],
+      integrations: {},
+      settings: getDefaultConfig().settings,
+    };
+
+    const manifestPath = join(targetDir, 'arete.yaml');
+    await this.storage.write(manifestPath, stringifyYaml(manifest));
+    if (!result.files.includes('arete.yaml')) {
+      result.files.push('arete.yaml');
+    }
+
+    const rootFiles = adapter.generateRootFiles(
+      manifest,
+      targetDir,
+      sourcePaths?.rules
+    );
+    for (const [filename, content] of Object.entries(rootFiles)) {
+      const filePath = join(targetDir, filename);
+      await this.storage.write(filePath, content);
+      if (!result.files.includes(filename)) {
+        result.files.push(filename);
+      }
+    }
+
+    return result;
   }
 
   async update(workspaceRoot: string): Promise<UpdateResult> {
-    throw new Error('Not implemented');
+    const config = await loadConfig(this.storage, workspaceRoot);
+    const adapter = getAdapterFromConfig(config, workspaceRoot);
+    const paths = this.getPaths(workspaceRoot);
+
+    const structureResult = await this.ensureWorkspaceStructure(
+      workspaceRoot,
+      { getIDEDirs: () => adapter.getIDEDirs() }
+    );
+
+    const result: UpdateResult = {
+      added: [...structureResult.directoriesAdded, ...structureResult.filesAdded],
+      updated: [],
+      preserved: config.skills?.overrides ?? [],
+      removed: [],
+    };
+    return result;
+  }
+
+  private async ensureWorkspaceStructure(
+    workspaceRoot: string,
+    options: { getIDEDirs?: () => string[] }
+  ): Promise<EnsureWorkspaceStructureResult> {
+    const directoriesAdded: string[] = [];
+    const filesAdded: string[] = [];
+    const allDirs = options.getIDEDirs
+      ? [...BASE_WORKSPACE_DIRS, ...options.getIDEDirs()]
+      : BASE_WORKSPACE_DIRS;
+
+    for (const dir of allDirs) {
+      const fullPath = join(workspaceRoot, dir);
+      const exists = await this.storage.exists(fullPath);
+      if (!exists) {
+        await this.storage.mkdir(fullPath);
+        directoriesAdded.push(dir);
+      }
+    }
+
+    for (const [filePath, content] of Object.entries(DEFAULT_FILES)) {
+      const fullPath = join(workspaceRoot, filePath);
+      const exists = await this.storage.exists(fullPath);
+      if (!exists) {
+        const parentDir = join(fullPath, '..');
+        await this.storage.mkdir(parentDir);
+        await this.storage.write(fullPath, content);
+        filesAdded.push(filePath);
+      }
+    }
+    return { directoriesAdded, filesAdded };
   }
 
   async getStatus(workspaceRoot: string): Promise<WorkspaceStatus> {
-    throw new Error('Not implemented');
+    const errors: string[] = [];
+    const manifestPath = join(workspaceRoot, 'arete.yaml');
+    const hasManifest = await this.storage.exists(manifestPath);
+
+    let version: string | null = null;
+    let config: AreteConfig | null = null;
+    if (hasManifest) {
+      const content = await this.storage.read(manifestPath);
+      if (content) {
+        try {
+          const parsed = parseYaml(content) as Record<string, unknown>;
+          version = (parsed.version as string) ?? null;
+          config = parsed as unknown as AreteConfig;
+        } catch {
+          errors.push('Could not parse arete.yaml');
+        }
+      }
+    } else {
+      errors.push('No arete.yaml found');
+    }
+
+    return {
+      initialized: hasManifest,
+      version,
+      ideTarget: config?.ide_target,
+      agentMode: config?.agent_mode,
+      errors,
+    };
   }
 }

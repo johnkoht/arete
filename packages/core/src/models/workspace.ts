@@ -84,6 +84,10 @@ export type CreateWorkspaceOptions = {
   agentMode?: AgentMode;
   source?: string;
   skipInstall?: boolean;
+  /** Package root for resolving symlink/local sources. Required when source is 'symlink'. */
+  packageRoot?: string;
+  /** Pre-resolved source paths (skills, rules, tools, etc.). When provided, used for copying. */
+  sourcePaths?: SourcePaths;
 };
 
 /** Result of an install operation */

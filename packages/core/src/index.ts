@@ -18,6 +18,11 @@ export * from './utils/index.js';
 
 // Compatibility shims (legacy function APIs)
 export {
+  isAreteWorkspace,
+  findWorkspaceRoot,
+  getWorkspacePaths,
+  parseSourceType,
+  getSourcePaths,
   getRelevantContext,
   searchMemory,
   assembleBriefing,
@@ -32,3 +37,8 @@ export {
   PEOPLE_CATEGORIES,
 } from './compat/index.js';
 export type { ListPeopleOptions, BriefingOptions } from './compat/index.js';
+
+// Adapters and integrations
+export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
+export type { IDEAdapter, IDETarget } from './adapters/index.js';
+export { getCalendarProvider } from './integrations/calendar/index.js';

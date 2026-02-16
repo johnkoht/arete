@@ -96,4 +96,12 @@ export class FileStorageAdapter implements StorageAdapter {
       return null;
     }
   }
+
+  async copy(
+    src: string,
+    dest: string,
+    _options?: { recursive?: boolean }
+  ): Promise<void> {
+    await fs.copy(src, dest, { overwrite: false });
+  }
 }
