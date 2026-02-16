@@ -18,10 +18,12 @@ Read the skill file with the Read tool, then follow its workflow. These skills a
 
 ## Skill Triggers
 
+**CRITICAL**: When these conditions occur, you MUST load and follow the corresponding skill. Do not skip or improvise.
+
 - Plan review requested → read `.agents/skills/review-plan/SKILL.md`
 - PRD execution starting → read `.agents/skills/execute-prd/SKILL.md`
 - Pre-mortem needed → read `.agents/skills/run-pre-mortem/SKILL.md`
 - PRD completed → read `.agents/skills/prd-post-mortem/SKILL.md`
-- Plan → PRD conversion → read `.agents/skills/plan-to-prd/SKILL.md`
+- **Plan approved + user chose "Convert to PRD"** → **MUST** read `.agents/skills/plan-to-prd/SKILL.md` (do not write PRDs manually)
 - Convert PRD to JSON → read `.agents/skills/prd-to-json/SKILL.md`
 - Update collaboration profile → read `.agents/skills/synthesize-collaboration-profile/SKILL.md`

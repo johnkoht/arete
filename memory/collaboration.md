@@ -72,6 +72,7 @@
 
 Things the builder has corrected — important context for avoiding repeat mistakes.
 
+- **Always use plan-to-prd skill** (2026-02-14): When converting a plan to a PRD (e.g., user chose "Create a PRD" execution path), you MUST load and follow `.agents/skills/plan-to-prd/SKILL.md`. Do not write PRDs directly without using the skill. The skill ensures correct structure, creates prd.json, and generates the handoff prompt for execute-prd. This applies whenever: (1) user selected "Convert to PRD" from PRD Gateway, or (2) user requested PRD creation after plan approval.
 - **Backlog placement** (2026-02-10): Do not put backlog items or future enhancements in `dev/entries/`. Entries = actions, decisions, learnings (what happened). Backlog = future work → `dev/backlog/`.
 - **Backlog subfolders** (2026-02-10): When adding to `dev/backlog/`, use subfolders — do not put files in the root. Use `dev/backlog/features/` for new capabilities (progress-dashboard, google-calendar-provider) and `dev/backlog/improvements/` for enhancements to existing functionality (automated-code-review, skills-enhancement).
 - **Report format** (2026-02-10): Produce ONE comprehensive report organized by theme, not separate sections per request that duplicate content.
