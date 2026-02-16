@@ -93,6 +93,25 @@ function hasTokenOverlap(text: string, tokens: string[]): boolean {
   return tokens.some(t => lower.includes(t));
 }
 
+function daysAgo(dateStr: string): number {
+  const itemDate = new Date(dateStr);
+  const today = new Date();
+  const diffMs = today.getTime() - itemDate.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function formatDaysAgo(days: number): string {
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day ago';
+  return `${days} days ago`;
+}
+
+type TemporalMatch = {
+  date: string;
+  title: string;
+  source: string;
+};
+
 // ---------------------------------------------------------------------------
 // ContextService
 // ---------------------------------------------------------------------------
@@ -267,6 +286,66 @@ export class ContextService {
       confidence = 'Low';
     }
 
+    // 9. Temporal signals — search memory for recent mentions of the topic
+    const temporalSignals: string[] = [];
+    try {
+      const temporalMatches: TemporalMatch[] = [];
+      const memItemsDir = join(paths.memory, 'items');
+      const memExists = await this.storage.exists(memItemsDir);
+      if (memExists) {
+        const memFiles = ['decisions.md', 'learnings.md', 'agent-observations.md'];
+        for (const mf of memFiles) {
+          const filePath = join(memItemsDir, mf);
+          const content = await safeRead(filePath);
+          if (!content) continue;
+          const sections = content.split(/^###\s+/m).slice(1);
+          for (const section of sections) {
+            const headingMatch = section.match(/^(?:(\d{4}-\d{2}-\d{2}):\s*)?(.+)/);
+            if (!headingMatch) continue;
+            const date = headingMatch[1];
+            const title = headingMatch[2].trim();
+            if (!date) continue;
+            const sectionLower = section.toLowerCase();
+            if (queryTokens.some(t => sectionLower.includes(t))) {
+              temporalMatches.push({ date, title, source: mf.replace('.md', '') });
+            }
+          }
+        }
+      }
+
+      // Check meetings
+      const meetingsDir = join(paths.resources, 'meetings');
+      const meetingsExist = await this.storage.exists(meetingsDir);
+      if (meetingsExist) {
+        const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
+        for (const mp of meetingFiles) {
+          const baseName = mp.split(/[/\\]/).pop() ?? '';
+          if (baseName === 'index.md') continue;
+          const dateMatch = baseName.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (!dateMatch) continue;
+          const content = await safeRead(mp);
+          if (!content) continue;
+          if (!hasTokenOverlap(content, queryTokens)) continue;
+          let title = baseName.replace(/\.md$/, '');
+          const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
+          if (titleMatch) title = titleMatch[1].trim();
+          temporalMatches.push({ date: dateMatch[1], title, source: 'meeting' });
+        }
+      }
+
+      // Sort by date descending and generate signals for the most recent matches
+      temporalMatches.sort((a, b) => b.date.localeCompare(a.date));
+      const MAX_SIGNALS = 5;
+      for (const match of temporalMatches.slice(0, MAX_SIGNALS)) {
+        const days = daysAgo(match.date);
+        temporalSignals.push(
+          `last discussed ${formatDaysAgo(days)} in ${match.source}: "${match.title}"`
+        );
+      }
+    } catch {
+      // Temporal signal generation is best-effort — don't fail context assembly
+    }
+
     return {
       query,
       primitives,
@@ -274,6 +353,7 @@ export class ContextService {
       gaps,
       confidence,
       assembledAt: now,
+      temporalSignals: temporalSignals.length > 0 ? temporalSignals : undefined,
     };
   }
 

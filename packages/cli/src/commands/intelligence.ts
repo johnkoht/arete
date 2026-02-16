@@ -220,6 +220,120 @@ export function registerMemoryCommand(program: Command): void {
         }
       },
     );
+
+  memoryCmd
+    .command('timeline <query>')
+    .description('Show temporal timeline for a topic')
+    .option('--days <n>', 'Number of days to look back')
+    .option('--from <date>', 'Start date (YYYY-MM-DD)')
+    .option('--to <date>', 'End date (YYYY-MM-DD)')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        query: string,
+        opts: { days?: string; from?: string; to?: string; json?: boolean },
+      ) => {
+        if (!query?.trim()) {
+          if (opts.json) {
+            console.log(
+              JSON.stringify({
+                success: false,
+                error: 'Missing query. Usage: arete memory timeline "onboarding"',
+              }),
+            );
+          } else {
+            error('Missing query');
+            info('Usage: arete memory timeline "onboarding"');
+          }
+          process.exit(1);
+        }
+
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+          } else {
+            error('Not in an Areté workspace');
+          }
+          process.exit(1);
+        }
+
+        const paths = services.workspace.getPaths(root);
+
+        // Build date range from options
+        let start: string | undefined = opts.from;
+        let end: string | undefined = opts.to;
+        if (opts.days) {
+          const daysBack = parseInt(opts.days, 10);
+          if (!isNaN(daysBack) && daysBack > 0) {
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - daysBack);
+            start = start ?? startDate.toISOString().slice(0, 10);
+          }
+        }
+        const range = (start || end) ? { start, end } : undefined;
+
+        const timeline = await services.memory.getTimeline(query, paths, range);
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                success: true,
+                query: timeline.query,
+                dateRange: timeline.dateRange,
+                themes: timeline.themes,
+                itemCount: timeline.items.length,
+                items: timeline.items.map((item) => ({
+                  date: item.date,
+                  type: item.type,
+                  title: item.title,
+                  source: item.source,
+                  relevanceScore: item.relevanceScore,
+                })),
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+
+        header('Memory Timeline');
+        console.log(chalk.dim(`  Query: "${timeline.query}"`));
+        if (timeline.dateRange.start || timeline.dateRange.end) {
+          console.log(
+            chalk.dim(`  Date range: ${timeline.dateRange.start ?? '...'} to ${timeline.dateRange.end ?? '...'}`),
+          );
+        }
+        console.log('');
+
+        if (timeline.themes.length > 0) {
+          console.log(chalk.bold('  Recurring themes: ') + chalk.cyan(timeline.themes.join(', ')));
+          console.log('');
+        }
+
+        if (timeline.items.length === 0) {
+          info('No timeline items found for this query');
+          return;
+        }
+
+        for (const item of timeline.items) {
+          const typeLabel = item.type === 'meeting'
+            ? chalk.green('Meeting')
+            : item.type === 'decisions'
+              ? chalk.cyan('Decision')
+              : item.type === 'learnings'
+                ? chalk.green('Learning')
+                : chalk.yellow('Observation');
+          console.log(
+            `  ${chalk.dim(item.date)} ${chalk.dim('|')} ${typeLabel}: ${item.title}`,
+          );
+        }
+        console.log('');
+      },
+    );
 }
 
 export function registerResolveCommand(program: Command): void {

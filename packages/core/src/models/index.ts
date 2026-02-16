@@ -24,6 +24,7 @@ export type {
   MemorySearchResult,
   MemorySearchOptions,
   CreateMemoryRequest,
+  TimelineItem,
   MemoryTimeline,
   MemoryIndex,
 } from './memory.js';

@@ -12,6 +12,7 @@ import type {
   CreateMemoryRequest,
   MemoryEntry,
   MemoryTimeline,
+  TimelineItem,
   MemoryIndex,
   DateRange,
   WorkspacePaths,
@@ -34,6 +35,8 @@ const RECENCY_30_DAYS = 30;
 const RECENCY_90_DAYS = 90;
 const RECENCY_30_BOOST = 0.2;
 const RECENCY_90_BOOST = 0.1;
+const THEME_MIN_OCCURRENCES = 3;
+const THEME_MAX_COUNT = 10;
 
 // ---------------------------------------------------------------------------
 // Parsing and scoring
@@ -139,6 +142,37 @@ function getMemoryTypeFromPath(filePath: string): MemoryItemType | null {
   if (fileName === 'learnings.md') return 'learnings';
   if (fileName === 'agent-observations.md') return 'observations';
   return null;
+}
+
+function isInDateRange(dateStr: string, range?: DateRange): boolean {
+  if (!range) return true;
+  if (range.start && dateStr < range.start) return false;
+  if (range.end && dateStr > range.end) return false;
+  return true;
+}
+
+function extractDateFromFilename(filename: string): string | undefined {
+  const match = filename.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : undefined;
+}
+
+function extractThemes(items: TimelineItem[]): string[] {
+  const tokenCounts = new Map<string, number>();
+  for (const item of items) {
+    const tokens = tokenize(item.title + ' ' + item.content);
+    const unique = new Set(tokens);
+    for (const token of unique) {
+      tokenCounts.set(token, (tokenCounts.get(token) ?? 0) + 1);
+    }
+  }
+  const themes: Array<{ token: string; count: number }> = [];
+  for (const [token, count] of tokenCounts) {
+    if (count >= THEME_MIN_OCCURRENCES) {
+      themes.push({ token, count });
+    }
+  }
+  themes.sort((a, b) => b.count - a.count);
+  return themes.slice(0, THEME_MAX_COUNT).map(t => t.token);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,10 +305,117 @@ export class MemoryService {
   }
 
   async getTimeline(
-    _query: string,
-    _range?: DateRange
+    query: string,
+    paths: WorkspacePaths,
+    range?: DateRange
   ): Promise<MemoryTimeline> {
-    throw new Error('getTimeline not implemented (Phase 6)');
+    const queryTokens = tokenize(query);
+    const items: TimelineItem[] = [];
+
+    // 1. Search memory items (decisions, learnings, observations)
+    const memoryItemsDir = join(paths.memory, 'items');
+    const memoryExists = await this.storage.exists(memoryItemsDir);
+    if (memoryExists) {
+      for (const [memType, fileName] of Object.entries(MEMORY_FILES) as Array<[MemoryItemType, string]>) {
+        const filePath = join(memoryItemsDir, fileName);
+        const content = await this.storage.read(filePath);
+        if (content === null) continue;
+
+        const sections = parseMemorySections(content);
+        for (const section of sections) {
+          if (!section.date) continue;
+          if (!isInDateRange(section.date, range)) continue;
+
+          const score = scoreSection(section, queryTokens);
+          if (score <= 0 && queryTokens.length > 0) continue;
+
+          const normalizedScore = queryTokens.length > 0
+            ? Math.min(score / (queryTokens.length * 4), 1)
+            : 0.5;
+
+          items.push({
+            type: memType,
+            title: section.title,
+            content: section.body,
+            date: section.date,
+            source: fileName,
+            relevanceScore: applyRecencyBoost(normalizedScore, section.date),
+          });
+        }
+      }
+    }
+
+    // 2. Search meeting transcripts/notes
+    const meetingsDir = join(paths.resources, 'meetings');
+    const meetingsExist = await this.storage.exists(meetingsDir);
+    if (meetingsExist) {
+      const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
+      for (const meetingPath of meetingFiles) {
+        const baseName = meetingPath.split(/[/\\]/).pop() ?? '';
+        if (baseName === 'index.md') continue;
+
+        const meetingDate = extractDateFromFilename(baseName);
+        if (meetingDate && !isInDateRange(meetingDate, range)) continue;
+
+        const content = await this.storage.read(meetingPath);
+        if (content === null) continue;
+
+        // Extract title from frontmatter or first heading
+        let title = baseName.replace(/\.md$/, '');
+        const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        } else {
+          const headingMatch = content.match(/^#\s+(.+)/m);
+          if (headingMatch) title = headingMatch[1].trim();
+        }
+
+        // Score against query
+        const combined = (title + ' ' + content).toLowerCase();
+        let score = 0;
+        for (const token of queryTokens) {
+          if (combined.includes(token)) score += 1;
+          if (title.toLowerCase().includes(token)) score += 2;
+        }
+        if (score <= 0 && queryTokens.length > 0) continue;
+
+        const date = meetingDate ?? '';
+        if (!date && !isInDateRange('', range)) continue;
+
+        const normalizedScore = queryTokens.length > 0
+          ? Math.min(score / (queryTokens.length * 3), 1)
+          : 0.5;
+
+        items.push({
+          type: 'meeting',
+          title,
+          content: content.slice(0, 500),
+          date,
+          source: baseName,
+          relevanceScore: date ? applyRecencyBoost(normalizedScore, date) : normalizedScore,
+        });
+      }
+    }
+
+    // 3. Sort by date (chronological, newest first)
+    items.sort((a, b) => b.date.localeCompare(a.date));
+
+    // 4. Extract recurring themes
+    const themes = extractThemes(items);
+
+    // 5. Build effective date range
+    const dates = items.map(i => i.date).filter(d => d.length > 0);
+    const effectiveRange: DateRange = {
+      start: range?.start ?? (dates.length > 0 ? dates[dates.length - 1] : undefined),
+      end: range?.end ?? (dates.length > 0 ? dates[0] : undefined),
+    };
+
+    return {
+      query,
+      items,
+      themes,
+      dateRange: effectiveRange,
+    };
   }
 
   async getIndex(paths: WorkspacePaths): Promise<MemoryIndex> {

@@ -33,6 +33,8 @@ export type ContextBundle = {
   gaps: ContextGap[];
   confidence: 'High' | 'Medium' | 'Low';
   assembledAt: string;
+  /** Temporal signals showing recency information for the query topic */
+  temporalSignals?: string[];
 };
 
 /** Request for context assembly (replaces ContextInjectionOptions with richer API) */

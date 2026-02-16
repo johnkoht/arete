@@ -61,11 +61,22 @@ export type CreateMemoryRequest = {
   relatedEntities?: string[];
 };
 
-/** Timeline of memory entries */
+/** A timeline item with relevance score */
+export type TimelineItem = {
+  type: MemoryItemType | 'meeting';
+  title: string;
+  content: string;
+  date: string;
+  source: string;
+  relevanceScore: number;
+};
+
+/** Timeline of memory entries for a topic */
 export type MemoryTimeline = {
-  entries: MemoryEntry[];
-  startDate?: string;
-  endDate?: string;
+  query: string;
+  items: TimelineItem[];
+  themes: string[];
+  dateRange: DateRange;
 };
 
 /** Index of memory entries by type */
