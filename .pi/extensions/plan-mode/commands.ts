@@ -9,6 +9,7 @@
  * and delegate to Pi's extension API for UI and messaging.
  */
 
+import { execSync } from "node:child_process";
 import {
 	savePlan,
 	loadPlan,
@@ -92,6 +93,40 @@ export interface CommandPi {
 
 // Normal and plan mode tool sets
 const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
+
+// ────────────────────────────────────────────────────────────
+// Git diff utilities for plan resume
+// ────────────────────────────────────────────────────────────
+
+/** Files changed since a given ISO date, from git */
+export interface PlanDiff {
+	files: string[];
+	since: string;
+}
+
+/**
+ * Get files changed since a given ISO date using git.
+ * Returns empty array on error (not a git repo, git not available, etc).
+ */
+export function getChangesSince(sinceDate: string): PlanDiff {
+	try {
+		const output = execSync(`git diff --name-only --diff-filter=ACMR HEAD @{0} -- . 2>/dev/null || git log --name-only --pretty=format: --since="${sinceDate}" 2>/dev/null`, {
+			encoding: "utf-8",
+			timeout: 5000,
+		});
+
+		const files = output
+			.split("\n")
+			.map((f) => f.trim())
+			.filter((f) => f.length > 0)
+			// Deduplicate
+			.filter((f, i, arr) => arr.indexOf(f) === i);
+
+		return { files, since: sinceDate };
+	} catch {
+		return { files: [], since: sinceDate };
+	}
+}
 
 // ────────────────────────────────────────────────────────────
 // /plan command handler
@@ -292,6 +327,19 @@ async function handlePlanOpen(
 		`📋 Opened: ${plan.frontmatter.title} (${plan.frontmatter.status}, ${plan.frontmatter.size})`,
 		"info",
 	);
+
+	// Show diff since plan was last updated
+	const diff = getChangesSince(plan.frontmatter.updated);
+	if (diff.files.length > 0) {
+		const MAX_FILES = 10;
+		const shown = diff.files.slice(0, MAX_FILES);
+		const extra = diff.files.length > MAX_FILES ? `\n  ... and ${diff.files.length - MAX_FILES} more` : "";
+		const fileList = shown.map((f) => `  ${f}`).join("\n");
+		ctx.ui.notify(
+			`📂 ${diff.files.length} file(s) changed since this plan was last updated:\n${fileList}${extra}`,
+			"info",
+		);
+	}
 }
 
 async function handlePlanSave(
