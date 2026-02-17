@@ -1,6 +1,21 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { getChangesSince } from "./commands.js";
+import {
+	getChangesSince,
+	extractPrdFeatureSlug,
+} from "./commands.js";
+
+describe("extractPrdFeatureSlug", () => {
+	it("extracts feature slug from artifact metadata", () => {
+		const artifact = `# PRD\n\nFeature: custom-feature-slug\nTriggered: 2026-02-17T12:00:00.000Z`;
+		assert.equal(extractPrdFeatureSlug(artifact), "custom-feature-slug");
+	});
+
+	it("returns null when feature metadata is missing", () => {
+		const artifact = `# PRD\n\nTriggered: 2026-02-17T12:00:00.000Z`;
+		assert.equal(extractPrdFeatureSlug(artifact), null);
+	});
+});
 
 describe("getChangesSince", () => {
 	it("returns a PlanDiff with files array and since date", () => {

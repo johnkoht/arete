@@ -399,6 +399,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}
 			}
 
+			const preMortemGuidance = state.preMortemRun
+				? "- Pre-mortem is already complete for this plan. Do not ask to run it again unless the user explicitly asks or the plan materially changes."
+				: "- For Small/Medium/Large plans, offer a pre-mortem once before execution.";
+
 			return {
 				message: {
 					customType: "plan-mode-context",
@@ -424,8 +428,9 @@ Do NOT attempt to make changes - just describe what you would do.
 
 **Arete workflow** (execution path decision tree):
 - **Tiny** (1-2 simple steps): Direct execution, quality gates ✓, skip pre-mortem
-- **Small** (2-3 moderate steps): Ask "Run pre-mortem first?" — use /skill:run-pre-mortem for risk analysis. Quality gates ✓. Offer "Capture learnings?" at end
-- **Medium/Large** (3+ steps or complex): If plan has 3+ steps, suggest converting to PRD via /skill:plan-to-prd for autonomous execution. Otherwise apply pre-mortem + quality gates + memory capture${agentContext}${planContext}`,
+- **Small** (2-3 moderate steps): Optional pre-mortem before build, then quality gates ✓. Offer "Capture learnings?" at end
+- **Medium/Large** (3+ steps or complex): If plan has 3+ steps, suggest converting to PRD via /skill:plan-to-prd for autonomous execution. Otherwise apply pre-mortem + quality gates + memory capture
+${preMortemGuidance}${agentContext}${planContext}`,
 					display: false,
 				},
 			};
@@ -578,7 +583,7 @@ After completing a step, include a [DONE:n] tag in your response.
 					{ customType: "plan-mode-execute", content: execMessage, display: true },
 					{ triggerTurn: true },
 				);
-			} else if (choice === "Run pre-mortem (no code changes)" || choice === "Re-run pre-mortem (optional)") {
+			} else if (choice === "Run pre-mortem (no code changes)") {
 				enableArtifactTool();
 				const saved = await ensurePlanSavedForGate(ctx, "running pre-mortem");
 				if (saved) {

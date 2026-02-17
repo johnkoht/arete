@@ -286,11 +286,10 @@ describe("getMenuOptions", () => {
 		assert.equal(options[0], "Convert to PRD (recommended, no code changes)");
 	});
 
-	it("small + preMortemRun: hides first-run option and offers rerun", () => {
+	it("small + preMortemRun: hides pre-mortem prompt and keeps build path", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "small", preMortemRun: true }));
 		assert.ok(!options.includes("Run pre-mortem (no code changes)"));
 		assert.ok(options.includes("Start build now (pre-mortem ✓, executes code changes)"));
-		assert.ok(options.includes("Re-run pre-mortem (optional)"));
 	});
 
 	it("medium + reviewRun: Review not in options", () => {
@@ -303,7 +302,7 @@ describe("getMenuOptions", () => {
 		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
 	});
 
-	it("all gates run: execute/save/refine remain, plus optional pre-mortem rerun", () => {
+	it("all gates run: execute/save/refine remain without repeated pre-mortem prompt", () => {
 		const options = getMenuOptions(
 			makeMenuState({
 				planSize: "large",
@@ -314,8 +313,8 @@ describe("getMenuOptions", () => {
 		);
 		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
 		assert.ok(!options.includes("Review the plan"));
+		assert.ok(!options.includes("Run pre-mortem (no code changes)"));
 		assert.ok(options.some((o) => o.includes("Start build now")));
-		assert.ok(options.includes("Re-run pre-mortem (optional)"));
 		assert.ok(options.includes("Save as draft"));
 		assert.ok(options.includes("Refine the plan"));
 	});

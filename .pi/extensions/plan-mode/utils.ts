@@ -314,7 +314,6 @@ export function getMenuOptions(state: WorkflowMenuState): string[] {
 		options.push(executeLabel);
 		if (!reviewRun) options.push("Review the plan");
 		if (!prdConverted) options.push("Convert to PRD (no code changes)");
-		if (preMortemRun) options.push("Re-run pre-mortem (optional)");
 		options.push("Save as draft", "Refine the plan");
 		return options;
 	}
@@ -325,7 +324,6 @@ export function getMenuOptions(state: WorkflowMenuState): string[] {
 	if (!preMortemRun) options.push("Run pre-mortem (no code changes)");
 	if (!reviewRun) options.push("Review the plan");
 	options.push(executeLabel);
-	if (preMortemRun) options.push("Re-run pre-mortem (optional)");
 	options.push("Save as draft", "Refine the plan");
 	return options;
 }

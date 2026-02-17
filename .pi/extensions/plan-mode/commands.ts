@@ -16,6 +16,7 @@ import {
 	listPlans,
 	updatePlanFrontmatter,
 	savePlanArtifact,
+	loadPlanArtifact,
 	slugify,
 	type PlanFrontmatter,
 	type PlanStatus,
@@ -126,6 +127,22 @@ export function getChangesSince(sinceDate: string): PlanDiff {
 	} catch {
 		return { files: [], since: sinceDate };
 	}
+}
+
+/** Parse "Feature: <slug>" metadata from a plan PRD artifact. */
+export function extractPrdFeatureSlug(artifactContent: string): string | null {
+	const match = artifactContent.match(/^Feature:\s+([a-z0-9-]+)\s*$/im);
+	if (!match) return null;
+	return match[1].trim();
+}
+
+/** Resolve which PRD feature slug to execute for a plan. */
+export function resolvePrdFeatureSlug(planSlug: string): string {
+	const artifact = loadPlanArtifact(planSlug, "prd.md");
+	if (!artifact) return planSlug;
+
+	const parsed = extractPrdFeatureSlug(artifact);
+	return parsed ?? planSlug;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -781,10 +798,29 @@ export async function handlePrd(
 		return;
 	}
 
-	ctx.ui.notify("📄 Converting plan to PRD...", "info");
+	const defaultFeatureName = state.currentSlug ?? slugify(plan.frontmatter.title);
+	const requestedFeatureName = await ctx.ui.editor(
+		"PRD feature name (used for dev/prds/{feature-name}/):",
+		defaultFeatureName,
+	);
+
+	if (!requestedFeatureName?.trim()) {
+		ctx.ui.notify("Skipped PRD conversion (feature name not provided).", "info");
+		return;
+	}
+
+	const featureSlug = slugify(requestedFeatureName.trim());
+	if (!featureSlug) {
+		ctx.ui.notify("PRD feature name must include letters or numbers.", "warning");
+		return;
+	}
+
+	ctx.ui.notify(`📄 Converting plan to PRD as '${featureSlug}'...`, "info");
 
 	pi.sendUserMessage(
 		`Convert this plan to a PRD. Load .agents/skills/plan-to-prd/SKILL.md and follow its workflow.\n\n` +
+			`Use this exact feature name: ${featureSlug}.\n` +
+			`Create artifacts under dev/prds/${featureSlug}/ (do not derive a different slug).\n\n` +
 			`Plan: ${plan.frontmatter.title}\nSize: ${plan.frontmatter.size}\nSteps: ${plan.frontmatter.steps}\n\n` +
 			plan.content,
 	);
@@ -795,7 +831,7 @@ export async function handlePrd(
 	savePlanArtifact(
 		state.currentSlug,
 		"prd.md",
-		`# PRD\n\nTriggered: ${new Date().toISOString()}\n\nPRD content will be created by the plan-to-prd skill.\n`,
+		`# PRD\n\nFeature: ${featureSlug}\nTriggered: ${new Date().toISOString()}\n\nPRD content will be created by the plan-to-prd skill.\n`,
 	);
 }
 
@@ -847,9 +883,10 @@ export async function handleBuild(
 
 	if (plan.frontmatter.has_prd) {
 		// Has PRD: invoke execute-prd skill
+		const prdFeatureSlug = resolvePrdFeatureSlug(state.currentSlug);
 		pi.sendUserMessage(
-			`Execute the ${state.currentSlug} PRD. Load the execute-prd skill from .pi/skills/execute-prd/SKILL.md. ` +
-				`The PRD is at dev/prds/${state.currentSlug}/prd.md and the task list is at dev/autonomous/prd.json. ` +
+			`Execute the ${prdFeatureSlug} PRD. Load the execute-prd skill from .pi/skills/execute-prd/SKILL.md. ` +
+				`The PRD is at dev/prds/${prdFeatureSlug}/prd.md and the task list is at dev/autonomous/prd.json. ` +
 				`Run the full workflow.`,
 		);
 	} else {
