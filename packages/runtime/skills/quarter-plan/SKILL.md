@@ -46,7 +46,11 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 Use the `light_pre_mortem` pattern before locking outcomes.
 
 - **File**: `goals/quarter.md`.
-- **Structure**: Use the template at `templates/plans/quarter-goals.md`:
+- **Structure**: Load the quarter goals template (resolution order — use first that exists):
+  1. `templates/plans/quarter-goals.md` — workspace override (user customized)
+  2. `.agents/skills/quarter-plan/templates/quarter-goals.md` — skill default
+
+  Template sections:
   - Quarter dates
   - 3–5 outcomes with success criteria and org pillar/OKR link
   - **Alignment table**: My goal → Org pillar/OKR (so roll-up and review are easy).
@@ -87,7 +91,7 @@ Common mistakes to avoid:
 
 - **Org strategy**: `goals/strategy.md`
 - **Output**: `goals/quarter.md`
-- **Template**: `templates/plans/quarter-goals.md`
+- **Template**: `templates/plans/quarter-goals.md` (override) or `.agents/skills/quarter-plan/templates/quarter-goals.md` (default)
 
 ## Error Handling
 

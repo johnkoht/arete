@@ -232,7 +232,11 @@ Before finalizing:
 
 ### 8. Final Output
 
-Create `outputs/roadmap.md`:
+Create `outputs/roadmap.md`. Load the roadmap output template (resolution order — use first that exists):
+1. `templates/outputs/construct-roadmap/roadmap.md` — workspace override (user customized)
+2. `.agents/skills/construct-roadmap/templates/roadmap.md` — skill default
+
+Populate with the synthesized content from earlier steps:
 
 ```markdown
 # Product Roadmap: [Period]

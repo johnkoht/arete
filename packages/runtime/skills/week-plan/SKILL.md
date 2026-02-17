@@ -72,7 +72,11 @@ Also capture:
 ### 4. Write Week File
 
 - **File**: `now/week.md`.
-- **Structure**: Use the template at `templates/plans/week-priorities.md`:
+- **Structure**: Load the week priorities template (resolution order — use first that exists):
+  1. `templates/plans/week-priorities.md` — workspace override (user customized)
+  2. `.agents/skills/week-plan/templates/week-priorities.md` — skill default
+
+  Template sections:
   - Week dates
   - Top 3–5 outcomes with quarter goal links
   - Commitments due this week
@@ -96,7 +100,7 @@ Also capture:
 - **Quarter goals**: `goals/quarter.md`
 - **Last week**: `now/week.md`
 - **Output**: `now/week.md`
-- **Template**: `templates/plans/week-priorities.md`
+- **Template**: `templates/plans/week-priorities.md` (override) or `.agents/skills/week-plan/templates/week-priorities.md` (default)
 - **Context**: `projects/active/`, `now/scratchpad.md`
 - **Calendar**: `arete pull calendar --days 7 --json` (optional; same as daily-plan)
 

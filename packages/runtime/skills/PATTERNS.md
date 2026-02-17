@@ -20,14 +20,18 @@ Check each path in order; use the first file that exists:
 
 Where `{category}` matches the template group:
 
-| Skill | Category | Example variant |
-|-------|----------|-----------------|
-| `create-prd` | `outputs/create-prd` | `prd-simple` |
-| `prepare-meeting-agenda` | `meeting-agendas` | `one-on-one` |
-| `discovery` | `projects/discovery` | `project` |
-| `create-prd` (project) | `projects/definition` | `project` |
-| `competitive-analysis` | `projects/analysis` | `project` |
-| `construct-roadmap` | `projects/roadmap` | `project` |
+| Skill | Template type | Workspace override path | Variant(s) |
+|-------|--------------|------------------------|------------|
+| `create-prd` | PRD output | `templates/outputs/create-prd/` | `prd-simple`, `prd-regular`, `prd-full` |
+| `create-prd` | Project README | `templates/projects/definition/` | `project` |
+| `prepare-meeting-agenda` | Agenda | `templates/meeting-agendas/` | `customer`, `dev-team`, `leadership`, `one-on-one`, `other` |
+| `discovery` | Project README | `templates/projects/discovery/` | `project` |
+| `discovery` | Research inputs | `templates/inputs/` | `research-note`, `user-feedback` |
+| `competitive-analysis` | Project README | `templates/projects/analysis/` | `project` |
+| `construct-roadmap` | Project README | `templates/projects/roadmap/` | `project` |
+| `construct-roadmap` | Roadmap output | `templates/outputs/construct-roadmap/` | `roadmap` |
+| `week-plan` | Week file | `templates/plans/` | `week-priorities` |
+| `quarter-plan` | Quarter file | `templates/plans/` | `quarter-goals` |
 
 ### How to customize a template
 
@@ -38,10 +42,16 @@ Drop a file at the workspace override path — no config, no reinstall:
 templates/outputs/create-prd/prd-simple.md
 
 # Custom meeting agenda
-templates/meeting-agendas/prepare-meeting-agenda/one-on-one.md
+templates/meeting-agendas/one-on-one.md
 
 # Custom discovery project structure
 templates/projects/discovery/project.md
+
+# Custom week plan structure
+templates/plans/week-priorities.md
+
+# Custom roadmap output format
+templates/outputs/construct-roadmap/roadmap.md
 ```
 
 The skill will use your file automatically on its next run.

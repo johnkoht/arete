@@ -103,7 +103,11 @@ Help plan research activities:
 
 ### 4. Capture Inputs
 
-As user conducts research, help capture in `inputs/`:
+As user conducts research, help capture in `inputs/`. Load structured input templates (resolution order — use first that exists):
+
+- **Research note**: `templates/inputs/research-note.md` (override) or `.agents/skills/discovery/templates/research-note.md` (default)
+- **User feedback**: `templates/inputs/user-feedback.md` (override) or `.agents/skills/discovery/templates/user-feedback.md` (default)
+
 
 **Interview Notes Template**:
 ```markdown

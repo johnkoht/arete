@@ -72,40 +72,82 @@ describe('integration: workspace install/update journeys', () => {
     assert.equal(existsSync(join(workspace, '.claude')), false);
   });
 
-  it('install ships GUIDE.md and skill-local templates to new workspace', () => {
+  it('install ships GUIDE.md and skill-local templates; no defaults in user override space', () => {
     const workspace = join(sandboxRoot, 'install-outputs');
     const install = installWorkspace(workspace, 'cursor');
     assert.equal(install.success, true, 'install should succeed');
 
     // GUIDE.md must be present at workspace root
-    assert.equal(
-      existsSync(join(workspace, 'GUIDE.md')),
-      true,
-      'GUIDE.md should be present after install'
-    );
+    assert.equal(existsSync(join(workspace, 'GUIDE.md')), true, 'GUIDE.md should be present after install');
 
-    // PRD templates are skill-local, not in templates/outputs/
+    // PRD templates: skill-local YES, templates/outputs/ NO
     for (const variant of ['prd-simple', 'prd-regular', 'prd-full']) {
       assert.equal(
         existsSync(join(workspace, '.agents', 'skills', 'create-prd', 'templates', `${variant}.md`)),
-        true,
-        `.agents/skills/create-prd/templates/${variant}.md should be present after install`
+        true, `.agents/skills/create-prd/templates/${variant}.md should be skill-local`
       );
       assert.equal(
         existsSync(join(workspace, 'templates', 'outputs', `${variant}.md`)),
-        false,
-        `templates/outputs/${variant}.md should NOT be in outputs (user override space)`
+        false, `templates/outputs/${variant}.md must NOT be pre-populated (user override space)`
       );
     }
 
-    // Meeting agenda templates are skill-local
+    // Meeting agenda templates: skill-local YES, templates/meeting-agendas/ NO
     for (const type of ['one-on-one', 'customer', 'leadership', 'dev-team', 'other']) {
       assert.equal(
         existsSync(join(workspace, '.agents', 'skills', 'prepare-meeting-agenda', 'templates', `${type}.md`)),
-        true,
-        `.agents/skills/prepare-meeting-agenda/templates/${type}.md should be present after install`
+        true, `.agents/skills/prepare-meeting-agenda/templates/${type}.md should be skill-local`
+      );
+      assert.equal(
+        existsSync(join(workspace, 'templates', 'meeting-agendas', `${type}.md`)),
+        false, `templates/meeting-agendas/${type}.md must NOT be pre-populated (user override space)`
       );
     }
+
+    // Plans templates: skill-local YES, templates/plans/ NO
+    assert.equal(
+      existsSync(join(workspace, '.agents', 'skills', 'week-plan', 'templates', 'week-priorities.md')),
+      true, 'week-plan skill-local template should be present'
+    );
+    assert.equal(
+      existsSync(join(workspace, '.agents', 'skills', 'quarter-plan', 'templates', 'quarter-goals.md')),
+      true, 'quarter-plan skill-local template should be present'
+    );
+    assert.equal(
+      existsSync(join(workspace, 'templates', 'plans', 'week-priorities.md')),
+      false, 'templates/plans/week-priorities.md must NOT be pre-populated'
+    );
+    assert.equal(
+      existsSync(join(workspace, 'templates', 'plans', 'quarter-goals.md')),
+      false, 'templates/plans/quarter-goals.md must NOT be pre-populated'
+    );
+
+    // Project templates: skill-local YES, templates/projects/ NO
+    for (const [skill, type] of [
+      ['discovery', 'discovery'],
+      ['create-prd', 'definition'],
+      ['competitive-analysis', 'analysis'],
+      ['construct-roadmap', 'roadmap'],
+    ] as [string, string][]) {
+      assert.equal(
+        existsSync(join(workspace, '.agents', 'skills', skill, 'templates', 'project.md')),
+        true, `.agents/skills/${skill}/templates/project.md should be skill-local`
+      );
+      assert.equal(
+        existsSync(join(workspace, 'templates', 'projects', type, 'README.md')),
+        false, `templates/projects/${type}/README.md must NOT be pre-populated`
+      );
+    }
+
+    // Integration-driven templates still shipped to templates/inputs/ (used by integration configs)
+    assert.equal(
+      existsSync(join(workspace, 'templates', 'inputs', 'integration-meeting.md')),
+      true, 'templates/inputs/integration-meeting.md should be present (integration-driven)'
+    );
+    assert.equal(
+      existsSync(join(workspace, 'templates', 'inputs', 'meeting-note.md')),
+      true, 'templates/inputs/meeting-note.md should be present (integration-driven)'
+    );
   });
 
   it('update backfills missing GUIDE.md without overwriting existing', () => {
@@ -135,23 +177,23 @@ describe('integration: workspace install/update journeys', () => {
     const workspace = join(sandboxRoot, 'update-templates');
     installWorkspace(workspace, 'cursor');
 
-    // Use a non-skill template still shipped via templates/ (e.g. plans)
-    const planTemplate = join(workspace, 'templates', 'plans', 'week-priorities.md');
-    assert.equal(existsSync(planTemplate), true, 'week-priorities.md should exist after install');
+    // Use an integration-driven template still shipped via templates/inputs/
+    const inputTemplate = join(workspace, 'templates', 'inputs', 'meeting-note.md');
+    assert.equal(existsSync(inputTemplate), true, 'meeting-note.md should exist after install');
 
     // Remove it to simulate a workspace that lost it
-    unlinkSync(planTemplate);
-    assert.equal(existsSync(planTemplate), false, 'week-priorities.md should be gone');
+    unlinkSync(inputTemplate);
+    assert.equal(existsSync(inputTemplate), false, 'meeting-note.md should be gone');
 
     // Update should backfill it
     const update = runUpdateJson(workspace);
     assert.equal(update.success, true, 'update should succeed');
-    assert.equal(existsSync(planTemplate), true, 'week-priorities.md should be backfilled by update');
+    assert.equal(existsSync(inputTemplate), true, 'meeting-note.md should be backfilled by update');
 
     // A second update must not overwrite customized content
-    writeFileSync(planTemplate, '# My custom plan', 'utf-8');
+    writeFileSync(inputTemplate, '# My custom meeting note', 'utf-8');
     runUpdateJson(workspace);
-    const content = readFileSync(planTemplate, 'utf-8');
-    assert.equal(content, '# My custom plan', 'update must not overwrite customized template');
+    const content = readFileSync(inputTemplate, 'utf-8');
+    assert.equal(content, '# My custom meeting note', 'update must not overwrite customized template');
   });
 });
