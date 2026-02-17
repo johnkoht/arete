@@ -335,6 +335,11 @@ Run `arete skill list` to see all available skills.
    ```
 3. Run `arete update` safely — your customized skills are preserved
 
+**Important**:
+- `skills.defaults` (from `arete skill set-default ... --for <role>`) changes routing preference only.
+- It does **not** freeze native skill files.
+- `arete update` still refreshes native core skills unless they are listed in `skills.overrides`.
+
 **Reset to default**:
 1. Remove the skill name from `skills.overrides` in `arete.yaml`
 2. Delete the skill folder: `rm -rf .agents/skills/<name>`
@@ -361,6 +366,8 @@ Areté adds `.arete-meta.yaml` for routing and briefing. Edit it to add triggers
 ### Setting Role Defaults
 
 When a query matches a role (e.g., "create a PRD" → `create-prd`), you can use a different skill for that role:
+
+> Note: Role defaults affect routing preference only. They do not protect native skill files from `arete update`. To preserve local edits to a native skill, add it to `skills.overrides`.
 
 ```bash
 # Use this skill whenever "create-prd" role is matched

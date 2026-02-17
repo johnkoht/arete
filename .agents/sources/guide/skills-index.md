@@ -71,6 +71,11 @@ Protect your customized skills from being overwritten during updates:
    ```
 3. Run `arete update` - your customizations are preserved
 
+**Important**:
+- `skills.defaults` (from `arete skill set-default ... --for <role>`) affects routing preference only.
+- It does **not** freeze native skill files.
+- `arete update` still refreshes native core skills unless they are in `skills.overrides`.
+
 ### Reset to Default
 
 1. Remove from `skills.overrides` in `arete.yaml`
@@ -92,6 +97,8 @@ arete skill install ./path/to/skill
 ### Set Role Defaults
 
 Use a different skill when a role is matched:
+
+> Note: Role defaults do not protect native skill files from updates. If you edited a native skill and want to keep those edits, add it to `skills.overrides`.
 
 ```bash
 # Use this skill whenever "create-prd" role is matched

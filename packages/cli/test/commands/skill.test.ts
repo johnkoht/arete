@@ -59,4 +59,11 @@ describe('skill command', () => {
     assert.match(result.stdout, /Manage skills/);
     assert.match(result.stdout, /list \[options\]/);
   });
+
+  it('shows override guidance in set-default help output', () => {
+    const result = runCliRaw(['skill', 'set-default', '--help'], { cwd: workspaceDir });
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /routing preference only/i);
+    assert.match(result.stdout, /skills\.overrides/i);
+  });
 });

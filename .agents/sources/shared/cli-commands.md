@@ -27,7 +27,7 @@
 
 - `arete install [directory] [--ide cursor|claude]` - Create new workspace
 - `arete status` - Check workspace health
-- `arete update` - Update structure and rules
+- `arete update` - Update workspace structure and refresh core runtime assets (rules/skills), preserving overrides
 - `arete skill list` - List available skills
 - `arete skill install <url>` - Install skill from URL (e.g. skills.sh)
 - `arete tool list` - List available tools

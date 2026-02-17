@@ -327,12 +327,17 @@ export function registerSkillCommands(program: Command): void {
       console.log('');
     });
 
-  skillCmd
+  const setDefaultCmd = skillCmd
     .command('set-default <skill-name>')
     .description('Use this skill for a role when routing')
+    .addHelpText(
+      'after',
+      '\nNote: This changes routing preference only. It does not protect native skill files from `arete update`.\nTo preserve local edits to a native skill, add it to `skills.overrides` in arete.yaml.\n',
+    )
     .requiredOption('--for <role>', 'Role to assign')
-    .option('--json', 'Output as JSON')
-    .action(
+    .option('--json', 'Output as JSON');
+
+  setDefaultCmd.action(
       async (
         skillName: string,
         opts: { for?: string; json?: boolean },
