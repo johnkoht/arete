@@ -1,11 +1,11 @@
 ---
 title: Lock Scope And Success Criteria For User Journe Spec
 slug: lock-scope-and-success-criteria-for-user-journe-spec
-status: in-progress
+status: completed
 size: medium
 created: 2026-02-17T05:19:51.574Z
 updated: 2026-02-17T18:26:42.872Z
-completed: null
+completed: 2026-02-17T00:00:00Z
 blocked_reason: null
 previous_status: null
 has_review: true
