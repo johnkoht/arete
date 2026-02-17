@@ -31,9 +31,15 @@ Guide users through competitive research and landscape documentation.
 
 Create the project folder and populate README.md from the template.
 
-**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
-1. Attempt to read `templates/projects/analysis/project.md` → exists? Use it. Stop.
-2. Attempt to read `.agents/skills/competitive-analysis/templates/project.md` → exists? Use it. Stop.
+**Load project README template** — attempt each path in order.
+1. Attempt to read `templates/projects/analysis/project.md`
+   → **Exists**: use its sections as the README structure. Do not read step 2. Stop.
+   → **Missing**: continue.
+2. Attempt to read `.agents/skills/competitive-analysis/templates/project.md`
+   → **Exists**: use its sections. Stop.
+   → **Missing**: proceed without template.
+
+If step 1 succeeds, step 2 is irrelevant — do not consult it.
 
 Create project:
 

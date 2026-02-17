@@ -72,9 +72,14 @@ Also capture:
 ### 4. Write Week File
 
 - **File**: `now/week.md`.
-- **Structure**: **Load week priorities template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
-  1. Attempt to read `templates/plans/week-priorities.md` → exists? Use it. Stop.
-  2. Attempt to read `.agents/skills/week-plan/templates/week-priorities.md` → exists? Use it. Stop.
+- **Structure**: **Load week priorities template** — attempt each path in order.
+  1. Attempt to read `templates/plans/week-priorities.md`
+     → **Exists**: use its sections as the week file structure. Do not read step 2. Stop.
+     → **Missing**: continue.
+  2. Attempt to read `.agents/skills/week-plan/templates/week-priorities.md`
+     → **Exists**: use its sections. Stop.
+     → **Missing**: proceed without template.
+  If step 1 succeeds, step 2 is irrelevant — do not consult it.
 
   Template sections:
   - Week dates

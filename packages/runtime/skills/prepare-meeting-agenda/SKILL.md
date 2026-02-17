@@ -61,13 +61,16 @@ Use the **context inference rules** below to suggest a type. User can override.
 
 ### 3. Choose Template
 
-**Load agenda template** — you MUST attempt to read each path in order. Replace `{type}` with the selected meeting type (`one-on-one`, `leadership`, `customer`, `dev-team`, or `other`).
+**Load agenda template** — attempt each path in order. Replace `{type}` with the selected meeting type (`one-on-one`, `leadership`, `customer`, `dev-team`, or `other`).
 
-1. Attempt to read `templates/meeting-agendas/{type}.md` → exists? **Use it. Stop.**
-2. Attempt to read `.agents/skills/prepare-meeting-agenda/templates/{type}.md` → exists? **Use it. Stop.**
-3. None found → ask the user or use a plain section structure.
+1. Attempt to read `templates/meeting-agendas/{type}.md`
+   → **Exists**: use this file's sections as the agenda structure. **Do not read the next path. Do not add sections from the skill template or from training.** Stop here.
+   → **Missing**: continue to step 2.
+2. Attempt to read `.agents/skills/prepare-meeting-agenda/templates/{type}.md`
+   → **Exists**: use this file's sections as the agenda structure. Stop here.
+   → **Missing**: use a plain structure or ask the user.
 
-**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist.
+**What "use it" means**: the loaded file defines the complete section structure of the agenda. Do not add, remove, or reorder sections based on the other template path or training defaults. If step 1 succeeds, step 2 is irrelevant — do not consult it.
 
 If the user wants a different type, switch and reload using the same steps.
 

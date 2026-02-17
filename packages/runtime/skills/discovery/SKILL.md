@@ -39,9 +39,15 @@ Guide users through discovery projects to understand problems, validate assumpti
 
 Create the discovery project folder and populate README.md from the template.
 
-**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
-1. Attempt to read `templates/projects/discovery/project.md` → exists? Use it. Stop.
-2. Attempt to read `.agents/skills/discovery/templates/project.md` → exists? Use it. Stop.
+**Load project README template** — attempt each path in order.
+1. Attempt to read `templates/projects/discovery/project.md`
+   → **Exists**: use its sections as the README structure. Do not read step 2. Stop.
+   → **Missing**: continue.
+2. Attempt to read `.agents/skills/discovery/templates/project.md`
+   → **Exists**: use its sections. Stop.
+   → **Missing**: proceed without template.
+
+If step 1 succeeds, step 2 is irrelevant — do not consult it.
 
 Create project:
 
@@ -105,10 +111,12 @@ Help plan research activities:
 
 As user conducts research, help capture in `inputs/`. Load structured input templates (resolution order — use first that exists):
 
-For each input type, attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+For each input type, attempt each path in order. If step 1 exists, use it and do not consult step 2.
 
-- **Research note**: (1) `templates/inputs/research-note.md` → exists? Use it. (2) `.agents/skills/discovery/templates/research-note.md` → use it.
-- **User feedback**: (1) `templates/inputs/user-feedback.md` → exists? Use it. (2) `.agents/skills/discovery/templates/user-feedback.md` → use it.
+- **Research note**: (1) read `templates/inputs/research-note.md` → exists? Use its structure. Done. (2) read `.agents/skills/discovery/templates/research-note.md` → use its structure.
+- **User feedback**: (1) read `templates/inputs/user-feedback.md` → exists? Use its structure. Done. (2) read `.agents/skills/discovery/templates/user-feedback.md` → use its structure.
+
+**What "use its structure" means**: the loaded file defines the complete sections of the document. Do not add sections from the other path or from training defaults.
 
 
 **Interview Notes Template**:

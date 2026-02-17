@@ -12,19 +12,19 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 ### Resolution order — required behavior
 
-**You must attempt to read each path in order. Do not assume a file is absent without trying. Use the content from the first path that successfully reads.**
+**You must attempt to read each path in order. Do not assume a file is absent without trying.**
 
 1. **Attempt to read** `templates/{category}/{variant}.md` (workspace override — user customized)
-   → Exists? **Use it. Stop.**
-   → Missing? Continue to step 2.
+   → **Exists**: use this file's sections as the document structure. **Do not read step 2. Stop.**
+   → Missing: continue to step 2.
 2. **Attempt to read** `.agents/skills/{skill-id}/templates/{variant}.md` (skill default — shipped with skill)
-   → Exists? **Use it. Stop.**
-   → Missing? Continue to step 3.
-3. **Attempt to read** `templates/{category}/{variant}.md` at legacy path (old installs only — omit if same as step 1)
-   → Exists? **Use it. Stop.**
-   → Missing? Proceed without template or ask user.
+   → **Exists**: use this file's sections as the document structure. Do not read step 3. Stop.
+   → Missing: continue to step 3.
+3. **Attempt to read** legacy fallback (old installs only — omit if same path as step 1)
+   → **Exists**: use it. Done.
+   → Missing: proceed without template or ask user.
 
-**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist — you must verify by attempting the read.
+**What "use it" means**: the loaded file defines the complete section structure of the document. Do not add, remove, or reorder sections based on another template path or training defaults. If step 1 succeeds, step 2 is irrelevant — do not consult it.
 
 Where `{category}` matches the template group:
 

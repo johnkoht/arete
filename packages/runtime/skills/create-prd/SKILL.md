@@ -102,14 +102,19 @@ Based on discovery, recommend a template:
 
 **Full PRD** — for strategic initiatives, new products or major features, complex multi-quarter projects, high stakeholder involvement.
 
-**Load PRD template** — you MUST attempt to read each path in order. Do not assume a file is absent without trying. Replace `{variant}` with the chosen type (`prd-simple`, `prd-regular`, or `prd-full`).
+**Load PRD template** — attempt each path in order. Replace `{variant}` with the chosen type (`prd-simple`, `prd-regular`, or `prd-full`).
 
-1. Attempt to read `templates/outputs/create-prd/{variant}.md` → exists? **Use it. Stop.**
-2. Attempt to read `.agents/skills/create-prd/templates/{variant}.md` → exists? **Use it. Stop.**
-3. Attempt to read `templates/outputs/{variant}.md` → exists? **Use it. Stop.**
-4. None found → ask the user or proceed without a template.
+1. Attempt to read `templates/outputs/create-prd/{variant}.md`
+   → **Exists**: use this file's sections as the document structure. **Do not read the next path. Do not add sections from the skill template or from training.** Stop here.
+   → **Missing**: continue to step 2.
+2. Attempt to read `.agents/skills/create-prd/templates/{variant}.md`
+   → **Exists**: use this file's sections as the document structure. Do not read the next path. Stop here.
+   → **Missing**: continue to step 3.
+3. Attempt to read `templates/outputs/{variant}.md`
+   → **Exists**: use it. Done.
+   → **Missing**: proceed without template or ask the user.
 
-**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist.
+**What "use it" means**: the loaded file defines the complete section structure of the PRD. Generate content for each section as written in that file. Do not add, remove, or reorder sections based on the skill default, the other template paths, or training defaults. If step 1 succeeds, the skill template at step 2 is irrelevant — do not consult it.
 
 ### 5. Context Integration
 
