@@ -5,8 +5,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 > **Note**: Paths in entries before 2026-02-09 reference pre-reorganization structure (`.cursor/build/` = now `dev/`).
 
 - **USER.md** (gitignored): User-specific context — copy from `USER.md.example`.
-- **Entries**: `dev/entries/YYYY-MM-DD_short-title.md` — one file per change or decision. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
-- **Collaboration**: `dev/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Injected into new build conversations for immediate context.
+- **Entries**: `memory/entries/YYYY-MM-DD_short-title.md` — one file per change or decision. Include a **Learnings** section for collaboration observations, builder preferences, and working patterns.
+- **Collaboration**: `memory/collaboration.md` — synthesized profile of how to work with the builder, derived from Learnings in entries. Injected into new build conversations for immediate context.
 
 ## Conventions
 
@@ -17,6 +17,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+
+- 2026-02-16: [prd-archive-and-plan-migration](entries/2026-02-16_prd-archive-and-plan-migration.md) — Migrated PRD tracking to `dev/plans/`, archived legacy docs to `dev/archive/prds/`, and added transition cleanup follow-up.
 
 - 2026-02-16: [plan-lifecycle-system-learnings](entries/2026-02-16_plan-lifecycle-system-learnings.md) — Plan lifecycle system: persistence, state machine, agent config, smart gates, widget. 16/16 tasks, 0 iterations, 137 extension tests. Pure module architecture for testability. Fixed pre-existing typecheck failure.
 

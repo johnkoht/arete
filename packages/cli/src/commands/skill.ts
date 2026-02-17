@@ -24,7 +24,10 @@ import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export function registerSkillCommands(program: Command): void {
-  const skillCmd = program.command('skill').description('Manage skills');
+  const skillCmd = program
+    .command('skill')
+    .alias('skills')
+    .description('Manage skills');
 
   skillCmd
     .command('list')
@@ -91,65 +94,74 @@ export function registerSkillCommands(program: Command): void {
       console.log('');
     });
 
+  const installSkillAction = async (
+    source: string,
+    opts: { skill?: string; json?: boolean; yes?: boolean },
+  ): Promise<void> => {
+    const services = await createServices(process.cwd());
+    const root = await services.workspace.findRoot();
+    if (!root) {
+      if (opts.json) {
+        console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+      } else {
+        error('Not in an Areté workspace');
+      }
+      process.exit(1);
+    }
+
+    const result = await services.skills.install(source, {
+      source,
+      workspaceRoot: root,
+      name: opts.skill,
+      yes: opts.yes,
+    });
+
+    if (!result.installed) {
+      if (opts.json) {
+        console.log(
+          JSON.stringify({ success: false, error: result.error }, null, 2),
+        );
+      } else {
+        error(result.error ?? 'Install failed');
+      }
+      process.exit(1);
+    }
+
+    if (opts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            success: true,
+            skill: result.name,
+            path: result.path,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    success(`Installed skill: ${result.name}`);
+    listItem('Location', formatPath(result.path));
+    console.log('');
+  };
+
   skillCmd
     .command('install <source>')
     .description('Install a skill from skills.sh (owner/repo) or local path')
     .option('--skill <name>', 'For multi-skill repos: specify which skill')
     .option('--json', 'Output as JSON')
     .option('--yes', 'Skip prompts')
-    .action(
-      async (
-        source: string,
-        opts: { skill?: string; json?: boolean; yes?: boolean },
-      ) => {
-        const services = await createServices(process.cwd());
-        const root = await services.workspace.findRoot();
-        if (!root) {
-          if (opts.json) {
-            console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
-          } else {
-            error('Not in an Areté workspace');
-          }
-          process.exit(1);
-        }
+    .action(installSkillAction);
 
-        const result = await services.skills.install(source, {
-          source,
-          workspaceRoot: root,
-          name: opts.skill,
-        });
-
-        if (!result.installed) {
-          if (opts.json) {
-            console.log(
-              JSON.stringify({ success: false, error: result.error }, null, 2),
-            );
-          } else {
-            error(result.error ?? 'Install failed');
-          }
-          process.exit(1);
-        }
-
-        if (opts.json) {
-          console.log(
-            JSON.stringify(
-              {
-                success: true,
-                skill: result.name,
-                path: result.path,
-              },
-              null,
-              2,
-            ),
-          );
-          return;
-        }
-
-        success(`Installed skill: ${result.name}`);
-        listItem('Location', formatPath(result.path));
-        console.log('');
-      },
-    );
+  skillCmd
+    .command('add <source>')
+    .description('Alias for "skill install"')
+    .option('--skill <name>', 'For multi-skill repos: specify which skill')
+    .option('--json', 'Output as JSON')
+    .option('--yes', 'Skip prompts')
+    .action(installSkillAction);
 
   skillCmd
     .command('route <query>')

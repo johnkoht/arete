@@ -172,6 +172,7 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 1. `npm run typecheck`
 2. `npm run test:all` (or `npm test` + `npm run test:py` if Python touched)
 3. New code → new/updated tests (see testing section above)
+4. For meaningful build changes (architecture, workflow, structure), add `memory/entries/YYYY-MM-DD_*.md` and index it in `memory/MEMORY.md`
 
 ---
 

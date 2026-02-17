@@ -84,6 +84,7 @@ export type InstallSkillOptions = {
   workspaceRoot: string;
   category?: SkillCategory;
   overwrite?: boolean;
+  yes?: boolean;
 };
 
 /** Result of installing a skill */

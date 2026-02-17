@@ -21,15 +21,23 @@ export function getPackageRoot(): string {
   }
 
   while (current !== dirname(current)) {
-    if (existsSync(join(current, 'packages', 'runtime'))) {
+    const hasPackageJson = existsSync(join(current, 'package.json'));
+
+    // Monorepo/package root markers
+    if (existsSync(join(current, 'packages', 'runtime')) && hasPackageJson) {
       return current;
     }
-    if (existsSync(join(current, 'runtime'))) {
+
+    // Legacy/single-package layout marker
+    if (existsSync(join(current, 'runtime')) && hasPackageJson) {
       return current;
     }
-    if (existsSync(join(current, 'packages'))) {
+
+    // Fallback for package roots that expose a packages/ dir
+    if (existsSync(join(current, 'packages')) && hasPackageJson) {
       return current;
     }
+
     current = dirname(current);
   }
   return process.cwd();

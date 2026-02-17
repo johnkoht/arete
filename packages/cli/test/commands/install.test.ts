@@ -46,6 +46,24 @@ describe('install command', () => {
         assert.equal(parsed.ide_target, 'cursor', 'ide_target should be cursor');
       });
 
+      it('copies product skills and rules into the new workspace', () => {
+        const output = runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+        const parsed = JSON.parse(output) as {
+          results: { skills: string[]; rules: string[] };
+        };
+
+        assert.ok(parsed.results.skills.length > 0, 'should copy skills on install');
+        assert.ok(parsed.results.rules.length > 0, 'should copy rules on install');
+        assert.ok(
+          existsSync(join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md')),
+          'meeting-prep skill should exist in .agents/skills',
+        );
+        assert.ok(
+          existsSync(join(tmpDir, '.cursor', 'rules', 'pm-workspace.mdc')),
+          'pm-workspace rule should exist in .cursor/rules',
+        );
+      });
+
       it('creates rules directory with AGENTS.md', () => {
         runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
 

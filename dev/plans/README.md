@@ -50,6 +50,27 @@ steps: 8
 | `blocked` | Blocked with reason (from any status) |
 | `on-hold` | Paused (from any status) |
 
+## Migrated PRD Statuses (2026-02-16)
+
+| Slug | Status |
+|------|--------|
+| agents-md-compilation | completed |
+| dev-cleanup-phase-1 | completed |
+| enhance-onboarding-tool | completed |
+| intelligence-and-calendar | completed |
+| meeting-agenda-skill | completed |
+| meeting-intelligence | completed |
+| meeting-propagation | completed |
+| multi-ide-support | completed |
+| pi-dev-workflow | completed |
+| plan-lifecycle-system | completed |
+| plan-mode-skills-integration | completed (superseded) |
+| pm-planning-system | completed |
+| product-os | on-hold |
+| refactor-pi-monorepo | completed |
+| rules-architecture-refactor | completed |
+| temporal-memory | planned |
+
 ## Quick Reference
 
 - **Create**: Use `/plan` mode, create a plan, then `/plan save`

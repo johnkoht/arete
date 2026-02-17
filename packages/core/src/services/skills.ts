@@ -171,8 +171,19 @@ export class SkillService {
         }
       }
 
+      if (options.name && existingSkills.has(options.name)) {
+        return {
+          installed: false,
+          path: join(paths.agentSkills, options.name),
+          name: options.name,
+          error: `Skill already installed: ${options.name}`,
+        };
+      }
+
       const args = ['skills', 'add', parsed.normalized];
       if (options.name) args.push('--skill', options.name);
+      // Always run non-interactively from Areté CLI wrapper.
+      args.push('--yes');
 
       const result = spawnSync('npx', args, {
         cwd: workspaceRoot,
@@ -211,10 +222,22 @@ export class SkillService {
         }
       }
 
+      if (!installedPath || !installedName) {
+        const output = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
+        return {
+          installed: false,
+          path: paths.agentSkills,
+          name: options.name ?? '',
+          error:
+            output ||
+            'skills add completed but no new skill was detected. Try again with --yes or verify the skill source.',
+        };
+      }
+
       return {
         installed: true,
-        path: installedPath ?? paths.agentSkills,
-        name: installedName ?? 'unknown',
+        path: installedPath,
+        name: installedName,
       };
     }
 
