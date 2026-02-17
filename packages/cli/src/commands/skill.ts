@@ -6,6 +6,8 @@ import {
   createServices,
   loadConfig,
   getWorkspaceConfigPath,
+  getPackageRoot,
+  getSourcePaths,
 } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -20,7 +22,9 @@ import {
   formatPath,
 } from '../formatters.js';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
+import { createInterface } from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export function registerSkillCommands(program: Command): void {
@@ -145,6 +149,43 @@ export function registerSkillCommands(program: Command): void {
     success(`Installed skill: ${result.name}`);
     listItem('Location', formatPath(result.path));
     console.log('');
+
+    if (opts.yes) {
+      return;
+    }
+
+    const installedSkill = await services.skills.get(result.name, root);
+    if (!installedSkill) {
+      return;
+    }
+
+    const overlapRole = await detectOverlapRole(
+      services,
+      installedSkill.id,
+      installedSkill.description,
+      installedSkill.workType,
+    );
+
+    if (!overlapRole || overlapRole === installedSkill.id) {
+      return;
+    }
+
+    info(`This skill appears similar to the default "${overlapRole}" skill.`);
+    info('If you set it as default, routing will use your new skill instead.');
+
+    const rl = createInterface({ input, output });
+    const answer = await rl.question(
+      `Replace "${overlapRole}" with "${installedSkill.id}" for routing? [y/N] `,
+    );
+    rl.close();
+
+    const normalized = answer.trim().toLowerCase();
+    if (normalized !== 'y' && normalized !== 'yes') {
+      return;
+    }
+
+    await setSkillDefault(services.storage, root, overlapRole, installedSkill.id);
+    success(`Default for role "${overlapRole}" set to: ${installedSkill.id}`);
   };
 
   skillCmd
@@ -427,6 +468,102 @@ export function registerSkillCommands(program: Command): void {
         success(`Restored Areté default for role: ${role}`);
       }
     });
+}
+
+async function setSkillDefault(
+  storage: { read: (p: string) => Promise<string | null>; write: (p: string, c: string) => Promise<void> },
+  workspaceRoot: string,
+  role: string,
+  skillName: string,
+): Promise<void> {
+  const configPath = getWorkspaceConfigPath(workspaceRoot);
+  const config = await loadYamlConfig(storage, configPath);
+  const skillsSection = (config.skills || {}) as Record<string, unknown>;
+  const defaults = (skillsSection.defaults as Record<string, string | null>) || {};
+  defaults[role] = skillName;
+  skillsSection.defaults = defaults;
+  config.skills = skillsSection;
+  await storage.write(configPath, stringifyYaml(config));
+}
+
+export function detectOverlapRoleFromCandidates(
+  installedSkillId: string,
+  installedDescription: string,
+  installedWorkType: string | undefined,
+  candidates: Array<{ id: string; workType?: string }>,
+): string | undefined {
+  const skillId = installedSkillId.toLowerCase();
+  const description = installedDescription.toLowerCase();
+
+  for (const candidate of candidates) {
+    const candidateId = candidate.id.toLowerCase();
+    if (
+      skillId === candidateId ||
+      skillId === candidateId.replace('create-', '') ||
+      skillId === candidateId.replace(/-/g, '')
+    ) {
+      return candidate.id;
+    }
+  }
+
+  for (const candidate of candidates) {
+    const candidateText = candidate.id.toLowerCase().replace(/-/g, ' ');
+    if (candidateText && (description.includes(candidateText) || description.includes(candidate.id.toLowerCase()))) {
+      return candidate.id;
+    }
+  }
+
+  if (/\b(prd|product requirements?)\b/i.test(description)) {
+    const prdRole = candidates.find((c) => c.id === 'create-prd');
+    if (prdRole) return prdRole.id;
+  }
+
+  if (/\b(discover|discovery|research)\b/i.test(description)) {
+    const discoveryRole = candidates.find((c) => c.id === 'discovery');
+    if (discoveryRole) return discoveryRole.id;
+  }
+
+  if (installedWorkType && installedWorkType !== 'operations' && installedWorkType !== 'planning') {
+    const workTypeMatch = candidates.find((c) => c.workType === installedWorkType);
+    if (workTypeMatch) return workTypeMatch.id;
+  }
+
+  return undefined;
+}
+
+async function detectOverlapRole(
+  services: { skills: { getInfo: (skillPath: string) => Promise<{ id: string; workType?: string }> } },
+  installedSkillId: string,
+  installedDescription: string,
+  installedWorkType: string | undefined,
+): Promise<string | undefined> {
+  const packageRoot = getPackageRoot();
+  const useRuntime = !packageRoot.includes('node_modules');
+  const sourcePaths = getSourcePaths(packageRoot, useRuntime);
+
+  if (!existsSync(sourcePaths.skills)) {
+    return undefined;
+  }
+
+  const candidates: Array<{ id: string; workType?: string }> = [];
+  const roleDirs = readdirSync(sourcePaths.skills, { withFileTypes: true })
+    .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && !entry.name.startsWith('_'));
+
+  for (const role of roleDirs) {
+    const rolePath = join(sourcePaths.skills, role.name);
+    const info = await services.skills.getInfo(rolePath);
+    candidates.push({
+      id: info.id || basename(rolePath),
+      workType: info.workType,
+    });
+  }
+
+  return detectOverlapRoleFromCandidates(
+    installedSkillId,
+    installedDescription,
+    installedWorkType,
+    candidates,
+  );
 }
 
 function getDefaultRoleNames(paths: { agentSkills: string }): string[] {
