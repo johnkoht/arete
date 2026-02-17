@@ -170,3 +170,110 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
 	}
 	return doneSteps.length;
 }
+
+// ────────────────────────────────────────────────────────────
+// Plan classification and smart menu utilities
+// ────────────────────────────────────────────────────────────
+
+/** Plan size classification */
+export type PlanSize = "tiny" | "small" | "medium" | "large";
+
+/** Keywords that indicate higher complexity */
+export const COMPLEXITY_KEYWORDS = [
+	"integration",
+	"new system",
+	"refactor",
+	"multi-file",
+	"migration",
+	"provider",
+	"architecture",
+	"breaking change",
+] as const;
+
+/**
+ * Classify plan size based on step count and complexity keywords.
+ *
+ * Rules:
+ * - 0-2 steps, no keywords → tiny
+ * - 2-3 steps, no keywords → small (but 2 steps + keyword → medium)
+ * - 3-5 steps, or any with 1+ keyword → medium
+ * - 6+ steps, or medium with 2+ keywords → large
+ */
+export function classifyPlanSize(items: TodoItem[], planText: string): PlanSize {
+	const stepCount = items.length;
+	const lowerText = planText.toLowerCase();
+	const keywordCount = COMPLEXITY_KEYWORDS.filter((kw) => lowerText.includes(kw)).length;
+
+	// 6+ steps is always large
+	if (stepCount >= 6) return "large";
+
+	// 3-5 steps
+	if (stepCount >= 3) {
+		if (keywordCount >= 2) return "large";
+		return "medium";
+	}
+
+	// 2 steps
+	if (stepCount === 2) {
+		if (keywordCount >= 1) return "medium";
+		return "tiny";
+	}
+
+	// 0-1 steps
+	if (keywordCount >= 1 && stepCount >= 1) return "medium";
+	return "tiny";
+}
+
+/** State for building workflow menus */
+export interface WorkflowMenuState {
+	planSize: PlanSize;
+	preMortemRun: boolean;
+	reviewRun: boolean;
+	prdConverted: boolean;
+	postMortemRun: boolean;
+}
+
+/**
+ * Get contextual menu options based on plan size and completed gates.
+ */
+export function getMenuOptions(state: WorkflowMenuState): string[] {
+	const { planSize, preMortemRun, reviewRun, prdConverted } = state;
+
+	if (planSize === "tiny") {
+		return ["Execute the plan", "Save as draft", "Refine the plan"];
+	}
+
+	const executeLabel = preMortemRun ? "Execute (pre-mortem ✓)" : "Execute directly";
+	const preMortemLabel = preMortemRun ? "Run pre-mortem, then execute (pre-mortem ✓)" : "Run pre-mortem, then execute";
+
+	if (planSize === "small") {
+		const options: string[] = [];
+		if (!preMortemRun) options.push("Run pre-mortem, then execute");
+		else options.push(preMortemLabel);
+		options.push(executeLabel);
+		if (!reviewRun) options.push("Review the plan");
+		if (!prdConverted) options.push("Convert to PRD");
+		options.push("Save as draft", "Refine the plan");
+		return options;
+	}
+
+	// medium or large
+	const options: string[] = [];
+	if (!prdConverted) options.push("Convert to PRD (recommended)");
+	if (!preMortemRun) options.push("Run pre-mortem, then execute");
+	else options.push(preMortemLabel);
+	if (!reviewRun) options.push("Review the plan");
+	options.push(executeLabel);
+	options.push("Save as draft", "Refine the plan");
+	return options;
+}
+
+/**
+ * Get post-execution menu options.
+ */
+export function getPostExecutionMenuOptions(postMortemRun: boolean): string[] {
+	const options: string[] = [];
+	if (!postMortemRun) options.push("Run post-mortem (extract learnings)");
+	options.push("Capture learnings to memory", "Done");
+	return options;
+}
