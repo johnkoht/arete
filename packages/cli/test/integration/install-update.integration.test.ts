@@ -77,8 +77,9 @@ describe('integration: workspace install/update journeys', () => {
     const install = installWorkspace(workspace, 'cursor');
     assert.equal(install.success, true, 'install should succeed');
 
-    // GUIDE.md must be present at workspace root
+    // GUIDE.md at workspace root and templates/README.md must be present
     assert.equal(existsSync(join(workspace, 'GUIDE.md')), true, 'GUIDE.md should be present after install');
+    assert.equal(existsSync(join(workspace, 'templates', 'README.md')), true, 'templates/README.md should be present after install');
 
     // PRD templates: skill-local YES, templates/outputs/ NO
     for (const variant of ['prd-simple', 'prd-regular', 'prd-full']) {

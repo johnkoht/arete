@@ -96,11 +96,8 @@ your-workspace/
 │   ├── customers/           # External stakeholders
 │   └── users/               # Product users
 
-├── templates/               # Document templates
-│   ├── plans/               # Plan templates (goals, week)
-│   ├── projects/            # Project templates
-│   ├── inputs/              # Input templates
-│   └── outputs/             # Output templates (PRDs, etc.)
+├── templates/               # Your template customization space (see templates/README.md)
+│   └── inputs/              # Integration-driven templates (meeting imports)
 
 ├── .agents/skills/          # PM workflows (discovery, PRD, etc.)
 ├── .cursor/ or .claude/     # IDE config (depends on install)
@@ -538,39 +535,53 @@ Returns skill/tool ID, action, and model suggestion.
 
 ## Templates & Customization
 
-### Meeting Agenda Templates
+### Template Customization
 
-Areté ships with 5 default meeting agenda templates:
+All skill templates live in `.agents/skills/{skill}/templates/` alongside the skill that uses them. Your workspace's `templates/` folder is the **override space** — drop a file there and the skill uses yours instead.
 
-| Type | Description | Default Sections |
-|------|-------------|------------------|
-| **leadership** | Leadership/exec syncs | Updates, Decisions, Asks and Blockers, Next Steps |
-| **customer** | Customer meetings, QBRs | Agenda, Discussion, Action Items, Follow-up |
-| **dev-team** | Engineering team meetings | Updates, Blockers, Technical Decisions, Next Sprint |
-| **one-on-one** | 1:1 check-ins | Check-in, Discussion Topics, Action Items, Next Steps |
-| **other** | Generic fallback | Agenda, Discussion, Next Steps |
+**Full reference**: See `templates/README.md` for the complete list of what's customizable, copy-paste prompts, and step-by-step instructions.
 
-#### List Available Templates
-
-```bash
-# List all templates (default + custom)
-arete template list meeting-agendas
-
-# View a specific template structure
-arete template view meeting-agenda --type leadership
+**How it works**:
+```
+templates/{category}/{variant}.md      ← your override (wins)
+.agents/skills/{skill}/templates/...  ← skill default (fallback)
 ```
 
-#### Create Custom Templates
+**Quick examples**:
 
-You can override default templates or create new meeting types.
+| What to customize | Create this file |
+|-------------------|-----------------|
+| One-on-one agenda | `templates/meeting-agendas/one-on-one.md` |
+| Simple PRD format | `templates/outputs/create-prd/prd-simple.md` |
+| Week plan layout  | `templates/plans/week-priorities.md` |
+| Discovery README  | `templates/projects/discovery/project.md` |
 
-**Location**: `.arete/templates/meeting-agendas/`
+**To see a default before customizing it**, open the skill file directly:
+```
+.agents/skills/prepare-meeting-agenda/templates/one-on-one.md
+.agents/skills/create-prd/templates/prd-simple.md
+.agents/skills/week-plan/templates/week-priorities.md
+```
 
-**Example**: Create a weekly stakeholder update template
+**Or ask an agent**:
+```
+I want to customize my one-on-one agenda. Please read templates/README.md,
+show me the default, and help me create my override.
+```
 
-1. Create file: `.arete/templates/meeting-agendas/weekly-stakeholder.md`
+#### Meeting Agenda Templates
 
-2. Use this format:
+Areté ships with 5 default agenda types bundled with the `prepare-meeting-agenda` skill:
+
+| Type | When used |
+|------|-----------|
+| `one-on-one` | 1:1 check-ins |
+| `leadership` | Leadership/exec syncs |
+| `customer` | Customer meetings, QBRs |
+| `dev-team` | Engineering team meetings |
+| `other` | Generic fallback |
+
+To customize or add a new type, create `templates/meeting-agendas/{type}.md`. The frontmatter format:
 
 ```markdown
 ---
@@ -587,55 +598,21 @@ time_allocation:
 
 ## Wins This Week
 - Key accomplishments and milestones
-- Customer wins or positive feedback
 
 ## Metrics Review
-- Key product metrics and trends
-- Notable changes from last week
+- Key metrics and trends
 
 ## Upcoming Releases
 - Features shipping this week/next week
-- Release timeline and dependencies
 
 ## Asks and Blockers
 - Resources or decisions needed
-- Blockers requiring escalation
 
 ## Q&A
-- Open floor for questions
+- Open floor
 ```
 
-3. Template is immediately available:
-
-```bash
-arete template list meeting-agendas
-# Shows your custom template under "Custom Templates"
-```
-
-4. Use it when creating agendas:
-
-```
-User: "Create a meeting agenda for my weekly stakeholder update"
-```
-→ Agent suggests your custom template
-
-#### Template Format
-
-**YAML Frontmatter**:
-- `name`: Display name (e.g., "Weekly Stakeholder Update")
-- `type`: Identifier, matches filename without .md (e.g., "weekly-stakeholder")
-- `description`: When to use this template
-- `time_allocation`: Optional percentage breakdown per section (when duration known)
-
-**Body**: Markdown sections (##) with bullets
-
-**Precedence**: Custom templates in `.arete/templates/meeting-agendas/` override defaults for the same type.
-
-### Project Templates
-
-**Location**: `templates/projects/`
-
-You can customize project templates used by skills (discovery, PRD, analysis).
+New types are picked up immediately — no reinstall needed.
 
 ---
 
