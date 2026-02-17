@@ -23,6 +23,13 @@
 - `arete pull calendar [--today|--days N]` - Pull calendar events
 - `arete pull fathom [--days N]` - Pull Fathom recordings
 
+## Templates
+
+- `arete template resolve --skill <id> --variant <name>` - Resolve and print the active template for a skill (workspace override > skill default)
+- `arete template resolve --skill <id> --variant <name> --path` - Print resolved file path only
+- `arete template list [--skill <id>]` - List all skill templates; shows which have active workspace overrides
+- `arete template view --skill <id> --variant <name>` - View resolved template content with source annotation
+
 ## Workspace Management
 
 - `arete install [directory] [--ide cursor|claude]` - Create new workspace

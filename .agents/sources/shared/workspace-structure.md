@@ -11,7 +11,7 @@ your-workspace/
 ├── resources/               # Raw inputs (meetings/, notes/)
 ├── .arete/                  # System-managed (memory/, activity/)
 ├── people/                  # People tracking (internal/, customers/, users/)
-├── templates/               # Document templates
+├── templates/               # Template override space (see templates/README.md; defaults live in .agents/skills/)
 ├── .agents/skills/          # PM workflows (discovery, PRD, meeting prep, etc.)
 └── .cursor/                 # IDE configuration (rules/, tools/)
 ```
