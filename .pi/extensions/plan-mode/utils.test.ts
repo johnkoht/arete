@@ -260,36 +260,37 @@ function makeMenuState(overrides: Partial<WorkflowMenuState> = {}): WorkflowMenu
 }
 
 describe("getMenuOptions", () => {
-	it("tiny: returns 3 options, first is Execute", () => {
+	it("tiny: returns 3 options, first starts build with explicit warning", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "tiny" }));
 		assert.equal(options.length, 3);
-		assert.equal(options[0], "Execute the plan");
+		assert.equal(options[0], "Start build now (executes code changes)");
 		assert.ok(options.includes("Save as draft"));
 		assert.ok(options.includes("Refine the plan"));
 	});
 
-	it("small: returns 6 options, includes pre-mortem", () => {
+	it("small: returns 6 options, includes non-destructive gate labels", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "small" }));
 		assert.equal(options.length, 6);
-		assert.ok(options.includes("Run pre-mortem, then execute"));
+		assert.ok(options.includes("Run pre-mortem (no code changes)"));
 		assert.ok(options.includes("Review the plan"));
-		assert.ok(options.includes("Convert to PRD"));
+		assert.ok(options.includes("Convert to PRD (no code changes)"));
 	});
 
-	it("medium: first option is Convert to PRD (recommended)", () => {
+	it("medium: first option is Convert to PRD with no-code-changes note", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "medium" }));
-		assert.equal(options[0], "Convert to PRD (recommended)");
+		assert.equal(options[0], "Convert to PRD (recommended, no code changes)");
 	});
 
-	it("large: first option is Convert to PRD (recommended)", () => {
+	it("large: first option is Convert to PRD with no-code-changes note", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "large" }));
-		assert.equal(options[0], "Convert to PRD (recommended)");
+		assert.equal(options[0], "Convert to PRD (recommended, no code changes)");
 	});
 
-	it("small + preMortemRun: execute label shows checkmark", () => {
+	it("small + preMortemRun: hides first-run option and offers rerun", () => {
 		const options = getMenuOptions(makeMenuState({ planSize: "small", preMortemRun: true }));
-		assert.ok(options.some((o) => o.includes("pre-mortem ✓")));
-		assert.ok(options.some((o) => o.includes("Execute (pre-mortem ✓)")));
+		assert.ok(!options.includes("Run pre-mortem (no code changes)"));
+		assert.ok(options.includes("Start build now (pre-mortem ✓, executes code changes)"));
+		assert.ok(options.includes("Re-run pre-mortem (optional)"));
 	});
 
 	it("medium + reviewRun: Review not in options", () => {
@@ -302,7 +303,7 @@ describe("getMenuOptions", () => {
 		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
 	});
 
-	it("all gates run: only execute and save/refine remain", () => {
+	it("all gates run: execute/save/refine remain, plus optional pre-mortem rerun", () => {
 		const options = getMenuOptions(
 			makeMenuState({
 				planSize: "large",
@@ -313,7 +314,8 @@ describe("getMenuOptions", () => {
 		);
 		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
 		assert.ok(!options.includes("Review the plan"));
-		assert.ok(options.some((o) => o.includes("Execute")));
+		assert.ok(options.some((o) => o.includes("Start build now")));
+		assert.ok(options.includes("Re-run pre-mortem (optional)"));
 		assert.ok(options.includes("Save as draft"));
 		assert.ok(options.includes("Refine the plan"));
 	});

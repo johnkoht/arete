@@ -564,7 +564,7 @@ After completing a step, include a [DONE:n] tag in your response.
 
 			const choice = await ctx.ui.select("Plan mode - what next?", menuOptions);
 
-			if (choice?.startsWith("Execute") || choice?.includes("Execute")) {
+			if (choice?.startsWith("Start build now") || choice?.startsWith("Execute") || choice?.includes("Execute")) {
 				state.planModeEnabled = false;
 				state.executionMode = state.todoItems.length > 0;
 				pi.setActiveTools(NORMAL_MODE_TOOLS);
@@ -578,7 +578,7 @@ After completing a step, include a [DONE:n] tag in your response.
 					{ customType: "plan-mode-execute", content: execMessage, display: true },
 					{ triggerTurn: true },
 				);
-			} else if (choice === "Run pre-mortem, then execute") {
+			} else if (choice === "Run pre-mortem (no code changes)" || choice === "Re-run pre-mortem (optional)") {
 				enableArtifactTool();
 				const saved = await ensurePlanSavedForGate(ctx, "running pre-mortem");
 				if (saved) {
@@ -616,12 +616,12 @@ After completing a step, include a [DONE:n] tag in your response.
 		} else {
 			// No plan extracted — show simple menu
 			const choice = await ctx.ui.select("Plan mode - what next?", [
-				"Execute the plan",
+				"Start build now (executes code changes)",
 				"Stay in plan mode",
 				"Refine the plan",
 			]);
 
-			if (choice?.startsWith("Execute")) {
+			if (choice?.startsWith("Start build now") || choice?.startsWith("Execute")) {
 				state.planModeEnabled = false;
 				state.executionMode = false;
 				pi.setActiveTools(NORMAL_MODE_TOOLS);

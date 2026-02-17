@@ -297,30 +297,35 @@ export function getMenuOptions(state: WorkflowMenuState): string[] {
 	const { planSize, preMortemRun, reviewRun, prdConverted } = state;
 
 	if (planSize === "tiny") {
-		return ["Execute the plan", "Save as draft", "Refine the plan"];
+		return [
+			"Start build now (executes code changes)",
+			"Save as draft",
+			"Refine the plan",
+		];
 	}
 
-	const executeLabel = preMortemRun ? "Execute (pre-mortem ✓)" : "Execute directly";
-	const preMortemLabel = preMortemRun ? "Run pre-mortem, then execute (pre-mortem ✓)" : "Run pre-mortem, then execute";
+	const executeLabel = preMortemRun
+		? "Start build now (pre-mortem ✓, executes code changes)"
+		: "Start build now (executes code changes)";
 
 	if (planSize === "small") {
 		const options: string[] = [];
-		if (!preMortemRun) options.push("Run pre-mortem, then execute");
-		else options.push(preMortemLabel);
+		if (!preMortemRun) options.push("Run pre-mortem (no code changes)");
 		options.push(executeLabel);
 		if (!reviewRun) options.push("Review the plan");
-		if (!prdConverted) options.push("Convert to PRD");
+		if (!prdConverted) options.push("Convert to PRD (no code changes)");
+		if (preMortemRun) options.push("Re-run pre-mortem (optional)");
 		options.push("Save as draft", "Refine the plan");
 		return options;
 	}
 
 	// medium or large
 	const options: string[] = [];
-	if (!prdConverted) options.push("Convert to PRD (recommended)");
-	if (!preMortemRun) options.push("Run pre-mortem, then execute");
-	else options.push(preMortemLabel);
+	if (!prdConverted) options.push("Convert to PRD (recommended, no code changes)");
+	if (!preMortemRun) options.push("Run pre-mortem (no code changes)");
 	if (!reviewRun) options.push("Review the plan");
 	options.push(executeLabel);
+	if (preMortemRun) options.push("Re-run pre-mortem (optional)");
 	options.push("Save as draft", "Refine the plan");
 	return options;
 }
