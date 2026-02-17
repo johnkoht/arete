@@ -10,13 +10,21 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 **Used by**: Any skill that loads a template before generating output (create-prd, prepare-meeting-agenda, discovery, competitive-analysis, construct-roadmap).
 
-### Resolution order
+### Resolution order — required behavior
 
-Check each path in order; use the first file that exists:
+**You must attempt to read each path in order. Do not assume a file is absent without trying. Use the content from the first path that successfully reads.**
 
-1. **Workspace override** — user customized: `templates/{category}/{skill-id}/{variant}.md`
-2. **Skill-local default** — shipped with the skill: `.agents/skills/{skill-id}/templates/{variant}.md`
-3. **Legacy fallback** — old installs only: `templates/{category}/{variant}.md`
+1. **Attempt to read** `templates/{category}/{variant}.md` (workspace override — user customized)
+   → Exists? **Use it. Stop.**
+   → Missing? Continue to step 2.
+2. **Attempt to read** `.agents/skills/{skill-id}/templates/{variant}.md` (skill default — shipped with skill)
+   → Exists? **Use it. Stop.**
+   → Missing? Continue to step 3.
+3. **Attempt to read** `templates/{category}/{variant}.md` at legacy path (old installs only — omit if same as step 1)
+   → Exists? **Use it. Stop.**
+   → Missing? Proceed without template or ask user.
+
+**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist — you must verify by attempting the read.
 
 Where `{category}` matches the template group:
 

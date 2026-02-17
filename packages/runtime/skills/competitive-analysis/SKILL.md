@@ -31,9 +31,9 @@ Guide users through competitive research and landscape documentation.
 
 Create the project folder and populate README.md from the template.
 
-**Template resolution** (check in order, use first that exists):
-1. `templates/projects/analysis/project.md` — workspace override (user customized)
-2. `.agents/skills/competitive-analysis/templates/project.md` — skill default
+**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+1. Attempt to read `templates/projects/analysis/project.md` → exists? Use it. Stop.
+2. Attempt to read `.agents/skills/competitive-analysis/templates/project.md` → exists? Use it. Stop.
 
 Create project:
 

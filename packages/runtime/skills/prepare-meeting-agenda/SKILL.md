@@ -61,14 +61,15 @@ Use the **context inference rules** below to suggest a type. User can override.
 
 ### 3. Choose Template
 
-Load the template for the selected type using the resolution order from [PATTERNS.md](../PATTERNS.md) (Template Resolution):
+**Load agenda template** — you MUST attempt to read each path in order. Replace `{type}` with the selected meeting type (`one-on-one`, `leadership`, `customer`, `dev-team`, or `other`).
 
-1. **Workspace override** — `templates/meeting-agendas/{type}.md` (user customized)
-2. **Skill-local default** — `.agents/skills/prepare-meeting-agenda/templates/{type}.md` (shipped with skill)
+1. Attempt to read `templates/meeting-agendas/{type}.md` → exists? **Use it. Stop.**
+2. Attempt to read `.agents/skills/prepare-meeting-agenda/templates/{type}.md` → exists? **Use it. Stop.**
+3. None found → ask the user or use a plain section structure.
 
-Where `{type}` is one of: `customer`, `dev-team`, `leadership`, `one-on-one`, `other`.
+**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist.
 
-If the user wants a different type, switch and reload template.
+If the user wants a different type, switch and reload using the same steps.
 
 ### 4. Gather Context When It Adds Value
 

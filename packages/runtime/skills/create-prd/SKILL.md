@@ -35,9 +35,9 @@ Write PRDs iteratively—provide "just enough" so Design and Engineering can sta
 
 First, create a PRD project. Populate README.md from the template:
 
-**Template resolution** (check in order, use first that exists):
-1. `templates/projects/definition/project.md` — workspace override (user customized)
-2. `.agents/skills/create-prd/templates/project.md` — skill default
+**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+1. Attempt to read `templates/projects/definition/project.md` → exists? Use it. Stop.
+2. Attempt to read `.agents/skills/create-prd/templates/project.md` → exists? Use it. Stop.
 
 ```
 projects/active/[feature-name]-prd/
@@ -102,19 +102,14 @@ Based on discovery, recommend a template:
 
 **Full PRD** — for strategic initiatives, new products or major features, complex multi-quarter projects, high stakeholder involvement.
 
-**Template resolution order** — check each path in order, use the first file that exists:
+**Load PRD template** — you MUST attempt to read each path in order. Do not assume a file is absent without trying. Replace `{variant}` with the chosen type (`prd-simple`, `prd-regular`, or `prd-full`).
 
-1. **Workspace override**: `templates/outputs/create-prd/{variant}.md`
-2. **Skill-local default**: `.agents/skills/create-prd/templates/{variant}.md`
-3. **Legacy fallback**: `templates/outputs/{variant}.md`
+1. Attempt to read `templates/outputs/create-prd/{variant}.md` → exists? **Use it. Stop.**
+2. Attempt to read `.agents/skills/create-prd/templates/{variant}.md` → exists? **Use it. Stop.**
+3. Attempt to read `templates/outputs/{variant}.md` → exists? **Use it. Stop.**
+4. None found → ask the user or proceed without a template.
 
-Where `{variant}` is one of: `prd-simple`, `prd-regular`, `prd-full`
-
-Example for Simple PRD:
-1. Check `templates/outputs/create-prd/prd-simple.md` → use if it exists
-2. Check `.agents/skills/create-prd/templates/prd-simple.md` → use if it exists
-3. Check `templates/outputs/prd-simple.md` → use if it exists
-4. If none found, ask the user or proceed without a template
+**Never skip step 1** to go straight to step 2, even if you believe the workspace override doesn't exist.
 
 ### 5. Context Integration
 

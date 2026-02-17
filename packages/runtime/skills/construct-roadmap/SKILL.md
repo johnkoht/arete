@@ -32,9 +32,9 @@ Guide users through building, updating, and communicating product roadmaps.
 
 Create the project folder and populate README.md from the template.
 
-**Template resolution** (check in order, use first that exists):
-1. `templates/projects/roadmap/project.md` — workspace override (user customized)
-2. `.agents/skills/construct-roadmap/templates/project.md` — skill default
+**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+1. Attempt to read `templates/projects/roadmap/project.md` → exists? Use it. Stop.
+2. Attempt to read `.agents/skills/construct-roadmap/templates/project.md` → exists? Use it. Stop.
 
 Create project:
 
@@ -232,11 +232,11 @@ Before finalizing:
 
 ### 8. Final Output
 
-Create `outputs/roadmap.md`. Load the roadmap output template (resolution order — use first that exists):
-1. `templates/outputs/construct-roadmap/roadmap.md` — workspace override (user customized)
-2. `.agents/skills/construct-roadmap/templates/roadmap.md` — skill default
+Create `outputs/roadmap.md`. **Load the roadmap output template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+1. Attempt to read `templates/outputs/construct-roadmap/roadmap.md` → exists? Use it. Stop.
+2. Attempt to read `.agents/skills/construct-roadmap/templates/roadmap.md` → exists? Use it. Stop.
 
-Populate with the synthesized content from earlier steps:
+Populate the template with the synthesized content from earlier steps:
 
 ```markdown
 # Product Roadmap: [Period]

@@ -72,9 +72,9 @@ Also capture:
 ### 4. Write Week File
 
 - **File**: `now/week.md`.
-- **Structure**: Load the week priorities template (resolution order — use first that exists):
-  1. `templates/plans/week-priorities.md` — workspace override (user customized)
-  2. `.agents/skills/week-plan/templates/week-priorities.md` — skill default
+- **Structure**: **Load week priorities template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+  1. Attempt to read `templates/plans/week-priorities.md` → exists? Use it. Stop.
+  2. Attempt to read `.agents/skills/week-plan/templates/week-priorities.md` → exists? Use it. Stop.
 
   Template sections:
   - Week dates

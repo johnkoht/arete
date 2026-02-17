@@ -39,9 +39,9 @@ Guide users through discovery projects to understand problems, validate assumpti
 
 Create the discovery project folder and populate README.md from the template.
 
-**Template resolution** (check in order, use first that exists):
-1. `templates/projects/discovery/project.md` — workspace override (user customized)
-2. `.agents/skills/discovery/templates/project.md` — skill default
+**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+1. Attempt to read `templates/projects/discovery/project.md` → exists? Use it. Stop.
+2. Attempt to read `.agents/skills/discovery/templates/project.md` → exists? Use it. Stop.
 
 Create project:
 
@@ -105,8 +105,10 @@ Help plan research activities:
 
 As user conducts research, help capture in `inputs/`. Load structured input templates (resolution order — use first that exists):
 
-- **Research note**: `templates/inputs/research-note.md` (override) or `.agents/skills/discovery/templates/research-note.md` (default)
-- **User feedback**: `templates/inputs/user-feedback.md` (override) or `.agents/skills/discovery/templates/user-feedback.md` (default)
+For each input type, attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+
+- **Research note**: (1) `templates/inputs/research-note.md` → exists? Use it. (2) `.agents/skills/discovery/templates/research-note.md` → use it.
+- **User feedback**: (1) `templates/inputs/user-feedback.md` → exists? Use it. (2) `.agents/skills/discovery/templates/user-feedback.md` → use it.
 
 
 **Interview Notes Template**:

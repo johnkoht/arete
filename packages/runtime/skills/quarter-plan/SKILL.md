@@ -46,9 +46,9 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 Use the `light_pre_mortem` pattern before locking outcomes.
 
 - **File**: `goals/quarter.md`.
-- **Structure**: Load the quarter goals template (resolution order — use first that exists):
-  1. `templates/plans/quarter-goals.md` — workspace override (user customized)
-  2. `.agents/skills/quarter-plan/templates/quarter-goals.md` — skill default
+- **Structure**: **Load quarter goals template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
+  1. Attempt to read `templates/plans/quarter-goals.md` → exists? Use it. Stop.
+  2. Attempt to read `.agents/skills/quarter-plan/templates/quarter-goals.md` → exists? Use it. Stop.
 
   Template sections:
   - Quarter dates
