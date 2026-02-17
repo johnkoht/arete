@@ -51,13 +51,25 @@ describe('template resolve command', () => {
     assert.ok(result.relPath.includes('.agents/skills/prepare-meeting-agenda/templates'), 'should be skill-local');
   });
 
-  it('returns --path only when flag is set', () => {
+  it('returns --path only when flag is set (skill-local)', () => {
     const output = runCliRaw(['template', 'resolve', '--skill', 'create-prd', '--variant', 'prd-simple', '--path', '--json'], { cwd: workspaceDir });
     const result = JSON.parse(output.stdout) as { success: boolean; resolvedPath: string };
 
     assert.equal(result.success, true);
     assert.ok(result.resolvedPath, 'resolvedPath should be present');
     assert.ok(!(result as Record<string, unknown>)['content'], 'content should not be present with --path');
+  });
+
+  it('--path returns override path when workspace override exists', () => {
+    const overrideDir = join(workspaceDir, 'templates', 'outputs', 'create-prd');
+    mkdirSync(overrideDir, { recursive: true });
+    writeFileSync(join(overrideDir, 'prd-regular.md'), '# My Custom PRD', 'utf-8');
+
+    const output = runCliRaw(['template', 'resolve', '--skill', 'create-prd', '--variant', 'prd-regular', '--path', '--json'], { cwd: workspaceDir });
+    const result = JSON.parse(output.stdout) as { success: boolean; resolvedPath: string };
+
+    assert.equal(result.success, true);
+    assert.ok(result.resolvedPath.includes('templates/outputs/create-prd/prd-regular.md'), '--path should point to the workspace override, not skill-local');
   });
 
   it('exits with error for unknown skill', () => {
