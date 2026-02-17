@@ -4,6 +4,57 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 ---
 
+## Template Resolution
+
+**Purpose**: Locate the correct template file for a skill, respecting user customization over skill defaults.
+
+**Used by**: Any skill that loads a template before generating output (create-prd, prepare-meeting-agenda, discovery, competitive-analysis, construct-roadmap).
+
+### Resolution order
+
+Check each path in order; use the first file that exists:
+
+1. **Workspace override** — user customized: `templates/{category}/{skill-id}/{variant}.md`
+2. **Skill-local default** — shipped with the skill: `.agents/skills/{skill-id}/templates/{variant}.md`
+3. **Legacy fallback** — old installs only: `templates/{category}/{variant}.md`
+
+Where `{category}` matches the template group:
+
+| Skill | Category | Example variant |
+|-------|----------|-----------------|
+| `create-prd` | `outputs/create-prd` | `prd-simple` |
+| `prepare-meeting-agenda` | `meeting-agendas` | `one-on-one` |
+| `discovery` | `projects/discovery` | `project` |
+| `create-prd` (project) | `projects/definition` | `project` |
+| `competitive-analysis` | `projects/analysis` | `project` |
+| `construct-roadmap` | `projects/roadmap` | `project` |
+
+### How to customize a template
+
+Drop a file at the workspace override path — no config, no reinstall:
+
+```
+# Custom PRD template
+templates/outputs/create-prd/prd-simple.md
+
+# Custom meeting agenda
+templates/meeting-agendas/prepare-meeting-agenda/one-on-one.md
+
+# Custom discovery project structure
+templates/projects/discovery/project.md
+```
+
+The skill will use your file automatically on its next run.
+
+### For skills without multiple variants
+
+Use `default.md` as the variant name:
+```
+templates/outputs/{skill-id}/default.md
+```
+
+---
+
 ## get_meeting_context
 
 **Purpose**: Given a meeting (title and/or attendees), assemble full context: people, prior meetings, related projects, outstanding action items.

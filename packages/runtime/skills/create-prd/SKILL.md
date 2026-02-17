@@ -33,11 +33,15 @@ Guide users through creating Product Requirements Documents with a Product Leade
 
 Write PRDs iteratively—provide "just enough" so Design and Engineering can start exploration. Avoid 2-month waterfall specs.
 
-First, create a PRD project:
+First, create a PRD project. Populate README.md from the template:
+
+**Template resolution** (check in order, use first that exists):
+1. `templates/projects/definition/project.md` — workspace override (user customized)
+2. `.agents/skills/create-prd/templates/project.md` — skill default
 
 ```
 projects/active/[feature-name]-prd/
-├── README.md
+├── README.md          ← from template above
 ├── inputs/
 ├── working/
 └── outputs/

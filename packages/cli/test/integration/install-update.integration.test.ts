@@ -72,7 +72,7 @@ describe('integration: workspace install/update journeys', () => {
     assert.equal(existsSync(join(workspace, '.claude')), false);
   });
 
-  it('install ships GUIDE.md and default PRD templates to new workspace', () => {
+  it('install ships GUIDE.md and skill-local templates to new workspace', () => {
     const workspace = join(sandboxRoot, 'install-outputs');
     const install = installWorkspace(workspace, 'cursor');
     assert.equal(install.success, true, 'install should succeed');
@@ -84,12 +84,26 @@ describe('integration: workspace install/update journeys', () => {
       'GUIDE.md should be present after install'
     );
 
-    // Default PRD templates must be shipped into templates/outputs/
+    // PRD templates are skill-local, not in templates/outputs/
     for (const variant of ['prd-simple', 'prd-regular', 'prd-full']) {
       assert.equal(
-        existsSync(join(workspace, 'templates', 'outputs', `${variant}.md`)),
+        existsSync(join(workspace, '.agents', 'skills', 'create-prd', 'templates', `${variant}.md`)),
         true,
-        `templates/outputs/${variant}.md should be present after install`
+        `.agents/skills/create-prd/templates/${variant}.md should be present after install`
+      );
+      assert.equal(
+        existsSync(join(workspace, 'templates', 'outputs', `${variant}.md`)),
+        false,
+        `templates/outputs/${variant}.md should NOT be in outputs (user override space)`
+      );
+    }
+
+    // Meeting agenda templates are skill-local
+    for (const type of ['one-on-one', 'customer', 'leadership', 'dev-team', 'other']) {
+      assert.equal(
+        existsSync(join(workspace, '.agents', 'skills', 'prepare-meeting-agenda', 'templates', `${type}.md`)),
+        true,
+        `.agents/skills/prepare-meeting-agenda/templates/${type}.md should be present after install`
       );
     }
   });
@@ -121,22 +135,23 @@ describe('integration: workspace install/update journeys', () => {
     const workspace = join(sandboxRoot, 'update-templates');
     installWorkspace(workspace, 'cursor');
 
-    const simpleTemplate = join(workspace, 'templates', 'outputs', 'prd-simple.md');
-    assert.equal(existsSync(simpleTemplate), true, 'prd-simple.md should exist after install');
+    // Use a non-skill template still shipped via templates/ (e.g. plans)
+    const planTemplate = join(workspace, 'templates', 'plans', 'week-priorities.md');
+    assert.equal(existsSync(planTemplate), true, 'week-priorities.md should exist after install');
 
-    // Remove one template to simulate a workspace missing it
-    unlinkSync(simpleTemplate);
-    assert.equal(existsSync(simpleTemplate), false, 'prd-simple.md should be gone');
+    // Remove it to simulate a workspace that lost it
+    unlinkSync(planTemplate);
+    assert.equal(existsSync(planTemplate), false, 'week-priorities.md should be gone');
 
     // Update should backfill it
     const update = runUpdateJson(workspace);
     assert.equal(update.success, true, 'update should succeed');
-    assert.equal(existsSync(simpleTemplate), true, 'prd-simple.md should be backfilled by update');
+    assert.equal(existsSync(planTemplate), true, 'week-priorities.md should be backfilled by update');
 
-    // A second update must not overwrite customized template content
-    writeFileSync(simpleTemplate, '# My custom template', 'utf-8');
+    // A second update must not overwrite customized content
+    writeFileSync(planTemplate, '# My custom plan', 'utf-8');
     runUpdateJson(workspace);
-    const content = readFileSync(simpleTemplate, 'utf-8');
-    assert.equal(content, '# My custom template', 'update must not overwrite customized template');
+    const content = readFileSync(planTemplate, 'utf-8');
+    assert.equal(content, '# My custom plan', 'update must not overwrite customized template');
   });
 });

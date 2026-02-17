@@ -30,11 +30,17 @@ Guide users through building, updating, and communicating product roadmaps.
 
 ### 1. Project Setup
 
-Create roadmap project:
+Create the project folder and populate README.md from the template.
+
+**Template resolution** (check in order, use first that exists):
+1. `templates/projects/roadmap/project.md` — workspace override (user customized)
+2. `.agents/skills/construct-roadmap/templates/project.md` — skill default
+
+Create project:
 
 ```
 projects/active/[period]-roadmap/
-├── README.md
+├── README.md          ← from template above
 ├── inputs/
 │   ├── initiatives/
 │   ├── feedback/

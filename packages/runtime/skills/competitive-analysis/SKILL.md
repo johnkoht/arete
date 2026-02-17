@@ -29,11 +29,17 @@ Guide users through competitive research and landscape documentation.
 
 ### 1. Project Setup
 
-Create competitive analysis project:
+Create the project folder and populate README.md from the template.
+
+**Template resolution** (check in order, use first that exists):
+1. `templates/projects/analysis/project.md` — workspace override (user customized)
+2. `.agents/skills/competitive-analysis/templates/project.md` — skill default
+
+Create project:
 
 ```
 projects/active/[scope]-competitive-analysis/
-├── README.md
+├── README.md          ← from template above
 ├── inputs/
 │   ├── competitor-research/
 │   └── market-data/

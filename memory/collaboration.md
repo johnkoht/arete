@@ -72,6 +72,8 @@
 
 Things the builder has corrected — important context for avoiding repeat mistakes.
 
+- **Audit all instances of a pattern before changing one** (2026-02-17): When making a structural change to one instance of a pattern (e.g. moving a template into a skill), immediately grep for ALL other instances of that pattern (other skills with `project_template:`, other template dirs, other `creates_project: true` flags) and surface them proactively. Don't finish the N=1 case and wait to be asked about N=2…N. The builder should hear "I also see these 4 other skills with the same structure — should we handle them consistently?" before work is done, not after.
+
 - **Always use plan-to-prd skill** (2026-02-14): When converting a plan to a PRD (e.g., user chose "Create a PRD" execution path), you MUST load and follow `.agents/skills/plan-to-prd/SKILL.md`. Do not write PRDs directly without using the skill. The skill ensures correct structure, creates prd.json, and generates the handoff prompt for execute-prd. This applies whenever: (1) user selected "Convert to PRD" from PRD Gateway, or (2) user requested PRD creation after plan approval.
 - **Backlog placement** (2026-02-10): Do not put backlog items or future enhancements in `dev/entries/`. Entries = actions, decisions, learnings (what happened). Backlog = future work → `dev/backlog/`.
 - **Backlog subfolders** (2026-02-10): When adding to `dev/backlog/`, use subfolders — do not put files in the root. Use `dev/backlog/features/` for new capabilities (progress-dashboard, google-calendar-provider) and `dev/backlog/improvements/` for enhancements to existing functionality (automated-code-review, skills-enhancement).

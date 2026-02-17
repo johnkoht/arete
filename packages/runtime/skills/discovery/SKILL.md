@@ -37,11 +37,17 @@ Guide users through discovery projects to understand problems, validate assumpti
 
 ### 1. Project Setup
 
-Create discovery project:
+Create the discovery project folder and populate README.md from the template.
+
+**Template resolution** (check in order, use first that exists):
+1. `templates/projects/discovery/project.md` — workspace override (user customized)
+2. `.agents/skills/discovery/templates/project.md` — skill default
+
+Create project:
 
 ```
 projects/active/[topic]-discovery/
-├── README.md
+├── README.md          ← from template above
 ├── inputs/
 │   ├── interviews/
 │   ├── data/

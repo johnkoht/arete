@@ -61,9 +61,14 @@ Use the **context inference rules** below to suggest a type. User can override.
 
 ### 3. Choose Template
 
-- Default for the selected type is loaded from package templates (or workspace override in `.arete/templates/meeting-agendas/`).
-- To list all: run `arete template list meeting-agendas`. To view a template: `arete template view meeting-agenda --type <type>`.
-- If user wants a different type, switch and reload template.
+Load the template for the selected type using the resolution order from [PATTERNS.md](../PATTERNS.md) (Template Resolution):
+
+1. **Workspace override** — `templates/meeting-agendas/{type}.md` (user customized)
+2. **Skill-local default** — `.agents/skills/prepare-meeting-agenda/templates/{type}.md` (shipped with skill)
+
+Where `{type}` is one of: `customer`, `dev-team`, `leadership`, `one-on-one`, `other`.
+
+If the user wants a different type, switch and reload template.
 
 ### 4. Gather Context When It Adds Value
 
