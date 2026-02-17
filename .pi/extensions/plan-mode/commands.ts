@@ -105,15 +105,15 @@ export interface PlanDiff {
 }
 
 /**
- * Get files changed since a given ISO date using git.
+ * Get files changed since a given ISO date using git log.
  * Returns empty array on error (not a git repo, git not available, etc).
  */
 export function getChangesSince(sinceDate: string): PlanDiff {
 	try {
-		const output = execSync(`git diff --name-only --diff-filter=ACMR HEAD @{0} -- . 2>/dev/null || git log --name-only --pretty=format: --since="${sinceDate}" 2>/dev/null`, {
-			encoding: "utf-8",
-			timeout: 5000,
-		});
+		const output = execSync(
+			`git log --name-only --pretty=format: --since="${sinceDate}"`,
+			{ encoding: "utf-8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+		);
 
 		const files = output
 			.split("\n")
