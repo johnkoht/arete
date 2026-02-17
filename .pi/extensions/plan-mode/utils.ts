@@ -172,6 +172,26 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
 }
 
 /**
+ * Detect whether the assistant is asking for clarification and is likely
+ * waiting for a user response before continuing the workflow.
+ */
+export function isAwaitingUserResponse(message: string): boolean {
+	const text = message.trim();
+	if (!text) return false;
+
+	const questionMarks = (text.match(/\?/g) ?? []).length;
+	if (questionMarks === 0) return false;
+
+	const asksForInput = /\b(clarifying questions|to tailor|before i|please answer|can you share|let me know|which option|does this align|should i)\b/i.test(
+		text,
+	);
+
+	const hasQuestionsSection = /\bquestions?:\s*$/im.test(text) || /^\s*[-*\d.)]+\s+.+\?/m.test(text);
+
+	return asksForInput || hasQuestionsSection;
+}
+
+/**
  * Suggest a human-friendly plan name from plan text and extracted todo items.
  * Prefers a non-generic H1 title, otherwise falls back to first todo(s).
  */

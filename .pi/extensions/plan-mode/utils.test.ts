@@ -6,6 +6,7 @@ import {
 	cleanStepText,
 	extractDoneSteps,
 	markCompletedSteps,
+	isAwaitingUserResponse,
 	classifyPlanSize,
 	getMenuOptions,
 	getPostExecutionMenuOptions,
@@ -150,6 +151,18 @@ describe("markCompletedSteps", () => {
 		const count = markCompletedSteps("no markers here", items);
 		assert.equal(count, 0);
 		assert.equal(items[0].completed, false);
+	});
+});
+
+describe("isAwaitingUserResponse", () => {
+	it("returns true for explicit clarifying questions", () => {
+		const message = `Great start. Before I adapt this, I have a few clarifying questions:\n1. What is the target module?\n2. Should I optimize for speed or readability?`;
+		assert.equal(isAwaitingUserResponse(message), true);
+	});
+
+	it("returns false for a plain plan with no questions", () => {
+		const message = `Plan:\n1. Inspect current behavior\n2. Add regression test\n3. Implement fix`;
+		assert.equal(isAwaitingUserResponse(message), false);
 	});
 });
 

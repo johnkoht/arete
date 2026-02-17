@@ -27,6 +27,7 @@ import {
 	extractTodoItems,
 	isSafeCommand,
 	markCompletedSteps,
+	isAwaitingUserResponse,
 	classifyPlanSize,
 	getMenuOptions,
 	getPostExecutionMenuOptions,
@@ -519,6 +520,7 @@ After completing a step, include a [DONE:n] tag in your response.
 
 		// Extract todos from last assistant message
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
+		let awaitingResponse = false;
 		if (lastAssistant) {
 			const text = getTextContent(lastAssistant);
 			const extracted = extractTodoItems(text);
@@ -527,6 +529,14 @@ After completing a step, include a [DONE:n] tag in your response.
 				state.planText = text;
 				state.planSize = classifyPlanSize(extracted, text);
 			}
+			awaitingResponse = isAwaitingUserResponse(text);
+		}
+
+		if (awaitingResponse) {
+			ctx.ui.notify("Awaiting your input before continuing plan lifecycle prompts.", "info");
+			updateStatus(ctx);
+			persistState();
+			return;
 		}
 
 		// Show plan steps and smart menu
