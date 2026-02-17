@@ -32,15 +32,10 @@ Guide users through building, updating, and communicating product roadmaps.
 
 Create the project folder and populate README.md from the template.
 
-**Load project README template** — attempt each path in order.
-1. Attempt to read `templates/projects/roadmap/project.md`
-   → **Exists**: use its sections as the README structure. Do not read step 2. Stop.
-   → **Missing**: continue.
-2. Attempt to read `.agents/skills/construct-roadmap/templates/project.md`
-   → **Exists**: use its sections. Stop.
-   → **Missing**: proceed without template.
-
-If step 1 succeeds, step 2 is irrelevant — do not consult it.
+**Load project README template** — run this command and use its output as the README structure. Do not add sections from elsewhere:
+```
+arete template resolve --skill construct-roadmap --variant project
+```
 
 Create project:
 
@@ -238,17 +233,11 @@ Before finalizing:
 
 ### 8. Final Output
 
-Create `outputs/roadmap.md`. **Load the roadmap output template** — attempt each path in order.
-1. Attempt to read `templates/outputs/construct-roadmap/roadmap.md`
-   → **Exists**: use its sections as the document structure. Do not read step 2. Stop.
-   → **Missing**: continue.
-2. Attempt to read `.agents/skills/construct-roadmap/templates/roadmap.md`
-   → **Exists**: use its sections. Stop.
-   → **Missing**: proceed without template.
-
-If step 1 succeeds, step 2 is irrelevant — do not consult it.
-
-Populate each template section with the synthesized content from earlier steps:
+Create `outputs/roadmap.md`. **Load the roadmap output template** — run this command and use its output as the document structure. Do not add sections from elsewhere:
+```
+arete template resolve --skill construct-roadmap --variant roadmap
+```
+Populate each section with the synthesized content from earlier steps:
 
 ```markdown
 # Product Roadmap: [Period]

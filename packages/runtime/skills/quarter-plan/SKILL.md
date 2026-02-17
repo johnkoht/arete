@@ -46,14 +46,10 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 Use the `light_pre_mortem` pattern before locking outcomes.
 
 - **File**: `goals/quarter.md`.
-- **Structure**: **Load quarter goals template** — attempt each path in order.
-  1. Attempt to read `templates/plans/quarter-goals.md`
-     → **Exists**: use its sections as the quarter file structure. Do not read step 2. Stop.
-     → **Missing**: continue.
-  2. Attempt to read `.agents/skills/quarter-plan/templates/quarter-goals.md`
-     → **Exists**: use its sections. Stop.
-     → **Missing**: proceed without template.
-  If step 1 succeeds, step 2 is irrelevant — do not consult it.
+- **Structure**: Run this command and use its output as the quarter file structure. Do not add sections from elsewhere:
+  ```
+  arete template resolve --skill quarter-plan --variant quarter-goals
+  ```
 
   Template sections:
   - Quarter dates

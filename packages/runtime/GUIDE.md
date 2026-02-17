@@ -547,26 +547,26 @@ templates/{category}/{variant}.md      ← your override (wins)
 .agents/skills/{skill}/templates/...  ← skill default (fallback)
 ```
 
-**Quick examples**:
+**Quick examples** — all overrides use `templates/outputs/{skill-id}/{variant}.md`:
 
-| What to customize | Create this file |
-|-------------------|-----------------|
-| One-on-one agenda | `templates/meeting-agendas/one-on-one.md` |
-| Simple PRD format | `templates/outputs/create-prd/prd-simple.md` |
-| Week plan layout  | `templates/plans/week-priorities.md` |
-| Discovery README  | `templates/projects/discovery/project.md` |
+| What to customize | Override path |
+|-------------------|--------------|
+| One-on-one agenda | `templates/outputs/prepare-meeting-agenda/one-on-one.md` |
+| Regular PRD format | `templates/outputs/create-prd/prd-regular.md` |
+| Week plan layout  | `templates/outputs/week-plan/week-priorities.md` |
+| Discovery README  | `templates/outputs/discovery/project.md` |
 
-**To see a default before customizing it**, open the skill file directly:
-```
-.agents/skills/prepare-meeting-agenda/templates/one-on-one.md
-.agents/skills/create-prd/templates/prd-simple.md
-.agents/skills/week-plan/templates/week-priorities.md
+**To see a default before customizing**:
+```bash
+arete template view --skill create-prd --variant prd-regular
+arete template view --skill prepare-meeting-agenda --variant one-on-one
+arete template list   # see all skills and which have active overrides
 ```
 
 **Or ask an agent**:
 ```
-I want to customize my one-on-one agenda. Please read templates/README.md,
-show me the default, and help me create my override.
+I want to customize my one-on-one agenda. Run: arete template view --skill prepare-meeting-agenda --variant one-on-one
+Show me the output, help me edit it, and save to templates/outputs/prepare-meeting-agenda/one-on-one.md.
 ```
 
 #### Meeting Agenda Templates

@@ -23,28 +23,30 @@ To customize, drop your version at the **workspace override path** for that temp
 
 ## What you can customize
 
-| What | Your override path | Variants |
-|------|--------------------|----------|
-| **PRD templates** | `templates/outputs/create-prd/` | `prd-simple.md`, `prd-regular.md`, `prd-full.md` |
-| **Meeting agendas** | `templates/meeting-agendas/` | `one-on-one.md`, `leadership.md`, `customer.md`, `dev-team.md`, `other.md` |
-| **Week plan structure** | `templates/plans/` | `week-priorities.md` |
-| **Quarter goals structure** | `templates/plans/` | `quarter-goals.md` |
-| **Roadmap output** | `templates/outputs/construct-roadmap/` | `roadmap.md` |
-| **Discovery project README** | `templates/projects/discovery/` | `project.md` |
-| **PRD project README** | `templates/projects/definition/` | `project.md` |
-| **Competitive analysis README** | `templates/projects/analysis/` | `project.md` |
-| **Roadmap project README** | `templates/projects/roadmap/` | `project.md` |
-| **Research notes** | `templates/inputs/` | `research-note.md` |
-| **User feedback capture** | `templates/inputs/` | `user-feedback.md` |
+All overrides live under `templates/outputs/{skill-id}/{variant}.md` — one consistent pattern for every skill.
+
+| What | Override path |
+|------|---------------|
+| **PRD templates** | `templates/outputs/create-prd/prd-simple.md` (or `prd-regular`, `prd-full`) |
+| **PRD project README** | `templates/outputs/create-prd/project.md` |
+| **Meeting agendas** | `templates/outputs/prepare-meeting-agenda/one-on-one.md` (or `leadership`, `customer`, `dev-team`, `other`) |
+| **Week plan structure** | `templates/outputs/week-plan/week-priorities.md` |
+| **Quarter goals structure** | `templates/outputs/quarter-plan/quarter-goals.md` |
+| **Discovery project README** | `templates/outputs/discovery/project.md` |
+| **Research notes** | `templates/outputs/discovery/research-note.md` |
+| **User feedback capture** | `templates/outputs/discovery/user-feedback.md` |
+| **Competitive analysis README** | `templates/outputs/competitive-analysis/project.md` |
+| **Roadmap project README** | `templates/outputs/construct-roadmap/project.md` |
+| **Roadmap output** | `templates/outputs/construct-roadmap/roadmap.md` |
 
 ---
 
 ## How to customize a template
 
-1. **Find the default** — open `.agents/skills/{skill-id}/templates/{variant}.md`
-2. **Copy it** to the override path in this folder (create the folder if needed)
-3. **Edit** your copy — the skill uses it immediately on the next run
-4. **Test it** — ask the agent to run the skill and verify your changes
+1. **Find the default** — run `arete template view --skill {skill-id} --variant {variant}` to see the current content
+2. **Create your override** at `templates/outputs/{skill-id}/{variant}.md` (create the folder if needed)
+3. **Verify** — run `arete template resolve --skill {skill-id} --variant {variant}` to confirm your override is picked up
+4. **Use it** — the skill automatically uses your version on the next run
 
 Your file is never overwritten by `arete update`. If you delete it, the skill falls back to the skill default.
 
@@ -56,47 +58,43 @@ Paste any of these directly into an agent chat. The agent will read this README,
 
 ### Customize a PRD template
 ```
-I want to customize my PRD template. Please read `templates/README.md` to understand
-the override system, then open `.agents/skills/create-prd/templates/prd-simple.md`
-(or prd-regular / prd-full — ask me which), show me what's there, and help me create
-a customized version at `templates/outputs/create-prd/prd-simple.md`.
+I want to customize my PRD template. Run: arete template view --skill create-prd --variant prd-regular
+Show me the output, then help me create my version at templates/outputs/create-prd/prd-regular.md.
+After saving, run: arete template resolve --skill create-prd --variant prd-regular
+to confirm the override is active.
 ```
 
 ### Customize a meeting agenda
 ```
-I want to customize my one-on-one meeting agenda template. Please read `templates/README.md`,
-then open `.agents/skills/prepare-meeting-agenda/templates/one-on-one.md`, show me the
-default, and help me create my version at `templates/meeting-agendas/one-on-one.md`.
+I want to customize my one-on-one meeting agenda. Run: arete template view --skill prepare-meeting-agenda --variant one-on-one
+Show me the output, then help me create my version at templates/outputs/prepare-meeting-agenda/one-on-one.md.
 ```
 
 ### Add a new meeting agenda type
 ```
-I want to create a new meeting agenda type called "product-review" for my weekly product
-review meetings. Please read `templates/README.md` and `.agents/skills/prepare-meeting-agenda/SKILL.md`,
-look at an existing agenda template for the format, and help me create
-`templates/meeting-agendas/product-review.md` with the right frontmatter and sections.
+I want a new meeting agenda type called "product-review". Run: arete template view --skill prepare-meeting-agenda --variant one-on-one
+Use that as a format reference, then help me create templates/outputs/prepare-meeting-agenda/product-review.md
+with the right frontmatter (name, type, description, time_allocation) and sections for a weekly product review.
 ```
 
 ### Customize the week plan structure
 ```
-I want to change how my weekly plan is structured. Please read `templates/README.md`,
-open `.agents/skills/week-plan/templates/week-priorities.md`, show me the default,
-and help me create my version at `templates/plans/week-priorities.md`.
+I want to change how my weekly plan is structured. Run: arete template view --skill week-plan --variant week-priorities
+Show me the output, then help me create my version at templates/outputs/week-plan/week-priorities.md.
 ```
 
 ### Customize a project README template
 ```
-I want to change the structure of my discovery project READMEs. Please read
-`templates/README.md`, open `.agents/skills/discovery/templates/project.md`,
-show me the default, and help me create my version at
-`templates/projects/discovery/project.md`.
+I want to change the structure of my discovery project READMEs. Run: arete template view --skill discovery --variant project
+Show me the output, then help me create my version at templates/outputs/discovery/project.md.
 ```
 
 ### General: customize any template
 ```
-I want to customize the [skill name] template. Please read `templates/README.md`
-to understand the override system, find the default in `.agents/skills/[skill-id]/templates/`,
-show it to me, and help me create my override at the right path.
+I want to customize the [skill-id] / [variant] template.
+Run: arete template view --skill [skill-id] --variant [variant]
+Show me the output, help me edit it, and save it to templates/outputs/[skill-id]/[variant].md.
+Then run: arete template resolve --skill [skill-id] --variant [variant] to confirm.
 ```
 
 ---

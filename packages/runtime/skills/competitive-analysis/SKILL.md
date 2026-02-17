@@ -31,15 +31,10 @@ Guide users through competitive research and landscape documentation.
 
 Create the project folder and populate README.md from the template.
 
-**Load project README template** — attempt each path in order.
-1. Attempt to read `templates/projects/analysis/project.md`
-   → **Exists**: use its sections as the README structure. Do not read step 2. Stop.
-   → **Missing**: continue.
-2. Attempt to read `.agents/skills/competitive-analysis/templates/project.md`
-   → **Exists**: use its sections. Stop.
-   → **Missing**: proceed without template.
-
-If step 1 succeeds, step 2 is irrelevant — do not consult it.
+**Load project README template** — run this command and use its output as the README structure. Do not add sections from elsewhere:
+```
+arete template resolve --skill competitive-analysis --variant project
+```
 
 Create project:
 

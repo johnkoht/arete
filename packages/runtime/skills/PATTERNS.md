@@ -10,21 +10,18 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 **Used by**: Any skill that loads a template before generating output (create-prd, prepare-meeting-agenda, discovery, competitive-analysis, construct-roadmap).
 
-### Resolution order — required behavior
+### Resolution — use the CLI, not manual path checking
 
-**You must attempt to read each path in order. Do not assume a file is absent without trying.**
+Template resolution is handled by the CLI. Each skill's SKILL.md specifies the exact command. The general form is:
 
-1. **Attempt to read** `templates/{category}/{variant}.md` (workspace override — user customized)
-   → **Exists**: use this file's sections as the document structure. **Do not read step 2. Stop.**
-   → Missing: continue to step 2.
-2. **Attempt to read** `.agents/skills/{skill-id}/templates/{variant}.md` (skill default — shipped with skill)
-   → **Exists**: use this file's sections as the document structure. Do not read step 3. Stop.
-   → Missing: continue to step 3.
-3. **Attempt to read** legacy fallback (old installs only — omit if same path as step 1)
-   → **Exists**: use it. Done.
-   → Missing: proceed without template or ask user.
+```
+arete template resolve --skill {skill-id} --variant {variant}
+```
 
-**What "use it" means**: the loaded file defines the complete section structure of the document. Do not add, remove, or reorder sections based on another template path or training defaults. If step 1 succeeds, step 2 is irrelevant — do not consult it.
+Use the command output as the document structure. Do not add sections from elsewhere. The CLI checks the workspace override path first, falls back to the skill default — the agent does not make this decision.
+
+**Workspace override path** (unified for all skills): `templates/outputs/{skill-id}/{variant}.md`
+**Skill default path**: `.agents/skills/{skill-id}/templates/{variant}.md`
 
 Where `{category}` matches the template group:
 

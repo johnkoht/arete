@@ -116,8 +116,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				return `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`;
 			});
 			ctx.ui.setWidget("plan-todos", lines);
-		} else if (state.planModeEnabled && state.planSize) {
-			// Show lifecycle pipeline during plan mode with an active plan
+		} else if (state.planModeEnabled) {
+			// Show lifecycle pipeline during plan mode (even before planSize is known)
 			const pipelineLines = renderLifecycleWidget(widgetState, ctx.ui.theme);
 			ctx.ui.setWidget("plan-todos", pipelineLines);
 		} else {

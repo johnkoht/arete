@@ -1,5 +1,5 @@
 /**
- * Template rendering with variable substitution.
+ * Template rendering, resolution, and registry.
  *
  * Ported from scripts/integrations/utils.py
  * Replaces {variable_name} placeholders with values from variables object.
@@ -7,6 +7,22 @@
 
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
+
+/**
+ * Registry of all known skill template variants.
+ * Used by `arete template resolve/list/view` for validation and discovery.
+ *
+ * Key: skill ID. Value: array of variant names (without .md extension).
+ */
+export const TEMPLATE_REGISTRY: Record<string, string[]> = {
+  'create-prd': ['prd-simple', 'prd-regular', 'prd-full', 'project'],
+  'prepare-meeting-agenda': ['one-on-one', 'leadership', 'customer', 'dev-team', 'other'],
+  'discovery': ['project', 'research-note', 'user-feedback'],
+  'competitive-analysis': ['project'],
+  'construct-roadmap': ['project', 'roadmap'],
+  'week-plan': ['week-priorities'],
+  'quarter-plan': ['quarter-goals'],
+};
 
 /**
  * Render a template file with variable substitution.
@@ -61,18 +77,20 @@ export function renderTemplateString(
 }
 
 /**
- * Resolve a skill template path using 3-level precedence:
+ * Resolve a skill template path using 2-level precedence (+ legacy fallback):
  *
  * 1. Workspace override:  {workspaceRoot}/templates/outputs/{skillId}/{variant}.md
  * 2. Skill-local default: {workspaceRoot}/.agents/skills/{skillId}/templates/{variant}.md
  * 3. Legacy fallback:     {workspaceRoot}/templates/outputs/{variant}.md
  *
- * Returns the first path that exists, or null if none found.
+ * Level 1 is the unified workspace override location for all skills (Decision 1).
+ * Level 3 exists only for backward compat with workspaces created before this system.
+ *
+ * Returns the absolute path to the first file that exists, or null if none found.
  *
  * @param workspaceRoot - Absolute path to the workspace root
  * @param skillId - The skill identifier (e.g., 'create-prd')
- * @param variant - Template variant name without extension (e.g., 'prd-simple')
- * @returns Absolute path to the resolved template, or null if not found
+ * @param variant - Template variant name without extension (e.g., 'prd-regular')
  */
 export async function resolveTemplatePath(
   workspaceRoot: string,
@@ -95,4 +113,26 @@ export async function resolveTemplatePath(
   }
 
   return null;
+}
+
+/**
+ * Resolve a skill template and return its content.
+ * Combines resolveTemplatePath + readFile in one call for CLI/skill use.
+ *
+ * @returns { path, content } of the resolved template, or null if not found
+ */
+export async function resolveTemplateContent(
+  workspaceRoot: string,
+  skillId: string,
+  variant: string
+): Promise<{ path: string; content: string } | null> {
+  const resolved = await resolveTemplatePath(workspaceRoot, skillId, variant);
+  if (!resolved) return null;
+
+  try {
+    const content = await readFile(resolved, 'utf-8');
+    return { path: resolved, content };
+  } catch {
+    return null;
+  }
 }

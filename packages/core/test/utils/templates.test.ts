@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { renderTemplate, renderTemplateString, resolveTemplatePath } from '../../src/utils/templates.js';
+import { renderTemplate, renderTemplateString, resolveTemplatePath, resolveTemplateContent, TEMPLATE_REGISTRY } from '../../src/utils/templates.js';
 
 describe('renderTemplate', () => {
   it('basic substitution', async () => {
@@ -182,6 +182,86 @@ describe('resolveTemplatePath', () => {
       await writeFile(legacyPath, '# legacy', 'utf-8');
       const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
       assert.equal(result, overridePath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('TEMPLATE_REGISTRY', () => {
+  it('contains all expected skills', () => {
+    const skills = Object.keys(TEMPLATE_REGISTRY);
+    assert.ok(skills.includes('create-prd'), 'registry has create-prd');
+    assert.ok(skills.includes('prepare-meeting-agenda'), 'registry has prepare-meeting-agenda');
+    assert.ok(skills.includes('discovery'), 'registry has discovery');
+    assert.ok(skills.includes('competitive-analysis'), 'registry has competitive-analysis');
+    assert.ok(skills.includes('construct-roadmap'), 'registry has construct-roadmap');
+    assert.ok(skills.includes('week-plan'), 'registry has week-plan');
+    assert.ok(skills.includes('quarter-plan'), 'registry has quarter-plan');
+  });
+
+  it('every entry has at least one variant', () => {
+    for (const [skill, variants] of Object.entries(TEMPLATE_REGISTRY)) {
+      assert.ok(Array.isArray(variants) && variants.length > 0, `${skill} must have at least one variant`);
+    }
+  });
+
+  it('create-prd has expected variants', () => {
+    assert.deepEqual(TEMPLATE_REGISTRY['create-prd'], ['prd-simple', 'prd-regular', 'prd-full', 'project']);
+  });
+
+  it('prepare-meeting-agenda has all five meeting types', () => {
+    const variants = TEMPLATE_REGISTRY['prepare-meeting-agenda'];
+    for (const type of ['one-on-one', 'leadership', 'customer', 'dev-team', 'other']) {
+      assert.ok(variants.includes(type), `prepare-meeting-agenda missing variant: ${type}`);
+    }
+  });
+});
+
+describe('resolveTemplateContent', () => {
+  it('returns null when no template exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-content-'));
+    try {
+      const result = await resolveTemplateContent(root, 'create-prd', 'prd-simple');
+      assert.equal(result, null);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns path and content for skill-local template', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-content-'));
+    try {
+      const skillDir = join(root, '.agents', 'skills', 'create-prd', 'templates');
+      await mkdir(skillDir, { recursive: true });
+      const skillPath = join(skillDir, 'prd-simple.md');
+      await writeFile(skillPath, '# Simple PRD\n## Problem\n', 'utf-8');
+
+      const result = await resolveTemplateContent(root, 'create-prd', 'prd-simple');
+      assert.ok(result !== null);
+      assert.equal(result.path, skillPath);
+      assert.equal(result.content, '# Simple PRD\n## Problem\n');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns workspace override content when both override and skill-local exist', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-content-'));
+    try {
+      const overrideDir = join(root, 'templates', 'outputs', 'create-prd');
+      const skillDir = join(root, '.agents', 'skills', 'create-prd', 'templates');
+      await mkdir(overrideDir, { recursive: true });
+      await mkdir(skillDir, { recursive: true });
+
+      const overridePath = join(overrideDir, 'prd-simple.md');
+      await writeFile(overridePath, '# My Custom PRD\n## Problem\n', 'utf-8');
+      await writeFile(join(skillDir, 'prd-simple.md'), '# Default PRD\n## Overview\n', 'utf-8');
+
+      const result = await resolveTemplateContent(root, 'create-prd', 'prd-simple');
+      assert.ok(result !== null);
+      assert.equal(result.path, overridePath);
+      assert.equal(result.content, '# My Custom PRD\n## Problem\n');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

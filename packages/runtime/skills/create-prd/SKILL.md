@@ -35,9 +35,10 @@ Write PRDs iteratively—provide "just enough" so Design and Engineering can sta
 
 First, create a PRD project. Populate README.md from the template:
 
-**Load project README template** — attempt each path in order; use the first that exists. Do not skip step 1 without trying.
-1. Attempt to read `templates/projects/definition/project.md` → exists? Use it. Stop.
-2. Attempt to read `.agents/skills/create-prd/templates/project.md` → exists? Use it. Stop.
+**Load project README template** — run this command and use its output as the README structure. Do not add sections from elsewhere:
+```
+arete template resolve --skill create-prd --variant project
+```
 
 ```
 projects/active/[feature-name]-prd/
@@ -102,19 +103,11 @@ Based on discovery, recommend a template:
 
 **Full PRD** — for strategic initiatives, new products or major features, complex multi-quarter projects, high stakeholder involvement.
 
-**Load PRD template** — attempt each path in order. Replace `{variant}` with the chosen type (`prd-simple`, `prd-regular`, or `prd-full`).
-
-1. Attempt to read `templates/outputs/create-prd/{variant}.md`
-   → **Exists**: use this file's sections as the document structure. **Do not read the next path. Do not add sections from the skill template or from training.** Stop here.
-   → **Missing**: continue to step 2.
-2. Attempt to read `.agents/skills/create-prd/templates/{variant}.md`
-   → **Exists**: use this file's sections as the document structure. Do not read the next path. Stop here.
-   → **Missing**: continue to step 3.
-3. Attempt to read `templates/outputs/{variant}.md`
-   → **Exists**: use it. Done.
-   → **Missing**: proceed without template or ask the user.
-
-**What "use it" means**: the loaded file defines the complete section structure of the PRD. Generate content for each section as written in that file. Do not add, remove, or reorder sections based on the skill default, the other template paths, or training defaults. If step 1 succeeds, the skill template at step 2 is irrelevant — do not consult it.
+**Load PRD template** — run this command (replace `{variant}` with `prd-simple`, `prd-regular`, or `prd-full`) and use its output as the document structure. Do not add sections from elsewhere:
+```
+arete template resolve --skill create-prd --variant {variant}
+```
+The command output defines the complete section structure. Generate content for each section as written. Do not add, remove, or reorder sections based on training defaults.
 
 ### 5. Context Integration
 
