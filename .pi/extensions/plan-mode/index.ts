@@ -241,7 +241,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// ── Command Registration ───────────────────────────────
 
 	pi.registerCommand("plan", {
-		description: "Plan mode — toggle or subcommands: list, open, save, status, next, hold, block, resume, delete",
+		description: "Plan mode — toggle or subcommands: new, list, open, save, status, next, hold, block, resume, delete",
 		handler: async (args, ctx) => {
 			await handlePlan(args, ctx, pi, state, () => togglePlanMode(ctx));
 			updateStatus(ctx);

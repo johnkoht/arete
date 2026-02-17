@@ -26,6 +26,7 @@ import {
 	type PlanSize,
 	type TodoItem,
 } from "./utils.js";
+import { getTemplate, getTemplates, getTemplateOptions } from "./templates.js";
 
 // ────────────────────────────────────────────────────────────
 // Shared types for command handlers
@@ -113,6 +114,9 @@ export async function handlePlan(
 	}
 
 	switch (cmd) {
+		case "new":
+			await handlePlanNew(subcommand[1], ctx, pi, state, togglePlanMode);
+			break;
 		case "list":
 			await handlePlanList(ctx, state);
 			break;
@@ -149,8 +153,79 @@ export async function handlePlan(
 			break;
 		}
 		default:
-			ctx.ui.notify(`Unknown subcommand: ${cmd}. Available: list, open, save, status, next, hold, block, resume, delete`, "warning");
+			ctx.ui.notify(`Unknown subcommand: ${cmd}. Available: new, list, open, save, status, next, hold, block, resume, delete`, "warning");
 	}
+}
+
+async function handlePlanNew(
+	templateSlug: string | undefined,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+	togglePlanMode: () => void,
+): Promise<void> {
+	let template;
+
+	if (templateSlug) {
+		// Direct template selection
+		template = getTemplate(templateSlug);
+		if (!template) {
+			const available = getTemplates().map((t) => t.slug).join(", ");
+			ctx.ui.notify(`Template not found: '${templateSlug}'. Available: ${available}`, "warning");
+			return;
+		}
+	} else {
+		// Interactive template picker
+		const options = [
+			...getTemplateOptions(),
+			"Blank plan — start from scratch",
+		];
+		const choice = await ctx.ui.select("Choose a plan template:", options);
+		if (!choice) return;
+
+		if (choice.startsWith("Blank")) {
+			// No template — just enable plan mode
+			if (!state.planModeEnabled) togglePlanMode();
+			ctx.ui.notify("📋 Plan mode enabled. Describe your idea and I'll help shape it into a plan.", "info");
+			return;
+		}
+
+		// Find template by matching the option text
+		const templates = getTemplates();
+		const index = getTemplateOptions().indexOf(choice);
+		if (index < 0 || index >= templates.length) return;
+		template = templates[index];
+	}
+
+	// Apply template
+	state.planText = template.content;
+	state.todoItems = extractTodoItems(template.content);
+	state.planSize = classifyPlanSize(state.todoItems, template.content);
+	state.currentSlug = template.slug;
+
+	// Enable plan mode if not already
+	if (!state.planModeEnabled) togglePlanMode();
+
+	// Show the template content and prompt for refinement
+	pi.sendMessage(
+		{
+			customType: "plan-template",
+			content: `📋 **Template: ${template.name}**\n\n${template.content}`,
+			display: true,
+		},
+		{ triggerTurn: false },
+	);
+
+	ctx.ui.notify(
+		`Template applied: ${template.name} (${state.todoItems.length} steps, ${state.planSize}). Refine it with your specific context.`,
+		"info",
+	);
+
+	// Ask PM agent to help refine
+	pi.sendUserMessage(
+		`I've started with the "${template.name}" plan template. Help me refine it for my specific use case. ` +
+			`Ask me clarifying questions about what I'm working on, then adapt the template steps to my context.`,
+	);
 }
 
 async function handlePlanList(ctx: CommandContext, state: PlanModeState): Promise<void> {
