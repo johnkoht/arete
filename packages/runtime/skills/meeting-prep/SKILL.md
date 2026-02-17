@@ -46,14 +46,26 @@ Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). I
 ### 1. Identify Meeting
 
 - User provides: meeting title and/or attendee names.
-- If not provided, ask: "Which meeting? Please share the title and/or attendee names."
-- No calendar integration in v1; user supplies title/attendees.
+- If meeting identity is ambiguous, try calendar first:
+  - Run `arete pull calendar --today --json`.
+  - If events are available, present a concise selectable list (time + title + attendees if present).
+  - Ask user to pick one meeting to prep.
+- If no calendar data or calendar is unavailable, ask: "Which meeting? Please share the title and/or attendee names."
 
-### 2. Gather Context
+### 2. Lazy Refresh Person Memory (stale-aware)
+
+After attendee slugs are resolved, refresh only if stale/missing:
+
+- For each attendee, run:
+  - `arete people memory refresh --person <slug> --if-stale-days 3`
+- If many attendees (e.g. 5+), ask before refreshing all: "Refresh person memory highlights now?"
+- If refresh fails, continue prep with existing person context (fail-open).
+
+### 3. Gather Context
 
 Run **get_meeting_context** (see PATTERNS.md). Use the outputs to build the brief.
 
-### 3. Build Prep Brief
+### 4. Build Prep Brief
 
 Output markdown:
 
@@ -82,7 +94,7 @@ Output markdown:
 
 Keep it concise and prep-focused.
 
-### 4. Close
+### 5. Close
 
 - Offer to save the brief to a note or scratchpad if useful.
 - Suggest **process-meetings** after the meeting to propagate attendees and extract decisions.

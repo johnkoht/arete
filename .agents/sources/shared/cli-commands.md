@@ -15,7 +15,7 @@
 
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show person details
-- `arete people memory refresh` - Refresh person memory highlights from meetings
+- `arete people memory refresh [--person <slug>] [--if-stale-days N]` - Refresh person memory highlights from meetings (stale-aware)
 
 ## Integrations
 

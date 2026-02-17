@@ -69,6 +69,7 @@ arete memory search "pricing model"
 - `process-meetings` - Extracts from meetings
 - `finalize-project` - Extracts from project work
 - `arete people memory refresh` - Updates person-specific recurring asks/concerns in `people/*/*.md`
+- `arete people memory refresh --person <slug> --if-stale-days N` - Targeted stale-aware refresh for prep/planning flows
 - Skills automatically append during key decisions
 
 ## Entity Resolution

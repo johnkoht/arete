@@ -39,7 +39,10 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
 
 ### 2. For Each Meeting
 
-Run **get_meeting_context** (see PATTERNS.md). Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
+- Resolve attendee slugs and run stale-aware person memory refresh for relevant attendees:
+  - `arete people memory refresh --person <slug> --if-stale-days 3`
+- Run **get_meeting_context** (see PATTERNS.md). Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
+- Add one concise stakeholder watchout when available from person memory highlights.
 
 ### 3. Build Daily Plan
 

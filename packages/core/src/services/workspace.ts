@@ -13,6 +13,7 @@ import type {
   CreateWorkspaceOptions,
   InstallResult,
   UpdateResult,
+  UpdateWorkspaceOptions,
   AreteConfig,
 } from '../models/index.js';
 import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
@@ -237,7 +238,10 @@ export class WorkspaceService {
     return result;
   }
 
-  async update(workspaceRoot: string): Promise<UpdateResult> {
+  async update(
+    workspaceRoot: string,
+    options: UpdateWorkspaceOptions = {}
+  ): Promise<UpdateResult> {
     const config = await loadConfig(this.storage, workspaceRoot);
     const adapter = getAdapterFromConfig(config, workspaceRoot);
     const paths = this.getPaths(workspaceRoot);
@@ -250,10 +254,94 @@ export class WorkspaceService {
     const result: UpdateResult = {
       added: [...structureResult.directoriesAdded, ...structureResult.filesAdded],
       updated: [],
-      preserved: config.skills?.overrides ?? [],
+      preserved: config.skills?.overrides ? [...config.skills.overrides] : [],
       removed: [],
     };
+
+    if (options.sourcePaths?.skills) {
+      const syncResult = await this.syncCoreSkills(
+        options.sourcePaths.skills,
+        paths.agentSkills,
+        new Set(config.skills?.overrides ?? []),
+      );
+      result.added.push(...syncResult.added);
+      result.updated.push(...syncResult.updated);
+      result.preserved.push(...syncResult.preserved);
+    }
+
     return result;
+  }
+
+  private async copyDirectory(sourceDir: string, targetDir: string): Promise<void> {
+    const files = await this.storage.list(sourceDir, { recursive: true });
+    for (const sourcePath of files) {
+      const relativePath = sourcePath.slice(sourceDir.length + 1);
+      const targetPath = join(targetDir, relativePath);
+      const parentDir = join(targetPath, '..');
+      const content = await this.storage.read(sourcePath);
+      if (content == null) continue;
+      await this.storage.mkdir(parentDir);
+      await this.storage.write(targetPath, content);
+    }
+  }
+
+  private async isCommunitySkill(skillDir: string): Promise<boolean> {
+    const metaPath = join(skillDir, '.arete-meta.yaml');
+    const exists = await this.storage.exists(metaPath);
+    if (!exists) return false;
+
+    const content = await this.storage.read(metaPath);
+    if (!content) return false;
+
+    try {
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      return parsed.category === 'community';
+    } catch {
+      return false;
+    }
+  }
+
+  private async syncCoreSkills(
+    sourceSkillsDir: string,
+    targetSkillsDir: string,
+    overrides: Set<string>
+  ): Promise<Pick<UpdateResult, 'added' | 'updated' | 'preserved'>> {
+    const added: string[] = [];
+    const updated: string[] = [];
+    const preserved: string[] = [];
+
+    const sourceExists = await this.storage.exists(sourceSkillsDir);
+    if (!sourceExists) return { added, updated, preserved };
+
+    await this.storage.mkdir(targetSkillsDir);
+    const sourceSkillDirs = await this.storage.listSubdirectories(sourceSkillsDir);
+
+    for (const sourceSkillDir of sourceSkillDirs) {
+      const skillName = sourceSkillDir.split(/[/\\]/).pop() ?? '';
+      if (!skillName) continue;
+
+      const targetSkillDir = join(targetSkillsDir, skillName);
+      const targetExists = await this.storage.exists(targetSkillDir);
+
+      if (overrides.has(skillName)) {
+        preserved.push(skillName);
+        continue;
+      }
+
+      if (targetExists && await this.isCommunitySkill(targetSkillDir)) {
+        preserved.push(skillName);
+        continue;
+      }
+
+      await this.copyDirectory(sourceSkillDir, targetSkillDir);
+      if (targetExists) {
+        updated.push(skillName);
+      } else {
+        added.push(skillName);
+      }
+    }
+
+    return { added, updated, preserved };
   }
 
   private async ensureWorkspaceStructure(

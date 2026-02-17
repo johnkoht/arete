@@ -214,8 +214,9 @@ export function registerPeopleCommands(program: Command): void {
     .description('Refresh auto-generated person memory highlights from meetings')
     .option('--person <slug>', 'Refresh only one person by slug')
     .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
+    .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { person?: string; minMentions?: string; json?: boolean }) => {
+    .action(async (opts: { person?: string; minMentions?: string; ifStaleDays?: string; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -232,10 +233,15 @@ export function registerPeopleCommands(program: Command): void {
       const minMentions = typeof minMentionsParsed === 'number' && !isNaN(minMentionsParsed)
         ? minMentionsParsed
         : undefined;
+      const ifStaleDaysParsed = opts.ifStaleDays ? parseInt(opts.ifStaleDays, 10) : undefined;
+      const ifStaleDays = typeof ifStaleDaysParsed === 'number' && !isNaN(ifStaleDaysParsed)
+        ? ifStaleDaysParsed
+        : undefined;
 
       const result = await services.entity.refreshPersonMemory(paths, {
         personSlug: opts.person,
         minMentions,
+        ifStaleDays,
       });
 
       if (opts.json) {
@@ -246,6 +252,7 @@ export function registerPeopleCommands(program: Command): void {
       info(`Refreshed person memory highlights for ${result.updated} person file(s).`);
       listItem('People scanned', String(result.scannedPeople));
       listItem('Meetings scanned', String(result.scannedMeetings));
+      listItem('Skipped (fresh)', String(result.skippedFresh));
       console.log('');
     });
 }

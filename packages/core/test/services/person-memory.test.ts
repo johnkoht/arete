@@ -94,6 +94,7 @@ Jane Doe is concerned about budget runway.
 
     const result = await service.refreshPersonMemory(paths);
     assert.equal(result.updated, 1);
+    assert.equal(result.skippedFresh, 0);
 
     const personContent = readFileSync(
       join(tmpDir, 'people', 'internal', 'jane-doe.md'),
@@ -104,6 +105,21 @@ Jane Doe is concerned about budget runway.
     assert.ok(personContent.includes('timeline risk for launch'));
     assert.ok(personContent.includes('budget runway'));
     assert.ok(personContent.includes('mentioned 2 times'));
+  });
+
+  it('skips refresh when memory is fresh and ifStaleDays is set', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const dir = join(tmpDir, 'people', 'internal');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'jane-doe.md'),
+      `---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n\n<!-- AUTO_PERSON_MEMORY:START -->\n## Memory Highlights (Auto)\n\nLast refreshed: ${today}\n\n### Repeated asks\n- **timeline** — mentioned 2 times\n\n### Repeated concerns\n- None detected yet.\n<!-- AUTO_PERSON_MEMORY:END -->\n`,
+      'utf8',
+    );
+
+    const result = await service.refreshPersonMemory(paths, { ifStaleDays: 7 });
+    assert.equal(result.updated, 0);
+    assert.equal(result.skippedFresh, 1);
   });
 
   it('is idempotent and does not duplicate auto section', async () => {

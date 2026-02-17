@@ -107,6 +107,12 @@ export type UpdateResult = {
   removed: string[];
 };
 
+/** Options for workspace update */
+export type UpdateWorkspaceOptions = {
+  /** Pre-resolved source paths used to sync canonical runtime assets (skills/rules/tools). */
+  sourcePaths?: SourcePaths;
+};
+
 /** Return type of parseSourceType() */
 export type SourceType = {
   type: 'npm' | 'symlink' | 'local';

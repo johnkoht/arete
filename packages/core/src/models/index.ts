@@ -49,6 +49,7 @@ export type {
   CreateWorkspaceOptions,
   InstallResult,
   UpdateResult,
+  UpdateWorkspaceOptions,
   SourceType,
   SourcePaths,
 } from './workspace.js';

@@ -442,6 +442,7 @@ Query what Areté knows about any topic over time.
 #### Person Memory Highlights
 Keep fast-access stakeholder memory on each person profile.
 - `arete people memory refresh` — Update repeated asks/concerns from meetings
+- `arete people memory refresh --person <slug> --if-stale-days N` — Refresh only when stale
 - Person files get `## Memory Highlights (Auto)` with mention counts and recent sources
 - Meeting prep and agenda generation can use these highlights for better callouts
 

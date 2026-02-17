@@ -79,7 +79,14 @@ Also capture:
   - Carried over from last week
   - Optional "End of week review" section (filled during **week-review**).
 
-### 5. Confirm and Close
+### 5. Stakeholder Watchouts (Summary)
+
+- For meetings likely to need prep, resolve attendees and run stale-aware refresh as needed:
+  - `arete people memory refresh --person <slug> --if-stale-days 7`
+- Add a compact section: **Stakeholder watchouts this week** with 3–5 high-signal themes.
+- Keep this strategic and concise (avoid per-person dumps unless requested).
+
+### 6. Confirm and Close
 
 - Summarize the week’s focus and quarter links.
 - Suggest **week-review** at the end of the week to close out and carry over.

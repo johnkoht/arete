@@ -70,6 +70,42 @@ email: "jane@example.com"
     assert.ok(stdout.includes('timeline'));
   });
 
+  it('supports stale-only refresh mode', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'jane-doe.md'),
+      `---
+name: "Jane Doe"
+category: "internal"
+email: "jane@example.com"
+---
+
+# Jane Doe
+
+<!-- AUTO_PERSON_MEMORY:START -->
+## Memory Highlights (Auto)
+
+Last refreshed: ${today}
+
+### Repeated asks
+- **timeline** — mentioned 2 times
+
+### Repeated concerns
+- None detected yet.
+<!-- AUTO_PERSON_MEMORY:END -->
+`,
+      'utf8',
+    );
+
+    const stdout = runCli(['people', 'memory', 'refresh', '--person', 'jane-doe', '--if-stale-days', '7', '--json'], { cwd: tmpDir });
+    const result = JSON.parse(stdout);
+    assert.equal(result.success, true);
+    assert.equal(result.updated, 0);
+    assert.equal(result.skippedFresh, 1);
+  });
+
   it('refreshes person memory highlights from meetings', () => {
     const personDir = join(tmpDir, 'people', 'internal');
     mkdirSync(personDir, { recursive: true });

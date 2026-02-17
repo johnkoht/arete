@@ -2,7 +2,8 @@
  * arete update — pull latest skills/tools/integrations
  */
 
-import { createServices } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths } from '@arete/core';
+import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, success, error, info } from '../formatters.js';
@@ -26,7 +27,22 @@ export function registerUpdateCommand(program: Command): void {
         process.exit(1);
       }
 
-      const result = await services.workspace.update(root);
+      const packageRoot = getPackageRoot();
+      const useRuntime = !packageRoot.includes('node_modules');
+      const basePaths = getSourcePaths(packageRoot, useRuntime);
+      const sourcePaths = {
+        root: basePaths.root,
+        skills: basePaths.skills,
+        tools: basePaths.tools,
+        rules: join(
+          basePaths.rules,
+          ((await services.workspace.getStatus(root)).ideTarget ?? 'cursor') === 'claude' ? 'claude-code' : 'cursor',
+        ),
+        integrations: basePaths.integrations,
+        templates: basePaths.templates,
+      };
+
+      const result = await services.workspace.update(root, { sourcePaths });
 
       if (opts.json) {
         console.log(

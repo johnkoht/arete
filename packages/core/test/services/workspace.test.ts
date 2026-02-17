@@ -5,8 +5,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'path';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   isAreteWorkspace,
   findWorkspaceRoot,
@@ -163,6 +164,150 @@ describe('WorkspaceService', () => {
       assert.ok(result.files.length > 0);
       const manifestExists = existsSync(join(tmpDir, 'arete.yaml'));
       assert.equal(manifestExists, true);
+    });
+  });
+
+  describe('update', () => {
+    it('syncs core skills from source paths and preserves custom workspace skills', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(sourceSkills, 'meeting-prep', 'SKILL.md'),
+        '# Meeting Prep\n\nNew canonical skill content\n',
+        'utf8',
+      );
+
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      // Existing core skill should be updated from source
+      mkdirSync(join(tmpDir, '.agents', 'skills', 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
+        '# Meeting Prep\n\nOld content\n',
+        'utf8',
+      );
+
+      // Custom skill should remain untouched
+      mkdirSync(join(tmpDir, '.agents', 'skills', 'my-custom-skill'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, '.agents', 'skills', 'my-custom-skill', 'SKILL.md'),
+        '# Custom Skill\n',
+        'utf8',
+      );
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+        },
+      });
+
+      assert.ok(
+        result.updated.includes('meeting-prep'),
+        `Expected meeting-prep in updated. added=${JSON.stringify(result.added)} updated=${JSON.stringify(result.updated)} preserved=${JSON.stringify(result.preserved)}`,
+      );
+      const updatedContent = readFileSync(
+        join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
+        'utf8',
+      );
+      assert.ok(updatedContent.includes('New canonical skill content'));
+
+      const customExists = existsSync(
+        join(tmpDir, '.agents', 'skills', 'my-custom-skill', 'SKILL.md'),
+      );
+      assert.equal(customExists, true);
+    });
+
+    it('preserves overridden core skills', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(sourceSkills, 'meeting-prep', 'SKILL.md'),
+        '# Meeting Prep\n\nCanonical update\n',
+        'utf8',
+      );
+
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const manifestPath = join(tmpDir, 'arete.yaml');
+      const manifest = parseYaml(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+      const skills = (manifest.skills as Record<string, unknown>) || {};
+      skills.overrides = ['meeting-prep'];
+      manifest.skills = skills;
+      writeFileSync(manifestPath, stringifyYaml(manifest), 'utf8');
+
+      mkdirSync(join(tmpDir, '.agents', 'skills', 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
+        '# Meeting Prep\n\nLocal override content\n',
+        'utf8',
+      );
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+        },
+      });
+
+      const content = readFileSync(
+        join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
+        'utf8',
+      );
+      assert.ok(content.includes('Local override content'));
+      assert.ok(result.preserved.includes('meeting-prep'));
+    });
+
+    it('preserves community skill with colliding core name', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(sourceSkills, 'meeting-prep', 'SKILL.md'),
+        '# Meeting Prep\n\nCanonical update\n',
+        'utf8',
+      );
+
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const targetSkillDir = join(tmpDir, '.agents', 'skills', 'meeting-prep');
+      mkdirSync(targetSkillDir, { recursive: true });
+      writeFileSync(join(targetSkillDir, 'SKILL.md'), '# Meeting Prep\n\nCommunity variant\n', 'utf8');
+      writeFileSync(join(targetSkillDir, '.arete-meta.yaml'), 'category: community\n', 'utf8');
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+        },
+      });
+
+      const content = readFileSync(join(targetSkillDir, 'SKILL.md'), 'utf8');
+      assert.ok(content.includes('Community variant'));
+      assert.ok(result.preserved.includes('meeting-prep'));
     });
   });
 

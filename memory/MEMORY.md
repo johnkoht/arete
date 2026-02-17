@@ -18,6 +18,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-17: [person-memory-skill-integration](entries/2026-02-17_person-memory-skill-integration.md) — Added stale-aware person memory refresh (`--if-stale-days`) and integrated usage guidance into meeting-prep, agenda, daily-plan, and week-plan workflows.
+
 - 2026-02-17: [temporal-person-memory-v2](entries/2026-02-17_temporal-person-memory-v2.md) — Added person memory refresh from meetings (`arete people memory refresh`) with auto-managed highlights in person profiles, tests, and workflow/docs integration.
 
 - 2026-02-16: [prd-archive-and-plan-migration](entries/2026-02-16_prd-archive-and-plan-migration.md) — Migrated PRD tracking to `dev/plans/`, archived legacy docs to `dev/archive/prds/`, and added transition cleanup follow-up.

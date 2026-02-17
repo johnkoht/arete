@@ -625,6 +625,37 @@ function renderPersonMemorySection(
   return lines.join('\n');
 }
 
+function extractPersonMemorySection(content: string): string | null {
+  const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
+  const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
+  if (startIndex < 0 || endIndex <= startIndex) return null;
+
+  const start = startIndex + AUTO_PERSON_MEMORY_START.length;
+  const section = content.slice(start, endIndex).trim();
+  return section.length > 0 ? section : null;
+}
+
+function getPersonMemoryLastRefreshed(content: string): string | null {
+  const section = extractPersonMemorySection(content);
+  if (!section) return null;
+
+  const match = section.match(/Last refreshed:\s*(\d{4}-\d{2}-\d{2})/i);
+  return match ? match[1] : null;
+}
+
+function isMemoryStale(lastRefreshed: string | null, ifStaleDays: number | undefined): boolean {
+  if (!ifStaleDays || ifStaleDays <= 0) return true;
+  if (!lastRefreshed) return true;
+
+  const refreshedAt = new Date(lastRefreshed);
+  if (Number.isNaN(refreshedAt.getTime())) return true;
+
+  const now = new Date();
+  const diffMs = now.getTime() - refreshedAt.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays >= ifStaleDays;
+}
+
 function upsertPersonMemorySection(content: string, section: string): string {
   const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
   const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
@@ -651,12 +682,14 @@ export interface ListPeopleOptions {
 export interface RefreshPersonMemoryOptions {
   personSlug?: string;
   minMentions?: number;
+  ifStaleDays?: number;
 }
 
 export interface RefreshPersonMemoryResult {
   updated: number;
   scannedPeople: number;
   scannedMeetings: number;
+  skippedFresh: number;
 }
 
 export class EntityService {
@@ -967,7 +1000,7 @@ export class EntityService {
     options: RefreshPersonMemoryOptions = {},
   ): Promise<RefreshPersonMemoryResult> {
     if (!workspacePaths?.people) {
-      return { updated: 0, scannedPeople: 0, scannedMeetings: 0 };
+      return { updated: 0, scannedPeople: 0, scannedMeetings: 0, skippedFresh: 0 };
     }
 
     const internalOptions: RefreshPersonMemoryInternalOptions = {
@@ -982,6 +1015,22 @@ export class EntityService {
       ? people.filter((p) => p.slug === internalOptions.personSlug)
       : people;
 
+    const refreshablePeople: Person[] = [];
+    let skippedFresh = 0;
+    for (const person of filteredPeople) {
+      const personPath = join(workspacePaths.people, person.category, `${person.slug}.md`);
+      const content = await this.storage.read(personPath);
+      if (!content) continue;
+
+      const lastRefreshed = getPersonMemoryLastRefreshed(content);
+      const stale = isMemoryStale(lastRefreshed, options.ifStaleDays);
+      if (!stale) {
+        skippedFresh += 1;
+        continue;
+      }
+      refreshablePeople.push(person);
+    }
+
     const meetingsDir = join(workspacePaths.resources, 'meetings');
     const meetingsExist = await this.storage.exists(meetingsDir);
     const meetingFiles = meetingsExist
@@ -990,7 +1039,7 @@ export class EntityService {
       : [];
 
     const personSignals = new Map<string, PersonMemorySignal[]>();
-    for (const person of filteredPeople) {
+    for (const person of refreshablePeople) {
       personSignals.set(person.slug, []);
     }
 
@@ -1017,7 +1066,7 @@ export class EntityService {
           ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
           : [];
 
-      for (const person of filteredPeople) {
+      for (const person of refreshablePeople) {
         const signals = personSignals.get(person.slug);
         if (!signals) continue;
 
@@ -1032,7 +1081,7 @@ export class EntityService {
     }
 
     let updated = 0;
-    for (const person of filteredPeople) {
+    for (const person of refreshablePeople) {
       const category = person.category;
       const personPath = join(workspacePaths.people, category, `${person.slug}.md`);
       const content = await this.storage.read(personPath);
@@ -1052,6 +1101,7 @@ export class EntityService {
       updated,
       scannedPeople: filteredPeople.length,
       scannedMeetings: meetingFiles.length,
+      skippedFresh,
     };
   }
 

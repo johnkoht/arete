@@ -81,6 +81,14 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 4. Refresh each person file's auto-managed section (`## Memory Highlights (Auto)`).
 5. Preserve manual notes; only replace the auto-managed section.
 
+**Stale-aware (recommended for prep/planning)**:
+
+```bash
+arete people memory refresh --person jane-doe --if-stale-days 3
+```
+
+Use a short freshness window (3 days) for meeting prep/daily planning and a longer window (7 days) for week planning.
+
 **CLI helper**:
 
 ```bash

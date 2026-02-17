@@ -70,7 +70,10 @@ Use the **context inference rules** below to suggest a type. User can override.
 **Default: gather context** so the agenda can include suggested items (recent topics, open action items, related projects).
 
 - Run the **get_meeting_context** pattern (see [PATTERNS.md](../PATTERNS.md)) with the meeting's attendees and use its outputs to suggest bullets under the template sections.
+- If attendees are known/resolved, run stale-aware refresh before using highlights:
+  - `arete people memory refresh --person <slug> --if-stale-days 3`
 - Check attendee person files for `## Memory Highlights (Auto)` and call out recurring asks/concerns as suggested agenda items.
+- If attendees are unknown, skip refresh and proceed with template-only agenda.
 - **Meetings index** — Read `resources/meetings/index.md` for high-level themes: recent meeting titles and dates often surface recurring topics, priorities, or follow-ups to include as agenda ideas.
 - **Latest meetings** — Read the latest 2–3 meeting files (by filename date) for summaries and key points; use them to suggest agenda items (e.g. follow-ups, open threads, decisions to revisit).
 
