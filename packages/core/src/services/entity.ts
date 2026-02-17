@@ -444,12 +444,219 @@ function escapeTableCell(s: string | null | undefined): string {
   return String(s).replace(/\|/g, ' ').replace(/\r?\n/g, ' ').trim();
 }
 
+interface PersonMemorySignal {
+  kind: 'ask' | 'concern';
+  topic: string;
+  date: string;
+  source: string;
+}
+
+interface AggregatedPersonSignal {
+  topic: string;
+  count: number;
+  lastMentioned: string;
+  sources: string[];
+}
+
+interface RefreshPersonMemoryInternalOptions {
+  personSlug?: string;
+  minMentions: number;
+}
+
+const AUTO_PERSON_MEMORY_START = '<!-- AUTO_PERSON_MEMORY:START -->';
+const AUTO_PERSON_MEMORY_END = '<!-- AUTO_PERSON_MEMORY:END -->';
+
+function normalizeSignalTopic(topic: string): string {
+  return topic
+    .toLowerCase()
+    .replace(/^[\s:;,.!?-]+/, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .slice(0, 120);
+}
+
+function collectSignalsForPerson(
+  content: string,
+  personName: string,
+  date: string,
+  source: string,
+): PersonMemorySignal[] {
+  const signals: PersonMemorySignal[] = [];
+  const lines = content.split('\n');
+  const personLower = personName.toLowerCase();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+
+    const mentionsPerson = lower.includes(personLower);
+    if (!mentionsPerson) continue;
+
+    const askMatch = trimmed.match(/\basked\s+(?:about|for|if)\s+(.+?)(?:[.?!]|$)/i);
+    if (askMatch) {
+      const topic = normalizeSignalTopic(askMatch[1]);
+      if (topic.length > 2) {
+        signals.push({ kind: 'ask', topic, date, source });
+      }
+    }
+
+    const concernMatch = trimmed.match(/\b(?:concerned about|worried about|skeptical about|pushed back on)\s+(.+?)(?:[.?!]|$)/i);
+    if (concernMatch) {
+      const topic = normalizeSignalTopic(concernMatch[1]);
+      if (topic.length > 2) {
+        signals.push({ kind: 'concern', topic, date, source });
+      }
+    }
+
+    const speakerMatch = trimmed.match(/^([^:]{2,80}):\s+(.+)$/);
+    if (speakerMatch) {
+      const speaker = speakerMatch[1].trim().toLowerCase();
+      const speech = speakerMatch[2].trim();
+      const speechLower = speech.toLowerCase();
+      if (!speaker.includes(personLower)) continue;
+
+      const speakerAskMatch = speech.match(/\b(?:can we|could we|what about|how about)\s+(.+?)(?:[.?!]|$)/i);
+      if (speakerAskMatch) {
+        const topic = normalizeSignalTopic(speakerAskMatch[1]);
+        if (topic.length > 2) {
+          signals.push({ kind: 'ask', topic, date, source });
+        }
+      }
+
+      if (speechLower.includes('concerned about') || speechLower.includes('worried about')) {
+        const topic = normalizeSignalTopic(
+          speech
+            .replace(/.*\b(?:concerned about|worried about)\b/i, '')
+            .replace(/[.?!].*$/, ''),
+        );
+        if (topic.length > 2) {
+          signals.push({ kind: 'concern', topic, date, source });
+        }
+      }
+    }
+  }
+
+  return signals;
+}
+
+function aggregateSignals(signals: PersonMemorySignal[], minMentions: number): {
+  asks: AggregatedPersonSignal[];
+  concerns: AggregatedPersonSignal[];
+} {
+  const asksByTopic = new Map<string, AggregatedPersonSignal>();
+  const concernsByTopic = new Map<string, AggregatedPersonSignal>();
+
+  for (const signal of signals) {
+    const targetMap = signal.kind === 'ask' ? asksByTopic : concernsByTopic;
+    const existing = targetMap.get(signal.topic);
+    if (!existing) {
+      targetMap.set(signal.topic, {
+        topic: signal.topic,
+        count: 1,
+        lastMentioned: signal.date,
+        sources: [signal.source],
+      });
+      continue;
+    }
+
+    existing.count += 1;
+    if (signal.date > existing.lastMentioned) {
+      existing.lastMentioned = signal.date;
+    }
+    if (!existing.sources.includes(signal.source)) {
+      existing.sources.push(signal.source);
+    }
+  }
+
+  const toSorted = (m: Map<string, AggregatedPersonSignal>): AggregatedPersonSignal[] =>
+    [...m.values()]
+      .filter((item) => item.count >= minMentions)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.lastMentioned.localeCompare(a.lastMentioned);
+      });
+
+  return {
+    asks: toSorted(asksByTopic),
+    concerns: toSorted(concernsByTopic),
+  };
+}
+
+function renderPersonMemorySection(
+  asks: AggregatedPersonSignal[],
+  concerns: AggregatedPersonSignal[],
+): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const lines: string[] = [
+    AUTO_PERSON_MEMORY_START,
+    '## Memory Highlights (Auto)',
+    '',
+    '> Auto-generated from meeting notes/transcripts. Do not edit manually.',
+    '',
+    `Last refreshed: ${today}`,
+    '',
+    '### Repeated asks',
+  ];
+
+  if (asks.length === 0) {
+    lines.push('- None detected yet.');
+  } else {
+    for (const item of asks.slice(0, 8)) {
+      lines.push(
+        `- **${item.topic}** — mentioned ${item.count} times (last: ${item.lastMentioned}; sources: ${item.sources.slice(0, 3).join(', ')})`,
+      );
+    }
+  }
+
+  lines.push('', '### Repeated concerns');
+  if (concerns.length === 0) {
+    lines.push('- None detected yet.');
+  } else {
+    for (const item of concerns.slice(0, 8)) {
+      lines.push(
+        `- **${item.topic}** — mentioned ${item.count} times (last: ${item.lastMentioned}; sources: ${item.sources.slice(0, 3).join(', ')})`,
+      );
+    }
+  }
+
+  lines.push('', AUTO_PERSON_MEMORY_END, '');
+  return lines.join('\n');
+}
+
+function upsertPersonMemorySection(content: string, section: string): string {
+  const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
+  const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
+
+  if (startIndex >= 0 && endIndex > startIndex) {
+    const before = content.slice(0, startIndex).trimEnd();
+    const after = content.slice(endIndex + AUTO_PERSON_MEMORY_END.length).trimStart();
+    const joined = `${before}\n\n${section.trim()}\n\n${after}`.trimEnd();
+    return joined + '\n';
+  }
+
+  const trimmed = content.trimEnd();
+  return `${trimmed}\n\n${section.trim()}\n`;
+}
+
 // ---------------------------------------------------------------------------
 // EntityService
 // ---------------------------------------------------------------------------
 
 export interface ListPeopleOptions {
   category?: PersonCategory;
+}
+
+export interface RefreshPersonMemoryOptions {
+  personSlug?: string;
+  minMentions?: number;
+}
+
+export interface RefreshPersonMemoryResult {
+  updated: number;
+  scannedPeople: number;
+  scannedMeetings: number;
 }
 
 export class EntityService {
@@ -753,6 +960,99 @@ export class EntityService {
     }
 
     return false;
+  }
+
+  async refreshPersonMemory(
+    workspacePaths: WorkspacePaths | null,
+    options: RefreshPersonMemoryOptions = {},
+  ): Promise<RefreshPersonMemoryResult> {
+    if (!workspacePaths?.people) {
+      return { updated: 0, scannedPeople: 0, scannedMeetings: 0 };
+    }
+
+    const internalOptions: RefreshPersonMemoryInternalOptions = {
+      personSlug: options.personSlug,
+      minMentions: options.minMentions && options.minMentions > 0
+        ? options.minMentions
+        : 2,
+    };
+
+    const people = await this.listPeople(workspacePaths);
+    const filteredPeople = internalOptions.personSlug
+      ? people.filter((p) => p.slug === internalOptions.personSlug)
+      : people;
+
+    const meetingsDir = join(workspacePaths.resources, 'meetings');
+    const meetingsExist = await this.storage.exists(meetingsDir);
+    const meetingFiles = meetingsExist
+      ? (await this.storage.list(meetingsDir, { extensions: ['.md'] }))
+          .filter((p) => (p.split(/[/\\]/).pop() ?? '') !== 'index.md')
+      : [];
+
+    const personSignals = new Map<string, PersonMemorySignal[]>();
+    for (const person of filteredPeople) {
+      personSignals.set(person.slug, []);
+    }
+
+    for (const meetingPath of meetingFiles) {
+      const content = await this.storage.read(meetingPath);
+      if (!content) continue;
+
+      const parsed = parseFrontmatter(content);
+      const fromFilename = extractDateFromPath(meetingPath);
+      const dateFromFrontmatter = parsed?.frontmatter.date;
+      const date = typeof dateFromFrontmatter === 'string'
+        ? dateFromFrontmatter.slice(0, 10)
+        : (fromFilename ?? new Date().toISOString().slice(0, 10));
+
+      const source = meetingPath.split(/[/\\]/).pop() ?? meetingPath;
+      const attendeeIds = parsed && Array.isArray(parsed.frontmatter.attendee_ids)
+        ? parsed.frontmatter.attendee_ids.map(String)
+        : [];
+
+      const attendeesRaw = parsed?.frontmatter.attendees;
+      const attendeeNames = Array.isArray(attendeesRaw)
+        ? attendeesRaw.map(String).map((s) => s.toLowerCase())
+        : typeof attendeesRaw === 'string'
+          ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
+          : [];
+
+      for (const person of filteredPeople) {
+        const signals = personSignals.get(person.slug);
+        if (!signals) continue;
+
+        const inAttendeeIds = attendeeIds.includes(person.slug);
+        const nameLower = person.name.toLowerCase();
+        const inAttendeeNames = attendeeNames.some((n) => n.includes(nameLower));
+        const mentionedInBody = content.toLowerCase().includes(nameLower);
+        if (!inAttendeeIds && !inAttendeeNames && !mentionedInBody) continue;
+
+        signals.push(...collectSignalsForPerson(content, person.name, date, source));
+      }
+    }
+
+    let updated = 0;
+    for (const person of filteredPeople) {
+      const category = person.category;
+      const personPath = join(workspacePaths.people, category, `${person.slug}.md`);
+      const content = await this.storage.read(personPath);
+      if (!content) continue;
+
+      const signals = personSignals.get(person.slug) ?? [];
+      const aggregated = aggregateSignals(signals, internalOptions.minMentions);
+      const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns);
+      const nextContent = upsertPersonMemorySection(content, section);
+      if (nextContent !== content) {
+        await this.storage.write(personPath, nextContent);
+        updated += 1;
+      }
+    }
+
+    return {
+      updated,
+      scannedPeople: filteredPeople.length,
+      scannedMeetings: meetingFiles.length,
+    };
   }
 
   async listPeople(

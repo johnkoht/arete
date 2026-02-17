@@ -68,6 +68,7 @@ arete memory search "pricing model"
 **When memory is updated**:
 - `process-meetings` - Extracts from meetings
 - `finalize-project` - Extracts from project work
+- `arete people memory refresh` - Updates person-specific recurring asks/concerns in `people/*/*.md`
 - Skills automatically append during key decisions
 
 ## Entity Resolution
@@ -273,6 +274,7 @@ arete route "query" [--json]          # Route to skill/tool
 # Supporting Commands
 arete people list                     # List people
 arete people show <slug|email>        # Show person details
+arete people memory refresh           # Refresh person memory highlights
 arete pull calendar [--today]         # Pull calendar events
 arete pull fathom [--days N]          # Pull Fathom recordings
 ```

@@ -18,6 +18,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-17: [temporal-person-memory-v2](entries/2026-02-17_temporal-person-memory-v2.md) — Added person memory refresh from meetings (`arete people memory refresh`) with auto-managed highlights in person profiles, tests, and workflow/docs integration.
+
 - 2026-02-16: [prd-archive-and-plan-migration](entries/2026-02-16_prd-archive-and-plan-migration.md) — Migrated PRD tracking to `dev/plans/`, archived legacy docs to `dev/archive/prds/`, and added transition cleanup follow-up.
 
 - 2026-02-16: [plan-lifecycle-system-learnings](entries/2026-02-16_plan-lifecycle-system-learnings.md) — Plan lifecycle system: persistence, state machine, agent config, smart gates, widget. 16/16 tasks, 0 iterations, 137 extension tests. Pure module architecture for testability. Fixed pre-existing typecheck failure.

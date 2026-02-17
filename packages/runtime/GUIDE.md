@@ -439,6 +439,12 @@ Query what Areté knows about any topic over time.
 - `arete memory timeline "onboarding"` — See when a topic was discussed and themes over time
 - Briefings automatically include recency signals: "last discussed 3 days ago in [meeting]"
 
+#### Person Memory Highlights
+Keep fast-access stakeholder memory on each person profile.
+- `arete people memory refresh` — Update repeated asks/concerns from meetings
+- Person files get `## Memory Highlights (Auto)` with mention counts and recent sources
+- Meeting prep and agenda generation can use these highlights for better callouts
+
 #### Proactive Context Assembly
 Areté searches ALL available sources automatically when assembling briefings:
 - Context files, meeting transcripts, memory entries, project docs
@@ -676,6 +682,7 @@ arete template view meeting-agenda --type <name>      # View template
 arete people list [--category internal|customers|users]  # List people
 arete people show <slug|email>                           # Show person details
 arete people index                                       # Regenerate people index
+arete people memory refresh                              # Refresh person memory highlights
 ```
 
 ### Meetings

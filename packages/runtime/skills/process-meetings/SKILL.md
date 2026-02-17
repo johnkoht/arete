@@ -62,9 +62,13 @@ After resolving people, add or update meeting frontmatter with `attendee_ids: [s
 
 Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). Scan "## Decisions Made" and "## Summary" / "## Key Points" for candidates; present for inline review (approve / edit / skip); write approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` per the formats in PATTERNS.md.
 
-### 5. Summary
+### 5. Refresh Person Memory Highlights
 
-Report: meetings processed, people created/updated, decisions and learnings added.
+Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md). Refresh recurring asks/concerns for attendees so person files include quick-access memory highlights.
+
+### 6. Summary
+
+Report: meetings processed, people created/updated, decisions and learnings added, person memory highlights refreshed.
 
 ## Arguments (Documented)
 
@@ -73,9 +77,10 @@ Report: meetings processed, people created/updated, decisions and learnings adde
 - `--days-back=N` — last N days (default 7)
 - `--people-only` — skip decisions/learnings extraction
 - `--no-people` — skip people propagation; only extract decisions/learnings
+- `--no-person-memory` — skip person memory highlight refresh
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `company`, `pillar`)

@@ -65,6 +65,33 @@ These patterns are used by multiple Areté skills. When a skill says "use the ge
 
 ---
 
+## refresh_person_memory
+
+**Purpose**: Keep person profiles up to date with repeated asks/concerns from meeting notes and transcripts.
+
+**Used by**: process-meetings, meeting-prep, prepare-meeting-agenda
+
+**Steps**:
+
+1. Ensure attendees are resolved to person files (`people/{internal|customers|users}/*.md`).
+2. Scan recently processed meeting content for person-specific signals:
+   - asks: "[Name] asked about/for..."
+   - concerns: "[Name] is concerned about...", "[Name] pushed back on..."
+3. Aggregate repeated mentions (default threshold: 2+ mentions) and keep source references.
+4. Refresh each person file's auto-managed section (`## Memory Highlights (Auto)`).
+5. Preserve manual notes; only replace the auto-managed section.
+
+**CLI helper**:
+
+```bash
+arete people memory refresh
+arete people memory refresh --person jane-doe
+```
+
+**Output**: Person profiles include fast-access highlights for recurring asks/concerns, with mention counts and recent sources.
+
+---
+
 ## light_pre_mortem
 
 **Purpose**: Quick risk identification before committing to a decision (PRD, quarter plan, roadmap). Takes 5 minutes; surfaces 2-3 risks with mitigations.

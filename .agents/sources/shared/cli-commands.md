@@ -15,6 +15,7 @@
 
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show person details
+- `arete people memory refresh` - Refresh person memory highlights from meetings
 
 ## Integrations
 

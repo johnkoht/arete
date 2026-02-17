@@ -39,7 +39,7 @@ Build a prep brief for a meeting: attendee details, recent meetings, related pro
 
 ## Gather Context
 
-Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Inputs: meeting title (optional), attendee names or slugs. Outputs: attendee details, recent meetings, related projects, outstanding action items. Include QMD queries (step 6) for decisions/learnings involving the attendee or topic.
+Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Inputs: meeting title (optional), attendee names or slugs. Outputs: attendee details, recent meetings, related projects, outstanding action items, and person memory highlights (if present). Include QMD queries (step 6) for decisions/learnings involving the attendee or topic.
 
 ## Workflow
 
@@ -62,6 +62,7 @@ Output markdown:
 
 ### Attendees
 - **Name** — Role, Company | Last met: YYYY-MM-DD (or "No prior meetings")
+- **Memory highlight** — Repeated asks/concerns from prior meetings (if available)
 
 ### Recent Meetings
 - YYYY-MM-DD — [Meeting title] — Brief summary

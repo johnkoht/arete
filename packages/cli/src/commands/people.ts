@@ -8,6 +8,7 @@ import {
   type PersonCategory,
 } from '@arete/core';
 import type { Command } from 'commander';
+import { join } from 'node:path';
 import chalk from 'chalk';
 import {
   header,
@@ -58,13 +59,14 @@ export function registerPeopleCommands(program: Command): void {
       }
 
       console.log('');
-      console.log(chalk.dim('  Name                    Category   Email'));
-      console.log(chalk.dim('  ' + '-'.repeat(60)));
+      console.log(chalk.dim('  Name                    Slug                 Category   Email'));
+      console.log(chalk.dim('  ' + '-'.repeat(80)));
       for (const p of people) {
         const name = (p.name + ' ').slice(0, 24).padEnd(24);
+        const slug = (p.slug + ' ').slice(0, 20).padEnd(20);
         const cat = p.category.padEnd(10);
         const email = p.email ?? '—';
-        console.log(`  ${name} ${cat} ${email}`);
+        console.log(`  ${name} ${slug} ${cat} ${email}`);
       }
       console.log('');
       listItem('Total', String(people.length));
@@ -75,11 +77,12 @@ export function registerPeopleCommands(program: Command): void {
     .command('show <slug-or-email>')
     .description('Show a person by slug or email')
     .option('--category <name>', 'Category when looking up by slug')
+    .option('--memory', 'Include auto-generated memory highlights section')
     .option('--json', 'Output as JSON')
     .action(
       async (
         slugOrEmail: string,
-        opts: { category?: string; json?: boolean },
+        opts: { category?: string; memory?: boolean; json?: boolean },
       ) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -131,8 +134,15 @@ export function registerPeopleCommands(program: Command): void {
           process.exit(1);
         }
 
+        let memoryHighlights: string | null = null;
+        if (opts.memory) {
+          const personPath = join(paths.people, person.category, `${person.slug}.md`);
+          const personContent = await services.storage.read(personPath);
+          memoryHighlights = extractAutoPersonMemorySection(personContent);
+        }
+
         if (opts.json) {
-          console.log(JSON.stringify({ success: true, person }, null, 2));
+          console.log(JSON.stringify({ success: true, person, memoryHighlights }, null, 2));
           return;
         }
 
@@ -144,6 +154,18 @@ export function registerPeopleCommands(program: Command): void {
         if (person.team) listItem('Team', person.team);
         if (person.company) listItem('Company', person.company);
         console.log('');
+
+        if (opts.memory) {
+          if (memoryHighlights) {
+            section('Memory Highlights (Auto)');
+            console.log(memoryHighlights.trim());
+            console.log('');
+          } else {
+            info('No auto memory highlights found for this person yet.');
+            console.log('');
+          }
+        }
+
         listItem('File', formatPath(`people/${person.category}/${person.slug}.md`));
         console.log('');
       },
@@ -182,6 +204,63 @@ export function registerPeopleCommands(program: Command): void {
 
       info(`Updated people/index.md with ${people.length} person(s).`);
     });
+
+  const memoryCmd = peopleCmd
+    .command('memory')
+    .description('Person memory utilities');
+
+  memoryCmd
+    .command('refresh')
+    .description('Refresh auto-generated person memory highlights from meetings')
+    .option('--person <slug>', 'Refresh only one person by slug')
+    .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { person?: string; minMentions?: string; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+      const minMentionsParsed = opts.minMentions ? parseInt(opts.minMentions, 10) : undefined;
+      const minMentions = typeof minMentionsParsed === 'number' && !isNaN(minMentionsParsed)
+        ? minMentionsParsed
+        : undefined;
+
+      const result = await services.entity.refreshPersonMemory(paths, {
+        personSlug: opts.person,
+        minMentions,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, ...result }, null, 2));
+        return;
+      }
+
+      info(`Refreshed person memory highlights for ${result.updated} person file(s).`);
+      listItem('People scanned', String(result.scannedPeople));
+      listItem('Meetings scanned', String(result.scannedMeetings));
+      console.log('');
+    });
+}
+
+function extractAutoPersonMemorySection(content: string | null): string | null {
+  if (!content) return null;
+  const startMarker = '<!-- AUTO_PERSON_MEMORY:START -->';
+  const endMarker = '<!-- AUTO_PERSON_MEMORY:END -->';
+  const start = content.indexOf(startMarker);
+  const end = content.indexOf(endMarker);
+  if (start < 0 || end <= start) return null;
+
+  const sectionStart = start + startMarker.length;
+  const section = content.slice(sectionStart, end).trim();
+  return section.length > 0 ? section : null;
 }
 
 function parseCategory(cat: string | undefined): PersonCategory | undefined {
