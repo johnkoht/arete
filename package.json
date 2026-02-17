@@ -30,6 +30,9 @@
     "prepublishOnly": "npm run build",
     "start": "node packages/cli/bin/arete.js",
     "test": "tsx --test 'packages/core/test/**/*.test.ts' 'packages/cli/test/**/*.test.ts'",
+    "test:integration:smoke": "tsx --test 'packages/cli/test/integration/install-update.integration.test.ts' 'packages/cli/test/integration/context-brief.integration.test.ts'",
+    "test:integration": "tsx --test 'packages/cli/test/integration/**/*.integration.test.ts'",
+    "test:integration:full": "npm run test:integration",
     "test:all": "npm run typecheck && npm test"
   },
   "keywords": [

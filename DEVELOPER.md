@@ -733,6 +733,12 @@ fs.readFile(path, (err, data) => {
 # Run all tests (core + cli)
 npm test
 
+# Run integration smoke tests (fast PR signal)
+npm run test:integration:smoke
+
+# Run full integration tests (all workspace journeys)
+npm run test:integration
+
 # Run specific test file
 npm test -- packages/core/test/services/memory.test.ts
 
@@ -742,6 +748,32 @@ npm run test:all
 # Type check only
 npm run typecheck
 ```
+
+### Integration Test Policy
+
+Run `npm run test:integration` when a change can affect end-user command behavior or workspace outcomes.
+
+**Required triggers:**
+- `packages/cli/src/**`
+- `packages/core/src/services/context.ts`
+- `packages/core/src/services/memory.ts`
+- `packages/core/src/services/intelligence.ts`
+- `packages/core/src/services/entity.ts`
+- `packages/core/src/services/workspace.ts`
+- `packages/core/src/integrations/**`
+- `packages/runtime/**`
+- `test-data/**`
+- `packages/cli/test/integration/**`
+
+**Usually safe to skip integration tests:**
+- Builder-only planning/docs/process files (`dev/**`, `memory/**`, `.agents/**`)
+- Documentation-only edits (outside user behavior)
+- Internal orchestration changes that do not alter runtime behavior
+
+**CI behavior:**
+- `.github/workflows/ci.yml` always runs `typecheck` + `npm test`
+- `.github/workflows/integration-tests.yml` runs `npm run test:integration:smoke` on required path changes (PR/push)
+- `.github/workflows/integration-tests.yml` runs `npm run test:integration:full` nightly
 
 ### Test Organization
 
@@ -754,7 +786,8 @@ packages/core/test/
 └── integration/       # Intelligence integration tests
 packages/cli/test/
 ├── commands/          # CLI command tests
-└── golden/            # Golden file output tests
+├── golden/            # Golden file output tests
+└── integration/       # End-to-end workspace journey tests
 ```
 
 ### Test Patterns
