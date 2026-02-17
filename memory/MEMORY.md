@@ -18,6 +18,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 
 <!-- Add new entries at the top -->
 
+- 2026-02-16: [plan-lifecycle-system-learnings](entries/2026-02-16_plan-lifecycle-system-learnings.md) — Plan lifecycle system: persistence, state machine, agent config, smart gates, widget. 16/16 tasks, 0 iterations, 137 extension tests. Pure module architecture for testability. Fixed pre-existing typecheck failure.
+
 - 2026-02-16: [pi-dev-workflow-learnings](entries/2026-02-16_pi-dev-workflow-learnings.md) — Added Pi coding agent as additive dev workflow. 7/7 tasks, 0 iterations, 8 commits. Created .pi/ structure (settings, APPEND_SYSTEM.md, plan-mode extension, skills symlinks, agent definitions). Validation script confirms all components load. **Key patterns**: Symlinks maintain single source of truth; Pi jiti loader (no build step); compression functions need manual updates when adding dirs; fast model sufficient for infrastructure tasks.
 
 - 2026-02-15: [monorepo-intelligence-refactor-learnings](entries/2026-02-15_monorepo-intelligence-refactor-learnings.md) — Full monorepo refactor: single-package → 3 packages (core, cli, runtime) with npm workspaces. 18/18 tasks, 0 iterations, 20 commits. Added intelligence enhancements: temporal queries (memory timeline), proactive context assembly (deep source search, inventory), entity relationships (findMentions, getRelationships). 275 files changed, +12.6K/-21.2K lines. **Key patterns**: Pre-mapped type dependency graph; compat shim incremental migration; createServices() single factory; phase-by-phase verification.

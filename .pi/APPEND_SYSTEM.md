@@ -175,6 +175,56 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 ---
 
+## Plan Lifecycle Commands
+
+The plan-mode extension provides a full plan lifecycle with persistence, gates, and execution.
+
+### Core commands
+
+| Command | Description |
+|---------|-------------|
+| `/plan` | Toggle plan mode (read-only exploration) |
+| `/plan list` | List all saved plans with status |
+| `/plan open <slug>` | Open a saved plan and restore its state |
+| `/plan save [slug]` | Save current plan to `dev/plans/{slug}/plan.md` |
+| `/plan status` | Show lifecycle info: status, size, gates, readiness |
+| `/plan next` | Smart gate orchestrator — shows checklist, runs gates, approves |
+| `/plan hold` | Put plan on hold (preserves previous status) |
+| `/plan block <reason>` | Block plan with reason |
+| `/plan resume` | Resume from hold/blocked to previous status |
+| `/plan delete <slug>` | Delete a plan and its artifacts |
+
+### Gate commands
+
+| Command | Description |
+|---------|-------------|
+| `/review` | Run cross-model review (invokes review-plan skill) |
+| `/pre-mortem` | Run pre-mortem analysis (invokes run-pre-mortem skill) |
+| `/prd` | Convert plan to PRD (invokes plan-to-prd skill) |
+| `/build` | Start execution (transitions to in-progress) |
+| `/build status` | Show build progress |
+
+### Lifecycle statuses
+
+`draft → planned → reviewed → approved → in-progress → completed` (+ `blocked`, `on-hold` from any)
+
+### Gate requirements by size
+
+| Size | Steps | Review | Pre-mortem | PRD |
+|------|-------|--------|-----------|-----|
+| tiny | 1-2 | optional | optional | skip |
+| small | 2-3 | optional | optional | skip |
+| medium | 3-5 | optional | recommended | optional |
+| large | 6+ | recommended | mandatory | mandatory |
+
+### Agent model configuration
+
+Agent models configured in `.pi/settings.json` under `agents`:
+- `product-manager`: primary + secondary (for cross-model review)
+- `orchestrator`, `reviewer`, `developer`: single model each
+
+---
+
 ## References
 
 - **AGENTS.md**: Conventions, skills index, memory guidance, CLI reference (compressed, always-loaded)
