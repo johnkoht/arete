@@ -9,6 +9,7 @@ import {
 	classifyPlanSize,
 	getMenuOptions,
 	getPostExecutionMenuOptions,
+	suggestPlanName,
 	type TodoItem,
 	type WorkflowMenuState,
 } from "./utils.js";
@@ -149,6 +150,26 @@ describe("markCompletedSteps", () => {
 		const count = markCompletedSteps("no markers here", items);
 		assert.equal(count, 0);
 		assert.equal(items[0].completed, false);
+	});
+});
+
+describe("suggestPlanName", () => {
+	it("uses specific heading when available", () => {
+		const name = suggestPlanName("# Improve plan mode autosave\n\nPlan:\n1. Save\n", []);
+		assert.equal(name, "Improve plan mode autosave");
+	});
+
+	it("falls back to todo text for generic heading", () => {
+		const name = suggestPlanName("# Refactor\n\nPlan:\n1. Improve slug naming\n2. Save plan before gates", [
+			{ step: 1, text: "Improve slug naming", completed: false },
+			{ step: 2, text: "Save plan before gates", completed: false },
+		]);
+		assert.ok(name.includes("Improve slug naming"));
+	});
+
+	it("returns default when no heading or todos", () => {
+		const name = suggestPlanName("", []);
+		assert.equal(name, "New Plan");
 	});
 });
 

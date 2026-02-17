@@ -171,6 +171,43 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
 	return doneSteps.length;
 }
 
+/**
+ * Suggest a human-friendly plan name from plan text and extracted todo items.
+ * Prefers a non-generic H1 title, otherwise falls back to first todo(s).
+ */
+export function suggestPlanName(planText: string, items: TodoItem[]): string {
+	const headingMatch = planText.match(/^#\s+(.+)$/m);
+	const heading = headingMatch ? headingMatch[1].trim() : "";
+
+	if (heading && !isGenericPlanHeading(heading)) {
+		return heading;
+	}
+
+	if (items.length > 0) {
+		const first = cleanStepText(items[0].text);
+		const second = items.length > 1 ? cleanStepText(items[1].text) : "";
+		const combined = second ? `${first} + ${second}` : first;
+		return combined.length > 60 ? `${combined.slice(0, 57)}...` : combined;
+	}
+
+	return "New Plan";
+}
+
+function isGenericPlanHeading(heading: string): boolean {
+	const normalized = heading.toLowerCase().trim();
+	const genericHeadings = new Set([
+		"plan",
+		"refactor",
+		"todo",
+		"to-do",
+		"tasks",
+		"work plan",
+		"untitled",
+		"untitled plan",
+	]);
+	return genericHeadings.has(normalized);
+}
+
 // ────────────────────────────────────────────────────────────
 // Plan classification and smart menu utilities
 // ────────────────────────────────────────────────────────────

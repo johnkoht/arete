@@ -30,6 +30,7 @@ import {
 	classifyPlanSize,
 	getMenuOptions,
 	getPostExecutionMenuOptions,
+	suggestPlanName,
 	type TodoItem,
 } from "./utils.js";
 import {
@@ -41,7 +42,7 @@ import {
 	type PlanModeState,
 	createDefaultState,
 } from "./commands.js";
-import { loadPlan, savePlanArtifact, updatePlanFrontmatter } from "./persistence.js";
+import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter } from "./persistence.js";
 import { loadAgentConfig, getAgentModel, getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderLifecycleWidget, type WidgetState } from "./widget.js";
 
@@ -149,6 +150,41 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			reviewRun: state.reviewRun,
 			prdConverted: state.prdConverted,
 		});
+	}
+
+	async function ensurePlanSavedForGate(ctx: ExtensionContext, actionLabel: string): Promise<boolean> {
+		if (!state.planText.trim()) {
+			ctx.ui.notify("No plan text found. Ask for a plan first, then run this action.", "warning");
+			return false;
+		}
+
+		if (state.currentSlug) {
+			const existing = loadPlan(state.currentSlug);
+			if (existing) {
+				return true;
+			}
+		}
+
+		const suggestedName = suggestPlanName(state.planText, state.todoItems);
+		const providedName = await ctx.ui.editor(
+			`Name this plan before ${actionLabel}:`,
+			suggestedName,
+		);
+
+		if (!providedName?.trim()) {
+			ctx.ui.notify(`Skipped ${actionLabel} (plan name not provided).`, "info");
+			return false;
+		}
+
+		const chosenSlug = slugify(providedName.trim());
+		if (!chosenSlug) {
+			ctx.ui.notify("Plan name must include letters or numbers.", "warning");
+			return false;
+		}
+
+		const { handlePlan: handlePlanCommand } = await import("./commands.js");
+		await handlePlanCommand(`save ${chosenSlug}`, ctx, pi, state, () => togglePlanMode(ctx));
+		return loadPlan(chosenSlug) !== null;
 	}
 
 	/**
@@ -534,32 +570,28 @@ After completing a step, include a [DONE:n] tag in your response.
 				);
 			} else if (choice === "Run pre-mortem, then execute") {
 				enableArtifactTool();
-				// Auto-save plan first
-				if (!state.currentSlug) {
-					const titleMatch = state.planText.match(/^#\s+(.+)/m);
-					const title = titleMatch ? titleMatch[1].trim() : "auto-plan";
-					const { slugify } = await import("./persistence.js");
-					state.currentSlug = slugify(title);
+				const saved = await ensurePlanSavedForGate(ctx, "running pre-mortem");
+				if (saved) {
+					await handlePreMortem("", ctx, pi, state);
+				} else {
+					disableArtifactTool();
 				}
-				await handlePreMortem("", ctx, pi, state);
 			} else if (choice === "Review the plan") {
 				enableArtifactTool();
-				if (!state.currentSlug) {
-					const titleMatch = state.planText.match(/^#\s+(.+)/m);
-					const title = titleMatch ? titleMatch[1].trim() : "auto-plan";
-					const { slugify } = await import("./persistence.js");
-					state.currentSlug = slugify(title);
+				const saved = await ensurePlanSavedForGate(ctx, "reviewing");
+				if (saved) {
+					await handleReview("", ctx, pi, state);
+				} else {
+					disableArtifactTool();
 				}
-				await handleReview("", ctx, pi, state);
 			} else if (choice?.startsWith("Convert to PRD")) {
 				enableArtifactTool();
-				if (!state.currentSlug) {
-					const titleMatch = state.planText.match(/^#\s+(.+)/m);
-					const title = titleMatch ? titleMatch[1].trim() : "auto-plan";
-					const { slugify } = await import("./persistence.js");
-					state.currentSlug = slugify(title);
+				const saved = await ensurePlanSavedForGate(ctx, "converting to PRD");
+				if (saved) {
+					await handlePrd("", ctx, pi, state);
+				} else {
+					disableArtifactTool();
 				}
-				await handlePrd("", ctx, pi, state);
 			} else if (choice === "Save as draft") {
 				const { handlePlan: handlePlanCmd } = await import("./commands.js");
 				await handlePlanCmd("save", ctx, pi, state, () => togglePlanMode(ctx));
