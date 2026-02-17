@@ -1,0 +1,301 @@
+{
+  "name": "plan-lifecycle-system",
+  "branchName": "feature/plan-lifecycle-system",
+  "goal": "Build a complete plan lifecycle system with persistence, lifecycle state machine, agent model configuration, smart gate commands, and build integration into the plan-mode Pi extension",
+  "userStories": [
+    {
+      "id": "task-1-persistence",
+      "title": "Plan persistence module",
+      "description": "Create .pi/extensions/plan-mode/persistence.ts with plan file I/O. Includes PlanFrontmatter and PlanStatus types, savePlan, loadPlan, listPlans, updatePlanFrontmatter, savePlanArtifact, loadPlanArtifact, slugify, and deletePlan functions. All file I/O via Node.js node:fs and node:path. YAML frontmatter parsing via simple regex (split on --- delimiters). No external dependencies.",
+      "acceptanceCriteria": [
+        "savePlan creates directory and writes file with valid YAML frontmatter",
+        "loadPlan correctly parses frontmatter and separates content",
+        "listPlans returns all plans sorted by updated date (most recent first)",
+        "updatePlanFrontmatter merges partial updates without losing other fields",
+        "updatePlanFrontmatter sets updated timestamp",
+        "savePlanArtifact writes to correct plan directory",
+        "loadPlanArtifact returns content or null for non-existent artifact",
+        "slugify produces valid kebab-case slugs (handles spaces, special chars, uppercase)",
+        "deletePlan removes plan directory",
+        "All functions handle missing files/directories gracefully (return null or empty array, don't throw)",
+        "TypeScript compiles without errors",
+        "No external dependencies (uses node:fs, node:path only)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-lifecycle",
+      "title": "Lifecycle state machine module",
+      "description": "Create .pi/extensions/plan-mode/lifecycle.ts with status transitions and gate logic. Includes VALID_TRANSITIONS map, canTransition, getGateRequirements, getAvailableTransitions, getMissingGates, and isReadyToApprove functions. Gate requirements by size: tiny=all optional, small=all optional, medium=pre-mortem recommended + PRD optional, large=pre-mortem mandatory + PRD mandatory. Review always optional. Blocked/on-hold store previous_status for resume.",
+      "acceptanceCriteria": [
+        "All valid transitions from architecture table are allowed",
+        "Invalid transitions return false (e.g., draft \u2192 completed)",
+        "Gate requirements match size table (tiny=all optional, large=pre-mortem+PRD mandatory)",
+        "isReadyToApprove blocks approval when mandatory gates are missing",
+        "isReadyToApprove allows approval when only optional/recommended gates are missing",
+        "getMissingGates correctly distinguishes required vs recommended",
+        "Blocked/on-hold transitions work from any status",
+        "Resume returns to previous_status",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-foundation-tests",
+      "title": "Tests for persistence and lifecycle",
+      "description": "Create .pi/extensions/plan-mode/persistence.test.ts and .pi/extensions/plan-mode/lifecycle.test.ts. Persistence tests: save/load round-trip, directory creation, missing file handling, listPlans sorting, updatePlanFrontmatter merging, artifact save/load, slugify cases, deletePlan. Lifecycle tests: valid/invalid transitions, gate requirements per size, isReadyToApprove with various gate combinations, getMissingGates, blocked/resume flow. Use node:fs mkdtempSync for temp directories.",
+      "acceptanceCriteria": [
+        "All tests pass with tsx --test .pi/extensions/plan-mode/persistence.test.ts .pi/extensions/plan-mode/lifecycle.test.ts",
+        "Tests use node:test and node:assert/strict",
+        "Tests use .js extensions in imports",
+        "Persistence tests use temp directories (no side effects on dev/plans/)",
+        "Coverage for happy path, edge cases, and error handling",
+        "At least 10 persistence tests and 10 lifecycle tests"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-agent-config",
+      "title": "Agent configuration module",
+      "description": "Create .pi/extensions/plan-mode/agents.ts for agent model config and prompt loading. Includes AgentRole and AgentConfig types, loadAgentConfig (reads .pi/settings.json agents section), getAgentModel (returns model ID for role with optional primary/secondary variant), getAgentPrompt (reads .pi/agents/{role}.md, strips frontmatter), resolveModel (parses provider/model-id string). Returns null/defaults when config is missing.",
+      "acceptanceCriteria": [
+        "loadAgentConfig reads from .pi/settings.json and returns agents section",
+        "loadAgentConfig returns empty defaults when agents section is missing",
+        "getAgentModel returns correct model for each role",
+        "getAgentModel returns null when role not configured",
+        "getAgentModel('product-manager', 'secondary') returns the secondary model",
+        "getAgentPrompt reads and returns agent markdown content without frontmatter",
+        "getAgentPrompt returns null for non-existent agent",
+        "resolveModel parses provider/model-id format",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-agent-tests",
+      "title": "Tests for agent configuration",
+      "description": "Create .pi/extensions/plan-mode/agents.test.ts. Tests: loadAgentConfig with full/empty/missing config, getAgentModel for all roles and variants, getAgentPrompt with valid/missing agent files, resolveModel parsing. Use temp files for settings.json and agent .md files.",
+      "acceptanceCriteria": [
+        "All tests pass",
+        "Tests use node:test and node:assert/strict",
+        "Tests use temp files, no side effects on real .pi/settings.json or .pi/agents/",
+        "Coverage for happy path, missing config, and edge cases",
+        "At least 10 agent config tests"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-pm-agent",
+      "title": "Product Manager agent definition",
+      "description": "Create .pi/agents/product-manager.md with YAML frontmatter (name, description) and agent instructions covering: goals (shape ideas, ask questions, define AC, think about user impact, identify risks, estimate size), planning process (6 steps), output format (Plan: header with numbered steps + AC per step + summary block), and constraints (read-only, focus on plan, be opinionated). Output format must be compatible with plan-mode todo extraction (Plan: header).",
+      "acceptanceCriteria": [
+        "File exists at .pi/agents/product-manager.md",
+        "Has YAML frontmatter with name and description",
+        "Covers goals, planning process, output format, constraints",
+        "Output format includes Plan: header compatible with plan-mode todo extraction",
+        "Size estimation guidance matches lifecycle gate thresholds",
+        "Reads naturally as agent instructions"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-classification",
+      "title": "Plan classification and smart menu utilities",
+      "description": "Add plan classification and menu functions to .pi/extensions/plan-mode/utils.ts. New exports: PlanSize type, COMPLEXITY_KEYWORDS array, classifyPlanSize (step count + keyword analysis), WorkflowMenuState type, getMenuOptions (contextual menu per size with gate-aware adaptation), getPostExecutionMenuOptions. Existing functions remain unchanged.",
+      "acceptanceCriteria": [
+        "classifyPlanSize correctly classifies all size thresholds",
+        "Complexity keywords bump size (2 steps + integration keyword \u2192 medium)",
+        "getMenuOptions returns correct menus for all 4 sizes",
+        "Menu options adapt when gates are already completed",
+        "getPostExecutionMenuOptions returns correct post-execution options",
+        "All functions are pure (no side effects) and exported",
+        "Existing utils functions unchanged (backward compatible)",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8-classification-tests",
+      "title": "Tests for plan classification and menu utilities",
+      "description": "Create or extend .pi/extensions/plan-mode/utils.test.ts with tests for classifyPlanSize (all size thresholds, keyword bumping, edge cases), getMenuOptions (all 4 sizes, gate adaptations), getPostExecutionMenuOptions, and existing utils functions (isSafeCommand, extractTodoItems, cleanStepText, extractDoneSteps, markCompletedSteps).",
+      "acceptanceCriteria": [
+        "All tests pass with tsx --test .pi/extensions/plan-mode/utils.test.ts",
+        "Uses node:test and node:assert/strict",
+        "Uses .js extensions in imports",
+        "Coverage for happy path, edge cases, and boundary conditions",
+        "Existing utils functions tested (isSafeCommand, extractTodoItems, etc.)",
+        "At least 25 total tests across all utils functions"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9-widget",
+      "title": "Lifecycle status widget",
+      "description": "Create .pi/extensions/plan-mode/widget.ts with renderFooterStatus and renderLifecycleWidget functions. Footer: phase-specific status text. Widget: pipeline showing Plan \u2192 Review \u2192 Pre-mortem \u2192 Build \u2192 Done with accent/muted/dim coloring per stage. WidgetState type. Functions are pure (receive state + theme, return strings).",
+      "acceptanceCriteria": [
+        "Footer status renders correctly for each lifecycle phase",
+        "Lifecycle widget shows pipeline with correct highlighting",
+        "Current stage uses accent color",
+        "Completed stages show checkmark and use muted color",
+        "Future stages use dim color",
+        "Functions are pure (testable without TUI)",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-10-commands",
+      "title": "Refactor plan-mode extension \u2014 commands module",
+      "description": "Create .pi/extensions/plan-mode/commands.ts with all command handlers: handlePlan (toggle + subcommands: list, open, save, status, next, hold, block, resume), handleReview (review-plan skill + artifact save + model switching), handlePreMortem (pre-mortem skill + artifact save), handlePrd (plan-to-prd skill + artifact save), handleBuild (start build + status). Refactor index.ts to import from commands.ts. Extend PlanModeState with new fields (currentSlug, planSize, planText, gate booleans).",
+      "acceptanceCriteria": [
+        "All commands registered and functional",
+        "/plan list shows plans from dev/plans/ with status indicators",
+        "/plan open <slug> loads plan and restores state",
+        "/plan save extracts plan from conversation and persists",
+        "/plan status shows lifecycle information",
+        "/plan hold, /plan block, /plan resume update status correctly",
+        "/review invokes review-plan skill with plan context",
+        "/pre-mortem invokes run-pre-mortem skill with plan context",
+        "/prd invokes plan-to-prd skill with plan context",
+        "/build transitions to in-progress and triggers execution",
+        "/build status shows progress",
+        "State is properly persisted via pi.appendEntry()",
+        "Existing plan-mode functionality preserved (toggle, read-only, DONE tracking)",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-11-plan-next",
+      "title": "/plan next \u2014 smart gate orchestrator",
+      "description": "Implement /plan next subcommand. Reads current status, size, and gates. Calls getMissingGates and isReadyToApprove. Presents interactive menu via ctx.ui.select() showing gate checklist (checkmark/unchecked per gate with required/recommended/optional labels). Options: run next gate, run all remaining, skip \u2192 approve, cancel. When gates are all done, offers approve directly. Warns if mandatory gates missing when skipping. After approval updates status to approved.",
+      "acceptanceCriteria": [
+        "/plan next shows correct gate checklist for current plan size",
+        "Required gates are labeled as such",
+        "Completed gates show checkmark",
+        "Selecting a gate runs the appropriate command",
+        "Run all remaining gates runs them in sequence",
+        "Skip \u2192 approve works when all mandatory gates are done",
+        "Skip \u2192 approve warns if mandatory gates are missing but allows override with confirm",
+        "After approval plan status is approved",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-12-wire-together",
+      "title": "Refactor index.ts \u2014 wire everything together",
+      "description": "Refactor .pi/extensions/plan-mode/index.ts to use all new modules. Import from commands.js, persistence.js, lifecycle.js, agents.js, widget.js, utils.js. Enhanced before_agent_start (inject agent context per phase), agent_end (smart menus + post-execution flow), updateStatus (use widget.ts), session_start (restore plan state). Register save_plan_artifact tool. Preserve all existing functionality.",
+      "acceptanceCriteria": [
+        "Extension loads without errors",
+        "All commands work end-to-end",
+        "Plan mode toggle works (backward compatible)",
+        "Smart menus appear after plan extraction",
+        "Agent context injection changes based on phase",
+        "Lifecycle widget renders correctly",
+        "Post-execution menu appears after completion",
+        "save_plan_artifact tool available during gate phases and scoped to plan directory",
+        "State persists across sessions via appendEntry",
+        "Existing functionality preserved: read-only mode, DONE tracking, Ctrl+Alt+P, /todos",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-13-save-artifact-tool",
+      "title": "Save artifact tool",
+      "description": "Register save_plan_artifact tool in the extension. Parameters: filename (string), content (string). Validates: currentSlug must be set, filename must be in allowlist (review.md, pre-mortem.md, prd.md, notes.md), content must be non-empty. Writes via savePlanArtifact from persistence.ts. Tool only added to active tools during gate phases via pi.setActiveTools().",
+      "acceptanceCriteria": [
+        "Tool registered with correct parameters and description",
+        "Rejects writes when no active plan",
+        "Rejects filenames not in allowlist",
+        "Rejects empty content",
+        "Successfully writes artifacts to dev/plans/{slug}/",
+        "Tool only available during gate phases",
+        "Returns clear error messages for validation failures",
+        "TypeScript compiles without errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-14-settings",
+      "title": "Update settings.json with agent config",
+      "description": "Update .pi/settings.json to include agents section with model configuration for all 4 roles: product-manager (primary + secondary), orchestrator, reviewer, developer. Preserve existing tools field.",
+      "acceptanceCriteria": [
+        ".pi/settings.json contains agents section",
+        "Existing tools field preserved",
+        "All 4 agent roles configured",
+        "Product manager has primary + secondary",
+        "Other roles have single model",
+        "File is valid JSON"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-15-integration-testing",
+      "title": "Integration testing and quality gates",
+      "description": "Run full integration testing: start Pi with --plan (PM context injected), create plans of different sizes (verify menu options), /plan save + list + open + status, /plan next (gate checklist), /review + /pre-mortem + /prd (skill invocation + artifact save), /build (transition to in-progress), /plan hold + resume, lifecycle widget at each phase. Quality gates: npm run typecheck, npm test, tsx --test .pi/extensions/plan-mode/*.test.ts.",
+      "acceptanceCriteria": [
+        "All manual integration tests pass",
+        "npm run typecheck passes",
+        "npm test passes (no regressions)",
+        "Extension-specific tests pass",
+        "Extension loads cleanly in Pi"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-16-documentation",
+      "title": "Documentation updates",
+      "description": "Update APPEND_SYSTEM.md with plan lifecycle command reference and agent model config. Create dev/plans/README.md documenting plan directory structure, frontmatter format, lifecycle statuses, and command quick reference. Create memory entry skeleton. Mark plan-mode-skills-integration PRD as superseded. Create dev/backlog/features/plan-lifecycle-enhancements.md with future ideas (cross-model via subagent, plan templates, plan analytics, backlog auto-marking).",
+      "acceptanceCriteria": [
+        "APPEND_SYSTEM.md has complete command reference for plan lifecycle",
+        "dev/plans/README.md documents format and workflow",
+        "Memory entry skeleton created at memory/entries/",
+        "MEMORY.md index updated",
+        "plan-mode-skills-integration PRD marked as superseded",
+        "Future enhancements backlog item created at dev/backlog/features/plan-lifecycle-enhancements.md",
+        "All documentation is accurate and consistent"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-16T22:00:00Z",
+    "totalTasks": 16,
+    "completedTasks": 16,
+    "failedTasks": 0
+  }
+}
