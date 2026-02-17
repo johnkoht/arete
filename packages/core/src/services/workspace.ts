@@ -203,6 +203,60 @@ export class WorkspaceService {
       }
     }
 
+    // Copy default templates (skip files that already exist)
+    if (sourcePaths?.templates && this.storage.copy) {
+      const templateSrc = sourcePaths.templates;
+      const templateDest = join(targetDir, 'templates');
+      const templateSrcExists = await this.storage.exists(templateSrc);
+      if (templateSrcExists) {
+        const templateFiles = await this.storage.list(templateSrc, { recursive: true });
+        for (const src of templateFiles) {
+          const rel = src.slice(templateSrc.length).replace(/^[/\\]/, '');
+          const dest = join(templateDest, rel);
+          const destExists = await this.storage.exists(dest);
+          if (!destExists) {
+            try {
+              const parentDir = join(dest, '..');
+              await this.storage.mkdir(parentDir);
+              const content = await this.storage.read(src);
+              if (content !== null) {
+                await this.storage.write(dest, content);
+                result.files.push(join('templates', rel));
+              }
+            } catch (err) {
+              result.errors.push({
+                type: 'file',
+                path: join('templates', rel),
+                error: (err as Error).message,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Copy GUIDE.md to workspace root (skip if already exists)
+    if (sourcePaths?.guide) {
+      const guideSrc = sourcePaths.guide;
+      const guideDest = join(targetDir, 'GUIDE.md');
+      const guideDestExists = await this.storage.exists(guideDest);
+      if (!guideDestExists) {
+        try {
+          const content = await this.storage.read(guideSrc);
+          if (content !== null) {
+            await this.storage.write(guideDest, content);
+            result.files.push('GUIDE.md');
+          }
+        } catch (err) {
+          result.errors.push({
+            type: 'file',
+            path: 'GUIDE.md',
+            error: (err as Error).message,
+          });
+        }
+      }
+    }
+
     const manifest: AreteConfig = {
       schema: 1,
       version: '0.1.0',
@@ -267,6 +321,54 @@ export class WorkspaceService {
       result.added.push(...syncResult.added);
       result.updated.push(...syncResult.updated);
       result.preserved.push(...syncResult.preserved);
+    }
+
+    // Backfill GUIDE.md if missing (never overwrite existing)
+    if (options.sourcePaths?.guide) {
+      const guideSrc = options.sourcePaths.guide;
+      const guideDest = join(workspaceRoot, 'GUIDE.md');
+      const guideExists = await this.storage.exists(guideDest);
+      if (!guideExists) {
+        const guideSrcExists = await this.storage.exists(guideSrc);
+        if (guideSrcExists) {
+          try {
+            const content = await this.storage.read(guideSrc);
+            if (content != null) {
+              await this.storage.write(guideDest, content);
+              result.added.push('GUIDE.md');
+            }
+          } catch {
+            // Non-fatal: skip GUIDE.md backfill on error
+          }
+        }
+      }
+    }
+
+    // Backfill missing templates (never overwrite existing)
+    if (options.sourcePaths?.templates) {
+      const templateSrc = options.sourcePaths.templates;
+      const templateDest = join(workspaceRoot, 'templates');
+      const srcExists = await this.storage.exists(templateSrc);
+      if (srcExists) {
+        const srcFiles = await this.storage.list(templateSrc, { recursive: true });
+        for (const srcFile of srcFiles) {
+          const rel = srcFile.slice(templateSrc.length + 1);
+          const destFile = join(templateDest, rel);
+          const destExists = await this.storage.exists(destFile);
+          if (!destExists) {
+            try {
+              const content = await this.storage.read(srcFile);
+              if (content != null) {
+                await this.storage.mkdir(join(destFile, '..'));
+                await this.storage.write(destFile, content);
+                result.added.push(join('templates', rel));
+              }
+            } catch {
+              // Non-fatal: skip individual template backfill on error
+            }
+          }
+        }
+      }
     }
 
     return result;

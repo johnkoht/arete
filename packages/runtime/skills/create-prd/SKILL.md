@@ -92,23 +92,25 @@ If user says "skip" or "quick mode":
 
 Based on discovery, recommend a template:
 
-**Simple PRD** (`templates/outputs/prd-simple.md`):
-- Straightforward features
-- Well-understood problem
-- Small scope
-- Tactical improvements
+**Simple PRD** — for straightforward features, well-understood problems, small scope, tactical improvements.
 
-**Regular PRD** (`templates/outputs/prd-regular.md`):
-- Standard feature development
-- Moderate complexity
-- Cross-functional work
-- Typical sprint/quarter work
+**Regular PRD** — for standard feature development, moderate complexity, cross-functional work, typical sprint/quarter work.
 
-**Full PRD** (`templates/outputs/prd-full.md`):
-- Strategic initiatives
-- New products or major features
-- Complex, multi-quarter projects
-- High stakeholder involvement
+**Full PRD** — for strategic initiatives, new products or major features, complex multi-quarter projects, high stakeholder involvement.
+
+**Template resolution order** — check each path in order, use the first file that exists:
+
+1. **Workspace override**: `templates/outputs/create-prd/{variant}.md`
+2. **Skill-local default**: `.agents/skills/create-prd/templates/{variant}.md`
+3. **Legacy fallback**: `templates/outputs/{variant}.md`
+
+Where `{variant}` is one of: `prd-simple`, `prd-regular`, `prd-full`
+
+Example for Simple PRD:
+1. Check `templates/outputs/create-prd/prd-simple.md` → use if it exists
+2. Check `.agents/skills/create-prd/templates/prd-simple.md` → use if it exists
+3. Check `templates/outputs/prd-simple.md` → use if it exists
+4. If none found, ask the user or proceed without a template
 
 ### 5. Context Integration
 

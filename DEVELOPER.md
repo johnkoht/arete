@@ -739,6 +739,10 @@ npm run test:integration:smoke
 # Run full integration tests (all workspace journeys)
 npm run test:integration
 
+# Optional: set a stable sandbox root (loaded from .env.test/.env)
+# Example .env.test:
+# ARETE_E2E_SANDBOX_ROOT=~/arete-e2e-workspace
+
 # Run specific test file
 npm test -- packages/core/test/services/memory.test.ts
 

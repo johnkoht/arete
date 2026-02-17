@@ -7,6 +7,31 @@ globs: ["src/**/*", "test/**/*", "dev/**/*"]
 
 **Only when in Build Context (BUILDER mode).** Ignore in GUIDE mode or end-user workspaces.
 
+## Plan Checkpoint: Prompt to Save
+
+When a plan feels complete — steps are defined, scope is clear, and the conversation has reached a natural resting point — prompt the user to checkpoint before continuing.
+
+**Trigger signals** (any of these):
+- Builder says something like "looks good", "that works", "I think that's it", "solid", "perfect", "let's do it"
+- A clear lull after iterative refinement (plan has been discussed for several turns and no new changes are being proposed)
+- All major steps, risks, or scope questions have been resolved
+
+**Do not trigger** if the plan is still clearly in flux, or if the builder just asked a question.
+
+**When triggered**, offer this checkpoint:
+
+> "Want to save this plan before we keep going?"
+>
+> 1. **Save & keep working** — checkpoint it now, continue refining
+> 2. **Save & move to next step** — save and proceed to [pre-mortem / PRD / build, whichever applies]
+> 3. **Not yet** — still refining, no save needed
+
+- **Option 1**: Run `/plan save`, then continue the conversation normally.
+- **Option 2**: Run `/plan save`, then proceed with the appropriate next step (use `/plan next` to determine it, or offer the PRD gateway below if applicable).
+- **Option 3**: Continue without saving.
+
+---
+
 ## When This Applies
 
 You **must** conduct a pre-mortem when **any** of these are true:

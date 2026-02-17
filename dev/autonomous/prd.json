@@ -1,301 +1,132 @@
 {
-  "name": "plan-lifecycle-system",
-  "branchName": "feature/plan-lifecycle-system",
-  "goal": "Build a complete plan lifecycle system with persistence, lifecycle state machine, agent model configuration, smart gate commands, and build integration into the plan-mode Pi extension",
+  "name": "template-architecture",
+  "branchName": "feature/template-architecture",
+  "goal": "Ship default templates and GUIDE.md to user workspaces on install; backfill missing files on update; co-locate create-prd templates with the skill; implement 3-level template resolution order.",
   "userStories": [
     {
-      "id": "task-1-persistence",
-      "title": "Plan persistence module",
-      "description": "Create .pi/extensions/plan-mode/persistence.ts with plan file I/O. Includes PlanFrontmatter and PlanStatus types, savePlan, loadPlan, listPlans, updatePlanFrontmatter, savePlanArtifact, loadPlanArtifact, slugify, and deletePlan functions. All file I/O via Node.js node:fs and node:path. YAML frontmatter parsing via simple regex (split on --- delimiters). No external dependencies.",
+      "id": "task-1-source-paths-and-install",
+      "title": "Extend SourcePaths + fix template and GUIDE.md copy in install",
+      "description": "Add `guide: string` field to SourcePaths type pointing to GUIDE.md file path. Update getSourcePaths() to set guide field. Add template copy loop to WorkspaceService.create() (source: sourcePaths.templates, dest: {targetDir}/templates/, skip-if-exists, recursive). Add GUIDE.md copy to WorkspaceService.create() (source: sourcePaths.guide, dest: {targetDir}/GUIDE.md, skip-if-exists). Update install.ts and update.ts CLI commands to pass guide through sourcePaths.",
       "acceptanceCriteria": [
-        "savePlan creates directory and writes file with valid YAML frontmatter",
-        "loadPlan correctly parses frontmatter and separates content",
-        "listPlans returns all plans sorted by updated date (most recent first)",
-        "updatePlanFrontmatter merges partial updates without losing other fields",
-        "updatePlanFrontmatter sets updated timestamp",
-        "savePlanArtifact writes to correct plan directory",
-        "loadPlanArtifact returns content or null for non-existent artifact",
-        "slugify produces valid kebab-case slugs (handles spaces, special chars, uppercase)",
-        "deletePlan removes plan directory",
-        "All functions handle missing files/directories gracefully (return null or empty array, don't throw)",
-        "TypeScript compiles without errors",
-        "No external dependencies (uses node:fs, node:path only)"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-2-lifecycle",
-      "title": "Lifecycle state machine module",
-      "description": "Create .pi/extensions/plan-mode/lifecycle.ts with status transitions and gate logic. Includes VALID_TRANSITIONS map, canTransition, getGateRequirements, getAvailableTransitions, getMissingGates, and isReadyToApprove functions. Gate requirements by size: tiny=all optional, small=all optional, medium=pre-mortem recommended + PRD optional, large=pre-mortem mandatory + PRD mandatory. Review always optional. Blocked/on-hold store previous_status for resume.",
-      "acceptanceCriteria": [
-        "All valid transitions from architecture table are allowed",
-        "Invalid transitions return false (e.g., draft \u2192 completed)",
-        "Gate requirements match size table (tiny=all optional, large=pre-mortem+PRD mandatory)",
-        "isReadyToApprove blocks approval when mandatory gates are missing",
-        "isReadyToApprove allows approval when only optional/recommended gates are missing",
-        "getMissingGates correctly distinguishes required vs recommended",
-        "Blocked/on-hold transitions work from any status",
-        "Resume returns to previous_status",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-3-foundation-tests",
-      "title": "Tests for persistence and lifecycle",
-      "description": "Create .pi/extensions/plan-mode/persistence.test.ts and .pi/extensions/plan-mode/lifecycle.test.ts. Persistence tests: save/load round-trip, directory creation, missing file handling, listPlans sorting, updatePlanFrontmatter merging, artifact save/load, slugify cases, deletePlan. Lifecycle tests: valid/invalid transitions, gate requirements per size, isReadyToApprove with various gate combinations, getMissingGates, blocked/resume flow. Use node:fs mkdtempSync for temp directories.",
-      "acceptanceCriteria": [
-        "All tests pass with tsx --test .pi/extensions/plan-mode/persistence.test.ts .pi/extensions/plan-mode/lifecycle.test.ts",
-        "Tests use node:test and node:assert/strict",
-        "Tests use .js extensions in imports",
-        "Persistence tests use temp directories (no side effects on dev/plans/)",
-        "Coverage for happy path, edge cases, and error handling",
-        "At least 10 persistence tests and 10 lifecycle tests"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-4-agent-config",
-      "title": "Agent configuration module",
-      "description": "Create .pi/extensions/plan-mode/agents.ts for agent model config and prompt loading. Includes AgentRole and AgentConfig types, loadAgentConfig (reads .pi/settings.json agents section), getAgentModel (returns model ID for role with optional primary/secondary variant), getAgentPrompt (reads .pi/agents/{role}.md, strips frontmatter), resolveModel (parses provider/model-id string). Returns null/defaults when config is missing.",
-      "acceptanceCriteria": [
-        "loadAgentConfig reads from .pi/settings.json and returns agents section",
-        "loadAgentConfig returns empty defaults when agents section is missing",
-        "getAgentModel returns correct model for each role",
-        "getAgentModel returns null when role not configured",
-        "getAgentModel('product-manager', 'secondary') returns the secondary model",
-        "getAgentPrompt reads and returns agent markdown content without frontmatter",
-        "getAgentPrompt returns null for non-existent agent",
-        "resolveModel parses provider/model-id format",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-5-agent-tests",
-      "title": "Tests for agent configuration",
-      "description": "Create .pi/extensions/plan-mode/agents.test.ts. Tests: loadAgentConfig with full/empty/missing config, getAgentModel for all roles and variants, getAgentPrompt with valid/missing agent files, resolveModel parsing. Use temp files for settings.json and agent .md files.",
-      "acceptanceCriteria": [
-        "All tests pass",
-        "Tests use node:test and node:assert/strict",
-        "Tests use temp files, no side effects on real .pi/settings.json or .pi/agents/",
-        "Coverage for happy path, missing config, and edge cases",
-        "At least 10 agent config tests"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-6-pm-agent",
-      "title": "Product Manager agent definition",
-      "description": "Create .pi/agents/product-manager.md with YAML frontmatter (name, description) and agent instructions covering: goals (shape ideas, ask questions, define AC, think about user impact, identify risks, estimate size), planning process (6 steps), output format (Plan: header with numbered steps + AC per step + summary block), and constraints (read-only, focus on plan, be opinionated). Output format must be compatible with plan-mode todo extraction (Plan: header).",
-      "acceptanceCriteria": [
-        "File exists at .pi/agents/product-manager.md",
-        "Has YAML frontmatter with name and description",
-        "Covers goals, planning process, output format, constraints",
-        "Output format includes Plan: header compatible with plan-mode todo extraction",
-        "Size estimation guidance matches lifecycle gate thresholds",
-        "Reads naturally as agent instructions"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-7-classification",
-      "title": "Plan classification and smart menu utilities",
-      "description": "Add plan classification and menu functions to .pi/extensions/plan-mode/utils.ts. New exports: PlanSize type, COMPLEXITY_KEYWORDS array, classifyPlanSize (step count + keyword analysis), WorkflowMenuState type, getMenuOptions (contextual menu per size with gate-aware adaptation), getPostExecutionMenuOptions. Existing functions remain unchanged.",
-      "acceptanceCriteria": [
-        "classifyPlanSize correctly classifies all size thresholds",
-        "Complexity keywords bump size (2 steps + integration keyword \u2192 medium)",
-        "getMenuOptions returns correct menus for all 4 sizes",
-        "Menu options adapt when gates are already completed",
-        "getPostExecutionMenuOptions returns correct post-execution options",
-        "All functions are pure (no side effects) and exported",
-        "Existing utils functions unchanged (backward compatible)",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-8-classification-tests",
-      "title": "Tests for plan classification and menu utilities",
-      "description": "Create or extend .pi/extensions/plan-mode/utils.test.ts with tests for classifyPlanSize (all size thresholds, keyword bumping, edge cases), getMenuOptions (all 4 sizes, gate adaptations), getPostExecutionMenuOptions, and existing utils functions (isSafeCommand, extractTodoItems, cleanStepText, extractDoneSteps, markCompletedSteps).",
-      "acceptanceCriteria": [
-        "All tests pass with tsx --test .pi/extensions/plan-mode/utils.test.ts",
-        "Uses node:test and node:assert/strict",
-        "Uses .js extensions in imports",
-        "Coverage for happy path, edge cases, and boundary conditions",
-        "Existing utils functions tested (isSafeCommand, extractTodoItems, etc.)",
-        "At least 25 total tests across all utils functions"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-9-widget",
-      "title": "Lifecycle status widget",
-      "description": "Create .pi/extensions/plan-mode/widget.ts with renderFooterStatus and renderLifecycleWidget functions. Footer: phase-specific status text. Widget: pipeline showing Plan \u2192 Review \u2192 Pre-mortem \u2192 Build \u2192 Done with accent/muted/dim coloring per stage. WidgetState type. Functions are pure (receive state + theme, return strings).",
-      "acceptanceCriteria": [
-        "Footer status renders correctly for each lifecycle phase",
-        "Lifecycle widget shows pipeline with correct highlighting",
-        "Current stage uses accent color",
-        "Completed stages show checkmark and use muted color",
-        "Future stages use dim color",
-        "Functions are pure (testable without TUI)",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-10-commands",
-      "title": "Refactor plan-mode extension \u2014 commands module",
-      "description": "Create .pi/extensions/plan-mode/commands.ts with all command handlers: handlePlan (toggle + subcommands: list, open, save, status, next, hold, block, resume), handleReview (review-plan skill + artifact save + model switching), handlePreMortem (pre-mortem skill + artifact save), handlePrd (plan-to-prd skill + artifact save), handleBuild (start build + status). Refactor index.ts to import from commands.ts. Extend PlanModeState with new fields (currentSlug, planSize, planText, gate booleans).",
-      "acceptanceCriteria": [
-        "All commands registered and functional",
-        "/plan list shows plans from dev/plans/ with status indicators",
-        "/plan open <slug> loads plan and restores state",
-        "/plan save extracts plan from conversation and persists",
-        "/plan status shows lifecycle information",
-        "/plan hold, /plan block, /plan resume update status correctly",
-        "/review invokes review-plan skill with plan context",
-        "/pre-mortem invokes run-pre-mortem skill with plan context",
-        "/prd invokes plan-to-prd skill with plan context",
-        "/build transitions to in-progress and triggers execution",
-        "/build status shows progress",
-        "State is properly persisted via pi.appendEntry()",
-        "Existing plan-mode functionality preserved (toggle, read-only, DONE tracking)",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-11-plan-next",
-      "title": "/plan next \u2014 smart gate orchestrator",
-      "description": "Implement /plan next subcommand. Reads current status, size, and gates. Calls getMissingGates and isReadyToApprove. Presents interactive menu via ctx.ui.select() showing gate checklist (checkmark/unchecked per gate with required/recommended/optional labels). Options: run next gate, run all remaining, skip \u2192 approve, cancel. When gates are all done, offers approve directly. Warns if mandatory gates missing when skipping. After approval updates status to approved.",
-      "acceptanceCriteria": [
-        "/plan next shows correct gate checklist for current plan size",
-        "Required gates are labeled as such",
-        "Completed gates show checkmark",
-        "Selecting a gate runs the appropriate command",
-        "Run all remaining gates runs them in sequence",
-        "Skip \u2192 approve works when all mandatory gates are done",
-        "Skip \u2192 approve warns if mandatory gates are missing but allows override with confirm",
-        "After approval plan status is approved",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-12-wire-together",
-      "title": "Refactor index.ts \u2014 wire everything together",
-      "description": "Refactor .pi/extensions/plan-mode/index.ts to use all new modules. Import from commands.js, persistence.js, lifecycle.js, agents.js, widget.js, utils.js. Enhanced before_agent_start (inject agent context per phase), agent_end (smart menus + post-execution flow), updateStatus (use widget.ts), session_start (restore plan state). Register save_plan_artifact tool. Preserve all existing functionality.",
-      "acceptanceCriteria": [
-        "Extension loads without errors",
-        "All commands work end-to-end",
-        "Plan mode toggle works (backward compatible)",
-        "Smart menus appear after plan extraction",
-        "Agent context injection changes based on phase",
-        "Lifecycle widget renders correctly",
-        "Post-execution menu appears after completion",
-        "save_plan_artifact tool available during gate phases and scoped to plan directory",
-        "State persists across sessions via appendEntry",
-        "Existing functionality preserved: read-only mode, DONE tracking, Ctrl+Alt+P, /todos",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-13-save-artifact-tool",
-      "title": "Save artifact tool",
-      "description": "Register save_plan_artifact tool in the extension. Parameters: filename (string), content (string). Validates: currentSlug must be set, filename must be in allowlist (review.md, pre-mortem.md, prd.md, notes.md), content must be non-empty. Writes via savePlanArtifact from persistence.ts. Tool only added to active tools during gate phases via pi.setActiveTools().",
-      "acceptanceCriteria": [
-        "Tool registered with correct parameters and description",
-        "Rejects writes when no active plan",
-        "Rejects filenames not in allowlist",
-        "Rejects empty content",
-        "Successfully writes artifacts to dev/plans/{slug}/",
-        "Tool only available during gate phases",
-        "Returns clear error messages for validation failures",
-        "TypeScript compiles without errors"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-14-settings",
-      "title": "Update settings.json with agent config",
-      "description": "Update .pi/settings.json to include agents section with model configuration for all 4 roles: product-manager (primary + secondary), orchestrator, reviewer, developer. Preserve existing tools field.",
-      "acceptanceCriteria": [
-        ".pi/settings.json contains agents section",
-        "Existing tools field preserved",
-        "All 4 agent roles configured",
-        "Product manager has primary + secondary",
-        "Other roles have single model",
-        "File is valid JSON"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 0
-    },
-    {
-      "id": "task-15-integration-testing",
-      "title": "Integration testing and quality gates",
-      "description": "Run full integration testing: start Pi with --plan (PM context injected), create plans of different sizes (verify menu options), /plan save + list + open + status, /plan next (gate checklist), /review + /pre-mortem + /prd (skill invocation + artifact save), /build (transition to in-progress), /plan hold + resume, lifecycle widget at each phase. Quality gates: npm run typecheck, npm test, tsx --test .pi/extensions/plan-mode/*.test.ts.",
-      "acceptanceCriteria": [
-        "All manual integration tests pass",
+        "SourcePaths type has `guide: string` field",
+        "getSourcePaths() sets guide to join(base, 'GUIDE.md')",
+        "WorkspaceService.create() copies all files from sourcePaths.templates into {targetDir}/templates/ recursively",
+        "WorkspaceService.create() copies GUIDE.md to {targetDir}/GUIDE.md",
+        "Existing files at destination are never overwritten (skip-if-exists)",
+        "result.files includes template paths and GUIDE.md path on success",
+        "No crash if sourcePaths.guide is missing or GUIDE.md doesn't exist at source",
         "npm run typecheck passes",
-        "npm test passes (no regressions)",
-        "Extension-specific tests pass",
-        "Extension loads cleanly in Pi"
+        "npm test passes"
       ],
-      "status": "complete",
-      "passes": true,
+      "status": "pending",
+      "passes": false,
       "attemptCount": 0
     },
     {
-      "id": "task-16-documentation",
-      "title": "Documentation updates",
-      "description": "Update APPEND_SYSTEM.md with plan lifecycle command reference and agent model config. Create dev/plans/README.md documenting plan directory structure, frontmatter format, lifecycle statuses, and command quick reference. Create memory entry skeleton. Mark plan-mode-skills-integration PRD as superseded. Create dev/backlog/features/plan-lifecycle-enhancements.md with future ideas (cross-model via subagent, plan templates, plan analytics, backlog auto-marking).",
+      "id": "task-2-update-backfill",
+      "title": "Add GUIDE.md and template backfill to arete update",
+      "description": "Add GUIDE.md backfill to WorkspaceService.update(): if {workspaceRoot}/GUIDE.md is missing and options.sourcePaths.guide exists, copy it; if it exists, skip. Add template backfill loop to WorkspaceService.update(): iterate source templates recursively; for each file, if destination does not exist copy it; if it exists skip it. Add backfilled paths to result.added. Policy: 'only write if file does not exist' — no content comparison, no checksums.",
       "acceptanceCriteria": [
-        "APPEND_SYSTEM.md has complete command reference for plan lifecycle",
-        "dev/plans/README.md documents format and workflow",
-        "Memory entry skeleton created at memory/entries/",
-        "MEMORY.md index updated",
-        "plan-mode-skills-integration PRD marked as superseded",
-        "Future enhancements backlog item created at dev/backlog/features/plan-lifecycle-enhancements.md",
-        "All documentation is accurate and consistent"
+        "arete update on workspace missing GUIDE.md creates GUIDE.md at workspace root",
+        "arete update on workspace with existing GUIDE.md leaves it untouched",
+        "arete update on workspace missing template file creates that template file",
+        "arete update on workspace with existing template file leaves it untouched",
+        "result.added reflects what was backfilled",
+        "No crash when sourcePaths.templates or sourcePaths.guide is undefined",
+        "npm run typecheck passes",
+        "npm test passes"
       ],
-      "status": "complete",
-      "passes": true,
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-skill-local-templates",
+      "title": "Add skill-local templates for create-prd",
+      "description": "Create packages/runtime/skills/create-prd/templates/ directory. Copy prd-simple.md, prd-regular.md, prd-full.md from packages/runtime/templates/outputs/ into packages/runtime/skills/create-prd/templates/. Do NOT delete the originals in templates/outputs/ — they serve as legacy fallback for existing workspaces.",
+      "acceptanceCriteria": [
+        "packages/runtime/skills/create-prd/templates/prd-simple.md exists",
+        "packages/runtime/skills/create-prd/templates/prd-regular.md exists",
+        "packages/runtime/skills/create-prd/templates/prd-full.md exists",
+        "packages/runtime/templates/outputs/prd-simple.md still exists (not deleted)",
+        "packages/runtime/templates/outputs/prd-regular.md still exists (not deleted)",
+        "packages/runtime/templates/outputs/prd-full.md still exists (not deleted)",
+        "Content of skill-local copies matches originals",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-resolve-template-path",
+      "title": "Implement resolveTemplatePath() utility",
+      "description": "Add resolveTemplatePath(workspaceRoot, skillId, variant) async function to packages/core/src/utils/templates.ts. Implements 3-level resolution using fs/promises.access(): (1) workspace override: {workspaceRoot}/templates/outputs/{skillId}/{variant}.md, (2) skill-local: {workspaceRoot}/.agents/skills/{skillId}/templates/{variant}.md, (3) legacy fallback: {workspaceRoot}/templates/outputs/{variant}.md. Returns the first path that exists as a string, or null if none found. Export from packages/core/src/utils/index.ts.",
+      "acceptanceCriteria": [
+        "resolveTemplatePath returns workspace override path when it exists",
+        "resolveTemplatePath returns skill-local path when override doesn't exist but skill-local does",
+        "resolveTemplatePath returns legacy fallback path when neither override nor skill-local exists",
+        "resolveTemplatePath returns null when no template found at any level",
+        "resolveTemplatePath prefers override over skill-local when both exist",
+        "resolveTemplatePath prefers skill-local over legacy when both exist",
+        "Function uses fs/promises.access() not readFile for existence checks",
+        "No any types; async with proper error handling",
+        "Exported from packages/core/src/utils/index.ts",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-skill-md-update",
+      "title": "Update create-prd SKILL.md with template resolution instructions",
+      "description": "Update the Template Selection section (Step 4) of packages/runtime/skills/create-prd/SKILL.md to document 3-level template resolution order in plain language for agents. Replace hardcoded template paths with explicit resolution instructions referencing all three levels. No other content in SKILL.md should change.",
+      "acceptanceCriteria": [
+        "Template Selection section documents all three resolution levels in priority order",
+        "Level 1 workspace override path is documented: templates/outputs/create-prd/{variant}.md",
+        "Level 2 skill-local path is documented: .agents/skills/create-prd/templates/{variant}.md",
+        "Level 3 legacy fallback path is documented: templates/outputs/{variant}.md",
+        "Instructions are written in plain language suitable for AI agents",
+        "Variant values (prd-simple, prd-regular, prd-full) are still documented",
+        "No other SKILL.md content is changed",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-tests",
+      "title": "Unit and integration tests",
+      "description": "Add unit tests for resolveTemplatePath() in packages/core/test/utils/templates.test.ts (new file). Add integration tests to packages/cli/test/integration/install-update.integration.test.ts covering install outputs and update backfill behavior. Unit tests use real temp directories (not mocked fs). Integration tests use existing createIntegrationSandbox() and installWorkspace() helpers.",
+      "acceptanceCriteria": [
+        "packages/core/test/utils/templates.test.ts exists and passes",
+        "Unit tests cover: override wins over skill-local, skill-local wins over legacy, legacy used when only that exists, null returned when nothing exists, override wins when all three exist, skill-local wins when skill-local + legacy exist",
+        "Integration tests added to install-update.integration.test.ts",
+        "Integration test: arete install produces workspace with GUIDE.md at root",
+        "Integration test: arete install produces workspace with templates/outputs/prd-simple.md",
+        "Integration test: arete install produces workspace with templates/outputs/prd-regular.md",
+        "Integration test: arete install produces workspace with templates/outputs/prd-full.md",
+        "Integration test: arete update backfills missing GUIDE.md without touching existing GUIDE.md",
+        "Integration test: arete update backfills missing template without touching existing template",
+        "All tests use node:test and node:assert/strict",
+        "All imports use .js extensions",
+        "npm run typecheck passes",
+        "npm test passes (full suite)"
+      ],
+      "status": "pending",
+      "passes": false,
       "attemptCount": 0
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-16T22:00:00Z",
-    "totalTasks": 16,
-    "completedTasks": 16,
+    "createdAt": "2026-02-17T12:30:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
     "failedTasks": 0
   }
 }

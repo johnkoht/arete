@@ -101,5 +101,6 @@ export function getSourcePaths(
     rules: join(base, 'rules'),
     integrations: join(base, 'integrations'),
     templates: join(base, 'templates'),
+    guide: join(base, 'GUIDE.md'),
   };
 }

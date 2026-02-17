@@ -21,6 +21,7 @@ notion-export/
 # Environment files (in case someone adds them)
 .env
 .env.local
+.env.test
 .env.*.local
 
 # Local credentials (API keys, tokens, secrets)
@@ -85,6 +86,8 @@ scratchpad.md
 GUIDE.md
 # Exception: package runtime templates (shipped with CLI) are committed
 !packages/runtime/templates/
+!packages/runtime/skills/*/templates/
+!packages/runtime/skills/*/templates/**
 # Exception: packages/runtime/GUIDE.md is the source (shipped with CLI)
 !packages/runtime/GUIDE.md
 

@@ -127,4 +127,6 @@ export type SourcePaths = {
   rules: string;
   integrations: string;
   templates: string;
+  /** Path to GUIDE.md file in the runtime/dist package */
+  guide: string;
 };

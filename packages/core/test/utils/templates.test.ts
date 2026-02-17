@@ -5,10 +5,10 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { renderTemplate, renderTemplateString } from '../../src/utils/templates.js';
+import { renderTemplate, renderTemplateString, resolveTemplatePath } from '../../src/utils/templates.js';
 
 describe('renderTemplate', () => {
   it('basic substitution', async () => {
@@ -85,5 +85,105 @@ describe('renderTemplateString', () => {
       author: 'Alice',
     });
     assert.equal(result, '# Hello\n\nBy Alice');
+  });
+});
+
+describe('resolveTemplatePath', () => {
+  async function makeWorkspace(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), 'arete-resolve-'));
+    await mkdir(join(root, 'templates', 'outputs', 'create-prd'), { recursive: true });
+    await mkdir(join(root, '.agents', 'skills', 'create-prd', 'templates'), { recursive: true });
+    await mkdir(join(root, 'templates', 'outputs'), { recursive: true });
+    return root;
+  }
+
+  it('returns null when no template exists at any level', async () => {
+    const root = await makeWorkspace();
+    try {
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, null);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns legacy fallback when only that exists', async () => {
+    const root = await makeWorkspace();
+    try {
+      const legacyPath = join(root, 'templates', 'outputs', 'prd-simple.md');
+      await writeFile(legacyPath, '# legacy', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, legacyPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns skill-local when only that exists', async () => {
+    const root = await makeWorkspace();
+    try {
+      const skillLocalPath = join(root, '.agents', 'skills', 'create-prd', 'templates', 'prd-simple.md');
+      await writeFile(skillLocalPath, '# skill-local', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, skillLocalPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns workspace override when only that exists', async () => {
+    const root = await makeWorkspace();
+    try {
+      const overridePath = join(root, 'templates', 'outputs', 'create-prd', 'prd-simple.md');
+      await writeFile(overridePath, '# override', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, overridePath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers workspace override over skill-local (both exist)', async () => {
+    const root = await makeWorkspace();
+    try {
+      const overridePath = join(root, 'templates', 'outputs', 'create-prd', 'prd-simple.md');
+      const skillLocalPath = join(root, '.agents', 'skills', 'create-prd', 'templates', 'prd-simple.md');
+      await writeFile(overridePath, '# override', 'utf-8');
+      await writeFile(skillLocalPath, '# skill-local', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, overridePath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers skill-local over legacy fallback (both exist)', async () => {
+    const root = await makeWorkspace();
+    try {
+      const skillLocalPath = join(root, '.agents', 'skills', 'create-prd', 'templates', 'prd-simple.md');
+      const legacyPath = join(root, 'templates', 'outputs', 'prd-simple.md');
+      await writeFile(skillLocalPath, '# skill-local', 'utf-8');
+      await writeFile(legacyPath, '# legacy', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, skillLocalPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers workspace override over all others when all three exist', async () => {
+    const root = await makeWorkspace();
+    try {
+      const overridePath = join(root, 'templates', 'outputs', 'create-prd', 'prd-simple.md');
+      const skillLocalPath = join(root, '.agents', 'skills', 'create-prd', 'templates', 'prd-simple.md');
+      const legacyPath = join(root, 'templates', 'outputs', 'prd-simple.md');
+      await writeFile(overridePath, '# override', 'utf-8');
+      await writeFile(skillLocalPath, '# skill-local', 'utf-8');
+      await writeFile(legacyPath, '# legacy', 'utf-8');
+      const result = await resolveTemplatePath(root, 'create-prd', 'prd-simple');
+      assert.equal(result, overridePath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

@@ -108,6 +108,7 @@ export function registerInstallCommand(program: Command): void {
           rules: join(basePaths.rules, rulesSubdir),
           integrations: basePaths.integrations,
           templates: basePaths.templates,
+          guide: basePaths.guide,
         };
 
         const result = await services.workspace.create(targetDir, {
