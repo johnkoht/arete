@@ -1,0 +1,98 @@
+{
+  "name": "plan-mode-ux",
+  "branchName": "feature/plan-mode-ux",
+  "goal": "Improve /build execution UX with compact PRD progress, clear active-role display, and reliable fallback behavior.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Define UX contract (single source of truth + role labels)",
+      "description": "Define compact status format, progress source-of-truth rules, and role-label mapping for execution UX.",
+      "acceptanceCriteria": [
+        "Compact status format is defined and documented",
+        "PRD mode uses dev/autonomous/prd.json as source of truth",
+        "Non-PRD mode uses existing todoItems",
+        "Role mapping (PM/EM/Reviewer/Agent) is explicit and deterministic"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
+    },
+    {
+      "id": "task-2",
+      "title": "Add PRD progress reader (from dev/autonomous/prd.json)",
+      "description": "Add a pure helper that parses PRD JSON and derives total/completed/current task with graceful fallbacks.",
+      "acceptanceCriteria": [
+        "Helper returns total, completed, and current task data",
+        "Current task resolution is deterministic (in_progress -> pending -> none)",
+        "Missing/malformed/incomplete PRD data does not throw",
+        "Fallback behavior to todo-based progress is preserved"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1"
+      ]
+    },
+    {
+      "id": "task-3",
+      "title": "Refactor status/widget rendering to compact mode",
+      "description": "Use compact one-line PRD progress in execution UI by default while preserving detailed status on demand.",
+      "acceptanceCriteria": [
+        "PRD execution defaults to compact status line",
+        "Full checklist is hidden by default in PRD mode",
+        "Detailed status remains available via /build status",
+        "Long task titles are handled without excessive wrapping"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1",
+        "task-2"
+      ]
+    },
+    {
+      "id": "task-4",
+      "title": "Surface active persona cleanly",
+      "description": "Render a single active role label in status output based on command context.",
+      "acceptanceCriteria": [
+        "Role is derived from active command/context mapping",
+        "Exactly one role label is shown at a time",
+        "No simultaneous multi-role primary status labels in build loop"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1"
+      ]
+    },
+    {
+      "id": "task-5",
+      "title": "Tests + validation",
+      "description": "Add parser/rendering tests and run mandatory quality gates.",
+      "acceptanceCriteria": [
+        "Parser tests cover valid, missing, malformed, and edge cases",
+        "Rendering tests cover role/progress/current-task/fallback behavior",
+        "Lifecycle/widget regressions are covered",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-2",
+        "task-3",
+        "task-4"
+      ]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-18T04:55:00.000Z",
+    "totalTasks": 5,
+    "completedTasks": 5,
+    "failedTasks": 0,
+    "updatedAt": "2026-02-18T05:32:11.861Z"
+  }
+}

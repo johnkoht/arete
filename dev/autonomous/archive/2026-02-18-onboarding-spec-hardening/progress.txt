@@ -1,0 +1,81 @@
+# Progress Log - onboarding-improvements
+
+## Context
+- PRD: dev/prds/onboarding-improvements/prd.md
+- Child PRDs:
+  - dev/prds/onboarding-improvements/child-onboarding-mvp.md
+  - dev/prds/onboarding-improvements/child-rapid-context-dump-mvp.md
+  - dev/prds/onboarding-improvements/child-people-intelligence-mvp.md
+- Task list: dev/autonomous/prd.json
+- Branch target: feature/onboarding-improvements
+
+## Execution Notes
+- Sequence by dependency order and phase:
+  1) Stream boundaries and baseline alignment
+  2) Stream-specific MVP definitions
+  3) Cross-stream contracts and phase gates
+  4) KPI thresholds and final handoff
+- Quality gates for each implementation task:
+  - npm run typecheck
+  - npm test
+
+---
+
+## 2026-02-18 Bootstrapping
+
+- Archived previous completed PRD artifacts for plan-mode-ux to:
+  - dev/autonomous/archive/2026-02-18-onboarding-improvements-bootstrap/
+- Initialized onboarding-improvements prd.json and progress tracker.
+- Created/validated plan + pre-mortem + umbrella PRD + 3 child PRDs.
+- Pending: execution pre-mortem approval before task loop.
+
+### Task 1 — Lock stream boundaries and ownership ✅
+- Updated umbrella PRD with explicit Stream Ownership Table (v1).
+- Added task-to-stream mapping rule (single primary stream requirement).
+- Added independent ship constraints to prevent cross-stream coupling.
+- Files changed:
+  - dev/prds/onboarding-improvements/prd.md
+
+### Task 2 — Finalize onboarding-mvp baseline + deltas ✅
+- Added explicit Baseline + Deltas section to Stream A child PRD.
+- Reinforced Path A website + context dump delta and Phase 1 scope boundary.
+- Files changed:
+  - dev/prds/onboarding-improvements/child-onboarding-mvp.md
+
+### Task 3 — Specify Rapid Context Dump MVP interface ✅
+- Added deterministic input fallback matrix (paste/folder/url/upload-optional).
+- Added explicit consent + exclusion acceptance criterion.
+- Files changed:
+  - dev/prds/onboarding-improvements/child-rapid-context-dump-mvp.md
+
+### Task 4 — Specify People Intelligence MVP foundations ✅
+- Added explicit suggestion payload expectations (confidence + evidence + source pointers).
+- Added confidence-threshold behavior to avoid forced classification.
+- Files changed:
+  - dev/prds/onboarding-improvements/child-people-intelligence-mvp.md
+
+### Task 5 — Define lightweight cross-stream contracts ✅
+- Added Contract v1 table with producer/consumer ownership and fallback behavior.
+- Files changed:
+  - dev/prds/onboarding-improvements/prd.md
+
+### Task 6 — Define 3-phase delivery gates and independent ship checks ✅
+- Added phase gate table with user-visible wins and independent ship checks.
+- Files changed:
+  - dev/prds/onboarding-improvements/prd.md
+
+### Task 7 — Finalize KPI thresholds and kill criteria ✅
+- Added numeric KPI thresholds and pause/kill triggers for each stream.
+- Added measurement window cadence.
+- Files changed:
+  - dev/prds/onboarding-improvements/prd.md
+
+### Task 8 — Execution handoff package ✅
+- Added source plan link and explicit execution handoff checklist in umbrella PRD.
+- Verified plan/review/pre-mortem/prd artifacts are linked and synchronized.
+- Files changed:
+  - dev/prds/onboarding-improvements/prd.md
+
+### Validation ✅
+- `npm run typecheck` passed
+- `npm test` passed
