@@ -152,8 +152,9 @@ export function registerInstallCommand(program: Command): void {
         console.log('');
         console.log(chalk.dim('Next steps:'));
         console.log(`  1. ${chalk.cyan('cd ' + formatPath(targetDir))}`);
-        console.log(`  2. ${chalk.cyan('arete setup')} to configure integrations`);
-        console.log(`  3. ${chalk.cyan('arete status')} to verify installation`);
+        console.log(`  2. ${chalk.cyan('arete onboard')} to set up your profile`);
+        console.log(`  3. ${chalk.cyan('arete setup')} to configure integrations ${chalk.dim('(optional)')}`);
+        console.log(`  4. Say ${chalk.cyan('"Let\'s get started"')} in chat to continue onboarding`);
         console.log('');
       },
     );

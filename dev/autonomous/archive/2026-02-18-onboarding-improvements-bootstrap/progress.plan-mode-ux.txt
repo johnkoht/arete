@@ -1,0 +1,46 @@
+# Progress Log - plan-mode-ux
+
+## Context
+- PRD: dev/prds/plan-mode-ux/prd.md
+- Task list: dev/autonomous/prd.json
+- Branch target: feature/plan-mode-ux
+
+## Execution Notes
+- Start with Task 1 and proceed by dependency order.
+- Update this file after each completed task with key learnings/blockers.
+
+---
+
+## 2026-02-18 Execution Summary
+
+### Task 1 — UX contract and role mapping ✅
+- Added deterministic active-role mapping (`plan/prd -> PM`, `pre-mortem/build -> EM`, `review -> Reviewer`, fallback `Agent`).
+- Plan-mode active command now defaults to `plan` while in planning flow; build keeps `build` role during execution loop.
+
+### Task 2 — PRD progress reader + fallback ✅
+- Added `.pi/extensions/plan-mode/execution-progress.ts` with:
+  - safe PRD parsing (`parsePrdFile`)
+  - deterministic current task resolution (`in_progress -> pending -> none`)
+  - source arbitration helper (`resolveExecutionProgress`) with graceful fallback to todo progress.
+
+### Task 3 — Compact PRD rendering ✅
+- Footer now renders compact status line in PRD execution mode:
+  - `Role: <role> · PRD: X/Y complete · Current: #N <title> · Status: <state>`
+- Long task titles are truncated with ellipsis in compact mode.
+- Execution widget defaults to a single compact PRD line instead of checklist in PRD mode.
+
+### Task 4 — Persona display wiring ✅
+- `WidgetState` now carries `activeRole` and computed execution progress.
+- Compact status always shows a single role label.
+
+### Task 5 — Tests + validation ✅
+- Added `execution-progress.test.ts` covering parser, fallback, role mapping, compact formatting/truncation.
+- Updated `widget.test.ts` for compact PRD rendering and todo fallback behavior.
+- Validation run:
+  - `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'` ✅
+  - `npm run typecheck` ✅
+  - `npm test` ✅
+
+## Notes
+- `/build status` now reads from PRD progress when available and prints a detailed task list with status markers.
+- Non-PRD execution path still uses todo-based rendering and counters.

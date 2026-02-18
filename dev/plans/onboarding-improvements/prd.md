@@ -1,6 +1,7 @@
-# PRD
+# PRD: Onboarding Improvements
 
-Feature: onboarding-improvements
-Triggered: 2026-02-18T03:12:51.694Z
+Canonical PRD is now saved at:
 
-PRD content will be created by the plan-to-prd skill.
+- `dev/prds/onboarding-improvements/prd.md`
+
+This plan artifact intentionally points to the canonical PRD path used by execute-prd.

@@ -1,98 +1,186 @@
 {
-  "name": "plan-mode-ux",
-  "branchName": "feature/plan-mode-ux",
-  "goal": "Improve /build execution UX with compact PRD progress, clear active-role display, and reliable fallback behavior.",
+  "name": "onboarding-improvements-phase1",
+  "branchName": "feature/onboarding-improvements",
+  "goal": "Implement Phase 1: Onboarding MVP skill (Stream A) + Rapid Context Dump capability (Stream B) for first-session activation flow.",
   "userStories": [
     {
-      "id": "task-1",
-      "title": "Define UX contract (single source of truth + role labels)",
-      "description": "Define compact status format, progress source-of-truth rules, and role-label mapping for execution UX.",
+      "id": "a1-onboarding-skill-scaffold",
+      "title": "Create onboarding skill scaffold",
+      "description": "Create packages/runtime/skills/onboarding/SKILL.md with triggers, discovery phase structure, and path routing placeholder. Follow existing skill patterns from meeting-prep or daily-plan.",
       "acceptanceCriteria": [
-        "Compact status format is defined and documented",
-        "PRD mode uses dev/autonomous/prd.json as source of truth",
-        "Non-PRD mode uses existing todoItems",
-        "Role mapping (PM/EM/Reviewer/Agent) is explicit and deterministic"
+        "SKILL.md exists at packages/runtime/skills/onboarding/",
+        "Triggers include: 'Let's get started', 'Help me set up Areté', 'Onboard me', 'I'm new to Areté'",
+        "Frontmatter includes name, description, category (core), triggers array",
+        "Discovery phase questions are documented (data sources, immediate need, docs availability)",
+        "Path routing structure documented (Path A: data dump, Path B: guided input, Path C: integration first)"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1
     },
     {
-      "id": "task-2",
-      "title": "Add PRD progress reader (from dev/autonomous/prd.json)",
-      "description": "Add a pure helper that parses PRD JSON and derives total/completed/current task with graceful fallbacks.",
+      "id": "a2-discovery-and-routing",
+      "title": "Implement discovery questions and path routing logic",
+      "description": "Complete the discovery phase with 3-4 key questions and document clear routing criteria to Path A/B/C based on user answers.",
       "acceptanceCriteria": [
-        "Helper returns total, completed, and current task data",
-        "Current task resolution is deterministic (in_progress -> pending -> none)",
-        "Missing/malformed/incomplete PRD data does not throw",
-        "Fallback behavior to todo-based progress is preserved"
+        "Discovery questions cover: data sources available, immediate need, doc readiness",
+        "Path A triggers when user has docs to dump (website, folder, paste)",
+        "Path B triggers when user needs guided Q&A input",
+        "Path C triggers when user wants to connect integrations first",
+        "Routing criteria are explicit and deterministic"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "task-1"
+        "a1-onboarding-skill-scaffold"
       ]
     },
     {
-      "id": "task-3",
-      "title": "Refactor status/widget rendering to compact mode",
-      "description": "Use compact one-line PRD progress in execution UI by default while preserving detailed status on demand.",
+      "id": "b1-context-dump-skill-scaffold",
+      "title": "Create rapid-context-dump skill scaffold",
+      "description": "Create packages/runtime/skills/rapid-context-dump/SKILL.md as standalone capability that can be invoked from onboarding or directly. Include input types, output structure, and review-before-promote workflow.",
       "acceptanceCriteria": [
-        "PRD execution defaults to compact status line",
-        "Full checklist is hidden by default in PRD mode",
-        "Detailed status remains available via /build status",
-        "Long task titles are handled without excessive wrapping"
+        "SKILL.md exists at packages/runtime/skills/rapid-context-dump/",
+        "Triggers include: 'dump my context', 'import my docs', 'bootstrap context from...'",
+        "Input types documented: website URL, inputs/onboarding-dump/ folder, pasted text",
+        "Output structure documented: draft context files, draft strategy summary, review checklist",
+        "Review-before-promote workflow is explicit"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
+    },
+    {
+      "id": "b2-input-handling-and-fallback",
+      "title": "Document input handling and fallback matrix",
+      "description": "Add detailed input handling for each input type with fallback behavior when inputs are unavailable or fail.",
+      "acceptanceCriteria": [
+        "Pasted text handling documented with extraction guidance",
+        "Folder handling documented (inputs/onboarding-dump/) with file type support",
+        "Website URL handling documented with extraction approach",
+        "Fallback matrix matches PRD: paste > folder > URL priority with graceful degradation",
+        "Non-blocking behavior explicit (one channel failure doesn't block flow)"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "task-1",
-        "task-2"
+        "b1-context-dump-skill-scaffold"
       ]
     },
     {
-      "id": "task-4",
-      "title": "Surface active persona cleanly",
-      "description": "Render a single active role label in status output based on command context.",
+      "id": "b3-draft-output-and-review",
+      "title": "Document draft output format and review workflow",
+      "description": "Specify exact draft output format with [DRAFT] labels, source references, and review checklist. Document promotion flow.",
       "acceptanceCriteria": [
-        "Role is derived from active command/context mapping",
-        "Exactly one role label is shown at a time",
-        "No simultaneous multi-role primary status labels in build loop"
+        "Draft files include [DRAFT] header and source/evidence references",
+        "Draft strategy summary template documented",
+        "Review checklist template documented",
+        "Promotion requires explicit user confirmation",
+        "Consent checkpoint documented before ingestion begins"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "task-1"
+        "b2-input-handling-and-fallback"
       ]
     },
     {
-      "id": "task-5",
-      "title": "Tests + validation",
-      "description": "Add parser/rendering tests and run mandatory quality gates.",
+      "id": "a3-path-a-context-dump-integration",
+      "title": "Integrate Path A with rapid-context-dump skill",
+      "description": "Wire onboarding Path A to invoke rapid-context-dump skill. Document handoff including website URL entry point.",
       "acceptanceCriteria": [
-        "Parser tests cover valid, missing, malformed, and edge cases",
-        "Rendering tests cover role/progress/current-task/fallback behavior",
-        "Lifecycle/widget regressions are covered",
-        "npm run typecheck and npm test pass"
+        "Path A explicitly hands off to rapid-context-dump skill",
+        "Website URL + context dump entry point is clear",
+        "Profile capture fields are collected before handoff (per contract)",
+        "Return flow after context dump leads to first-win suggestion"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "task-2",
-        "task-3",
-        "task-4"
+        "a2-discovery-and-routing",
+        "b3-draft-output-and-review"
+      ]
+    },
+    {
+      "id": "a4-first-win-handoff",
+      "title": "Document first-win recommendation and handoff",
+      "description": "Complete the onboarding flow with first-win skill recommendation based on what was set up, and next-step guidance.",
+      "acceptanceCriteria": [
+        "First-win recommendations are context-aware (meeting-prep if calendar, synthesize if docs, week-plan if fresh)",
+        "Handoff to first-win skill is documented",
+        "Graduation message includes next steps and skill discovery guidance",
+        "Flow completes in target time (≤30 min per PRD)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "a3-path-a-context-dump-integration"
+      ]
+    },
+    {
+      "id": "a5-contract-profile-fields",
+      "title": "Add contract-compliant profile capture",
+      "description": "Ensure onboarding captures minimal identity/profile fields per Contract v1 for downstream Stream C consumption.",
+      "acceptanceCriteria": [
+        "Profile fields captured: name, role, company (per Contract v1)",
+        "Fields are written to appropriate workspace location",
+        "Graceful handling if user skips optional fields",
+        "Contract compliance note in skill documentation"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "a4-first-win-handoff"
+      ]
+    },
+    {
+      "id": "b4-contract-domain-hints",
+      "title": "Add contract-compliant domain hints output",
+      "description": "Ensure rapid-context-dump emits domain/company hints per Contract v1 for downstream Stream C consumption.",
+      "acceptanceCriteria": [
+        "Domain hints extracted from website URL and content",
+        "Hints written to discoverable location or embedded in context",
+        "Contract compliance note in skill documentation",
+        "Graceful degradation if hints cannot be extracted"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "b3-draft-output-and-review"
+      ]
+    },
+    {
+      "id": "phase1-validation",
+      "title": "Phase 1 validation and quality gates",
+      "description": "Run typecheck, tests, verify skills are discoverable, and confirm Phase 1 ship-check passes (A+B ship without C).",
+      "acceptanceCriteria": [
+        "npm run typecheck passes",
+        "npm test passes",
+        "Both skills appear in arete skill list output",
+        "Skills are routable via arete skill route",
+        "Phase 1 ship-check confirmed: onboarding + context-dump work without people-intelligence"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "a5-contract-profile-fields",
+        "b4-contract-domain-hints"
       ]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T04:55:00.000Z",
-    "totalTasks": 5,
-    "completedTasks": 5,
+    "createdAt": "2026-02-18T06:45:00.000Z",
+    "totalTasks": 10,
+    "completedTasks": 10,
     "failedTasks": 0,
-    "updatedAt": "2026-02-18T05:32:11.861Z"
+    "updatedAt": "2026-02-18T14:27:55.414Z"
   }
 }

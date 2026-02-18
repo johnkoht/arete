@@ -311,6 +311,7 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 
 | Area | Skills |
 |------|--------|
+| **Setup** | onboarding, rapid-context-dump |
 | **Planning** | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
 | **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap |
 | **Execution** | meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |

@@ -1,0 +1,142 @@
+{
+  "name": "onboarding-improvements",
+  "branchName": "feature/onboarding-improvements",
+  "goal": "Ship a phased onboarding strategy with clear stream boundaries across onboarding shell, rapid context dump, and people intelligence, with measurable phase gates and governance.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Lock stream boundaries and ownership",
+      "description": "Finalize and publish explicit stream ownership boundaries (A onboarding shell, B rapid context dump, C people intelligence), ensure task-to-stream mapping rules are explicit, and document independent shippability constraints.",
+      "acceptanceCriteria": [
+        "Stream ownership table is explicit in umbrella PRD",
+        "Task-to-single-primary-stream mapping rule is documented",
+        "Independent shippability constraints are defined"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
+    },
+    {
+      "id": "task-2",
+      "title": "Finalize onboarding-mvp baseline + deltas",
+      "description": "Anchor onboarding stream to dev/backlog/features/onboarding-mvp.md and document explicit deltas for website + context dump extension while keeping self-guided infrastructure out of Phase 1.",
+      "acceptanceCriteria": [
+        "Baseline reference to onboarding-mvp is explicit",
+        "Path A delta includes company website + context dump handoff",
+        "Phase 1 excludes self-guided infrastructure"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1"
+      ]
+    },
+    {
+      "id": "task-3",
+      "title": "Specify Rapid Context Dump MVP interface",
+      "description": "Define supported inputs, outputs, fallback matrix, and review-before-promote guardrails in child/umbrella PRDs for Stream B.",
+      "acceptanceCriteria": [
+        "Inputs include website URL, inputs/onboarding-dump/, and pasted text",
+        "Outputs include draft context files, draft strategy summary, and review checklist",
+        "Fallback matrix and review-before-promote behavior are explicit"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1",
+        "task-2"
+      ]
+    },
+    {
+      "id": "task-4",
+      "title": "Specify People Intelligence MVP foundations",
+      "description": "Define unknown queue, evidence-backed recommendations, and non-blocking digest review behavior with uncertainty-safe classification model in child PRD for Stream C.",
+      "acceptanceCriteria": [
+        "Unknown queue is first-class and default for low-confidence items",
+        "Recommendation evidence/rationale requirements are explicit",
+        "Batch/digest review default and non-blocking behavior are documented"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-1",
+        "task-3"
+      ]
+    },
+    {
+      "id": "task-5",
+      "title": "Define lightweight cross-stream contracts",
+      "description": "Document v1 contract schema connecting onboarding profile capture and context dump hints to people intelligence consumers, including ownership and graceful-degradation behavior.",
+      "acceptanceCriteria": [
+        "Contract v1 fields and ownership are explicit",
+        "Onboarding-exported profile fields and context-hint payloads are documented",
+        "Graceful degradation behavior is defined when dependencies are absent"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-2",
+        "task-3",
+        "task-4"
+      ]
+    },
+    {
+      "id": "task-6",
+      "title": "Define 3-phase delivery gates and independent ship checks",
+      "description": "Convert strategic phases into explicit gates, include user-visible win per phase, and add ship checks proving stream independence.",
+      "acceptanceCriteria": [
+        "Phase 1/2/3 gates are explicit with deliverables",
+        "Each phase has measurable user-visible win",
+        "Ship checks verify streams can release independently"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-5"
+      ]
+    },
+    {
+      "id": "task-7",
+      "title": "Finalize KPI thresholds and kill criteria",
+      "description": "Define numeric KPI thresholds and explicit continue/pause criteria for each stream in umbrella and child PRDs.",
+      "acceptanceCriteria": [
+        "Numeric KPI thresholds are present for onboarding, context dump, and people intelligence",
+        "Continue/pause kill criteria are explicit and testable",
+        "Metric collection points are aligned with phase gates"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-6"
+      ]
+    },
+    {
+      "id": "task-8",
+      "title": "Execution handoff package",
+      "description": "Prepare final handoff artifacts for execute-prd: umbrella + child PRDs linked, pre-mortem attached, task list synchronized, and review summary captured.",
+      "acceptanceCriteria": [
+        "Umbrella PRD links all child PRDs and source plan",
+        "Pre-mortem and review artifacts are complete and up to date",
+        "Autonomous task list and progress tracking are initialized for execution"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "dependencies": [
+        "task-7"
+      ]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-18T06:13:00.000Z",
+    "totalTasks": 8,
+    "completedTasks": 8,
+    "failedTasks": 0
+  }
+}
