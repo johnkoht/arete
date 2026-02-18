@@ -116,40 +116,19 @@ export function registerOnboardCommand(program: Command): void {
             process.exit(1);
           }
 
-          const companyInput = await rl.question(
-            chalk.cyan('What company are you at? (or paste website URL) ')
-          );
-          if (!companyInput.trim()) {
-            error('Company name or website is required');
+          const company = await rl.question(chalk.cyan('What company are you at? '));
+          if (!company.trim()) {
+            error('Company name is required');
             process.exit(1);
           }
 
-          // Detect if they pasted a URL
-          let company = companyInput.trim();
-          let website: string | undefined;
+          // Ask for website optionally
+          const websiteInput = await rl.question(
+            chalk.dim('Company website? (optional, press enter to skip) ')
+          );
+          const website = websiteInput.trim() || undefined;
 
-          if (companyInput.includes('.') && (companyInput.includes('http') || companyInput.includes('www'))) {
-            website = companyInput.trim();
-            // Extract company name from domain
-            const domain = extractDomainFromUrl(website);
-            if (domain) {
-              const companyFromDomain = domain.split('.')[0];
-              const derivedCompany = await rl.question(
-                chalk.cyan(`Company name? (press enter for "${companyFromDomain}") `)
-              );
-              company = derivedCompany.trim() || companyFromDomain;
-            }
-          } else {
-            // Ask for website optionally
-            const websiteInput = await rl.question(
-              chalk.dim('Company website? (optional, press enter to skip) ')
-            );
-            if (websiteInput.trim()) {
-              website = websiteInput.trim();
-            }
-          }
-
-          answers = { name: name.trim(), email: email.trim(), company, website };
+          answers = { name: name.trim(), email: email.trim(), company: company.trim(), website };
         } finally {
           rl.close();
         }
