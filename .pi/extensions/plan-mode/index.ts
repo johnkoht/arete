@@ -32,6 +32,7 @@ import {
 	extractPhaseContent,
 	getPhaseMenu,
 	getPostExecutionMenuOptions,
+	shouldShowExecutionStatus,
 	suggestPlanName,
 	type TodoItem,
 } from "./utils.js";
@@ -91,7 +92,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	function getWidgetState(): WidgetState {
 		const plan = state.currentSlug ? loadPlan(state.currentSlug) : null;
 		const hasPrd = Boolean(plan?.frontmatter.has_prd ?? state.prdConverted);
-		const executionProgress = state.executionMode
+		const isExecuting = shouldShowExecutionStatus(
+			state.executionMode,
+			plan?.frontmatter.status ?? null,
+			state.currentPhase,
+		);
+		const executionProgress = isExecuting
 			? resolveExecutionProgress({
 				hasPrd,
 				todoItems: state.todoItems,
@@ -108,7 +114,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			has_review: state.reviewRun,
 			has_pre_mortem: state.preMortemRun,
 			has_prd: hasPrd,
-			executionMode: state.executionMode,
+			executionMode: isExecuting,
 			todosCompleted: state.todoItems.filter((t) => t.completed).length,
 			todosTotal: state.todoItems.length,
 			activeRole: deriveActiveRole(state.activeCommand),
@@ -126,14 +132,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 		// Widget showing compact PRD execution status, todo list, or lifecycle pipeline.
 		if (
-			state.executionMode &&
+			widgetState.executionMode &&
 			widgetState.executionProgress &&
 			widgetState.executionProgress.source === "prd" &&
 			widgetState.executionProgress.total > 0
 		) {
 			const planLabel = widgetState.planId ? `Plan: ${widgetState.planId}` : "Plan execution";
 			ctx.ui.setWidget("plan-todos", [ctx.ui.theme.fg("muted", planLabel)]);
-		} else if (state.executionMode && state.todoItems.length > 0) {
+		} else if (widgetState.executionMode && state.todoItems.length > 0) {
 			const lines = state.todoItems.map((item) => {
 				if (item.completed) {
 					return (

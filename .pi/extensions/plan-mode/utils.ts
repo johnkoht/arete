@@ -115,6 +115,18 @@ export function isAllowedInPlanMode(command: string, activeCommand: string | nul
 	return isSafeCommand(command);
 }
 
+/**
+ * Guard execution UX rendering so stale execution state doesn't leak into non-build plans.
+ */
+export function shouldShowExecutionStatus(
+	executionMode: boolean,
+	status: string | null,
+	currentPhase: Phase,
+): boolean {
+	if (!executionMode) return false;
+	return status === "in-progress" || currentPhase === "build";
+}
+
 export interface TodoItem {
 	step: number;
 	text: string;

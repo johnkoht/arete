@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
 	isSafeCommand,
 	isAllowedInPlanMode,
+	shouldShowExecutionStatus,
 	extractTodoItems,
 	cleanStepText,
 	extractDoneSteps,
@@ -64,6 +65,24 @@ describe("isAllowedInPlanMode", () => {
 
 	it("still blocks dangerous commands during prd command", () => {
 		assert.equal(isAllowedInPlanMode("rm -rf /", "prd"), false);
+	});
+});
+
+describe("shouldShowExecutionStatus", () => {
+	it("returns false when execution mode is off", () => {
+		assert.equal(shouldShowExecutionStatus(false, "in-progress", "build"), false);
+	});
+
+	it("returns true for in-progress plans", () => {
+		assert.equal(shouldShowExecutionStatus(true, "in-progress", "plan"), true);
+	});
+
+	it("returns true when current phase is build", () => {
+		assert.equal(shouldShowExecutionStatus(true, "draft", "build"), true);
+	});
+
+	it("returns false for stale execution flags on non-build phases", () => {
+		assert.equal(shouldShowExecutionStatus(true, "draft", "plan"), false);
 	});
 });
 
