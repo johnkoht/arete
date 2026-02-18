@@ -167,8 +167,8 @@
         "Skills are routable via arete skill route",
         "Phase 1 ship-check confirmed: onboarding + context-dump work without people-intelligence"
       ],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "attemptCount": 1,
       "dependencies": [
         "a5-contract-profile-fields",
@@ -179,7 +179,8 @@
   "metadata": {
     "createdAt": "2026-02-18T06:45:00.000Z",
     "totalTasks": 10,
-    "completedTasks": 9,
-    "failedTasks": 0
+    "completedTasks": 10,
+    "failedTasks": 0,
+    "updatedAt": "2026-02-18T14:27:55.414Z"
   }
 }
