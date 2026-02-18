@@ -165,9 +165,75 @@ describe('WorkspaceService', () => {
       const manifestExists = existsSync(join(tmpDir, 'arete.yaml'));
       assert.equal(manifestExists, true);
     });
+
+    it('creates default context files', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const expectedContextFiles = [
+        'business-overview.md',
+        'business-model.md',
+        'competitive-landscape.md',
+        'products-services.md',
+        'users-personas.md',
+      ];
+
+      for (const filename of expectedContextFiles) {
+        const fullPath = join(tmpDir, 'context', filename);
+        assert.equal(existsSync(fullPath), true, `Expected ${filename} to exist`);
+        const content = readFileSync(fullPath, 'utf8');
+        assert.ok(content.length > 20, `Expected ${filename} to have starter content`);
+      }
+    });
+
+    it('creates credentials example file', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const examplePath = join(tmpDir, '.credentials', 'credentials.yaml.example');
+      assert.equal(existsSync(examplePath), true);
+      const content = readFileSync(examplePath, 'utf8');
+      assert.ok(content.includes('fathom:'));
+      assert.ok(content.includes('api_key:'));
+    });
   });
 
   describe('update', () => {
+    it('backfills missing default context files', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      rmSync(join(tmpDir, 'context', 'business-model.md'));
+      rmSync(join(tmpDir, 'context', 'users-personas.md'));
+
+      const result = await service.update(tmpDir, {});
+
+      assert.ok(result.added.includes('context/business-model.md'));
+      assert.ok(result.added.includes('context/users-personas.md'));
+      assert.equal(existsSync(join(tmpDir, 'context', 'business-model.md')), true);
+      assert.equal(existsSync(join(tmpDir, 'context', 'users-personas.md')), true);
+    });
+
+    it('backfills missing credentials example file', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      rmSync(join(tmpDir, '.credentials', 'credentials.yaml.example'));
+
+      const result = await service.update(tmpDir, {});
+
+      assert.ok(result.added.includes('.credentials/credentials.yaml.example'));
+      assert.equal(existsSync(join(tmpDir, '.credentials', 'credentials.yaml.example')), true);
+    });
+
     it('syncs core skills from source paths and preserves custom workspace skills', async () => {
       const sourceRoot = join(tmpDir, 'source-runtime');
       const sourceSkills = join(sourceRoot, 'skills');

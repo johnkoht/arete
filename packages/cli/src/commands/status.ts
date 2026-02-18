@@ -95,7 +95,7 @@ export function registerStatusCommand(program: Command): void {
       section('Integrations');
       if (integrations.length === 0) {
         console.log(chalk.dim('  No integrations configured'));
-        console.log(chalk.dim('  Run "arete integration add <name>" to add one'));
+        console.log(chalk.dim('  Run "arete integration configure <name>" to configure one'));
       } else {
         for (const int of integrations) {
           const statusColor =

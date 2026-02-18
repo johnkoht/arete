@@ -61,6 +61,76 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 Your business and product knowledge. Fill in business-overview.md, users-personas.md, etc.
 `,
+  'context/business-overview.md': `# Business Overview
+
+## Company
+
+[Add your company name, stage, and what you do]
+
+## Problem Space
+
+[Describe the customer problem you solve]
+
+## Strategy
+
+[Summarize current strategic focus]
+`,
+  'context/business-model.md': `# Business Model
+
+## Revenue Model
+
+[How you make money]
+
+## Pricing
+
+[Pricing approach and packaging]
+
+## Unit Economics
+
+[Key economics assumptions]
+`,
+  'context/competitive-landscape.md': `# Competitive Landscape
+
+## Competitors
+
+[List primary alternatives and competitors]
+
+## Positioning
+
+[How you are different]
+
+## Market Dynamics
+
+[Important market trends and shifts]
+`,
+  'context/products-services.md': `# Products & Services
+
+## Current Offerings
+
+[List what you offer today]
+
+## Roadmap Themes
+
+[Summarize where the product is heading]
+
+## Gaps
+
+[Known gaps or unmet needs]
+`,
+  'context/users-personas.md': `# Users & Personas
+
+## Target Users
+
+[Who uses your product]
+
+## Needs and Pain Points
+
+[What they need and what is hard today]
+
+## Buying Stakeholders
+
+[Who decides and influences purchases]
+`,
   'now/scratchpad.md': `# Scratchpad
 
 Quick capture space for notes and ideas.
@@ -84,6 +154,14 @@ None yet.
   '.credentials/README.md': `# Credentials
 
 API keys and tokens. Never commit credentials.yaml.
+
+Copy credentials.yaml.example to credentials.yaml and add your real keys.
+`,
+  '.credentials/credentials.yaml.example': `# Copy this file to credentials.yaml and fill in real values.
+# credentials.yaml is gitignored.
+
+fathom:
+  api_key: ""
 `,
   '.gitignore': `# Areté
 .credentials/credentials.yaml

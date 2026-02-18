@@ -84,6 +84,9 @@ memory/
 arete.yaml
 scratchpad.md
 GUIDE.md
+# Exception: committed test fixtures
+!test-data/
+!test-data/**
 # Exception: package runtime templates (shipped with CLI) are committed
 !packages/runtime/templates/
 !packages/runtime/skills/*/templates/

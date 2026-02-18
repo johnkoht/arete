@@ -43,6 +43,13 @@ describe('seed command', () => {
     assert.equal(existsSync(join(workspaceDir, 'people', 'index.md')), true);
     assert.equal(existsSync(join(workspaceDir, 'TEST-SCENARIOS.md')), true);
 
+    // seeded context corpus should include canonical context files
+    assert.equal(existsSync(join(workspaceDir, 'context', 'business-overview.md')), true);
+    assert.equal(existsSync(join(workspaceDir, 'context', 'business-model.md')), true);
+    assert.equal(existsSync(join(workspaceDir, 'context', 'competitive-landscape.md')), true);
+    assert.equal(existsSync(join(workspaceDir, 'context', 'products-services.md')), true);
+    assert.equal(existsSync(join(workspaceDir, 'context', 'users-personas.md')), true);
+
     // lifecycle-aware projects layout
     assert.equal(
       existsSync(join(workspaceDir, 'projects', 'active', 'onboarding-discovery', 'README.md')),

@@ -43,10 +43,10 @@ export function registerSetupCommand(program: Command): void {
       header('Areté Setup');
       console.log('Configure integrations and credentials for your workspace.');
       console.log('');
-      info('For full interactive setup with inquirer prompts, use the legacy CLI.');
+      info('Use the commands below to configure integrations and credentials.');
       console.log('');
       console.log(chalk.dim('Quick config:'));
-      console.log(`  • ${chalk.cyan('arete integration add fathom')} - Add Fathom integration`);
+      console.log(`  • ${chalk.cyan('arete integration configure fathom')} - Configure Fathom integration`);
       console.log(`  • ${chalk.cyan('arete integration configure calendar')} - Configure calendar`);
       console.log('');
     });

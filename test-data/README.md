@@ -48,11 +48,11 @@ Scenarios should assert stable product signals, not fragile phrasing:
 ## Contents (current baseline)
 
 - **meetings/** — sample meetings with overlapping attendees, action items, decisions
-- **people/** — person files across internal and customer categories
+- **people/** — person files across internal, customer, and user categories
 - **plans/** — quarter and week plan files
 - **projects/** — lifecycle fixtures (`active/`, `archive/`) plus one legacy flat project for backward-compat seed testing
 - **memory/** — decisions and learnings (seeded to `.arete/memory/items/`)
-- **context/** — product/business context files
+- **context/** — product/business context files (`business-overview.md`, `business-model.md`, `competitive-landscape.md`, `products-services.md`, `users-personas.md`, plus `goals-strategy.md`)
 - **TEST-SCENARIOS.md** — prompt playbook copied to workspace root with expected outcomes
 - **MANUAL-SMOKE.md** — concise command checklist for manual seeded-workspace validation
 

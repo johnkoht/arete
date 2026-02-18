@@ -73,6 +73,18 @@ export class IntegrationService {
     const configsExist = await this.storage.exists(configsDir);
 
     const configured: Record<string, IntegrationStatus> = {};
+
+    // Primary source: workspace manifest integrations config
+    const manifestIntegrations = await this.getManifestIntegrations(workspaceRoot);
+    for (const [name, value] of Object.entries(manifestIntegrations)) {
+      if (!value || typeof value !== 'object') continue;
+      const status = (value as Record<string, unknown>).status;
+      if (typeof status === 'string') {
+        configured[name] = status as IntegrationStatus;
+      }
+    }
+
+    // Backward-compat source: IDE integration config files
     if (configsExist) {
       const files = await this.storage.list(configsDir, {
         extensions: ['.yaml'],
@@ -80,11 +92,16 @@ export class IntegrationService {
       for (const filePath of files) {
         const name = filePath.split(/[/\\]/).pop()?.replace(/\.yaml$/, '') ?? '';
         const content = await this.storage.read(filePath);
-        if (content) {
-          try {
-            const parsed = parseYaml(content) as Record<string, string>;
-            configured[name] = (parsed.status as IntegrationStatus) ?? 'inactive';
-          } catch {
+        if (!content) continue;
+
+        try {
+          const parsed = parseYaml(content) as Record<string, string>;
+          const status = (parsed.status as IntegrationStatus) ?? 'inactive';
+          if (!configured[name] || status === 'active') {
+            configured[name] = status;
+          }
+        } catch {
+          if (!configured[name]) {
             configured[name] = 'inactive';
           }
         }
@@ -186,11 +203,40 @@ export class IntegrationService {
     };
   }
 
+  private async getManifestIntegrations(
+    workspaceRoot: string,
+  ): Promise<Record<string, unknown>> {
+    const configPath = getWorkspaceConfigPath(workspaceRoot);
+    const exists = await this.storage.exists(configPath);
+    if (!exists) return {};
+
+    const content = await this.storage.read(configPath);
+    if (!content) return {};
+
+    try {
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      const integrations = parsed.integrations;
+      if (!integrations || typeof integrations !== 'object') return {};
+      return integrations as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+
   private async getIntegrationStatus(
     workspaceRoot: string,
     integration: string
   ): Promise<IntegrationStatus> {
     if (integration === 'fathom') {
+      const manifestIntegrations = await this.getManifestIntegrations(workspaceRoot);
+      const manifestCfg = manifestIntegrations.fathom;
+      if (manifestCfg && typeof manifestCfg === 'object') {
+        const status = (manifestCfg as Record<string, unknown>).status;
+        if (typeof status === 'string') {
+          return status as IntegrationStatus;
+        }
+      }
+
       const paths = this.getPaths(workspaceRoot);
       const configPath = join(paths.integrations, 'configs', 'fathom.yaml');
       const exists = await this.storage.exists(configPath);

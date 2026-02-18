@@ -83,15 +83,42 @@ export function registerIntegrationCommands(program: Command): void {
         }
 
         if (name === 'calendar') {
+          const selectedCalendars = (opts.calendars ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+
+          const calendarConfig: Record<string, unknown> = {
+            provider: 'macos',
+            status: 'active',
+          };
+
+          if (opts.all) {
+            calendarConfig.calendars = [];
+          } else if (selectedCalendars.length > 0) {
+            calendarConfig.calendars = selectedCalendars;
+          }
+
+          await services.integrations.configure(root, name, calendarConfig);
+
           if (opts.json) {
             console.log(
               JSON.stringify({
-                success: false,
-                error: 'Calendar configure requires interactive mode or --calendars/--all. Use legacy CLI.',
+                success: true,
+                integration: name,
+                provider: 'macos',
+                calendars: opts.all ? 'all' : selectedCalendars,
               }),
             );
           } else {
-            info('For full calendar configuration, use the legacy CLI: arete integration configure calendar');
+            success('calendar integration configured');
+            if (opts.all) {
+              info('Calendar scope: all calendars');
+            } else if (selectedCalendars.length > 0) {
+              info(`Calendar scope: ${selectedCalendars.join(', ')}`);
+            } else {
+              info('Calendar scope: provider configured (add --calendars or --all to set scope)');
+            }
           }
           return;
         }

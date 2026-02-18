@@ -94,5 +94,14 @@ describe('install command', () => {
       assert.ok(existsSync(join(tmpDir, 'projects')), 'projects/ should exist');
       assert.ok(existsSync(join(tmpDir, 'people')), 'people/ should exist');
     });
+
+    it('creates credentials example file', () => {
+      runCli(['install', tmpDir, '--json']);
+
+      const examplePath = join(tmpDir, '.credentials', 'credentials.yaml.example');
+      assert.ok(existsSync(examplePath), '.credentials/credentials.yaml.example should exist');
+      const content = readFileSync(examplePath, 'utf8');
+      assert.ok(content.includes('fathom:'), 'credentials example should include fathom section');
+    });
   });
 });
