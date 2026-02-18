@@ -30,6 +30,7 @@ import { registerPullCommand } from './commands/pull.js';
 import { registerMeetingCommands } from './commands/meeting.js';
 import { registerTemplateCommands } from './commands/template.js';
 import { registerSeedCommand } from './commands/seed.js';
+import { registerOnboardCommand } from './commands/onboard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,6 +47,7 @@ program
     `
 ${chalk.bold('Setup & Workspace')}
   install [directory]              Initialize workspace
+  onboard                          Quick identity setup (name, email, company)
   setup                            Configure API keys and credentials
   update                           Update skills, tools, and integrations
   status                           Check workspace health
@@ -88,6 +90,7 @@ ${chalk.bold('Meetings & Templates')}
 
 // Register commands
 registerInstallCommand(program);
+registerOnboardCommand(program);
 registerSetupCommand(program);
 registerUpdateCommand(program);
 registerStatusCommand(program);

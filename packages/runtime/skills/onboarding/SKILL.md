@@ -56,6 +56,14 @@ First, a few questions to understand your situation...
 
 ### Discovery Questions
 
+**Q0: Identity (Required)**
+> Before we dive in, let me get to know you:
+> - What's your name?
+> - What's your work email?
+> - What company are you at? (or share your company website)
+
+*This helps personalize your experience and enables smarter meeting prep later.*
+
 **Q1: Data Sources**
 > What data sources do you have access to?
 > - [ ] Calendar (meetings scheduled)
@@ -141,36 +149,42 @@ After integration setup, fall back to Path B (guided input) for context.
 
 ---
 
-## Phase 3: Profile Capture (Contract Compliance)
+## Phase 3: Profile Storage (Contract Compliance)
 
-Before proceeding to first-win, capture minimal profile fields for downstream use:
+Profile fields are captured in Discovery (Q0). Store them immediately after discovery:
 
 **Required for Contract v1**:
 - `profile.name` — User's name (for personalization)
-- `profile.role` — User's role (PM, founder, etc.)
+- `profile.email` — Work email (for People Intelligence matching)
 - `profile.company` — Company name
+- `profile.role` — User's role (ask if not volunteered)
 
-**Capture approach**:
-```
-Quick question before we continue:
-- What's your name?
-- What's your role? (e.g., PM, founder, product lead)
-- What company are you at?
-```
+**Optional (ask during path routing if relevant)**:
+- `profile.website` — Company website URL (for domain extraction)
 
 Store in `context/profile.md`:
 ```markdown
 ---
 name: [Name]
-role: [Role]
+email: [Email]
 company: [Company]
+role: [Role]
+website: [URL if provided]
 created: [ISO date]
 ---
 
 # Profile
 
 Personal context for Areté personalization.
+
+## Identity
+- **Name**: [Name]
+- **Email**: [Email]
+- **Company**: [Company]
+- **Role**: [Role]
 ```
+
+**Note**: If user ran `arete onboard` CLI first, profile.md may already exist. Merge any new fields rather than overwriting.
 
 ---
 
@@ -250,7 +264,11 @@ This skill implements Contract v1 requirements:
 | Contract Field | Captured? | Location |
 |---|---|---|
 | `profile.name` | Yes | `context/profile.md` |
-| `profile.role` | Yes | `context/profile.md` |
+| `profile.email` | Yes | `context/profile.md` |
 | `profile.company` | Yes | `context/profile.md` |
+| `profile.role` | Yes | `context/profile.md` |
+| `profile.website` | Optional | `context/profile.md` |
 
 These fields enable downstream People Intelligence (Phase 2) functionality.
+
+**Email importance**: Used for internal vs external classification and entity matching in People Intelligence.
