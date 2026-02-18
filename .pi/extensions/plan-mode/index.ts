@@ -25,7 +25,7 @@ import { Type } from "@sinclair/typebox";
 import { Key } from "@mariozechner/pi-tui";
 import {
 	extractTodoItems,
-	isSafeCommand,
+	isAllowedInPlanMode,
 	markCompletedSteps,
 	isAwaitingUserResponse,
 	classifyPlanSize,
@@ -350,6 +350,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Convert the current plan to a PRD",
 		handler: async (args, ctx) => {
 			enableArtifactTool();
+			// PRD conversion writes files (dev/prds, prd.json), so temporarily allow normal tools.
+			pi.setActiveTools([...NORMAL_MODE_TOOLS, "save_plan_artifact"]);
 			await handlePrd(args, ctx, pi, state);
 			updateStatus(ctx);
 		},
@@ -390,7 +392,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (!state.planModeEnabled || event.toolName !== "bash") return;
 
 		const command = event.input.command as string;
-		if (!isSafeCommand(command)) {
+		if (!isAllowedInPlanMode(command, state.activeCommand)) {
 			return {
 				block: true,
 				reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
@@ -427,7 +429,18 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// Inject plan/execution context before agent starts
 	pi.on("before_agent_start", async () => {
 		if (state.planModeEnabled) {
-			const baseContext = `[PLAN MODE ACTIVE]
+			const inPrdConversion = state.activeCommand === "prd";
+			const baseContext = inPrdConversion
+				? `[PLAN MODE ACTIVE - PRD CONVERSION]
+You are converting a plan to PRD artifacts.
+
+Restrictions:
+- You can use normal file tools for artifact generation (read, bash, edit, write)
+- Bash should remain minimal and focused on creating PRD artifacts
+- Do not make unrelated code changes
+
+Generate PRD artifacts and keep output aligned to the active plan.`
+				: `[PLAN MODE ACTIVE]
 You are in plan mode - a read-only exploration mode for safe code analysis.
 
 Restrictions:
@@ -584,6 +597,11 @@ After completing a step, include a [DONE:n] tag in your response.
 		}
 
 		if (!state.planModeEnabled || !ctx.hasUI) return;
+
+		if (completedCommand === "prd") {
+			disableArtifactTool();
+			pi.setActiveTools(PLAN_MODE_TOOLS);
+		}
 
 		// Extract todos from last assistant message
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);

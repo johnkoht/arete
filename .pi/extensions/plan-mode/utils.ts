@@ -104,6 +104,17 @@ export function isSafeCommand(command: string): boolean {
 	return !isDestructive && isSafe;
 }
 
+/**
+ * During PRD conversion we permit minimal write-oriented bash needed for file scaffolding.
+ * All other plan-mode turns remain read-only.
+ */
+export function isAllowedInPlanMode(command: string, activeCommand: string | null): boolean {
+	if (activeCommand === "prd") {
+		return isSafeCommand(command) || /^\s*mkdir\s+-p\b/.test(command);
+	}
+	return isSafeCommand(command);
+}
+
 export interface TodoItem {
 	step: number;
 	text: string;

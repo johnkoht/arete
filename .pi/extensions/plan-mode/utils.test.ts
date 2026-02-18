@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
 	isSafeCommand,
+	isAllowedInPlanMode,
 	extractTodoItems,
 	cleanStepText,
 	extractDoneSteps,
@@ -48,6 +49,21 @@ describe("isSafeCommand", () => {
 
 	it("allows npm run test:all", () => {
 		assert.equal(isSafeCommand("npm run test:all"), true);
+	});
+});
+
+describe("isAllowedInPlanMode", () => {
+	it("allows safe read-only commands during normal plan mode", () => {
+		assert.equal(isAllowedInPlanMode("ls -la", null), true);
+	});
+
+	it("allows mkdir -p only during prd command", () => {
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", "prd"), true);
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", null), false);
+	});
+
+	it("still blocks dangerous commands during prd command", () => {
+		assert.equal(isAllowedInPlanMode("rm -rf /", "prd"), false);
 	});
 });
 
