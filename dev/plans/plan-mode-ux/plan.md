@@ -1,11 +1,11 @@
 ---
 title: Plan Mode Ux
 slug: plan-mode-ux
-status: in-progress
+status: completed
 size: medium
 created: 2026-02-18T04:36:21.546Z
-updated: 2026-02-18T05:25:57.831Z
-completed: null
+updated: 2026-02-18T05:39:56.000Z
+completed: 2026-02-18T05:39:56.000Z
 blocked_reason: null
 previous_status: null
 has_review: true
