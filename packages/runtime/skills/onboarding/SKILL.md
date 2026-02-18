@@ -56,36 +56,70 @@ First, a few questions to understand your situation...
 
 ### Discovery Questions
 
-**Q0: Identity (Required)**
-> Before we dive in, let me get to know you:
-> - What's your name?
-> - What's your work email?
-> - What company are you at? (or share your company website)
+Present questions with numbered options. Users can respond with:
+- Full text answers
+- Shorthand like "Q1: 1,3" to select options 1 and 3
+- Just numbers if context is clear (e.g., "1 and 3")
 
-*This helps personalize your experience and enables smarter meeting prep later.*
+---
+
+**Q0: Identity** *(Required — skip if user ran `arete onboard` CLI)*
+
+```
+Before we dive in, let me get to know you:
+  a) What's your name?
+  b) What's your work email?
+  c) What company are you at?
+```
+
+*Check if `context/profile.md` exists with real values. If so, greet by name and skip to Q1.*
+
+---
 
 **Q1: Data Sources**
-> What data sources do you have access to?
-> - [ ] Calendar (meetings scheduled)
-> - [ ] Meeting recordings (Fathom, Grain, etc.)
-> - [ ] Existing docs/notes (strategy docs, PRDs, research)
-> - [ ] Company website
-> - [ ] None yet - starting fresh
+
+```
+What data sources do you have access to? (select all that apply)
+
+  1. Calendar (meetings scheduled)
+  2. Meeting recordings (Fathom, Grain, etc.)
+  3. Existing docs/notes (strategy docs, PRDs, research)
+  4. Company website I can share
+  5. None yet - starting fresh
+
+Reply with numbers (e.g., "1, 3") or "Q1: 1, 3"
+```
+
+---
 
 **Q2: Immediate Need**
-> What do you want to accomplish first?
-> - [ ] Prep for upcoming meetings
-> - [ ] Document product strategy
-> - [ ] Organize existing research
-> - [ ] Build a roadmap
-> - [ ] Not sure - want to explore
+
+```
+What do you want to accomplish first?
+
+  1. Prep for upcoming meetings
+  2. Document product strategy
+  3. Organize existing research
+  4. Build a roadmap
+  5. Not sure - want to explore
+
+Reply with a number or describe what you need.
+```
+
+---
 
 **Q3: Context Readiness**
-> Do you have existing content you can share now?
-> - [ ] Yes, I have docs/notes to paste or drop
-> - [ ] Yes, I have a company website URL
-> - [ ] No, but I can answer questions
-> - [ ] I need time to gather materials
+
+```
+Do you have existing content you can share now?
+
+  1. Yes, I have docs/notes to paste or drop
+  2. Yes, I have a company website URL
+  3. No, but I can answer questions now
+  4. I need time to gather materials
+
+Reply with a number (e.g., "Q3: 1") or just describe your situation.
+```
 
 ---
 
@@ -93,36 +127,51 @@ First, a few questions to understand your situation...
 
 Based on discovery answers, route to the appropriate path:
 
-### Path A: Data Dump (Context Dump)
-**Triggers**: User has docs, website URL, or content to share
+### Path Routing Logic
 
-Route to `rapid-context-dump` skill with handoff:
+| Q1 Answer | Q3 Answer | Route to |
+|-----------|-----------|----------|
+| Has docs (3) or website (4) | Ready to share (1, 2) | **Path A** |
+| Has calendar/recordings (1, 2) | Not ready (3, 4) | **Path C** |
+| None/starting fresh (5) | Any | **Path B** |
+| Any | Can answer questions (3) | **Path B** |
+
+---
+
+### Path A: Data Dump (Context Dump)
+**Triggers**: Q1 includes 3 or 4, AND Q3 is 1 or 2
 
 ```
 Perfect! Let's get your context into the workspace.
 
-I'll hand you off to the context dump flow. You can:
-- Paste content directly
-- Share your company website URL
-- Drop files into inputs/onboarding-dump/
+You can:
+  1. Paste content directly in chat
+  2. Share your company website URL
+  3. Drop files into inputs/onboarding-dump/ folder
 
-[Invoke rapid-context-dump skill]
+Which would you like to start with?
 ```
 
-After context dump completes, return here for first-win.
+Route to `rapid-context-dump` skill. After completion, return for first-win.
+
+---
 
 ### Path B: Guided Input
-**Triggers**: User doesn't have docs but can answer questions now
+**Triggers**: Q3 is 3 (can answer questions), OR Q1 is 5 (starting fresh)
 
 Ask 5-7 structured questions to build context:
 
-1. **Company/Product**: What's your company or product?
-2. **Users**: Who are your users? What problems do they have?
-3. **Value Prop**: What problem does your product solve?
-4. **Goals**: What are your top 2-3 goals this quarter?
-5. **Competitors**: Who are your main competitors?
-6. **Team**: Who do you work with closely? (optional)
-7. **Challenges**: What's your biggest PM challenge right now? (optional)
+```
+I'll ask a few questions to build your context. Answer what you can:
+
+  B1. What's your company/product in one sentence?
+  B2. Who are your users? What problems do they have?
+  B3. What's your top goal this quarter?
+  B4. Who are your main competitors? (optional)
+  B5. What's your biggest PM challenge right now? (optional)
+
+Take them one at a time, or answer several at once.
+```
 
 From answers, draft:
 - `context/business-overview.md`
@@ -131,18 +180,18 @@ From answers, draft:
 
 Mark drafts with `[DRAFT - please review]` header.
 
-### Path C: Integration First
-**Triggers**: User has calendar/Fathom but no docs ready
+---
 
-Guide integration setup:
+### Path C: Integration First
+**Triggers**: Q1 includes 1 or 2 (calendar/recordings), AND Q3 is 3 or 4 (not ready with docs)
 
 ```
 Let's connect your integrations first, then add context.
 
-1. Run: arete configure calendar
-2. Once connected: arete pull calendar --days 7
+  1. Run: arete integration configure calendar
+  2. Then: arete pull calendar --days 7
 
-After that, I'll help you add business context.
+Let me know when you've done that, or if you need help.
 ```
 
 After integration setup, fall back to Path B (guided input) for context.
