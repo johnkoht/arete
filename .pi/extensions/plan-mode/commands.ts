@@ -28,6 +28,13 @@ import {
 	type PlanSize,
 	type TodoItem,
 } from "./utils.js";
+
+// ────────────────────────────────────────────────────────────
+// Phase type for linear pipeline flow
+// ────────────────────────────────────────────────────────────
+
+/** Pipeline phases for linear flow control */
+export type Phase = "plan" | "prd" | "pre-mortem" | "review" | "build" | "done";
 import { getTemplate, getTemplates, getTemplateOptions } from "./templates.js";
 
 // ────────────────────────────────────────────────────────────
@@ -40,7 +47,7 @@ export interface PlanModeState {
 	planModeEnabled: boolean;
 	executionMode: boolean;
 	todoItems: TodoItem[];
-	// New — plan lifecycle
+	// Plan lifecycle
 	currentSlug: string | null;
 	planSize: PlanSize | null;
 	planText: string;
@@ -48,6 +55,9 @@ export interface PlanModeState {
 	reviewRun: boolean;
 	prdConverted: boolean;
 	postMortemRun: boolean;
+	// Phase tracking (linear flow)
+	currentPhase: Phase;       // Where user is in linear flow (controls menus)
+	activeCommand: string | null; // Which command is running (controls prompt injection)
 }
 
 /** Create a fresh default state */
@@ -63,6 +73,8 @@ export function createDefaultState(): PlanModeState {
 		reviewRun: false,
 		prdConverted: false,
 		postMortemRun: false,
+		currentPhase: "plan",
+		activeCommand: null,
 	};
 }
 

@@ -47,8 +47,9 @@ const PIPELINE_STAGES: PipelineStage[] = [
 function getCurrentStage(state: WidgetState): PipelineStage["key"] {
 	if (!state.planModeEnabled && !state.executionMode && state.status === "completed") return "done";
 	if (state.executionMode || state.status === "in-progress") return "build";
-	if (state.status === "reviewed" || state.status === "approved") return "pre-mortem";
-	if (state.has_review || state.status === "planned") return "review";
+	if (state.has_pre_mortem || state.has_prd || state.status === "approved") return "build";
+	if (state.has_review || state.status === "reviewed" || state.status === "planned") return "pre-mortem";
+	if (state.planSize || state.status === "draft") return "review";
 	return "plan";
 }
 
@@ -63,11 +64,23 @@ function getCompletedStages(state: WidgetState): Set<PipelineStage["key"]> {
 		completed.add("plan");
 	}
 
-	if (state.has_review) {
+	if (
+		state.has_review ||
+		state.status === "reviewed" ||
+		state.status === "approved" ||
+		state.status === "in-progress" ||
+		state.status === "completed"
+	) {
 		completed.add("review");
 	}
 
-	if (state.has_pre_mortem) {
+	if (
+		state.has_pre_mortem ||
+		state.has_prd ||
+		state.status === "approved" ||
+		state.status === "in-progress" ||
+		state.status === "completed"
+	) {
 		completed.add("pre-mortem");
 	}
 
@@ -98,6 +111,7 @@ export function renderFooterStatus(state: WidgetState, theme: WidgetTheme): stri
 		const extras: string[] = [];
 		if (state.has_pre_mortem) extras.push("pre-mortem ✓");
 		if (state.has_review) extras.push("review ✓");
+		if (state.has_prd) extras.push("PRD ✓");
 
 		const sizeInfo = `${state.todosTotal} steps, ${state.planSize}`;
 		const extrasStr = extras.length > 0 ? `, ${extras.join(", ")}` : "";

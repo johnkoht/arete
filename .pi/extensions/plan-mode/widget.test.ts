@@ -58,6 +58,15 @@ describe("renderFooterStatus", () => {
 		assert.ok(result.includes("pre-mortem ✓"));
 	});
 
+	it("shows PRD checkmark when converted", () => {
+		const result = renderFooterStatus(
+			makeState({ planModeEnabled: true, planSize: "large", todosTotal: 6, has_prd: true }),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(result.includes("PRD ✓"));
+	});
+
 	it("shows execution progress", () => {
 		const result = renderFooterStatus(
 			makeState({ executionMode: true, todosCompleted: 3, todosTotal: 5 }),
@@ -85,23 +94,49 @@ describe("renderLifecycleWidget", () => {
 		assert.ok(lines[0].includes("Done"));
 	});
 
-	it("highlights build stage during execution", () => {
-		const lines = renderLifecycleWidget(makeState({ executionMode: true, status: "in-progress" }), mockTheme);
-		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
-	});
-
-	it("shows completed stages with checkmark", () => {
+	it("moves to pre-mortem stage after review", () => {
 		const lines = renderLifecycleWidget(
 			makeState({
 				planModeEnabled: true,
 				planSize: "medium",
-				status: "approved",
 				has_review: true,
 			}),
 			mockTheme,
 		);
-		assert.ok(lines[0].includes("Plan ✓"));
+		assert.ok(lines[0].includes("[accent]🛡 Pre-mortem[/accent]"));
 		assert.ok(lines[0].includes("Review ✓"));
+	});
+
+	it("moves to build stage after pre-mortem", () => {
+		const lines = renderLifecycleWidget(
+			makeState({
+				planModeEnabled: true,
+				planSize: "medium",
+				has_review: true,
+				has_pre_mortem: true,
+			}),
+			mockTheme,
+		);
+		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
+		assert.ok(lines[0].includes("Pre-mortem ✓"));
+	});
+
+	it("moves to build stage after PRD conversion", () => {
+		const lines = renderLifecycleWidget(
+			makeState({
+				planModeEnabled: true,
+				planSize: "large",
+				has_review: true,
+				has_prd: true,
+			}),
+			mockTheme,
+		);
+		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
+	});
+
+	it("highlights build stage during execution", () => {
+		const lines = renderLifecycleWidget(makeState({ executionMode: true, status: "in-progress" }), mockTheme);
+		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
 	});
 
 	it("shows done stage for completed plans", () => {

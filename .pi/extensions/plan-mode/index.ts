@@ -41,6 +41,7 @@ import {
 	handlePrd,
 	handleBuild,
 	type PlanModeState,
+	type Phase,
 	createDefaultState,
 } from "./commands.js";
 import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter } from "./persistence.js";
@@ -131,6 +132,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		state.todoItems = [];
 
 		if (state.planModeEnabled) {
+			// Initialize phase to "plan" when entering plan mode
+			state.currentPhase = "plan";
+			state.activeCommand = null;
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 			ctx.ui.notify(`Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
 		} else {
@@ -150,6 +154,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			preMortemRun: state.preMortemRun,
 			reviewRun: state.reviewRun,
 			prdConverted: state.prdConverted,
+			currentPhase: state.currentPhase,
+			activeCommand: state.activeCommand,
 		});
 	}
 
@@ -671,6 +677,8 @@ After completing a step, include a [DONE:n] tag in your response.
 						preMortemRun?: boolean;
 						reviewRun?: boolean;
 						prdConverted?: boolean;
+						currentPhase?: Phase;
+						activeCommand?: string | null;
 					};
 			  }
 			| undefined;
@@ -684,6 +692,8 @@ After completing a step, include a [DONE:n] tag in your response.
 			state.preMortemRun = planModeEntry.data.preMortemRun ?? state.preMortemRun;
 			state.reviewRun = planModeEntry.data.reviewRun ?? state.reviewRun;
 			state.prdConverted = planModeEntry.data.prdConverted ?? state.prdConverted;
+			state.currentPhase = planModeEntry.data.currentPhase ?? state.currentPhase;
+			state.activeCommand = planModeEntry.data.activeCommand ?? state.activeCommand;
 		}
 
 		// On resume: re-scan messages to rebuild completion state
