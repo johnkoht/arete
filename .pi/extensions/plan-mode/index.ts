@@ -50,7 +50,6 @@ import { loadAgentConfig, getAgentModel, getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderLifecycleWidget, type WidgetState } from "./widget.js";
 import {
 	deriveActiveRole,
-	formatCompactExecutionStatus,
 	resolveExecutionProgress,
 } from "./execution-progress.js";
 
@@ -113,6 +112,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			todosTotal: state.todoItems.length,
 			activeRole: deriveActiveRole(state.activeCommand),
 			executionProgress,
+			planId: plan?.frontmatter.slug ?? state.currentSlug,
 		};
 	}
 
@@ -130,12 +130,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			widgetState.executionProgress.source === "prd" &&
 			widgetState.executionProgress.total > 0
 		) {
-			const compactLine = formatCompactExecutionStatus(
-				widgetState.activeRole,
-				widgetState.executionProgress,
-				64,
-			);
-			ctx.ui.setWidget("plan-todos", [ctx.ui.theme.fg("accent", `⚡ ${compactLine}`)]);
+			const planLabel = widgetState.planId ? `Plan: ${widgetState.planId}` : "Plan execution";
+			ctx.ui.setWidget("plan-todos", [ctx.ui.theme.fg("muted", planLabel)]);
 		} else if (state.executionMode && state.todoItems.length > 0) {
 			const lines = state.todoItems.map((item) => {
 				if (item.completed) {

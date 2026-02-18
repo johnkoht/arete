@@ -27,6 +27,7 @@ export interface WidgetState {
 	todosTotal: number;
 	activeRole: ExecutionRole;
 	executionProgress: ExecutionProgressSnapshot | null;
+	planId: string | null;
 }
 
 /** Minimal theme interface for widget rendering (subset of Pi's Theme) */
@@ -132,15 +133,17 @@ function getCompletedStages(state: WidgetState): Set<PipelineStage["key"]> {
  * Render footer status text for the current lifecycle phase.
  */
 export function renderFooterStatus(state: WidgetState, theme: WidgetTheme): string | undefined {
+	const planPrefix = state.planId ? `${state.planId} · ` : "";
+
 	// Execution mode: show compact PRD status when PRD progress is available.
 	if (state.executionMode && state.executionProgress && state.executionProgress.total > 0) {
 		if (state.executionProgress.source === "prd") {
 			return theme.fg(
 				"accent",
-				`⚡ ${formatCompactExecutionStatus(state.activeRole, state.executionProgress, 42)}`,
+				`⚡ ${planPrefix}${formatCompactExecutionStatus(state.activeRole, state.executionProgress, 42)}`,
 			);
 		}
-		return theme.fg("accent", `⚡ ${state.todosCompleted}/${state.todosTotal}`);
+		return theme.fg("accent", `⚡ ${planPrefix}${state.todosCompleted}/${state.todosTotal}`);
 	}
 
 	// Completed
@@ -157,12 +160,13 @@ export function renderFooterStatus(state: WidgetState, theme: WidgetTheme): stri
 
 		const sizeInfo = `${state.todosTotal} steps, ${state.planSize}`;
 		const extrasStr = extras.length > 0 ? `, ${extras.join(", ")}` : "";
-		return theme.fg("warning", `📋 plan (${sizeInfo}${extrasStr})`);
+		const planLabel = state.planId ?? "plan";
+		return theme.fg("warning", `📋 ${planLabel} (${sizeInfo}${extrasStr})`);
 	}
 
 	// Plan mode (no plan yet)
 	if (state.planModeEnabled) {
-		return theme.fg("warning", "⏸ plan");
+		return theme.fg("warning", `⏸ ${state.planId ?? "plan"}`);
 	}
 
 	// Not in plan mode
@@ -196,5 +200,9 @@ export function renderLifecycleWidget(state: WidgetState, theme: WidgetTheme): s
 		parts.push(stageText);
 	}
 
-	return [parts.join(" → ")];
+	const lines = [parts.join(" → ")];
+	if (state.planId) {
+		lines.push(theme.fg("muted", `Plan: ${state.planId}`));
+	}
+	return lines;
 }

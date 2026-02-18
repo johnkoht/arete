@@ -26,6 +26,7 @@ function makeState(overrides: Partial<WidgetState> = {}): WidgetState {
 		todosTotal: 0,
 		activeRole: "PM",
 		executionProgress: null,
+		planId: null,
 		...overrides,
 	};
 }
@@ -50,6 +51,15 @@ describe("renderFooterStatus", () => {
 		);
 		assert.ok(result);
 		assert.ok(result.includes("4 steps, medium"));
+	});
+
+	it("shows plan id when available", () => {
+		const result = renderFooterStatus(
+			makeState({ planModeEnabled: true, planSize: "medium", todosTotal: 4, planId: "planning-system-refinement" }),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(result.includes("planning-system-refinement"));
 	});
 
 	it("shows pre-mortem checkmark when completed", () => {
@@ -139,11 +149,20 @@ describe("renderFooterStatus", () => {
 describe("renderLifecycleWidget", () => {
 	it("renders pipeline with plan as current stage", () => {
 		const lines = renderLifecycleWidget(makeState({ planModeEnabled: true, currentPhase: "plan" }), mockTheme);
-		assert.equal(lines.length, 1);
+		assert.ok(lines.length >= 1);
 		assert.ok(lines[0].includes("Plan"));
 		assert.ok(lines[0].includes("PRD"));
 		assert.ok(lines[0].includes("Done"));
 		assert.ok(lines[0].includes("→"));
+	});
+
+	it("adds plan id line when available", () => {
+		const lines = renderLifecycleWidget(
+			makeState({ planModeEnabled: true, currentPhase: "plan", planId: "planning-system-refinement" }),
+			mockTheme,
+		);
+		assert.equal(lines.length, 2);
+		assert.ok(lines[1].includes("Plan: planning-system-refinement"));
 	});
 
 	it("highlights PRD stage when currentPhase=prd", () => {
