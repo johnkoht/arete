@@ -6,12 +6,14 @@
  */
 
 import type { PlanSize, PlanStatus } from "./persistence.js";
+import type { Phase } from "./utils.js";
 
 /** State for widget rendering */
 export interface WidgetState {
 	planModeEnabled: boolean;
 	planSize: PlanSize | null;
 	status: PlanStatus | null;
+	currentPhase: Phase;
 	has_review: boolean;
 	has_pre_mortem: boolean;
 	has_prd: boolean;
@@ -30,13 +32,14 @@ export interface WidgetTheme {
 interface PipelineStage {
 	emoji: string;
 	label: string;
-	key: "plan" | "review" | "pre-mortem" | "build" | "done";
+	key: "plan" | "prd" | "pre-mortem" | "review" | "build" | "done";
 }
 
 const PIPELINE_STAGES: PipelineStage[] = [
 	{ emoji: "📋", label: "Plan", key: "plan" },
-	{ emoji: "🔍", label: "Review", key: "review" },
+	{ emoji: "📄", label: "PRD", key: "prd" },
 	{ emoji: "🛡", label: "Pre-mortem", key: "pre-mortem" },
+	{ emoji: "🔍", label: "Review", key: "review" },
 	{ emoji: "⚡", label: "Build", key: "build" },
 	{ emoji: "📊", label: "Done", key: "done" },
 ];
@@ -45,11 +48,31 @@ const PIPELINE_STAGES: PipelineStage[] = [
  * Determine the current pipeline stage from widget state.
  */
 function getCurrentStage(state: WidgetState): PipelineStage["key"] {
+	// Primary source of truth: currentPhase
+	switch (state.currentPhase) {
+		case "plan":
+			return "plan";
+		case "prd":
+			return "prd";
+		case "pre-mortem":
+			return "pre-mortem";
+		case "review":
+			return "review";
+		case "build":
+			return "build";
+		case "done":
+			return "done";
+		default:
+			break;
+	}
+
+	// Legacy fallback for older persisted state
 	if (!state.planModeEnabled && !state.executionMode && state.status === "completed") return "done";
 	if (state.executionMode || state.status === "in-progress") return "build";
-	if (state.has_pre_mortem || state.has_prd || state.status === "approved") return "build";
-	if (state.has_review || state.status === "reviewed" || state.status === "planned") return "pre-mortem";
-	if (state.planSize || state.status === "draft") return "review";
+	if (state.has_review || state.status === "reviewed") return "review";
+	if (state.has_pre_mortem) return "pre-mortem";
+	if (state.has_prd || state.status === "approved") return "prd";
+	if (state.planSize || state.status === "draft" || state.status === "planned") return "plan";
 	return "plan";
 }
 
@@ -59,32 +82,38 @@ function getCurrentStage(state: WidgetState): PipelineStage["key"] {
 function getCompletedStages(state: WidgetState): Set<PipelineStage["key"]> {
 	const completed = new Set<PipelineStage["key"]>();
 
-	// Plan is completed once we have a plan (planSize is set or status beyond draft)
-	if (state.planSize || (state.status && state.status !== "draft")) {
-		completed.add("plan");
+	// Phase progression is primary source of completion
+	const phaseOrder: Phase[] = ["plan", "prd", "pre-mortem", "review", "build", "done"];
+	const stageByPhase: Record<Phase, PipelineStage["key"]> = {
+		plan: "plan",
+		prd: "prd",
+		"pre-mortem": "pre-mortem",
+		review: "review",
+		build: "build",
+		done: "done",
+	};
+
+	const currentIndex = phaseOrder.indexOf(state.currentPhase);
+	if (currentIndex >= 0) {
+		for (let i = 0; i < currentIndex; i++) {
+			completed.add(stageByPhase[phaseOrder[i]]);
+		}
+		if (state.currentPhase === "done") {
+			completed.add("done");
+		}
 	}
 
-	if (
-		state.has_review ||
-		state.status === "reviewed" ||
-		state.status === "approved" ||
-		state.status === "in-progress" ||
-		state.status === "completed"
-	) {
-		completed.add("review");
-	}
+	// Completion flags can mark stages complete independent of phase
+	if (state.has_prd) completed.add("prd");
+	if (state.has_pre_mortem) completed.add("pre-mortem");
+	if (state.has_review) completed.add("review");
 
-	if (
-		state.has_pre_mortem ||
-		state.has_prd ||
-		state.status === "approved" ||
-		state.status === "in-progress" ||
-		state.status === "completed"
-	) {
-		completed.add("pre-mortem");
-	}
-
+	// Legacy fallback from status
 	if (state.status === "completed") {
+		completed.add("plan");
+		completed.add("prd");
+		completed.add("pre-mortem");
+		completed.add("review");
 		completed.add("build");
 		completed.add("done");
 	}

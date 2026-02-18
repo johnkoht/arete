@@ -90,7 +90,8 @@ export function canTransition(from: PlanStatus, to: PlanStatus): boolean {
 export function getGateRequirements(size: PlanSize): GateRequirement[] {
 	const reqs = GATE_REQUIREMENTS[size];
 	if (!reqs) return [];
-	return [reqs.review, reqs.preMortem, reqs.prd];
+	// Pipeline order: PRD → pre-mortem → review
+	return [reqs.prd, reqs.preMortem, reqs.review];
 }
 
 /**
@@ -127,14 +128,15 @@ export function getMissingGates(size: PlanSize, gates: PlanGates): GateRequireme
 
 	const missing: GateRequirement[] = [];
 
-	if (!gates.has_review) {
-		missing.push(reqs.review);
+	// Pipeline order: PRD → pre-mortem → review
+	if (!gates.has_prd) {
+		missing.push(reqs.prd);
 	}
 	if (!gates.has_pre_mortem) {
 		missing.push(reqs.preMortem);
 	}
-	if (!gates.has_prd) {
-		missing.push(reqs.prd);
+	if (!gates.has_review) {
+		missing.push(reqs.review);
 	}
 
 	return missing;

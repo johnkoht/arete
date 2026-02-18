@@ -172,6 +172,50 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
 }
 
 /**
+ * Extract relevant content for a lifecycle phase from an agent response.
+ * Falls back to full response if no expected headers are found.
+ */
+export function extractPhaseContent(response: string, phase: Phase): string {
+	const text = response.trim();
+	if (!text) return "";
+
+	const startPatternsByPhase: Record<Phase, RegExp[]> = {
+		plan: [/^\*{0,2}Plan:\*{0,2}\s*$/im, /^Plan:\s*$/im],
+		prd: [/^#\s*PRD\b/im, /^##\s*PRD\b/im],
+		"pre-mortem": [/^##\s*Pre-Mortem\b/im, /^###\s*Risk\b/im],
+		review: [/^##\s*Review\b/im, /^#\s*Review\b/im],
+		build: [],
+		done: [],
+	};
+
+	const endMarkers = [/^##\s+/gm, /^#\s+/gm];
+	const startPatterns = startPatternsByPhase[phase] ?? [];
+
+	for (const pattern of startPatterns) {
+		const match = pattern.exec(text);
+		if (!match || match.index < 0) continue;
+
+		const startIndex = match.index;
+		const afterStart = text.slice(startIndex + match[0].length);
+		const localEndCandidates = endMarkers
+			.map((endPattern) => {
+				const endMatch = endPattern.exec(afterStart);
+				return endMatch ? endMatch.index : -1;
+			})
+			.filter((idx) => idx > 0);
+
+		const endOffset = localEndCandidates.length > 0 ? Math.min(...localEndCandidates) : -1;
+		const extracted = endOffset > 0
+			? text.slice(startIndex, startIndex + match[0].length + endOffset)
+			: text.slice(startIndex);
+		const trimmed = extracted.trim();
+		if (trimmed) return trimmed;
+	}
+
+	return text;
+}
+
+/**
  * Detect whether the assistant is asking for clarification and is likely
  * waiting for a user response before continuing the workflow.
  */
@@ -235,6 +279,9 @@ function isGenericPlanHeading(heading: string): boolean {
 /** Plan size classification */
 export type PlanSize = "tiny" | "small" | "medium" | "large";
 
+/** Pipeline phases for linear flow control (re-exported from commands.ts for convenience) */
+export type Phase = "plan" | "prd" | "pre-mortem" | "review" | "build" | "done";
+
 /** Keywords that indicate higher complexity */
 export const COMPLEXITY_KEYWORDS = [
 	"integration",
@@ -290,8 +337,75 @@ export interface WorkflowMenuState {
 	postMortemRun: boolean;
 }
 
+/** Result from getPhaseMenu: exactly two options (refine current, continue to next) */
+export interface PhaseMenuOptions {
+	refine: string | null;  // "Refine X" option, null if not applicable
+	next: string | null;    // "Continue to Y" option, null if at end
+}
+
+/**
+ * Get phase-based menu options for linear flow.
+ * Returns exactly two options: refine current phase, continue to next phase.
+ *
+ * @param phase - Current pipeline phase
+ * @param planSize - Plan size classification (affects routing: tiny/small skip PRD)
+ * @returns PhaseMenuOptions with refine and next labels
+ */
+export function getPhaseMenu(phase: Phase, planSize: PlanSize): PhaseMenuOptions {
+	switch (phase) {
+		case "plan":
+			// Tiny/small skip PRD → go directly to pre-mortem
+			if (planSize === "tiny" || planSize === "small") {
+				return {
+					refine: "Refine plan",
+					next: "Continue to pre-mortem",
+				};
+			}
+			// Medium/large go through PRD
+			return {
+				refine: "Refine plan",
+				next: "Continue to PRD",
+			};
+
+		case "prd":
+			return {
+				refine: "Refine PRD",
+				next: "Continue to pre-mortem",
+			};
+
+		case "pre-mortem":
+			return {
+				refine: "Refine pre-mortem",
+				next: planSize === "tiny" || planSize === "small"
+					? "Skip review → build"
+					: "Continue to review",
+			};
+
+		case "review":
+			return {
+				refine: "Refine review",
+				next: "Continue to build",
+			};
+
+		case "build":
+		case "done":
+			// No menu during build or after done
+			return {
+				refine: null,
+				next: null,
+			};
+
+		default:
+			return {
+				refine: null,
+				next: null,
+			};
+	}
+}
+
 /**
  * Get contextual menu options based on plan size and completed gates.
+ * @deprecated Use getPhaseMenu for linear flow. This function remains for backward compatibility.
  */
 export function getMenuOptions(state: WorkflowMenuState): string[] {
 	const { planSize, preMortemRun, reviewRun, prdConverted } = state;

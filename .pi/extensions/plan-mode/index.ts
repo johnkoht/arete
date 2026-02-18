@@ -29,7 +29,8 @@ import {
 	markCompletedSteps,
 	isAwaitingUserResponse,
 	classifyPlanSize,
-	getMenuOptions,
+	extractPhaseContent,
+	getPhaseMenu,
 	getPostExecutionMenuOptions,
 	suggestPlanName,
 	type TodoItem,
@@ -44,7 +45,7 @@ import {
 	type Phase,
 	createDefaultState,
 } from "./commands.js";
-import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter } from "./persistence.js";
+import { loadPlan, savePlan, savePlanArtifact, slugify, updatePlanFrontmatter } from "./persistence.js";
 import { loadAgentConfig, getAgentModel, getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderLifecycleWidget, type WidgetState } from "./widget.js";
 
@@ -89,6 +90,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			planModeEnabled: state.planModeEnabled,
 			planSize: state.planSize,
 			status: plan?.frontmatter.status ?? null,
+			currentPhase: state.currentPhase,
 			has_review: state.reviewRun,
 			has_pre_mortem: state.preMortemRun,
 			has_prd: state.prdConverted,
@@ -135,6 +137,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			// Initialize phase to "plan" when entering plan mode
 			state.currentPhase = "plan";
 			state.activeCommand = null;
+			state.isRefining = false;
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 			ctx.ui.notify(`Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
 		} else {
@@ -156,6 +159,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			prdConverted: state.prdConverted,
 			currentPhase: state.currentPhase,
 			activeCommand: state.activeCommand,
+			isRefining: state.isRefining,
 		});
 	}
 
@@ -213,6 +217,39 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const currentTools = pi.getActiveTools();
 		pi.setActiveTools(currentTools.filter((t) => t !== "save_plan_artifact"));
 		artifactToolActive = false;
+	}
+
+	function appendExtractionComment(content: string): string {
+		const timestamp = new Date().toISOString();
+		return `<!-- Extracted at ${timestamp} -->\n\n${content.trim()}`;
+	}
+
+	function autoSavePhaseArtifact(phase: Phase, responseText: string): void {
+		if (!state.currentSlug) return;
+		const extracted = extractPhaseContent(responseText, phase).trim();
+		if (!extracted) {
+			console.warn(`[plan-mode] Skipping ${phase} artifact save: extracted content was empty.`);
+			return;
+		}
+		const contentWithComment = appendExtractionComment(extracted);
+
+		if (phase === "plan") {
+			const plan = loadPlan(state.currentSlug);
+			if (plan) {
+				savePlan(state.currentSlug, { ...plan.frontmatter, updated: new Date().toISOString() }, contentWithComment);
+			}
+			return;
+		}
+
+		if (phase === "pre-mortem") {
+			savePlanArtifact(state.currentSlug, "pre-mortem.md", contentWithComment);
+			return;
+		}
+
+		if (phase === "review") {
+			savePlanArtifact(state.currentSlug, "review.md", contentWithComment);
+			return;
+		}
 	}
 
 	// ── Tool Registration ──────────────────────────────────
@@ -390,29 +427,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// Inject plan/execution context before agent starts
 	pi.on("before_agent_start", async () => {
 		if (state.planModeEnabled) {
-			// Try to inject PM agent prompt
-			const pmPrompt = getAgentPrompt("product-manager");
-			const agentContext = pmPrompt
-				? `\n\n## Product Manager Context\n\n${pmPrompt}`
-				: "";
-
-			// If there's an active plan, include its content
-			let planContext = "";
-			if (state.currentSlug) {
-				const plan = loadPlan(state.currentSlug);
-				if (plan) {
-					planContext = `\n\n## Active Plan: ${plan.frontmatter.title}\n\nStatus: ${plan.frontmatter.status} | Size: ${plan.frontmatter.size}\n\n${plan.content}`;
-				}
-			}
-
-			const preMortemGuidance = state.preMortemRun
-				? "- Pre-mortem is already complete for this plan. Do not ask to run it again unless the user explicitly asks or the plan materially changes."
-				: "- For Small/Medium/Large plans, offer a pre-mortem once before execution.";
-
-			return {
-				message: {
-					customType: "plan-mode-context",
-					content: `[PLAN MODE ACTIVE]
+			const baseContext = `[PLAN MODE ACTIVE]
 You are in plan mode - a read-only exploration mode for safe code analysis.
 
 Restrictions:
@@ -435,8 +450,45 @@ Do NOT attempt to make changes - just describe what you would do.
 **Arete workflow** (execution path decision tree):
 - **Tiny** (1-2 simple steps): Direct execution, quality gates ✓, skip pre-mortem
 - **Small** (2-3 moderate steps): Optional pre-mortem before build, then quality gates ✓. Offer "Capture learnings?" at end
-- **Medium/Large** (3+ steps or complex): If plan has 3+ steps, suggest converting to PRD via /skill:plan-to-prd for autonomous execution. Otherwise apply pre-mortem + quality gates + memory capture
-${preMortemGuidance}${agentContext}${planContext}`,
+- **Medium/Large** (3+ steps or complex): If plan has 3+ steps, suggest converting to PRD via /skill:plan-to-prd for autonomous execution. Otherwise apply pre-mortem + quality gates + memory capture`;
+
+			const preMortemGuidance = state.preMortemRun
+				? "- Pre-mortem is already complete for this plan. Do not ask to run it again unless the user explicitly asks or the plan materially changes."
+				: "- For Small/Medium/Large plans, offer a pre-mortem once before execution.";
+
+			// Select exactly one prompt based on active command
+			const promptRole =
+				state.activeCommand === "review"
+					? "reviewer"
+					: state.activeCommand === "pre-mortem" || state.activeCommand === "build"
+						? "orchestrator"
+						: "product-manager";
+			const promptTitle =
+				promptRole === "reviewer"
+					? "Reviewer Context"
+					: promptRole === "orchestrator"
+						? "Orchestrator Context"
+						: "Product Manager Context";
+			const selectedPrompt = getAgentPrompt(promptRole);
+			const agentPromptContext = selectedPrompt
+				? `\n\n## ${promptTitle}\n\n${selectedPrompt}`
+				: "";
+
+			// If there's an active plan, include its content
+			let planContext = "";
+			if (state.currentSlug) {
+				const plan = loadPlan(state.currentSlug);
+				if (plan) {
+					planContext = `\n\n## Active Plan: ${plan.frontmatter.title}\n\nStatus: ${plan.frontmatter.status} | Size: ${plan.frontmatter.size}\n\n${plan.content}`;
+				}
+			}
+
+			// Injection order: base context → agent prompt → plan content
+			return {
+				message: {
+					customType: "plan-mode-context",
+					content: `${baseContext}
+${preMortemGuidance}${agentPromptContext}${planContext}`,
 					display: false,
 				},
 			};
@@ -478,6 +530,9 @@ After completing a step, include a [DONE:n] tag in your response.
 
 	// Handle plan completion and plan mode UI
 	pi.on("agent_end", async (event, ctx) => {
+		const completedCommand = state.activeCommand;
+		state.activeCommand = null;
+
 		// Check if execution is complete
 		if (state.executionMode && state.todoItems.length > 0) {
 			if (state.todoItems.every((t) => t.completed)) {
@@ -497,6 +552,7 @@ After completing a step, include a [DONE:n] tag in your response.
 						status: "completed",
 						completed: new Date().toISOString(),
 					});
+					state.currentPhase = "done";
 				}
 
 				// Show post-execution menu
@@ -541,6 +597,15 @@ After completing a step, include a [DONE:n] tag in your response.
 				state.planSize = classifyPlanSize(extracted, text);
 			}
 			awaitingResponse = isAwaitingUserResponse(text);
+
+			// Auto-save artifacts from actual agent output
+			if (completedCommand === "pre-mortem") {
+				autoSavePhaseArtifact("pre-mortem", text);
+			} else if (completedCommand === "review") {
+				autoSavePhaseArtifact("review", text);
+			} else if (!completedCommand && state.currentPhase === "plan") {
+				autoSavePhaseArtifact("plan", text);
+			}
 		}
 
 		if (awaitingResponse) {
@@ -550,7 +615,7 @@ After completing a step, include a [DONE:n] tag in your response.
 			return;
 		}
 
-		// Show plan steps and smart menu
+		// Show plan steps and phase menu
 		if (state.todoItems.length > 0) {
 			const todoListText = state.todoItems
 				.map((t, i) => `${i + 1}. ☐ ${t.text}`)
@@ -564,87 +629,61 @@ After completing a step, include a [DONE:n] tag in your response.
 				{ triggerTurn: false },
 			);
 
-			// Show smart menu based on plan size and gates
-			const menuOptions = getMenuOptions({
-				planSize: state.planSize ?? "small",
-				preMortemRun: state.preMortemRun,
-				reviewRun: state.reviewRun,
-				prdConverted: state.prdConverted,
-				postMortemRun: state.postMortemRun,
-			});
-
-			const choice = await ctx.ui.select("Plan mode - what next?", menuOptions);
-
-			if (choice?.startsWith("Start build now") || choice?.startsWith("Execute") || choice?.includes("Execute")) {
-				state.planModeEnabled = false;
-				state.executionMode = state.todoItems.length > 0;
-				pi.setActiveTools(NORMAL_MODE_TOOLS);
+			if (state.isRefining) {
+				state.isRefining = false;
 				updateStatus(ctx);
+				persistState();
+				return;
+			}
 
-				const execMessage =
-					state.todoItems.length > 0
-						? `Execute the plan. Start with: ${state.todoItems[0].text}`
-						: "Execute the plan you just created.";
-				pi.sendMessage(
-					{ customType: "plan-mode-execute", content: execMessage, display: true },
-					{ triggerTurn: true },
-				);
-			} else if (choice === "Run pre-mortem (no code changes)") {
-				enableArtifactTool();
-				const saved = await ensurePlanSavedForGate(ctx, "running pre-mortem");
-				if (saved) {
-					await handlePreMortem("", ctx, pi, state);
-				} else {
-					disableArtifactTool();
-				}
-			} else if (choice === "Review the plan") {
-				enableArtifactTool();
-				const saved = await ensurePlanSavedForGate(ctx, "reviewing");
-				if (saved) {
-					await handleReview("", ctx, pi, state);
-				} else {
-					disableArtifactTool();
-				}
-			} else if (choice?.startsWith("Convert to PRD")) {
-				enableArtifactTool();
-				const saved = await ensurePlanSavedForGate(ctx, "converting to PRD");
-				if (saved) {
-					await handlePrd("", ctx, pi, state);
-				} else {
-					disableArtifactTool();
-				}
-			} else if (choice === "Save as draft") {
-				const { handlePlan: handlePlanCmd } = await import("./commands.js");
-				await handlePlanCmd("save", ctx, pi, state, () => togglePlanMode(ctx));
-			} else if (choice === "Refine the plan") {
-				const refinement = await ctx.ui.editor("Refine the plan:", "");
-				if (refinement?.trim()) {
-					pi.sendUserMessage(refinement.trim());
+			const phaseMenu = getPhaseMenu(state.currentPhase, state.planSize ?? "small");
+			const options = [phaseMenu.refine, phaseMenu.next].filter((v): v is string => v !== null);
+
+			if (options.length > 0) {
+				const choice = await ctx.ui.select("Plan mode - what next?", options);
+
+				if (choice === phaseMenu.refine && phaseMenu.refine) {
+					const prompt = `${phaseMenu.refine}:`;
+					const refinement = await ctx.ui.editor(prompt, "");
+					if (refinement?.trim()) {
+						state.isRefining = true;
+						pi.sendUserMessage(`Refinement for ${state.currentPhase}: ${refinement.trim()}`);
+					}
+				} else if (choice === "Continue to PRD") {
+					enableArtifactTool();
+					const saved = await ensurePlanSavedForGate(ctx, "continuing to PRD");
+					if (saved) {
+						await handlePrd("", ctx, pi, state);
+						state.currentPhase = "prd";
+					}
+				} else if (choice === "Continue to pre-mortem") {
+					enableArtifactTool();
+					const saved = await ensurePlanSavedForGate(ctx, "continuing to pre-mortem");
+					if (saved) {
+						await handlePreMortem("", ctx, pi, state);
+						state.currentPhase = "pre-mortem";
+					}
+				} else if (choice === "Continue to review") {
+					enableArtifactTool();
+					const saved = await ensurePlanSavedForGate(ctx, "continuing to review");
+					if (saved) {
+						await handleReview("", ctx, pi, state);
+						state.currentPhase = "review";
+					}
+				} else if (choice === "Continue to build" || choice === "Skip review → build") {
+					await handleBuild("", ctx, pi, state);
+					state.currentPhase = "build";
 				}
 			}
 
 			updateStatus(ctx);
 		} else {
-			// No plan extracted — show simple menu
-			const choice = await ctx.ui.select("Plan mode - what next?", [
-				"Start build now (executes code changes)",
-				"Stay in plan mode",
-				"Refine the plan",
-			]);
-
-			if (choice?.startsWith("Start build now") || choice?.startsWith("Execute")) {
-				state.planModeEnabled = false;
-				state.executionMode = false;
-				pi.setActiveTools(NORMAL_MODE_TOOLS);
-				updateStatus(ctx);
-				pi.sendMessage(
-					{ customType: "plan-mode-execute", content: "Execute the plan you just created.", display: true },
-					{ triggerTurn: true },
-				);
-			} else if (choice === "Refine the plan") {
-				const refinement = await ctx.ui.editor("Refine the plan:", "");
+			const choice = await ctx.ui.select("Plan mode - what next?", ["Refine plan", "Stay in plan mode"]);
+			if (choice === "Refine plan") {
+				const refinement = await ctx.ui.editor("Refine plan:", "");
 				if (refinement?.trim()) {
-					pi.sendUserMessage(refinement.trim());
+					state.isRefining = true;
+					pi.sendUserMessage(`Refinement for plan: ${refinement.trim()}`);
 				}
 			}
 		}
@@ -679,6 +718,7 @@ After completing a step, include a [DONE:n] tag in your response.
 						prdConverted?: boolean;
 						currentPhase?: Phase;
 						activeCommand?: string | null;
+						isRefining?: boolean;
 					};
 			  }
 			| undefined;
@@ -694,6 +734,7 @@ After completing a step, include a [DONE:n] tag in your response.
 			state.prdConverted = planModeEntry.data.prdConverted ?? state.prdConverted;
 			state.currentPhase = planModeEntry.data.currentPhase ?? state.currentPhase;
 			state.activeCommand = planModeEntry.data.activeCommand ?? state.activeCommand;
+			state.isRefining = planModeEntry.data.isRefining ?? state.isRefining;
 		}
 
 		// On resume: re-scan messages to rebuild completion state

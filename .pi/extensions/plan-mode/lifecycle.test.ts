@@ -82,6 +82,14 @@ describe("getGateRequirements", () => {
 		assert.ok(gates.every((g) => !g.required && !g.recommended));
 	});
 
+	it("returns gates in pipeline order: prd → pre-mortem → review", () => {
+		const gates = getGateRequirements("large");
+		assert.deepEqual(
+			gates.map((g) => g.gate),
+			["prd", "pre-mortem", "review"],
+		);
+	});
+
 	it("small: all optional", () => {
 		const gates = getGateRequirements("small");
 		assert.equal(gates.length, 3);
@@ -178,6 +186,14 @@ describe("getMissingGates", () => {
 	it("returns all gates when none completed", () => {
 		const missing = getMissingGates("large", { has_review: false, has_pre_mortem: false, has_prd: false });
 		assert.equal(missing.length, 3);
+	});
+
+	it("returns missing gates in pipeline order: prd → pre-mortem → review", () => {
+		const missing = getMissingGates("large", { has_review: false, has_pre_mortem: false, has_prd: false });
+		assert.deepEqual(
+			missing.map((g) => g.gate),
+			["prd", "pre-mortem", "review"],
+		);
 	});
 
 	it("returns empty when all completed", () => {

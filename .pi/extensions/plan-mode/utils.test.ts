@@ -6,8 +6,10 @@ import {
 	cleanStepText,
 	extractDoneSteps,
 	markCompletedSteps,
+	extractPhaseContent,
 	isAwaitingUserResponse,
 	classifyPlanSize,
+	getPhaseMenu,
 	getMenuOptions,
 	getPostExecutionMenuOptions,
 	suggestPlanName,
@@ -154,6 +156,28 @@ describe("markCompletedSteps", () => {
 	});
 });
 
+describe("extractPhaseContent", () => {
+	it("extracts plan section when Plan header exists", () => {
+		const response = `Intro\n\nPlan:\n1. Step one\n2. Step two\n\n## Notes\nOther content`;
+		const extracted = extractPhaseContent(response, "plan");
+		assert.ok(extracted.startsWith("Plan:"));
+		assert.ok(extracted.includes("1. Step one"));
+	});
+
+	it("extracts pre-mortem section from heading", () => {
+		const response = `Some preface\n\n## Pre-Mortem\n### Risk 1\n- Something\n\n## Next`;
+		const extracted = extractPhaseContent(response, "pre-mortem");
+		assert.ok(extracted.startsWith("## Pre-Mortem"));
+		assert.ok(extracted.includes("### Risk 1"));
+	});
+
+	it("falls back to full response when no header found", () => {
+		const response = "Unstructured output without expected headers";
+		const extracted = extractPhaseContent(response, "review");
+		assert.equal(extracted, response);
+	});
+});
+
 describe("isAwaitingUserResponse", () => {
 	it("returns true for explicit clarifying questions", () => {
 		const message = `Great start. Before I adapt this, I have a few clarifying questions:\n1. What is the target module?\n2. Should I optimize for speed or readability?`;
@@ -258,6 +282,61 @@ function makeMenuState(overrides: Partial<WorkflowMenuState> = {}): WorkflowMenu
 		...overrides,
 	};
 }
+
+describe("getPhaseMenu", () => {
+	it("plan phase (tiny): refine + continue to pre-mortem", () => {
+		const menu = getPhaseMenu("plan", "tiny");
+		assert.deepEqual(menu, {
+			refine: "Refine plan",
+			next: "Continue to pre-mortem",
+		});
+	});
+
+	it("plan phase (large): refine + continue to PRD", () => {
+		const menu = getPhaseMenu("plan", "large");
+		assert.deepEqual(menu, {
+			refine: "Refine plan",
+			next: "Continue to PRD",
+		});
+	});
+
+	it("prd phase: refine + continue to pre-mortem", () => {
+		const menu = getPhaseMenu("prd", "medium");
+		assert.deepEqual(menu, {
+			refine: "Refine PRD",
+			next: "Continue to pre-mortem",
+		});
+	});
+
+	it("pre-mortem phase (small): refine + skip review to build", () => {
+		const menu = getPhaseMenu("pre-mortem", "small");
+		assert.deepEqual(menu, {
+			refine: "Refine pre-mortem",
+			next: "Skip review → build",
+		});
+	});
+
+	it("pre-mortem phase (large): refine + continue to review", () => {
+		const menu = getPhaseMenu("pre-mortem", "large");
+		assert.deepEqual(menu, {
+			refine: "Refine pre-mortem",
+			next: "Continue to review",
+		});
+	});
+
+	it("review phase: refine + continue to build", () => {
+		const menu = getPhaseMenu("review", "medium");
+		assert.deepEqual(menu, {
+			refine: "Refine review",
+			next: "Continue to build",
+		});
+	});
+
+	it("build/done: returns null options", () => {
+		assert.deepEqual(getPhaseMenu("build", "medium"), { refine: null, next: null });
+		assert.deepEqual(getPhaseMenu("done", "medium"), { refine: null, next: null });
+	});
+});
 
 describe("getMenuOptions", () => {
 	it("tiny: returns 3 options, first starts build with explicit warning", () => {

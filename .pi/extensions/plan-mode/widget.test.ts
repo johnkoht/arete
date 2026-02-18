@@ -17,6 +17,7 @@ function makeState(overrides: Partial<WidgetState> = {}): WidgetState {
 		planModeEnabled: false,
 		planSize: null,
 		status: null,
+		currentPhase: "plan",
 		has_review: false,
 		has_pre_mortem: false,
 		has_prd: false,
@@ -58,6 +59,22 @@ describe("renderFooterStatus", () => {
 		assert.ok(result.includes("pre-mortem ✓"));
 	});
 
+	it("shows pre-mortem and review completion markers", () => {
+		const result = renderFooterStatus(
+			makeState({
+				planModeEnabled: true,
+				planSize: "large",
+				todosTotal: 6,
+				has_pre_mortem: true,
+				has_review: true,
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(result.includes("pre-mortem ✓"));
+		assert.ok(result.includes("review ✓"));
+	});
+
 	it("shows PRD checkmark when converted", () => {
 		const result = renderFooterStatus(
 			makeState({ planModeEnabled: true, planSize: "large", todosTotal: 6, has_prd: true }),
@@ -87,60 +104,46 @@ describe("renderFooterStatus", () => {
 
 describe("renderLifecycleWidget", () => {
 	it("renders pipeline with plan as current stage", () => {
-		const lines = renderLifecycleWidget(makeState({ planModeEnabled: true }), mockTheme);
+		const lines = renderLifecycleWidget(makeState({ planModeEnabled: true, currentPhase: "plan" }), mockTheme);
 		assert.equal(lines.length, 1);
 		assert.ok(lines[0].includes("Plan"));
-		assert.ok(lines[0].includes("→"));
+		assert.ok(lines[0].includes("PRD"));
 		assert.ok(lines[0].includes("Done"));
+		assert.ok(lines[0].includes("→"));
 	});
 
-	it("moves to pre-mortem stage after review", () => {
+	it("highlights PRD stage when currentPhase=prd", () => {
+		const lines = renderLifecycleWidget(makeState({ planModeEnabled: true, currentPhase: "prd" }), mockTheme);
+		assert.ok(lines[0].includes("[accent]📄 PRD[/accent]"));
+		assert.ok(lines[0].includes("Plan ✓"));
+	});
+
+	it("highlights pre-mortem stage when currentPhase=pre-mortem", () => {
 		const lines = renderLifecycleWidget(
 			makeState({
 				planModeEnabled: true,
-				planSize: "medium",
-				has_review: true,
+				currentPhase: "pre-mortem",
 			}),
 			mockTheme,
 		);
 		assert.ok(lines[0].includes("[accent]🛡 Pre-mortem[/accent]"));
-		assert.ok(lines[0].includes("Review ✓"));
+		assert.ok(lines[0].includes("PRD ✓"));
 	});
 
-	it("moves to build stage after pre-mortem", () => {
-		const lines = renderLifecycleWidget(
-			makeState({
-				planModeEnabled: true,
-				planSize: "medium",
-				has_review: true,
-				has_pre_mortem: true,
-			}),
-			mockTheme,
-		);
-		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
+	it("highlights review stage when currentPhase=review", () => {
+		const lines = renderLifecycleWidget(makeState({ planModeEnabled: true, currentPhase: "review" }), mockTheme);
+		assert.ok(lines[0].includes("[accent]🔍 Review[/accent]"));
 		assert.ok(lines[0].includes("Pre-mortem ✓"));
 	});
 
-	it("moves to build stage after PRD conversion", () => {
-		const lines = renderLifecycleWidget(
-			makeState({
-				planModeEnabled: true,
-				planSize: "large",
-				has_review: true,
-				has_prd: true,
-			}),
-			mockTheme,
-		);
+	it("highlights build stage when currentPhase=build", () => {
+		const lines = renderLifecycleWidget(makeState({ currentPhase: "build", executionMode: true }), mockTheme);
 		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
-	});
-
-	it("highlights build stage during execution", () => {
-		const lines = renderLifecycleWidget(makeState({ executionMode: true, status: "in-progress" }), mockTheme);
-		assert.ok(lines[0].includes("[accent]⚡ Build[/accent]"));
+		assert.ok(lines[0].includes("Review ✓"));
 	});
 
 	it("shows done stage for completed plans", () => {
-		const lines = renderLifecycleWidget(makeState({ status: "completed" }), mockTheme);
+		const lines = renderLifecycleWidget(makeState({ currentPhase: "done", status: "completed" }), mockTheme);
 		assert.ok(lines[0].includes("[accent]📊 Done[/accent]"));
 	});
 });

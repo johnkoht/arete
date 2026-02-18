@@ -15,9 +15,10 @@
         "createDefaultState() sets both fields",
         "Note: Phase controls menus; completion flags (preMortemRun etc.) track what's done — keep them separate"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "f312916"
     },
     {
       "id": "task-2",
@@ -34,9 +35,10 @@
         "Keep getMenuOptions() but mark @deprecated",
         "Tests pass"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING",
       "dependencies": ["task-1"]
     },
     {
@@ -54,9 +56,10 @@
         "Add extraction comment: <!-- Extracted at {timestamp} -->",
         "Remove placeholder-saving code from handlePreMortem and handleReview"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING"
     },
     {
       "id": "task-4",
@@ -71,9 +74,10 @@
         "Remove direct plan-mode-execute bypass path",
         "Phase advances only via menu 'Continue to X' selection"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING",
       "dependencies": ["task-2", "task-3"]
     },
     {
@@ -87,9 +91,10 @@
         "Only one agent prompt injected per turn",
         "getAgentPrompt() is called (not hardcoded strings)"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING",
       "dependencies": ["task-1"]
     },
     {
@@ -103,9 +108,10 @@
         "Update lifecycle tests to assert new order",
         "Grep and fix any order-dependent test assertions"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING"
     },
     {
       "id": "task-7",
@@ -119,9 +125,10 @@
         "Footer shows completion: '📋 plan (pre-mortem ✓, review ✓)' when applicable",
         "Widget tests pass for each phase value"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING",
       "dependencies": ["task-1", "task-6"]
     },
     {
@@ -138,16 +145,17 @@
         "Proceed to build after acknowledgment",
         "Can refine multiple times before continuing"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "PENDING",
       "dependencies": ["task-4", "task-7"]
     }
   ],
   "metadata": {
     "createdAt": "2026-02-18T04:10:00.000Z",
     "totalTasks": 8,
-    "completedTasks": 0,
+    "completedTasks": 8,
     "failedTasks": 0
   }
 }

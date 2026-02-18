@@ -56,8 +56,9 @@ export interface PlanModeState {
 	prdConverted: boolean;
 	postMortemRun: boolean;
 	// Phase tracking (linear flow)
-	currentPhase: Phase;       // Where user is in linear flow (controls menus)
+	currentPhase: Phase; // Where user is in linear flow (controls menus)
 	activeCommand: string | null; // Which command is running (controls prompt injection)
+	isRefining: boolean; // Refine loop guard to prevent menu recursion
 }
 
 /** Create a fresh default state */
@@ -75,6 +76,7 @@ export function createDefaultState(): PlanModeState {
 		postMortemRun: false,
 		currentPhase: "plan",
 		activeCommand: null,
+		isRefining: false,
 	};
 }
 
@@ -422,6 +424,9 @@ async function handlePlanSave(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		currentPhase: state.currentPhase,
+		activeCommand: state.activeCommand,
+		isRefining: state.isRefining,
 	});
 
 	ctx.ui.notify(`💾 Plan saved to dev/plans/${slug}/plan.md`, "info");
@@ -452,7 +457,7 @@ function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
 	const lines = [
 		`📋 **${fm.title}**`,
 		`Status: ${fm.status} | Size: ${fm.size} | Steps: ${fm.steps}`,
-		`Gates: review ${fm.has_review ? "✓" : "☐"} | pre-mortem ${fm.has_pre_mortem ? "✓" : "☐"} | PRD ${fm.has_prd ? "✓" : "☐"}`,
+		`Gates: PRD ${fm.has_prd ? "✓" : "☐"} | pre-mortem ${fm.has_pre_mortem ? "✓" : "☐"} | review ${fm.has_review ? "✓" : "☐"}`,
 	];
 
 	if (missing.length > 0) {
@@ -497,9 +502,9 @@ export async function handlePlanNext(
 
 	// Build gate checklist display
 	const gateChecklist = [
-		`${fm.has_review ? "☑" : "☐"} Cross-model review (${getGateLabel(fm.size, "review")})`,
-		`${fm.has_pre_mortem ? "☑" : "☐"} Pre-mortem (${getGateLabel(fm.size, "pre-mortem")})`,
 		`${fm.has_prd ? "☑" : "☐"} PRD (${getGateLabel(fm.size, "prd")})`,
+		`${fm.has_pre_mortem ? "☑" : "☐"} Pre-mortem (${getGateLabel(fm.size, "pre-mortem")})`,
+		`${fm.has_review ? "☑" : "☐"} Cross-model review (${getGateLabel(fm.size, "review")})`,
 	];
 
 	const header = `📋 ${fm.title} (status: ${fm.status}, size: ${fm.size})\n\nGate checklist:\n${gateChecklist.map((g) => `  ${g}`).join("\n")}`;
@@ -599,6 +604,9 @@ async function approvePlan(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		currentPhase: state.currentPhase,
+		activeCommand: state.activeCommand,
+		isRefining: state.isRefining,
 	});
 }
 
@@ -730,6 +738,7 @@ export async function handleReview(
 	}
 
 	ctx.ui.notify("🔍 Starting cross-model review...", "info");
+	state.activeCommand = "review";
 
 	// Invoke review-plan skill with plan content
 	pi.sendUserMessage(
@@ -742,12 +751,7 @@ export async function handleReview(
 	state.reviewRun = true;
 	updatePlanFrontmatter(state.currentSlug, { has_review: true });
 
-	// Save a note artifact that review was triggered
-	savePlanArtifact(
-		state.currentSlug,
-		"review.md",
-		`# Cross-Model Review\n\nTriggered: ${new Date().toISOString()}\n\nReview content will appear in the conversation.\n`,
-	);
+	// review.md is auto-saved from actual agent output in index.ts (agent_end).
 }
 
 // ────────────────────────────────────────────────────────────
@@ -772,6 +776,7 @@ export async function handlePreMortem(
 	}
 
 	ctx.ui.notify("🛡 Starting pre-mortem analysis...", "info");
+	state.activeCommand = "pre-mortem";
 
 	pi.sendUserMessage(
 		`Run a pre-mortem risk analysis on this plan. Load .agents/skills/run-pre-mortem/SKILL.md and follow its workflow.\n\n` +
@@ -782,11 +787,7 @@ export async function handlePreMortem(
 	state.preMortemRun = true;
 	updatePlanFrontmatter(state.currentSlug, { has_pre_mortem: true });
 
-	savePlanArtifact(
-		state.currentSlug,
-		"pre-mortem.md",
-		`# Pre-Mortem Analysis\n\nTriggered: ${new Date().toISOString()}\n\nPre-mortem analysis will appear in the conversation.\n`,
-	);
+	// pre-mortem.md is auto-saved from actual agent output in index.ts (agent_end).
 }
 
 // ────────────────────────────────────────────────────────────
@@ -828,6 +829,7 @@ export async function handlePrd(
 	}
 
 	ctx.ui.notify(`📄 Converting plan to PRD as '${featureSlug}'...`, "info");
+	state.activeCommand = "prd";
 
 	pi.sendUserMessage(
 		`Convert this plan to a PRD. Load .agents/skills/plan-to-prd/SKILL.md and follow its workflow.\n\n` +
@@ -884,6 +886,20 @@ export async function handleBuild(
 		if (!override) return;
 	}
 
+	// Build gating
+	const effectivePlanSize = state.planSize ?? plan.frontmatter.size;
+	if (!state.preMortemRun && effectivePlanSize !== "tiny") {
+		const skipPreMortem = await ctx.ui.confirm(
+			"Pre-mortem missing",
+			"Pre-mortem not completed. Skip?",
+		);
+		if (!skipPreMortem) return;
+	}
+
+	if (!state.reviewRun) {
+		ctx.ui.notify("Review not completed. Proceeding.", "info");
+	}
+
 	// Transition to in-progress
 	updatePlanFrontmatter(state.currentSlug, { status: "in-progress" });
 
@@ -892,6 +908,7 @@ export async function handleBuild(
 	pi.setActiveTools(NORMAL_MODE_TOOLS);
 
 	ctx.ui.notify("⚡ Build started!", "info");
+	state.activeCommand = "build";
 
 	if (plan.frontmatter.has_prd) {
 		// Has PRD: invoke execute-prd skill
@@ -921,6 +938,9 @@ export async function handleBuild(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		currentPhase: state.currentPhase,
+		activeCommand: state.activeCommand,
+		isRefining: state.isRefining,
 	});
 }
 
