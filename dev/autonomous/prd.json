@@ -1,132 +1,92 @@
 {
-  "name": "template-architecture",
-  "branchName": "feature/template-architecture",
-  "goal": "Ship default templates and GUIDE.md to user workspaces on install; backfill missing files on update; co-locate create-prd templates with the skill; implement 3-level template resolution order.",
+  "name": "test-data-improvements",
+  "branchName": "feature/test-data-improvements",
+  "goal": "Improve Areté test data so it exercises real end-product workflows and provides shared realistic fixtures for automated tests.",
   "userStories": [
     {
-      "id": "task-1-source-paths-and-install",
-      "title": "Extend SourcePaths + fix template and GUIDE.md copy in install",
-      "description": "Add `guide: string` field to SourcePaths type pointing to GUIDE.md file path. Update getSourcePaths() to set guide field. Add template copy loop to WorkspaceService.create() (source: sourcePaths.templates, dest: {targetDir}/templates/, skip-if-exists, recursive). Add GUIDE.md copy to WorkspaceService.create() (source: sourcePaths.guide, dest: {targetDir}/GUIDE.md, skip-if-exists). Update install.ts and update.ts CLI commands to pass guide through sourcePaths.",
+      "id": "task-1",
+      "title": "Lock scope and success criteria (product-first)",
+      "description": "Define and document the canonical scenario contract focused on end-product behavior and clearly separate product-seeded fixtures from developer fixture APIs.",
       "acceptanceCriteria": [
-        "SourcePaths type has `guide: string` field",
-        "getSourcePaths() sets guide to join(base, 'GUIDE.md')",
-        "WorkspaceService.create() copies all files from sourcePaths.templates into {targetDir}/templates/ recursively",
-        "WorkspaceService.create() copies GUIDE.md to {targetDir}/GUIDE.md",
-        "Existing files at destination are never overwritten (skip-if-exists)",
-        "result.files includes template paths and GUIDE.md path on success",
-        "No crash if sourcePaths.guide is missing or GUIDE.md doesn't exist at source",
-        "npm run typecheck passes",
-        "npm test passes"
+        "Scenario contract lists end-product workflows: brief, context inventory, memory search, memory timeline, resolve, people memory refresh, planning/agenda/PRD prep.",
+        "Each workflow has explicit expected user-facing output signals.",
+        "Documentation clearly distinguishes test-data seeded product fixtures from dev fixture API."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
-      "id": "task-2-update-backfill",
-      "title": "Add GUIDE.md and template backfill to arete update",
-      "description": "Add GUIDE.md backfill to WorkspaceService.update(): if {workspaceRoot}/GUIDE.md is missing and options.sourcePaths.guide exists, copy it; if it exists, skip. Add template backfill loop to WorkspaceService.update(): iterate source templates recursively; for each file, if destination does not exist copy it; if it exists skip it. Add backfilled paths to result.added. Policy: 'only write if file does not exist' — no content comparison, no checksums.",
+      "id": "task-2",
+      "title": "Expand test-data corpus for realistic journeys",
+      "description": "Build richer fixture corpus with temporal depth, relationship complexity, project threads, and memory variety to support realistic feature validation.",
       "acceptanceCriteria": [
-        "arete update on workspace missing GUIDE.md creates GUIDE.md at workspace root",
-        "arete update on workspace with existing GUIDE.md leaves it untouched",
-        "arete update on workspace missing template file creates that template file",
-        "arete update on workspace with existing template file leaves it untouched",
-        "result.added reflects what was backfilled",
-        "No crash when sourcePaths.templates or sourcePaths.guide is undefined",
-        "npm run typecheck passes",
-        "npm test passes"
+        "Corpus includes 6+ people and 12-15 meetings across approximately 10 weeks.",
+        "Corpus includes at least 3 project threads and richer decisions/learnings memory entries.",
+        "Corpus includes stale/fresh spread sufficient for context inventory stale detection.",
+        "TEST-SCENARIOS.md maps prompts to expected outcomes."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
-      "id": "task-3-skill-local-templates",
-      "title": "Add skill-local templates for create-prd",
-      "description": "Create packages/runtime/skills/create-prd/templates/ directory. Copy prd-simple.md, prd-regular.md, prd-full.md from packages/runtime/templates/outputs/ into packages/runtime/skills/create-prd/templates/. Do NOT delete the originals in templates/outputs/ — they serve as legacy fallback for existing workspaces.",
+      "id": "task-3",
+      "title": "Upgrade integration tests to semantic product assertions",
+      "description": "Refactor and add integration tests to assert semantic correctness of surfaced intelligence, not only structural existence/counts.",
       "acceptanceCriteria": [
-        "packages/runtime/skills/create-prd/templates/prd-simple.md exists",
-        "packages/runtime/skills/create-prd/templates/prd-regular.md exists",
-        "packages/runtime/skills/create-prd/templates/prd-full.md exists",
-        "packages/runtime/templates/outputs/prd-simple.md still exists (not deleted)",
-        "packages/runtime/templates/outputs/prd-regular.md still exists (not deleted)",
-        "packages/runtime/templates/outputs/prd-full.md still exists (not deleted)",
-        "Content of skill-local copies matches originals",
-        "npm run typecheck passes",
-        "npm test passes"
+        "Existing seeded integration tests verify meaningful content signals (entity/thread/action).",
+        "Coverage added for memory search, memory timeline, resolve, people memory refresh, and stale inventory behavior.",
+        "Assertions rely on stable semantic markers rather than exact prose matching."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
-      "id": "task-4-resolve-template-path",
-      "title": "Implement resolveTemplatePath() utility",
-      "description": "Add resolveTemplatePath(workspaceRoot, skillId, variant) async function to packages/core/src/utils/templates.ts. Implements 3-level resolution using fs/promises.access(): (1) workspace override: {workspaceRoot}/templates/outputs/{skillId}/{variant}.md, (2) skill-local: {workspaceRoot}/.agents/skills/{skillId}/templates/{variant}.md, (3) legacy fallback: {workspaceRoot}/templates/outputs/{variant}.md. Returns the first path that exists as a string, or null if none found. Export from packages/core/src/utils/index.ts.",
+      "id": "task-4",
+      "title": "Add shared fixture builder for developer tests",
+      "description": "Implement typed shared fixture builder in core tests and migrate selected service tests away from duplicated setup patterns.",
       "acceptanceCriteria": [
-        "resolveTemplatePath returns workspace override path when it exists",
-        "resolveTemplatePath returns skill-local path when override doesn't exist but skill-local does",
-        "resolveTemplatePath returns legacy fallback path when neither override nor skill-local exists",
-        "resolveTemplatePath returns null when no template found at any level",
-        "resolveTemplatePath prefers override over skill-local when both exist",
-        "resolveTemplatePath prefers skill-local over legacy when both exist",
-        "Function uses fs/promises.access() not readFile for existence checks",
-        "No any types; async with proper error handling",
-        "Exported from packages/core/src/utils/index.ts",
-        "npm run typecheck passes",
-        "npm test passes"
+        "packages/core/test/fixtures includes typed API and rich preset scenario.",
+        "Fixture builder has tests for deterministic output and compatibility with core services.",
+        "At least 2-3 high-value service tests migrated from ad-hoc setup to shared fixtures."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
-      "id": "task-5-skill-md-update",
-      "title": "Update create-prd SKILL.md with template resolution instructions",
-      "description": "Update the Template Selection section (Step 4) of packages/runtime/skills/create-prd/SKILL.md to document 3-level template resolution order in plain language for agents. Replace hardcoded template paths with explicit resolution instructions referencing all three levels. No other content in SKILL.md should change.",
+      "id": "task-5",
+      "title": "Support lifecycle-rich project fixtures in seed safely",
+      "description": "Update seed fixture copy behavior to support lifecycle project structure while maintaining backward compatibility with existing fixture layout.",
       "acceptanceCriteria": [
-        "Template Selection section documents all three resolution levels in priority order",
-        "Level 1 workspace override path is documented: templates/outputs/create-prd/{variant}.md",
-        "Level 2 skill-local path is documented: .agents/skills/create-prd/templates/{variant}.md",
-        "Level 3 legacy fallback path is documented: templates/outputs/{variant}.md",
-        "Instructions are written in plain language suitable for AI agents",
-        "Variant values (prd-simple, prd-regular, prd-full) are still documented",
-        "No other SKILL.md content is changed",
-        "npm run typecheck passes",
-        "npm test passes"
+        "seed test-data supports active/archive project fixture structure.",
+        "Legacy fixture layouts remain supported.",
+        "Seed command tests cover both legacy and lifecycle-rich fixture shapes."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
-      "id": "task-6-tests",
-      "title": "Unit and integration tests",
-      "description": "Add unit tests for resolveTemplatePath() in packages/core/test/utils/templates.test.ts (new file). Add integration tests to packages/cli/test/integration/install-update.integration.test.ts covering install outputs and update backfill behavior. Unit tests use real temp directories (not mocked fs). Integration tests use existing createIntegrationSandbox() and installWorkspace() helpers.",
+      "id": "task-6",
+      "title": "Finalize docs, quality gates, and handoff",
+      "description": "Update docs, run mandatory quality gates, and provide a concise manual smoke validation script for end-product workflows.",
       "acceptanceCriteria": [
-        "packages/core/test/utils/templates.test.ts exists and passes",
-        "Unit tests cover: override wins over skill-local, skill-local wins over legacy, legacy used when only that exists, null returned when nothing exists, override wins when all three exist, skill-local wins when skill-local + legacy exist",
-        "Integration tests added to install-update.integration.test.ts",
-        "Integration test: arete install produces workspace with GUIDE.md at root",
-        "Integration test: arete install produces workspace with templates/outputs/prd-simple.md",
-        "Integration test: arete install produces workspace with templates/outputs/prd-regular.md",
-        "Integration test: arete install produces workspace with templates/outputs/prd-full.md",
-        "Integration test: arete update backfills missing GUIDE.md without touching existing GUIDE.md",
-        "Integration test: arete update backfills missing template without touching existing template",
-        "All tests use node:test and node:assert/strict",
-        "All imports use .js extensions",
-        "npm run typecheck passes",
-        "npm test passes (full suite)"
+        "Fixture/testing docs updated with canonical scenario and contributor guidance.",
+        "npm run typecheck and npm test pass (plus npm run test:py if Python changes exist).",
+        "Manual smoke script for end-product workspace validation is provided."
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 2
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-17T12:30:00Z",
+    "createdAt": "2026-02-17T23:05:00.000Z",
     "totalTasks": 6,
-    "completedTasks": 0,
+    "completedTasks": 6,
     "failedTasks": 0
   }
 }

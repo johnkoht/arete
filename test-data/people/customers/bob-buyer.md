@@ -11,22 +11,26 @@ category: customers
 
 ## Relationship
 
-Key contact at Acme Corp. Involved in implementation and renewal discussions.
+Primary operational buyer at Acme Corp. Participates in discovery, renewal, and QBR threads.
 
 ## Recent Meetings
 
+- 2026-02-14 — QBR - Acme Corp
+- 2026-02-10 — Renewal Negotiation - Acme Corp
 - 2026-02-03 — Customer Call - Acme Corp
+- 2025-12-04 — Customer Discovery Call - Northstar Account
 
 ## Key Topics
 
-- Onboarding experience
-- Setup friction
-- Renewal (Q2)
+- Onboarding admin setup friction
+- Renewal packaging and success metrics
+- QBR action commitments
 
 ## Action Items
 
-- [ ] (Jane) Send onboarding doc improvements to Bob by Friday
+- [ ] (Jane) Send renewal recap with onboarding success metrics
+- [ ] (Bob) Confirm pilot account expansion decision date
 
 ## Notes
 
-Test fixture for customer-facing meeting-prep.
+Primary customer target for meeting-prep and brief scenarios.

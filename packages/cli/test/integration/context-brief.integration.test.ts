@@ -21,7 +21,7 @@ describe('integration: context + brief seeded journey', () => {
     rmSync(sandboxRoot, { recursive: true, force: true });
   });
 
-  it('returns useful context inventory and briefing data for seeded onboarding query', () => {
+  it('returns semantic context, stale inventory signals, and relevant customer briefing', () => {
     const workspace = join(sandboxRoot, 'cursor');
     installWorkspace(workspace, 'cursor');
     seedWorkspaceFromFixtures(workspace);
@@ -40,40 +40,43 @@ describe('integration: context + brief seeded journey', () => {
     assert.ok(contextResult.filesCount > 0, 'context should include relevant files');
     assert.ok(['High', 'Medium', 'Low'].includes(contextResult.confidence));
     assert.ok(
-      contextResult.files.some((file) => file.relativePath.includes('projects/active')) ||
-        contextResult.files.some((file) => file.relativePath.includes('context/')),
-      'context should include project or context files',
+      contextResult.files.some((file) => file.relativePath.includes('projects/active/onboarding-discovery')),
+      'context should include onboarding project context',
     );
 
-    const inventoryOutput = runCli(['context', '--inventory', '--json'], { cwd: workspace });
+    const inventoryOutput = runCli(
+      ['context', '--inventory', '--stale-days', '-1', '--json'],
+      { cwd: workspace },
+    );
     const inventoryResult = JSON.parse(inventoryOutput) as {
       success: boolean;
       totalFiles: number;
       staleCount: number;
-      freshness: Array<{ relativePath: string }>;
+      freshness: Array<{ relativePath: string; isStale: boolean }>;
     };
 
     assert.equal(inventoryResult.success, true);
     assert.ok(inventoryResult.totalFiles > 0, 'inventory should scan seeded workspace files');
-    assert.ok(inventoryResult.staleCount >= 0);
-    assert.ok(inventoryResult.freshness.length > 0, 'inventory should include freshness entries');
-
-    const briefOutput = runCli(
-      ['brief', '--for', 'prep for my onboarding meeting with Jane Doe', '--json'],
-      { cwd: workspace },
+    assert.ok(inventoryResult.staleCount > 0, 'inventory should surface stale seeded files');
+    assert.ok(
+      inventoryResult.freshness.some((entry) => entry.isStale),
+      'freshness entries should include at least one stale file',
     );
+
+    const briefOutput = runCli(['brief', '--for', 'prep for call with Bob Buyer', '--json'], {
+      cwd: workspace,
+    });
     const briefResult = JSON.parse(briefOutput) as {
       success: boolean;
       contextFiles: number;
-      memoryResults: number;
       markdown: string;
       confidence: string;
     };
 
     assert.equal(briefResult.success, true);
     assert.ok(briefResult.contextFiles > 0, 'brief should include context files');
-    assert.ok(briefResult.memoryResults >= 0);
-    assert.ok(briefResult.markdown.includes('Primitive Briefing'));
+    assert.ok(briefResult.markdown.includes('Bob Buyer'), 'brief should include Bob Buyer context');
+    assert.ok(briefResult.markdown.includes('Acme'), 'brief should include Acme thread context');
     assert.ok(['High', 'Medium', 'Low'].includes(briefResult.confidence));
   });
 });

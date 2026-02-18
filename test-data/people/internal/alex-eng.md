@@ -11,25 +11,31 @@ category: internal
 
 ## Relationship
 
-Engineering lead. Collaborates on onboarding v2 and sprint delivery.
+Engineering lead for onboarding v2. Weekly 1:1 thread captures blocker-to-shipping arc.
 
 ## Recent Meetings
 
+- 2026-02-12 — Onboarding v2 Launch Readiness
 - 2026-02-04 — Product Review - Q1
 - 2026-02-02 — 1:1 with Alex
 - 2026-02-01 — Sprint Planning
+- 2026-01-22 — Weekly 1:1 with Alex (Auth Unblocked)
+- 2026-01-15 — Weekly 1:1 with Alex (Auth Blocker)
+- 2026-01-08 — Weekly 1:1 with Alex
+- 2025-12-18 — Onboarding Design Review
+- 2025-11-20 — Onboarding Discovery Kickoff
 
 ## Key Topics
 
-- Onboarding prototype
-- Auth integration
-- Design review
+- Auth vendor dependency
+- Step-3 simplification implementation
+- Launch readiness and instrumentation
 
 ## Action Items
 
-- [ ] Prototype simplified signup flow by Feb 11
-- [ ] Share WIP screens for design review
+- [ ] Verify auth fallback in production rollout checklist
+- [ ] Publish onboarding telemetry dashboard link
 
 ## Notes
 
-Test fixture for meeting-prep scenarios.
+Core entity for resolve/timeline/people-memory-refresh scenarios.

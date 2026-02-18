@@ -11,21 +11,24 @@ category: customers
 
 ## Relationship
 
-Product lead at Acme Corp. Interested in beta programs and early access.
+Product champion at Acme Corp. Provides detailed UX feedback and joins QBR planning.
 
 ## Recent Meetings
 
+- 2026-02-14 — QBR - Acme Corp
+- 2026-02-10 — Renewal Negotiation - Acme Corp
 - 2026-02-01 — Sprint Planning
 
 ## Key Topics
 
-- Onboarding beta
-- Internal pilot
+- Beta onboarding feedback
+- Renewal scope confidence
+- Product KPI reporting
 
 ## Action Items
 
-- [ ] (Jane) Add Carol to onboarding beta list
+- [ ] (Jane) Add Carol to onboarding beta recap distribution
 
 ## Notes
 
-Test fixture for customer-facing meeting-prep.
+Customer champion fixture for context and resolve tests.
