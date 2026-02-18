@@ -23,6 +23,7 @@ describe("parsePrdFile + computePrdProgress", () => {
 	it("parses valid PRD JSON and picks in_progress as current first", () => {
 		const parsed = parsePrdFile(
 			JSON.stringify({
+				name: "plan-mode-ux",
 				userStories: [
 					{ id: "a", title: "Task A", status: "complete" },
 					{ id: "b", title: "Task B", status: "in_progress" },
@@ -31,6 +32,7 @@ describe("parsePrdFile + computePrdProgress", () => {
 			}),
 		);
 		assert.ok(parsed);
+		assert.equal(parsed.name, "plan-mode-ux");
 		const progress = computePrdProgress(parsed);
 		assert.equal(progress.total, 3);
 		assert.equal(progress.completed, 1);
@@ -62,17 +64,20 @@ describe("parsePrdFile + computePrdProgress", () => {
 describe("resolveExecutionProgress", () => {
 	it("uses PRD source when available", () => {
 		const progress = resolveExecutionProgress(
-			{ hasPrd: true, todoItems: [] },
-			() => ({
-				source: "prd",
-				total: 2,
-				completed: 1,
-				currentTask: { id: "2", title: "Second", status: "pending", index: 2 },
-				tasks: [
-					{ id: "1", title: "First", status: "complete", index: 1 },
-					{ id: "2", title: "Second", status: "pending", index: 2 },
-				],
-			}),
+			{ hasPrd: true, todoItems: [], expectedPrdName: "plan-mode-ux" },
+			(prdPath, expectedName) => {
+				assert.equal(expectedName, "plan-mode-ux");
+				return {
+					source: "prd",
+					total: 2,
+					completed: 1,
+					currentTask: { id: "2", title: "Second", status: "pending", index: 2 },
+					tasks: [
+						{ id: "1", title: "First", status: "complete", index: 1 },
+						{ id: "2", title: "Second", status: "pending", index: 2 },
+					],
+				};
+			},
 		);
 		assert.equal(progress.source, "prd");
 		assert.equal(progress.total, 2);

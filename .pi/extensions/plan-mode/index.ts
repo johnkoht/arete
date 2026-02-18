@@ -96,6 +96,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				hasPrd,
 				todoItems: state.todoItems,
 				prdPath: "dev/autonomous/prd.json",
+				expectedPrdName: plan?.frontmatter.slug ?? state.currentSlug ?? undefined,
 			})
 			: null;
 

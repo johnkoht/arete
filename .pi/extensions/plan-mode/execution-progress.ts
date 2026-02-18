@@ -27,6 +27,7 @@ interface PrdUserStory {
 }
 
 interface PrdFile {
+	name: string | null;
 	userStories: PrdUserStory[];
 }
 
@@ -82,7 +83,8 @@ export function parsePrdFile(content: string): PrdFile | null {
 		.filter((story): story is PrdUserStory => story !== null);
 
 	if (normalized.length === 0) return null;
-	return { userStories: normalized };
+	const name = typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : null;
+	return { name, userStories: normalized };
 }
 
 export function computePrdProgress(prdFile: PrdFile): ExecutionProgressSnapshot {
@@ -108,12 +110,21 @@ export function computePrdProgress(prdFile: PrdFile): ExecutionProgressSnapshot 
 	};
 }
 
-export function readPrdProgress(prdPath = "dev/autonomous/prd.json"): ExecutionProgressSnapshot | null {
+export function readPrdProgress(
+	prdPath = "dev/autonomous/prd.json",
+	expectedPrdName?: string,
+): ExecutionProgressSnapshot | null {
 	try {
 		const absolutePath = resolve(process.cwd(), prdPath);
 		const content = readFileSync(absolutePath, "utf-8");
 		const parsed = parsePrdFile(content);
 		if (!parsed) return null;
+
+		if (expectedPrdName) {
+			if (!parsed.name) return null;
+			if (parsed.name !== expectedPrdName) return null;
+		}
+
 		return computePrdProgress(parsed);
 	} catch {
 		return null;
@@ -145,11 +156,12 @@ export function resolveExecutionProgress(
 		hasPrd: boolean;
 		todoItems: TodoItem[];
 		prdPath?: string;
+		expectedPrdName?: string;
 	},
-	readPrdProgressFn: (prdPath?: string) => ExecutionProgressSnapshot | null = readPrdProgress,
+	readPrdProgressFn: (prdPath?: string, expectedPrdName?: string) => ExecutionProgressSnapshot | null = readPrdProgress,
 ): ExecutionProgressSnapshot {
 	if (params.hasPrd) {
-		const prdProgress = readPrdProgressFn(params.prdPath);
+		const prdProgress = readPrdProgressFn(params.prdPath, params.expectedPrdName);
 		if (prdProgress) return prdProgress;
 	}
 
