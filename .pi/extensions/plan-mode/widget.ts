@@ -7,6 +7,11 @@
 
 import type { PlanSize, PlanStatus } from "./persistence.js";
 import type { Phase } from "./utils.js";
+import {
+	formatCompactExecutionStatus,
+	type ExecutionProgressSnapshot,
+	type ExecutionRole,
+} from "./execution-progress.js";
 
 /** State for widget rendering */
 export interface WidgetState {
@@ -20,6 +25,8 @@ export interface WidgetState {
 	executionMode: boolean;
 	todosCompleted: number;
 	todosTotal: number;
+	activeRole: ExecutionRole;
+	executionProgress: ExecutionProgressSnapshot | null;
 }
 
 /** Minimal theme interface for widget rendering (subset of Pi's Theme) */
@@ -125,8 +132,14 @@ function getCompletedStages(state: WidgetState): Set<PipelineStage["key"]> {
  * Render footer status text for the current lifecycle phase.
  */
 export function renderFooterStatus(state: WidgetState, theme: WidgetTheme): string | undefined {
-	// Execution mode: show progress
-	if (state.executionMode && state.todosTotal > 0) {
+	// Execution mode: show compact PRD status when PRD progress is available.
+	if (state.executionMode && state.executionProgress && state.executionProgress.total > 0) {
+		if (state.executionProgress.source === "prd") {
+			return theme.fg(
+				"accent",
+				`⚡ ${formatCompactExecutionStatus(state.activeRole, state.executionProgress, 42)}`,
+			);
+		}
 		return theme.fg("accent", `⚡ ${state.todosCompleted}/${state.todosTotal}`);
 	}
 

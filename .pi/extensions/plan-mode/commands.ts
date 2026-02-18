@@ -27,6 +27,7 @@ import {
 	type PlanSize,
 	type TodoItem,
 } from "./utils.js";
+import { resolveExecutionProgress } from "./execution-progress.js";
 
 const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
 
@@ -970,21 +971,37 @@ function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 		return;
 	}
 
-	const completed = state.todoItems.filter((t) => t.completed).length;
-	const total = state.todoItems.length;
-	const remaining = state.todoItems.filter((t) => !t.completed);
+	const plan = state.currentSlug ? loadPlan(state.currentSlug) : null;
+	const hasPrd = Boolean(plan?.frontmatter.has_prd ?? state.prdConverted);
+	const progress = resolveExecutionProgress({
+		hasPrd,
+		todoItems: state.todoItems,
+		prdPath: "dev/autonomous/prd.json",
+	});
 
-	const lines = [
-		`⚡ Build Status: ${completed}/${total} tasks complete`,
-	];
+	const lines = [`⚡ Build Status: ${progress.completed}/${progress.total} tasks complete`];
 
-	if (remaining.length > 0) {
-		lines.push(`\nRemaining:`);
-		for (const item of remaining) {
-			lines.push(`  ☐ ${item.step}. ${item.text}`);
-		}
-	} else {
+	if (progress.currentTask) {
+		lines.push(`Current: #${progress.currentTask.index} ${progress.currentTask.title} (${progress.currentTask.status})`);
+	}
+
+	if (progress.tasks.length === 0) {
 		lines.push("🎉 All tasks complete!");
+		ctx.ui.notify(lines.join("\n"), "info");
+		return;
+	}
+
+	lines.push("\nTasks:");
+	for (const task of progress.tasks) {
+		const marker =
+			task.status === "complete"
+				? "☑"
+				: task.status === "in_progress"
+					? "▸"
+					: task.status === "failed"
+						? "✖"
+						: "☐";
+		lines.push(`  ${marker} ${task.index}. ${task.title} (${task.status})`);
 	}
 
 	ctx.ui.notify(lines.join("\n"), "info");

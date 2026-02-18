@@ -48,6 +48,11 @@ import {
 import { loadPlan, savePlan, savePlanArtifact, slugify, updatePlanFrontmatter } from "./persistence.js";
 import { loadAgentConfig, getAgentModel, getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderLifecycleWidget, type WidgetState } from "./widget.js";
+import {
+	deriveActiveRole,
+	formatCompactExecutionStatus,
+	resolveExecutionProgress,
+} from "./execution-progress.js";
 
 // Tools
 const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
@@ -86,6 +91,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function getWidgetState(): WidgetState {
 		const plan = state.currentSlug ? loadPlan(state.currentSlug) : null;
+		const hasPrd = Boolean(plan?.frontmatter.has_prd ?? state.prdConverted);
+		const executionProgress = state.executionMode
+			? resolveExecutionProgress({
+				hasPrd,
+				todoItems: state.todoItems,
+				prdPath: "dev/autonomous/prd.json",
+			})
+			: null;
+
 		return {
 			planModeEnabled: state.planModeEnabled,
 			planSize: state.planSize,
@@ -93,10 +107,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			currentPhase: state.currentPhase,
 			has_review: state.reviewRun,
 			has_pre_mortem: state.preMortemRun,
-			has_prd: state.prdConverted,
+			has_prd: hasPrd,
 			executionMode: state.executionMode,
 			todosCompleted: state.todoItems.filter((t) => t.completed).length,
 			todosTotal: state.todoItems.length,
+			activeRole: deriveActiveRole(state.activeCommand),
+			executionProgress,
 		};
 	}
 
@@ -107,8 +123,20 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		const footerText = renderFooterStatus(widgetState, ctx.ui.theme);
 		ctx.ui.setStatus("plan-mode", footerText);
 
-		// Widget showing todo list (during execution) or lifecycle pipeline
-		if (state.executionMode && state.todoItems.length > 0) {
+		// Widget showing compact PRD execution status, todo list, or lifecycle pipeline.
+		if (
+			state.executionMode &&
+			widgetState.executionProgress &&
+			widgetState.executionProgress.source === "prd" &&
+			widgetState.executionProgress.total > 0
+		) {
+			const compactLine = formatCompactExecutionStatus(
+				widgetState.activeRole,
+				widgetState.executionProgress,
+				64,
+			);
+			ctx.ui.setWidget("plan-todos", [ctx.ui.theme.fg("accent", `⚡ ${compactLine}`)]);
+		} else if (state.executionMode && state.todoItems.length > 0) {
 			const lines = state.todoItems.map((item) => {
 				if (item.completed) {
 					return (
@@ -136,7 +164,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (state.planModeEnabled) {
 			// Initialize phase to "plan" when entering plan mode
 			state.currentPhase = "plan";
-			state.activeCommand = null;
+			state.activeCommand = "plan";
 			state.isRefining = false;
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 			ctx.ui.notify(`Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
@@ -561,7 +589,9 @@ After completing a step, include a [DONE:n] tag in your response.
 	// Handle plan completion and plan mode UI
 	pi.on("agent_end", async (event, ctx) => {
 		const completedCommand = state.activeCommand;
-		state.activeCommand = null;
+		if (!(state.executionMode && state.activeCommand === "build")) {
+			state.activeCommand = state.planModeEnabled ? "plan" : null;
+		}
 
 		// Check if execution is complete
 		if (state.executionMode && state.todoItems.length > 0) {
@@ -604,6 +634,7 @@ After completing a step, include a [DONE:n] tag in your response.
 				}
 
 				state.executionMode = false;
+				state.activeCommand = null;
 				state.todoItems = [];
 				pi.setActiveTools(NORMAL_MODE_TOOLS);
 				disableArtifactTool();
@@ -806,6 +837,9 @@ After completing a step, include a [DONE:n] tag in your response.
 		}
 
 		if (state.planModeEnabled) {
+			if (!state.activeCommand) {
+				state.activeCommand = "plan";
+			}
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 		}
 		updateStatus(ctx);

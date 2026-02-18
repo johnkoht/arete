@@ -24,6 +24,8 @@ function makeState(overrides: Partial<WidgetState> = {}): WidgetState {
 		executionMode: false,
 		todosCompleted: 0,
 		todosTotal: 0,
+		activeRole: "PM",
+		executionProgress: null,
 		...overrides,
 	};
 }
@@ -84,14 +86,46 @@ describe("renderFooterStatus", () => {
 		assert.ok(result.includes("PRD ✓"));
 	});
 
-	it("shows execution progress", () => {
+	it("shows compact PRD execution progress with role", () => {
 		const result = renderFooterStatus(
-			makeState({ executionMode: true, todosCompleted: 3, todosTotal: 5 }),
+			makeState({
+				executionMode: true,
+				activeRole: "EM",
+				executionProgress: {
+					source: "prd",
+					total: 5,
+					completed: 3,
+					currentTask: { id: "4", title: "Current task", status: "in_progress", index: 4 },
+					tasks: [],
+				},
+			}),
 			mockTheme,
 		);
 		assert.ok(result);
-		assert.ok(result.includes("⚡ 3/5"));
+		assert.ok(result.includes("Role: EM"));
+		assert.ok(result.includes("PRD: 3/5 complete"));
+		assert.ok(result.includes("Status: in_progress"));
 		assert.ok(result.includes("accent"));
+	});
+
+	it("falls back to legacy todo counter in non-PRD execution", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				todosCompleted: 2,
+				todosTotal: 4,
+				executionProgress: {
+					source: "todo",
+					total: 4,
+					completed: 2,
+					currentTask: { id: "3", title: "Task 3", status: "pending", index: 3 },
+					tasks: [],
+				},
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(result.includes("⚡ 2/4"));
 	});
 
 	it("shows complete status", () => {

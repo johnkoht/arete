@@ -17,6 +17,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-18: [plan-mode-ux-learnings](entries/2026-02-18_plan-mode-ux-learnings.md) — Completed 5/5 PRD tasks for compact PRD execution status, deterministic role labels, shared progress arbitration, and parser/render regression coverage.
+- 2026-02-18: [plan-mode-integration-gaps](entries/2026-02-18_plan-mode-integration-gaps.md) — Captures root causes and prevention checklist for plan-mode regressions missed by helper-only tests (direct command phase loops, PRD write path, and /plan list open restoration).
 - 2026-02-18: [planning-system-refinement-learnings](entries/2026-02-18_planning-system-refinement-learnings.md) — Executed 8/8 planning-system-refinement tasks: linear phase menus, command routing, artifact auto-save, active-command prompt injection, lifecycle reorder, widget PRD stage, and build/refine gating improvements.
 
 - 2026-02-17: [template-resolver-cli](entries/2026-02-17_template-resolver-cli.md) — Added `arete template resolve/list/view` CLI commands; unified workspace override paths to `templates/outputs/{skill-id}/{variant}.md`; TEMPLATE_REGISTRY; replaced all SKILL.md prose flowcharts with single CLI command call.

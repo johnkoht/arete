@@ -1,161 +1,98 @@
 {
-  "name": "planning-system-refinement",
-  "branchName": "feature/planning-system-refinement",
-  "goal": "Refine the plan-mode extension to implement linear pipeline flow, auto-save artifacts, wire agent prompts, route menu selections through commands, and correct pipeline order.",
+  "name": "plan-mode-ux",
+  "branchName": "feature/plan-mode-ux",
+  "goal": "Improve /build execution UX with compact PRD progress, clear active-role display, and reliable fallback behavior.",
   "userStories": [
     {
       "id": "task-1",
-      "title": "Add phase tracking to state",
-      "description": "Add currentPhase and activeCommand fields to PlanModeState to track where user is in the linear flow and which command is running.",
+      "title": "Define UX contract (single source of truth + role labels)",
+      "description": "Define compact status format, progress source-of-truth rules, and role-label mapping for execution UX.",
       "acceptanceCriteria": [
-        "Add currentPhase: Phase where Phase = 'plan' | 'prd' | 'pre-mortem' | 'review' | 'build' | 'done'",
-        "Add activeCommand: string | null to track which command is running",
-        "Phase initializes to 'plan' on /plan or /plan new",
-        "Phase persists across sessions via appendEntry()",
-        "createDefaultState() sets both fields",
-        "Note: Phase controls menus; completion flags (preMortemRun etc.) track what's done — keep them separate"
+        "Compact status format is defined and documented",
+        "PRD mode uses dev/autonomous/prd.json as source of truth",
+        "Non-PRD mode uses existing todoItems",
+        "Role mapping (PM/EM/Reviewer/Agent) is explicit and deterministic"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "commitSha": "f312916"
+      "attemptCount": 1
     },
     {
       "id": "task-2",
-      "title": "Create phase-based menu helper",
-      "description": "Replace getMenuOptions() with getPhaseMenu() returning exactly two options (refine/next) based on current phase.",
+      "title": "Add PRD progress reader (from dev/autonomous/prd.json)",
+      "description": "Add a pure helper that parses PRD JSON and derives total/completed/current task with graceful fallbacks.",
       "acceptanceCriteria": [
-        "Add Phase type export",
-        "Add getPhaseMenu(phase, planSize): { refine: string, next: string | null }",
-        "Plan phase: 'Refine plan' / 'Continue to PRD' (medium/large) or 'Continue to pre-mortem' (tiny/small)",
-        "PRD phase: 'Refine PRD' / 'Continue to pre-mortem'",
-        "Pre-mortem phase: 'Refine pre-mortem' / 'Continue to review' or 'Skip review → build'",
-        "Review phase: 'Refine review' / 'Continue to build'",
-        "Build/done: return nulls (no menu)",
-        "Keep getMenuOptions() but mark @deprecated",
-        "Tests pass"
+        "Helper returns total, completed, and current task data",
+        "Current task resolution is deterministic (in_progress -> pending -> none)",
+        "Missing/malformed/incomplete PRD data does not throw",
+        "Fallback behavior to todo-based progress is preserved"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "commitSha": "11cd16b",
-      "dependencies": ["task-1"]
+      "dependencies": [
+        "task-1"
+      ]
     },
     {
       "id": "task-3",
-      "title": "Implement auto-save for artifacts",
-      "description": "Extract content from agent response and save to artifact files instead of placeholders.",
+      "title": "Refactor status/widget rendering to compact mode",
+      "description": "Use compact one-line PRD progress in execution UI by default while preserving detailed status on demand.",
       "acceptanceCriteria": [
-        "Add extractPhaseContent(response: string, phase: Phase): string",
-        "Extraction looks for headers: 'Plan:', '## Pre-Mortem', '## Review', '### Risk'",
-        "If no headers found, return full response (fallback)",
-        "Never save empty string — log warning and skip",
-        "After plan phase: update plan.md content section",
-        "After pre-mortem: save to pre-mortem.md with actual content",
-        "After review: save to review.md with actual content",
-        "Add extraction comment: <!-- Extracted at {timestamp} -->",
-        "Remove placeholder-saving code from handlePreMortem and handleReview"
+        "PRD execution defaults to compact status line",
+        "Full checklist is hidden by default in PRD mode",
+        "Detailed status remains available via /build status",
+        "Long task titles are handled without excessive wrapping"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "commitSha": "11cd16b"
+      "dependencies": [
+        "task-1",
+        "task-2"
+      ]
     },
     {
       "id": "task-4",
-      "title": "Route menu selections through commands",
-      "description": "Make 'Continue to X' invoke actual commands. Commands are phase-independent but set completion flags.",
+      "title": "Surface active persona cleanly",
+      "description": "Render a single active role label in status output based on command context.",
       "acceptanceCriteria": [
-        "'Continue to pre-mortem' calls handlePreMortem() + advances phase",
-        "'Continue to review' calls handleReview() + advances phase",
-        "'Continue to build' calls handleBuild()",
-        "/pre-mortem and /review can be called from ANY phase (don't check currentPhase)",
-        "These commands set completion flags but DON'T change currentPhase",
-        "Remove direct plan-mode-execute bypass path",
-        "Phase advances only via menu 'Continue to X' selection"
+        "Role is derived from active command/context mapping",
+        "Exactly one role label is shown at a time",
+        "No simultaneous multi-role primary status labels in build loop"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "commitSha": "11cd16b",
-      "dependencies": ["task-2", "task-3"]
+      "dependencies": [
+        "task-1"
+      ]
     },
     {
       "id": "task-5",
-      "title": "Wire agent prompts into commands",
-      "description": "Inject appropriate agent prompt based on activeCommand, not currentPhase.",
+      "title": "Tests + validation",
+      "description": "Add parser/rendering tests and run mandatory quality gates.",
       "acceptanceCriteria": [
-        "Set state.activeCommand when command starts, clear when done",
-        "In before_agent_start, inject prompt based on activeCommand: 'pre-mortem' → orchestrator.md, 'review' → reviewer.md, 'build' → orchestrator.md, null (plan mode) → product-manager.md",
-        "Injection order: base context → agent prompt → plan content",
-        "Only one agent prompt injected per turn",
-        "getAgentPrompt() is called (not hardcoded strings)"
+        "Parser tests cover valid, missing, malformed, and edge cases",
+        "Rendering tests cover role/progress/current-task/fallback behavior",
+        "Lifecycle/widget regressions are covered",
+        "npm run typecheck and npm test pass"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "commitSha": "11cd16b",
-      "dependencies": ["task-1"]
-    },
-    {
-      "id": "task-6",
-      "title": "Update pipeline order in lifecycle.ts",
-      "description": "Change gate order to: prd → pre-mortem → review (not review → pre-mortem → prd).",
-      "acceptanceCriteria": [
-        "getMissingGates() returns gates in order: prd, pre-mortem, review",
-        "getGateRequirements() returns in same order",
-        "/plan next shows gates in this order",
-        "Update lifecycle tests to assert new order",
-        "Grep and fix any order-dependent test assertions"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "11cd16b"
-    },
-    {
-      "id": "task-7",
-      "title": "Update widget pipeline stages",
-      "description": "Add PRD stage to widget and show completion checkmarks based on phase.",
-      "acceptanceCriteria": [
-        "Add { emoji: '📄', label: 'PRD', key: 'prd' } to PIPELINE_STAGES after Plan",
-        "Widget shows 6 stages: Plan → PRD → Pre-mortem → Review → Build → Done",
-        "getCurrentStage() uses currentPhase as primary source",
-        "getCompletedStages() marks stages based on phase progression",
-        "Footer shows completion: '📋 plan (pre-mortem ✓, review ✓)' when applicable",
-        "Widget tests pass for each phase value"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "11cd16b",
-      "dependencies": ["task-1", "task-6"]
-    },
-    {
-      "id": "task-8",
-      "title": "Handle Refine option and /build gating",
-      "description": "Implement refine loop and build gate logic with pre-mortem/review checks.",
-      "acceptanceCriteria": [
-        "'Refine X' opens editor for feedback",
-        "User input sent via sendUserMessage() with phase context",
-        "Track isRefining: boolean to prevent menu loop",
-        "After agent response: clear isRefining, auto-save, show menu",
-        "/build gating: if !preMortemRun && planSize !== 'tiny': confirm('Pre-mortem not completed. Skip?')",
-        "/build gating: if !reviewRun: notify('Review not completed. Proceeding.')",
-        "Proceed to build after acknowledgment",
-        "Can refine multiple times before continuing"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "11cd16b",
-      "dependencies": ["task-4", "task-7"]
+      "dependencies": [
+        "task-2",
+        "task-3",
+        "task-4"
+      ]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T04:10:00.000Z",
-    "totalTasks": 8,
-    "completedTasks": 8,
-    "failedTasks": 0
+    "createdAt": "2026-02-18T04:55:00.000Z",
+    "totalTasks": 5,
+    "completedTasks": 5,
+    "failedTasks": 0,
+    "updatedAt": "2026-02-18T05:32:11.861Z"
   }
 }
