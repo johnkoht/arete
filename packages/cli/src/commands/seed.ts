@@ -156,7 +156,44 @@ async function seedFromFixtures(
 
   const projectsSource = join(fixtureRoot, 'projects');
   const activeProjectsDestination = join(paths.projects, 'active');
-  stats.projects += copyDirectoryEntries(projectsSource, activeProjectsDestination, force);
+  const archiveProjectsDestination = join(paths.projects, 'archive');
+
+  const lifecycleActiveSource = join(projectsSource, 'active');
+  const lifecycleArchiveSource = join(projectsSource, 'archive');
+
+  // New lifecycle-aware layout support
+  stats.projects += copyDirectoryEntries(lifecycleActiveSource, activeProjectsDestination, force);
+  stats.projects += copyDirectoryEntries(lifecycleArchiveSource, archiveProjectsDestination, force);
+
+  // Backward compatibility: legacy flat projects/ entries seed into active/
+  if (existsSync(projectsSource)) {
+    const legacyEntries = readdirSync(projectsSource, { withFileTypes: true }).filter(
+      (entry) => entry.name !== 'active' && entry.name !== 'archive',
+    );
+
+    for (const entry of legacyEntries) {
+      const sourcePath = join(projectsSource, entry.name);
+      const destinationPath = join(activeProjectsDestination, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!force && existsSync(destinationPath)) {
+          continue;
+        }
+        cpSync(sourcePath, destinationPath, { recursive: true });
+        stats.projects += 1;
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const copied = copyFileIfNeeded(sourcePath, destinationPath, force);
+      if (copied) {
+        stats.projects += 1;
+      }
+    }
+  }
 
   const memorySource = join(fixtureRoot, 'memory', 'items');
   const memoryDestination = join(paths.memory, 'items');

@@ -21,7 +21,7 @@ describe('integration: seeded people workflow regression', () => {
     rmSync(sandboxRoot, { recursive: true, force: true });
   });
 
-  it('supports seeded people workflows on two fresh runs (deterministic regression guard)', () => {
+  it('supports deterministic seeded people workflows with richer customer/internal coverage', () => {
     for (let run = 1; run <= 2; run++) {
       const workspace = join(sandboxRoot, `cursor-run-${run}`);
       installWorkspace(workspace, 'cursor');
@@ -29,19 +29,27 @@ describe('integration: seeded people workflow regression', () => {
 
       const meetingsDir = join(workspace, 'resources', 'meetings');
       const meetings = readdirSync(meetingsDir).filter((name) => name.endsWith('.md'));
-      assert.ok(meetings.length > 0, 'seeded meetings should exist');
+      assert.ok(meetings.length >= 12, 'seeded meetings should include richer corpus');
 
       const peopleListOutput = runCli(['people', 'list', '--json'], { cwd: workspace });
       const peopleList = JSON.parse(peopleListOutput) as {
         success: boolean;
         count: number;
-        people: Array<{ slug: string }>;
+        people: Array<{ slug: string; category: string }>;
       };
       assert.equal(peopleList.success, true);
-      assert.ok(peopleList.count > 0, 'seeded people list should not be empty');
+      assert.ok(peopleList.count >= 6, 'seeded people list should include expanded people corpus');
       assert.ok(
         peopleList.people.some((person) => person.slug === 'jane-doe'),
         'seeded people should include jane-doe',
+      );
+      assert.ok(
+        peopleList.people.some((person) => person.slug === 'alex-eng'),
+        'seeded people should include alex-eng',
+      );
+      assert.ok(
+        peopleList.people.some((person) => person.slug === 'david-decision-maker'),
+        'seeded people should include executive customer stakeholder',
       );
 
       const showOutput = runCli(['people', 'show', 'jane-doe', '--json'], {
@@ -49,10 +57,12 @@ describe('integration: seeded people workflow regression', () => {
       });
       const showResult = JSON.parse(showOutput) as {
         success: boolean;
-        person: { slug: string; category: string };
+        person: { slug: string; category: string; role: string };
       };
       assert.equal(showResult.success, true);
       assert.equal(showResult.person.slug, 'jane-doe');
+      assert.equal(showResult.person.category, 'internal');
+      assert.ok(showResult.person.role.toLowerCase().includes('product'));
 
       const indexOutput = runCli(['people', 'index', '--json'], { cwd: workspace });
       const indexResult = JSON.parse(indexOutput) as {
@@ -61,7 +71,7 @@ describe('integration: seeded people workflow regression', () => {
         count: number;
       };
       assert.equal(indexResult.success, true);
-      assert.ok(indexResult.count > 0, 'index should include seeded people');
+      assert.ok(indexResult.count >= 6, 'index should include expanded seeded people');
       assert.equal(existsSync(join(workspace, 'people', 'index.md')), true);
     }
   });

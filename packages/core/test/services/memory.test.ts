@@ -4,46 +4,23 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { searchMemory } from '../../src/compat/memory.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
-
-function makePaths(root: string): WorkspacePaths {
-  return {
-    root,
-    manifest: join(root, 'arete.yaml'),
-    ideConfig: join(root, '.cursor'),
-    rules: join(root, '.cursor', 'rules'),
-    agentSkills: join(root, '.agents', 'skills'),
-    tools: join(root, '.cursor', 'tools'),
-    integrations: join(root, '.cursor', 'integrations'),
-    context: join(root, 'context'),
-    memory: join(root, '.arete', 'memory'),
-    now: join(root, 'now'),
-    goals: join(root, 'goals'),
-    projects: join(root, 'projects'),
-    resources: join(root, 'resources'),
-    people: join(root, 'people'),
-    credentials: join(root, '.credentials'),
-    templates: join(root, 'templates'),
-  };
-}
-
-function writeMemoryFile(root: string, fileName: string, content: string): void {
-  const dir = join(root, '.arete', 'memory', 'items');
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, fileName), content, 'utf8');
-}
+import { createTestWorkspace } from '../fixtures/index.js';
 
 describe('MemoryService (via compat)', () => {
   let tmpDir: string;
   let paths: WorkspacePaths;
+  let writeFixtureFile: (relativePath: string, content: string) => void;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'mem-svc-'));
-    paths = makePaths(tmpDir);
+    const fixture = createTestWorkspace(tmpDir);
+    paths = fixture.paths;
+    writeFixtureFile = fixture.writeFile;
   });
 
   afterEach(() => {
@@ -57,7 +34,9 @@ describe('MemoryService (via compat)', () => {
   });
 
   it('finds decisions matching query tokens', async () => {
-    writeMemoryFile(tmpDir, 'decisions.md', `# Decisions
+    writeFixtureFile(
+      '.arete/memory/items/decisions.md',
+      `# Decisions
 
 ### 2026-01-15: Use Elasticsearch for search
 **Decision**: We chose Elasticsearch over Algolia.
@@ -65,7 +44,9 @@ describe('MemoryService (via compat)', () => {
 ### 2026-01-20: Onboarding flow redesign
 **Context**: Onboarding drop-off was 40%.
 **Decision**: Redesign the onboarding wizard.
-`);
+`,
+    );
+
     const result = await searchMemory('onboarding', paths);
     assert.ok(result.results.length >= 1);
     assert.equal(result.results[0].type, 'decisions');
@@ -73,19 +54,33 @@ describe('MemoryService (via compat)', () => {
   });
 
   it('filters by memory type when specified', async () => {
-    writeMemoryFile(tmpDir, 'decisions.md', '# Decisions\n\n### 2026-01-15: Search decision\n\n**Decision**: Use Elasticsearch.\n');
-    writeMemoryFile(tmpDir, 'learnings.md', '# Learnings\n\n### 2026-02-01: Search insight\n\n**Insight**: Users want instant search.\n');
+    writeFixtureFile(
+      '.arete/memory/items/decisions.md',
+      '# Decisions\n\n### 2026-01-15: Search decision\n\n**Decision**: Use Elasticsearch.\n',
+    );
+    writeFixtureFile(
+      '.arete/memory/items/learnings.md',
+      '# Learnings\n\n### 2026-02-01: Search insight\n\n**Insight**: Users want instant search.\n',
+    );
+
     const result = await searchMemory('search', paths, { types: ['learnings'] });
     assert.equal(result.results.length, 1);
     assert.equal(result.results[0].type, 'learnings');
   });
 
   it('respects limit option', async () => {
-    writeMemoryFile(tmpDir, 'decisions.md', `# Decisions
-### 2026-01-10: Search tech\n**Decision**: Elasticsearch.
-### 2026-01-15: Search UX\n**Decision**: Instant search.
-### 2026-01-20: Search API\n**Decision**: REST endpoints.
-`);
+    writeFixtureFile(
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+### 2026-01-10: Search tech
+**Decision**: Elasticsearch.
+### 2026-01-15: Search UX
+**Decision**: Instant search.
+### 2026-01-20: Search API
+**Decision**: REST endpoints.
+`,
+    );
+
     const result = await searchMemory('search', paths, { limit: 2 });
     assert.equal(result.results.length, 2);
     assert.equal(result.total, 3);

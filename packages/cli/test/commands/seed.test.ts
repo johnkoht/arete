@@ -29,17 +29,35 @@ describe('seed command', () => {
       source: string;
       people: number;
       meetings: number;
+      projects: number;
     };
 
     assert.equal(result.success, true);
     assert.equal(result.source, 'test-data');
     assert.ok(result.people > 0, 'should copy people fixtures');
     assert.ok(result.meetings > 0, 'should copy meeting fixtures');
+    assert.ok(result.projects > 0, 'should copy project fixtures');
 
     assert.equal(existsSync(join(workspaceDir, 'people', 'internal', 'jane-doe.md')), true);
     assert.equal(existsSync(join(workspaceDir, 'resources', 'meetings')), true);
     assert.equal(existsSync(join(workspaceDir, 'people', 'index.md')), true);
     assert.equal(existsSync(join(workspaceDir, 'TEST-SCENARIOS.md')), true);
+
+    // lifecycle-aware projects layout
+    assert.equal(
+      existsSync(join(workspaceDir, 'projects', 'active', 'onboarding-discovery', 'README.md')),
+      true,
+    );
+    assert.equal(
+      existsSync(join(workspaceDir, 'projects', 'archive', 'design-system', 'README.md')),
+      true,
+    );
+
+    // backward-compat legacy flat project should still land under active/
+    assert.equal(
+      existsSync(join(workspaceDir, 'projects', 'active', 'legacy-prototype', 'README.md')),
+      true,
+    );
 
     const peopleListOutput = runCli(['people', 'list', '--json'], { cwd: workspaceDir });
     const peopleList = JSON.parse(peopleListOutput) as {
