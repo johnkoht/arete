@@ -2,35 +2,51 @@
 
 > **Quick Start Checklist** - For detailed documentation, see [GUIDE.md](GUIDE.md) in your workspace.
 
-A quick checklist to get you up and running.
+## Fastest Path (5 minutes)
 
-> **Note**: We're building an `arete onboard` command that will guide you through a personalized onboarding plan. For now, follow this checklist.
+### 1. Set up your profile
 
-## First Steps (15 minutes)
+```bash
+arete onboard
+```
 
-### 1. Fill in Basic Context
+This asks for your name, email, and company — enabling personalized experiences and smarter meeting prep.
 
-Start with these three files—just the essentials to get going:
+### 2. Continue in chat
+
+Say **"Let's get started"** to the AI agent. It will guide you through:
+
+- Importing your existing docs/context
+- Connecting integrations (calendar, Fathom)
+- Getting your first quick win
+
+That's it! The conversational onboarding handles the rest.
+
+---
+
+## Manual Setup (Alternative)
+
+If you prefer to set things up yourself:
+
+### Fill in Basic Context
+
+Start with these three files—just the essentials:
 
 - [ ] **`context/business-overview.md`** - Company name, mission, what you do
 - [ ] **`context/users-personas.md`** - Who uses your product
 - [ ] **`context/products-services.md`** - What you're building
 
-*These files give the AI context about your work. You can always expand them later.*
-
-### 2. Take a Tour
+### Take a Tour
 
 - [ ] Ask the AI: **"Give me a tour"** or **"How does this workspace work?"**
 
-*The workspace-tour skill will orient you to what's available.*
+### Try a Quick Action
 
-### 3. Try a Quick Action
+Pick one to test:
 
-Pick one to test the workspace:
-
-- [ ] **"What's on my plate today?"** - Get today's focus and priorities
+- [ ] **"What's on my plate today?"** - Get today's priorities
 - [ ] **"Start a discovery project for [topic]"** - Begin exploring a problem
-- [ ] **Save a meeting** - Paste meeting notes and say "save this meeting"
+- [ ] **"Prep for my meeting with [person]"** - Meeting preparation
 
 ---
 
@@ -40,9 +56,11 @@ Pick one to test the workspace:
 
 QMD provides semantic search across all your content.
 
-- [ ] **Install QMD**: `bun install -g https://github.com/tobi/qmd`
-- [ ] **Create collection**: `qmd collection add ~/path/to/arete --name arete`
-- [ ] **Generate embeddings**: `qmd embed`
+```bash
+bun install -g https://github.com/tobi/qmd
+qmd collection add ~/path/to/arete --name arete
+qmd embed
+```
 
 *See SETUP.md → "Set Up QMD" for full instructions*
 
@@ -50,19 +68,23 @@ QMD provides semantic search across all your content.
 
 Connect your calendar for automatic meeting context.
 
-- [ ] **Install ical-buddy**: `brew install ical-buddy`
-- [ ] **Configure**: `arete integration configure calendar`
-- [ ] **Test**: `arete pull calendar --today`
+```bash
+brew install ical-buddy
+arete integration configure calendar
+arete pull calendar --today
+```
 
 *See SETUP.md → "Calendar Setup" for details*
 
-### Strategy & Planning
+### Integrations
 
-Set up your strategic context for goal planning.
+Configure additional integrations:
 
-- [ ] **`goals/strategy.md`** - Org strategy, OKRs, pillars
-- [ ] **Try quarter planning**: "Set my quarter goals"
-- [ ] **Try week planning**: "Plan my week"
+```bash
+arete setup                              # See available integrations
+arete integration configure fathom       # Meeting recordings
+arete integration configure calendar     # Calendar sync
+```
 
 ---
 
@@ -102,8 +124,6 @@ people/       → Colleagues, customers, users
 - [ ] Read **SETUP.md** for comprehensive setup (QMD, calendar, MCP integrations)
 - [ ] Explore **`.agents/skills/`** to see available workflows
 - [ ] Check **`README.md`** for full feature list
-
-*If you installed with `arete install --ide claude`, open this workspace in Claude Code.*
 
 ---
 
