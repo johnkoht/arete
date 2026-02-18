@@ -451,6 +451,56 @@ Keep fast-access stakeholder memory on each person profile.
 - Person files get `## Memory Highlights (Auto)` with mention counts and recent sources
 - Meeting prep and agenda generation can use these highlights for better callouts
 
+#### People Intelligence Digest
+Run uncertainty-safe people classification in non-blocking batch mode.
+
+- `arete people intelligence digest --input inputs/people-candidates.json --json`
+- Low-confidence candidates route to `unknown_queue` by default (no forced customer fallback)
+- Suggestions include confidence, rationale, and evidence snippets
+- Digest output includes KPI metrics (misclassification rate, triage burden, interruption complaints, unknown queue rate)
+
+**Optional toggles (Phase 3):**
+- `--feature-extraction-tuning` — Enable extraction tuning for this run
+- `--feature-enrichment` — Enable optional enrichment for this run
+- `--extraction-quality <0..1>` — Attach extraction quality score to KPI snapshot
+
+**Policy config (optional):**
+Create `context/people-intelligence-policy.json`:
+
+```json
+{
+  "confidenceThreshold": 0.65,
+  "defaultTrackingIntent": "track",
+  "features": {
+    "enableExtractionTuning": false,
+    "enableEnrichment": false
+  }
+}
+```
+
+If missing or invalid, safe defaults are used.
+
+**Input format (`--input`)**:
+
+```json
+[
+  {
+    "name": "Sam Internal",
+    "email": "sam@acme.com",
+    "company": "Acme",
+    "text": "internal planning sync attendee",
+    "source": "meeting-1.md",
+    "actualRoleLens": "customer"
+  }
+]
+```
+
+`actualRoleLens` is optional and only used for misclassification KPI evaluation.
+
+**KPI snapshots:**
+- Stored at `.arete/memory/metrics/people-intelligence.jsonl`
+- One JSON record per digest run for trend review
+
 #### Proactive Context Assembly
 Areté searches ALL available sources automatically when assembling briefings:
 - Context files, meeting transcripts, memory entries, project docs
@@ -669,12 +719,15 @@ arete people list [--category internal|customers|users]  # List people
 arete people show <slug|email>                           # Show person details
 arete people index                                       # Regenerate people index
 arete people memory refresh                              # Refresh person memory highlights
+arete people intelligence digest --input <path> [--json] # Batch people-intelligence suggestions
 ```
 
 ### Meetings
 
 ```bash
-arete meeting add --file <path>       # Add meeting from JSON
+arete meeting add --file <path>                 # Add meeting from JSON
+arete meeting process --latest [--json]         # Process latest meeting with people intelligence
+arete meeting process --file <path> [--json]    # Process a specific meeting file
 ```
 
 ### Integrations
@@ -899,10 +952,14 @@ npm install -g https://github.com/tobi/qmd
 - Create a project to update specific context areas
 - Use `periodic-review` skill to audit and refresh
 
-### Meetings Not Linked to People
+### Meetings Not Linked to People (or everyone became customers)
 
-- Ensure `internal_email_domain` is set in `arete.yaml` (e.g., `acme.com`)
-- Run `process-meetings` skill to propagate attendees to `people/`
+- Run `process-meetings` skill to propagate attendees and extract memory
+- For safer classification, run:
+  - `arete people intelligence digest --input inputs/people-candidates.json --json`
+- Treat `unknown_queue` as review-needed (don’t force `customers`)
+- Optional: configure `context/people-intelligence-policy.json` for threshold/toggles
+- `internal_email_domain` remains a fallback signal, not your only classifier
 - Check `attendee_ids` in meeting frontmatter
 
 ### Calendar Not Working (macOS)

@@ -1,17 +1,27 @@
 /**
- * arete meeting add — add meeting from JSON file or stdin
+ * arete meeting commands — add and process meetings
  */
 
 import {
   createServices,
   saveMeetingFile,
   meetingFilename,
+  slugifyPersonName,
+  PEOPLE_CATEGORIES,
 } from '@arete/core';
-import type { MeetingForSave } from '@arete/core';
+import type { MeetingForSave, PersonCategory } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { success, error, info } from '../formatters.js';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { success, error, info, warn } from '../formatters.js';
+
+type AttendeeCandidate = {
+  name?: string;
+  email?: string | null;
+  text?: string;
+  source: string;
+};
 
 const DEFAULT_TEMPLATE = `# {title}
 **Date**: {date}
@@ -122,6 +132,322 @@ export function registerMeetingCommands(program: Command): void {
         }
       },
     );
+
+  meetingCmd
+    .command('process')
+    .description('Process a meeting file with People Intelligence classification')
+    .option('--file <path>', 'Path to meeting markdown file (relative to workspace or absolute)')
+    .option('--latest', 'Process latest meeting in resources/meetings')
+    .option('--threshold <n>', 'Confidence threshold override (default from policy or 0.65)')
+    .option('--feature-extraction-tuning', 'Enable extraction tuning for this run')
+    .option('--feature-enrichment', 'Enable optional enrichment for this run')
+    .option('--dry-run', 'Analyze only; do not write people files or attendee_ids')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: {
+      file?: string;
+      latest?: boolean;
+      threshold?: string;
+      featureExtractionTuning?: boolean;
+      featureEnrichment?: boolean;
+      dryRun?: boolean;
+      json?: boolean;
+    }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      if (!opts.file && !opts.latest) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Provide --file <path> or --latest' }));
+        } else {
+          error('Provide --file <path> or --latest');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+      const meetingPath = await resolveMeetingPath(
+        services,
+        paths.resources,
+        root,
+        opts.file,
+        Boolean(opts.latest),
+      );
+
+      if (!meetingPath) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'No meeting file found to process' }));
+        } else {
+          error('No meeting file found to process');
+        }
+        process.exit(1);
+      }
+
+      const content = await services.storage.read(meetingPath);
+      if (!content) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: `Meeting not found: ${meetingPath}` }));
+        } else {
+          error(`Meeting not found: ${meetingPath}`);
+        }
+        process.exit(1);
+      }
+
+      const attendees = extractAttendeesFromMeeting(content, meetingPath, root);
+      if (attendees.length === 0) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: true, meeting: meetingPath, candidates: 0, message: 'No attendees detected' }));
+        } else {
+          warn('No attendees detected in meeting content.');
+        }
+        return;
+      }
+
+      const thresholdRaw = opts.threshold ? Number(opts.threshold) : undefined;
+      const confidenceThreshold =
+        typeof thresholdRaw === 'number' && Number.isFinite(thresholdRaw)
+          ? thresholdRaw
+          : undefined;
+
+      const digest = await services.entity.suggestPeopleIntelligence(
+        attendees.map((candidate) => ({
+          name: candidate.name,
+          email: candidate.email ?? null,
+          text: candidate.text ?? null,
+          source: candidate.source,
+        })),
+        paths,
+        {
+          confidenceThreshold,
+          features: {
+            enableExtractionTuning: Boolean(opts.featureExtractionTuning),
+            enableEnrichment: Boolean(opts.featureEnrichment),
+          },
+        },
+      );
+
+      const dryRun = Boolean(opts.dryRun);
+      const applied: Array<{ slug: string; category: PersonCategory }> = [];
+      const unknownQueue = digest.suggestions.filter((s) => s.recommendation.category === 'unknown_queue');
+
+      if (!dryRun) {
+        for (const suggestion of digest.suggestions) {
+          const category = suggestion.recommendation.category;
+          if (category === 'unknown_queue') continue;
+
+          const name = suggestion.candidate.name?.trim();
+          if (!name) continue;
+
+          const slug = slugifyPersonName(name);
+          const personPath = join(paths.people, category, `${slug}.md`);
+          const exists = await services.storage.exists(personPath);
+
+          if (!exists) {
+            const frontmatter = [
+              '---',
+              `name: "${name.replace(/"/g, '\\"')}"`,
+              `category: "${category}"`,
+              suggestion.candidate.email ? `email: "${suggestion.candidate.email}"` : null,
+              suggestion.candidate.company ? `company: "${suggestion.candidate.company}"` : null,
+              '---',
+              '',
+              `# ${name}`,
+              '',
+              `- Created from meeting process on ${new Date().toISOString().slice(0, 10)}`,
+              '',
+            ].filter((line): line is string => line != null).join('\n');
+            await services.storage.write(personPath, frontmatter);
+          }
+
+          applied.push({ slug, category });
+        }
+
+        const attendeeIds = [...new Set(applied.map((p) => p.slug))];
+        if (attendeeIds.length > 0) {
+          const updatedMeeting = upsertAttendeeIds(content, attendeeIds);
+          if (updatedMeeting !== content) {
+            await services.storage.write(meetingPath, updatedMeeting);
+          }
+        }
+
+        if (applied.length > 0) {
+          await services.entity.buildPeopleIndex(paths);
+        }
+      }
+
+      const response = {
+        success: true,
+        meeting: meetingPath,
+        candidates: attendees.length,
+        digest,
+        dryRun,
+        applied,
+        unknownQueue: unknownQueue.map((u) => ({
+          name: u.candidate.name ?? null,
+          confidence: u.confidence,
+          rationale: u.rationale,
+        })),
+      };
+
+      if (opts.json) {
+        console.log(JSON.stringify(response, null, 2));
+        return;
+      }
+
+      success(`Processed meeting: ${meetingPath}`);
+      info(`Candidates: ${attendees.length}`);
+      info(`Applied: ${applied.length}`);
+      info(`Unknown queue: ${unknownQueue.length}`);
+      if (unknownQueue.length > 0) {
+        warn('Some attendees remain in unknown_queue and require review.');
+      }
+    });
+}
+
+async function resolveMeetingPath(
+  services: Awaited<ReturnType<typeof createServices>>,
+  resourcesPath: string,
+  root: string,
+  file: string | undefined,
+  latest: boolean,
+): Promise<string | null> {
+  if (file) {
+    return file.startsWith('/') ? file : join(root, file);
+  }
+
+  if (!latest) return null;
+  const meetingsDir = join(resourcesPath, 'meetings');
+  const files = await services.storage.list(meetingsDir, { extensions: ['.md'] });
+  const filtered = files
+    .filter((path) => !path.endsWith('/index.md') && !path.endsWith('index.md'))
+    .sort((a, b) => b.localeCompare(a));
+  return filtered[0] ?? null;
+}
+
+function extractFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+  try {
+    const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+    return { frontmatter, body: match[2] };
+  } catch {
+    return { frontmatter: {}, body: content };
+  }
+}
+
+function parseAttendeeToken(token: string): { name?: string; email?: string | null } {
+  const trimmed = token.trim();
+  if (!trimmed) return {};
+
+  const angleMatch = trimmed.match(/^(.+?)\s*<([^>]+)>$/);
+  if (angleMatch) {
+    return {
+      name: angleMatch[1].trim(),
+      email: angleMatch[2].trim().toLowerCase(),
+    };
+  }
+
+  const emailOnly = trimmed.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+  if (emailOnly) {
+    return {
+      name: trimmed.split('@')[0].replace(/[._-]/g, ' '),
+      email: trimmed.toLowerCase(),
+    };
+  }
+
+  return { name: trimmed, email: null };
+}
+
+function dedupeCandidates(candidates: AttendeeCandidate[]): AttendeeCandidate[] {
+  const seen = new Set<string>();
+  const unique: AttendeeCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const key = `${candidate.email?.toLowerCase() ?? ''}|${candidate.name?.toLowerCase() ?? ''}`;
+    if (!candidate.name && !candidate.email) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
+  }
+
+  return unique;
+}
+
+function extractAttendeesFromMeeting(
+  content: string,
+  sourcePath: string,
+  root: string,
+): AttendeeCandidate[] {
+  const { frontmatter, body } = extractFrontmatter(content);
+  const candidates: AttendeeCandidate[] = [];
+
+  const attendees = frontmatter.attendees;
+  if (Array.isArray(attendees)) {
+    for (const attendee of attendees) {
+      if (typeof attendee === 'string') {
+        const parsed = parseAttendeeToken(attendee);
+        candidates.push({ ...parsed, source: relativePath(sourcePath, root), text: body.slice(0, 400) });
+      }
+    }
+  } else if (typeof attendees === 'string') {
+    for (const token of attendees.split(',')) {
+      const parsed = parseAttendeeToken(token);
+      candidates.push({ ...parsed, source: relativePath(sourcePath, root), text: body.slice(0, 400) });
+    }
+  }
+
+  const attendeesLine = body.match(/\*\*Attendees\*\*:\s*(.+)$/im) || body.match(/^Attendees:\s*(.+)$/im);
+  if (attendeesLine && attendeesLine[1]) {
+    for (const token of attendeesLine[1].split(',')) {
+      const parsed = parseAttendeeToken(token);
+      candidates.push({ ...parsed, source: relativePath(sourcePath, root), text: body.slice(0, 400) });
+    }
+  }
+
+  const speakerRegex = /\*\*(?:\[[^\]]+\]\s*)?([^*:\n]{2,80})\*\*:/g;
+  let match: RegExpExecArray | null = null;
+  while ((match = speakerRegex.exec(body)) !== null) {
+    const speakerName = match[1].trim();
+    if (/^(unknown|you|host|speaker|attendees|date|duration|source)$/i.test(speakerName)) continue;
+    candidates.push({
+      name: speakerName,
+      email: null,
+      source: relativePath(sourcePath, root),
+      text: body.slice(Math.max(0, match.index - 120), Math.min(body.length, match.index + 220)),
+    });
+  }
+
+  return dedupeCandidates(candidates);
+}
+
+function upsertAttendeeIds(content: string, attendeeIds: string[]): string {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!match) {
+    const frontmatter = stringifyYaml({ attendee_ids: attendeeIds }).trimEnd();
+    return `---\n${frontmatter}\n---\n\n${content}`;
+  }
+
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = (parseYaml(match[1]) as Record<string, unknown>) ?? {};
+  } catch {
+    parsed = {};
+  }
+
+  parsed.attendee_ids = attendeeIds;
+  const yaml = stringifyYaml(parsed).trimEnd();
+  return `---\n${yaml}\n---\n\n${match[2]}`;
+}
+
+function relativePath(path: string, root: string): string {
+  return path.startsWith(root) ? path.slice(root.length + 1) : path;
 }
 
 function normalizeMeetingInput(raw: Record<string, unknown>): MeetingForSave {
@@ -138,8 +464,13 @@ function normalizeMeetingInput(raw: Record<string, unknown>): MeetingForSave {
     : [];
   const attendees = Array.isArray(raw.attendees)
     ? (raw.attendees as unknown[]).map((a): string | { name?: string | null; email?: string | null } =>
-        typeof a === 'string' ? a : { name: (a as Record<string, unknown>).name as string | undefined, email: (a as Record<string, unknown>).email as string | undefined },
-      )
+      typeof a === 'string'
+        ? a
+        : {
+          name: (a as Record<string, unknown>).name as string | undefined,
+          email: (a as Record<string, unknown>).email as string | undefined,
+        },
+    )
     : [];
 
   return {

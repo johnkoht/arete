@@ -26,20 +26,35 @@ Read meeting files from `resources/meetings/`, create or update person files fro
 
 ## Configuration
 
-**Internal vs external classification**: Add `internal_email_domain` to `arete.yaml` (workspace root) or `~/.arete/config.yaml`:
+### Legacy fallback (still supported)
+
+`internal_email_domain` can still be set in `arete.yaml` (workspace root) or `~/.arete/config.yaml`:
 
 ```yaml
 internal_email_domain: "acme.com"
 ```
 
-If absent, all attendees are classified as external (customers). Attendees whose email domain matches go to `people/internal/`; others to `people/customers/`.
+### Preferred path (People Intelligence)
+
+Use People Intelligence digest for uncertainty-safe classification:
+
+- Build attendee candidates from meeting files
+- Run `arete people intelligence digest --input <path> --json`
+- Respect `unknown_queue` for low-confidence candidates (do **not** force customer)
+
+Optional policy file:
+- `context/people-intelligence-policy.json`
 
 ## Workflow
 
 ### 1. Gather Context
 
-- Read `arete.yaml` or `~/.arete/config.yaml` for `internal_email_domain`. If absent, treat all attendees as external (customers).
 - List meeting files in `resources/meetings/`: default last 7 days (by filename `YYYY-MM-DD-*.md`). Support: `today`, `"search term"`, `--days-back=N`.
+- Build attendee candidate JSON from selected meeting(s): name/email/text/source.
+- Run People Intelligence digest:
+  - `arete people intelligence digest --input inputs/people-candidates.json --json`
+  - Optionally use `--feature-extraction-tuning` and `--feature-enrichment`.
+- Use legacy `internal_email_domain` only as a fallback signal (not as forced default).
 
 **Legacy meetings** (no YAML frontmatter): Parse title from first `#` heading, date from filename, attendees from body ("**Attendees**: ..." or "Attendees: ...").
 
@@ -49,10 +64,15 @@ Parse frontmatter and body (title, date, attendees, company, summary).
 
 **For each attendee** (from frontmatter `attendees` or body):
 
-- Resolve slug: lowercase, replace spaces with hyphens, strip non-alphanumeric (see `src/core/people.ts` slugifyPersonName).
-- Category: `people/internal/` if email domain matches `internal_email_domain`; else `people/customers/`.
-- Create `people/<category>/<slug>.md` if missing (frontmatter: name, email, company).
-- Update existing: append "Last met: YYYY-MM-DD" or add to "Recent meetings".
+- Resolve slug: lowercase, replace spaces with hyphens, strip non-alphanumeric.
+- Use People Intelligence digest recommendation as primary category decision:
+  - `internal` → `people/internal/`
+  - `customers` → `people/customers/`
+  - `users` → `people/users/`
+  - `unknown_queue` → do not auto-file as customer; ask user to confirm or defer
+- Create `people/<category>/<slug>.md` only for confirmed categories.
+- For `unknown_queue`, present a review batch (name, confidence, rationale, evidence).
+- Update existing people: append "Last met: YYYY-MM-DD" or add to "Recent meetings".
 
 ### 3. Write attendee_ids to Meeting Frontmatter
 

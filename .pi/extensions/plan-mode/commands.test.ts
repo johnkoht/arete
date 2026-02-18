@@ -1,11 +1,18 @@
-import { describe, it } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import {
 	createDefaultState,
 	getChangesSince,
 	extractPrdFeatureSlug,
 	hasUnsavedPlanChanges,
 	getSuggestedNextActions,
+	handlePlanSave,
+	handlePlanRename,
+	type PlanModeState,
+	type CommandContext,
+	type CommandPi,
 } from "./commands.js";
 
 describe("createDefaultState", () => {
@@ -105,5 +112,216 @@ describe("getSuggestedNextActions", () => {
 			hasPrd: false,
 		});
 		assert.ok(largeActions.includes("/review"));
+	});
+});
+
+// Test helpers
+const TEST_PLANS_DIR = "dev/plans-test";
+
+function createTestContext(overrides: Partial<CommandContext["ui"]> = {}): CommandContext {
+	return {
+		hasUI: true,
+		ui: {
+			select: async () => undefined,
+			confirm: async () => true,
+			notify: () => {},
+			editor: async () => undefined,
+			...overrides,
+		},
+	};
+}
+
+function createTestPi(): CommandPi & { entries: unknown[] } {
+	const entries: unknown[] = [];
+	return {
+		entries,
+		sendUserMessage: () => {},
+		sendMessage: () => {},
+		appendEntry: (_type, data) => entries.push(data),
+		setActiveTools: () => {},
+		getActiveTools: () => [],
+	};
+}
+
+function createTestState(overrides: Partial<PlanModeState> = {}): PlanModeState {
+	return {
+		...createDefaultState(),
+		...overrides,
+	};
+}
+
+function setupTestPlansDir(): void {
+	if (existsSync(TEST_PLANS_DIR)) {
+		rmSync(TEST_PLANS_DIR, { recursive: true, force: true });
+	}
+	mkdirSync(TEST_PLANS_DIR, { recursive: true });
+}
+
+function cleanupTestPlansDir(): void {
+	if (existsSync(TEST_PLANS_DIR)) {
+		rmSync(TEST_PLANS_DIR, { recursive: true, force: true });
+	}
+}
+
+function createTestPlan(slug: string, content: string): void {
+	const planDir = join(TEST_PLANS_DIR, slug);
+	mkdirSync(planDir, { recursive: true });
+	const frontmatter = `---
+title: ${slug.replace(/-/g, " ")}
+slug: ${slug}
+status: draft
+size: small
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+backlog_ref: null
+steps: 0
+---
+
+`;
+	writeFileSync(join(planDir, "plan.md"), frontmatter + content, "utf-8");
+}
+
+describe("handlePlanSave", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("prompts for name on first save when no slug exists", async () => {
+		let editorCalled = false;
+		const ctx = createTestContext({
+			editor: async (title, prefill) => {
+				editorCalled = true;
+				assert.ok(title.includes("Name"));
+				return "my-new-plan";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ planText: "# Test Plan\nSome content" });
+
+		// Note: This will try to save to real dev/plans/ since we can't easily inject basePath
+		// For a full integration test, we'd need to refactor savePlan to accept basePath
+		// For now, we verify the prompt behavior
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.equal(editorCalled, true, "Should prompt for plan name");
+	});
+
+	it("errors when trying to save with different name than current slug", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Test\nContent",
+			currentSlug: "existing-plan",
+		});
+
+		await handlePlanSave("different-name", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("already saved"), "Should warn about existing slug");
+		assert.ok(notifyMessage.includes("/plan rename"), "Should suggest rename command");
+	});
+
+	it("allows save without prompt when slug already exists", async () => {
+		let editorCalled = false;
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			editor: async () => {
+				editorCalled = true;
+				return "something";
+			},
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Test\nContent",
+			currentSlug: "existing-plan",
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.equal(editorCalled, false, "Should not prompt when slug exists");
+		assert.ok(notifyMessage.includes("Saved"), "Should confirm save");
+	});
+
+	it("cancels save when user dismisses name prompt", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			editor: async () => undefined, // User cancelled
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ planText: "# Test\nContent" });
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("cancelled"), "Should indicate cancellation");
+		assert.equal(state.currentSlug, null, "Should not set slug");
+	});
+});
+
+describe("handlePlanRename", () => {
+	it("errors when no active plan exists", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePlanRename("new-name", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No active plan"), "Should error on no plan");
+	});
+
+	it("errors when new name equals current name", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Test\nContent",
+			currentSlug: "my-plan",
+		});
+
+		await handlePlanRename("my-plan", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("same as current"), "Should note same name");
+	});
+
+	it("prompts for name when not provided", async () => {
+		let editorCalled = false;
+		const ctx = createTestContext({
+			editor: async (title, prefill) => {
+				editorCalled = true;
+				assert.equal(prefill, "old-plan");
+				return undefined; // Cancel
+			},
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Test\nContent",
+			currentSlug: "old-plan",
+		});
+
+		await handlePlanRename(undefined, ctx, pi, state);
+
+		assert.equal(editorCalled, true, "Should prompt for new name");
 	});
 });

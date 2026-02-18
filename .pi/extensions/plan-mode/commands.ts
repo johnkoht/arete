@@ -168,6 +168,9 @@ export async function handlePlan(
 		case "save":
 			await handlePlanSave(subcommand[1], ctx, pi, state);
 			break;
+		case "rename":
+			await handlePlanRename(subcommand[1], ctx, pi, state);
+			break;
 		case "status":
 			handlePlanStatus(ctx, state);
 			break;
@@ -182,7 +185,7 @@ export async function handlePlan(
 		}
 		default:
 			ctx.ui.notify(
-				`Unknown subcommand: ${cmd}. Available: new, list, open, save, status, delete`,
+				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete`,
 				"warning",
 			);
 	}
@@ -366,12 +369,34 @@ export async function handlePlanSave(
 		return;
 	}
 
-	// Derive slug from plan text title or use provided
+	// If user provided a slug AND we already have a different slug, guide to rename
+	if (providedSlug && state.currentSlug && providedSlug !== state.currentSlug) {
+		ctx.ui.notify(
+			`Plan already saved as '${state.currentSlug}'. Use /plan rename ${providedSlug} to change the name.`,
+			"warning",
+		);
+		return;
+	}
+
 	let slug = providedSlug ?? state.currentSlug;
+
+	// First save: prompt user for a name
 	if (!slug) {
 		const titleMatch = state.planText.match(/^#\s+(.+)/m);
-		const title = titleMatch ? titleMatch[1].trim() : "untitled-plan";
-		slug = slugify(title);
+		const suggestedTitle = titleMatch ? titleMatch[1].trim() : "untitled-plan";
+		const suggestedSlug = slugify(suggestedTitle);
+
+		const userInput = await ctx.ui.editor("Name this plan:", suggestedSlug);
+		if (!userInput?.trim()) {
+			ctx.ui.notify("Save cancelled. Use /plan save to try again.", "info");
+			return;
+		}
+
+		slug = slugify(userInput.trim());
+		if (!slug) {
+			ctx.ui.notify("Plan name must include letters or numbers.", "warning");
+			return;
+		}
 	}
 
 	const now = new Date().toISOString();
@@ -405,7 +430,94 @@ export async function handlePlanSave(
 		planSize: state.planSize,
 	});
 
-	ctx.ui.notify(`💾 Plan saved to dev/plans/${slug}/plan.md`, "info");
+	ctx.ui.notify(`💾 Saved to dev/plans/${slug}/plan.md`, "info");
+}
+
+/**
+ * Handle /plan rename <new-name> command.
+ * Renames the current plan by moving to a new folder and deleting the old one.
+ */
+export async function handlePlanRename(
+	newName: string | undefined,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	if (!state.currentSlug) {
+		ctx.ui.notify("No active plan to rename. Save a plan first with /plan save.", "warning");
+		return;
+	}
+
+	if (!state.planText) {
+		ctx.ui.notify("No plan content to rename.", "warning");
+		return;
+	}
+
+	// Prompt for new name if not provided
+	let newSlug: string;
+	if (newName) {
+		newSlug = slugify(newName);
+	} else {
+		const userInput = await ctx.ui.editor("Rename plan to:", state.currentSlug);
+		if (!userInput?.trim()) {
+			ctx.ui.notify("Rename cancelled.", "info");
+			return;
+		}
+		newSlug = slugify(userInput.trim());
+	}
+
+	if (!newSlug) {
+		ctx.ui.notify("Plan name must include letters or numbers.", "warning");
+		return;
+	}
+
+	if (newSlug === state.currentSlug) {
+		ctx.ui.notify("New name is the same as current name.", "info");
+		return;
+	}
+
+	// Check if target already exists
+	const targetExists = loadPlan(newSlug);
+	if (targetExists) {
+		ctx.ui.notify(`A plan named '${newSlug}' already exists. Choose a different name.`, "warning");
+		return;
+	}
+
+	const oldSlug = state.currentSlug;
+	const oldPlan = loadPlan(oldSlug);
+	if (!oldPlan) {
+		ctx.ui.notify(`Could not load current plan: ${oldSlug}`, "error");
+		return;
+	}
+
+	// Create new plan with updated frontmatter
+	const now = new Date().toISOString();
+	const newFrontmatter: PlanFrontmatter = {
+		...oldPlan.frontmatter,
+		title: newSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+		slug: newSlug,
+		updated: now,
+	};
+
+	// Save to new location
+	savePlan(newSlug, newFrontmatter, state.planText);
+
+	// Delete old plan folder
+	const { deletePlan } = await import("./persistence.js");
+	deletePlan(oldSlug);
+
+	// Update state
+	state.currentSlug = newSlug;
+
+	pi.appendEntry("plan-mode", {
+		enabled: state.planModeEnabled,
+		todos: state.todoItems,
+		executing: state.executionMode,
+		currentSlug: state.currentSlug,
+		planSize: state.planSize,
+	});
+
+	ctx.ui.notify(`📝 Renamed '${oldSlug}' → '${newSlug}' (dev/plans/${newSlug}/)`, "info");
 }
 
 function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
