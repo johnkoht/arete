@@ -62,9 +62,22 @@ export type PeopleIntelligenceCandidate = {
 
 /** Evidence item for people intelligence suggestions */
 export type PeopleIntelligenceEvidence = {
-  kind: 'email-domain' | 'profile-hint' | 'text-signal' | 'existing-person';
+  kind: 'email-domain' | 'profile-hint' | 'text-signal' | 'existing-person' | 'enrichment';
   source: string;
   snippet: string;
+};
+
+/** Feature toggles for people intelligence behavior */
+export type PeopleIntelligenceFeatureToggles = {
+  enableExtractionTuning: boolean;
+  enableEnrichment: boolean;
+};
+
+/** Policy configuration for people intelligence */
+export type PeopleIntelligencePolicy = {
+  confidenceThreshold: number;
+  defaultTrackingIntent: TrackingIntent;
+  features: PeopleIntelligenceFeatureToggles;
 };
 
 /** Recommendation payload for people intelligence */
@@ -80,6 +93,7 @@ export type PeopleIntelligenceSuggestion = {
   rationale: string;
   evidence: PeopleIntelligenceEvidence[];
   status: 'recommended' | 'needs-review';
+  enrichmentApplied: boolean;
 };
 
 /** KPI snapshot for people intelligence digest */
@@ -88,6 +102,7 @@ export type PeopleIntelligenceMetrics = {
   triageBurdenMinutes: number;
   interruptionComplaintRate: number;
   unknownQueueRate: number;
+  extractionQualityScore: number | null;
 };
 
 /** Digest output (batch review default) */
@@ -98,6 +113,15 @@ export type PeopleIntelligenceDigest = {
   unknownQueueCount: number;
   suggestions: PeopleIntelligenceSuggestion[];
   metrics: PeopleIntelligenceMetrics;
+  policy: PeopleIntelligencePolicy;
+};
+
+/** Persisted KPI snapshot record for trend analysis */
+export type PeopleIntelligenceSnapshot = {
+  createdAt: string;
+  metrics: PeopleIntelligenceMetrics;
+  totalCandidates: number;
+  unknownQueueCount: number;
 };
 
 /** A resolved entity */

@@ -1,30 +1,3 @@
----
-title: Onboarding Improvements
-slug: onboarding-improvements
-status: building
-size: large
-created: 2026-02-18T03:12:45.227Z
-updated: 2026-02-18T19:42:40.681Z
-completed: null
-has_review: true
-has_pre_mortem: true
-has_prd: true
-backlog_ref: null
-steps: 5
----
-
-Absolutely—great next step.
-
-I can’t directly write `dev/autonomous/prd.json` in Plan Mode, but here’s a ready-to-paste **Phase 2 PRD JSON** for the autonomous loop.
-
-Plan:
-1. Back up current Phase 1 task file (`dev/autonomous/prd.json`) to archive so you can roll back if needed.
-2. Replace `dev/autonomous/prd.json` with the Phase 2 draft below.
-3. Run `/build` to start the autonomous loop for Stream C (People Intelligence MVP).
-4. Monitor with `/build status` and verify quality gates (`npm run typecheck`, `npm test`) before marking complete.
-5. After completion, validate against child PRD ACs in `dev/prds/onboarding-improvements/child-people-intelligence-mvp.md` and decide whether to proceed to Phase 3.
-
-```json
 {
   "name": "onboarding-improvements-phase2",
   "branchName": "feature/onboarding-improvements",
@@ -41,9 +14,9 @@ Plan:
         "Out-of-scope items explicitly exclude Phase 3 enrichment/policy tuning",
         "Skill is independently routable without requiring Stream A/B runtime coupling"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "c2-classification-data-model",
@@ -56,9 +29,9 @@ Plan:
         "Type safety is preserved (no any), and NodeNext import conventions are respected",
         "Unit tests cover happy path, mixed identity, and unknown/edge cases"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c1-people-intelligence-skill-scaffold"
       ]
@@ -74,9 +47,9 @@ Plan:
         "Fallback behavior works when source hints are sparse or missing",
         "Tests validate payload schema and traceability requirements"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c2-classification-data-model"
       ]
@@ -92,9 +65,9 @@ Plan:
         "Threshold behavior is deterministic and documented",
         "Regression tests prove uncertain entities are not force-classified"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c3-evidence-backed-suggestion-payload"
       ]
@@ -110,9 +83,9 @@ Plan:
         "Review output still preserves evidence and confidence context",
         "Tests validate default mode and non-blocking behavior"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c4-unknown-queue-threshold-routing"
       ]
@@ -128,9 +101,9 @@ Plan:
         "Classification falls back to evidence-first logic with unknown queue where needed",
         "Tests cover both hint-rich and hint-sparse scenarios"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c5-digest-review-default-ux"
       ]
@@ -146,9 +119,9 @@ Plan:
         "Metric outputs are documented and accessible for phase-gate decisions",
         "Tests validate metric calculation/output integrity"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c6-contract-consumption-and-graceful-degradation"
       ]
@@ -164,21 +137,20 @@ Plan:
         "Default review flow remains non-blocking and unknown queue behavior is verified",
         "Stream C demonstrates graceful degradation when Stream A/B hints are missing"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
       "dependencies": [
         "c7-kpi-instrumentation-and-visibility"
       ]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T11:15:23.000Z",
+    "createdAt": "2026-02-18T11:35:00.000Z",
     "totalTasks": 8,
-    "completedTasks": 0,
-    "failedTasks": 0
+    "completedTasks": 8,
+    "failedTasks": 0,
+    "updatedAt": "2026-02-18T17:38:48.548Z",
+    "completedAt": "2026-02-18T17:38:48.550Z"
   }
 }
-```
-
-If you want, next I can draft a matching `dev/autonomous/progress.txt` Phase 2 starter template so your `/build` run has clean tracking from the first loop.

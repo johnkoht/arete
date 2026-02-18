@@ -12,3 +12,13 @@ export {
   TEMPLATE_REGISTRY,
 } from './templates.js';
 export { checkDuplicate } from './dedup.js';
+export {
+  buildContextDumpArtifacts,
+  buildContextDumpQualityReport,
+} from './context-dump-quality.js';
+export type {
+  ContextDumpInput,
+  ContextDumpInputType,
+  ContextDumpArtifact,
+  ContextDumpQualityReport,
+} from './context-dump-quality.js';

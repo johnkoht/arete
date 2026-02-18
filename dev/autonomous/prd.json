@@ -1,156 +1,148 @@
 {
-  "name": "onboarding-improvements-phase2",
+  "name": "onboarding-improvements-phase3",
   "branchName": "feature/onboarding-improvements",
-  "goal": "Implement Phase 2: People Intelligence MVP (Stream C) with unknown queue defaults, evidence-backed recommendations, digest review UX, and KPI visibility.",
+  "goal": "Implement Phase 3 enhancements for Stream B + C: improve context extraction quality, add configurable people-intelligence policy tuning, and ship optional enrichment with safe feature toggles.",
   "userStories": [
     {
-      "id": "c1-people-intelligence-skill-scaffold",
-      "title": "Create people-intelligence skill scaffold",
-      "description": "Create packages/runtime/skills/people-intelligence/SKILL.md defining triggers, scope, unknown queue behavior, and non-blocking review flow. Follow existing skill conventions.",
+      "id": "p3-b1-extraction-quality-baseline",
+      "title": "Establish extraction quality baseline and acceptance corpus",
+      "description": "Create a deterministic baseline corpus and scoring harness for Rapid Context Dump outputs to measure extraction quality before tuning.",
       "acceptanceCriteria": [
-        "SKILL.md exists at packages/runtime/skills/people-intelligence/",
-        "Skill description aligns to Stream C and Phase 2 scope",
-        "Triggers cover user intents for people triage/classification",
-        "Out-of-scope items explicitly exclude Phase 3 enrichment/policy tuning",
-        "Skill is independently routable without requiring Stream A/B runtime coupling"
+        "Baseline corpus fixtures exist for website, folder, and pasted text paths",
+        "Quality checks cover draft completeness and evidence traceability",
+        "A repeatable score/report format is documented in code comments or tests",
+        "No behavior regression in existing Phase 1 draft workflow"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1
     },
     {
-      "id": "c2-classification-data-model",
-      "title": "Implement uncertainty-safe people classification model",
-      "description": "Introduce or extend model structures to support multi-dimensional classification: affiliation (internal/external), role lens (customer/user/partner/unknown), and tracking intent (track/defer/ignore), with explicit unknown state.",
+      "id": "p3-b2-extraction-tuning-improvements",
+      "title": "Improve extraction and draft synthesis quality",
+      "description": "Tune extraction heuristics and draft synthesis so draft context artifacts are higher signal with clearer source references.",
       "acceptanceCriteria": [
-        "Data model supports unknown state as first-class value",
-        "Model supports mixed identities without forced single-label assumptions",
-        "Low-confidence outputs are representable without coercion to customer/user",
-        "Type safety is preserved (no any), and NodeNext import conventions are respected",
-        "Unit tests cover happy path, mixed identity, and unknown/edge cases"
+        "Extraction logic improves draft quality on baseline corpus",
+        "Draft artifacts preserve explicit source/evidence references",
+        "Fallback behavior remains non-blocking when one source is low quality",
+        "Unit tests validate happy path + edge cases for tuned extraction"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c1-people-intelligence-skill-scaffold"
+        "p3-b1-extraction-quality-baseline"
       ]
     },
     {
-      "id": "c3-evidence-backed-suggestion-payload",
-      "title": "Implement recommendation payload with confidence and evidence",
-      "description": "Implement suggestion output contract that includes recommendation, confidence score, rationale text, evidence snippets, and source pointers/artifact references.",
+      "id": "p3-c1-policy-config-surface",
+      "title": "Add policy configuration for people-intelligence thresholds",
+      "description": "Introduce configurable policy knobs for confidence threshold and routing behavior while preserving safe defaults.",
       "acceptanceCriteria": [
-        "Every recommendation includes confidence + rationale + evidence snippets",
-        "Source pointers/artifact refs are included for traceability",
-        "Recommendations missing evidence are flagged as non-auto-recommended",
-        "Fallback behavior works when source hints are sparse or missing",
-        "Tests validate payload schema and traceability requirements"
+        "Policy config supports confidence threshold tuning with defaults",
+        "Unknown queue behavior remains default-safe when config is missing",
+        "Policy loading includes graceful fallback on invalid values",
+        "Unit tests validate default, custom, and invalid-config scenarios"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c2-classification-data-model"
+        "p3-b2-extraction-tuning-improvements"
       ]
     },
     {
-      "id": "c4-unknown-queue-threshold-routing",
-      "title": "Add unknown queue and threshold-based default routing",
-      "description": "Implement queueing/routing logic so low-confidence classifications default to unknown queue, with no forced customer default behavior.",
+      "id": "p3-c2-enrichment-optional-mode",
+      "title": "Implement optional enrichment pathway",
+      "description": "Add optional enrichment inputs for better suggestions without making enrichment a release blocker.",
       "acceptanceCriteria": [
-        "Unknown queue exists as a first-class destination",
-        "Low-confidence classifications always route to unknown queue by default",
-        "No forced customer default occurs when confidence is below threshold",
-        "Threshold behavior is deterministic and documented",
-        "Regression tests prove uncertain entities are not force-classified"
+        "Enrichment path is opt-in and disabled by default",
+        "System degrades gracefully when enrichment is unavailable",
+        "Suggestion payload clearly indicates when enrichment was applied",
+        "No forced coupling between enrichment and core classification flow"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c3-evidence-backed-suggestion-payload"
+        "p3-c1-policy-config-surface"
       ]
     },
     {
-      "id": "c5-digest-review-default-ux",
-      "title": "Implement batch/digest review as default non-blocking flow",
-      "description": "Implement default review mode as digest/batch rather than per-person interruptions, ensuring workflows remain non-blocking.",
+      "id": "p3-c3-feature-toggle-safety",
+      "title": "Add feature toggles for Phase 3 enhancements",
+      "description": "Guard Phase 3 extraction/enrichment behavior behind explicit toggles so Phase 1/2 behavior remains stable.",
       "acceptanceCriteria": [
-        "Default review mode is digest/batch",
-        "Per-person interruptive prompts are not the primary flow",
-        "User workflow continues without forced immediate triage",
-        "Review output still preserves evidence and confidence context",
-        "Tests validate default mode and non-blocking behavior"
+        "Feature toggles exist for extraction tuning and enrichment mode",
+        "Default toggle values preserve existing Phase 1/2 behavior",
+        "Toggles can be enabled independently without cross-stream breakage",
+        "Regression tests verify old behavior when toggles are off"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c4-unknown-queue-threshold-routing"
+        "p3-c2-enrichment-optional-mode"
       ]
     },
     {
-      "id": "c6-contract-consumption-and-graceful-degradation",
-      "title": "Consume Stream A/B contracts with graceful degradation",
-      "description": "Consume profile/domain hints from Streams A/B when present and degrade gracefully when hints are unavailable.",
+      "id": "p3-c4-metrics-trend-persistence",
+      "title": "Persist KPI snapshots for trend review",
+      "description": "Persist People Intelligence and Context Dump KPI snapshots so phase-gate reviews can evaluate week-over-week trends.",
       "acceptanceCriteria": [
-        "Consumes profile fields from Stream A contract when available",
-        "Consumes domain/company hints from Stream B contract when available",
-        "If hints are missing, behavior degrades gracefully without failure",
-        "Classification falls back to evidence-first logic with unknown queue where needed",
-        "Tests cover both hint-rich and hint-sparse scenarios"
+        "Snapshot format stores timestamped KPI records",
+        "Misclassification, triage burden, interruption, and extraction quality metrics are persisted",
+        "Read path supports recent-trend retrieval for review",
+        "Tests validate snapshot write/read and malformed data handling"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c5-digest-review-default-ux"
+        "p3-c3-feature-toggle-safety"
       ]
     },
     {
-      "id": "c7-kpi-instrumentation-and-visibility",
-      "title": "Add KPI instrumentation for Phase 2 success metrics",
-      "description": "Implement measurable outputs for misclassification rate, triage burden, and interruption complaints, suitable for weekly MVP phase reviews.",
+      "id": "p3-integration-regression-suite",
+      "title": "Expand integration tests for Phase 2+3 flows",
+      "description": "Add integration tests that validate digest mode, unknown queue routing, contract fallback, and toggle-off backward compatibility for enhanced flows.",
       "acceptanceCriteria": [
-        "Misclassification rate is measurable from generated outputs",
-        "Triage burden is measurable (time/volume proxy or equivalent)",
-        "Interruption complaints signal is tracked for review",
-        "Metric outputs are documented and accessible for phase-gate decisions",
-        "Tests validate metric calculation/output integrity"
+        "New integration coverage exists for people intelligence digest end-to-end",
+        "Integration coverage verifies unknown queue + internal classification with hints",
+        "Integration coverage verifies graceful degradation without hints",
+        "Integration coverage verifies backward compatibility when Phase 3 toggles are disabled"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c6-contract-consumption-and-graceful-degradation"
+        "p3-c4-metrics-trend-persistence"
       ]
     },
     {
-      "id": "phase2-validation",
-      "title": "Phase 2 validation and quality gates",
-      "description": "Run full quality gates and validate Phase 2 acceptance criteria against the child PRD and umbrella PRD independent-ship constraints.",
+      "id": "phase3-validation",
+      "title": "Phase 3 full validation and quality gates",
+      "description": "Run full validation for Phase 3 scope, including typecheck, full test suite, and all integration tests.",
       "acceptanceCriteria": [
         "npm run typecheck passes",
         "npm test passes",
-        "People Intelligence flow satisfies child PRD acceptance criteria 1-6",
-        "Default review flow remains non-blocking and unknown queue behavior is verified",
-        "Stream C demonstrates graceful degradation when Stream A/B hints are missing"
+        "All integration tests pass across core + cli integration directories",
+        "Phase 3 enhancements do not break independent ship constraints from prior phases"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "c7-kpi-instrumentation-and-visibility"
+        "p3-integration-regression-suite"
       ]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T11:35:00.000Z",
+    "createdAt": "2026-02-18T12:10:00.000Z",
     "totalTasks": 8,
     "completedTasks": 8,
     "failedTasks": 0,
-    "updatedAt": "2026-02-18T17:38:48.548Z",
-    "completedAt": "2026-02-18T17:38:48.550Z"
+    "updatedAt": "2026-02-18T19:49:49.688Z",
+    "completedAt": "2026-02-18T19:49:49.689Z"
   }
 }

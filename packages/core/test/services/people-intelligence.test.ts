@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { EntityService } from '../../src/services/entity.js';
@@ -134,5 +134,56 @@ describe('EntityService.suggestPeopleIntelligence', () => {
     assert.equal(digest.totalCandidates, 1);
     assert.equal(digest.suggestions[0].recommendation.roleLens, 'unknown');
     assert.equal(digest.suggestions[0].recommendation.category, 'unknown_queue');
+  });
+
+  it('loads policy config and supports feature toggles with safe defaults', async () => {
+    writeFileSync(
+      join(paths.context, 'people-intelligence-policy.json'),
+      JSON.stringify({
+        confidenceThreshold: 0.5,
+        defaultTrackingIntent: 'ignore',
+        features: {
+          enableExtractionTuning: true,
+          enableEnrichment: true,
+        },
+      }, null, 2),
+      'utf8',
+    );
+
+    const digest = await service.suggestPeopleIntelligence(
+      [
+        {
+          name: 'Buyer Contact',
+          company: 'Customer Buyer Team',
+          text: 'customer buyer asked about renewal plans',
+          source: 'meeting-5.md',
+        },
+      ],
+      paths,
+    );
+
+    assert.equal(digest.policy.confidenceThreshold, 0.5);
+    assert.equal(digest.policy.defaultTrackingIntent, 'ignore');
+    assert.equal(digest.policy.features.enableEnrichment, true);
+    assert.equal(digest.suggestions[0].enrichmentApplied, true);
+    assert.ok(digest.suggestions[0].evidence.some((item) => item.kind === 'enrichment'));
+  });
+
+  it('persists snapshots and reads recent valid entries only', async () => {
+    await service.suggestPeopleIntelligence(
+      [{ name: 'Unknown', text: 'small mention', source: 'meeting-6.md' }],
+      paths,
+      { extractionQualityScore: 0.72 },
+    );
+
+    const snapshotPath = join(paths.memory, 'metrics', 'people-intelligence.jsonl');
+    const existing = readFileSync(snapshotPath, 'utf8');
+    writeFileSync(snapshotPath, existing + '{"bad-json"\n', 'utf8');
+
+    const snapshots = await service.getRecentPeopleIntelligenceSnapshots(paths, 5);
+    assert.ok(snapshots.length >= 1);
+    const latest = snapshots[snapshots.length - 1];
+    assert.equal(latest.metrics.extractionQualityScore, 0.72);
+    assert.equal(typeof latest.totalCandidates, 'number');
   });
 });

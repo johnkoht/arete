@@ -1,0 +1,127 @@
+# Progress Log - onboarding-improvements-phase1
+
+## Context
+- PRD: dev/prds/onboarding-improvements/prd.md
+- Child PRDs:
+  - Stream A: dev/prds/onboarding-improvements/child-onboarding-mvp.md
+  - Stream B: dev/prds/onboarding-improvements/child-rapid-context-dump-mvp.md
+- Task list: dev/autonomous/prd.json
+- Branch: feature/onboarding-improvements
+
+## Phase 1 Scope
+- Stream A: Onboarding MVP skill (5 tasks: a1-a5)
+- Stream B: Rapid Context Dump skill (4 tasks: b1-b4)
+- Validation: 1 task (phase1-validation)
+
+## Execution Notes
+- Sequence: scaffold skills first (a1, b1), then build out features
+- Quality gates: typecheck + test after each code change
+- Add tests if any implementation touches TypeScript code
+- Contract compliance: ensure profile fields (A) and domain hints (B) for Phase 2 compatibility
+
+---
+
+## 2026-02-18 Phase 1 Implementation Start
+
+- Archived spec-hardening prd.json to:
+  - dev/autonomous/archive/2026-02-18-onboarding-spec-hardening/
+- Created 10-task implementation prd.json for Phase 1
+- Pending: pre-mortem approval before task loop
+
+### Task a1 — Create onboarding skill scaffold ✅
+- Created packages/runtime/skills/onboarding/SKILL.md
+- Full conversational onboarding flow with triggers, discovery, paths, first-win, graduation
+
+### Task a2 — Discovery and path routing ✅
+- Included in a1: 3 discovery questions, deterministic Path A/B/C routing
+
+### Task b1 — Create rapid-context-dump skill scaffold ✅
+- Created packages/runtime/skills/rapid-context-dump/SKILL.md
+- Input handling, extraction, draft generation, review workflow
+
+### Task b2 — Input handling and fallback ✅
+- Included in b1: paste/folder/URL/upload with fallback matrix
+
+### Task b3 — Draft output and review ✅
+- Included in b1: [DRAFT] headers, source refs, review checklist, promotion flow
+
+### Task a3 — Path A context dump integration ✅
+- Included in a1: Path A hands off to rapid-context-dump, return for first-win
+
+### Task a4 — First-win handoff ✅
+- Included in a1: Context-aware recommendations, graduation message
+
+### Task a5 — Contract profile fields ✅
+- Included in a1: profile.name/role/company captured, stored in context/profile.md
+
+### Task b4 — Contract domain hints ✅
+- Included in b1: Domain extraction, stored in context/domain-hints.md
+
+### Task phase1-validation ✅
+- npm run typecheck: PASS
+- npm test: PASS (279/279)
+- Skills in packages/runtime/skills/ with proper frontmatter
+- Phase 1 ship-check: Skills have no dependency on People Intelligence
+
+---
+
+## Fast Follow: arete onboard CLI + Identity Capture
+
+### Updates to onboarding skill ✅
+- Added Q0 (Identity) to discovery phase: name, email, company/website
+- Profile capture now includes email for People Intelligence matching
+- Contract v1 updated: profile.email added
+
+### New: arete onboard CLI ✅
+- Interactive command collects: name, email, company, optional website
+- Creates context/profile.md with user identity
+- Extracts domain hints to context/domain-hints.md
+- Supports --json mode for scripting
+- 5 tests added (packages/cli/test/commands/onboard.test.ts)
+
+### Validation ✅
+- npm run typecheck: PASS
+- npm test: PASS (286/286, +5 new tests)
+
+---
+
+## 2026-02-18 Phase 2 Implementation Start
+
+- Loaded execute-prd workflow for onboarding-improvements PRD
+- Scope: Stream C (People Intelligence MVP) task list from dev/autonomous/prd.json
+- Pre-mortem focus applied: unknown-queue defaults, evidence traceability, non-blocking digest UX, graceful contract degradation
+
+### Task c1 — Create people-intelligence skill scaffold ✅
+- Created packages/runtime/skills/people-intelligence/SKILL.md
+- Added triggers, scope boundaries, and digest-first workflow
+
+### Task c2 — Implement uncertainty-safe classification model ✅
+- Extended entity intelligence models in packages/core/src/models/entities.ts
+- Added multi-dimensional classification types (affiliation, role lens, tracking intent)
+
+### Task c3 — Recommendation payload with confidence + evidence ✅
+- Added suggestion payload types and implemented evidence/rationale generation in EntityService
+- Added traceability fields (evidence kind/source/snippet)
+
+### Task c4 — Unknown queue threshold routing ✅
+- Implemented threshold-based routing in EntityService.suggestPeopleIntelligence()
+- Low-confidence suggestions default to unknown_queue with needs-review status
+
+### Task c5 — Digest/batch review default UX ✅
+- Added CLI workflow: arete people intelligence digest --input <file>
+- Default output mode is digest (non-blocking batch review)
+
+### Task c6 — Contract consumption + graceful degradation ✅
+- Consumes Stream A/B hints from context/profile.md + context/domain-hints.md when available
+- Gracefully degrades to evidence-first classification when hints are missing
+
+### Task c7 — KPI instrumentation ✅
+- Added digest metrics: misclassificationRate, triageBurdenMinutes, interruptionComplaintRate, unknownQueueRate
+- Exposed metrics in JSON and human-readable digest output
+
+### Task phase2-validation ✅
+- Added tests:
+  - packages/core/test/services/people-intelligence.test.ts
+  - packages/cli/test/commands/people-intelligence.test.ts
+- npm run typecheck: PASS
+- npm test: PASS (290/290)

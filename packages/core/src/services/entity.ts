@@ -19,7 +19,10 @@ import type {
   PeopleIntelligenceCandidate,
   PeopleIntelligenceDigest,
   PeopleIntelligenceEvidence,
+  PeopleIntelligenceFeatureToggles,
   PeopleIntelligenceMetrics,
+  PeopleIntelligencePolicy,
+  PeopleIntelligenceSnapshot,
   PeopleIntelligenceSuggestion,
   PersonAffiliation,
   PersonRoleLens,
@@ -704,10 +707,66 @@ export interface PeopleIntelligenceOptions {
   confidenceThreshold?: number;
   internalDomains?: string[];
   defaultTrackingIntent?: TrackingIntent;
+  features?: Partial<PeopleIntelligenceFeatureToggles>;
+  extractionQualityScore?: number | null;
 }
+
+const DEFAULT_FEATURE_TOGGLES: PeopleIntelligenceFeatureToggles = {
+  enableExtractionTuning: false,
+  enableEnrichment: false,
+};
+
+const DEFAULT_POLICY: PeopleIntelligencePolicy = {
+  confidenceThreshold: 0.65,
+  defaultTrackingIntent: 'track',
+  features: DEFAULT_FEATURE_TOGGLES,
+};
 
 function normalizeDomain(domain: string): string {
   return domain.trim().toLowerCase().replace(/^www\./, '');
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function sanitizePolicy(input: unknown): PeopleIntelligencePolicy {
+  if (!input || typeof input !== 'object') return DEFAULT_POLICY;
+
+  const maybe = input as Record<string, unknown>;
+  const thresholdRaw = toNumber(maybe.confidenceThreshold);
+  const threshold = thresholdRaw == null ? DEFAULT_POLICY.confidenceThreshold : Math.min(0.95, Math.max(0.05, thresholdRaw));
+
+  const tracking = maybe.defaultTrackingIntent;
+  const defaultTrackingIntent: TrackingIntent =
+    tracking === 'track' || tracking === 'defer' || tracking === 'ignore'
+      ? tracking
+      : DEFAULT_POLICY.defaultTrackingIntent;
+
+  const featuresRaw = maybe.features;
+  const featuresObj = featuresRaw && typeof featuresRaw === 'object'
+    ? (featuresRaw as Record<string, unknown>)
+    : {};
+
+  return {
+    confidenceThreshold: threshold,
+    defaultTrackingIntent,
+    features: {
+      enableExtractionTuning:
+        typeof featuresObj.enableExtractionTuning === 'boolean'
+          ? featuresObj.enableExtractionTuning
+          : DEFAULT_FEATURE_TOGGLES.enableExtractionTuning,
+      enableEnrichment:
+        typeof featuresObj.enableEnrichment === 'boolean'
+          ? featuresObj.enableEnrichment
+          : DEFAULT_FEATURE_TOGGLES.enableEnrichment,
+    },
+  };
 }
 
 function extractEmailDomain(email: string | null | undefined): string | null {
@@ -1265,13 +1324,113 @@ export class EntityService {
     return null;
   }
 
+  async loadPeopleIntelligencePolicy(
+    workspacePaths: WorkspacePaths | null,
+  ): Promise<PeopleIntelligencePolicy> {
+    if (!workspacePaths) return DEFAULT_POLICY;
+
+    const policyPath = join(workspacePaths.context, 'people-intelligence-policy.json');
+    const policyContent = await this.storage.read(policyPath);
+    if (!policyContent) return DEFAULT_POLICY;
+
+    try {
+      const parsed = JSON.parse(policyContent) as unknown;
+      return sanitizePolicy(parsed);
+    } catch {
+      return DEFAULT_POLICY;
+    }
+  }
+
+  private mergePeopleIntelligencePolicy(
+    policy: PeopleIntelligencePolicy,
+    options: PeopleIntelligenceOptions,
+  ): PeopleIntelligencePolicy {
+    const confidenceThreshold = options.confidenceThreshold ?? policy.confidenceThreshold;
+    const defaultTrackingIntent = options.defaultTrackingIntent ?? policy.defaultTrackingIntent;
+    const features = {
+      enableExtractionTuning:
+        options.features?.enableExtractionTuning ?? policy.features.enableExtractionTuning,
+      enableEnrichment:
+        options.features?.enableEnrichment ?? policy.features.enableEnrichment,
+    };
+
+    return {
+      confidenceThreshold,
+      defaultTrackingIntent,
+      features,
+    };
+  }
+
+  async savePeopleIntelligenceSnapshot(
+    workspacePaths: WorkspacePaths | null,
+    digest: PeopleIntelligenceDigest,
+  ): Promise<void> {
+    if (!workspacePaths) return;
+
+    const metricsDir = join(workspacePaths.memory, 'metrics');
+    await this.storage.mkdir(metricsDir);
+    const snapshotPath = join(metricsDir, 'people-intelligence.jsonl');
+
+    const existing = (await this.storage.read(snapshotPath)) ?? '';
+    const lines = existing
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(-49);
+
+    const snapshot: PeopleIntelligenceSnapshot = {
+      createdAt: new Date().toISOString(),
+      metrics: digest.metrics,
+      totalCandidates: digest.totalCandidates,
+      unknownQueueCount: digest.unknownQueueCount,
+    };
+
+    lines.push(JSON.stringify(snapshot));
+    await this.storage.write(snapshotPath, lines.join('\n') + '\n');
+  }
+
+  async getRecentPeopleIntelligenceSnapshots(
+    workspacePaths: WorkspacePaths | null,
+    limit = 8,
+  ): Promise<PeopleIntelligenceSnapshot[]> {
+    if (!workspacePaths) return [];
+
+    const snapshotPath = join(workspacePaths.memory, 'metrics', 'people-intelligence.jsonl');
+    const content = await this.storage.read(snapshotPath);
+    if (!content) return [];
+
+    const parsed: PeopleIntelligenceSnapshot[] = [];
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const candidate = JSON.parse(trimmed) as Partial<PeopleIntelligenceSnapshot>;
+        if (
+          typeof candidate.createdAt === 'string' &&
+          candidate.metrics &&
+          typeof candidate.totalCandidates === 'number' &&
+          typeof candidate.unknownQueueCount === 'number'
+        ) {
+          parsed.push(candidate as PeopleIntelligenceSnapshot);
+        }
+      } catch {
+        // ignore malformed lines
+      }
+    }
+
+    return parsed.slice(-limit);
+  }
+
   async suggestPeopleIntelligence(
     candidates: PeopleIntelligenceCandidate[],
     workspacePaths: WorkspacePaths | null,
     options: PeopleIntelligenceOptions = {},
   ): Promise<PeopleIntelligenceDigest> {
-    const confidenceThreshold = options.confidenceThreshold ?? 0.65;
-    const defaultTrackingIntent = options.defaultTrackingIntent ?? 'track';
+    const loadedPolicy = await this.loadPeopleIntelligencePolicy(workspacePaths);
+    const policy = this.mergePeopleIntelligencePolicy(loadedPolicy, options);
+
+    const confidenceThreshold = policy.confidenceThreshold;
+    const defaultTrackingIntent = policy.defaultTrackingIntent;
 
     const domains = new Set<string>((options.internalDomains ?? []).map(normalizeDomain));
 
@@ -1325,9 +1484,12 @@ export class EntityService {
       let affiliation: PersonAffiliation = 'unknown';
       let roleLens: PersonRoleLens = 'unknown';
 
-      const mergedText = [candidate.name, candidate.company, candidate.text]
+      const rawMergedText = [candidate.name, candidate.company, candidate.text]
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .join(' ');
+      const mergedText = policy.features.enableExtractionTuning
+        ? rawMergedText.replace(/\s+/g, ' ').trim()
+        : rawMergedText;
 
       if (mergedText) {
         const detectedLens = detectRoleLens(mergedText);
@@ -1339,6 +1501,23 @@ export class EntityService {
             source: candidate.source ?? 'candidate-input',
             snippet: `Detected ${detectedLens} signal from text`,
           });
+        }
+      }
+
+      let enrichmentApplied = false;
+      if (policy.features.enableEnrichment) {
+        const companySignal = candidate.company?.trim();
+        if (companySignal) {
+          enrichmentApplied = true;
+          confidence += 0.08;
+          evidence.push({
+            kind: 'enrichment',
+            source: candidate.source ?? 'candidate-input',
+            snippet: `Enrichment signal: company=${companySignal}`,
+          });
+          if (roleLens === 'unknown' && /customer|client|buyer/i.test(companySignal)) {
+            roleLens = 'customer';
+          }
         }
       }
 
@@ -1412,6 +1591,7 @@ export class EntityService {
         rationale: buildRationale(affiliation, recommendationRole, evidence.length, confidence),
         evidence,
         status,
+        enrichmentApplied,
       });
     }
 
@@ -1429,16 +1609,21 @@ export class EntityService {
       triageBurdenMinutes: computeTriageBurdenMinutes(unknownQueueCount),
       interruptionComplaintRate: 0,
       unknownQueueRate: suggestions.length > 0 ? unknownQueueCount / suggestions.length : 0,
+      extractionQualityScore: options.extractionQualityScore ?? null,
     };
 
-    return {
+    const digest: PeopleIntelligenceDigest = {
       mode: 'digest',
       totalCandidates: suggestions.length,
       suggestedCount,
       unknownQueueCount,
       suggestions,
       metrics,
+      policy,
     };
+
+    await this.savePeopleIntelligenceSnapshot(workspacePaths, digest);
+    return digest;
   }
 
   async buildPeopleIndex(workspacePaths: WorkspacePaths | null): Promise<void> {

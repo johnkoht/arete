@@ -213,9 +213,19 @@ export function registerPeopleCommands(program: Command): void {
     .command('digest')
     .description('Generate batch people intelligence suggestions from JSON candidates')
     .requiredOption('--input <path>', 'Path to JSON array of candidate records')
-    .option('--threshold <n>', 'Confidence threshold for unknown queue (default: 0.65)')
+    .option('--threshold <n>', 'Confidence threshold for unknown queue (default: policy or 0.65)')
+    .option('--feature-extraction-tuning', 'Enable extraction-tuning feature toggle for this run')
+    .option('--feature-enrichment', 'Enable optional enrichment feature for this run')
+    .option('--extraction-quality <n>', 'Optional extraction quality score (0..1) to include in KPI snapshot')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { input?: string; threshold?: string; json?: boolean }) => {
+    .action(async (opts: {
+      input?: string;
+      threshold?: string;
+      featureExtractionTuning?: boolean;
+      featureEnrichment?: boolean;
+      extractionQuality?: string;
+      json?: boolean;
+    }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -264,8 +274,17 @@ export function registerPeopleCommands(program: Command): void {
         process.exit(1);
       }
 
-      const thresholdRaw = opts.threshold ? Number(opts.threshold) : 0.65;
-      const confidenceThreshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 0.65;
+      const thresholdRaw = opts.threshold ? Number(opts.threshold) : undefined;
+      const confidenceThreshold =
+        typeof thresholdRaw === 'number' && Number.isFinite(thresholdRaw)
+          ? thresholdRaw
+          : undefined;
+      const extractionQualityRaw = opts.extractionQuality ? Number(opts.extractionQuality) : undefined;
+      const extractionQualityScore =
+        typeof extractionQualityRaw === 'number' && Number.isFinite(extractionQualityRaw)
+          ? Math.min(1, Math.max(0, extractionQualityRaw))
+          : undefined;
+
       const paths = services.workspace.getPaths(root);
 
       const digest = await services.entity.suggestPeopleIntelligence(
@@ -280,7 +299,14 @@ export function registerPeopleCommands(program: Command): void {
             : undefined,
         })),
         paths,
-        { confidenceThreshold },
+        {
+          confidenceThreshold,
+          extractionQualityScore,
+          features: {
+            enableExtractionTuning: Boolean(opts.featureExtractionTuning),
+            enableEnrichment: Boolean(opts.featureEnrichment),
+          },
+        },
       );
 
       if (opts.json) {
@@ -293,6 +319,9 @@ export function registerPeopleCommands(program: Command): void {
       listItem('Candidates', String(digest.totalCandidates));
       listItem('Suggested', String(digest.suggestedCount));
       listItem('Unknown queue', String(digest.unknownQueueCount));
+      listItem('Confidence threshold', digest.policy.confidenceThreshold.toFixed(2));
+      listItem('Feature: extraction tuning', String(digest.policy.features.enableExtractionTuning));
+      listItem('Feature: enrichment', String(digest.policy.features.enableEnrichment));
       listItem('Triage burden (min/week)', String(digest.metrics.triageBurdenMinutes));
       listItem(
         'Misclassification rate',
@@ -300,12 +329,18 @@ export function registerPeopleCommands(program: Command): void {
           ? 'n/a (no reviewed labels)'
           : `${Math.round(digest.metrics.misclassificationRate * 100)}%`,
       );
+      listItem(
+        'Extraction quality score',
+        digest.metrics.extractionQualityScore == null
+          ? 'n/a'
+          : digest.metrics.extractionQualityScore.toFixed(2),
+      );
       console.log('');
 
       for (const suggestion of digest.suggestions) {
         const label = suggestion.candidate.name ?? suggestion.candidate.email ?? '(unnamed candidate)';
         console.log(`- ${label}`);
-        console.log(`  queue: ${suggestion.recommendation.category} | confidence: ${suggestion.confidence.toFixed(2)} | status: ${suggestion.status}`);
+        console.log(`  queue: ${suggestion.recommendation.category} | confidence: ${suggestion.confidence.toFixed(2)} | status: ${suggestion.status} | enrichment: ${suggestion.enrichmentApplied}`);
         console.log(`  rationale: ${suggestion.rationale}`);
       }
       console.log('');
