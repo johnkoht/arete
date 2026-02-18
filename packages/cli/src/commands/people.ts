@@ -205,6 +205,113 @@ export function registerPeopleCommands(program: Command): void {
       info(`Updated people/index.md with ${people.length} person(s).`);
     });
 
+  const intelligenceCmd = peopleCmd
+    .command('intelligence')
+    .description('People intelligence classification tools');
+
+  intelligenceCmd
+    .command('digest')
+    .description('Generate batch people intelligence suggestions from JSON candidates')
+    .requiredOption('--input <path>', 'Path to JSON array of candidate records')
+    .option('--threshold <n>', 'Confidence threshold for unknown queue (default: 0.65)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { input?: string; threshold?: string; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      if (!opts.input) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Missing --input path' }));
+        } else {
+          error('Missing --input path');
+        }
+        process.exit(1);
+      }
+
+      const inputPath = opts.input.startsWith('/') ? opts.input : join(root, opts.input);
+      const raw = await services.storage.read(inputPath);
+      if (!raw) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: `Input file not found: ${opts.input}` }));
+        } else {
+          error(`Input file not found: ${opts.input}`);
+        }
+        process.exit(1);
+      }
+
+      let candidates: Array<Record<string, unknown>> = [];
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) {
+          throw new Error('Input must be a JSON array');
+        }
+        candidates = parsed.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null);
+      } catch (parseError) {
+        const message = parseError instanceof Error ? parseError.message : 'Invalid JSON input';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: message }));
+        } else {
+          error(message);
+        }
+        process.exit(1);
+      }
+
+      const thresholdRaw = opts.threshold ? Number(opts.threshold) : 0.65;
+      const confidenceThreshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 0.65;
+      const paths = services.workspace.getPaths(root);
+
+      const digest = await services.entity.suggestPeopleIntelligence(
+        candidates.map((candidate) => ({
+          name: typeof candidate.name === 'string' ? candidate.name : undefined,
+          email: typeof candidate.email === 'string' ? candidate.email : null,
+          company: typeof candidate.company === 'string' ? candidate.company : null,
+          text: typeof candidate.text === 'string' ? candidate.text : null,
+          source: typeof candidate.source === 'string' ? candidate.source : null,
+          actualRoleLens: candidate.actualRoleLens === 'customer' || candidate.actualRoleLens === 'user' || candidate.actualRoleLens === 'partner' || candidate.actualRoleLens === 'unknown'
+            ? candidate.actualRoleLens
+            : undefined,
+        })),
+        paths,
+        { confidenceThreshold },
+      );
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, ...digest }, null, 2));
+        return;
+      }
+
+      header('People Intelligence Digest');
+      listItem('Mode', digest.mode);
+      listItem('Candidates', String(digest.totalCandidates));
+      listItem('Suggested', String(digest.suggestedCount));
+      listItem('Unknown queue', String(digest.unknownQueueCount));
+      listItem('Triage burden (min/week)', String(digest.metrics.triageBurdenMinutes));
+      listItem(
+        'Misclassification rate',
+        digest.metrics.misclassificationRate == null
+          ? 'n/a (no reviewed labels)'
+          : `${Math.round(digest.metrics.misclassificationRate * 100)}%`,
+      );
+      console.log('');
+
+      for (const suggestion of digest.suggestions) {
+        const label = suggestion.candidate.name ?? suggestion.candidate.email ?? '(unnamed candidate)';
+        console.log(`- ${label}`);
+        console.log(`  queue: ${suggestion.recommendation.category} | confidence: ${suggestion.confidence.toFixed(2)} | status: ${suggestion.status}`);
+        console.log(`  rationale: ${suggestion.rationale}`);
+      }
+      console.log('');
+      info('Default review mode is digest/batch (non-blocking).');
+    });
+
   const memoryCmd = peopleCmd
     .command('memory')
     .description('Person memory utilities');

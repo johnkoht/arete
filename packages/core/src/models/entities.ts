@@ -9,6 +9,15 @@ import type { EntityType } from './common.js';
 /** People category for person classification */
 export type PersonCategory = 'internal' | 'customers' | 'users';
 
+/** Affiliation lens for people intelligence */
+export type PersonAffiliation = 'internal' | 'external' | 'unknown';
+
+/** Role lens for people intelligence */
+export type PersonRoleLens = 'customer' | 'user' | 'partner' | 'unknown';
+
+/** Tracking intent for people triage */
+export type TrackingIntent = 'track' | 'defer' | 'ignore';
+
 /** Person record (from frontmatter or API) */
 export type Person = {
   slug: string;
@@ -39,6 +48,56 @@ export type Project = {
   status?: 'active' | 'completed' | 'archived';
   created?: string;
   updated?: string;
+};
+
+/** Candidate input for people intelligence classification */
+export type PeopleIntelligenceCandidate = {
+  name?: string;
+  email?: string | null;
+  company?: string | null;
+  text?: string | null;
+  source?: string | null;
+  actualRoleLens?: PersonRoleLens;
+};
+
+/** Evidence item for people intelligence suggestions */
+export type PeopleIntelligenceEvidence = {
+  kind: 'email-domain' | 'profile-hint' | 'text-signal' | 'existing-person';
+  source: string;
+  snippet: string;
+};
+
+/** Recommendation payload for people intelligence */
+export type PeopleIntelligenceSuggestion = {
+  candidate: PeopleIntelligenceCandidate;
+  recommendation: {
+    affiliation: PersonAffiliation;
+    roleLens: PersonRoleLens;
+    trackingIntent: TrackingIntent;
+    category: PersonCategory | 'unknown_queue';
+  };
+  confidence: number;
+  rationale: string;
+  evidence: PeopleIntelligenceEvidence[];
+  status: 'recommended' | 'needs-review';
+};
+
+/** KPI snapshot for people intelligence digest */
+export type PeopleIntelligenceMetrics = {
+  misclassificationRate: number | null;
+  triageBurdenMinutes: number;
+  interruptionComplaintRate: number;
+  unknownQueueRate: number;
+};
+
+/** Digest output (batch review default) */
+export type PeopleIntelligenceDigest = {
+  mode: 'digest';
+  totalCandidates: number;
+  suggestedCount: number;
+  unknownQueueCount: number;
+  suggestions: PeopleIntelligenceSuggestion[];
+  metrics: PeopleIntelligenceMetrics;
 };
 
 /** A resolved entity */

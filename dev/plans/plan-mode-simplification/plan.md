@@ -1,13 +1,11 @@
 ---
 title: Plan Mode Simplification
 slug: plan-mode-simplification
-status: draft
+status: complete
 size: large
 created: 2025-01-13T10:30:00.000Z
-updated: 2025-01-13T10:30:00.000Z
-completed: null
-blocked_reason: null
-previous_status: null
+updated: 2025-01-13T11:45:00.000Z
+completed: 2025-01-13T11:45:00.000Z
 has_review: false
 has_pre_mortem: true
 has_prd: false
@@ -39,49 +37,59 @@ Simplify plan mode to be a **planning-only tool** with:
 
 ## Plan
 
-1. **Simplify `PlanFrontmatter` and status** — Reduce to `draft|ready|building|complete`. Remove `previous_status`, `blocked_reason`. Keep `has_pre_mortem`, `has_review` as informational flags. Add migration logic for existing plans.
+1. ☑ **Simplify `PlanFrontmatter` and status** — Reduced to `draft|ready|building|complete`. Removed `previous_status`, `blocked_reason`. Added migration logic for existing plans.
 
-2. **Simplify `PlanModeState`** — Remove `currentPhase`, `activeCommand`, `isRefining`. Keep: `planModeEnabled`, `currentSlug`, `planSize`, `planText`, `todoItems`, `preMortemRun`, `reviewRun`.
+2. ☑ **Simplify `PlanModeState`** — Removed `currentPhase`, `activeCommand`, `isRefining`, `postMortemRun`. Kept: `planModeEnabled`, `currentSlug`, `planSize`, `planText`, `todoItems`, `preMortemRun`, `reviewRun`, `prdConverted`.
 
-3. **Delete `lifecycle.ts`** — No more transition rules or gate requirements.
+3. ☑ **Delete `lifecycle.ts`** — Removed transition rules and gate requirements.
 
-4. **Simplify commands** — Remove `/plan next|hold|block|resume`. Keep `/plan [new|list|open|save|status|delete]`. Remove template selection from `/plan new` (just enters plan mode).
+4. ☑ **Simplify commands** — Removed `/plan next|hold|block|resume`. Kept `/plan [new|list|open|save|status|delete]`. Removed template selection from `/plan new`.
 
-5. **Add `/approve` command** — Simple transition: `draft → ready`. Validates plan exists and has content.
+5. ☑ **Add `/approve` command** — Simple transition: `draft → ready` with soft recommendations.
 
-6. **Simplify `/build`** — Exits plan mode, sets status to `building`, invokes execution. If PRD exists, use execute-prd skill. Otherwise direct execution. Preserve PRD detection logic.
+6. ☑ **Simplify `/build`** — Exits plan mode, sets status to `building`, invokes execution. Preserved PRD detection logic.
 
-7. **Implement auto-save** — After agent produces a plan (detected via "Plan:" header extraction), auto-save. Infer slug from content, notify "Auto-saved as 'feature-x' — rename with /plan save <name>". Only save when 2+ steps extracted and content materially changed.
+7. ☑ **Implement auto-save** — Auto-saves when agent produces 2+ steps. Infers slug from content, notifies user.
 
-8. **Simplify `widget.ts`** — Single-line footer: `📋 plan-name (draft) — pre-mortem ✓`. Remove pipeline rendering entirely.
+8. ☑ **Simplify `widget.ts`** — Single-line footer: `📋 plan-name (status) — artifacts`. Removed pipeline rendering.
 
-9. **Simplify `index.ts`** — Remove phase tracking and automatic menu system. Keep artifact auto-save for pre-mortem/review. Simplify context injection to just plan mode restrictions + active plan content. Preserve bash restriction logic.
+9. ☑ **Simplify `index.ts`** — Removed phase tracking and automatic menu system. Kept artifact auto-save. Simplified context injection. Preserved bash restriction logic.
 
-10. **Update PM agent prompt** — Remove template references. Add work-type adaptation guidance (bug fix, refactor, new feature, discovery). Agent should communicate its adapted approach naturally and recommend pre-mortem/review based on work type and size.
+10. ☑ **Update PM agent prompt** — Added work-type adaptation guidance (bug fix, refactor, new feature, discovery).
 
-11. **Update `utils.ts`** — Remove `getPhaseMenu`, `getMenuOptions`. Keep `classifyPlanSize` for display.
+11. ☑ **Update `utils.ts`** — Removed `getPhaseMenu`, `getMenuOptions`, `Phase` type, `shouldShowExecutionStatus`, `extractPhaseContent`, `isAwaitingUserResponse`.
 
-12. **Remove `templates.ts`** — No longer needed without template selection.
+12. ☑ **Remove `templates.ts`** — Deleted template system.
 
-13. **Update tests** — Simpler scenarios. Remove lifecycle transition tests, template tests. Ensure core flows tested: save, load, approve, build, auto-save.
+13. ☑ **Update tests** — Removed lifecycle/template tests. Updated persistence, utils, widget, commands tests for new interface.
 
-14. **Quality gates** — `npm run typecheck && npm test`
+14. ☑ **Quality gates** — `npm run typecheck && npm test` pass.
 
 ## Acceptance Criteria
 
-- [ ] Existing plans in `dev/plans/` load correctly (backward compatible)
-- [ ] `/plan new` enters plan mode without template selection
-- [ ] Plans auto-save when agent produces numbered steps
-- [ ] `/approve` transitions draft → ready
-- [ ] `/build` works with and without PRD
-- [ ] Footer shows simple status: `📋 name (status) — artifacts`
-- [ ] Bash restrictions still work in plan mode
-- [ ] PM agent mentions work type and recommendations naturally
-- [ ] All tests pass
-- [ ] TypeScript compiles without errors
+- [x] Existing plans in `dev/plans/` load correctly (backward compatible via migration)
+- [x] `/plan new` enters plan mode without template selection
+- [x] Plans auto-save when agent produces numbered steps
+- [x] `/approve` transitions draft → ready
+- [x] `/build` works with and without PRD
+- [x] Footer shows simple status: `📋 name (status) — artifacts`
+- [x] Bash restrictions still work in plan mode
+- [x] PM agent mentions work type and recommendations naturally
+- [x] All tests pass
+- [x] TypeScript compiles without errors
 
 ## Out of Scope
 
 - Work-type-specific skill routing (future enhancement)
-- PRD workflow changes (keep as-is)
+- PRD workflow changes (kept as-is)
 - Changes to execute-prd skill
+
+## Summary
+
+Successfully simplified plan mode from a complex 6-phase workflow with mandatory gates to a simple planning tool. Key changes:
+- Reduced status from 8 to 4 values
+- Removed ~500 lines of lifecycle/phase tracking code
+- Added auto-save functionality
+- Simplified UI to single-line footer
+- Made gates (pre-mortem, review) optional with soft recommendations
+- Added work-type adaptation to PM agent prompt

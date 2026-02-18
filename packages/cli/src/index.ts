@@ -72,6 +72,7 @@ ${chalk.bold('People')}
   people list [--category]         List people
   people show <slug|email>         Show person
   people index                     Regenerate index
+  people intelligence digest       Batch people classification suggestions
   people memory refresh            Refresh person memory highlights
 
 ${chalk.bold('Integrations')}

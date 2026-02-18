@@ -30,7 +30,7 @@ arete/                 # Build workspace root
 │   └── sources/       # AGENTS.md source files
 ├── dev/               # Development tooling
 │   ├── backlog/       # Future work (features/, improvements/)
-│   ├── plans/         # Active plan lifecycle records
+│   ├── plans/         # Active plan drafts and planning artifacts
 │   ├── archive/prds/  # Archived legacy PRD documents
 │   └── autonomous/    # Autonomous execution templates
 ├── .cursor/           # Cursor IDE configuration (rules/, tools/)
@@ -41,5 +41,5 @@ arete/                 # Build workspace root
 **Key differences:**
 - Build workspace has `memory/` at root; user workspace has `.arete/memory/`
 - Build workspace has `.agents/skills/` for build skills; user workspace has product skills
-- Build workspace has `dev/` directory for backlog, plan lifecycle records, archive, and autonomous tooling
+- Build workspace has `dev/` directory for backlog, plan artifacts, archive, and autonomous tooling
 - Current plan system of record: `dev/plans/`; legacy PRDs are archived in `dev/archive/prds/`

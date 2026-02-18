@@ -1,18 +1,18 @@
 # Plans Directory
 
-Persistent storage for plan lifecycle management. Plans are created and managed by the plan-mode Pi extension.
+Persistent storage for plan mode. Plans are created and managed by the plan-mode extension.
 
 ## Structure
 
-```
+```text
 dev/plans/
 ├── README.md                    # This file
-├── slack-integration/
+├── my-feature/
 │   ├── plan.md                  # Plan with YAML frontmatter
-│   ├── review.md                # Cross-model review output
-│   ├── pre-mortem.md            # Pre-mortem analysis
-│   └── prd.md                   # PRD (if generated)
-└── search-perf-fix/
+│   ├── pre-mortem.md            # Optional pre-mortem output
+│   ├── review.md                # Optional review output
+│   └── prd.md                   # Optional PRD artifact
+└── bug-fix-foo/
     └── plan.md
 ```
 
@@ -20,63 +20,46 @@ dev/plans/
 
 ```yaml
 ---
-title: Slack Integration
-slug: slack-integration
+title: My Feature
+slug: my-feature
 status: draft
-size: large
+size: medium
 created: 2026-02-16T15:00:00Z
 updated: 2026-02-16T15:00:00Z
 completed: null
-blocked_reason: null
-previous_status: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
 backlog_ref: null
-steps: 8
+steps: 4
 ---
 ```
 
-## Lifecycle Statuses
+## Statuses
 
 | Status | Description |
 |--------|-------------|
-| `draft` | Initial plan, not yet finalized |
-| `planned` | PM confirmed plan is coherent |
-| `reviewed` | Cross-model review completed |
-| `approved` | All required gates passed, ready to build |
-| `in-progress` | Build started via `/build` |
-| `completed` | All tasks done, quality gates passed |
-| `blocked` | Blocked with reason (from any status) |
-| `on-hold` | Paused (from any status) |
+| `draft` | Plan is being shaped/refined |
+| `ready` | Plan approved and ready to build |
+| `building` | Build started via `/build` |
+| `complete` | Build finished |
 
-## Migrated PRD Statuses (2026-02-16)
+## Commands (Plan Mode UX)
 
-| Slug | Status |
-|------|--------|
-| agents-md-compilation | completed |
-| dev-cleanup-phase-1 | completed |
-| enhance-onboarding-tool | completed |
-| intelligence-and-calendar | completed |
-| meeting-agenda-skill | completed |
-| meeting-intelligence | completed |
-| meeting-propagation | completed |
-| multi-ide-support | completed |
-| pi-dev-workflow | completed |
-| plan-lifecycle-system | completed |
-| plan-mode-skills-integration | completed (superseded) |
-| pm-planning-system | completed |
-| product-os | on-hold |
-| refactor-pi-monorepo | completed |
-| rules-architecture-refactor | completed |
-| temporal-memory | planned |
+- `/plan` — Toggle plan mode on/off
+- `/plan new` — Start a new plan session
+- `/plan save [slug]` — Save or rename the active plan
+- `/plan list` — List saved plans
+- `/plan open <slug>` — Open an existing plan
+- `/plan status` — Show plan status + recommendations
+- `/plan delete <slug>` — Delete a plan and artifacts
+- `/pre-mortem` — Optional risk analysis artifact
+- `/review` — Optional second-opinion artifact
+- `/approve` — Mark draft as ready
+- `/build` — Start execution
 
-## Quick Reference
+## Notes
 
-- **Create**: Use `/plan` mode, create a plan, then `/plan save`
-- **List**: `/plan list`
-- **Open**: `/plan open <slug>`
-- **Next step**: `/plan next` (smart gate orchestrator)
-- **Gates**: `/review`, `/pre-mortem`, `/prd`
-- **Build**: `/build` (after approval)
-- **Status**: `/plan status`
+- Plan mode is planning-focused, but editing/writing is allowed when needed.
+- Pre-mortem and review are optional recommendations, not required gates.
+- Existing legacy plan statuses are migrated automatically when loaded.

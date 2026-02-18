@@ -3,25 +3,28 @@ import assert from "node:assert/strict";
 import {
 	isSafeCommand,
 	isAllowedInPlanMode,
-	shouldShowExecutionStatus,
 	extractTodoItems,
 	cleanStepText,
 	extractDoneSteps,
 	markCompletedSteps,
-	extractPhaseContent,
-	isAwaitingUserResponse,
 	classifyPlanSize,
-	getPhaseMenu,
-	getMenuOptions,
-	getPostExecutionMenuOptions,
 	suggestPlanName,
+	PLAN_MODE_TOOLS,
 	type TodoItem,
-	type WorkflowMenuState,
 } from "./utils.js";
 
 // ────────────────────────────────────────────────────────────
-// Existing utils
+// Toolset + command safety checks
 // ────────────────────────────────────────────────────────────
+
+describe("PLAN_MODE_TOOLS", () => {
+	it("includes edit and write so plan mode can persist artifacts", () => {
+		assert.ok(PLAN_MODE_TOOLS.includes("edit"));
+		assert.ok(PLAN_MODE_TOOLS.includes("write"));
+		assert.ok(PLAN_MODE_TOOLS.includes("read"));
+		assert.ok(PLAN_MODE_TOOLS.includes("bash"));
+	});
+});
 
 describe("isSafeCommand", () => {
 	it("allows read-only commands", () => {
@@ -55,36 +58,22 @@ describe("isSafeCommand", () => {
 
 describe("isAllowedInPlanMode", () => {
 	it("allows safe read-only commands during normal plan mode", () => {
-		assert.equal(isAllowedInPlanMode("ls -la", null), true);
+		assert.equal(isAllowedInPlanMode("ls -la", false), true);
 	});
 
-	it("allows mkdir -p only during prd command", () => {
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", "prd"), true);
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", null), false);
+	it("allows mkdir -p only during prd conversion", () => {
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", true), true);
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", false), false);
 	});
 
-	it("still blocks dangerous commands during prd command", () => {
-		assert.equal(isAllowedInPlanMode("rm -rf /", "prd"), false);
+	it("still blocks dangerous commands during prd conversion", () => {
+		assert.equal(isAllowedInPlanMode("rm -rf /", true), false);
 	});
 });
 
-describe("shouldShowExecutionStatus", () => {
-	it("returns false when execution mode is off", () => {
-		assert.equal(shouldShowExecutionStatus(false, "in-progress", "build"), false);
-	});
-
-	it("returns true for in-progress plans", () => {
-		assert.equal(shouldShowExecutionStatus(true, "in-progress", "plan"), true);
-	});
-
-	it("returns true when current phase is build", () => {
-		assert.equal(shouldShowExecutionStatus(true, "draft", "build"), true);
-	});
-
-	it("returns false for stale execution flags on non-build phases", () => {
-		assert.equal(shouldShowExecutionStatus(true, "draft", "plan"), false);
-	});
-});
+// ────────────────────────────────────────────────────────────
+// Todo extraction and step tracking
+// ────────────────────────────────────────────────────────────
 
 describe("extractTodoItems", () => {
 	it("extracts items from Plan: header", () => {
@@ -191,39 +180,9 @@ describe("markCompletedSteps", () => {
 	});
 });
 
-describe("extractPhaseContent", () => {
-	it("extracts plan section when Plan header exists", () => {
-		const response = `Intro\n\nPlan:\n1. Step one\n2. Step two\n\n## Notes\nOther content`;
-		const extracted = extractPhaseContent(response, "plan");
-		assert.ok(extracted.startsWith("Plan:"));
-		assert.ok(extracted.includes("1. Step one"));
-	});
-
-	it("extracts pre-mortem section from heading", () => {
-		const response = `Some preface\n\n## Pre-Mortem\n### Risk 1\n- Something\n\n## Next`;
-		const extracted = extractPhaseContent(response, "pre-mortem");
-		assert.ok(extracted.startsWith("## Pre-Mortem"));
-		assert.ok(extracted.includes("### Risk 1"));
-	});
-
-	it("falls back to full response when no header found", () => {
-		const response = "Unstructured output without expected headers";
-		const extracted = extractPhaseContent(response, "review");
-		assert.equal(extracted, response);
-	});
-});
-
-describe("isAwaitingUserResponse", () => {
-	it("returns true for explicit clarifying questions", () => {
-		const message = `Great start. Before I adapt this, I have a few clarifying questions:\n1. What is the target module?\n2. Should I optimize for speed or readability?`;
-		assert.equal(isAwaitingUserResponse(message), true);
-	});
-
-	it("returns false for a plain plan with no questions", () => {
-		const message = `Plan:\n1. Inspect current behavior\n2. Add regression test\n3. Implement fix`;
-		assert.equal(isAwaitingUserResponse(message), false);
-	});
-});
+// ────────────────────────────────────────────────────────────
+// Plan naming
+// ────────────────────────────────────────────────────────────
 
 describe("suggestPlanName", () => {
 	it("uses specific heading when available", () => {
@@ -300,190 +259,5 @@ describe("classifyPlanSize", () => {
 
 	it("10 steps → large", () => {
 		assert.equal(classifyPlanSize(makeItems(10), "Big plan"), "large");
-	});
-});
-
-// ────────────────────────────────────────────────────────────
-// Menu options
-// ────────────────────────────────────────────────────────────
-
-function makeMenuState(overrides: Partial<WorkflowMenuState> = {}): WorkflowMenuState {
-	return {
-		planSize: "small",
-		preMortemRun: false,
-		reviewRun: false,
-		prdConverted: false,
-		postMortemRun: false,
-		...overrides,
-	};
-}
-
-describe("getPhaseMenu", () => {
-	it("plan phase (tiny): refine + continue to pre-mortem", () => {
-		const menu = getPhaseMenu("plan", "tiny");
-		assert.deepEqual(menu, {
-			refine: "Refine plan",
-			next: "Continue to pre-mortem",
-		});
-	});
-
-	it("plan phase (large): refine + continue to PRD", () => {
-		const menu = getPhaseMenu("plan", "large");
-		assert.deepEqual(menu, {
-			refine: "Refine plan",
-			next: "Continue to PRD",
-		});
-	});
-
-	it("prd phase: refine + continue to pre-mortem", () => {
-		const menu = getPhaseMenu("prd", "medium");
-		assert.deepEqual(menu, {
-			refine: "Refine PRD",
-			next: "Continue to pre-mortem",
-		});
-	});
-
-	it("prd phase after out-of-order pre-mortem: next is continue to review", () => {
-		const menu = getPhaseMenu("prd", "large", {
-			prdConverted: true,
-			preMortemRun: true,
-			reviewRun: false,
-		});
-		assert.deepEqual(menu, {
-			refine: "Refine PRD",
-			next: "Continue to review",
-		});
-	});
-
-	it("prd phase after pre-mortem and review: next is continue to build", () => {
-		const menu = getPhaseMenu("prd", "large", {
-			prdConverted: true,
-			preMortemRun: true,
-			reviewRun: true,
-		});
-		assert.deepEqual(menu, {
-			refine: "Refine PRD",
-			next: "Continue to build",
-		});
-	});
-
-	it("pre-mortem phase (small): refine + skip review to build", () => {
-		const menu = getPhaseMenu("pre-mortem", "small");
-		assert.deepEqual(menu, {
-			refine: "Refine pre-mortem",
-			next: "Skip review → build",
-		});
-	});
-
-	it("pre-mortem phase (small) with review already done: continue to build", () => {
-		const menu = getPhaseMenu("pre-mortem", "small", {
-			prdConverted: false,
-			preMortemRun: true,
-			reviewRun: true,
-		});
-		assert.deepEqual(menu, {
-			refine: "Refine pre-mortem",
-			next: "Continue to build",
-		});
-	});
-
-	it("pre-mortem phase (large): refine + continue to review", () => {
-		const menu = getPhaseMenu("pre-mortem", "large");
-		assert.deepEqual(menu, {
-			refine: "Refine pre-mortem",
-			next: "Continue to review",
-		});
-	});
-
-	it("review phase: refine + continue to build", () => {
-		const menu = getPhaseMenu("review", "medium");
-		assert.deepEqual(menu, {
-			refine: "Refine review",
-			next: "Continue to build",
-		});
-	});
-
-	it("build/done: returns null options", () => {
-		assert.deepEqual(getPhaseMenu("build", "medium"), { refine: null, next: null });
-		assert.deepEqual(getPhaseMenu("done", "medium"), { refine: null, next: null });
-	});
-});
-
-describe("getMenuOptions", () => {
-	it("tiny: returns 3 options, first starts build with explicit warning", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "tiny" }));
-		assert.equal(options.length, 3);
-		assert.equal(options[0], "Start build now (executes code changes)");
-		assert.ok(options.includes("Save as draft"));
-		assert.ok(options.includes("Refine the plan"));
-	});
-
-	it("small: returns 6 options, includes non-destructive gate labels", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "small" }));
-		assert.equal(options.length, 6);
-		assert.ok(options.includes("Run pre-mortem (no code changes)"));
-		assert.ok(options.includes("Review the plan"));
-		assert.ok(options.includes("Convert to PRD (no code changes)"));
-	});
-
-	it("medium: first option is Convert to PRD with no-code-changes note", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "medium" }));
-		assert.equal(options[0], "Convert to PRD (recommended, no code changes)");
-	});
-
-	it("large: first option is Convert to PRD with no-code-changes note", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "large" }));
-		assert.equal(options[0], "Convert to PRD (recommended, no code changes)");
-	});
-
-	it("small + preMortemRun: hides pre-mortem prompt and keeps build path", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "small", preMortemRun: true }));
-		assert.ok(!options.includes("Run pre-mortem (no code changes)"));
-		assert.ok(options.includes("Start build now (pre-mortem ✓, executes code changes)"));
-	});
-
-	it("medium + reviewRun: Review not in options", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "medium", reviewRun: true }));
-		assert.ok(!options.includes("Review the plan"));
-	});
-
-	it("large + prdConverted: Convert to PRD not in options", () => {
-		const options = getMenuOptions(makeMenuState({ planSize: "large", prdConverted: true }));
-		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
-	});
-
-	it("all gates run: execute/save/refine remain without repeated pre-mortem prompt", () => {
-		const options = getMenuOptions(
-			makeMenuState({
-				planSize: "large",
-				preMortemRun: true,
-				reviewRun: true,
-				prdConverted: true,
-			}),
-		);
-		assert.ok(!options.some((o) => o.includes("Convert to PRD")));
-		assert.ok(!options.includes("Review the plan"));
-		assert.ok(!options.includes("Run pre-mortem (no code changes)"));
-		assert.ok(options.some((o) => o.includes("Start build now")));
-		assert.ok(options.includes("Save as draft"));
-		assert.ok(options.includes("Refine the plan"));
-	});
-});
-
-describe("getPostExecutionMenuOptions", () => {
-	it("default: 3 options including post-mortem", () => {
-		const options = getPostExecutionMenuOptions(false);
-		assert.equal(options.length, 3);
-		assert.ok(options.includes("Run post-mortem (extract learnings)"));
-		assert.ok(options.includes("Capture learnings to memory"));
-		assert.ok(options.includes("Done"));
-	});
-
-	it("postMortemRun: post-mortem option removed", () => {
-		const options = getPostExecutionMenuOptions(true);
-		assert.equal(options.length, 2);
-		assert.ok(!options.includes("Run post-mortem (extract learnings)"));
-		assert.ok(options.includes("Capture learnings to memory"));
-		assert.ok(options.includes("Done"));
 	});
 });

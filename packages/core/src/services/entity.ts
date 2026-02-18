@@ -16,6 +16,14 @@ import type {
   MentionSourceType,
   Person,
   PersonCategory,
+  PeopleIntelligenceCandidate,
+  PeopleIntelligenceDigest,
+  PeopleIntelligenceEvidence,
+  PeopleIntelligenceMetrics,
+  PeopleIntelligenceSuggestion,
+  PersonAffiliation,
+  PersonRoleLens,
+  TrackingIntent,
   WorkspacePaths,
 } from '../models/index.js';
 
@@ -692,6 +700,60 @@ export interface RefreshPersonMemoryResult {
   skippedFresh: number;
 }
 
+export interface PeopleIntelligenceOptions {
+  confidenceThreshold?: number;
+  internalDomains?: string[];
+  defaultTrackingIntent?: TrackingIntent;
+}
+
+function normalizeDomain(domain: string): string {
+  return domain.trim().toLowerCase().replace(/^www\./, '');
+}
+
+function extractEmailDomain(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const match = email.trim().toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/);
+  return match ? match[1] : null;
+}
+
+function detectRoleLens(text: string): PersonRoleLens {
+  const lower = text.toLowerCase();
+  if (/(customer|buyer|prospect|account|renewal|deal)/.test(lower)) return 'customer';
+  if (/(user interview|usability|participant|beta user|end user|persona)/.test(lower)) return 'user';
+  if (/(partner|reseller|alliance|integrator)/.test(lower)) return 'partner';
+  return 'unknown';
+}
+
+function computeTriageBurdenMinutes(unknownQueueCount: number): number {
+  if (unknownQueueCount <= 0) return 0;
+  return Math.max(5, Math.ceil(unknownQueueCount / 5) * 5);
+}
+
+function deriveCategory(
+  affiliation: PersonAffiliation,
+  roleLens: PersonRoleLens,
+): PersonCategory | 'unknown_queue' {
+  if (affiliation === 'internal') return 'internal';
+  if (roleLens === 'customer') return 'customers';
+  if (roleLens === 'user') return 'users';
+  return 'unknown_queue';
+}
+
+function buildRationale(
+  affiliation: PersonAffiliation,
+  roleLens: PersonRoleLens,
+  evidenceCount: number,
+  confidence: number,
+): string {
+  const parts = [
+    `Affiliation: ${affiliation}`,
+    `Role lens: ${roleLens}`,
+    `Evidence items: ${evidenceCount}`,
+    `Confidence: ${confidence.toFixed(2)}`,
+  ];
+  return parts.join(' | ');
+}
+
 export class EntityService {
   constructor(private storage: StorageAdapter) {}
 
@@ -1201,6 +1263,182 @@ export class EntityService {
       }
     }
     return null;
+  }
+
+  async suggestPeopleIntelligence(
+    candidates: PeopleIntelligenceCandidate[],
+    workspacePaths: WorkspacePaths | null,
+    options: PeopleIntelligenceOptions = {},
+  ): Promise<PeopleIntelligenceDigest> {
+    const confidenceThreshold = options.confidenceThreshold ?? 0.65;
+    const defaultTrackingIntent = options.defaultTrackingIntent ?? 'track';
+
+    const domains = new Set<string>((options.internalDomains ?? []).map(normalizeDomain));
+
+    if (workspacePaths) {
+      const profilePath = join(workspacePaths.context, 'profile.md');
+      const profileContent = await this.storage.read(profilePath);
+      const profileParsed = profileContent ? parseFrontmatter(profileContent) : null;
+      const profileEmail = profileParsed && typeof profileParsed.frontmatter.email === 'string'
+        ? profileParsed.frontmatter.email
+        : null;
+      const profileWebsite = profileParsed && typeof profileParsed.frontmatter.website === 'string'
+        ? profileParsed.frontmatter.website
+        : null;
+
+      const profileDomain = extractEmailDomain(profileEmail);
+      if (profileDomain) domains.add(profileDomain);
+
+      if (profileWebsite) {
+        try {
+          const host = new URL(profileWebsite.startsWith('http') ? profileWebsite : `https://${profileWebsite}`).hostname;
+          domains.add(normalizeDomain(host));
+        } catch {
+          // ignore invalid website
+        }
+      }
+
+      const domainHintsPath = join(workspacePaths.context, 'domain-hints.md');
+      const domainHintsContent = await this.storage.read(domainHintsPath);
+      const domainParsed = domainHintsContent ? parseFrontmatter(domainHintsContent) : null;
+      const hints = domainParsed?.frontmatter.domains;
+      if (Array.isArray(hints)) {
+        for (const hint of hints) {
+          if (typeof hint === 'string' && hint.trim()) domains.add(normalizeDomain(hint));
+        }
+      }
+    }
+
+    const existingPeople = workspacePaths ? await this.listPeople(workspacePaths) : [];
+    const existingByEmail = new Map<string, Person>();
+    for (const person of existingPeople) {
+      if (person.email) {
+        existingByEmail.set(person.email.toLowerCase(), person);
+      }
+    }
+
+    const suggestions: PeopleIntelligenceSuggestion[] = [];
+
+    for (const candidate of candidates) {
+      const evidence: PeopleIntelligenceEvidence[] = [];
+      let confidence = 0.2;
+      let affiliation: PersonAffiliation = 'unknown';
+      let roleLens: PersonRoleLens = 'unknown';
+
+      const mergedText = [candidate.name, candidate.company, candidate.text]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join(' ');
+
+      if (mergedText) {
+        const detectedLens = detectRoleLens(mergedText);
+        if (detectedLens !== 'unknown') {
+          roleLens = detectedLens;
+          confidence += 0.25;
+          evidence.push({
+            kind: 'text-signal',
+            source: candidate.source ?? 'candidate-input',
+            snippet: `Detected ${detectedLens} signal from text`,
+          });
+        }
+      }
+
+      const emailDomain = extractEmailDomain(candidate.email);
+      if (emailDomain) {
+        if (domains.has(normalizeDomain(emailDomain))) {
+          affiliation = 'internal';
+          confidence += 0.45;
+          evidence.push({
+            kind: 'email-domain',
+            source: candidate.source ?? 'candidate-input',
+            snippet: `Email domain ${emailDomain} matches internal domain hints`,
+          });
+        } else {
+          affiliation = 'external';
+          confidence += 0.2;
+          evidence.push({
+            kind: 'email-domain',
+            source: candidate.source ?? 'candidate-input',
+            snippet: `Email domain ${emailDomain} is not recognized as internal`,
+          });
+        }
+      }
+
+      if (candidate.email) {
+        const existing = existingByEmail.get(candidate.email.toLowerCase());
+        if (existing) {
+          evidence.push({
+            kind: 'existing-person',
+            source: `people/${existing.category}/${existing.slug}.md`,
+            snippet: `Matched existing person record (${existing.category})`,
+          });
+          confidence += 0.2;
+          if (existing.category === 'internal') {
+            affiliation = 'internal';
+          } else if (existing.category === 'customers' && roleLens === 'unknown') {
+            roleLens = 'customer';
+          } else if (existing.category === 'users' && roleLens === 'unknown') {
+            roleLens = 'user';
+          }
+        }
+      }
+
+      if (domains.size > 0) {
+        evidence.push({
+          kind: 'profile-hint',
+          source: 'context/domain-hints.md',
+          snippet: `Internal domains available (${domains.size})`,
+        });
+      }
+
+      confidence = Math.min(confidence, 0.99);
+      const initialCategory = deriveCategory(affiliation, roleLens);
+      const lowConfidence = confidence < confidenceThreshold;
+      const category = lowConfidence ? 'unknown_queue' : initialCategory;
+      const recommendationRole = lowConfidence ? 'unknown' : roleLens;
+      const trackingIntent: TrackingIntent = lowConfidence ? 'defer' : defaultTrackingIntent;
+
+      const status: 'recommended' | 'needs-review' =
+        !lowConfidence && evidence.length > 0 ? 'recommended' : 'needs-review';
+
+      suggestions.push({
+        candidate,
+        recommendation: {
+          affiliation,
+          roleLens: recommendationRole,
+          trackingIntent,
+          category,
+        },
+        confidence,
+        rationale: buildRationale(affiliation, recommendationRole, evidence.length, confidence),
+        evidence,
+        status,
+      });
+    }
+
+    const unknownQueueCount = suggestions.filter((s) => s.recommendation.category === 'unknown_queue').length;
+    const suggestedCount = suggestions.filter((s) => s.status === 'recommended').length;
+
+    const reviewed = suggestions.filter((s) => s.candidate.actualRoleLens && s.recommendation.roleLens !== 'unknown');
+    const mismatches = reviewed.filter((s) => s.candidate.actualRoleLens !== s.recommendation.roleLens);
+    const misclassificationRate = reviewed.length > 0
+      ? mismatches.length / reviewed.length
+      : null;
+
+    const metrics: PeopleIntelligenceMetrics = {
+      misclassificationRate,
+      triageBurdenMinutes: computeTriageBurdenMinutes(unknownQueueCount),
+      interruptionComplaintRate: 0,
+      unknownQueueRate: suggestions.length > 0 ? unknownQueueCount / suggestions.length : 0,
+    };
+
+    return {
+      mode: 'digest',
+      totalCandidates: suggestions.length,
+      suggestedCount,
+      unknownQueueCount,
+      suggestions,
+      metrics,
+    };
   }
 
   async buildPeopleIndex(workspacePaths: WorkspacePaths | null): Promise<void> {

@@ -10,8 +10,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Valid plan lifecycle statuses */
-export type PlanStatus =
+/** Valid plan lifecycle statuses (simplified) */
+export type PlanStatus = "draft" | "ready" | "building" | "complete";
+
+/** Legacy status values for migration */
+type LegacyPlanStatus =
 	| "draft"
 	| "planned"
 	| "reviewed"
@@ -21,10 +24,28 @@ export type PlanStatus =
 	| "blocked"
 	| "on-hold";
 
+/**
+ * Migrate legacy status values to simplified statuses.
+ * Preserves backward compatibility with existing plans.
+ */
+function migrateStatus(status: string): PlanStatus {
+	const migrations: Record<LegacyPlanStatus, PlanStatus> = {
+		draft: "draft",
+		planned: "draft",
+		reviewed: "draft",
+		approved: "ready",
+		"in-progress": "building",
+		completed: "complete",
+		blocked: "draft",
+		"on-hold": "draft",
+	};
+	return migrations[status as LegacyPlanStatus] ?? "draft";
+}
+
 /** Plan size classification */
 export type PlanSize = "tiny" | "small" | "medium" | "large";
 
-/** YAML frontmatter for a plan.md file */
+/** YAML frontmatter for a plan.md file (simplified) */
 export interface PlanFrontmatter {
 	title: string;
 	slug: string;
@@ -33,8 +54,6 @@ export interface PlanFrontmatter {
 	created: string;
 	updated: string;
 	completed: string | null;
-	blocked_reason: string | null;
-	previous_status: PlanStatus | null;
 	has_review: boolean;
 	has_pre_mortem: boolean;
 	has_prd: boolean;
@@ -94,6 +113,7 @@ export function serializeFrontmatter(fm: PlanFrontmatter): string {
 
 /**
  * Parse a YAML frontmatter string into a PlanFrontmatter object.
+ * Applies migrations for backward compatibility with legacy plans.
  * Expects flat key-value pairs only.
  */
 export function parseFrontmatter(raw: string): PlanFrontmatter {
@@ -109,6 +129,9 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
 		const key = trimmed.slice(0, colonIndex).trim();
 		const rawValue = trimmed.slice(colonIndex + 1).trim();
 
+		// Skip removed legacy fields
+		if (key === "previous_status" || key === "blocked_reason") continue;
+
 		if (rawValue === "null") {
 			fm[key] = null;
 		} else if (rawValue === "true") {
@@ -120,6 +143,11 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
 		} else {
 			fm[key] = rawValue;
 		}
+	}
+
+	// Migrate legacy status values to simplified statuses
+	if (fm.status && typeof fm.status === "string") {
+		fm.status = migrateStatus(fm.status);
 	}
 
 	return fm as unknown as PlanFrontmatter;

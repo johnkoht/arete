@@ -1,186 +1,156 @@
 {
-  "name": "onboarding-improvements-phase1",
+  "name": "onboarding-improvements-phase2",
   "branchName": "feature/onboarding-improvements",
-  "goal": "Implement Phase 1: Onboarding MVP skill (Stream A) + Rapid Context Dump capability (Stream B) for first-session activation flow.",
+  "goal": "Implement Phase 2: People Intelligence MVP (Stream C) with unknown queue defaults, evidence-backed recommendations, digest review UX, and KPI visibility.",
   "userStories": [
     {
-      "id": "a1-onboarding-skill-scaffold",
-      "title": "Create onboarding skill scaffold",
-      "description": "Create packages/runtime/skills/onboarding/SKILL.md with triggers, discovery phase structure, and path routing placeholder. Follow existing skill patterns from meeting-prep or daily-plan.",
+      "id": "c1-people-intelligence-skill-scaffold",
+      "title": "Create people-intelligence skill scaffold",
+      "description": "Create packages/runtime/skills/people-intelligence/SKILL.md defining triggers, scope, unknown queue behavior, and non-blocking review flow. Follow existing skill conventions.",
       "acceptanceCriteria": [
-        "SKILL.md exists at packages/runtime/skills/onboarding/",
-        "Triggers include: 'Let's get started', 'Help me set up Areté', 'Onboard me', 'I'm new to Areté'",
-        "Frontmatter includes name, description, category (core), triggers array",
-        "Discovery phase questions are documented (data sources, immediate need, docs availability)",
-        "Path routing structure documented (Path A: data dump, Path B: guided input, Path C: integration first)"
+        "SKILL.md exists at packages/runtime/skills/people-intelligence/",
+        "Skill description aligns to Stream C and Phase 2 scope",
+        "Triggers cover user intents for people triage/classification",
+        "Out-of-scope items explicitly exclude Phase 3 enrichment/policy tuning",
+        "Skill is independently routable without requiring Stream A/B runtime coupling"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1
     },
     {
-      "id": "a2-discovery-and-routing",
-      "title": "Implement discovery questions and path routing logic",
-      "description": "Complete the discovery phase with 3-4 key questions and document clear routing criteria to Path A/B/C based on user answers.",
+      "id": "c2-classification-data-model",
+      "title": "Implement uncertainty-safe people classification model",
+      "description": "Introduce or extend model structures to support multi-dimensional classification: affiliation (internal/external), role lens (customer/user/partner/unknown), and tracking intent (track/defer/ignore), with explicit unknown state.",
       "acceptanceCriteria": [
-        "Discovery questions cover: data sources available, immediate need, doc readiness",
-        "Path A triggers when user has docs to dump (website, folder, paste)",
-        "Path B triggers when user needs guided Q&A input",
-        "Path C triggers when user wants to connect integrations first",
-        "Routing criteria are explicit and deterministic"
+        "Data model supports unknown state as first-class value",
+        "Model supports mixed identities without forced single-label assumptions",
+        "Low-confidence outputs are representable without coercion to customer/user",
+        "Type safety is preserved (no any), and NodeNext import conventions are respected",
+        "Unit tests cover happy path, mixed identity, and unknown/edge cases"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "a1-onboarding-skill-scaffold"
+        "c1-people-intelligence-skill-scaffold"
       ]
     },
     {
-      "id": "b1-context-dump-skill-scaffold",
-      "title": "Create rapid-context-dump skill scaffold",
-      "description": "Create packages/runtime/skills/rapid-context-dump/SKILL.md as standalone capability that can be invoked from onboarding or directly. Include input types, output structure, and review-before-promote workflow.",
+      "id": "c3-evidence-backed-suggestion-payload",
+      "title": "Implement recommendation payload with confidence and evidence",
+      "description": "Implement suggestion output contract that includes recommendation, confidence score, rationale text, evidence snippets, and source pointers/artifact references.",
       "acceptanceCriteria": [
-        "SKILL.md exists at packages/runtime/skills/rapid-context-dump/",
-        "Triggers include: 'dump my context', 'import my docs', 'bootstrap context from...'",
-        "Input types documented: website URL, inputs/onboarding-dump/ folder, pasted text",
-        "Output structure documented: draft context files, draft strategy summary, review checklist",
-        "Review-before-promote workflow is explicit"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1
-    },
-    {
-      "id": "b2-input-handling-and-fallback",
-      "title": "Document input handling and fallback matrix",
-      "description": "Add detailed input handling for each input type with fallback behavior when inputs are unavailable or fail.",
-      "acceptanceCriteria": [
-        "Pasted text handling documented with extraction guidance",
-        "Folder handling documented (inputs/onboarding-dump/) with file type support",
-        "Website URL handling documented with extraction approach",
-        "Fallback matrix matches PRD: paste > folder > URL priority with graceful degradation",
-        "Non-blocking behavior explicit (one channel failure doesn't block flow)"
+        "Every recommendation includes confidence + rationale + evidence snippets",
+        "Source pointers/artifact refs are included for traceability",
+        "Recommendations missing evidence are flagged as non-auto-recommended",
+        "Fallback behavior works when source hints are sparse or missing",
+        "Tests validate payload schema and traceability requirements"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "b1-context-dump-skill-scaffold"
+        "c2-classification-data-model"
       ]
     },
     {
-      "id": "b3-draft-output-and-review",
-      "title": "Document draft output format and review workflow",
-      "description": "Specify exact draft output format with [DRAFT] labels, source references, and review checklist. Document promotion flow.",
+      "id": "c4-unknown-queue-threshold-routing",
+      "title": "Add unknown queue and threshold-based default routing",
+      "description": "Implement queueing/routing logic so low-confidence classifications default to unknown queue, with no forced customer default behavior.",
       "acceptanceCriteria": [
-        "Draft files include [DRAFT] header and source/evidence references",
-        "Draft strategy summary template documented",
-        "Review checklist template documented",
-        "Promotion requires explicit user confirmation",
-        "Consent checkpoint documented before ingestion begins"
+        "Unknown queue exists as a first-class destination",
+        "Low-confidence classifications always route to unknown queue by default",
+        "No forced customer default occurs when confidence is below threshold",
+        "Threshold behavior is deterministic and documented",
+        "Regression tests prove uncertain entities are not force-classified"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "b2-input-handling-and-fallback"
+        "c3-evidence-backed-suggestion-payload"
       ]
     },
     {
-      "id": "a3-path-a-context-dump-integration",
-      "title": "Integrate Path A with rapid-context-dump skill",
-      "description": "Wire onboarding Path A to invoke rapid-context-dump skill. Document handoff including website URL entry point.",
+      "id": "c5-digest-review-default-ux",
+      "title": "Implement batch/digest review as default non-blocking flow",
+      "description": "Implement default review mode as digest/batch rather than per-person interruptions, ensuring workflows remain non-blocking.",
       "acceptanceCriteria": [
-        "Path A explicitly hands off to rapid-context-dump skill",
-        "Website URL + context dump entry point is clear",
-        "Profile capture fields are collected before handoff (per contract)",
-        "Return flow after context dump leads to first-win suggestion"
+        "Default review mode is digest/batch",
+        "Per-person interruptive prompts are not the primary flow",
+        "User workflow continues without forced immediate triage",
+        "Review output still preserves evidence and confidence context",
+        "Tests validate default mode and non-blocking behavior"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "a2-discovery-and-routing",
-        "b3-draft-output-and-review"
+        "c4-unknown-queue-threshold-routing"
       ]
     },
     {
-      "id": "a4-first-win-handoff",
-      "title": "Document first-win recommendation and handoff",
-      "description": "Complete the onboarding flow with first-win skill recommendation based on what was set up, and next-step guidance.",
+      "id": "c6-contract-consumption-and-graceful-degradation",
+      "title": "Consume Stream A/B contracts with graceful degradation",
+      "description": "Consume profile/domain hints from Streams A/B when present and degrade gracefully when hints are unavailable.",
       "acceptanceCriteria": [
-        "First-win recommendations are context-aware (meeting-prep if calendar, synthesize if docs, week-plan if fresh)",
-        "Handoff to first-win skill is documented",
-        "Graduation message includes next steps and skill discovery guidance",
-        "Flow completes in target time (≤30 min per PRD)"
+        "Consumes profile fields from Stream A contract when available",
+        "Consumes domain/company hints from Stream B contract when available",
+        "If hints are missing, behavior degrades gracefully without failure",
+        "Classification falls back to evidence-first logic with unknown queue where needed",
+        "Tests cover both hint-rich and hint-sparse scenarios"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "a3-path-a-context-dump-integration"
+        "c5-digest-review-default-ux"
       ]
     },
     {
-      "id": "a5-contract-profile-fields",
-      "title": "Add contract-compliant profile capture",
-      "description": "Ensure onboarding captures minimal identity/profile fields per Contract v1 for downstream Stream C consumption.",
+      "id": "c7-kpi-instrumentation-and-visibility",
+      "title": "Add KPI instrumentation for Phase 2 success metrics",
+      "description": "Implement measurable outputs for misclassification rate, triage burden, and interruption complaints, suitable for weekly MVP phase reviews.",
       "acceptanceCriteria": [
-        "Profile fields captured: name, role, company (per Contract v1)",
-        "Fields are written to appropriate workspace location",
-        "Graceful handling if user skips optional fields",
-        "Contract compliance note in skill documentation"
+        "Misclassification rate is measurable from generated outputs",
+        "Triage burden is measurable (time/volume proxy or equivalent)",
+        "Interruption complaints signal is tracked for review",
+        "Metric outputs are documented and accessible for phase-gate decisions",
+        "Tests validate metric calculation/output integrity"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "a4-first-win-handoff"
+        "c6-contract-consumption-and-graceful-degradation"
       ]
     },
     {
-      "id": "b4-contract-domain-hints",
-      "title": "Add contract-compliant domain hints output",
-      "description": "Ensure rapid-context-dump emits domain/company hints per Contract v1 for downstream Stream C consumption.",
-      "acceptanceCriteria": [
-        "Domain hints extracted from website URL and content",
-        "Hints written to discoverable location or embedded in context",
-        "Contract compliance note in skill documentation",
-        "Graceful degradation if hints cannot be extracted"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "b3-draft-output-and-review"
-      ]
-    },
-    {
-      "id": "phase1-validation",
-      "title": "Phase 1 validation and quality gates",
-      "description": "Run typecheck, tests, verify skills are discoverable, and confirm Phase 1 ship-check passes (A+B ship without C).",
+      "id": "phase2-validation",
+      "title": "Phase 2 validation and quality gates",
+      "description": "Run full quality gates and validate Phase 2 acceptance criteria against the child PRD and umbrella PRD independent-ship constraints.",
       "acceptanceCriteria": [
         "npm run typecheck passes",
         "npm test passes",
-        "Both skills appear in arete skill list output",
-        "Skills are routable via arete skill route",
-        "Phase 1 ship-check confirmed: onboarding + context-dump work without people-intelligence"
+        "People Intelligence flow satisfies child PRD acceptance criteria 1-6",
+        "Default review flow remains non-blocking and unknown queue behavior is verified",
+        "Stream C demonstrates graceful degradation when Stream A/B hints are missing"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
       "dependencies": [
-        "a5-contract-profile-fields",
-        "b4-contract-domain-hints"
+        "c7-kpi-instrumentation-and-visibility"
       ]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T06:45:00.000Z",
-    "totalTasks": 10,
-    "completedTasks": 10,
+    "createdAt": "2026-02-18T11:35:00.000Z",
+    "totalTasks": 8,
+    "completedTasks": 8,
     "failedTasks": 0,
-    "updatedAt": "2026-02-18T14:27:55.414Z"
+    "updatedAt": "2026-02-18T17:38:48.548Z",
+    "completedAt": "2026-02-18T17:38:48.550Z"
   }
 }

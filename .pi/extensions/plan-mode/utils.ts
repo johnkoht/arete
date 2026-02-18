@@ -1,7 +1,20 @@
 /**
- * Pure utility functions for plan mode.
+ * Pure utility functions for plan mode (simplified).
  * Extracted for testability.
  */
+
+import type { PlanSize } from "./persistence.js";
+
+// Re-export PlanSize for convenience
+export type { PlanSize };
+
+/**
+ * Active tools for plan mode.
+ *
+ * Plan mode still keeps bash safety restrictions, but now allows editing/writing
+ * so users can persist plans and artifacts without leaving the mode.
+ */
+export const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire", "edit", "write"] as const;
 
 // Destructive commands blocked in plan mode
 const DESTRUCTIVE_PATTERNS = [
@@ -105,26 +118,14 @@ export function isSafeCommand(command: string): boolean {
 }
 
 /**
- * During PRD conversion we permit minimal write-oriented bash needed for file scaffolding.
- * All other plan-mode turns remain read-only.
+ * Check if a command is allowed in plan mode.
+ * During PRD conversion, we permit mkdir -p for file scaffolding.
  */
-export function isAllowedInPlanMode(command: string, activeCommand: string | null): boolean {
-	if (activeCommand === "prd") {
+export function isAllowedInPlanMode(command: string, inPrdConversion: boolean = false): boolean {
+	if (inPrdConversion) {
 		return isSafeCommand(command) || /^\s*mkdir\s+-p\b/.test(command);
 	}
 	return isSafeCommand(command);
-}
-
-/**
- * Guard execution UX rendering so stale execution state doesn't leak into non-build plans.
- */
-export function shouldShowExecutionStatus(
-	executionMode: boolean,
-	status: string | null,
-	currentPhase: Phase,
-): boolean {
-	if (!executionMode) return false;
-	return status === "in-progress" || currentPhase === "build";
 }
 
 export interface TodoItem {
@@ -195,70 +196,6 @@ export function markCompletedSteps(text: string, items: TodoItem[]): number {
 }
 
 /**
- * Extract relevant content for a lifecycle phase from an agent response.
- * Falls back to full response if no expected headers are found.
- */
-export function extractPhaseContent(response: string, phase: Phase): string {
-	const text = response.trim();
-	if (!text) return "";
-
-	const startPatternsByPhase: Record<Phase, RegExp[]> = {
-		plan: [/^\*{0,2}Plan:\*{0,2}\s*$/im, /^Plan:\s*$/im],
-		prd: [/^#\s*PRD\b/im, /^##\s*PRD\b/im],
-		"pre-mortem": [/^##\s*Pre-Mortem\b/im, /^###\s*Risk\b/im],
-		review: [/^##\s*Review\b/im, /^#\s*Review\b/im],
-		build: [],
-		done: [],
-	};
-
-	const endMarkers = [/^##\s+/gm, /^#\s+/gm];
-	const startPatterns = startPatternsByPhase[phase] ?? [];
-
-	for (const pattern of startPatterns) {
-		const match = pattern.exec(text);
-		if (!match || match.index < 0) continue;
-
-		const startIndex = match.index;
-		const afterStart = text.slice(startIndex + match[0].length);
-		const localEndCandidates = endMarkers
-			.map((endPattern) => {
-				const endMatch = endPattern.exec(afterStart);
-				return endMatch ? endMatch.index : -1;
-			})
-			.filter((idx) => idx > 0);
-
-		const endOffset = localEndCandidates.length > 0 ? Math.min(...localEndCandidates) : -1;
-		const extracted = endOffset > 0
-			? text.slice(startIndex, startIndex + match[0].length + endOffset)
-			: text.slice(startIndex);
-		const trimmed = extracted.trim();
-		if (trimmed) return trimmed;
-	}
-
-	return text;
-}
-
-/**
- * Detect whether the assistant is asking for clarification and is likely
- * waiting for a user response before continuing the workflow.
- */
-export function isAwaitingUserResponse(message: string): boolean {
-	const text = message.trim();
-	if (!text) return false;
-
-	const questionMarks = (text.match(/\?/g) ?? []).length;
-	if (questionMarks === 0) return false;
-
-	const asksForInput = /\b(clarifying questions|to tailor|before i|please answer|can you share|let me know|which option|does this align|should i)\b/i.test(
-		text,
-	);
-
-	const hasQuestionsSection = /\bquestions?:\s*$/im.test(text) || /^\s*[-*\d.)]+\s+.+\?/m.test(text);
-
-	return asksForInput || hasQuestionsSection;
-}
-
-/**
  * Suggest a human-friendly plan name from plan text and extracted todo items.
  * Prefers a non-generic H1 title, otherwise falls back to first todo(s).
  */
@@ -294,16 +231,6 @@ function isGenericPlanHeading(heading: string): boolean {
 	]);
 	return genericHeadings.has(normalized);
 }
-
-// ────────────────────────────────────────────────────────────
-// Plan classification and smart menu utilities
-// ────────────────────────────────────────────────────────────
-
-/** Plan size classification */
-export type PlanSize = "tiny" | "small" | "medium" | "large";
-
-/** Pipeline phases for linear flow control (re-exported from commands.ts for convenience) */
-export type Phase = "plan" | "prd" | "pre-mortem" | "review" | "build" | "done";
 
 /** Keywords that indicate higher complexity */
 export const COMPLEXITY_KEYWORDS = [
@@ -349,141 +276,4 @@ export function classifyPlanSize(items: TodoItem[], planText: string): PlanSize 
 	// 0-1 steps
 	if (keywordCount >= 1 && stepCount >= 1) return "medium";
 	return "tiny";
-}
-
-/** State for building workflow menus */
-export interface WorkflowMenuState {
-	planSize: PlanSize;
-	preMortemRun: boolean;
-	reviewRun: boolean;
-	prdConverted: boolean;
-	postMortemRun: boolean;
-}
-
-/** Result from getPhaseMenu: exactly two options (refine current, continue to next) */
-export interface PhaseMenuOptions {
-	refine: string | null; // "Refine X" option, null if not applicable
-	next: string | null; // "Continue to Y" option, null if at end
-}
-
-/** Completion flags that can affect next-step label for the current phase. */
-export interface PhaseCompletion {
-	prdConverted: boolean;
-	preMortemRun: boolean;
-	reviewRun: boolean;
-}
-
-/**
- * Get phase-based menu options for linear flow.
- * Returns exactly two options: refine current phase, continue to next phase.
- *
- * Supports flexible command invocation: if a gate was already run out-of-order,
- * "next" adapts to the next missing gate instead of repeating the same step.
- */
-export function getPhaseMenu(
-	phase: Phase,
-	planSize: PlanSize,
-	completion: PhaseCompletion = {
-		prdConverted: false,
-		preMortemRun: false,
-		reviewRun: false,
-	},
-): PhaseMenuOptions {
-	switch (phase) {
-		case "plan": {
-			const shouldGoThroughPrd = planSize === "medium" || planSize === "large";
-			const next = shouldGoThroughPrd && !completion.prdConverted
-				? "Continue to PRD"
-				: !completion.preMortemRun
-					? "Continue to pre-mortem"
-					: !completion.reviewRun
-						? "Continue to review"
-						: "Continue to build";
-			return { refine: "Refine plan", next };
-		}
-
-		case "prd": {
-			const next = !completion.preMortemRun
-				? "Continue to pre-mortem"
-				: !completion.reviewRun
-					? "Continue to review"
-					: "Continue to build";
-			return {
-				refine: "Refine PRD",
-				next,
-			};
-		}
-
-		case "pre-mortem": {
-			const next = planSize === "tiny" || planSize === "small"
-				? completion.reviewRun ? "Continue to build" : "Skip review → build"
-				: completion.reviewRun ? "Continue to build" : "Continue to review";
-			return {
-				refine: "Refine pre-mortem",
-				next,
-			};
-		}
-
-		case "review":
-			return {
-				refine: "Refine review",
-				next: "Continue to build",
-			};
-
-		case "build":
-		case "done":
-			return { refine: null, next: null };
-
-		default:
-			return { refine: null, next: null };
-	}
-}
-
-/**
- * Get contextual menu options based on plan size and completed gates.
- * @deprecated Use getPhaseMenu for linear flow. This function remains for backward compatibility.
- */
-export function getMenuOptions(state: WorkflowMenuState): string[] {
-	const { planSize, preMortemRun, reviewRun, prdConverted } = state;
-
-	if (planSize === "tiny") {
-		return [
-			"Start build now (executes code changes)",
-			"Save as draft",
-			"Refine the plan",
-		];
-	}
-
-	const executeLabel = preMortemRun
-		? "Start build now (pre-mortem ✓, executes code changes)"
-		: "Start build now (executes code changes)";
-
-	if (planSize === "small") {
-		const options: string[] = [];
-		if (!preMortemRun) options.push("Run pre-mortem (no code changes)");
-		options.push(executeLabel);
-		if (!reviewRun) options.push("Review the plan");
-		if (!prdConverted) options.push("Convert to PRD (no code changes)");
-		options.push("Save as draft", "Refine the plan");
-		return options;
-	}
-
-	// medium or large
-	const options: string[] = [];
-	if (!prdConverted) options.push("Convert to PRD (recommended, no code changes)");
-	if (!preMortemRun) options.push("Run pre-mortem (no code changes)");
-	if (!reviewRun) options.push("Review the plan");
-	options.push(executeLabel);
-	options.push("Save as draft", "Refine the plan");
-	return options;
-}
-
-/**
- * Get post-execution menu options.
- */
-export function getPostExecutionMenuOptions(postMortemRun: boolean): string[] {
-	const options: string[] = [];
-	if (!postMortemRun) options.push("Run post-mortem (extract learnings)");
-	options.push("Capture learnings to memory", "Done");
-	return options;
 }

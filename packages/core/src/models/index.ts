@@ -67,9 +67,17 @@ export type {
 // Entities domain
 export type {
   PersonCategory,
+  PersonAffiliation,
+  PersonRoleLens,
+  TrackingIntent,
   Person,
   Meeting,
   Project,
+  PeopleIntelligenceCandidate,
+  PeopleIntelligenceEvidence,
+  PeopleIntelligenceSuggestion,
+  PeopleIntelligenceMetrics,
+  PeopleIntelligenceDigest,
   ResolvedEntity,
   MentionSourceType,
   EntityMention,

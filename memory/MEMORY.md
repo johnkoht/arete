@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-18: [onboarding-improvements-phase2-learnings](entries/2026-02-18_onboarding-improvements-phase2-learnings.md) — Phase 2 implementation (8/8 tasks): people-intelligence skill, uncertainty-safe classification, unknown queue routing, digest review UX, contract fallback handling, and KPI instrumentation.
 - 2026-02-18: [onboarding-improvements-phase1-learnings](entries/2026-02-18_onboarding-improvements-phase1-learnings.md) — Phase 1 implementation (10/10 tasks): onboarding skill + rapid-context-dump skill with discovery, path routing, input fallback, draft workflow, contract compliance, and first-win handoff.
 - 2026-02-18: [onboarding-improvements-prd-packaging](entries/2026-02-18_onboarding-improvements-prd-packaging.md) — Completed PRD packaging execution (8/8 tasks): stream boundaries, child PRDs, contracts, phase gates, numeric KPI thresholds, and handoff readiness.
 - 2026-02-18: [plan-mode-ux-learnings](entries/2026-02-18_plan-mode-ux-learnings.md) — Completed 5/5 PRD tasks for compact PRD execution status, deterministic role labels, shared progress arbitration, and parser/render regression coverage.

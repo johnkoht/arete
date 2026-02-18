@@ -26,8 +26,6 @@ function makeFrontmatter(overrides: Partial<PlanFrontmatter> = {}): PlanFrontmat
 		created: "2026-02-16T15:00:00.000Z",
 		updated: "2026-02-16T15:00:00.000Z",
 		completed: null,
-		blocked_reason: null,
-		previous_status: null,
 		has_review: false,
 		has_pre_mortem: false,
 		has_prd: false,
@@ -87,7 +85,6 @@ describe("serializeFrontmatter / parseFrontmatter", () => {
 		assert.equal(parsed.has_review, false);
 		assert.equal(parsed.has_prd, false);
 		assert.equal(parsed.completed, null);
-		assert.equal(parsed.blocked_reason, null);
 	});
 
 	it("handles boolean values", () => {
@@ -224,9 +221,9 @@ describe("updatePlanFrontmatter", () => {
 		const fm = makeFrontmatter();
 		savePlan("test-plan", fm, "content", tempDir);
 
-		const updated = updatePlanFrontmatter("test-plan", { status: "planned" }, tempDir);
+		const updated = updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
 		assert.ok(updated);
-		assert.equal(updated.status, "planned");
+		assert.equal(updated.status, "ready");
 		assert.equal(updated.title, "Test Plan"); // preserved
 		assert.equal(updated.steps, 3); // preserved
 		assert.equal(updated.has_review, false); // preserved
@@ -237,13 +234,13 @@ describe("updatePlanFrontmatter", () => {
 		savePlan("test-plan", fm, "content", tempDir);
 
 		const before = new Date().toISOString();
-		const updated = updatePlanFrontmatter("test-plan", { status: "planned" }, tempDir);
+		const updated = updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
 		assert.ok(updated);
 		assert.ok(updated.updated >= before);
 	});
 
 	it("returns null for non-existent plan", () => {
-		const result = updatePlanFrontmatter("nonexistent", { status: "planned" }, tempDir);
+		const result = updatePlanFrontmatter("nonexistent", { status: "ready" }, tempDir);
 		assert.equal(result, null);
 	});
 
@@ -252,7 +249,7 @@ describe("updatePlanFrontmatter", () => {
 		const content = "# My Plan\n\nDetailed content here.";
 		savePlan("test-plan", fm, content, tempDir);
 
-		updatePlanFrontmatter("test-plan", { status: "approved" }, tempDir);
+		updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
 
 		const loaded = loadPlan("test-plan", tempDir);
 		assert.ok(loaded);
