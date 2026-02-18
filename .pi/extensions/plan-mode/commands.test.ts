@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inferPhaseFromPlan } from "./commands.js";
+import { inferPhaseFromPlan, shouldResumeExecutionFromPlan } from "./commands.js";
 
 describe("inferPhaseFromPlan", () => {
 	it("returns done for completed status", () => {
@@ -47,5 +47,14 @@ describe("inferPhaseFromPlan", () => {
 			inferPhaseFromPlan("draft", { has_prd: false, has_pre_mortem: false, has_review: false }),
 			"plan",
 		);
+	});
+});
+
+describe("shouldResumeExecutionFromPlan", () => {
+	it("resumes execution only for in-progress build phase", () => {
+		assert.equal(shouldResumeExecutionFromPlan("in-progress", "build"), true);
+		assert.equal(shouldResumeExecutionFromPlan("approved", "build"), false);
+		assert.equal(shouldResumeExecutionFromPlan("draft", "plan"), false);
+		assert.equal(shouldResumeExecutionFromPlan("completed", "done"), false);
 	});
 });

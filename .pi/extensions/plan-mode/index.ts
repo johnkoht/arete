@@ -42,6 +42,8 @@ import {
 	handlePreMortem,
 	handlePrd,
 	handleBuild,
+	inferPhaseFromPlan,
+	shouldResumeExecutionFromPlan,
 	type PlanModeState,
 	type Phase,
 	createDefaultState,
@@ -812,6 +814,35 @@ After completing a step, include a [DONE:n] tag in your response.
 			state.isRefining = planModeEntry.data.isRefining ?? state.isRefining;
 		}
 
+		// Reconcile restored in-memory state with persisted plan frontmatter.
+		// This prevents stale execution/build phase state from leaking after /reload.
+		if (state.currentSlug) {
+			const persistedPlan = loadPlan(state.currentSlug);
+			if (persistedPlan) {
+				state.planText = persistedPlan.content;
+				state.planSize = persistedPlan.frontmatter.size;
+				state.todoItems = extractTodoItems(persistedPlan.content);
+				state.preMortemRun = persistedPlan.frontmatter.has_pre_mortem;
+				state.reviewRun = persistedPlan.frontmatter.has_review;
+				state.prdConverted = persistedPlan.frontmatter.has_prd;
+
+				const inferredPhase = inferPhaseFromPlan(persistedPlan.frontmatter.status, {
+					has_prd: persistedPlan.frontmatter.has_prd,
+					has_pre_mortem: persistedPlan.frontmatter.has_pre_mortem,
+					has_review: persistedPlan.frontmatter.has_review,
+				});
+				state.currentPhase = inferredPhase;
+				state.executionMode = shouldResumeExecutionFromPlan(
+					persistedPlan.frontmatter.status,
+					inferredPhase,
+				);
+
+				if (!state.executionMode && state.planModeEnabled) {
+					state.activeCommand = "plan";
+				}
+			}
+		}
+
 		// On resume: re-scan messages to rebuild completion state
 		const isResume = planModeEntry !== undefined;
 		if (isResume && state.executionMode && state.todoItems.length > 0) {
@@ -839,7 +870,11 @@ After completing a step, include a [DONE:n] tag in your response.
 			markCompletedSteps(allText, state.todoItems);
 		}
 
-		if (state.planModeEnabled) {
+		if (state.executionMode) {
+			state.planModeEnabled = false;
+			state.activeCommand = "build";
+			pi.setActiveTools(NORMAL_MODE_TOOLS);
+		} else if (state.planModeEnabled) {
 			if (!state.activeCommand) {
 				state.activeCommand = "plan";
 			}

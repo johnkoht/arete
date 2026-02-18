@@ -50,6 +50,14 @@ export function inferPhaseFromPlan(
 	if (gates.has_prd) return "prd";
 	return "plan";
 }
+
+/**
+ * Whether execution UI/state should be resumed for a restored plan.
+ * We only resume when the plan is actively in-progress build work.
+ */
+export function shouldResumeExecutionFromPlan(status: PlanStatus, phase: Phase): boolean {
+	return status === "in-progress" && phase === "build";
+}
 import { getTemplate, getTemplates, getTemplateOptions } from "./templates.js";
 
 // ────────────────────────────────────────────────────────────
