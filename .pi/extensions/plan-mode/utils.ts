@@ -350,47 +350,67 @@ export interface WorkflowMenuState {
 
 /** Result from getPhaseMenu: exactly two options (refine current, continue to next) */
 export interface PhaseMenuOptions {
-	refine: string | null;  // "Refine X" option, null if not applicable
-	next: string | null;    // "Continue to Y" option, null if at end
+	refine: string | null; // "Refine X" option, null if not applicable
+	next: string | null; // "Continue to Y" option, null if at end
+}
+
+/** Completion flags that can affect next-step label for the current phase. */
+export interface PhaseCompletion {
+	prdConverted: boolean;
+	preMortemRun: boolean;
+	reviewRun: boolean;
 }
 
 /**
  * Get phase-based menu options for linear flow.
  * Returns exactly two options: refine current phase, continue to next phase.
  *
- * @param phase - Current pipeline phase
- * @param planSize - Plan size classification (affects routing: tiny/small skip PRD)
- * @returns PhaseMenuOptions with refine and next labels
+ * Supports flexible command invocation: if a gate was already run out-of-order,
+ * "next" adapts to the next missing gate instead of repeating the same step.
  */
-export function getPhaseMenu(phase: Phase, planSize: PlanSize): PhaseMenuOptions {
+export function getPhaseMenu(
+	phase: Phase,
+	planSize: PlanSize,
+	completion: PhaseCompletion = {
+		prdConverted: false,
+		preMortemRun: false,
+		reviewRun: false,
+	},
+): PhaseMenuOptions {
 	switch (phase) {
-		case "plan":
-			// Tiny/small skip PRD → go directly to pre-mortem
-			if (planSize === "tiny" || planSize === "small") {
-				return {
-					refine: "Refine plan",
-					next: "Continue to pre-mortem",
-				};
-			}
-			// Medium/large go through PRD
-			return {
-				refine: "Refine plan",
-				next: "Continue to PRD",
-			};
+		case "plan": {
+			const shouldGoThroughPrd = planSize === "medium" || planSize === "large";
+			const next = shouldGoThroughPrd && !completion.prdConverted
+				? "Continue to PRD"
+				: !completion.preMortemRun
+					? "Continue to pre-mortem"
+					: !completion.reviewRun
+						? "Continue to review"
+						: "Continue to build";
+			return { refine: "Refine plan", next };
+		}
 
-		case "prd":
+		case "prd": {
+			const next = !completion.preMortemRun
+				? "Continue to pre-mortem"
+				: !completion.reviewRun
+					? "Continue to review"
+					: "Continue to build";
 			return {
 				refine: "Refine PRD",
-				next: "Continue to pre-mortem",
+				next,
 			};
+		}
 
-		case "pre-mortem":
+		case "pre-mortem": {
+			const next = planSize === "tiny" || planSize === "small"
+				? completion.reviewRun ? "Continue to build" : "Skip review → build"
+				: completion.reviewRun ? "Continue to build" : "Continue to review";
 			return {
 				refine: "Refine pre-mortem",
-				next: planSize === "tiny" || planSize === "small"
-					? "Skip review → build"
-					: "Continue to review",
+				next,
 			};
+		}
 
 		case "review":
 			return {
@@ -400,17 +420,10 @@ export function getPhaseMenu(phase: Phase, planSize: PlanSize): PhaseMenuOptions
 
 		case "build":
 		case "done":
-			// No menu during build or after done
-			return {
-				refine: null,
-				next: null,
-			};
+			return { refine: null, next: null };
 
 		default:
-			return {
-				refine: null,
-				next: null,
-			};
+			return { refine: null, next: null };
 	}
 }
 

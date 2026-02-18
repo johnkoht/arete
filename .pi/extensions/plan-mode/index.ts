@@ -241,6 +241,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			return;
 		}
 
+		if (phase === "prd") {
+			savePlanArtifact(state.currentSlug, "prd.md", contentWithComment);
+			return;
+		}
+
 		if (phase === "pre-mortem") {
 			savePlanArtifact(state.currentSlug, "pre-mortem.md", contentWithComment);
 			return;
@@ -333,7 +338,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			enableArtifactTool();
 			await handleReview(args, ctx, pi, state);
+			if (state.reviewRun) {
+				state.currentPhase = "review";
+			}
 			updateStatus(ctx);
+			persistState();
 		},
 	});
 
@@ -342,7 +351,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			enableArtifactTool();
 			await handlePreMortem(args, ctx, pi, state);
+			if (state.preMortemRun) {
+				state.currentPhase = "pre-mortem";
+			}
 			updateStatus(ctx);
+			persistState();
 		},
 	});
 
@@ -353,7 +366,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			// PRD conversion writes files (dev/prds, prd.json), so temporarily allow normal tools.
 			pi.setActiveTools([...NORMAL_MODE_TOOLS, "save_plan_artifact"]);
 			await handlePrd(args, ctx, pi, state);
+			if (state.prdConverted) {
+				state.currentPhase = "prd";
+			}
 			updateStatus(ctx);
+			persistState();
 		},
 	});
 
@@ -617,7 +634,9 @@ After completing a step, include a [DONE:n] tag in your response.
 			awaitingResponse = isAwaitingUserResponse(text);
 
 			// Auto-save artifacts from actual agent output
-			if (completedCommand === "pre-mortem") {
+			if (completedCommand === "prd") {
+				autoSavePhaseArtifact("prd", text);
+			} else if (completedCommand === "pre-mortem") {
 				autoSavePhaseArtifact("pre-mortem", text);
 			} else if (completedCommand === "review") {
 				autoSavePhaseArtifact("review", text);
@@ -654,7 +673,11 @@ After completing a step, include a [DONE:n] tag in your response.
 				return;
 			}
 
-			const phaseMenu = getPhaseMenu(state.currentPhase, state.planSize ?? "small");
+			const phaseMenu = getPhaseMenu(state.currentPhase, state.planSize ?? "small", {
+				prdConverted: state.prdConverted,
+				preMortemRun: state.preMortemRun,
+				reviewRun: state.reviewRun,
+			});
 			const options = [phaseMenu.refine, phaseMenu.next].filter((v): v is string => v !== null);
 
 			if (options.length > 0) {

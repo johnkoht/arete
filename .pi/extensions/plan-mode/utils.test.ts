@@ -324,11 +324,47 @@ describe("getPhaseMenu", () => {
 		});
 	});
 
+	it("prd phase after out-of-order pre-mortem: next is continue to review", () => {
+		const menu = getPhaseMenu("prd", "large", {
+			prdConverted: true,
+			preMortemRun: true,
+			reviewRun: false,
+		});
+		assert.deepEqual(menu, {
+			refine: "Refine PRD",
+			next: "Continue to review",
+		});
+	});
+
+	it("prd phase after pre-mortem and review: next is continue to build", () => {
+		const menu = getPhaseMenu("prd", "large", {
+			prdConverted: true,
+			preMortemRun: true,
+			reviewRun: true,
+		});
+		assert.deepEqual(menu, {
+			refine: "Refine PRD",
+			next: "Continue to build",
+		});
+	});
+
 	it("pre-mortem phase (small): refine + skip review to build", () => {
 		const menu = getPhaseMenu("pre-mortem", "small");
 		assert.deepEqual(menu, {
 			refine: "Refine pre-mortem",
 			next: "Skip review → build",
+		});
+	});
+
+	it("pre-mortem phase (small) with review already done: continue to build", () => {
+		const menu = getPhaseMenu("pre-mortem", "small", {
+			prdConverted: false,
+			preMortemRun: true,
+			reviewRun: true,
+		});
+		assert.deepEqual(menu, {
+			refine: "Refine pre-mortem",
+			next: "Continue to build",
 		});
 	});
 

@@ -15,7 +15,6 @@ import {
 	loadPlan,
 	listPlans,
 	updatePlanFrontmatter,
-	savePlanArtifact,
 	loadPlanArtifact,
 	slugify,
 	type PlanFrontmatter,
@@ -842,11 +841,7 @@ export async function handlePrd(
 	state.prdConverted = true;
 	updatePlanFrontmatter(state.currentSlug, { has_prd: true });
 
-	savePlanArtifact(
-		state.currentSlug,
-		"prd.md",
-		`# PRD\n\nFeature: ${featureSlug}\nTriggered: ${new Date().toISOString()}\n\nPRD content will be created by the plan-to-prd skill.\n`,
-	);
+	// prd.md is auto-saved from actual agent output in index.ts (agent_end).
 }
 
 // ────────────────────────────────────────────────────────────
