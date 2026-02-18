@@ -28,12 +28,27 @@ import {
 	type TodoItem,
 } from "./utils.js";
 
+const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
+
 // ────────────────────────────────────────────────────────────
 // Phase type for linear pipeline flow
 // ────────────────────────────────────────────────────────────
 
 /** Pipeline phases for linear flow control */
 export type Phase = "plan" | "prd" | "pre-mortem" | "review" | "build" | "done";
+
+/** Infer lifecycle phase from persisted plan status and gate completion flags. */
+export function inferPhaseFromPlan(
+	status: PlanStatus,
+	gates: { has_prd: boolean; has_pre_mortem: boolean; has_review: boolean },
+): Phase {
+	if (status === "completed") return "done";
+	if (status === "in-progress" || status === "approved") return "build";
+	if (gates.has_review) return "review";
+	if (gates.has_pre_mortem) return "pre-mortem";
+	if (gates.has_prd) return "prd";
+	return "plan";
+}
 import { getTemplate, getTemplates, getTemplateOptions } from "./templates.js";
 
 // ────────────────────────────────────────────────────────────
@@ -183,7 +198,7 @@ export async function handlePlan(
 			await handlePlanNew(subcommand[1], ctx, pi, state, togglePlanMode);
 			break;
 		case "list":
-			await handlePlanList(ctx, state);
+			await handlePlanList(ctx, pi, state);
 			break;
 		case "open":
 			await handlePlanOpen(subcommand[1], ctx, pi, state);
@@ -293,7 +308,7 @@ async function handlePlanNew(
 	);
 }
 
-async function handlePlanList(ctx: CommandContext, state: PlanModeState): Promise<void> {
+async function handlePlanList(ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {
 	const plans = listPlans();
 
 	if (plans.length === 0) {
@@ -322,7 +337,7 @@ async function handlePlanList(ctx: CommandContext, state: PlanModeState): Promis
 		const index = options.indexOf(selected);
 		if (index >= 0) {
 			const plan = plans[index];
-			await handlePlanOpen(plan.slug, ctx, {} as CommandPi, state);
+			await handlePlanOpen(plan.slug, ctx, pi, state);
 		}
 	}
 }
@@ -352,9 +367,19 @@ async function handlePlanOpen(
 	state.reviewRun = plan.frontmatter.has_review;
 	state.prdConverted = plan.frontmatter.has_prd;
 	state.todoItems = extractTodoItems(plan.content);
+	state.currentPhase = inferPhaseFromPlan(plan.frontmatter.status, {
+		has_prd: plan.frontmatter.has_prd,
+		has_pre_mortem: plan.frontmatter.has_pre_mortem,
+		has_review: plan.frontmatter.has_review,
+	});
+	state.planModeEnabled = true;
+	state.executionMode = false;
+	state.activeCommand = null;
+	state.isRefining = false;
+	pi.setActiveTools(PLAN_MODE_TOOLS);
 
 	ctx.ui.notify(
-		`📋 Opened: ${plan.frontmatter.title} (${plan.frontmatter.status}, ${plan.frontmatter.size})`,
+		`📋 Opened: ${plan.frontmatter.title} (${plan.frontmatter.status}, ${plan.frontmatter.size}) — phase: ${state.currentPhase}`,
 		"info",
 	);
 
