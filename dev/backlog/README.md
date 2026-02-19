@@ -56,6 +56,14 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 **Effort**: Small (2-3 tasks: command, status computation, formatting)  
 **Dependencies**: prd.json schema stable ✅  
 
+### User Feedback & Privacy-First Telemetry
+**Status**: Backlog / Needs design  
+**File**: `features/user-feedback-and-telemetry.md`  
+**What**: Add `arete feedback`, in-chat feedback submission, post-outcome ratings, and opt-in anonymous telemetry  
+**Why**: Create a direct feedback loop from real users while preserving trust with explicit privacy controls  
+**Effort**: Medium (phased rollout across feedback UX, consent model, and telemetry events)  
+**Dependencies**: Preference model + config UX for privacy tiers  
+
 ### Competitive Analysis Skill Enhancement
 **Status**: Backlog / Needs design  
 **File**: `improvements/competitive-analysis-enhancement.md`  

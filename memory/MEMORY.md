@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-19: [persona-council-learnings](entries/2026-02-19_persona-council-learnings.md) — Introduced Persona Council to BUILD MODE: 3 behavioral archetypes (Harvester/Architect/Preparer) wired into PM agent + AGENTS.md. 3/3 tasks, 0 iterations. Key: docs-only PRDs move fast; Evidence sections built in from day one; esbuild x64/arm64 env issue needs fixing.
 - 2026-02-18: [onboarding-improvements-phase3-learnings](entries/2026-02-18_onboarding-improvements-phase3-learnings.md) — Phase 3 implementation (8/8 tasks): extraction-quality utilities, policy/toggle controls, optional enrichment, KPI snapshot persistence, and integration regression expansion.
 - 2026-02-18: [onboarding-improvements-phase2-learnings](entries/2026-02-18_onboarding-improvements-phase2-learnings.md) — Phase 2 implementation (8/8 tasks): people-intelligence skill, uncertainty-safe classification, unknown queue routing, digest review UX, contract fallback handling, and KPI instrumentation.
 - 2026-02-18: [onboarding-improvements-phase1-learnings](entries/2026-02-18_onboarding-improvements-phase1-learnings.md) — Phase 1 implementation (10/10 tasks): onboarding skill + rapid-context-dump skill with discovery, path routing, input fallback, draft workflow, contract compliance, and first-win handoff.

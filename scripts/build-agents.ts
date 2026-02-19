@@ -44,6 +44,7 @@ function getConfig(target: Target): BuildConfig {
     'builder/rules-index.md',
     'builder/conventions.md',
     'builder/memory.md',
+    'builder/personas.md',
   ];
 
   const guideFiles = [

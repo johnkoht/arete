@@ -161,7 +161,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		lastAutoSavedContent = contentHash;
 
 		ctx.ui.notify(
-			`💾 Auto-saved as '${state.currentSlug}' — rename with /plan save <name>`,
+			`💾 Auto-saved as '${state.currentSlug}' — rename with /plan rename <name>`,
 			"info",
 		);
 	}
@@ -235,7 +235,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// ── Command Registration ───────────────────────────────
 
 	pi.registerCommand("plan", {
-		description: "Plan mode — toggle or subcommands: new, list, open, save, status, delete",
+		description: "Plan mode — toggle or subcommands: new, list, open, save, rename, status, delete",
 		handler: async (args, ctx) => {
 			await handlePlan(args, ctx, pi, state, () => togglePlanMode(ctx));
 			updateStatus(ctx);

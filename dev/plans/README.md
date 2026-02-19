@@ -48,7 +48,8 @@ steps: 4
 
 - `/plan` — Toggle plan mode on/off
 - `/plan new` — Start a new plan session
-- `/plan save [slug]` — Save or rename the active plan
+- `/plan save [slug]` — Save the active plan
+- `/plan rename <new-name>` — Rename the active plan
 - `/plan list` — List saved plans
 - `/plan open <slug>` — Open an existing plan
 - `/plan status` — Show plan status + recommendations

@@ -1,14 +1,14 @@
 ---
 title: Persona Council
 slug: persona-council
-status: draft
+status: completed
 size: medium
 created: 2026-02-19T02:49:27.000Z
-updated: 2026-02-19T04:22:16.022Z
+updated: 2026-02-19T04:38:36.551Z
 completed: null
 has_review: false
 has_pre_mortem: true
-has_prd: false
+has_prd: true
 backlog_ref: null
 steps: 5
 ---
