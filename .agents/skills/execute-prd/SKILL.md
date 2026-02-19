@@ -13,7 +13,9 @@ Autonomously execute a PRD by dispatching subagents for each task, with two dist
 
 ## Tool Reference
 
-This skill uses the `subagent` tool from the `pi-subagents` extension to dispatch work:
+This skill uses the `subagent` tool to dispatch work to developer and reviewer agents.
+
+**IMPORTANT — Tool availability**: The `subagent` tool is provided by an installed pi extension (npm package). It is loaded into your tool list automatically at session start — just like `read`, `bash`, `edit`, and `write`. **Do NOT check `.pi/extensions/` or the filesystem to determine if it's available.** If `subagent` is in your tool list, use it. Simply call it directly.
 
 ```typescript
 // Dispatch a developer to implement a task
@@ -32,7 +34,7 @@ subagent({ agent: "reviewer", task: "<prompt>", agentScope: "project" })
 
 **Important**: All subagent calls inherit the current working directory. The orchestrator must run from the **worktree root** so subagents work in the correct location.
 
-**Fallback**: If the `subagent` tool is not available, the orchestrator executes tasks directly in sequence with the same quality gates and review process.
+**Fallback**: Only if calling `subagent(...)` returns an error (tool not found), execute tasks directly in sequence with the same quality gates.
 
 ## Roles
 
