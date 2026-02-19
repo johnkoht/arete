@@ -48,9 +48,20 @@ The Preparer evaluates everything against artifact quality. Their single questio
 
 ## Keeping Personas Grounded
 
-Personas drift toward fiction when not anchored to evidence. When real signal is available — user interviews, dogfooding observations, support pain points, beta feedback — add it to the Evidence section of the relevant persona in PERSONA_COUNCIL.md with a date and source.
+Personas drift toward fiction when not anchored to evidence. Until the Evidence sections in PERSONA_COUNCIL.md are populated with real signal, all council output is directional hypothesis. Flag it as such when presenting to the builder.
+
+When to update evidence:
+- After a user interview or beta conversation that reveals actual behavior
+- After dogfooding observations (builder uses Arete and notices friction or delight that maps to a persona)
+- After support pain points or explicit user feedback
+- After any A/B test or usage data that reveals behavioral patterns
+
+Where to update: open dev/personas/PERSONA_COUNCIL.md, find the relevant persona's Evidence section, and append an entry.
 
 Format for evidence entries:
 - [YYYY-MM-DD] Source: [where the signal came from]. Observation: [what was observed].
 
-Until evidence exists, all council output is directional hypothesis. Flag it as such when presenting to the builder.
+Example:
+- [2026-03-15] Source: Slack beta user interview. Observation: User pasted meeting notes mid-call, said "I don't have time to tag people right now" when prompted to map participants. Confirms zero-interruption threshold for Harvester.
+
+Once a persona has 3+ evidence entries, it graduates from hypothesis to validated. Update the Evidence section header to reflect this: replace the hypothesis disclaimer with "Validated — [N] observations."
