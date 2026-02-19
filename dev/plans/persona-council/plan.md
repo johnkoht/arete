@@ -4,10 +4,10 @@ slug: persona-council
 status: draft
 size: medium
 created: 2026-02-19T02:49:27.000Z
-updated: 2026-02-19T02:49:27.000Z
+updated: 2026-02-19T04:22:16.022Z
 completed: null
 has_review: false
-has_pre_mortem: false
+has_pre_mortem: true
 has_prd: false
 backlog_ref: null
 steps: 5
