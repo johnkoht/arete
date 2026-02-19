@@ -110,6 +110,9 @@ npm-debug.log*
 .cursor/skills-core/
 .cursor/skills-local/
 
-# Autonomous execution system (runtime files)
+# Autonomous execution system (runtime files — legacy)
 dev/autonomous/prd.json
 dev/autonomous/progress.txt
+
+# Per-run execution state (transient — see dev/executions/README.md)
+dev/executions/*/
