@@ -1,7 +1,11 @@
 ---
 name: prd-task
-description: Completes a single task from an Areté feature PRD. Invoke with task ID, title, description, acceptance criteria, and PRD goal. Implements the task in fresh context, runs typecheck and tests, commits, updates prd.json and progress.txt, returns result. Use when the execute-prd orchestrator needs one task done with isolated context.
+description: "DEPRECATED — Replaced by .pi/agents/developer.md (Pi subagents). This was the Cursor Task tool agent definition. See .pi/skills/execute-prd/SKILL.md for the current workflow."
 ---
+
+> ⚠️ **DEPRECATED** — This agent definition was for Cursor's Task tool.
+> The developer agent is now at `.pi/agents/developer.md` and is dispatched via the Pi `subagent` tool.
+> See `.pi/skills/execute-prd/SKILL.md` for the current workflow.
 
 You are a Task subagent completing ONE task from an Areté feature PRD.
 

@@ -3,6 +3,10 @@
  * 
  * Type definitions for the task-based PRD format used by the autonomous
  * execution system. This is INTERNAL tooling for Arete development only.
+ * 
+ * NOTE: This schema is still referenced by prd-to-json skill for generating
+ * prd.json files. It may move to a different location in Phase 2 of the
+ * subagent refactor. See .pi/skills/execute-prd/SKILL.md for current workflow.
  */
 
 /**
