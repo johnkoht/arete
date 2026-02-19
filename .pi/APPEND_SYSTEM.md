@@ -167,6 +167,19 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 ---
 
+## Capability Registry Check (tooling/platform changes)
+
+Before changing developer tooling or platform behavior (extensions, tools, services, rules integration, major external packages):
+
+- Read `dev/catalog/capabilities.json`
+- Confirm provenance: `built | customized | external`
+- Follow `readBeforeChange` references in the capability entry
+- Update capability metadata if behavior, paths, owner, or status changed
+
+Use memory entries for rationale/history; use the capability registry as current-state source of truth.
+
+---
+
 ## Before Committing
 
 1. `npm run typecheck`

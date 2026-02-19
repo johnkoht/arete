@@ -87,6 +87,14 @@ Ideas for future PRDs. When ready to build, convert to PRD in `dev/prds/`.
 **Effort**: Medium (similar to Google Calendar - OAuth2, API integration)  
 **Dependencies**: Calendar system complete ✅  
 
+### Capabilities Registry Hardening
+**Status**: Backlog / Needs design  
+**File**: `improvements/capabilities-registry-hardening.md`  
+**What**: Expand and validate a machine-friendly inventory of built/customized/external capabilities (extensions, tools, services, packages), and integrate it into planning/review workflows  
+**Why**: Prevent agent assumptions (e.g. local extension mistaken as Pi core), improve discoverability and change safety  
+**Effort**: Medium (schema + inventory pass + workflow hooks)  
+**Dependencies**: Initial registry seed (`dev/catalog/capabilities.json`) ✅  
+
 ---
 
 ## Low Priority / Ideas
