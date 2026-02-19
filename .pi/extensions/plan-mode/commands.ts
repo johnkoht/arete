@@ -876,7 +876,7 @@ function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 	const progress = resolveExecutionProgress({
 		hasPrd,
 		todoItems: state.todoItems,
-		prdPath: state.currentSlug ? `dev/plans/${state.currentSlug}/prd.json` : "dev/plans/prd.json",
+		prdPath: state.currentSlug ? `dev/plans/${state.currentSlug}/prd.json` : undefined,
 	});
 
 	const lines = [`⚡ Build Status: ${progress.completed}/${progress.total} tasks complete`];

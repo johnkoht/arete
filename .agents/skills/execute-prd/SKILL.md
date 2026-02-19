@@ -250,22 +250,19 @@ For each pending task (in dependency order):
    - ✅ Include **Execution State Path** so subagent writes to the correct location
    - ❌ Don't say "use good patterns" (too vague)
 
-10. **Reviewer: Pre-Work Sanity Check** (Sr. Engineer)
+10. **Reviewer: Pre-Work Sanity Check**
 
-    Before dispatching the subagent, the Reviewer confirms:
-    - **Details**: Task description and acceptance criteria are clear and unambiguous.
-    - **AC**: Acceptance criteria are complete and testable; nothing critical is missing.
-    - **Clarity on what to build**: The prompt and context (files to read, patterns) give the subagent enough to implement without guessing. Dependencies and pre-mortem mitigations for this task are reflected.
-    - If anything is vague or missing, refine the prompt or ask the Orchestrator to add context — then proceed to dispatch only when the sanity check passes.
+    Dispatch the reviewer to validate the task prompt before the developer starts:
 
-    Dispatch the reviewer for pre-work sanity check:
     ```typescript
     subagent({
       agent: "reviewer",
-      task: "Pre-work sanity check for Task [ID]: [title]\n\n[paste the crafted prompt]\n\nReview this task prompt for: clarity, completeness of AC, sufficient context, and pre-mortem mitigation coverage. Return APPROVED if ready to dispatch, or NEEDS REFINEMENT with specific issues.",
+      task: "Pre-work sanity check for Task [ID]: [title]\n\n[paste the crafted prompt]\n\nReview this task prompt for clarity, completeness of AC, sufficient context, and pre-mortem mitigation coverage.",
       agentScope: "project"
     })
     ```
+
+    The reviewer follows its own pre-work checklist (see `.pi/agents/reviewer.md`). If the verdict is **NEEDS REFINEMENT**, refine the prompt before dispatching the developer.
 
 11. **Dispatch Developer Subagent** (Orchestrator)
     
@@ -277,166 +274,35 @@ For each pending task (in dependency order):
     })
     ```
     
-    Wait for the subagent to complete and return its completion report.
+    Wait for the subagent to complete and return its completion report. The developer returns a structured report with: Completed, Files Changed, Quality Checks, Commit, and Reflection sections (see `.pi/agents/developer.md` for format).
 
-    **Expected Developer Output Format**:
-    ```markdown
-    ## Completed
-    [Summary of what was done]
+12. **Reviewer: Code Review**
 
-    ## Files Changed
-    - path/to/file.ts — what changed
-    - path/to/file.test.ts — added
-
-    ## Quality Checks
-    - typecheck: ✓/✗
-    - tests: ✓/✗ (N passed)
-
-    ## Commit
-    <sha>
-
-    ## Reflection
-    [What helped, token estimate]
-    ```
-
-12. **Reviewer: Code Review** (Sr. Engineer)
-
-    After the developer subagent completes, dispatch the reviewer for a thorough code review:
+    After the developer completes, dispatch the reviewer for a thorough code review:
 
     ```typescript
     subagent({
       agent: "reviewer",
-      task: "Code review for Task [ID]: [title]\n\nDeveloper completion report:\n[paste developer output]\n\nReview the implementation against acceptance criteria. Check: technical standards (.js imports, strict types, error handling), AC completeness, DRY/KISS quality, reuse (no reimplemented existing capabilities), and test coverage. Return APPROVED or ITERATE with structured feedback.",
+      task: "Code review for Task [ID]: [title]\n\nAcceptance Criteria:\n[list from prd.json]\n\nPre-mortem mitigations for this task:\n[list]\n\nDeveloper completion report:\n[paste developer output]\n\nReview the implementation. Return APPROVED or ITERATE with structured feedback.",
       agentScope: "project"
     })
     ```
 
-    **12.0 File Deletion Review**
+    The reviewer follows its full review process: file deletion check, technical review, AC review, quality check (DRY/KISS), reuse check, quality gates, and accept/iterate decision (see `.pi/agents/reviewer.md` for the complete checklist).
 
-    Before conducting the code review, check for deleted files:
+    **Orchestrator actions based on verdict:**
 
-    ```bash
-    git diff HEAD --name-status | grep '^D'
-    ```
+    - **APPROVED**: Proceed to step 13.
+    - **ITERATE**: Dispatch the developer again with the reviewer's structured feedback. Include: what was wrong, what to do, files to check, and instruction to re-verify. After the developer returns, dispatch the reviewer again for re-review. Repeat until APPROVED.
 
-    **If files were deleted:**
-
-    1. **Was it specified in the plan?** (e.g., "remove old fathom.py, superseded by fathom.ts")
-       - If yes → Proceed to 12a.
-       - If no → Continue to step 2.
-
-    2. **Ask subagent to justify:** What file was deleted? Why? What replaced it (if anything)? Was it intentional or accidental?
-
-    3. **Validate justification:**
-       - **Good:** "Deleted scripts/fathom.py; superseded by src/integrations/fathom/ (TypeScript). Old Python client no longer needed."
-       - **Bad:** Silence, or "cleanup", or no justification.
-
-    4. **If justification is unclear or missing:** Reject the work. Ask subagent to either restore the file or provide clear rationale. Do not accept until justified or restored.
-
-    **Special attention:** Build-only files (`.cursor/rules/*.mdc`, `dev/*`, `test/*`, `scripts/*`) should RARELY be deleted unless explicitly planned or obviously superseded.
-
-    **12a. Technical Review**
+13. **Update Tracking** (Orchestrator)
     
-    - [ ] Uses `.js` extensions in imports (NodeNext module resolution)
-    - [ ] No `any` types (strict TypeScript)
-    - [ ] Proper error handling (try/catch with graceful fallback)
-    - [ ] Tests for happy path and edge cases
-    - [ ] Backward compatibility preserved (function signatures unchanged)
-    - [ ] Follows project patterns (see dev.mdc)
-    
-    **12b. AC Review**
-    
-    - Read all changed files. Verify implementation **matches acceptance criteria** for this task (no more, no less).
-    - Flag scope drift (implemented more than asked) or missing criteria.
-    
-    **12c. Quality Check (DRY, KISS, Best Solution)**
-    
-    - [ ] **DRY**: No duplicated logic that already exists elsewhere; no copy-paste that should be a shared util or existing service.
-    - [ ] **KISS**: Implementation is the simplest that meets acceptance criteria; no over-engineering or unnecessary abstraction.
-    - [ ] **Best solution**: Code is appropriate for context and constraints (e.g. used existing provider instead of reimplementing; didn't hardcode what should be config).
-    - Flag lazy or fragile choices: hardcoding, bypassing abstractions the codebase expects, or doing the minimum in a brittle way.
-    
-    **12d. Reuse & Duplication Check**
-    
-    - **New services/modules**: For any new file or "service-like" code (e.g. new helper module, new provider), ask: does equivalent functionality already exist? Check AGENTS.md and `src/` (e.g. `src/core/`, `src/integrations/`). If the solution already exists elsewhere, flag: "Reimplemented existing capability — use [X] instead."
-    - **Repetitive but not abstracted**: If the implementation is correct but you notice similar logic exists elsewhere without a shared abstraction, do **not** block acceptance. Instead: add a **refactor backlog item** (step 12e) so it can be addressed later. Continue with accept/iterate based on other criteria.
-    
-    **12e. Refactor Backlog (When Applicable)**
-    
-    When you find repetitive logic that isn't yet abstracted (same pattern in multiple places, no shared util):
-    1. Create a short backlog item in `dev/backlog/improvements/` using the naming pattern `refactor-[short-description].md` (e.g. `refactor-search-scoring-shared-util.md`).
-    2. In the file include: **What** (duplicated pattern and where), **Why** (DRY/maintainability), **Suggested direction** (e.g. extract to `src/core/utils.ts`), **Effort** (Tiny/Small/Medium).
-    3. Note the item in progress.md or your review summary so the final report can list "Refactor items added to backlog: N."
-    
-    **If any of 12a–12d fail**: Proceed to step 14 (Accept or Iterate) with **Iterate** — give the subagent structured feedback (see step 14). Do not accept until the subagent has addressed the issues or you have explicitly decided to accept with a known backlog item only (12e).
-
-    **Expected Reviewer Output Format**:
-    ```markdown
-    ## Review: Task [ID] — [Title]
-
-    **Verdict**: APPROVED | ITERATE
-
-    **Technical Review**: ✅ pass | ❌ [issues]
-    **AC Review**: ✅ all criteria met | ❌ [gaps]
-    **Quality (DRY/KISS)**: ✅ pass | ❌ [issues]
-    **Reuse Check**: ✅ pass | ❌ [issues]
-    **Tests**: ✅ pass (N tests) | ❌ [issues]
-
-    **Required Changes** (if ITERATE):
-    1. [Specific change with file path and line range]
-    2. [Specific change]
-
-    **Refactor Backlog** (if applicable):
-    - [Item description] → suggested file: dev/backlog/improvements/refactor-[name].md
-    ```
-
-13. **Verify Tests** (Reviewer)
-    
-    Run full test suite (not just new tests):
-    
-    ```bash
-    npm run typecheck  # Must pass
-    npm test           # Must pass
-    ```
-    
-    If tests fail:
-    - **Integration issue**: Full suite catches ripple effects (e.g. async changes)
-    - **Resume subagent**: Provide specific feedback, ask to fix
-    - **Repeat review**: After fix, verify again
-
-14. **Accept or Iterate** (Reviewer)
-    
-    **Accept if**:
-    - ✅ All acceptance criteria met (12b)
-    - ✅ Technical review passed (12a)
-    - ✅ Quality check passed — DRY, KISS, best solution (12c)
-    - ✅ Reuse check passed — no reimplemented existing capability (12d); refactor-only items (12e) are backlogged, not blockers
-    - ✅ All tests passing (including existing tests)
-    - ✅ Pre-mortem mitigations applied
-    
-    **Iterate if** (any of the following):
-    - ❌ AC not met (scope drift, missing criteria, or over-implementation)
-    - ❌ Technical review failed (pattern violations: any types, missing .js, error handling, tests, backward compat)
-    - ❌ Quality check failed: lazy/fragile implementation, violated DRY/KISS, or clearly worse solution than existing option
-    - ❌ Reuse check failed: reimplemented existing service/capability instead of using it
-    - ❌ Tests failing
-    
-    **When iterating: give the subagent structured feedback.** Dispatch the developer again with a prompt that includes:
-    1. **What was wrong**: Specific finding (e.g. "Reimplemented search logic; getSearchProvider() already exists in src/core/search.ts").
-    2. **What to do**: Concrete instruction (e.g. "Remove the new search helper; import getSearchProvider from './search.js' and use provider.semanticSearch().").
-    3. **Files to check**: List files or line ranges to change.
-    4. **Re-verify**: "After fixing, run npm run typecheck and npm test again; then update prd.json and progress.md."
-    
-    Repeat from step 12 (Reviewer: Code Review) after the subagent returns.
-
-15. **Update Tracking** (Orchestrator)
-    
-    Once accepted:
+    Once the reviewer returns APPROVED:
     - Mark task complete in `dev/executions/{plan-slug}/prd.json` (`status: "complete"`)
     - Update `dev/executions/{plan-slug}/status.json` (`currentTaskId`, `completedTasks`, `updatedAt`)
     - Verify commitSha is recorded
 
-16. **Progress Update (Every 3 Tasks)** (Orchestrator)
+14. **Progress Update (Every 3 Tasks)** (Orchestrator)
     
     Report to user:
     - "Task X/Y complete: [title]"
@@ -447,15 +313,15 @@ For each pending task (in dependency order):
 
 **Orchestrator returns to sr. eng manager role.** All tasks are complete from a Reviewer perspective; now assess the whole.
 
-17. **Orchestrator: Holistic Review**
+15. **Orchestrator: Holistic Review**
 
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
    - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
    - **Documentation check**: Should AGENTS.md, README.md, or other docs be updated? If so, create a quick follow-up task or note for the builder.
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
-   - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 18–22.
+   - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 16–20.
 
-18. **Analyze Pre-Mortem Effectiveness**
+16. **Analyze Pre-Mortem Effectiveness**
     
     For each risk identified in pre-mortem:
     - Did it materialize? (Yes/No)
@@ -469,13 +335,13 @@ For each pending task (in dependency order):
     | Fresh context | No | Yes (file lists) | Yes |
     | Test patterns | No | Yes (testDeps ref) | Yes |
     
-19. **Identify Surprises**
+17. **Identify Surprises**
     
     What happened that wasn't in the pre-mortem?
     - **Positive surprises**: What went better than expected?
     - **Negative surprises**: What issues arose that weren't anticipated?
 
-20. **Extract Learnings**
+18. **Extract Learnings**
     
     Synthesize:
     - **What worked well**: Patterns to repeat
@@ -483,9 +349,9 @@ For each pending task (in dependency order):
     - **Collaboration patterns**: How did builder respond? What did they prefer?
     - **System improvements**: What would make next PRD execution smoother?
 
-21. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
+19. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
     
-    **This is a required orchestrator task.** Do not deliver the final report (step 22) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
+    **This is a required orchestrator task.** Do not deliver the final report (step 20) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
     
     1. **Create entry**: `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md`
        
@@ -502,13 +368,13 @@ For each pending task (in dependency order):
     
     2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
     
-    **Verification before step 22**: Entry file exists; MEMORY.md contains a new line pointing to it.
+    **Verification before step 20**: Entry file exists; MEMORY.md contains a new line pointing to it.
 
-22. **Deliver Final Report to Builder** (Orchestrator)
+20. **Deliver Final Report to Builder** (Orchestrator)
 
    Present to the builder (ONE comprehensive report, not repetitive sections):
     
-    **Prerequisite**: Step 21 (Update Builder Memory) must be complete. Do not deliver the report until the entry exists and MEMORY.md is updated.
+    **Prerequisite**: Step 19 (Update Builder Memory) must be complete. Do not deliver the report until the entry exists and MEMORY.md is updated.
     
     **Format**:
     ```markdown
@@ -551,7 +417,7 @@ For each pending task (in dependency order):
     3. Address refactor backlog (if any)
     ```
     
-    (Build memory is already updated in step 21; do not list "create memory entry" as a next step.)
+    (Build memory is already updated in step 19; do not list "create memory entry" as a next step.)
     
     **Keep it concise** — 1-2 pages max, no repetition. The memory entry has full details.
 
