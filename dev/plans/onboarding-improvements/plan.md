@@ -1,184 +1,63 @@
 ---
 title: Onboarding Improvements
 slug: onboarding-improvements
-status: building
+status: draft
 size: large
 created: 2026-02-18T03:12:45.227Z
-updated: 2026-02-18T19:42:40.681Z
+updated: 2026-02-19T02:53:24.196Z
 completed: null
 has_review: true
 has_pre_mortem: true
 has_prd: true
 backlog_ref: null
-steps: 5
+steps: 4
 ---
 
-Absolutely—great next step.
+Now I have full context. Here's my honest take, then a concrete plan.
 
-I can’t directly write `dev/autonomous/prd.json` in Plan Mode, but here’s a ready-to-paste **Phase 2 PRD JSON** for the autonomous loop.
+---
+
+## Review
+
+**The idea is strong. The execution plan needs one structural adjustment.**
+
+### What's working
+
+The three personas are genuinely well-calibrated. Behavioral archetypes beat demographic profiles for this use case — what matters isn't "a 34-year-old PM at a Series B" but *how someone relates to context capture vs. output generation*. The Harvester/Architect/Preparer triangle covers the realistic behavioral range without over-segmenting.
+
+The decision table in COUNCIL_INSTRUCTIONS is the best part of the proposal. "Harvester rejects it but others want it → must be async or skippable with no blocking" is immediately actionable and prevents the exact class of feature mistake you described (the Slack people-mapping dialog).
+
+The Slack paste example is a perfect proof case. The council would have said: Harvester abandons the flow here, Preparer doesn't care about people tracking, Architect wants it but would accept deferred review. Outcome: make the mapping async and optional, not a blocking dialog.
+
+### One structural concern
+
+The proposal treats the council as two loose markdown docs that you'd reference manually. That works initially, but the pattern in Arete build already has a clear solution: `.cursor/rules/*.mdc` files are auto-applied, and `.agents/sources/builder/` feeds AGENTS.md. If the council isn't wired into the rule layer, it becomes "a doc I remember occasionally" — which is exactly what you don't want.
+
+Concretely: the council check should live in a `.cursor/rules/persona-council.mdc` that auto-triggers during user-facing feature planning, the same way `plan-pre-mortem.mdc` auto-triggers before execution.
+
+### What I'd scope differently
+
+The previous agent's plan also left some leftover context from a different onboarding session (Phase 2 PRD JSON, Stream C, etc.) — I'd set that aside. This is a fresh, focused implementation.
+
+One thing I'd add that wasn't in the proposal: a lightweight **Evidence section** standard for persona updates. You mentioned it in passing ("update the persona files when you have real signal"), but that should be a first-class field from the start. The council drifts toward fiction fast without it. We should build in the habit now, even if the evidence blocks start empty.
+
+---
+
+## Plan
+
+**Size: Small** (4 targeted steps, purely docs and rule files, no code changes)
 
 Plan:
-1. Back up current Phase 1 task file (`dev/autonomous/prd.json`) to archive so you can roll back if needed.
-2. Replace `dev/autonomous/prd.json` with the Phase 2 draft below.
-3. Run `/build` to start the autonomous loop for Stream C (People Intelligence MVP).
-4. Monitor with `/build status` and verify quality gates (`npm run typecheck`, `npm test`) before marking complete.
-5. After completion, validate against child PRD ACs in `dev/prds/onboarding-improvements/child-people-intelligence-mvp.md` and decide whether to proceed to Phase 3.
+1. **Create `dev/personas/` directory with `PERSONA_COUNCIL.md`** — The three behavioral archetypes (Harvester, Architect, Preparer) with persona voice, friction threshold, risk note, and an empty `## Evidence` section on each for future grounding.
+2. **Create `dev/personas/COUNCIL_INSTRUCTIONS.md`** — The operating manual: when to invoke, the decision table, voice calibration examples, and guidance for keeping personas grounded with evidence.
+3. **Create `.cursor/rules/persona-council.mdc`** — The auto-applied rule. Triggers during user-facing feature planning (not internal arch, build tooling, or bug fixes). Defines the structured council check format and how to surface it during PRD review and planning conversations.
+4. **Update `.agents/sources/builder/rules-index.md`** to reference the new rule, then run `npm run build:agents:dev` to rebuild AGENTS.md so the council is always-loaded context for BUILD MODE agents.
 
-```json
-{
-  "name": "onboarding-improvements-phase2",
-  "branchName": "feature/onboarding-improvements",
-  "goal": "Implement Phase 2: People Intelligence MVP (Stream C) with unknown queue defaults, evidence-backed recommendations, digest review UX, and KPI visibility.",
-  "userStories": [
-    {
-      "id": "c1-people-intelligence-skill-scaffold",
-      "title": "Create people-intelligence skill scaffold",
-      "description": "Create packages/runtime/skills/people-intelligence/SKILL.md defining triggers, scope, unknown queue behavior, and non-blocking review flow. Follow existing skill conventions.",
-      "acceptanceCriteria": [
-        "SKILL.md exists at packages/runtime/skills/people-intelligence/",
-        "Skill description aligns to Stream C and Phase 2 scope",
-        "Triggers cover user intents for people triage/classification",
-        "Out-of-scope items explicitly exclude Phase 3 enrichment/policy tuning",
-        "Skill is independently routable without requiring Stream A/B runtime coupling"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
-    },
-    {
-      "id": "c2-classification-data-model",
-      "title": "Implement uncertainty-safe people classification model",
-      "description": "Introduce or extend model structures to support multi-dimensional classification: affiliation (internal/external), role lens (customer/user/partner/unknown), and tracking intent (track/defer/ignore), with explicit unknown state.",
-      "acceptanceCriteria": [
-        "Data model supports unknown state as first-class value",
-        "Model supports mixed identities without forced single-label assumptions",
-        "Low-confidence outputs are representable without coercion to customer/user",
-        "Type safety is preserved (no any), and NodeNext import conventions are respected",
-        "Unit tests cover happy path, mixed identity, and unknown/edge cases"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c1-people-intelligence-skill-scaffold"
-      ]
-    },
-    {
-      "id": "c3-evidence-backed-suggestion-payload",
-      "title": "Implement recommendation payload with confidence and evidence",
-      "description": "Implement suggestion output contract that includes recommendation, confidence score, rationale text, evidence snippets, and source pointers/artifact references.",
-      "acceptanceCriteria": [
-        "Every recommendation includes confidence + rationale + evidence snippets",
-        "Source pointers/artifact refs are included for traceability",
-        "Recommendations missing evidence are flagged as non-auto-recommended",
-        "Fallback behavior works when source hints are sparse or missing",
-        "Tests validate payload schema and traceability requirements"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c2-classification-data-model"
-      ]
-    },
-    {
-      "id": "c4-unknown-queue-threshold-routing",
-      "title": "Add unknown queue and threshold-based default routing",
-      "description": "Implement queueing/routing logic so low-confidence classifications default to unknown queue, with no forced customer default behavior.",
-      "acceptanceCriteria": [
-        "Unknown queue exists as a first-class destination",
-        "Low-confidence classifications always route to unknown queue by default",
-        "No forced customer default occurs when confidence is below threshold",
-        "Threshold behavior is deterministic and documented",
-        "Regression tests prove uncertain entities are not force-classified"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c3-evidence-backed-suggestion-payload"
-      ]
-    },
-    {
-      "id": "c5-digest-review-default-ux",
-      "title": "Implement batch/digest review as default non-blocking flow",
-      "description": "Implement default review mode as digest/batch rather than per-person interruptions, ensuring workflows remain non-blocking.",
-      "acceptanceCriteria": [
-        "Default review mode is digest/batch",
-        "Per-person interruptive prompts are not the primary flow",
-        "User workflow continues without forced immediate triage",
-        "Review output still preserves evidence and confidence context",
-        "Tests validate default mode and non-blocking behavior"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c4-unknown-queue-threshold-routing"
-      ]
-    },
-    {
-      "id": "c6-contract-consumption-and-graceful-degradation",
-      "title": "Consume Stream A/B contracts with graceful degradation",
-      "description": "Consume profile/domain hints from Streams A/B when present and degrade gracefully when hints are unavailable.",
-      "acceptanceCriteria": [
-        "Consumes profile fields from Stream A contract when available",
-        "Consumes domain/company hints from Stream B contract when available",
-        "If hints are missing, behavior degrades gracefully without failure",
-        "Classification falls back to evidence-first logic with unknown queue where needed",
-        "Tests cover both hint-rich and hint-sparse scenarios"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c5-digest-review-default-ux"
-      ]
-    },
-    {
-      "id": "c7-kpi-instrumentation-and-visibility",
-      "title": "Add KPI instrumentation for Phase 2 success metrics",
-      "description": "Implement measurable outputs for misclassification rate, triage burden, and interruption complaints, suitable for weekly MVP phase reviews.",
-      "acceptanceCriteria": [
-        "Misclassification rate is measurable from generated outputs",
-        "Triage burden is measurable (time/volume proxy or equivalent)",
-        "Interruption complaints signal is tracked for review",
-        "Metric outputs are documented and accessible for phase-gate decisions",
-        "Tests validate metric calculation/output integrity"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c6-contract-consumption-and-graceful-degradation"
-      ]
-    },
-    {
-      "id": "phase2-validation",
-      "title": "Phase 2 validation and quality gates",
-      "description": "Run full quality gates and validate Phase 2 acceptance criteria against the child PRD and umbrella PRD independent-ship constraints.",
-      "acceptanceCriteria": [
-        "npm run typecheck passes",
-        "npm test passes",
-        "People Intelligence flow satisfies child PRD acceptance criteria 1-6",
-        "Default review flow remains non-blocking and unknown queue behavior is verified",
-        "Stream C demonstrates graceful degradation when Stream A/B hints are missing"
-      ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0,
-      "dependencies": [
-        "c7-kpi-instrumentation-and-visibility"
-      ]
-    }
-  ],
-  "metadata": {
-    "createdAt": "2026-02-18T11:15:23.000Z",
-    "totalTasks": 8,
-    "completedTasks": 0,
-    "failedTasks": 0
-  }
-}
-```
+**Out of scope for this plan:**
+- Adding a council check section to existing PRD templates (follow-on, once we validate the rule is firing correctly)
+- Retrofitting council checks onto existing plans/PRDs in `dev/`
+- Any code changes — this is purely documentation and agent wiring
 
-If you want, next I can draft a matching `dev/autonomous/progress.txt` Phase 2 starter template so your `/build` run has clean tracking from the first loop.
+---
+
+Want to save this plan and proceed? Or do you have feedback on the scope — anything you'd add, cut, or restructure before we move forward?
