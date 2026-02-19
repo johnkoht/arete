@@ -111,7 +111,7 @@ export function computePrdProgress(prdFile: PrdFile): ExecutionProgressSnapshot 
 }
 
 export function readPrdProgress(
-	prdPath = "dev/autonomous/prd.json",
+	prdPath = "dev/plans/prd.json",
 	expectedPrdName?: string,
 ): ExecutionProgressSnapshot | null {
 	try {

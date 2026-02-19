@@ -839,7 +839,7 @@ export async function handleBuild(
 		const prdFeatureSlug = resolvePrdFeatureSlug(state.currentSlug);
 		pi.sendUserMessage(
 			`Execute the ${prdFeatureSlug} PRD. Load the execute-prd skill from .pi/skills/execute-prd/SKILL.md. ` +
-				`The PRD is at dev/prds/${prdFeatureSlug}/prd.md and the task list is at dev/autonomous/prd.json. ` +
+				`The PRD is at dev/prds/${prdFeatureSlug}/prd.md and the task list is at dev/plans/${state.currentSlug}/prd.json. ` +
 				`Run the full workflow.`,
 		);
 	} else {
@@ -876,7 +876,7 @@ function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 	const progress = resolveExecutionProgress({
 		hasPrd,
 		todoItems: state.todoItems,
-		prdPath: "dev/autonomous/prd.json",
+		prdPath: state.currentSlug ? `dev/plans/${state.currentSlug}/prd.json` : "dev/plans/prd.json",
 	});
 
 	const lines = [`⚡ Build Status: ${progress.completed}/${progress.total} tasks complete`];

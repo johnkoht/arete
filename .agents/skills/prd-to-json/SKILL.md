@@ -78,7 +78,7 @@ Ask user to confirm or customize.
 
 ### 6. Build PRD Object
 
-Create the JSON structure following the schema in `dev/autonomous/schema.ts`:
+Create the JSON structure following the schema in `dev/autonomous/schema.ts` (schema location may move in Phase 2):
 
 ```typescript
 {
@@ -117,32 +117,24 @@ Ensure:
 - Status is "pending" for all tasks
 - attemptCount is 0 for all tasks
 
-Reference `dev/autonomous/schema.ts` for validation functions.
+Reference `dev/autonomous/schema.ts` for validation functions (schema location may move in Phase 2).
 
 ### 8. Write prd.json
 
-Write the JSON to `dev/autonomous/prd.json`:
+Write the JSON to `dev/plans/{feature-name}/prd.json` (alongside the plan):
 
 ```typescript
 import fs from 'fs';
 import path from 'path';
 
-const outputPath = 'dev/autonomous/prd.json';
+const outputPath = `dev/plans/${featureName}/prd.json`;
+fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, JSON.stringify(prd, null, 2));
 ```
 
-### 9. Initialize progress.txt
+### 9. Note on Progress Log
 
-Create or clear the progress log:
-
-```bash
-# Copy template if it doesn't exist
-cp dev/autonomous/progress.txt.template dev/autonomous/progress.txt
-
-# Or create empty with header
-echo "# Progress Log - $(date)" > dev/autonomous/progress.txt
-echo "" >> dev/autonomous/progress.txt
-```
+The progress log (`progress.md`) is created by the execute-prd orchestrator at execution time in `dev/executions/{feature-name}/progress.md`. You do **not** need to create it during JSON generation — it is initialized when execution starts.
 
 ### 10. Confirm with User
 
@@ -159,9 +151,9 @@ Tasks:
 2. {task-2-title}
 ...
 
-Output: dev/autonomous/prd.json
+Output: dev/plans/{feature-name}/prd.json
 
-Ready to execute? Say: "Execute the PRD"
+Ready to execute? Use `/build` or invoke the execute-prd skill.
 ```
 
 ## Parsing Tips
@@ -286,5 +278,5 @@ If no acceptance criteria found:
 ## Next Step
 
 After successful conversion, user can:
-1. Review/edit `dev/autonomous/prd.json` manually if needed
-2. Invoke the execute-prd skill to begin autonomous execution
+1. Review/edit `dev/plans/{feature-name}/prd.json` manually if needed
+2. Use `/build` or invoke the execute-prd skill to begin autonomous execution

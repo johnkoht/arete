@@ -42,24 +42,29 @@ Reference `dev/prds/intelligence-and-calendar/prd.md` for format. Ensure each ta
 
 ### 3. Run prd-to-json
 
-Load `.agents/skills/prd-to-json/SKILL.md` and follow its workflow to convert the PRD to `dev/autonomous/prd.json`. Use the PRD you just created at `dev/prds/{feature-name}/prd.md`.
+Load `.agents/skills/prd-to-json/SKILL.md` and follow its workflow to convert the PRD to `dev/plans/{feature-name}/prd.json`. Use the PRD you just created at `dev/prds/{feature-name}/prd.md`.
 
-### 4. Create Handoff File
+### 4. Create Handoff File (Optional)
+
+> **Note**: When using Pi with plan mode, you can use `/build` to start execution directly. The handoff file is optional — useful for manual execution or Cursor-based workflows.
 
 Create `dev/prds/{feature-name}/EXECUTE.md` with this content (replace `{feature-name}`):
 
 ```markdown
 # Execute {feature-name} PRD
 
-Execute this PRD using the autonomous agent loop.
+## Pi (preferred)
 
-**Copy the prompt below into a new chat to begin:**
+Open the plan in plan mode and use `/build`:
 
----
+```
+/plan open {feature-name}
+/build
+```
 
-Execute the {feature-name} PRD. Load the execute-prd skill from `dev/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/{feature-name}/prd.md` and the task list is at `dev/autonomous/prd.json`. Run the full workflow: pre-mortem → task execution loop → post-mortem.
+## Manual (fallback)
 
----
+Execute the {feature-name} PRD. Load the execute-prd skill from `.pi/skills/execute-prd/SKILL.md`. The PRD is at `dev/prds/{feature-name}/prd.md` and the task list is at `dev/plans/{feature-name}/prd.json`. Run the full workflow: pre-mortem → task execution loop → holistic review.
 ```
 
 ### 5. Present Summary to User
@@ -71,10 +76,10 @@ Output:
 
 **Feature**: {feature-name}
 **PRD**: dev/prds/{feature-name}/prd.md
-**Task list**: dev/autonomous/prd.json
-**Handoff prompt**: dev/prds/{feature-name}/EXECUTE.md
+**Task list**: dev/plans/{feature-name}/prd.json
+**Handoff prompt**: dev/prds/{feature-name}/EXECUTE.md (optional)
 
-**Next step**: Start a new chat, paste the contents of `dev/prds/{feature-name}/EXECUTE.md` (or the prompt from it), and the agent will run the execute-prd workflow.
+**Next step**: Use `/plan open {feature-name}` then `/build`, or start a new Pi session and invoke execute-prd manually.
 ```
 
 ## Parsing Tips
@@ -90,5 +95,5 @@ When converting plan steps to PRD tasks:
 
 - **PRD example**: `dev/prds/intelligence-and-calendar/prd.md`
 - **prd-to-json skill**: `.agents/skills/prd-to-json/SKILL.md`
-- **execute-prd skill**: `.agents/skills/execute-prd/SKILL.md`
-- **Schema**: `dev/autonomous/schema.ts`
+- **execute-prd skill**: `.pi/skills/execute-prd/SKILL.md`
+- **Schema**: `dev/autonomous/schema.ts` (may move in Phase 2)
