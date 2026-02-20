@@ -82,7 +82,14 @@ Phase 2:
 - Continuous channel ingestion
 - Auto-posting back to Slack
 
-## 10) Backlog Follow-ups
+## 10) Related Artifacts
 
-- [ ] Create Phase 2 backlog ticket (BYO beta) with gate-trigger criteria
+- **Phase 1 PRD**: `dev/prds/slack-conversation-capture-phase-1/prd.md` (Manual ingestion + intelligence core)
+- **Phase 1 Plan**: `dev/plans/slack-integration/plan.md`
+- **Phase 2 Backlog**: `dev/backlog/features/slack-conversation-capture-phase-2.md` (People modes + improvements)
+
+## 11) Backlog Follow-ups
+
+- [x] Create Phase 1 PRD
+- [x] Create Phase 2 backlog ticket (people modes + improvements) with gate-trigger criteria
 - [ ] Create Phase 3 backlog ticket (managed OAuth add-on) with gate-trigger criteria
