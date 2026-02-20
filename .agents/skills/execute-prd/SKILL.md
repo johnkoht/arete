@@ -357,6 +357,7 @@ For each pending task (in dependency order):
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
    - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
    - **Documentation check**: Should AGENTS.md, README.md, or other docs be updated? If so, create a quick follow-up task or note for the builder.
+   - **Catalog check**: If this PRD touched extensions, tools, services, integrations, or external packages, update `dev/catalog/capabilities.json` — add new entries, update paths/status/entrypoints, bump `lastUpdated`.
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
    - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.
 
