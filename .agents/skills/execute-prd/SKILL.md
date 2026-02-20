@@ -15,8 +15,6 @@ Autonomously execute a PRD by dispatching subagents for each task, with two dist
 
 This skill uses the `subagent` tool to dispatch work to developer and reviewer agents.
 
-**IMPORTANT — Tool availability**: The `subagent` tool is provided by an installed pi extension (npm package). It is loaded into your tool list automatically at session start — just like `read`, `bash`, `edit`, and `write`. **Do NOT check `.pi/extensions/` or the filesystem to determine if it's available.** If `subagent` is in your tool list, use it. Simply call it directly.
-
 ```typescript
 // Dispatch a developer to implement a task
 subagent({ agent: "developer", task: "<prompt>", agentScope: "project" })
@@ -34,7 +32,42 @@ subagent({ agent: "reviewer", task: "<prompt>", agentScope: "project" })
 
 **Important**: All subagent calls inherit the current working directory. The orchestrator must run from the **worktree root** so subagents work in the correct location.
 
-**Fallback**: Only if calling `subagent(...)` returns an error (tool not found), execute tasks directly in sequence with the same quality gates.
+### Pre-Flight Check (MANDATORY)
+
+Before doing ANY other work, verify the `subagent` tool is available by making a real call:
+
+```typescript
+subagent({ action: "list" })
+```
+
+**If the call succeeds**: The tool is available. Proceed with Phase 0.
+
+**If the call fails** (tool not found, error, or no `subagent` in tool list): **HALT immediately.** Do NOT silently fall back to single-agent execution. Instead:
+
+1. **Stop all work** — do not read the PRD, do not begin planning
+2. **Notify the builder** with this exact message:
+
+   > ⚠️ **Subagent tool is not available in this session.**
+   >
+   > The execute-prd skill requires the `subagent` tool to dispatch work to developer and reviewer agents. Without it, the multi-agent orchestration loop (reviewer pre-checks, developer implementation, reviewer code review, iterate cycles) cannot run.
+   >
+   > **Without subagents you lose:**
+   > - Independent reviewer sanity checks before each task
+   > - Separate developer agents with fresh context per task
+   > - Reviewer code reviews with iterate/approve cycles
+   > - Developer reflections and cross-task learning
+   >
+   > **Options:**
+   > 1. **Fix and retry** — Ensure the `pi-subagents` package is installed and restart the session
+   > 2. **Continue without subagents** — I'll execute all tasks directly as a single agent (reduced quality assurance)
+   > 3. **Abort** — Stop execution entirely
+   >
+   > Which would you like?
+
+3. **Wait for the builder's explicit choice** — do not proceed until they respond
+4. **If the builder chooses option 2**: Proceed with Phase 0, but prepend all progress.md entries and the final report with `⚠️ Executed in single-agent fallback mode (no subagents)` so the degraded mode is always visible
+
+**There is no silent fallback.** The builder must explicitly opt in to degraded execution.
 
 ## Roles
 
@@ -79,20 +112,24 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 ## Workflow
 
-### Phase 0: Understand the PRD (Orchestrator — Sr. Eng Manager)
+### Phase 0: Verify Tools & Understand the PRD (Orchestrator — Sr. Eng Manager)
 
-1. **Read and Internalize the PRD**
+1. **Pre-Flight: Verify Subagent Tool** (MANDATORY — do this FIRST)
+   
+   Run the pre-flight check described in [Tool Reference > Pre-Flight Check](#pre-flight-check-mandatory). Do NOT proceed to step 2 until subagent availability is confirmed or the builder has explicitly chosen to continue without subagents.
+
+2. **Read and Internalize the PRD**
    - Read `dev/work/plans/{feature-name}/prd.md` (path provided by user or derived from plan slug)
    - Read `dev/work/plans/{plan-slug}/prd.json` (task breakdown)
    - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
    - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
    - Understand dependencies between tasks (A1→A2→A3→B1...).
 
-2. **Clarity and Alignment**
+3. **Clarity and Alignment**
    - If anything is unclear (scope, problem statement, success criteria, or how it fits Areté), **ask the builder** before proceeding. Do not assume.
    - Confirm alignment: this PRD is the right thing to execute at this time.
 
-3. **Initialize Execution State**
+4. **Initialize Execution State**
    - Create `dev/executions/{plan-slug}/` directory
    - Copy `dev/work/plans/{plan-slug}/prd.json` → `dev/executions/{plan-slug}/prd.json`
    - Create `dev/executions/{plan-slug}/status.json`:
@@ -118,7 +155,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
      Started: <ISO timestamp>
      ```
 
-4. **Identify Completed Work**
+5. **Identify Completed Work**
    - Check prd.json for tasks with `status: "complete"`
    - Read progress.md to understand what's been done
    - Identify next pending task in dependency order
@@ -127,7 +164,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 **Purpose**: Identify risks before starting, create actionable mitigations.
 
-5. **Identify Risks**
+6. **Identify Risks**
    
    Consider these common risk categories:
    
@@ -144,7 +181,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    | **State Tracking** | How to track progress? | "Update prd.json after each task" |
    | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, backlog items with doc tasks" |
 
-6. **Document Mitigations**
+7. **Document Mitigations**
    
    For each risk, create concrete mitigation:
    
@@ -165,7 +202,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
    **Pattern:** Orchestrator spawns doc subagent after all implementation tasks complete. Subagent has full context of what changed and runs systematic audit.
 
-7. **Share Pre-Mortem with User**
+8. **Share Pre-Mortem with User**
    
    Present risks + mitigations table. Ask:
    - "Do you see any other risks?"
@@ -176,13 +213,13 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 For each pending task (in dependency order):
 
-8. **Prepare Context** (Orchestrator)
+9. **Prepare Context** (Orchestrator)
    
    - **Read prior completed tasks**: Check what's been built (files, patterns, tests)
    - **Identify files to reference**: List specific files subagent should read first
    - **Check mitigations**: Review pre-mortem - which mitigations apply to this task?
 
-9. **Craft Subagent Prompt** (Orchestrator)
+10. **Craft Subagent Prompt** (Orchestrator)
    
    Use this template (scale reflection based on task complexity):
    
@@ -252,7 +289,7 @@ For each pending task (in dependency order):
    - ✅ Include **Execution State Path** so subagent writes to the correct location
    - ❌ Don't say "use good patterns" (too vague)
 
-10. **Reviewer: Pre-Work Sanity Check**
+11. **Reviewer: Pre-Work Sanity Check**
 
     Dispatch the reviewer to validate the task prompt before the developer starts:
 
@@ -266,19 +303,19 @@ For each pending task (in dependency order):
 
     The reviewer follows its own pre-work checklist (see `.pi/agents/reviewer.md`). If the verdict is **NEEDS REFINEMENT**, refine the prompt before dispatching the developer.
 
-11. **Dispatch Developer Subagent** (Orchestrator)
+12. **Dispatch Developer Subagent** (Orchestrator)
     
     ```typescript
     subagent({
       agent: "developer",
-      task: "<crafted prompt from step 9>",
+      task: "<crafted prompt from step 10>",
       agentScope: "project"
     })
     ```
     
     Wait for the subagent to complete and return its completion report. The developer returns a structured report with: Completed, Files Changed, Quality Checks, Commit, and Reflection sections (see `.pi/agents/developer.md` for format).
 
-12. **Reviewer: Code Review**
+13. **Reviewer: Code Review**
 
     After the developer completes, dispatch the reviewer for a thorough code review:
 
@@ -294,17 +331,17 @@ For each pending task (in dependency order):
 
     **Orchestrator actions based on verdict:**
 
-    - **APPROVED**: Proceed to step 13.
+    - **APPROVED**: Proceed to step 14.
     - **ITERATE**: Dispatch the developer again with the reviewer's structured feedback. Include: what was wrong, what to do, files to check, and instruction to re-verify. After the developer returns, dispatch the reviewer again for re-review. Repeat until APPROVED.
 
-13. **Update Tracking** (Orchestrator)
+14. **Update Tracking** (Orchestrator)
     
     Once the reviewer returns APPROVED:
     - Mark task complete in `dev/executions/{plan-slug}/prd.json` (`status: "complete"`)
     - Update `dev/executions/{plan-slug}/status.json` (`currentTaskId`, `completedTasks`, `updatedAt`)
     - Verify commitSha is recorded
 
-14. **Progress Update (Every 3 Tasks)** (Orchestrator)
+15. **Progress Update (Every 3 Tasks)** (Orchestrator)
     
     Report to user:
     - "Task X/Y complete: [title]"
@@ -315,15 +352,15 @@ For each pending task (in dependency order):
 
 **Orchestrator returns to sr. eng manager role.** All tasks are complete from a Reviewer perspective; now assess the whole.
 
-15. **Orchestrator: Holistic Review**
+16. **Orchestrator: Holistic Review**
 
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
    - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
    - **Documentation check**: Should AGENTS.md, README.md, or other docs be updated? If so, create a quick follow-up task or note for the builder.
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
-   - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 16–20.
+   - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.
 
-16. **Analyze Pre-Mortem Effectiveness**
+17. **Analyze Pre-Mortem Effectiveness**
     
     For each risk identified in pre-mortem:
     - Did it materialize? (Yes/No)
@@ -337,13 +374,13 @@ For each pending task (in dependency order):
     | Fresh context | No | Yes (file lists) | Yes |
     | Test patterns | No | Yes (testDeps ref) | Yes |
     
-17. **Identify Surprises**
+18. **Identify Surprises**
     
     What happened that wasn't in the pre-mortem?
     - **Positive surprises**: What went better than expected?
     - **Negative surprises**: What issues arose that weren't anticipated?
 
-18. **Extract Learnings**
+19. **Extract Learnings**
     
     Synthesize:
     - **What worked well**: Patterns to repeat
@@ -351,9 +388,9 @@ For each pending task (in dependency order):
     - **Collaboration patterns**: How did builder respond? What did they prefer?
     - **System improvements**: What would make next PRD execution smoother?
 
-19. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
+20. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
     
-    **This is a required orchestrator task.** Do not deliver the final report (step 20) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
+    **This is a required orchestrator task.** Do not deliver the final report (step 21) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
     
     1. **Create entry**: `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md`
        
@@ -370,9 +407,9 @@ For each pending task (in dependency order):
     
     2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
     
-    **Verification before step 20**: Entry file exists; MEMORY.md contains a new line pointing to it.
+    **Verification before step 21**: Entry file exists; MEMORY.md contains a new line pointing to it.
 
-20. **Deliver Final Report to Builder** (Orchestrator)
+21. **Deliver Final Report to Builder** (Orchestrator)
 
    Present to the builder (ONE comprehensive report, not repetitive sections):
     
@@ -419,7 +456,7 @@ For each pending task (in dependency order):
     3. Address refactor backlog (if any)
     ```
     
-    (Build memory is already updated in step 19; do not list "create memory entry" as a next step.)
+    (Build memory is already updated in step 20; do not list "create memory entry" as a next step.)
     
     **Keep it concise** — 1-2 pages max, no repetition. The memory entry has full details.
 
