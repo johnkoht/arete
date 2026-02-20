@@ -22,6 +22,7 @@ import {
 	archiveItem,
 	createBacklogItem,
 	parseFrontmatterFromFile,
+	DEFAULT_BACKLOG_DIR,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -229,6 +230,9 @@ export function getSuggestedNextActions(
 ): string[] {
 	const actions: string[] = [];
 
+	if (status === "idea") {
+		actions.push("/approve");
+	}
 	if (status === "draft") {
 		actions.push("/approve");
 	}
@@ -238,7 +242,7 @@ export function getSuggestedNextActions(
 	if (status === "building") {
 		actions.push("/build status");
 	}
-	if (status === "complete") {
+	if (status === "complete" || status === "abandoned") {
 		actions.push("/plan new");
 	}
 
@@ -710,8 +714,8 @@ async function handleBacklogEdit(slug: string, ctx: CommandContext, pi: CommandP
 	const { join } = await import("node:path");
 
 	// Try folder first, then flat file
-	const folderPath = join("dev/work/backlog", slug, "plan.md");
-	const filePath = join("dev/work/backlog", `${slug}.md`);
+	const folderPath = join(DEFAULT_BACKLOG_DIR, slug, "plan.md");
+	const filePath = join(DEFAULT_BACKLOG_DIR, `${slug}.md`);
 
 	let content: string;
 	let path: string;

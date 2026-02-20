@@ -87,12 +87,20 @@ describe("hasUnsavedPlanChanges", () => {
 describe("getSuggestedNextActions", () => {
 	it("suggests approve/build actions by status", () => {
 		assert.deepEqual(
+			getSuggestedNextActions("idea", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
+			["/approve"],
+		);
+		assert.deepEqual(
 			getSuggestedNextActions("draft", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
 			["/approve"],
 		);
 		assert.deepEqual(
 			getSuggestedNextActions("planned", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
 			["/build"],
+		);
+		assert.deepEqual(
+			getSuggestedNextActions("abandoned", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
+			["/plan new"],
 		);
 	});
 
