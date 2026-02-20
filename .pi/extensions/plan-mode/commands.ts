@@ -15,14 +15,10 @@ import {
 	updatePlanFrontmatter,
 	loadPlanArtifact,
 	slugify,
-	listBacklog,
 	listArchive,
-	promoteBacklogItem,
-	shelveToBacklog,
 	archiveItem,
-	createBacklogItem,
 	parseFrontmatterFromFile,
-	DEFAULT_BACKLOG_DIR,
+	DEFAULT_PLANS_DIR,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -721,10 +717,12 @@ async function handleBacklogList(
 	pi: CommandPi,
 	state: PlanModeState,
 ): Promise<void> {
-	const items = listBacklog();
+	// Backlog is now unified into plans — filter for "idea" status
+	const allPlans = listPlans();
+	const items = allPlans.filter((p) => p.frontmatter.status === "idea");
 
 	if (items.length === 0) {
-		ctx.ui.notify("No backlog items found in dev/work/backlog/", "info");
+		ctx.ui.notify("No idea-status plans found. Use /plan backlog add <title> to create one.", "info");
 		return;
 	}
 
@@ -734,7 +732,7 @@ async function handleBacklogList(
 		return `${emoji} ${item.frontmatter.title}${tags}`;
 	});
 
-	const selected = await ctx.ui.select("Backlog", options);
+	const selected = await ctx.ui.select("Backlog (idea-status plans)", options);
 	if (selected) {
 		const index = options.indexOf(selected);
 		if (index >= 0) {
@@ -751,10 +749,33 @@ async function handleBacklogAdd(title: string, ctx: CommandContext): Promise<voi
 	}
 
 	try {
-		const slug = createBacklogItem(title.trim());
-		ctx.ui.notify(`📝 Created backlog item: dev/work/backlog/${slug}.md`, "info");
+		const slug = slugify(title.trim());
+		if (!slug) {
+			ctx.ui.notify("Title must include letters or numbers", "error");
+			return;
+		}
+
+		const now = new Date().toISOString();
+		const frontmatter: PlanFrontmatter = {
+			title: title.trim(),
+			slug,
+			status: "idea",
+			size: "unknown",
+			tags: [],
+			created: now,
+			updated: now,
+			completed: null,
+			execution: null,
+			has_review: false,
+			has_pre_mortem: false,
+			has_prd: false,
+			steps: 0,
+		};
+
+		savePlan(slug, frontmatter, `# ${title.trim()}\n`);
+		ctx.ui.notify(`📝 Created idea: dev/work/plans/${slug}/plan.md`, "info");
 	} catch (err) {
-		ctx.ui.notify(`Failed to create backlog item: ${err instanceof Error ? err.message : String(err)}`, "error");
+		ctx.ui.notify(`Failed to create item: ${err instanceof Error ? err.message : String(err)}`, "error");
 	}
 }
 
@@ -767,25 +788,16 @@ async function handleBacklogEdit(slug: string, ctx: CommandContext, pi: CommandP
 	const { existsSync, readFileSync } = await import("node:fs");
 	const { join } = await import("node:path");
 
-	// Try folder first, then flat file
-	const folderPath = join(DEFAULT_BACKLOG_DIR, slug, "plan.md");
-	const filePath = join(DEFAULT_BACKLOG_DIR, `${slug}.md`);
+	const planPath = join(DEFAULT_PLANS_DIR, slug, "plan.md");
 
-	let content: string;
-	let path: string;
-	if (existsSync(folderPath)) {
-		content = readFileSync(folderPath, "utf-8");
-		path = folderPath;
-	} else if (existsSync(filePath)) {
-		content = readFileSync(filePath, "utf-8");
-		path = filePath;
-	} else {
-		ctx.ui.notify(`Backlog item not found: ${slug}`, "error");
+	if (!existsSync(planPath)) {
+		ctx.ui.notify(`Plan not found: ${slug}`, "error");
 		return;
 	}
 
+	const content = readFileSync(planPath, "utf-8");
 	pi.sendUserMessage(
-		`Here is backlog item "${slug}" from ${path}. Review and suggest edits as needed:\n\n${content}`,
+		`Here is plan "${slug}" from ${planPath}. Review and suggest edits as needed:\n\n${content}`,
 	);
 }
 
@@ -801,8 +813,9 @@ async function handleBacklogPromote(
 	}
 
 	try {
-		promoteBacklogItem(slug.trim());
-		ctx.ui.notify(`🚀 Promoted to dev/work/plans/${slug}/`, "info");
+		// Promoting an idea = updating its status to "draft"
+		updatePlanFrontmatter(slug.trim(), { status: "draft" });
+		ctx.ui.notify(`🚀 Promoted '${slug}' to draft status.`, "info");
 
 		// Load the promoted plan into state
 		await handlePlanOpen(slug.trim(), ctx, pi, state);
@@ -828,15 +841,16 @@ export async function handleShelve(
 	const plan = loadPlan(state.currentSlug);
 	const title = plan?.frontmatter.title ?? state.currentSlug;
 
-	const confirmed = await ctx.ui.confirm("Shelve Plan", `Shelve '${title}' to backlog?`);
+	const confirmed = await ctx.ui.confirm("Shelve Plan", `Shelve '${title}' back to idea status?`);
 	if (!confirmed) return;
 
 	try {
-		shelveToBacklog(state.currentSlug);
-		ctx.ui.notify(`📦 Shelved to dev/work/backlog/${state.currentSlug}/`, "info");
+		updatePlanFrontmatter(state.currentSlug, { status: "idea" });
+		ctx.ui.notify(`📦 Shelved '${state.currentSlug}' (status → idea)`, "info");
 
 		// Clear plan state
 		state.currentSlug = null;
+		state.planTitle = null;
 		state.planText = "";
 		state.planSize = null;
 		state.todoItems = [];

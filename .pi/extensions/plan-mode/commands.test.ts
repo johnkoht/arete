@@ -468,17 +468,17 @@ describe("handlePlan — /plan new", () => {
 });
 
 describe("handleBacklog — /plan backlog new alias", () => {
-	const TEST_BACKLOG_DIR = join(process.cwd(), "dev/work/backlog");
+	const TEST_PLANS_DIR = join(process.cwd(), "dev/work/plans");
 
 	afterEach(() => {
-		// Clean up any test backlog items
-		const testFile = join(TEST_BACKLOG_DIR, "test-backlog-item.md");
-		if (existsSync(testFile)) {
-			rmSync(testFile);
+		// Clean up any test plan items
+		const testDir = join(TEST_PLANS_DIR, "test-backlog-item");
+		if (existsSync(testDir)) {
+			rmSync(testDir, { recursive: true, force: true });
 		}
 	});
 
-	it("'new' works as alias for 'add' and creates backlog item", async () => {
+	it("'new' works as alias for 'add' and creates plan with idea status", async () => {
 		let notifyMessage = "";
 		const ctx = createTestContext({
 			notify: (msg) => {
@@ -492,7 +492,7 @@ describe("handleBacklog — /plan backlog new alias", () => {
 
 		assert.ok(notifyMessage.includes("test-backlog-item"), "Should notify with slugified name");
 		assert.ok(notifyMessage.includes("📝"), "Should show creation emoji");
-		assert.ok(existsSync(join(TEST_BACKLOG_DIR, "test-backlog-item.md")), "Should create backlog file");
+		assert.ok(existsSync(join(TEST_PLANS_DIR, "test-backlog-item", "plan.md")), "Should create plan folder");
 	});
 
 	it("'new' without title shows usage warning", async () => {
