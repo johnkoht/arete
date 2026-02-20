@@ -42,8 +42,8 @@ import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter, type PlanSi
 import { getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderTodoWidget, type WidgetState } from "./widget.js";
 
-// Tools
-const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
+// Tools — captured at startup so we restore ALL tools (including extension-registered ones like subagent)
+let NORMAL_MODE_TOOLS: string[] = ["read", "bash", "edit", "write"];
 
 // Allowed artifact filenames for the save tool
 const ALLOWED_ARTIFACTS = ["review.md", "pre-mortem.md", "prd.md", "notes.md"];
@@ -521,6 +521,13 @@ After completing a step, include a [DONE:n] tag in your response.
 
 	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
+		// Capture all available tools (built-in + extension-registered like subagent)
+		// before we restrict them, so we can restore the full set when leaving plan mode
+		const allTools = pi.getAllTools();
+		if (allTools.length > 0) {
+			NORMAL_MODE_TOOLS = allTools.map((t: { name: string }) => t.name);
+		}
+
 		if (pi.getFlag("plan") === true) {
 			state.planModeEnabled = true;
 		}

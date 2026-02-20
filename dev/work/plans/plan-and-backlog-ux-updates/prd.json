@@ -1,0 +1,169 @@
+{
+  "name": "plan-and-backlog-ux-updates",
+  "branchName": "feature/plan-and-backlog-ux-updates",
+  "goal": "Unify plans and backlog into a single system with one folder, one command surface, rich list UI, auto-save on create, improved footer widget, and status management — replacing the dual plans/backlog architecture",
+  "userStories": [
+    {
+      "id": "a1-persistence-unify",
+      "title": "Persistence Layer — Unify Storage",
+      "description": "Remove backlog-specific persistence functions (listBacklog, createBacklogItem, shelveToBacklog, promoteBacklogItem, DEFAULT_BACKLOG_DIR), remove flat-file support from listPlans, add migrateBacklogToPlans() function. Remove corresponding test suites and add migration tests. Files: persistence.ts, persistence.test.ts",
+      "acceptanceCriteria": [
+        "listPlans() returns only folder-based plans (no flat file scanning)",
+        "No exported functions reference dev/work/backlog/",
+        "DEFAULT_BACKLOG_DIR export removed",
+        "migrateBacklogToPlans() converts flat .md files to {slug}/plan.md folders",
+        "migrateBacklogToPlans() moves existing backlog folders as-is",
+        "migrateBacklogToPlans() suffixes with -idea on slug collision and logs decision",
+        "migrateBacklogToPlans() returns { moved[], collisions[], skipped[] }",
+        "Removed test suites deleted; new migration tests added",
+        "npm run typecheck passes",
+        "npm test passes (extension tests)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a2-auto-save-plan-new",
+      "title": "Auto-Save on /plan new",
+      "description": "Make /plan new [name] immediately write to disk. RISK: Pre-mortem Risk 5 — auto-save writes stub only, response handler must not overwrite with empty content. After setting state.currentSlug, call savePlan() with status idea, size 'unknown' (NOT null — PlanFrontmatter.size is PlanSize | 'unknown'), and content '# {Title}'. Set state.planText and state.planTitle. Three code paths: name provided (auto-save), no name + editor provides (auto-save), no name + editor cancelled (no save, notify). Files: commands.ts, commands.test.ts",
+      "acceptanceCriteria": [
+        "/plan new my-idea creates dev/work/plans/my-idea/plan.md with valid frontmatter (status idea)",
+        "File has # My Idea as content body",
+        "state.planText is set (not empty) after /plan new",
+        "state.planTitle is set to the title-cased name",
+        "Plan appears in listPlans() immediately after creation",
+        "/plan save works without error after /plan new",
+        "If no name and editor cancelled: plan mode active but no file on disk, user notified",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a3-remove-backlog-shelve",
+      "title": "Remove Backlog and Shelve Commands",
+      "description": "Remove backlog and shelve cases from handlePlan switch. Remove handleBacklog, handleBacklogList, handleBacklogAdd, handleBacklogEdit, handleBacklogPromote, handleShelve functions. Remove exports and imports. Update error message and command description. Remove backlog tests. Files: commands.ts, commands.test.ts, index.ts",
+      "acceptanceCriteria": [
+        "/plan backlog shows Unknown subcommand with updated available commands list",
+        "/plan shelve shows Unknown subcommand",
+        "No dead handleBacklog* or handleShelve functions in codebase",
+        "No imports of listBacklog, createBacklogItem, promoteBacklogItem, shelveToBacklog in commands.ts",
+        "Extension loads without errors",
+        "Command description updated to: new, list, open, save, rename, status, delete, archive",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a4-plan-status-command",
+      "title": "Add /plan status Command",
+      "description": "Add ability to view and set plan status. RISK: Pre-mortem Risk 4 — status case may already exist, read it first. With no args: show plan info. With status arg: validate against allowed set (idea, draft, planned), confirm, update frontmatter. Reject building/complete/abandoned with guidance. Files: commands.ts, commands.test.ts",
+      "acceptanceCriteria": [
+        "/plan status (no args, no active plan) shows warning No active plan",
+        "/plan status (no args, active plan) shows title, slug, status, size, steps, gates",
+        "/plan status idea changes status to idea with user confirmation, persists to disk",
+        "/plan status draft changes status to draft, persists to disk",
+        "/plan status planned changes status to planned, persists to disk",
+        "/plan status building shows error: Use /build to start execution",
+        "/plan status complete shows error: Use /plan archive",
+        "/plan status invalid-thing shows error with valid options listed",
+        "Status change updates in-memory state",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a5-rich-plan-list",
+      "title": "Rich /plan list with SelectList UI",
+      "description": "Replace simple ctx.ui.select with bordered SelectList component. RISK: Pre-mortem Risk 1 — verify ctx.ui.custom access pattern before implementing. RISK: Pre-mortem Risk 6 — verify SelectList imports from @mariozechner/pi-tui. Reference preset.ts example. Support --ideas and --active filter flags. Files: commands.ts, commands.test.ts, index.ts",
+      "acceptanceCriteria": [
+        "/plan list shows a bordered, scrollable SelectList",
+        "Each item shows: emoji, title, slug in parens, size, step count",
+        "Items sorted by status priority (building first, ideas last)",
+        "/plan list --ideas shows only idea status plans",
+        "/plan list --active shows only draft/planned/building plans",
+        "Selecting an item opens it via handlePlanOpen",
+        "Esc dismisses the list",
+        "Empty state shows No plans found notification",
+        "Imports from @mariozechner/pi-tui and @mariozechner/pi-coding-agent work",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a6-footer-widget",
+      "title": "Improved Footer Widget",
+      "description": "Show title, slug, status, size, steps, and all three gate statuses in footer. RISK: Pre-mortem Risk 7 — implement truncation for narrow terminals. Add title and stepsCount to WidgetState. Add planTitle to PlanModeState. Files: widget.ts, widget.test.ts, index.ts, commands.ts",
+      "acceptanceCriteria": [
+        "Footer shows: title, slug, status, size, step count, all three gate statuses",
+        "Gates show ☑ for completed and ☐ for not completed",
+        "Footer truncates gracefully at width 60 (title truncated first)",
+        "Footer renders correctly at width 120 (full format)",
+        "planTitle populated on /plan new and /plan open",
+        "Execution mode footer unchanged",
+        "Widget tests cover new format and truncation",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a7-migrate-backlog",
+      "title": "Migrate Existing Backlog Items",
+      "description": "Run migrateBacklogToPlans() on this repo's actual data. Move ~35 items from dev/work/backlog/ to dev/work/plans/. Verify counts, review collision report, remove empty backlog dir. Commit migration.",
+      "acceptanceCriteria": [
+        "All items from dev/work/backlog/ are now in dev/work/plans/ as folders",
+        "Each migrated item has {slug}/plan.md with valid frontmatter",
+        "No data loss: item count matches before and after",
+        "Collision report reviewed and logged if any",
+        "dev/work/backlog/ directory no longer exists",
+        "listPlans() returns all migrated items",
+        "Committed with descriptive message"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "a8-docs-tests-final",
+      "title": "Update Docs, Rebuild AGENTS.md, Final Tests",
+      "description": "Update APPEND_SYSTEM.md (remove backlog commands, add /plan status, update lifecycle). Update specific .agents/sources/ files: workspace-structure.md (3 refs), conventions.md (refactor item path), memory.md (future work destination). Update .agents/skills/execute-prd/SKILL.md (3 refs to dev/work/backlog/ including refactor backlog item example — change to dev/work/plans/ with status idea). Rebuild AGENTS.md with npm run build:agents:dev. Grep all .md files for stale backlog references. Verify comprehensive test coverage. Run final quality gates. Extra reviewer pass: command end-to-end, docs consistency, dead code, test coverage.",
+      "acceptanceCriteria": [
+        "APPEND_SYSTEM.md has no backlog commands, has /plan status, has updated lifecycle",
+        "AGENTS.md rebuilt and contains no backlog references in source sections",
+        "No .agents/sources/ or .pi/skills/ files reference backlog commands or dev/work/backlog/",
+        ".agents/skills/execute-prd/SKILL.md refactor backlog example updated to use dev/work/plans/ with status idea",
+        ".agents/sources/shared/workspace-structure.md updated — no backlog dir references",
+        ".agents/sources/builder/conventions.md updated — refactor item path corrected",
+        ".agents/sources/builder/memory.md updated — future work destination corrected",
+        "All test suites pass: npm run typecheck && npm test",
+        "No orphaned imports or dead code referencing backlog",
+        "Zero results from rg 'dev/work/backlog' .pi/ .agents/sources/ .agents/skills/",
+        "Every /plan subcommand verified working: new, list, open, save, rename, status, delete, archive"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-20T18:06:00.000Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

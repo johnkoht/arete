@@ -94,7 +94,8 @@ export interface PlanSummary {
 }
 
 // Default base directories for work items (relative to cwd)
-const DEFAULT_PLANS_DIR = "dev/work/plans";
+export const DEFAULT_PLANS_DIR = "dev/work/plans";
+/** @deprecated Backlog is unified into plans. Use DEFAULT_PLANS_DIR instead. */
 export const DEFAULT_BACKLOG_DIR = "dev/work/backlog";
 export const DEFAULT_ARCHIVE_DIR = "dev/work/archive";
 
@@ -413,59 +414,10 @@ function resolveDir(basePath: string | undefined, defaultDir: string): string {
 }
 
 /**
- * List backlog items (mixed flat files and folders), sorted by updated date.
- * For folders: parses plan.md inside. For .md files: parses the file directly.
- * If both foo.md and foo/ exist (slug collision), prefers the folder.
+ * @deprecated Backlog is unified into plans. Use listPlans() instead.
  */
-export function listBacklog(basePath?: string): PlanSummary[] {
-	const dir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
-	if (!existsSync(dir)) return [];
-
-	try {
-		const entries = readdirSync(dir, { withFileTypes: true });
-		const itemsBySlug = new Map<string, PlanSummary>();
-
-		// First pass: folders (higher priority on collision)
-		for (const entry of entries) {
-			if (!entry.isDirectory()) continue;
-			const slug = entry.name;
-			const planFile = join(dir, slug, "plan.md");
-			if (!existsSync(planFile)) continue;
-
-			try {
-				const { frontmatter } = parseFrontmatterFromFile(planFile);
-				itemsBySlug.set(slug, { slug, frontmatter });
-			} catch {
-				// Skip unparseable
-			}
-		}
-
-		// Second pass: flat .md files (skip if folder with same slug exists)
-		for (const entry of entries) {
-			if (entry.isDirectory()) continue;
-			if (!entry.name.endsWith(".md")) continue;
-
-			const slug = entry.name.replace(/\.md$/, "");
-			if (itemsBySlug.has(slug)) continue; // folder wins
-
-			try {
-				const { frontmatter } = parseFrontmatterFromFile(join(dir, entry.name));
-				itemsBySlug.set(slug, { slug, frontmatter });
-			} catch {
-				// Skip unparseable
-			}
-		}
-
-		const items = Array.from(itemsBySlug.values());
-		items.sort((a, b) => {
-			const dateA = a.frontmatter.updated || "";
-			const dateB = b.frontmatter.updated || "";
-			return dateB.localeCompare(dateA);
-		});
-		return items;
-	} catch {
-		return [];
-	}
+export function listBacklog(_basePath?: string): PlanSummary[] {
+	throw new Error("Deprecated: backlog functions removed. Use unified plans system.");
 }
 
 /**
@@ -533,70 +485,17 @@ export function moveItem(slug: string, fromDir: string, toDir: string): void {
 }
 
 /**
- * Promote a backlog item to plans/.
- * Flat file → creates folder with plan.md. Folder → moves directly.
- * Updates status to "draft".
+ * @deprecated Backlog is unified into plans. Use savePlan() directly.
  */
-export function promoteBacklogItem(slug: string, basePath?: string): void {
-	const backlogDir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
-	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
-
-	if (!existsSync(plansDir)) {
-		mkdirSync(plansDir, { recursive: true });
-	}
-
-	const folderSrc = join(backlogDir, slug);
-	const fileSrc = join(backlogDir, `${slug}.md`);
-
-	if (existsSync(folderSrc) && statSync(folderSrc).isDirectory()) {
-		// Folder: move to plans, update status
-		const dest = join(plansDir, slug);
-		cpSync(folderSrc, dest, { recursive: true });
-		rmSync(folderSrc, { recursive: true, force: true });
-		updatePlanFrontmatter(slug, { status: "draft" }, plansDir);
-	} else if (existsSync(fileSrc)) {
-		// Flat file: create folder, move content to plan.md, update status
-		const { frontmatter, content } = parseFrontmatterFromFile(fileSrc);
-		frontmatter.status = "draft";
-		frontmatter.updated = new Date().toISOString();
-		savePlan(slug, frontmatter, content, plansDir);
-
-		rmSync(fileSrc);
-	} else {
-		throw new Error(`Backlog item not found: ${slug}`);
-	}
+export function promoteBacklogItem(_slug: string, _basePath?: string): void {
+	throw new Error("Deprecated: backlog functions removed. Use unified plans system.");
 }
 
 /**
- * Shelve a plan to backlog/. Preserves folder structure.
- * Updates status to "idea".
+ * @deprecated Backlog is unified into plans. Use updatePlanFrontmatter() to change status instead.
  */
-export function shelveToBacklog(slug: string, basePath?: string): void {
-	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
-	const backlogDir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
-
-	const src = join(plansDir, slug);
-	if (!existsSync(src) || !statSync(src).isDirectory()) {
-		throw new Error(`Plan not found: ${slug}`);
-	}
-
-	if (!existsSync(backlogDir)) {
-		mkdirSync(backlogDir, { recursive: true });
-	}
-
-	const dest = join(backlogDir, slug);
-	cpSync(src, dest, { recursive: true });
-	rmSync(src, { recursive: true, force: true });
-
-	// Update status in the backlog copy
-	const planFile = join(dest, "plan.md");
-	if (existsSync(planFile)) {
-		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
-		frontmatter.status = "idea";
-		frontmatter.updated = new Date().toISOString();
-		const fm = serializeFrontmatter(frontmatter);
-		writeFileSync(planFile, `${fm}\n\n${content}`, "utf-8");
-	}
+export function shelveToBacklog(_slug: string, _basePath?: string): void {
+	throw new Error("Deprecated: backlog functions removed. Use unified plans system.");
 }
 
 /**
@@ -633,39 +532,144 @@ export function archiveItem(slug: string, status: "complete" | "abandoned", base
 }
 
 /**
- * Create a new backlog item as a flat .md file with default frontmatter.
- * Returns the generated slug.
+ * @deprecated Backlog is unified into plans. Use savePlan() to create new items.
  */
-export function createBacklogItem(title: string, basePath?: string): string {
-	const dir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
-	if (!existsSync(dir)) {
-		mkdirSync(dir, { recursive: true });
+export function createBacklogItem(_title: string, _basePath?: string): string {
+	throw new Error("Deprecated: backlog functions removed. Use unified plans system.");
+}
+
+// ────────────────────────────────────────────────────────────
+// Migration
+// ────────────────────────────────────────────────────────────
+
+/** Result from migrating backlog items to unified plans */
+export interface MigrationResult {
+	moved: string[];
+	collisions: { slug: string; resolution: string }[];
+	skipped: string[];
+}
+
+/**
+ * Migrate all items from backlog/ to plans/.
+ * - Flat .md files → {slug}/plan.md folders
+ * - Existing folders → moved as-is, inner file renamed to plan.md if needed
+ * - Slug collisions with existing plans → suffixed with -idea
+ * - Items without explicit status get status "idea"
+ */
+export function migrateBacklogToPlans(
+	backlogPath?: string,
+	plansPath?: string,
+): MigrationResult {
+	const backlogDir = backlogPath ?? DEFAULT_BACKLOG_DIR;
+	const plansDir = plansPath ?? DEFAULT_PLANS_DIR;
+
+	const result: MigrationResult = { moved: [], collisions: [], skipped: [] };
+
+	if (!existsSync(backlogDir)) return result;
+
+	if (!existsSync(plansDir)) {
+		mkdirSync(plansDir, { recursive: true });
 	}
 
-	const slug = slugify(title);
-	if (!slug) {
-		throw new Error("Title must include letters or numbers");
+	const entries = readdirSync(backlogDir, { withFileTypes: true });
+
+	for (const entry of entries) {
+		try {
+			if (entry.isDirectory()) {
+				migrateFolder(entry.name, backlogDir, plansDir, result);
+			} else if (entry.name.endsWith(".md")) {
+				migrateFlatFile(entry.name, backlogDir, plansDir, result);
+			} else {
+				result.skipped.push(entry.name);
+			}
+		} catch {
+			result.skipped.push(entry.name);
+		}
 	}
 
-	const now = new Date().toISOString();
-	const frontmatter: PlanFrontmatter = {
-		title,
-		slug,
-		status: "idea",
-		size: "unknown",
-		tags: [],
-		created: now,
-		updated: now,
-		completed: null,
-		execution: null,
-		has_review: false,
-		has_pre_mortem: false,
-		has_prd: false,
-		steps: 0,
-	};
+	return result;
+}
 
-	const fm = serializeFrontmatter(frontmatter);
-	writeFileSync(join(dir, `${slug}.md`), `${fm}\n\n# ${title}\n`, "utf-8");
+/**
+ * Resolve a unique slug for migration, handling collisions with existing plans.
+ */
+function resolveSlug(
+	slug: string,
+	plansDir: string,
+	result: MigrationResult,
+): string {
+	if (!existsSync(join(plansDir, slug))) return slug;
 
-	return slug;
+	const resolved = `${slug}-idea`;
+	const resolution = `Collision: "${slug}" already exists in plans, migrated as "${resolved}"`;
+	console.log(resolution);
+	result.collisions.push({ slug, resolution });
+	return resolved;
+}
+
+/**
+ * Ensure migrated frontmatter has status "idea" if no explicit status was set.
+ */
+function ensureIdeaStatus(frontmatter: PlanFrontmatter): PlanFrontmatter {
+	if (!frontmatter.status || frontmatter.status === ("" as PlanStatus)) {
+		return { ...frontmatter, status: "idea" };
+	}
+	return frontmatter;
+}
+
+/**
+ * Migrate a flat .md file from backlog to plans.
+ */
+function migrateFlatFile(
+	filename: string,
+	backlogDir: string,
+	plansDir: string,
+	result: MigrationResult,
+): void {
+	const slug = filename.replace(/\.md$/, "");
+	const filePath = join(backlogDir, filename);
+	const { frontmatter, content } = parseFrontmatterFromFile(filePath);
+
+	const finalSlug = resolveSlug(slug, plansDir, result);
+	const fm = ensureIdeaStatus({ ...frontmatter, slug: finalSlug });
+
+	savePlan(finalSlug, fm, content, plansDir);
+	result.moved.push(finalSlug);
+}
+
+/**
+ * Migrate a folder from backlog to plans.
+ * Renames inner file to plan.md if needed.
+ */
+function migrateFolder(
+	folderName: string,
+	backlogDir: string,
+	plansDir: string,
+	result: MigrationResult,
+): void {
+	const srcDir = join(backlogDir, folderName);
+	const finalSlug = resolveSlug(folderName, plansDir, result);
+	const destDir = join(plansDir, finalSlug);
+
+	// Copy folder to plans
+	cpSync(srcDir, destDir, { recursive: true });
+
+	// Check if plan.md exists; if not, rename the first .md file
+	const planFile = join(destDir, "plan.md");
+	if (!existsSync(planFile)) {
+		const files = readdirSync(destDir).filter((f) => f.endsWith(".md"));
+		if (files.length > 0) {
+			renameSync(join(destDir, files[0]), planFile);
+		}
+	}
+
+	// Ensure status is "idea" if not set
+	if (existsSync(planFile)) {
+		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
+		const fm = ensureIdeaStatus({ ...frontmatter, slug: finalSlug });
+		const serialized = serializeFrontmatter(fm);
+		writeFileSync(planFile, `${serialized}\n\n${content}`, "utf-8");
+	}
+
+	result.moved.push(finalSlug);
 }

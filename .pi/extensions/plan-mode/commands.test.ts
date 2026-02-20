@@ -23,6 +23,7 @@ describe("createDefaultState", () => {
 		assert.equal(state.planModeEnabled, false);
 		assert.equal(state.executionMode, false);
 		assert.equal(state.currentSlug, null);
+		assert.equal(state.planTitle, null);
 		assert.equal(state.planSize, null);
 		assert.equal(state.planText, "");
 		assert.deepEqual(state.todoItems, []);
@@ -338,7 +339,7 @@ describe("handlePlanRename", () => {
 });
 
 describe("handlePlan — /plan new", () => {
-	it("pre-sets slug when name argument is provided", async () => {
+	it("auto-saves when name argument is provided", async () => {
 		let notifyMessage = "";
 		const ctx = createTestContext({
 			notify: (msg) => {
@@ -356,13 +357,17 @@ describe("handlePlan — /plan new", () => {
 		await handlePlan("new my cool feature", ctx, pi, state, togglePlanMode);
 
 		assert.equal(state.currentSlug, "my-cool-feature", "Should slugify and set currentSlug");
+		assert.equal(state.planTitle, "My Cool Feature", "Should set planTitle to title-cased name");
+		assert.equal(state.planText, "# My Cool Feature\n", "Should set planText with title heading");
 		assert.equal(toggleCalled, true, "Should enable plan mode");
 		assert.ok(notifyMessage.includes("my-cool-feature"), "Should mention the slug in notification");
+		assert.ok(notifyMessage.includes("created and saved"), "Should confirm auto-save");
 	});
 
-	it("does not pre-set slug when no name argument is provided", async () => {
+	it("auto-saves when no name provided and editor provides name", async () => {
 		let notifyMessage = "";
 		const ctx = createTestContext({
+			editor: async () => "editor provided name",
 			notify: (msg) => {
 				notifyMessage = msg;
 			},
@@ -375,9 +380,33 @@ describe("handlePlan — /plan new", () => {
 
 		await handlePlan("new", ctx, pi, state, togglePlanMode);
 
-		assert.equal(state.currentSlug, null, "Should not set slug without name");
-		assert.ok(notifyMessage.includes("Describe your idea"), "Should show generic prompt");
-		assert.ok(!notifyMessage.includes("for '"), "Should not mention a slug");
+		assert.equal(state.currentSlug, "editor-provided-name", "Should slugify editor result");
+		assert.equal(state.planTitle, "Editor Provided Name", "Should title-case from slug");
+		assert.equal(state.planText, "# Editor Provided Name\n", "Should set planText with title heading");
+		assert.ok(notifyMessage.includes("created and saved"), "Should confirm auto-save");
+	});
+
+	it("does not save when no name provided and editor cancelled", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			editor: async () => undefined, // User cancelled
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+		const togglePlanMode = () => {
+			state.planModeEnabled = true;
+		};
+
+		await handlePlan("new", ctx, pi, state, togglePlanMode);
+
+		assert.equal(state.currentSlug, null, "Should not set slug");
+		assert.equal(state.planTitle, null, "Should not set planTitle");
+		assert.equal(state.planText, "", "Should leave planText empty");
+		assert.ok(notifyMessage.includes("not saved"), "Should notify plan not saved");
+		assert.ok(notifyMessage.includes("/plan save"), "Should suggest /plan save");
 	});
 
 	it("resets state from previous plan before starting new one", async () => {
@@ -389,6 +418,7 @@ describe("handlePlan — /plan new", () => {
 		const state = createTestState({
 			planModeEnabled: true,
 			currentSlug: "old-plan",
+			planTitle: "Old Plan",
 			planText: "old content",
 			planSize: "large",
 			todoItems: [{ text: "step 1", completed: false }],
@@ -401,12 +431,39 @@ describe("handlePlan — /plan new", () => {
 		await handlePlan("new fresh-start", ctx, pi, state, togglePlanMode);
 
 		assert.equal(state.currentSlug, "fresh-start", "Should set new slug");
-		assert.equal(state.planText, "", "Should clear plan text");
+		assert.equal(state.planTitle, "Fresh Start", "Should set new planTitle");
+		assert.equal(state.planText, "# Fresh Start\n", "Should set planText with new title");
 		assert.equal(state.planSize, null, "Should clear plan size");
 		assert.deepEqual(state.todoItems, [], "Should clear todo items");
 		assert.equal(state.preMortemRun, false, "Should reset pre-mortem flag");
 		assert.equal(state.reviewRun, false, "Should reset review flag");
 		assert.equal(state.prdConverted, false, "Should reset PRD flag");
+	});
+
+	it("plan is discoverable via listPlans after auto-save", async () => {
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+		const togglePlanMode = () => {
+			state.planModeEnabled = true;
+		};
+
+		await handlePlan("new discoverable-test-plan", ctx, pi, state, togglePlanMode);
+
+		// Verify the plan was saved and is discoverable
+		assert.equal(state.currentSlug, "discoverable-test-plan");
+		assert.equal(state.planTitle, "Discoverable Test Plan");
+		assert.ok(state.planText.includes("# Discoverable Test Plan"), "planText should contain title");
+
+		// Clean up the auto-saved plan
+		const { existsSync: exists, rmSync: rm } = await import("node:fs");
+		const { join: pathJoin } = await import("node:path");
+		const planDir = pathJoin("dev/work/plans", "discoverable-test-plan");
+		if (exists(planDir)) {
+			rm(planDir, { recursive: true, force: true });
+		}
 	});
 });
 
