@@ -123,7 +123,7 @@ npm run test:py
 | Technical pre-mortem | Before execution | Risks, mitigations, task dependencies |
 | Task prompts | Per task | Context-rich prompts for Developers |
 | Code review feedback | Per task | Specific, actionable feedback |
-| `progress.txt` updates | During execution | Learnings, blockers, status |
+| `progress.md` updates | During execution | Learnings, blockers, status |
 | Holistic review report | After completion | Summary, regressions check, learnings |
 
 ## What You Consume

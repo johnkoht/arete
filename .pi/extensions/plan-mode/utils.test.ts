@@ -62,8 +62,8 @@ describe("isAllowedInPlanMode", () => {
 	});
 
 	it("allows mkdir -p only during prd conversion", () => {
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", true), true);
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/prds/plan-mode-ux", false), false);
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/work/plans/plan-mode-ux", true), true);
+		assert.equal(isAllowedInPlanMode("mkdir -p dev/work/plans/plan-mode-ux", false), false);
 	});
 
 	it("still blocks dangerous commands during prd conversion", () => {

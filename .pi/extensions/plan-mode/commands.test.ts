@@ -87,12 +87,20 @@ describe("hasUnsavedPlanChanges", () => {
 describe("getSuggestedNextActions", () => {
 	it("suggests approve/build actions by status", () => {
 		assert.deepEqual(
+			getSuggestedNextActions("idea", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
+			["/approve"],
+		);
+		assert.deepEqual(
 			getSuggestedNextActions("draft", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
 			["/approve"],
 		);
 		assert.deepEqual(
-			getSuggestedNextActions("ready", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
+			getSuggestedNextActions("planned", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
 			["/build"],
+		);
+		assert.deepEqual(
+			getSuggestedNextActions("abandoned", "small", { hasPreMortem: false, hasReview: false, hasPrd: false }),
+			["/plan new"],
 		);
 	});
 
@@ -171,13 +179,14 @@ title: ${slug.replace(/-/g, " ")}
 slug: ${slug}
 status: draft
 size: small
+tags: []
 created: 2026-01-01T00:00:00.000Z
 updated: 2026-01-01T00:00:00.000Z
 completed: null
+execution: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-backlog_ref: null
 steps: 0
 ---
 

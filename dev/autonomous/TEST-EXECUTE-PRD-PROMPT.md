@@ -18,7 +18,7 @@ I want to execute a PRD using the new orchestration system we built.
 1. Read .agents/skills/execute-prd/SKILL.md (the execution workflow)
 2. Read dev/QUICK-START-ORCHESTRATION.md (quick reference)
 3. Read dev/entries/2026-02-09_builder-orchestration-learnings.md (what worked last time)
-4. Find the next PRD to execute (check dev/prds/ for candidates)
+4. Find the next PRD to execute (check dev/work/plans/ for candidates)
 5. Follow the execute-prd workflow:
    - Phase 0: Understand the PRD and dependencies
    - Phase 1: Conduct mandatory pre-mortem (present to me for approval before proceeding)

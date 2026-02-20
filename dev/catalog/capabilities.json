@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-02-18",
+  "workspace": "arete-build",
+  "capabilities": [
+    {
+      "id": "pi-plan-mode-extension",
+      "name": "Pi Plan Mode Extension",
+      "type": "extension",
+      "provenance": "customized",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "pi",
+      "isPiCore": false,
+      "summary": "Plan lifecycle commands and persistence for Pi sessions.",
+      "implementationPaths": [
+        ".pi/extensions/plan-mode/index.ts",
+        ".pi/extensions/plan-mode/commands.ts",
+        ".pi/extensions/plan-mode/persistence.ts",
+        ".pi/extensions/plan-mode/widget.ts"
+      ],
+      "entrypoints": [
+        "/plan",
+        "/plan list",
+        "/plan open",
+        "/plan save",
+        "/plan status",
+        "/plan next",
+        "/plan hold",
+        "/plan block",
+        "/plan resume",
+        "/plan delete",
+        "/review",
+        "/pre-mortem",
+        "/prd",
+        "/build",
+        "/build status"
+      ],
+      "readBeforeChange": [
+        ".pi/extensions/plan-mode/index.ts",
+        ".pi/extensions/plan-mode/commands.ts",
+        ".pi/APPEND_SYSTEM.md",
+        "dev/plans/"
+      ],
+      "testCommands": [
+        "npm test",
+        "npm run typecheck"
+      ],
+      "notes": [
+        "Workspace-local extension under .pi/extensions (not baked into Pi core).",
+        "Exact upstream/base origin should be confirmed and recorded in a follow-up pass."
+      ],
+      "lastVerified": "2026-02-18"
+    },
+    {
+      "id": "pi-append-system-dev-rules",
+      "name": "Pi Appended Dev Rules",
+      "type": "configuration",
+      "provenance": "customized",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "pi",
+      "summary": "Always-on build instructions injected into Pi system prompt.",
+      "implementationPaths": [
+        ".pi/APPEND_SYSTEM.md",
+        ".cursor/rules/dev.mdc",
+        ".cursor/rules/testing.mdc"
+      ],
+      "readBeforeChange": [
+        ".pi/APPEND_SYSTEM.md",
+        ".cursor/rules/dev.mdc",
+        ".cursor/rules/testing.mdc"
+      ],
+      "notes": [
+        "Potential drift risk between .cursor/rules/* and .pi/APPEND_SYSTEM.md.",
+        "Keep both in sync when rules/workflows change."
+      ],
+      "lastVerified": "2026-02-18"
+    },
+    {
+      "id": "qmd-semantic-search",
+      "name": "QMD Semantic Search",
+      "type": "tool-integration",
+      "provenance": "external",
+      "status": "active",
+      "usageStatus": "occasional",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "External CLI used for semantic/hybrid search with fallback behavior in core services.",
+      "upstream": {
+        "name": "qmd",
+        "url": "https://github.com/tobi/qmd"
+      },
+      "implementationPaths": [
+        "packages/core/src/search-providers/qmd.ts",
+        "packages/core/src/services/search.ts",
+        "SETUP.md"
+      ],
+      "entrypoints": [
+        "qmd search",
+        "qmd vsearch",
+        "qmd query",
+        "qmd status",
+        "qmd update",
+        "qmd embed"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/search-providers/qmd.ts",
+        "packages/core/src/services/search.ts",
+        "SETUP.md"
+      ],
+      "testCommands": [
+        "npm test",
+        "npm run typecheck"
+      ],
+      "notes": [
+        "Can be available in workspace but underused; keep discoverable for agents.",
+        "When unavailable, core should gracefully fall back to token/keyword search."
+      ],
+      "lastVerified": "2026-02-18"
+    }
+  ]
+}

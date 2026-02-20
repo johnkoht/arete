@@ -4,7 +4,7 @@
  * Delegates to @arete/core IntelligenceService for compatibility.
  * See packages/core/src/compat/intelligence.ts
  *
- * See: dev/prds/product-os/skill-interface.md §1 (Primitive Briefing)
+ * See: dev/work/backlog/product-os/skill-interface.md §1 (Primitive Briefing)
  */
 
 export {

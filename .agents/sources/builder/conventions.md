@@ -160,9 +160,20 @@ Before implementing new helpers, services, or abstractions:
 - Apply DRY (Don't Repeat Yourself)
 - Apply KISS (Keep It Simple)
 
-If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/` — but don't block on it.
+If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/work/backlog/` — but don't block on it.
 
-### 7. Skill and rule changes (mandatory review)
+### 7. Capability registry check (for tooling/platform changes)
+
+Before changing developer tooling or platform behavior (extensions, tools, services, rules integration, major external packages):
+
+- [ ] Read `dev/catalog/capabilities.json`
+- [ ] Confirm whether the target is **built**, **customized**, or **external**
+- [ ] Follow `readBeforeChange` references for the capability
+- [ ] Update the capability entry if behavior, paths, status, or ownership changed
+
+Use memory entries (`memory/entries/`) for rationale/history, but treat `dev/catalog/capabilities.json` as the current-state source of truth.
+
+### 8. Skill and rule changes (mandatory review)
 
 Before creating or modifying any skill or rule file:
 
@@ -175,7 +186,7 @@ Before creating or modifying any skill or rule file:
 
 **Why:** Skills and rules define agent behavior. Changes propagate widely.
 
-### 8. Multi-IDE consistency check
+### 9. Multi-IDE consistency check
 
 Before editing files in `runtime/rules/`, `runtime/tools/`, or any path affecting both Cursor and Claude:
 

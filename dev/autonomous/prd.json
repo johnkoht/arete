@@ -1,148 +1,137 @@
 {
-  "name": "onboarding-improvements-phase3",
-  "branchName": "feature/onboarding-improvements",
-  "goal": "Implement Phase 3 enhancements for Stream B + C: improve context extraction quality, add configurable people-intelligence policy tuning, and ship optional enrichment with safe feature toggles.",
+  "name": "work-directory-cleanup",
+  "branchName": "feature/work-directory-cleanup",
+  "goal": "Consolidate work items from 4 scattered directories (dev/plans/, dev/prds/, dev/backlog/, dev/archive/) into unified dev/work/ structure with backlog/, plans/, archive/ subdirectories, co-located PRDs, unified frontmatter schema, and lifecycle commands.",
   "userStories": [
     {
-      "id": "p3-b1-extraction-quality-baseline",
-      "title": "Establish extraction quality baseline and acceptance corpus",
-      "description": "Create a deterministic baseline corpus and scoring harness for Rapid Context Dump outputs to measure extraction quality before tuning.",
+      "id": "task-1",
+      "title": "Unified Frontmatter Schema",
+      "description": "Update PlanStatus type, PlanFrontmatter interface, migrateStatus(), serializeFrontmatter(), and parseFrontmatter() in persistence.ts. Add tags (array) and execution fields, remove backlog_ref. Add parseFrontmatterFromFile() for graceful handling of files without frontmatter. Status type: idea | draft | planned | building | complete | abandoned.",
       "acceptanceCriteria": [
-        "Baseline corpus fixtures exist for website, folder, and pasted text paths",
-        "Quality checks cover draft completeness and evidence traceability",
-        "A repeatable score/report format is documented in code comments or tests",
-        "No behavior regression in existing Phase 1 draft workflow"
+        "PlanStatus type includes all 6 statuses: idea, draft, planned, building, complete, abandoned",
+        "PlanFrontmatter has tags: string[] and execution: string | null; no backlog_ref",
+        "migrateStatus('ready') returns 'planned'; migrateStatus('idea') returns 'idea'",
+        "serializeFrontmatter() outputs tags: [feature, integration] for array values",
+        "parseFrontmatter() parses tags: [feature, integration] into ['feature', 'integration']",
+        "parseFrontmatter() parses tags: [] into []",
+        "parseFrontmatterFromFile() returns sensible defaults for files without --- delimiters",
+        "npm run typecheck passes",
+        "Existing tests updated to compile with new types"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1
     },
     {
-      "id": "p3-b2-extraction-tuning-improvements",
-      "title": "Improve extraction and draft synthesis quality",
-      "description": "Tune extraction heuristics and draft synthesis so draft context artifacts are higher signal with clearer source references.",
+      "id": "task-2",
+      "title": "Audit and Migrate Existing Items",
+      "description": "Move all work items from old directories to dev/work/. Runs BEFORE code path changes. Triage rules: Archive (complete/executed/stale 30+ days), Active (building/ready/work-directory-cleanup), Backlog (everything else). Present triage table to builder for approval. Merge PRDs into plan folders. Flatten backlog subcategories with tags. Add frontmatter to items that lack it.",
       "acceptanceCriteria": [
-        "Extraction logic improves draft quality on baseline corpus",
-        "Draft artifacts preserve explicit source/evidence references",
-        "Fallback behavior remains non-blocking when one source is low quality",
-        "Unit tests validate happy path + edge cases for tuned extraction"
+        "Triage table presented and approved by builder before any moves",
+        "dev/plans/, dev/prds/, dev/backlog/, dev/archive/ no longer exist",
+        "All items in dev/work/ with correct subdirectory based on triage",
+        "PRDs from dev/prds/ merged into their plan folders",
+        "All migrated backlog items have frontmatter (title, slug, status, tags)",
+        "No data loss \u2014 every item accounted for"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-b1-extraction-quality-baseline"
-      ]
+      "attemptCount": 1
     },
     {
-      "id": "p3-c1-policy-config-surface",
-      "title": "Add policy configuration for people-intelligence thresholds",
-      "description": "Introduce configurable policy knobs for confidence threshold and routing behavior while preserving safe defaults.",
+      "id": "task-3",
+      "title": "Update Persistence Layer Paths",
+      "description": "Update plan-mode extension code to use dev/work/plans/. Three sub-parts: (3a) Change DEFAULT_PLANS_DIR, add BACKLOG/ARCHIVE dirs, update 6 notification strings. (3b) Add listBacklog(), listArchive(), moveItem(), promoteBacklogItem(), shelveToBacklog(), archiveItem(), createBacklogItem() functions. (3c) Update /prd and /build handlers to use plan folder for PRD, simplify resolvePrdFeatureSlug().",
       "acceptanceCriteria": [
-        "Policy config supports confidence threshold tuning with defaults",
-        "Unknown queue behavior remains default-safe when config is missing",
-        "Policy loading includes graceful fallback on invalid values",
-        "Unit tests validate default, custom, and invalid-config scenarios"
+        "DEFAULT_PLANS_DIR is 'dev/work/plans'",
+        "listBacklog() returns items from dev/work/backlog/ handling mixed files/folders and missing frontmatter",
+        "listArchive() returns items from dev/work/archive/",
+        "promoteBacklogItem() converts flat file to folder when promoting",
+        "shelveToBacklog() preserves folder structure",
+        "createBacklogItem('Slack integration') creates dev/work/backlog/slack-integration.md with proper frontmatter",
+        "/prd creates PRD at dev/work/plans/{slug}/prd.md",
+        "/build references PRD in plan folder, not dev/prds/",
+        "All 6 notification strings updated to reference dev/work/plans/",
+        "npm run typecheck passes"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-b2-extraction-tuning-improvements"
-      ]
+      "attemptCount": 1
     },
     {
-      "id": "p3-c2-enrichment-optional-mode",
-      "title": "Implement optional enrichment pathway",
-      "description": "Add optional enrichment inputs for better suggestions without making enrichment a release blocker.",
+      "id": "task-4",
+      "title": "Update Skills and Documentation",
+      "description": "Update 11 files with new path references: plan-to-prd, execute-prd, prd-post-mortem, prd-to-json SKILL.md files; workspace-structure.md, memory.md, conventions.md, README.md sources; APPEND_SYSTEM.md; dev.mdc; collaboration.md. Do NOT update memory/entries/ (historical). Rebuild AGENTS.md. Run validation grep.",
       "acceptanceCriteria": [
-        "Enrichment path is opt-in and disabled by default",
-        "System degrades gracefully when enrichment is unavailable",
-        "Suggestion payload clearly indicates when enrichment was applied",
-        "No forced coupling between enrichment and core classification flow"
+        "All 11 files updated with correct new paths",
+        "execute-prd/SKILL.md references dev/work/backlog/ for refactor backlog items",
+        "plan-to-prd/SKILL.md EXECUTE.md template uses dev/work/plans/{slug}/prd.md",
+        "AGENTS.md rebuilt successfully via npm run build:agents:dev",
+        "Validation grep returns zero hits outside memory/entries/ and dev/work/archive/",
+        "memory/entries/ files untouched"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c1-policy-config-surface"
-      ]
+      "attemptCount": 1
     },
     {
-      "id": "p3-c3-feature-toggle-safety",
-      "title": "Add feature toggles for Phase 3 enhancements",
-      "description": "Guard Phase 3 extraction/enrichment behavior behind explicit toggles so Phase 1/2 behavior remains stable.",
+      "id": "task-5",
+      "title": "Add Backlog Commands",
+      "description": "Add /plan backlog and /plan shelve commands. handleBacklog() with sub-routing: no args/list \u2192 listBacklog() with select UI; add <title> \u2192 createBacklogItem(); edit <slug> \u2192 read into context; promote <slug> \u2192 promoteBacklogItem() + load into state. handleShelve() \u2192 confirm, shelveToBacklog(), clear state. Update unknown subcommand message.",
       "acceptanceCriteria": [
-        "Feature toggles exist for extraction tuning and enrichment mode",
-        "Default toggle values preserve existing Phase 1/2 behavior",
-        "Toggles can be enabled independently without cross-stream breakage",
-        "Regression tests verify old behavior when toggles are off"
+        "/plan backlog shows list of backlog items (not shelve action)",
+        "/plan backlog list shows list with status emoji",
+        "/plan backlog add 'Slack integration' creates dev/work/backlog/slack-integration.md",
+        "/plan backlog edit some-item reads content into chat context",
+        "/plan backlog promote some-item moves to plans/ and loads as active plan",
+        "/plan shelve moves current plan to backlog/ with confirmation",
+        "/plan shelve with no active plan shows warning",
+        "Promoting a flat file creates a folder with plan.md",
+        "Shelving preserves folder structure"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c2-enrichment-optional-mode"
-      ]
+      "attemptCount": 1
     },
     {
-      "id": "p3-c4-metrics-trend-persistence",
-      "title": "Persist KPI snapshots for trend review",
-      "description": "Persist People Intelligence and Context Dump KPI snapshots so phase-gate reviews can evaluate week-over-week trends.",
+      "id": "task-6",
+      "title": "Add Archive Commands",
+      "description": "Add /plan archive commands. handleArchive() with sub-routing: no args \u2192 archive current plan with complete/abandoned choice via select UI; list \u2192 listArchive() with select UI; <slug> \u2192 archive specific plan with confirmation.",
       "acceptanceCriteria": [
-        "Snapshot format stores timestamped KPI records",
-        "Misclassification, triage burden, interruption, and extraction quality metrics are persisted",
-        "Read path supports recent-trend retrieval for review",
-        "Tests validate snapshot write/read and malformed data handling"
+        "/plan archive with active plan shows complete/abandoned choice then archives",
+        "/plan archive with no active plan shows warning",
+        "/plan archive list shows archived items",
+        "/plan archive some-plan archives a specific plan by slug",
+        "Archived items have status updated and completed date set",
+        "Plan state cleared after archiving current plan"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c3-feature-toggle-safety"
-      ]
+      "attemptCount": 1
     },
     {
-      "id": "p3-integration-regression-suite",
-      "title": "Expand integration tests for Phase 2+3 flows",
-      "description": "Add integration tests that validate digest mode, unknown queue routing, contract fallback, and toggle-off backward compatibility for enhanced flows.",
-      "acceptanceCriteria": [
-        "New integration coverage exists for people intelligence digest end-to-end",
-        "Integration coverage verifies unknown queue + internal classification with hints",
-        "Integration coverage verifies graceful degradation without hints",
-        "Integration coverage verifies backward compatibility when Phase 3 toggles are disabled"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c4-metrics-trend-persistence"
-      ]
-    },
-    {
-      "id": "phase3-validation",
-      "title": "Phase 3 full validation and quality gates",
-      "description": "Run full validation for Phase 3 scope, including typecheck, full test suite, and all integration tests.",
+      "id": "task-7",
+      "title": "Update Tests",
+      "description": "Update existing tests for new paths. Add comprehensive tests: frontmatter migration, tags parsing (empty/single/multiple/missing), listBacklog() with mixed formats and slug collision, promoteBacklogItem() flat\u2192folder, shelveToBacklog() preservation, archiveItem(), moveItem(), createBacklogItem(). Update utils.test.ts path references.",
       "acceptanceCriteria": [
         "npm run typecheck passes",
-        "npm test passes",
-        "All integration tests pass across core + cli integration directories",
-        "Phase 3 enhancements do not break independent ship constraints from prior phases"
+        "npm test passes (full suite)",
+        "All new persistence functions have test coverage",
+        "Tags parsing edge cases covered: empty [], single [feature], multiple [feature, integration, refactor], missing field",
+        "listBacklog() tested with: flat files only, folders only, mixed, no-frontmatter files, slug collision",
+        "promoteBacklogItem() tested: flat file \u2192 folder conversion",
+        "shelveToBacklog() tested: folder preservation",
+        "moveItem() tested: flat file and folder cases"
       ],
       "status": "complete",
       "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-integration-regression-suite"
-      ]
+      "attemptCount": 1
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T12:10:00.000Z",
-    "totalTasks": 8,
-    "completedTasks": 8,
-    "failedTasks": 0,
-    "updatedAt": "2026-02-18T19:49:49.688Z",
-    "completedAt": "2026-02-18T19:49:49.689Z"
+    "createdAt": "2026-02-19T16:20:00Z",
+    "totalTasks": 7,
+    "completedTasks": 7,
+    "failedTasks": 0
   }
 }

@@ -157,13 +157,26 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 **Scope Check:**
 - [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
+- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/work/backlog/*.md`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
 - [ ] Concept audit: If feature changes paths/structure, grep old paths in all `.md` files
 
 **Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and backlog frequently need updates.
+
+---
+
+## Capability Registry Check (tooling/platform changes)
+
+Before changing developer tooling or platform behavior (extensions, tools, services, rules integration, major external packages):
+
+- Read `dev/catalog/capabilities.json`
+- Confirm provenance: `built | customized | external`
+- Follow `readBeforeChange` references in the capability entry
+- Update capability metadata if behavior, paths, owner, or status changed
+
+Use memory entries for rationale/history; use the capability registry as current-state source of truth.
 
 ---
 
@@ -187,7 +200,7 @@ The plan-mode extension provides a full plan lifecycle with persistence, gates, 
 | `/plan` | Toggle plan mode (read-only exploration) |
 | `/plan list` | List all saved plans with status |
 | `/plan open <slug>` | Open a saved plan and restore its state |
-| `/plan save [slug]` | Save current plan to `dev/plans/{slug}/plan.md` |
+| `/plan save [slug]` | Save current plan to `dev/work/plans/{slug}/plan.md` |
 | `/plan status` | Show lifecycle info: status, size, gates, readiness |
 | `/plan next` | Smart gate orchestrator — shows checklist, runs gates, approves |
 | `/plan hold` | Put plan on hold (preserves previous status) |

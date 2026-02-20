@@ -104,38 +104,37 @@ Include in the commit only files related to this task.
 
 ### 6. Update Progress
 
-In `dev/autonomous/prd.json`:
+In the execution state directory provided by the orchestrator (e.g. `dev/executions/<plan-slug>/`):
+
+**prd.json**:
 - Set this task's `status: "complete"`
 - Set `commitSha` to the commit hash
 
-In `dev/autonomous/progress.txt`:
-- Append learnings, blockers encountered, time estimate accuracy
+**progress.md**:
+- Append task completion entry: what was done, files changed, quality checks, reflection
+
+> **Important**: The orchestrator provides the execution state path in your task prompt under `**Execution State Path**`. Always use that path — never hardcode execution state paths.
 
 ### 7. Report
 
-Return a completion report:
+Return a completion report using this exact format:
 
-```
-## Task Complete: [Title]
+```markdown
+## Completed
+[Summary of what was done]
 
-**What I Did**:
-- [Summary of implementation]
+## Files Changed
+- path/to/file.ts — what changed (added/modified)
+- path/to/file.test.ts — added
 
-**Files Changed**:
-- path/to/file.ts (added/modified)
-- path/to/file.test.ts (added)
+## Quality Checks
+- typecheck: ✓/✗
+- tests: ✓/✗ (N passed)
 
-**Tests Added**:
-- [Test description]
-- [Test description]
+## Commit
+abc1234
 
-**Quality Checks**:
-- typecheck: ✓
-- tests: ✓ (N passed)
-
-**Commit**: abc1234
-
-**Reflection**:
+## Reflection
 [What helped? What was harder than expected? Token estimate.]
 ```
 
@@ -155,9 +154,9 @@ Return a completion report:
 | Code changes | Implementation following patterns |
 | Test files | Tests for all new/changed behavior |
 | Commit | Single commit with passing checks |
-| prd.json update | Status and commit SHA |
-| progress.txt update | Learnings and notes |
-| Completion report | Summary for Engineering Lead review |
+| prd.json update | Status and commit SHA (in orchestrator-provided execution state path) |
+| progress.md update | Learnings and notes (in orchestrator-provided execution state path) |
+| Completion report | Summary for orchestrator review (use format from step 7) |
 
 ## What You Consume
 

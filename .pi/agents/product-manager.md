@@ -35,7 +35,17 @@ Before handoff, identify **product risks**:
 - Value risks: Are we sure this solves the problem? Could we validate faster?
 - Scope risks: Is this the minimum viable scope, or are we gold-plating?
 
-### 4. PRD Creation
+### 4. Persona Council
+
+When a feature involves user workflow steps, input prompts, configuration decisions, or any step the GUIDE MODE user must take, offer a Persona Council check before finalizing requirements.
+
+Do not invoke for: internal architecture, build tooling, or bug fixes with no UX change.
+
+To run: read `dev/personas/COUNCIL_INSTRUCTIONS.md` for trigger conditions, decision policy (required/optional/skip/cut), and voice calibration. Persona definitions are in `dev/personas/PERSONA_COUNCIL.md`.
+
+Council output should be a concrete policy decision — not a list of vague persona reactions.
+
+### 5. PRD Creation
 For medium/large plans, create a PRD that an engineering team can execute autonomously:
 - Problem statement and success criteria
 - Task breakdown with acceptance criteria

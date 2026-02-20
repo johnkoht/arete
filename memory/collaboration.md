@@ -6,7 +6,7 @@
 
 ## How This Works
 
-- Entries (`dev/entries/`) capture detailed architecture decisions, session notes, and tooling changes. They may include a **Learnings** section with collaboration observations.
+- Entries (`memory/entries/`) capture detailed architecture decisions, session notes, and tooling changes. They may include a **Learnings** section with collaboration observations.
 - This file synthesizes those observations into a working profile.
 - Corrections from the builder become new observations in the next entry, then update this file.
 - Review and edit anytime to improve accuracy.
@@ -36,11 +36,11 @@
 ## Process Preferences
 
 - Asks for learnings and observations to be captured. Values institutional memory about collaboration, not just about code.
-- Wants future work captured rather than lost. Raw or underdeveloped ideas → `scratchpad.md`; mature ideas with a plan → `dev/backlog/`.
+- Wants future work captured rather than lost. Raw or underdeveloped ideas → `scratchpad.md`; mature ideas with a plan → `dev/work/backlog/`.
 - Prefers a single PRD covering related work (e.g. intelligence + calendar together) rather than separate PRDs — keeps the execution scope coherent.
 - **Review workflow**: After reviewing completed work (PRD tasks, subagent deliverables, features), distinguish between:
   - **PRD-level changes** (significant functionality changes, missing acceptance criteria) → update the PRD
-  - **Enhancement-level items** (performance optimizations, nice-to-haves, minor improvements) → add to scratchpad (raw) or `dev/backlog/` (if discussed with a plan). Never add to entries.
+  - **Enhancement-level items** (performance optimizations, nice-to-haves, minor improvements) → add to scratchpad (raw) or `dev/work/backlog/` (if discussed with a plan). Never add to entries.
   - When minor observations emerge during a review, proactively add them to scratchpad or offer: "Should I add these enhancements to the scratchpad?"
 - **Closing or pausing a project**: Clean up outstanding/completed backlog items, update MEMORY.md index, add a dated entry with learnings, and mark progress/backlog docs (complete or on hold). Keeps institutional memory accurate and avoids orphaned state.
 - **Completed backlog artifacts**: Prefer delete over archive. The entry documents what was done; git history preserves content. Keeps repo lean; no need to bloat with an archive that duplicates the entry.
@@ -75,8 +75,8 @@ Things the builder has corrected — important context for avoiding repeat mista
 - **Audit all instances of a pattern before changing one** (2026-02-17): When making a structural change to one instance of a pattern (e.g. moving a template into a skill), immediately grep for ALL other instances of that pattern (other skills with `project_template:`, other template dirs, other `creates_project: true` flags) and surface them proactively. Don't finish the N=1 case and wait to be asked about N=2…N. The builder should hear "I also see these 4 other skills with the same structure — should we handle them consistently?" before work is done, not after.
 
 - **Always use plan-to-prd skill** (2026-02-14): When converting a plan to a PRD (e.g., user chose "Create a PRD" execution path), you MUST load and follow `.agents/skills/plan-to-prd/SKILL.md`. Do not write PRDs directly without using the skill. The skill ensures correct structure, creates prd.json, and generates the handoff prompt for execute-prd. This applies whenever: (1) user selected "Convert to PRD" from PRD Gateway, or (2) user requested PRD creation after plan approval.
-- **Backlog placement** (2026-02-10): Do not put backlog items or future enhancements in `dev/entries/`. Entries = actions, decisions, learnings (what happened). Backlog = future work → `dev/backlog/`.
-- **Backlog subfolders** (2026-02-10): When adding to `dev/backlog/`, use subfolders — do not put files in the root. Use `dev/backlog/features/` for new capabilities (progress-dashboard, google-calendar-provider) and `dev/backlog/improvements/` for enhancements to existing functionality (automated-code-review, skills-enhancement).
+- **Backlog placement** (2026-02-10): Do not put backlog items or future enhancements in `memory/entries/`. Entries = actions, decisions, learnings (what happened). Backlog = future work → `dev/work/backlog/`.
+- **Backlog subfolders** (2026-02-10): When adding to `dev/work/backlog/`, use subfolders — do not put files in the root. Use `dev/work/backlog/` for new capabilities (progress-dashboard, google-calendar-provider) and `dev/work/backlog/` for enhancements to existing functionality (automated-code-review, skills-enhancement).
 - **Report format** (2026-02-10): Produce ONE comprehensive report organized by theme, not separate sections per request that duplicate content.
 - **Reflection scaling** (2026-02-10): Scale reflection requests by task complexity—small tasks 1-2 sentences; large tasks 3-5 with specific insights.
 - **Documentation timing** (2026-02-10): For large architectural changes, update AGENTS.md mid-execution (after core phase) rather than post-execution.

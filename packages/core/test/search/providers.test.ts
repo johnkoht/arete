@@ -26,6 +26,21 @@ describe('search providers', () => {
       assert.strictEqual(typeof provider.semanticSearch, 'function');
     });
 
+    it('returns fallback provider when ARETE_SEARCH_FALLBACK=1', () => {
+      const original = process.env.ARETE_SEARCH_FALLBACK;
+      try {
+        process.env.ARETE_SEARCH_FALLBACK = '1';
+        const provider = getSearchProvider('/some/workspace');
+        assert.strictEqual(provider.name, 'fallback');
+      } finally {
+        if (original === undefined) {
+          delete process.env.ARETE_SEARCH_FALLBACK;
+        } else {
+          process.env.ARETE_SEARCH_FALLBACK = original;
+        }
+      }
+    });
+
     it('provider has correct interface shape', async () => {
       const provider = getSearchProvider('/workspace');
       assert.ok(provider.name.length > 0);

@@ -22,9 +22,9 @@ Conduct systematic post-mortem analysis after autonomous PRD execution. Extracts
 ### 1. Gather Data
 
 Read these files:
-- `dev/autonomous/prd.json` — Task outcomes, statuses, iteration counts, commit SHAs
-- `dev/autonomous/progress.txt` — Subagent reflections, learnings, implementation notes
-- `dev/prds/{feature-name}/prd.md` — Original PRD with pre-mortem (if included)
+- `dev/executions/{plan-slug}/prd.json` — Task outcomes, statuses, iteration counts, commit SHAs
+- `dev/executions/{plan-slug}/progress.md` — Subagent reflections, learnings, implementation notes
+- `dev/work/plans/{feature-name}/prd.md` — Original PRD with pre-mortem (if included)
 
 ### 2. Analyze Metrics
 
@@ -38,8 +38,8 @@ Calculate and record:
 
 ### 3. Synthesize Subagent Reflections
 
-From progress.txt, extract and group:
-- **Memory effectiveness**: What % of reflections mentioned progress.txt, MEMORY.md, collaboration.md helping?
+From progress.md, extract and group:
+- **Memory effectiveness**: What % of reflections mentioned progress.md, MEMORY.md, collaboration.md helping?
 - **Rule patterns**: Which rules were most cited as helpful? Any confusion?
 - **Common suggestions**: What improvements did multiple subagents suggest?
 - **Token patterns**: Average by task complexity (tiny/small/medium/large)
@@ -83,7 +83,7 @@ Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 ```markdown
 # {Feature Name} - PRD Execution Learnings
 **Date**: YYYY-MM-DD
-**PRD**: dev/prds/{feature-name}/prd.md
+**PRD**: dev/work/plans/{feature-name}/prd.md
 **Branch**: {branch-name}
 **Status**: Complete
 
@@ -109,7 +109,7 @@ Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 2. ...
 
 ## Subagent Insights
-- Memory: X% found progress.txt valuable; Y% referenced MEMORY.md
+- Memory: X% found progress.md valuable; Y% referenced MEMORY.md
 - Rules: Most helpful = {rule names}; confusion = {issues if any}
 - Common suggestions: [list]
 - Token patterns: Tiny=XK, Small=YK, Medium=ZK, Large=AK

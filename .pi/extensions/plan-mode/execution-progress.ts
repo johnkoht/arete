@@ -111,9 +111,10 @@ export function computePrdProgress(prdFile: PrdFile): ExecutionProgressSnapshot 
 }
 
 export function readPrdProgress(
-	prdPath = "dev/autonomous/prd.json",
+	prdPath?: string,
 	expectedPrdName?: string,
 ): ExecutionProgressSnapshot | null {
+	if (!prdPath) return null;
 	try {
 		const absolutePath = resolve(process.cwd(), prdPath);
 		const content = readFileSync(absolutePath, "utf-8");
