@@ -336,7 +336,8 @@ function compressConventions(content: string): string {
 |async:prefer async/await over Promises
 |tests:node:test + node:assert/strict
 |quality:npm run typecheck && npm test before commit
-|execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended`;
+|execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended
+|catalog:dev/catalog/capabilities.json — check before changing tooling/extensions/services; update after changes`;
 }
 
 /**

@@ -41,7 +41,7 @@ Work through each category from the template:
 | **Integration** | How will pieces fit together? |
 | **Scope Creep** | How to prevent over-implementation? |
 | **Code Quality** | What patterns must be followed? |
-| **Dependencies** | Are task dependencies clear? |
+| **Dependencies** | Are task dependencies clear? Check `dev/catalog/capabilities.json` for affected capabilities — verify `readBeforeChange` paths and provenance (`built`/`customized`/`external`) before assessing risk. |
 | **Platform Issues** | Any platform-specific risks? |
 | **State Tracking** | How to track progress across sessions? |
 
