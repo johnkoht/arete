@@ -29,7 +29,7 @@
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "start": "node packages/cli/bin/arete.js",
-    "test": "tsx --test --test-concurrency=4 $(find packages/core/test packages/cli/test -name \"*.test.ts\")",
+    "test": "ARETE_SEARCH_FALLBACK=1 tsx --test --test-concurrency=4 $(find packages/core/test packages/cli/test -name \"*.test.ts\")",
     "test:integration:smoke": "tsx --test 'packages/cli/test/integration/install-update.integration.test.ts' 'packages/cli/test/integration/context-brief.integration.test.ts'",
     "test:integration": "tsx --test $(find packages/cli/test/integration -name \"*.integration.test.ts\")",
     "test:integration:full": "npm run test:integration",

@@ -1,4 +1,9 @@
-# Autonomous Agent Loop (Areté Development Only)
+> ⚠️ **DEPRECATED** — The autonomous execution system has moved to Pi subagents.
+> See `.pi/skills/execute-prd/SKILL.md` for the current workflow.
+> Execution state now lives in `dev/executions/<plan-slug>/`.
+> Static templates and reference files in this directory remain until full legacy cleanup (Phase 2).
+
+# Autonomous Agent Loop (Areté Development Only) — DEPRECATED
 
 ⚠️ **INTERNAL TOOLING** - This system is for developing Areté itself, not for end users.
 

@@ -15,6 +15,12 @@ import type { SearchProvider } from './types.js';
  * @param workspaceRoot - Workspace root path (used by providers that need it)
  */
 export function getSearchProvider(workspaceRoot: string): SearchProvider {
+  // Allow forcing fallback provider (e.g. in tests to avoid spawning heavy qmd processes)
+  if (process.env.ARETE_SEARCH_FALLBACK === '1') {
+    const storage = new FileStorageAdapter();
+    return getFallbackProvider(workspaceRoot, storage);
+  }
+
   try {
     const r = spawnSync('which', ['qmd'], { encoding: 'utf8' });
     if (r.status === 0 && (r.stdout?.trim()?.length ?? 0) > 0) {

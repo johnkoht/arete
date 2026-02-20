@@ -99,6 +99,40 @@ describe("serializeFrontmatter / parseFrontmatter", () => {
 		assert.equal(parsed.has_pre_mortem, true);
 	});
 
+	it("preserves current statuses through round-trip", () => {
+		for (const status of ["idea", "draft", "planned", "building", "complete", "abandoned"] as const) {
+			const fm = makeFrontmatter({ status });
+			const serialized = serializeFrontmatter(fm);
+			const parsed = parseFrontmatter(serialized);
+			assert.equal(parsed.status, status, `status '${status}' should survive round-trip`);
+		}
+	});
+
+	it("migrates legacy statuses to current equivalents", () => {
+		const legacyMappings: Array<[string, string]> = [
+			["planned", "planned"],
+			["reviewed", "planned"],
+			["approved", "planned"],
+			["ready", "planned"],
+			["in-progress", "building"],
+			["completed", "complete"],
+			["blocked", "draft"],
+			["on-hold", "draft"],
+		];
+
+		for (const [legacy, expected] of legacyMappings) {
+			const raw = `---\nstatus: ${legacy}\ntitle: Test\nslug: test\n---`;
+			const parsed = parseFrontmatter(raw);
+			assert.equal(parsed.status, expected, `legacy status '${legacy}' should migrate to '${expected}'`);
+		}
+	});
+
+	it("falls back to draft for unknown statuses", () => {
+		const raw = "---\nstatus: banana\ntitle: Test\nslug: test\n---";
+		const parsed = parseFrontmatter(raw);
+		assert.equal(parsed.status, "draft");
+	});
+
 	it("handles date strings with colons", () => {
 		const fm = makeFrontmatter({ created: "2026-02-16T15:30:45.123Z" });
 		const serialized = serializeFrontmatter(fm);
@@ -224,9 +258,9 @@ describe("updatePlanFrontmatter", () => {
 		const fm = makeFrontmatter();
 		savePlan("test-plan", fm, "content", tempDir);
 
-		const updated = updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
+		const updated = updatePlanFrontmatter("test-plan", { status: "planned" }, tempDir);
 		assert.ok(updated);
-		assert.equal(updated.status, "ready");
+		assert.equal(updated.status, "planned");
 		assert.equal(updated.title, "Test Plan"); // preserved
 		assert.equal(updated.steps, 3); // preserved
 		assert.equal(updated.has_review, false); // preserved
@@ -237,13 +271,13 @@ describe("updatePlanFrontmatter", () => {
 		savePlan("test-plan", fm, "content", tempDir);
 
 		const before = new Date().toISOString();
-		const updated = updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
+		const updated = updatePlanFrontmatter("test-plan", { status: "planned" }, tempDir);
 		assert.ok(updated);
 		assert.ok(updated.updated >= before);
 	});
 
 	it("returns null for non-existent plan", () => {
-		const result = updatePlanFrontmatter("nonexistent", { status: "ready" }, tempDir);
+		const result = updatePlanFrontmatter("nonexistent", { status: "planned" }, tempDir);
 		assert.equal(result, null);
 	});
 
@@ -252,7 +286,7 @@ describe("updatePlanFrontmatter", () => {
 		const content = "# My Plan\n\nDetailed content here.";
 		savePlan("test-plan", fm, content, tempDir);
 
-		updatePlanFrontmatter("test-plan", { status: "ready" }, tempDir);
+		updatePlanFrontmatter("test-plan", { status: "planned" }, tempDir);
 
 		const loaded = loadPlan("test-plan", tempDir);
 		assert.ok(loaded);

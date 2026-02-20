@@ -29,11 +29,20 @@ type LegacyPlanStatus =
 	| "complete"
 	| "abandoned";
 
+/** The set of valid current statuses */
+const VALID_STATUSES = new Set<PlanStatus>(["idea", "draft", "planned", "building", "complete", "abandoned"]);
+
 /**
  * Migrate legacy status values to current statuses.
  * Preserves backward compatibility with existing plans.
+ * Returns the status as-is if it's already a valid simplified status.
  */
 export function migrateStatus(status: string): PlanStatus {
+	// If already a valid current status, return as-is
+	if (VALID_STATUSES.has(status as PlanStatus)) {
+		return status as PlanStatus;
+	}
+
 	const migrations: Record<LegacyPlanStatus, PlanStatus> = {
 		idea: "idea",
 		draft: "draft",
