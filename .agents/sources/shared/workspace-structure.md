@@ -30,6 +30,7 @@ arete/                 # Build workspace root
 │   └── sources/       # AGENTS.md source files
 ├── dev/               # Development tooling
 │   ├── backlog/       # Future work (features/, improvements/)
+│   ├── catalog/       # Machine-friendly capability inventory (tools/extensions/services/packages)
 │   ├── plans/         # Active plan drafts and planning artifacts
 │   ├── archive/prds/  # Archived legacy PRD documents
 │   └── autonomous/    # Autonomous execution templates

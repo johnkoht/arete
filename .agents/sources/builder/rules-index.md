@@ -29,3 +29,4 @@ These rules are automatically applied when working in the Areté build context. 
 - Build skills: `.agents/sources/builder/skills-index.md`
 - Build conventions: `.agents/sources/builder/conventions.md`
 - Build memory: `.agents/sources/builder/memory.md`
+- Capability registry: `dev/catalog/capabilities.json` (machine-friendly inventory for tooling assumptions)

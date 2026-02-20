@@ -1,148 +1,68 @@
 {
-  "name": "onboarding-improvements-phase3",
-  "branchName": "feature/onboarding-improvements",
-  "goal": "Implement Phase 3 enhancements for Stream B + C: improve context extraction quality, add configurable people-intelligence policy tuning, and ship optional enrichment with safe feature toggles.",
+  "name": "persona-council",
+  "branchName": "feature/persona-council",
+  "goal": "Introduce a Persona Council to the Arete BUILD MODE planning system — three behavioral archetypes (Harvester, Architect, Preparer) representing GUIDE MODE end users. Wired into the PM agent and AGENTS.md so the council fires automatically during feature planning as a voice-of-the-customer check.",
   "userStories": [
     {
-      "id": "p3-b1-extraction-quality-baseline",
-      "title": "Establish extraction quality baseline and acceptance corpus",
-      "description": "Create a deterministic baseline corpus and scoring harness for Rapid Context Dump outputs to measure extraction quality before tuning.",
+      "id": "persona-council-docs",
+      "title": "Create Persona Council documentation",
+      "description": "Create dev/personas/PERSONA_COUNCIL.md with Harvester, Architect, and Preparer archetypes. Each persona must include: core job (one line), behavioral description, what they care about, what they don't care about, friction threshold, representative voice (2-3 direct quotes), and an Evidence section labeled as hypothesis-only. Create dev/personas/COUNCIL_INSTRUCTIONS.md with trigger conditions, decision policy as a flat list (no tables), voice calibration guidance, and evidence grounding policy. No markdown tables in either file — prose and labeled lists only. Content is for agent consumption.",
       "acceptanceCriteria": [
-        "Baseline corpus fixtures exist for website, folder, and pasted text paths",
-        "Quality checks cover draft completeness and evidence traceability",
-        "A repeatable score/report format is documented in code comments or tests",
-        "No behavior regression in existing Phase 1 draft workflow"
+        "dev/personas/PERSONA_COUNCIL.md exists with Harvester, Architect, and Preparer archetypes",
+        "Each persona has: core job, behavior, cares/doesn't-care, friction threshold, representative voice (2-3 quotes), Evidence section",
+        "Each Evidence section contains: 'No evidence collected yet. This persona is hypothesis-based. Treat council output as directional, not validated.'",
+        "An Evidence Policy note exists at the top of PERSONA_COUNCIL.md: unsupported persona claims are assumptions, not facts",
+        "dev/personas/COUNCIL_INSTRUCTIONS.md exists with trigger conditions, decision policy (flat list, no table), voice calibration, evidence grounding guidance",
+        "Neither file uses markdown tables",
+        "Decision policy uses flat list format (e.g. 'all-three-value: required, on by default')"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1
     },
     {
-      "id": "p3-b2-extraction-tuning-improvements",
-      "title": "Improve extraction and draft synthesis quality",
-      "description": "Tune extraction heuristics and draft synthesis so draft context artifacts are higher signal with clearer source references.",
+      "id": "pm-agent-persona-council",
+      "title": "Update PM agent with Persona Council section",
+      "description": "Add a Persona Council section to .pi/agents/product-manager.md. The section must be <= 15 lines, use 'offer a council check' framing (not 'always run'), trigger on user workflow steps / input prompts / configuration decisions, and explicitly exclude internal architecture / build tooling / bug fixes. Reference dev/personas/COUNCIL_INSTRUCTIONS.md for the decision policy — do not reproduce it inline. Place the section after 'Product Pre-Mortem' and before 'PRD Creation' in the file.",
       "acceptanceCriteria": [
-        "Extraction logic improves draft quality on baseline corpus",
-        "Draft artifacts preserve explicit source/evidence references",
-        "Fallback behavior remains non-blocking when one source is low quality",
-        "Unit tests validate happy path + edge cases for tuned extraction"
+        ".pi/agents/product-manager.md contains a '## Persona Council' section",
+        "Section is 15 lines or fewer",
+        "Uses 'offer a council check' framing (not 'always' or 'must always')",
+        "Trigger condition is scoped to user-facing workflow, input prompts, or configuration decisions",
+        "Exclusions are explicit: internal arch, build tooling, bug fixes with no UX change",
+        "References dev/personas/COUNCIL_INSTRUCTIONS.md for decision policy",
+        "Does not duplicate the decision policy inline",
+        "Total file length remains under 145 lines",
+        "Existing PM agent sections are unchanged"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "dependencies": [
-        "p3-b1-extraction-quality-baseline"
-      ]
+      "dependencies": ["persona-council-docs"]
     },
     {
-      "id": "p3-c1-policy-config-surface",
-      "title": "Add policy configuration for people-intelligence thresholds",
-      "description": "Introduce configurable policy knobs for confidence threshold and routing behavior while preserving safe defaults.",
+      "id": "agents-md-personas",
+      "title": "Add Personas source file and rebuild AGENTS.md",
+      "description": "Create .agents/sources/builder/personas.md with a compressed [Personas] block in pipe-delimited AGENTS.md format. Include: what the council is, persona file locations (dev/personas/PERSONA_COUNCIL.md and dev/personas/COUNCIL_INSTRUCTIONS.md), invoke triggers (user-facing workflow/input/configuration), and exclusions (internal arch/build tooling/bug fixes). If scripts/build-agents.ts needs updating to include the new source file in the BUILD target, make that change. Run npm run build:agents:dev to rebuild root AGENTS.md.",
       "acceptanceCriteria": [
-        "Policy config supports confidence threshold tuning with defaults",
-        "Unknown queue behavior remains default-safe when config is missing",
-        "Policy loading includes graceful fallback on invalid values",
-        "Unit tests validate default, custom, and invalid-config scenarios"
+        ".agents/sources/builder/personas.md exists with a [Personas] block in pipe-delimited AGENTS.md format",
+        "Block follows the compression style of other AGENTS.md source sections",
+        "npm run build:agents:dev runs without errors",
+        "grep -i 'persona' AGENTS.md returns a result showing the council is referenced",
+        "The [Personas] block references both dev/personas/PERSONA_COUNCIL.md and dev/personas/COUNCIL_INSTRUCTIONS.md",
+        "Existing AGENTS.md content is unchanged (additive only)"
       ],
       "status": "complete",
       "passes": true,
       "attemptCount": 1,
-      "dependencies": [
-        "p3-b2-extraction-tuning-improvements"
-      ]
-    },
-    {
-      "id": "p3-c2-enrichment-optional-mode",
-      "title": "Implement optional enrichment pathway",
-      "description": "Add optional enrichment inputs for better suggestions without making enrichment a release blocker.",
-      "acceptanceCriteria": [
-        "Enrichment path is opt-in and disabled by default",
-        "System degrades gracefully when enrichment is unavailable",
-        "Suggestion payload clearly indicates when enrichment was applied",
-        "No forced coupling between enrichment and core classification flow"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c1-policy-config-surface"
-      ]
-    },
-    {
-      "id": "p3-c3-feature-toggle-safety",
-      "title": "Add feature toggles for Phase 3 enhancements",
-      "description": "Guard Phase 3 extraction/enrichment behavior behind explicit toggles so Phase 1/2 behavior remains stable.",
-      "acceptanceCriteria": [
-        "Feature toggles exist for extraction tuning and enrichment mode",
-        "Default toggle values preserve existing Phase 1/2 behavior",
-        "Toggles can be enabled independently without cross-stream breakage",
-        "Regression tests verify old behavior when toggles are off"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c2-enrichment-optional-mode"
-      ]
-    },
-    {
-      "id": "p3-c4-metrics-trend-persistence",
-      "title": "Persist KPI snapshots for trend review",
-      "description": "Persist People Intelligence and Context Dump KPI snapshots so phase-gate reviews can evaluate week-over-week trends.",
-      "acceptanceCriteria": [
-        "Snapshot format stores timestamped KPI records",
-        "Misclassification, triage burden, interruption, and extraction quality metrics are persisted",
-        "Read path supports recent-trend retrieval for review",
-        "Tests validate snapshot write/read and malformed data handling"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c3-feature-toggle-safety"
-      ]
-    },
-    {
-      "id": "p3-integration-regression-suite",
-      "title": "Expand integration tests for Phase 2+3 flows",
-      "description": "Add integration tests that validate digest mode, unknown queue routing, contract fallback, and toggle-off backward compatibility for enhanced flows.",
-      "acceptanceCriteria": [
-        "New integration coverage exists for people intelligence digest end-to-end",
-        "Integration coverage verifies unknown queue + internal classification with hints",
-        "Integration coverage verifies graceful degradation without hints",
-        "Integration coverage verifies backward compatibility when Phase 3 toggles are disabled"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-c4-metrics-trend-persistence"
-      ]
-    },
-    {
-      "id": "phase3-validation",
-      "title": "Phase 3 full validation and quality gates",
-      "description": "Run full validation for Phase 3 scope, including typecheck, full test suite, and all integration tests.",
-      "acceptanceCriteria": [
-        "npm run typecheck passes",
-        "npm test passes",
-        "All integration tests pass across core + cli integration directories",
-        "Phase 3 enhancements do not break independent ship constraints from prior phases"
-      ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": [
-        "p3-integration-regression-suite"
-      ]
+      "dependencies": ["persona-council-docs"]
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-18T12:10:00.000Z",
-    "totalTasks": 8,
-    "completedTasks": 8,
-    "failedTasks": 0,
-    "updatedAt": "2026-02-18T19:49:49.688Z",
-    "completedAt": "2026-02-18T19:49:49.689Z"
+    "createdAt": "2026-02-19T04:30:00.000Z",
+    "completedAt": "2026-02-19T05:15:00.000Z",
+    "totalTasks": 3,
+    "completedTasks": 3,
+    "failedTasks": 0
   }
 }

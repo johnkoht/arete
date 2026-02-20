@@ -1,7 +1,7 @@
 /**
  * Command handlers for plan mode (simplified).
  *
- * Commands: /plan [new|list|open|save|status|delete], /approve, /review, /pre-mortem, /prd, /build
+ * Commands: /plan [new|list|open|save|rename|status|delete], /approve, /review, /pre-mortem, /prd, /build
  *
  * Plan mode is a planning-only tool. No enforced workflow or mandatory gates.
  * Agent adapts behavior based on work type and plan size.
