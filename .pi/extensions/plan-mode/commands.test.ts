@@ -9,6 +9,7 @@ import {
 	hasUnsavedPlanChanges,
 	getSuggestedNextActions,
 	handlePlan,
+	handleBacklog,
 	handlePlanSave,
 	handlePlanRename,
 	type PlanModeState,
@@ -406,5 +407,52 @@ describe("handlePlan — /plan new", () => {
 		assert.equal(state.preMortemRun, false, "Should reset pre-mortem flag");
 		assert.equal(state.reviewRun, false, "Should reset review flag");
 		assert.equal(state.prdConverted, false, "Should reset PRD flag");
+	});
+});
+
+describe("handleBacklog — /plan backlog new alias", () => {
+	const TEST_BACKLOG_DIR = join(process.cwd(), "dev/work/backlog");
+
+	afterEach(() => {
+		// Clean up any test backlog items
+		const testFile = join(TEST_BACKLOG_DIR, "test-backlog-item.md");
+		if (existsSync(testFile)) {
+			rmSync(testFile);
+		}
+	});
+
+	it("'new' works as alias for 'add' and creates backlog item", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handleBacklog("new test backlog item", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("test-backlog-item"), "Should notify with slugified name");
+		assert.ok(notifyMessage.includes("📝"), "Should show creation emoji");
+		assert.ok(existsSync(join(TEST_BACKLOG_DIR, "test-backlog-item.md")), "Should create backlog file");
+	});
+
+	it("'new' without title shows usage warning", async () => {
+		let notifyMessage = "";
+		let notifyLevel = "";
+		const ctx = createTestContext({
+			notify: (msg, level) => {
+				notifyMessage = msg;
+				notifyLevel = level ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handleBacklog("new", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("Usage"), "Should show usage hint");
+		assert.equal(notifyLevel, "warning", "Should be a warning");
 	});
 });

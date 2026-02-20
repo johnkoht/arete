@@ -659,6 +659,7 @@ export async function handleBacklog(
 			await handleBacklogList(ctx, pi, state);
 			break;
 		case "add":
+		case "new":
 			await handleBacklogAdd(rest, ctx);
 			break;
 		case "edit":
