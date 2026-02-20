@@ -31,11 +31,10 @@ import {
 	classifyPlanSize,
 	extractTodoItems,
 	PLAN_MODE_TOOLS,
+	getNormalModeTools,
 	type TodoItem,
 } from "./utils.js";
 import { resolveExecutionProgress } from "./execution-progress.js";
-
-const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 
 // ────────────────────────────────────────────────────────────
 // Shared types for command handlers
@@ -46,6 +45,7 @@ export interface PlanModeState {
 	planModeEnabled: boolean;
 	executionMode: boolean;
 	currentSlug: string | null;
+	planTitle: string | null;
 	planSize: PlanSize | null;
 	planText: string;
 	todoItems: TodoItem[];
@@ -60,6 +60,7 @@ export function createDefaultState(): PlanModeState {
 		planModeEnabled: false,
 		executionMode: false,
 		currentSlug: null,
+		planTitle: null,
 		planSize: null,
 		planText: "",
 		todoItems: [],
@@ -278,6 +279,7 @@ async function handlePlanNew(
 
 	// Reset state for new plan
 	state.currentSlug = null;
+	state.planTitle = null;
 	state.planText = "";
 	state.planSize = null;
 	state.todoItems = [];
@@ -285,20 +287,59 @@ async function handlePlanNew(
 	state.reviewRun = false;
 	state.prdConverted = false;
 
-	// Pre-set slug from name argument if provided
-	const trimmedName = nameArg.trim();
-	if (trimmedName) {
-		state.currentSlug = slugify(trimmedName);
-	}
-
 	if (!state.planModeEnabled) {
 		togglePlanMode();
 	}
 
-	if (state.currentSlug) {
-		ctx.ui.notify(`📋 Plan mode enabled for '${state.currentSlug}'. Describe your idea and I'll help shape it into a plan.`, "info");
+	const trimmedName = nameArg.trim();
+	let nameToUse: string | null = null;
+
+	if (trimmedName) {
+		// Path 1: Name provided as argument
+		nameToUse = trimmedName;
 	} else {
-		ctx.ui.notify("📋 Plan mode enabled. Describe your idea and I'll help shape it into a plan.", "info");
+		// Path 2/3: Prompt for name via editor
+		const editorResult = await ctx.ui.editor("Name this plan:", "");
+		if (editorResult?.trim()) {
+			nameToUse = editorResult.trim();
+		}
+	}
+
+	if (nameToUse) {
+		// Auto-save the plan stub to disk
+		const slug = slugify(nameToUse);
+		const title = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+		const now = new Date().toISOString();
+		const content = `# ${title}\n`;
+		const frontmatter: PlanFrontmatter = {
+			title,
+			slug,
+			status: "idea",
+			size: "unknown",
+			tags: [],
+			created: now,
+			updated: now,
+			completed: null,
+			execution: null,
+			has_review: false,
+			has_pre_mortem: false,
+			has_prd: false,
+			steps: 0,
+		};
+
+		savePlan(slug, frontmatter, content);
+
+		state.currentSlug = slug;
+		state.planTitle = title;
+		state.planText = content;
+
+		ctx.ui.notify(`📋 Plan '${slug}' created and saved. Describe your idea and I'll help shape it.`, "info");
+	} else {
+		// Path 3: Editor cancelled — no save, notify user
+		state.planTitle = null;
+		state.planText = "";
+
+		ctx.ui.notify("📋 Plan mode enabled. Plan not saved — use /plan save <name> to persist.", "info");
 	}
 }
 
@@ -353,6 +394,7 @@ async function handlePlanOpen(
 
 	// Restore state from plan
 	state.currentSlug = slug;
+	state.planTitle = plan.frontmatter.title;
 	state.planText = plan.content;
 	state.planSize = plan.frontmatter.size;
 	state.preMortemRun = plan.frontmatter.has_pre_mortem;
@@ -1115,7 +1157,7 @@ export async function handleBuild(
 
 	state.planModeEnabled = false;
 	state.executionMode = true;
-	pi.setActiveTools(NORMAL_MODE_TOOLS);
+	pi.setActiveTools(getNormalModeTools());
 
 	ctx.ui.notify("⚡ Build started!", "info");
 
