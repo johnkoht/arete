@@ -218,7 +218,7 @@ export function getSuggestedNextActions(
 	if (status === "draft") {
 		actions.push("/approve");
 	}
-	if (status === "ready") {
+	if (status === "planned") {
 		actions.push("/build");
 	}
 	if (status === "building") {
@@ -282,10 +282,12 @@ async function handlePlanList(ctx: CommandContext, pi: CommandPi, state: PlanMod
 	}
 
 	const statusEmoji: Record<PlanStatus, string> = {
+		idea: "💡",
 		draft: "📝",
-		ready: "✅",
+		planned: "✅",
 		building: "⚡",
 		complete: "🎉",
+		abandoned: "🚫",
 	};
 
 	const options = plans.map((p) => {
@@ -409,13 +411,14 @@ export async function handlePlanSave(
 				slug,
 				status: "draft",
 				size: state.planSize ?? "small",
+				tags: [],
 				created: now,
 				updated: now,
 				completed: null,
+				execution: null,
 				has_review: state.reviewRun,
 				has_pre_mortem: state.preMortemRun,
 				has_prd: state.prdConverted,
-				backlog_ref: null,
 				steps: state.todoItems.length,
 			};
 
@@ -562,7 +565,7 @@ function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
 		lines.push(`\nRecommendations:\n${recommendations.map((r) => `  • ${r}`).join("\n")}`);
 	}
 
-	if (fm.status === "ready") {
+	if (fm.status === "planned") {
 		lines.push("\n✅ Ready to build. Run /build to start execution.");
 	} else if (fm.status === "draft") {
 		lines.push("\n📝 Draft. Run /approve when ready to build.");
@@ -619,7 +622,7 @@ export async function handleApprove(
 		return;
 	}
 
-	if (plan.frontmatter.status === "ready") {
+	if (plan.frontmatter.status === "planned") {
 		ctx.ui.notify("Plan is already ready. Run /build to start execution.", "info");
 		return;
 	}
@@ -651,7 +654,7 @@ export async function handleApprove(
 		if (!proceed) return;
 	}
 
-	updatePlanFrontmatter(state.currentSlug, { status: "ready" });
+	updatePlanFrontmatter(state.currentSlug, { status: "planned" });
 
 	ctx.ui.notify("✅ Plan marked ready! Run /build to start execution.", "info");
 
@@ -817,7 +820,7 @@ export async function handleBuild(
 			"This plan is still a draft. Mark it ready and start building?",
 		);
 		if (!proceed) return;
-		updatePlanFrontmatter(state.currentSlug, { status: "ready" });
+		updatePlanFrontmatter(state.currentSlug, { status: "planned" });
 	}
 
 	if (plan.frontmatter.status === "complete") {

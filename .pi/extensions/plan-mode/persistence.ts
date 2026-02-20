@@ -10,8 +10,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Valid plan lifecycle statuses (simplified) */
-export type PlanStatus = "draft" | "ready" | "building" | "complete";
+/** Valid plan lifecycle statuses */
+export type PlanStatus = "idea" | "draft" | "planned" | "building" | "complete" | "abandoned";
 
 /** Legacy status values for migration */
 type LegacyPlanStatus =
@@ -19,23 +19,33 @@ type LegacyPlanStatus =
 	| "planned"
 	| "reviewed"
 	| "approved"
+	| "ready"
 	| "in-progress"
 	| "completed"
 	| "blocked"
-	| "on-hold";
+	| "on-hold"
+	| "idea"
+	| "building"
+	| "complete"
+	| "abandoned";
 
 /**
- * Migrate legacy status values to simplified statuses.
+ * Migrate legacy status values to current statuses.
  * Preserves backward compatibility with existing plans.
  */
-function migrateStatus(status: string): PlanStatus {
+export function migrateStatus(status: string): PlanStatus {
 	const migrations: Record<LegacyPlanStatus, PlanStatus> = {
+		idea: "idea",
 		draft: "draft",
-		planned: "draft",
-		reviewed: "draft",
-		approved: "ready",
+		planned: "planned",
+		reviewed: "planned",
+		approved: "planned",
+		ready: "planned",
 		"in-progress": "building",
+		building: "building",
 		completed: "complete",
+		complete: "complete",
+		abandoned: "abandoned",
 		blocked: "draft",
 		"on-hold": "draft",
 	};
@@ -45,19 +55,20 @@ function migrateStatus(status: string): PlanStatus {
 /** Plan size classification */
 export type PlanSize = "tiny" | "small" | "medium" | "large";
 
-/** YAML frontmatter for a plan.md file (simplified) */
+/** YAML frontmatter for a plan.md file */
 export interface PlanFrontmatter {
 	title: string;
 	slug: string;
 	status: PlanStatus;
-	size: PlanSize;
+	size: PlanSize | "unknown";
+	tags: string[];
 	created: string;
 	updated: string;
 	completed: string | null;
+	execution: string | null;
 	has_review: boolean;
 	has_pre_mortem: boolean;
 	has_prd: boolean;
-	backlog_ref: string | null;
 	steps: number;
 }
 
@@ -98,6 +109,8 @@ export function serializeFrontmatter(fm: PlanFrontmatter): string {
 	for (const [key, value] of Object.entries(fm)) {
 		if (value === null) {
 			lines.push(`${key}: null`);
+		} else if (Array.isArray(value)) {
+			lines.push(`${key}: [${value.join(", ")}]`);
 		} else if (typeof value === "boolean") {
 			lines.push(`${key}: ${value}`);
 		} else if (typeof value === "number") {
@@ -114,10 +127,10 @@ export function serializeFrontmatter(fm: PlanFrontmatter): string {
 /**
  * Parse a YAML frontmatter string into a PlanFrontmatter object.
  * Applies migrations for backward compatibility with legacy plans.
- * Expects flat key-value pairs only.
+ * Supports flat key-value pairs and bracket-delimited arrays.
  */
 export function parseFrontmatter(raw: string): PlanFrontmatter {
-	const fm: Record<string, string | number | boolean | null> = {};
+	const fm: Record<string, string | number | boolean | string[] | null> = {};
 
 	for (const line of raw.split("\n")) {
 		const trimmed = line.trim();
@@ -130,7 +143,7 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
 		const rawValue = trimmed.slice(colonIndex + 1).trim();
 
 		// Skip removed legacy fields
-		if (key === "previous_status" || key === "blocked_reason") continue;
+		if (key === "previous_status" || key === "blocked_reason" || key === "backlog_ref") continue;
 
 		if (rawValue === "null") {
 			fm[key] = null;
@@ -138,6 +151,10 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
 			fm[key] = true;
 		} else if (rawValue === "false") {
 			fm[key] = false;
+		} else if (/^\[.*\]$/.test(rawValue)) {
+			// Parse bracket-delimited arrays: [a, b, c] → ["a", "b", "c"]
+			const inner = rawValue.slice(1, -1).trim();
+			fm[key] = inner.length === 0 ? [] : inner.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 		} else if (/^\d+$/.test(rawValue)) {
 			fm[key] = Number(rawValue);
 		} else {
@@ -145,9 +162,14 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
 		}
 	}
 
-	// Migrate legacy status values to simplified statuses
+	// Migrate legacy status values
 	if (fm.status && typeof fm.status === "string") {
 		fm.status = migrateStatus(fm.status);
+	}
+
+	// Ensure tags defaults to empty array
+	if (!fm.tags || !Array.isArray(fm.tags)) {
+		fm.tags = [];
 	}
 
 	return fm as unknown as PlanFrontmatter;
@@ -157,7 +179,7 @@ export function parseFrontmatter(raw: string): PlanFrontmatter {
  * Split a plan.md file into frontmatter string and content.
  * Returns null if the file doesn't have valid frontmatter delimiters.
  */
-function splitFrontmatterAndContent(fileContent: string): { frontmatterRaw: string; content: string } | null {
+export function splitFrontmatterAndContent(fileContent: string): { frontmatterRaw: string; content: string } | null {
 	if (!fileContent.startsWith("---")) return null;
 
 	const secondDelimiter = fileContent.indexOf("\n---", 3);
@@ -167,6 +189,45 @@ function splitFrontmatterAndContent(fileContent: string): { frontmatterRaw: stri
 	const content = fileContent.slice(secondDelimiter + 4).replace(/^\n+/, ""); // trim leading newlines after ---
 
 	return { frontmatterRaw, content };
+}
+
+/**
+ * Parse frontmatter from a file path. Handles files with or without frontmatter.
+ * For files without `---` delimiters, returns sensible defaults derived from the filename.
+ */
+export function parseFrontmatterFromFile(filePath: string): { frontmatter: PlanFrontmatter; content: string } {
+	const raw = readFileSync(filePath, "utf-8");
+	const parts = splitFrontmatterAndContent(raw);
+
+	if (parts) {
+		const frontmatter = parseFrontmatter(parts.frontmatterRaw);
+		return { frontmatter, content: parts.content };
+	}
+
+	// No frontmatter — derive defaults from filename
+	const basename = filePath.replace(/.*[\\/]/, "").replace(/\.md$/, "");
+	const title = basename
+		.replace(/-/g, " ")
+		.replace(/\b\w/g, (c) => c.toUpperCase());
+
+	return {
+		frontmatter: {
+			title,
+			slug: basename,
+			status: "idea",
+			size: "unknown",
+			tags: [],
+			created: "",
+			updated: "",
+			completed: null,
+			execution: null,
+			has_review: false,
+			has_pre_mortem: false,
+			has_prd: false,
+			steps: 0,
+		},
+		content: raw,
+	};
 }
 
 /**

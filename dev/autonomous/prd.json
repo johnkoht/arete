@@ -1,68 +1,137 @@
 {
-  "name": "persona-council",
-  "branchName": "feature/persona-council",
-  "goal": "Introduce a Persona Council to the Arete BUILD MODE planning system — three behavioral archetypes (Harvester, Architect, Preparer) representing GUIDE MODE end users. Wired into the PM agent and AGENTS.md so the council fires automatically during feature planning as a voice-of-the-customer check.",
+  "name": "work-directory-cleanup",
+  "branchName": "feature/work-directory-cleanup",
+  "goal": "Consolidate work items from 4 scattered directories (dev/plans/, dev/prds/, dev/backlog/, dev/archive/) into unified dev/work/ structure with backlog/, plans/, archive/ subdirectories, co-located PRDs, unified frontmatter schema, and lifecycle commands.",
   "userStories": [
     {
-      "id": "persona-council-docs",
-      "title": "Create Persona Council documentation",
-      "description": "Create dev/personas/PERSONA_COUNCIL.md with Harvester, Architect, and Preparer archetypes. Each persona must include: core job (one line), behavioral description, what they care about, what they don't care about, friction threshold, representative voice (2-3 direct quotes), and an Evidence section labeled as hypothesis-only. Create dev/personas/COUNCIL_INSTRUCTIONS.md with trigger conditions, decision policy as a flat list (no tables), voice calibration guidance, and evidence grounding policy. No markdown tables in either file — prose and labeled lists only. Content is for agent consumption.",
+      "id": "task-1",
+      "title": "Unified Frontmatter Schema",
+      "description": "Update PlanStatus type, PlanFrontmatter interface, migrateStatus(), serializeFrontmatter(), and parseFrontmatter() in persistence.ts. Add tags (array) and execution fields, remove backlog_ref. Add parseFrontmatterFromFile() for graceful handling of files without frontmatter. Status type: idea | draft | planned | building | complete | abandoned.",
       "acceptanceCriteria": [
-        "dev/personas/PERSONA_COUNCIL.md exists with Harvester, Architect, and Preparer archetypes",
-        "Each persona has: core job, behavior, cares/doesn't-care, friction threshold, representative voice (2-3 quotes), Evidence section",
-        "Each Evidence section contains: 'No evidence collected yet. This persona is hypothesis-based. Treat council output as directional, not validated.'",
-        "An Evidence Policy note exists at the top of PERSONA_COUNCIL.md: unsupported persona claims are assumptions, not facts",
-        "dev/personas/COUNCIL_INSTRUCTIONS.md exists with trigger conditions, decision policy (flat list, no table), voice calibration, evidence grounding guidance",
-        "Neither file uses markdown tables",
-        "Decision policy uses flat list format (e.g. 'all-three-value: required, on by default')"
+        "PlanStatus type includes all 6 statuses: idea, draft, planned, building, complete, abandoned",
+        "PlanFrontmatter has tags: string[] and execution: string | null; no backlog_ref",
+        "migrateStatus('ready') returns 'planned'; migrateStatus('idea') returns 'idea'",
+        "serializeFrontmatter() outputs tags: [feature, integration] for array values",
+        "parseFrontmatter() parses tags: [feature, integration] into ['feature', 'integration']",
+        "parseFrontmatter() parses tags: [] into []",
+        "parseFrontmatterFromFile() returns sensible defaults for files without --- delimiters",
+        "npm run typecheck passes",
+        "Existing tests updated to compile with new types"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
-      "id": "pm-agent-persona-council",
-      "title": "Update PM agent with Persona Council section",
-      "description": "Add a Persona Council section to .pi/agents/product-manager.md. The section must be <= 15 lines, use 'offer a council check' framing (not 'always run'), trigger on user workflow steps / input prompts / configuration decisions, and explicitly exclude internal architecture / build tooling / bug fixes. Reference dev/personas/COUNCIL_INSTRUCTIONS.md for the decision policy — do not reproduce it inline. Place the section after 'Product Pre-Mortem' and before 'PRD Creation' in the file.",
+      "id": "task-2",
+      "title": "Audit and Migrate Existing Items",
+      "description": "Move all work items from old directories to dev/work/. Runs BEFORE code path changes. Triage rules: Archive (complete/executed/stale 30+ days), Active (building/ready/work-directory-cleanup), Backlog (everything else). Present triage table to builder for approval. Merge PRDs into plan folders. Flatten backlog subcategories with tags. Add frontmatter to items that lack it.",
       "acceptanceCriteria": [
-        ".pi/agents/product-manager.md contains a '## Persona Council' section",
-        "Section is 15 lines or fewer",
-        "Uses 'offer a council check' framing (not 'always' or 'must always')",
-        "Trigger condition is scoped to user-facing workflow, input prompts, or configuration decisions",
-        "Exclusions are explicit: internal arch, build tooling, bug fixes with no UX change",
-        "References dev/personas/COUNCIL_INSTRUCTIONS.md for decision policy",
-        "Does not duplicate the decision policy inline",
-        "Total file length remains under 145 lines",
-        "Existing PM agent sections are unchanged"
+        "Triage table presented and approved by builder before any moves",
+        "dev/plans/, dev/prds/, dev/backlog/, dev/archive/ no longer exist",
+        "All items in dev/work/ with correct subdirectory based on triage",
+        "PRDs from dev/prds/ merged into their plan folders",
+        "All migrated backlog items have frontmatter (title, slug, status, tags)",
+        "No data loss — every item accounted for"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": ["persona-council-docs"]
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
-      "id": "agents-md-personas",
-      "title": "Add Personas source file and rebuild AGENTS.md",
-      "description": "Create .agents/sources/builder/personas.md with a compressed [Personas] block in pipe-delimited AGENTS.md format. Include: what the council is, persona file locations (dev/personas/PERSONA_COUNCIL.md and dev/personas/COUNCIL_INSTRUCTIONS.md), invoke triggers (user-facing workflow/input/configuration), and exclusions (internal arch/build tooling/bug fixes). If scripts/build-agents.ts needs updating to include the new source file in the BUILD target, make that change. Run npm run build:agents:dev to rebuild root AGENTS.md.",
+      "id": "task-3",
+      "title": "Update Persistence Layer Paths",
+      "description": "Update plan-mode extension code to use dev/work/plans/. Three sub-parts: (3a) Change DEFAULT_PLANS_DIR, add BACKLOG/ARCHIVE dirs, update 6 notification strings. (3b) Add listBacklog(), listArchive(), moveItem(), promoteBacklogItem(), shelveToBacklog(), archiveItem(), createBacklogItem() functions. (3c) Update /prd and /build handlers to use plan folder for PRD, simplify resolvePrdFeatureSlug().",
       "acceptanceCriteria": [
-        ".agents/sources/builder/personas.md exists with a [Personas] block in pipe-delimited AGENTS.md format",
-        "Block follows the compression style of other AGENTS.md source sections",
-        "npm run build:agents:dev runs without errors",
-        "grep -i 'persona' AGENTS.md returns a result showing the council is referenced",
-        "The [Personas] block references both dev/personas/PERSONA_COUNCIL.md and dev/personas/COUNCIL_INSTRUCTIONS.md",
-        "Existing AGENTS.md content is unchanged (additive only)"
+        "DEFAULT_PLANS_DIR is 'dev/work/plans'",
+        "listBacklog() returns items from dev/work/backlog/ handling mixed files/folders and missing frontmatter",
+        "listArchive() returns items from dev/work/archive/",
+        "promoteBacklogItem() converts flat file to folder when promoting",
+        "shelveToBacklog() preserves folder structure",
+        "createBacklogItem('Slack integration') creates dev/work/backlog/slack-integration.md with proper frontmatter",
+        "/prd creates PRD at dev/work/plans/{slug}/prd.md",
+        "/build references PRD in plan folder, not dev/prds/",
+        "All 6 notification strings updated to reference dev/work/plans/",
+        "npm run typecheck passes"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "dependencies": ["persona-council-docs"]
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Update Skills and Documentation",
+      "description": "Update 11 files with new path references: plan-to-prd, execute-prd, prd-post-mortem, prd-to-json SKILL.md files; workspace-structure.md, memory.md, conventions.md, README.md sources; APPEND_SYSTEM.md; dev.mdc; collaboration.md. Do NOT update memory/entries/ (historical). Rebuild AGENTS.md. Run validation grep.",
+      "acceptanceCriteria": [
+        "All 11 files updated with correct new paths",
+        "execute-prd/SKILL.md references dev/work/backlog/ for refactor backlog items",
+        "plan-to-prd/SKILL.md EXECUTE.md template uses dev/work/plans/{slug}/prd.md",
+        "AGENTS.md rebuilt successfully via npm run build:agents:dev",
+        "Validation grep returns zero hits outside memory/entries/ and dev/work/archive/",
+        "memory/entries/ files untouched"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Add Backlog Commands",
+      "description": "Add /plan backlog and /plan shelve commands. handleBacklog() with sub-routing: no args/list → listBacklog() with select UI; add <title> → createBacklogItem(); edit <slug> → read into context; promote <slug> → promoteBacklogItem() + load into state. handleShelve() → confirm, shelveToBacklog(), clear state. Update unknown subcommand message.",
+      "acceptanceCriteria": [
+        "/plan backlog shows list of backlog items (not shelve action)",
+        "/plan backlog list shows list with status emoji",
+        "/plan backlog add 'Slack integration' creates dev/work/backlog/slack-integration.md",
+        "/plan backlog edit some-item reads content into chat context",
+        "/plan backlog promote some-item moves to plans/ and loads as active plan",
+        "/plan shelve moves current plan to backlog/ with confirmation",
+        "/plan shelve with no active plan shows warning",
+        "Promoting a flat file creates a folder with plan.md",
+        "Shelving preserves folder structure"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Add Archive Commands",
+      "description": "Add /plan archive commands. handleArchive() with sub-routing: no args → archive current plan with complete/abandoned choice via select UI; list → listArchive() with select UI; <slug> → archive specific plan with confirmation.",
+      "acceptanceCriteria": [
+        "/plan archive with active plan shows complete/abandoned choice then archives",
+        "/plan archive with no active plan shows warning",
+        "/plan archive list shows archived items",
+        "/plan archive some-plan archives a specific plan by slug",
+        "Archived items have status updated and completed date set",
+        "Plan state cleared after archiving current plan"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Update Tests",
+      "description": "Update existing tests for new paths. Add comprehensive tests: frontmatter migration, tags parsing (empty/single/multiple/missing), listBacklog() with mixed formats and slug collision, promoteBacklogItem() flat→folder, shelveToBacklog() preservation, archiveItem(), moveItem(), createBacklogItem(). Update utils.test.ts path references.",
+      "acceptanceCriteria": [
+        "npm run typecheck passes",
+        "npm test passes (full suite)",
+        "All new persistence functions have test coverage",
+        "Tags parsing edge cases covered: empty [], single [feature], multiple [feature, integration, refactor], missing field",
+        "listBacklog() tested with: flat files only, folders only, mixed, no-frontmatter files, slug collision",
+        "promoteBacklogItem() tested: flat file → folder conversion",
+        "shelveToBacklog() tested: folder preservation",
+        "moveItem() tested: flat file and folder cases"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     }
   ],
   "metadata": {
-    "createdAt": "2026-02-19T04:30:00.000Z",
-    "completedAt": "2026-02-19T05:15:00.000Z",
-    "totalTasks": 3,
-    "completedTasks": 3,
+    "createdAt": "2026-02-19T16:20:00Z",
+    "totalTasks": 7,
+    "completedTasks": 0,
     "failedTasks": 0
   }
 }

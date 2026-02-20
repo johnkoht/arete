@@ -14,6 +14,8 @@ import {
 	deletePlan,
 	serializeFrontmatter,
 	parseFrontmatter,
+	parseFrontmatterFromFile,
+	migrateStatus,
 	type PlanFrontmatter,
 } from "./persistence.js";
 
@@ -23,13 +25,14 @@ function makeFrontmatter(overrides: Partial<PlanFrontmatter> = {}): PlanFrontmat
 		slug: "test-plan",
 		status: "draft",
 		size: "small",
+		tags: [],
 		created: "2026-02-16T15:00:00.000Z",
 		updated: "2026-02-16T15:00:00.000Z",
 		completed: null,
+		execution: null,
 		has_review: false,
 		has_pre_mortem: false,
 		has_prd: false,
-		backlog_ref: null,
 		steps: 3,
 		...overrides,
 	};
