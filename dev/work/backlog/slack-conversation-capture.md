@@ -100,9 +100,10 @@ Phase 2:
 
 ## 10) Related Artifacts
 
-- **Phase 1 PRD**: `dev/prds/slack-conversation-capture-phase-1/prd.md` (Manual ingestion + intelligence core)
-- **Phase 1 Plan**: `dev/plans/slack-integration/plan.md`
-- **Phase 2 Backlog**: `dev/backlog/features/slack-conversation-capture-phase-2.md` (People modes + improvements)
+- **Phase 1 Plan**: `dev/work/plans/slack-integration/plan.md`
+- **Phase 1 PRD**: `dev/work/plans/slack-integration/prd.md` (Manual ingestion + intelligence core)
+- **Phase 1 Pre-mortem**: `dev/work/plans/slack-integration/pre-mortem.md`
+- **Phase 2 Backlog**: `dev/work/backlog/slack-conversation-capture-phase-2.md` (People modes + improvements)
 
 ## 11) Backlog Follow-ups
 
