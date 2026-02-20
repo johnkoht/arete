@@ -113,7 +113,7 @@ In the execution state directory provided by the orchestrator (e.g. `dev/executi
 **progress.md**:
 - Append task completion entry: what was done, files changed, quality checks, reflection
 
-> **Important**: The orchestrator provides the execution state path in your task prompt under `**Execution State Path**`. Always use that path — do not write to `dev/autonomous/`.
+> **Important**: The orchestrator provides the execution state path in your task prompt under `**Execution State Path**`. Always use that path — never hardcode execution state paths.
 
 ### 7. Report
 
