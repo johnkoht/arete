@@ -1,7 +1,7 @@
 ---
 slug: catalog-doc-improvements
 title: Wire dev/catalog/capabilities.json into the agent workflow
-status: building
+status: complete
 size: small
 created: 2026-02-20
 tags: []
