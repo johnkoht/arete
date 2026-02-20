@@ -163,7 +163,7 @@ export async function handlePlan(
 
 	switch (cmd) {
 		case "new":
-			await handlePlanNew(ctx, pi, state, togglePlanMode);
+			await handlePlanNew(subcommand.slice(1).join(" "), ctx, pi, state, togglePlanMode);
 			break;
 		case "list":
 			await handlePlanList(ctx, pi, state);
@@ -260,6 +260,7 @@ export function getSuggestedNextActions(
 }
 
 async function handlePlanNew(
+	nameArg: string,
 	ctx: CommandContext,
 	pi: CommandPi,
 	state: PlanModeState,
@@ -284,11 +285,21 @@ async function handlePlanNew(
 	state.reviewRun = false;
 	state.prdConverted = false;
 
+	// Pre-set slug from name argument if provided
+	const trimmedName = nameArg.trim();
+	if (trimmedName) {
+		state.currentSlug = slugify(trimmedName);
+	}
+
 	if (!state.planModeEnabled) {
 		togglePlanMode();
 	}
 
-	ctx.ui.notify("📋 Plan mode enabled. Describe your idea and I'll help shape it into a plan.", "info");
+	if (state.currentSlug) {
+		ctx.ui.notify(`📋 Plan mode enabled for '${state.currentSlug}'. Describe your idea and I'll help shape it into a plan.`, "info");
+	} else {
+		ctx.ui.notify("📋 Plan mode enabled. Describe your idea and I'll help shape it into a plan.", "info");
+	}
 }
 
 async function handlePlanList(ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {

@@ -8,6 +8,7 @@ import {
 	extractPrdFeatureSlug,
 	hasUnsavedPlanChanges,
 	getSuggestedNextActions,
+	handlePlan,
 	handlePlanSave,
 	handlePlanRename,
 	type PlanModeState,
@@ -332,5 +333,78 @@ describe("handlePlanRename", () => {
 		await handlePlanRename(undefined, ctx, pi, state);
 
 		assert.equal(editorCalled, true, "Should prompt for new name");
+	});
+});
+
+describe("handlePlan — /plan new", () => {
+	it("pre-sets slug when name argument is provided", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+		let toggleCalled = false;
+		const togglePlanMode = () => {
+			toggleCalled = true;
+			state.planModeEnabled = true;
+		};
+
+		await handlePlan("new my cool feature", ctx, pi, state, togglePlanMode);
+
+		assert.equal(state.currentSlug, "my-cool-feature", "Should slugify and set currentSlug");
+		assert.equal(toggleCalled, true, "Should enable plan mode");
+		assert.ok(notifyMessage.includes("my-cool-feature"), "Should mention the slug in notification");
+	});
+
+	it("does not pre-set slug when no name argument is provided", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+		const togglePlanMode = () => {
+			state.planModeEnabled = true;
+		};
+
+		await handlePlan("new", ctx, pi, state, togglePlanMode);
+
+		assert.equal(state.currentSlug, null, "Should not set slug without name");
+		assert.ok(notifyMessage.includes("Describe your idea"), "Should show generic prompt");
+		assert.ok(!notifyMessage.includes("for '"), "Should not mention a slug");
+	});
+
+	it("resets state from previous plan before starting new one", async () => {
+		const ctx = createTestContext({
+			confirm: async () => false, // Don't save unsaved changes
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planModeEnabled: true,
+			currentSlug: "old-plan",
+			planText: "old content",
+			planSize: "large",
+			todoItems: [{ text: "step 1", completed: false }],
+			preMortemRun: true,
+			reviewRun: true,
+			prdConverted: true,
+		});
+		const togglePlanMode = () => {};
+
+		await handlePlan("new fresh-start", ctx, pi, state, togglePlanMode);
+
+		assert.equal(state.currentSlug, "fresh-start", "Should set new slug");
+		assert.equal(state.planText, "", "Should clear plan text");
+		assert.equal(state.planSize, null, "Should clear plan size");
+		assert.deepEqual(state.todoItems, [], "Should clear todo items");
+		assert.equal(state.preMortemRun, false, "Should reset pre-mortem flag");
+		assert.equal(state.reviewRun, false, "Should reset review flag");
+		assert.equal(state.prdConverted, false, "Should reset PRD flag");
 	});
 });
