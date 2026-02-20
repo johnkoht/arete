@@ -5,7 +5,7 @@ status: building
 size: medium
 tags: [feature]
 created: 2026-02-18T19:59:27.611Z
-updated: 2026-02-20T16:02:54.696Z
+updated: 2026-02-20T16:12:41.410Z
 completed: null
 execution: null
 has_review: false
