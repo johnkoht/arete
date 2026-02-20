@@ -553,16 +553,13 @@ export function promoteBacklogItem(slug: string, basePath?: string): void {
 		const dest = join(plansDir, slug);
 		cpSync(folderSrc, dest, { recursive: true });
 		rmSync(folderSrc, { recursive: true, force: true });
-		updatePlanFrontmatter(slug, { status: "draft" });
+		updatePlanFrontmatter(slug, { status: "draft" }, plansDir);
 	} else if (existsSync(fileSrc)) {
 		// Flat file: create folder, move content to plan.md, update status
-		const dest = join(plansDir, slug);
-		mkdirSync(dest, { recursive: true });
-
 		const { frontmatter, content } = parseFrontmatterFromFile(fileSrc);
 		frontmatter.status = "draft";
 		frontmatter.updated = new Date().toISOString();
-		savePlan(slug, frontmatter, content);
+		savePlan(slug, frontmatter, content, plansDir);
 
 		rmSync(fileSrc);
 	} else {

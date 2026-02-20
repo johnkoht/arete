@@ -16,6 +16,13 @@ import {
 	parseFrontmatter,
 	parseFrontmatterFromFile,
 	migrateStatus,
+	listBacklog,
+	listArchive,
+	moveItem,
+	promoteBacklogItem,
+	shelveToBacklog,
+	archiveItem,
+	createBacklogItem,
 	type PlanFrontmatter,
 } from "./persistence.js";
 
@@ -354,5 +361,456 @@ describe("deletePlan", () => {
 
 		deletePlan("multi", tempDir);
 		assert.ok(!existsSync(join(tempDir, "multi")));
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// migrateStatus
+// ────────────────────────────────────────────────────────────
+
+describe("migrateStatus", () => {
+	it("passes through current statuses", () => {
+		assert.equal(migrateStatus("idea"), "idea");
+		assert.equal(migrateStatus("draft"), "draft");
+		assert.equal(migrateStatus("planned"), "planned");
+		assert.equal(migrateStatus("building"), "building");
+		assert.equal(migrateStatus("complete"), "complete");
+		assert.equal(migrateStatus("abandoned"), "abandoned");
+	});
+
+	it("migrates ready to planned", () => {
+		assert.equal(migrateStatus("ready"), "planned");
+	});
+
+	it("migrates legacy statuses", () => {
+		assert.equal(migrateStatus("reviewed"), "planned");
+		assert.equal(migrateStatus("approved"), "planned");
+		assert.equal(migrateStatus("in-progress"), "building");
+		assert.equal(migrateStatus("completed"), "complete");
+		assert.equal(migrateStatus("blocked"), "draft");
+		assert.equal(migrateStatus("on-hold"), "draft");
+	});
+
+	it("defaults to draft for unknown statuses", () => {
+		assert.equal(migrateStatus("banana"), "draft");
+		assert.equal(migrateStatus(""), "draft");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// Tags parsing
+// ────────────────────────────────────────────────────────────
+
+describe("tags parsing", () => {
+	it("serializes and parses multiple tags", () => {
+		const fm = makeFrontmatter({ tags: ["feature", "integration"] });
+		const serialized = serializeFrontmatter(fm);
+		const parsed = parseFrontmatter(serialized);
+		assert.deepEqual(parsed.tags, ["feature", "integration"]);
+	});
+
+	it("serializes and parses empty tags", () => {
+		const fm = makeFrontmatter({ tags: [] });
+		const serialized = serializeFrontmatter(fm);
+		const parsed = parseFrontmatter(serialized);
+		assert.deepEqual(parsed.tags, []);
+	});
+
+	it("serializes and parses single tag", () => {
+		const fm = makeFrontmatter({ tags: ["feature"] });
+		const serialized = serializeFrontmatter(fm);
+		const parsed = parseFrontmatter(serialized);
+		assert.deepEqual(parsed.tags, ["feature"]);
+	});
+
+	it("defaults tags to empty array when missing", () => {
+		const raw = "---\ntitle: Test\nslug: test\nstatus: draft\n---";
+		const parsed = parseFrontmatter(raw);
+		assert.deepEqual(parsed.tags, []);
+	});
+
+	it("parses tags with extra spaces", () => {
+		const raw = "---\ntags: [ feature , integration , refactor ]\n---";
+		const parsed = parseFrontmatter(raw);
+		assert.deepEqual(parsed.tags, ["feature", "integration", "refactor"]);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// parseFrontmatterFromFile
+// ────────────────────────────────────────────────────────────
+
+describe("parseFrontmatterFromFile", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "parse-fm-test-"));
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("parses file with valid frontmatter", () => {
+		const fm = makeFrontmatter({ title: "My Item", slug: "my-item" });
+		const content = "# My Item\n\nSome content.";
+		const fileContent = `${serializeFrontmatter(fm)}\n\n${content}`;
+		const filePath = join(tempDir, "my-item.md");
+		writeFileSync(filePath, fileContent, "utf-8");
+
+		const result = parseFrontmatterFromFile(filePath);
+		assert.equal(result.frontmatter.title, "My Item");
+		assert.equal(result.frontmatter.slug, "my-item");
+		assert.equal(result.content, content);
+	});
+
+	it("returns defaults for file without frontmatter", () => {
+		const filePath = join(tempDir, "raw-idea.md");
+		writeFileSync(filePath, "# Raw Idea\n\nJust some text.", "utf-8");
+
+		const result = parseFrontmatterFromFile(filePath);
+		assert.equal(result.frontmatter.title, "Raw Idea");
+		assert.equal(result.frontmatter.slug, "raw-idea");
+		assert.equal(result.frontmatter.status, "idea");
+		assert.equal(result.frontmatter.size, "unknown");
+		assert.deepEqual(result.frontmatter.tags, []);
+		assert.equal(result.content, "# Raw Idea\n\nJust some text.");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// listBacklog
+// ────────────────────────────────────────────────────────────
+
+describe("listBacklog", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "backlog-test-"));
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("returns empty array when directory does not exist", () => {
+		assert.deepEqual(listBacklog(join(tempDir, "nonexistent")), []);
+	});
+
+	it("lists flat .md files", () => {
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Flat Item", slug: "flat-item", status: "idea" }));
+		writeFileSync(join(tempDir, "flat-item.md"), `${fm}\n\n# Flat Item`, "utf-8");
+
+		const items = listBacklog(tempDir);
+		assert.equal(items.length, 1);
+		assert.equal(items[0].slug, "flat-item");
+		assert.equal(items[0].frontmatter.status, "idea");
+	});
+
+	it("lists folders with plan.md", () => {
+		const planDir = join(tempDir, "folder-item");
+		mkdirSync(planDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Folder Item", slug: "folder-item", status: "idea" }));
+		writeFileSync(join(planDir, "plan.md"), `${fm}\n\n# Folder Item`, "utf-8");
+
+		const items = listBacklog(tempDir);
+		assert.equal(items.length, 1);
+		assert.equal(items[0].slug, "folder-item");
+	});
+
+	it("lists mixed flat files and folders", () => {
+		// Flat file
+		const fm1 = serializeFrontmatter(makeFrontmatter({ title: "Flat", slug: "flat", updated: "2026-01-01T00:00:00Z" }));
+		writeFileSync(join(tempDir, "flat.md"), `${fm1}\n\n# Flat`, "utf-8");
+
+		// Folder
+		const planDir = join(tempDir, "folder");
+		mkdirSync(planDir, { recursive: true });
+		const fm2 = serializeFrontmatter(makeFrontmatter({ title: "Folder", slug: "folder", updated: "2026-02-01T00:00:00Z" }));
+		writeFileSync(join(planDir, "plan.md"), `${fm2}\n\n# Folder`, "utf-8");
+
+		const items = listBacklog(tempDir);
+		assert.equal(items.length, 2);
+		assert.equal(items[0].slug, "folder"); // newer first
+		assert.equal(items[1].slug, "flat");
+	});
+
+	it("handles file without frontmatter gracefully", () => {
+		writeFileSync(join(tempDir, "no-fm.md"), "# Just a Title\n\nNo frontmatter here.", "utf-8");
+
+		const items = listBacklog(tempDir);
+		assert.equal(items.length, 1);
+		assert.equal(items[0].slug, "no-fm");
+		assert.equal(items[0].frontmatter.status, "idea");
+	});
+
+	it("prefers folder on slug collision (foo.md + foo/)", () => {
+		// Create flat file
+		const fm1 = serializeFrontmatter(makeFrontmatter({ title: "File Version", slug: "dupe" }));
+		writeFileSync(join(tempDir, "dupe.md"), `${fm1}\n\n# File`, "utf-8");
+
+		// Create folder with same slug
+		const planDir = join(tempDir, "dupe");
+		mkdirSync(planDir, { recursive: true });
+		const fm2 = serializeFrontmatter(makeFrontmatter({ title: "Folder Version", slug: "dupe" }));
+		writeFileSync(join(planDir, "plan.md"), `${fm2}\n\n# Folder`, "utf-8");
+
+		const items = listBacklog(tempDir);
+		assert.equal(items.length, 1);
+		assert.equal(items[0].frontmatter.title, "Folder Version");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// listArchive
+// ────────────────────────────────────────────────────────────
+
+describe("listArchive", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "archive-test-"));
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("returns empty for nonexistent dir", () => {
+		assert.deepEqual(listArchive(join(tempDir, "nonexistent")), []);
+	});
+
+	it("lists archived folders", () => {
+		const archDir = join(tempDir, "done-plan");
+		mkdirSync(archDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Done Plan", slug: "done-plan", status: "complete" }));
+		writeFileSync(join(archDir, "plan.md"), `${fm}\n\n# Done`, "utf-8");
+
+		const items = listArchive(tempDir);
+		assert.equal(items.length, 1);
+		assert.equal(items[0].slug, "done-plan");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// moveItem
+// ────────────────────────────────────────────────────────────
+
+describe("moveItem", () => {
+	let tempDir: string;
+	let fromDir: string;
+	let toDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "move-test-"));
+		fromDir = join(tempDir, "from");
+		toDir = join(tempDir, "to");
+		mkdirSync(fromDir, { recursive: true });
+		mkdirSync(toDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("moves a flat file", () => {
+		writeFileSync(join(fromDir, "item.md"), "content", "utf-8");
+		moveItem("item", fromDir, toDir);
+		assert.ok(!existsSync(join(fromDir, "item.md")));
+		assert.ok(existsSync(join(toDir, "item.md")));
+	});
+
+	it("moves a folder with all contents", () => {
+		const srcDir = join(fromDir, "plan-item");
+		mkdirSync(srcDir, { recursive: true });
+		writeFileSync(join(srcDir, "plan.md"), "plan content", "utf-8");
+		writeFileSync(join(srcDir, "prd.md"), "prd content", "utf-8");
+
+		moveItem("plan-item", fromDir, toDir);
+
+		assert.ok(!existsSync(srcDir));
+		assert.ok(existsSync(join(toDir, "plan-item", "plan.md")));
+		assert.ok(existsSync(join(toDir, "plan-item", "prd.md")));
+	});
+
+	it("throws for non-existent item", () => {
+		assert.throws(() => moveItem("ghost", fromDir, toDir), /not found/i);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// createBacklogItem
+// ────────────────────────────────────────────────────────────
+
+describe("createBacklogItem", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "create-backlog-test-"));
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("creates flat file with proper frontmatter", () => {
+		const slug = createBacklogItem("Slack Integration", tempDir);
+		assert.equal(slug, "slack-integration");
+
+		const filePath = join(tempDir, "slack-integration.md");
+		assert.ok(existsSync(filePath));
+
+		const result = parseFrontmatterFromFile(filePath);
+		assert.equal(result.frontmatter.title, "Slack Integration");
+		assert.equal(result.frontmatter.slug, "slack-integration");
+		assert.equal(result.frontmatter.status, "idea");
+		assert.equal(result.frontmatter.size, "unknown");
+		assert.deepEqual(result.frontmatter.tags, []);
+	});
+
+	it("creates directory if it does not exist", () => {
+		const nested = join(tempDir, "nested", "deep");
+		createBacklogItem("Test Item", nested);
+		assert.ok(existsSync(join(nested, "test-item.md")));
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// promoteBacklogItem
+// ────────────────────────────────────────────────────────────
+
+describe("promoteBacklogItem", () => {
+	let tempDir: string;
+	let backlogDir: string;
+	let plansDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "promote-test-"));
+		backlogDir = join(tempDir, "backlog");
+		plansDir = join(tempDir, "plans");
+		mkdirSync(backlogDir, { recursive: true });
+		mkdirSync(plansDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("promotes flat file to folder with plan.md", () => {
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "My Idea", slug: "my-idea", status: "idea" }));
+		writeFileSync(join(backlogDir, "my-idea.md"), `${fm}\n\n# My Idea\n\nSome content.`, "utf-8");
+
+		promoteBacklogItem("my-idea", backlogDir);
+
+		// Source should be gone
+		assert.ok(!existsSync(join(backlogDir, "my-idea.md")));
+		// Plan should exist with updated status
+		const planFile = join(plansDir, "my-idea", "plan.md");
+		assert.ok(existsSync(planFile));
+		const result = parseFrontmatterFromFile(planFile);
+		assert.equal(result.frontmatter.status, "draft");
+	});
+
+	it("promotes folder to plans, updates status", () => {
+		const srcDir = join(backlogDir, "shelved-plan");
+		mkdirSync(srcDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Shelved Plan", slug: "shelved-plan", status: "idea" }));
+		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Shelved`, "utf-8");
+		writeFileSync(join(srcDir, "prd.md"), "PRD content", "utf-8");
+
+		promoteBacklogItem("shelved-plan", backlogDir);
+
+		assert.ok(!existsSync(srcDir));
+		assert.ok(existsSync(join(plansDir, "shelved-plan", "plan.md")));
+		assert.ok(existsSync(join(plansDir, "shelved-plan", "prd.md")));
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// shelveToBacklog
+// ────────────────────────────────────────────────────────────
+
+describe("shelveToBacklog", () => {
+	let tempDir: string;
+	let backlogDir: string;
+	let plansDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "shelve-test-"));
+		backlogDir = join(tempDir, "backlog");
+		plansDir = join(tempDir, "plans");
+		mkdirSync(backlogDir, { recursive: true });
+		mkdirSync(plansDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("moves plan folder to backlog, updates status to idea", () => {
+		const srcDir = join(plansDir, "active-plan");
+		mkdirSync(srcDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Active Plan", slug: "active-plan", status: "draft" }));
+		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Active Plan`, "utf-8");
+		writeFileSync(join(srcDir, "prd.md"), "PRD content", "utf-8");
+
+		shelveToBacklog("active-plan", backlogDir);
+
+		assert.ok(!existsSync(srcDir));
+		assert.ok(existsSync(join(backlogDir, "active-plan", "plan.md")));
+		assert.ok(existsSync(join(backlogDir, "active-plan", "prd.md")));
+
+		const result = parseFrontmatterFromFile(join(backlogDir, "active-plan", "plan.md"));
+		assert.equal(result.frontmatter.status, "idea");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// archiveItem
+// ────────────────────────────────────────────────────────────
+
+describe("archiveItem", () => {
+	let tempDir: string;
+	let archiveDir: string;
+	let plansDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "archive-item-test-"));
+		archiveDir = join(tempDir, "archive");
+		plansDir = join(tempDir, "plans");
+		mkdirSync(archiveDir, { recursive: true });
+		mkdirSync(plansDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("archives plan as complete with completed date", () => {
+		const srcDir = join(plansDir, "done-plan");
+		mkdirSync(srcDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Done Plan", slug: "done-plan", status: "building" }));
+		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Done`, "utf-8");
+
+		archiveItem("done-plan", "complete", archiveDir);
+
+		assert.ok(!existsSync(srcDir));
+		const planFile = join(archiveDir, "done-plan", "plan.md");
+		assert.ok(existsSync(planFile));
+		const result = parseFrontmatterFromFile(planFile);
+		assert.equal(result.frontmatter.status, "complete");
+		assert.ok(result.frontmatter.completed !== null);
+	});
+
+	it("archives plan as abandoned", () => {
+		const srcDir = join(plansDir, "abandoned-plan");
+		mkdirSync(srcDir, { recursive: true });
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Abandoned", slug: "abandoned-plan" }));
+		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Abandoned`, "utf-8");
+
+		archiveItem("abandoned-plan", "abandoned", archiveDir);
+
+		const result = parseFrontmatterFromFile(join(archiveDir, "abandoned-plan", "plan.md"));
+		assert.equal(result.frontmatter.status, "abandoned");
 	});
 });
