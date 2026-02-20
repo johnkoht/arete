@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-19: [work-directory-cleanup-learnings](entries/2026-02-19_work-directory-cleanup-learnings.md) — Consolidated 4 work directories into unified dev/work/ (backlog/plans/archive). 7/7 tasks, 0 iterations, 29 new tests. Unified frontmatter schema, co-located PRDs, lifecycle commands (/plan backlog, shelve, archive).
 - 2026-02-19: [refactor-subagents-learnings](entries/2026-02-19_refactor-subagents-learnings.md) — Refactored execute-prd from Cursor Task tool to Pi subagents + per-run execution state isolation. 6/6 tasks, 0 iterations, 0/8 pre-mortem risks materialized. Symlink architecture eliminated dual-file sync issues.
 - 2026-02-19: [persona-council-learnings](entries/2026-02-19_persona-council-learnings.md) — Introduced Persona Council to BUILD MODE: 3 behavioral archetypes (Harvester/Architect/Preparer) wired into PM agent + AGENTS.md. 3/3 tasks, 0 iterations. Key: docs-only PRDs move fast; Evidence sections built in from day one; esbuild x64/arm64 env issue needs fixing.
 - 2026-02-18: [onboarding-improvements-phase3-learnings](entries/2026-02-18_onboarding-improvements-phase3-learnings.md) — Phase 3 implementation (8/8 tasks): extraction-quality utilities, policy/toggle controls, optional enrichment, KPI snapshot persistence, and integration regression expansion.
