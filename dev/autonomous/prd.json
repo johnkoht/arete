@@ -34,9 +34,9 @@
         "All migrated backlog items have frontmatter (title, slug, status, tags)",
         "No data loss \u2014 every item accounted for"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-3",
@@ -131,7 +131,7 @@
   "metadata": {
     "createdAt": "2026-02-19T16:20:00Z",
     "totalTasks": 7,
-    "completedTasks": 1,
+    "completedTasks": 2,
     "failedTasks": 0
   }
 }

@@ -7,7 +7,7 @@
  * No external dependencies — uses node:fs and node:path only.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Valid plan lifecycle statuses */
@@ -93,8 +93,10 @@ export interface PlanSummary {
 	frontmatter: PlanFrontmatter;
 }
 
-// Default base directory for plans (relative to cwd)
-const DEFAULT_PLANS_DIR = "dev/plans";
+// Default base directories for work items (relative to cwd)
+const DEFAULT_PLANS_DIR = "dev/work/plans";
+export const DEFAULT_BACKLOG_DIR = "dev/work/backlog";
+export const DEFAULT_ARCHIVE_DIR = "dev/work/archive";
 
 /**
  * Convert a title to a kebab-case slug.
@@ -247,7 +249,7 @@ function resolvePlansDir(basePath?: string): string {
 }
 
 /**
- * Save a plan to dev/plans/{slug}/plan.md.
+ * Save a plan to dev/work/plans/{slug}/plan.md.
  * Creates the directory if it doesn't exist.
  */
 export function savePlan(slug: string, frontmatter: PlanFrontmatter, content: string, basePath?: string): void {
@@ -264,7 +266,7 @@ export function savePlan(slug: string, frontmatter: PlanFrontmatter, content: st
 }
 
 /**
- * Load a plan from dev/plans/{slug}/plan.md.
+ * Load a plan from dev/work/plans/{slug}/plan.md.
  * Returns null if the plan doesn't exist or can't be parsed.
  */
 export function loadPlan(slug: string, basePath?: string): LoadedPlan | null {
@@ -397,4 +399,276 @@ export function deletePlan(slug: string, basePath?: string): void {
 	} catch {
 		// Graceful failure
 	}
+}
+
+// ────────────────────────────────────────────────────────────
+// Backlog, Archive, and Move operations
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Resolve a directory path with optional override.
+ */
+function resolveDir(basePath: string | undefined, defaultDir: string): string {
+	return basePath ?? defaultDir;
+}
+
+/**
+ * List backlog items (mixed flat files and folders), sorted by updated date.
+ * For folders: parses plan.md inside. For .md files: parses the file directly.
+ * If both foo.md and foo/ exist (slug collision), prefers the folder.
+ */
+export function listBacklog(basePath?: string): PlanSummary[] {
+	const dir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
+	if (!existsSync(dir)) return [];
+
+	try {
+		const entries = readdirSync(dir, { withFileTypes: true });
+		const itemsBySlug = new Map<string, PlanSummary>();
+
+		// First pass: folders (higher priority on collision)
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue;
+			const slug = entry.name;
+			const planFile = join(dir, slug, "plan.md");
+			if (!existsSync(planFile)) continue;
+
+			try {
+				const { frontmatter } = parseFrontmatterFromFile(planFile);
+				itemsBySlug.set(slug, { slug, frontmatter });
+			} catch {
+				// Skip unparseable
+			}
+		}
+
+		// Second pass: flat .md files (skip if folder with same slug exists)
+		for (const entry of entries) {
+			if (entry.isDirectory()) continue;
+			if (!entry.name.endsWith(".md")) continue;
+
+			const slug = entry.name.replace(/\.md$/, "");
+			if (itemsBySlug.has(slug)) continue; // folder wins
+
+			try {
+				const { frontmatter } = parseFrontmatterFromFile(join(dir, entry.name));
+				itemsBySlug.set(slug, { slug, frontmatter });
+			} catch {
+				// Skip unparseable
+			}
+		}
+
+		const items = Array.from(itemsBySlug.values());
+		items.sort((a, b) => {
+			const dateA = a.frontmatter.updated || "";
+			const dateB = b.frontmatter.updated || "";
+			return dateB.localeCompare(dateA);
+		});
+		return items;
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * List archived items (folders only), sorted by updated date.
+ */
+export function listArchive(basePath?: string): PlanSummary[] {
+	const dir = resolveDir(basePath, DEFAULT_ARCHIVE_DIR);
+	if (!existsSync(dir)) return [];
+
+	try {
+		const entries = readdirSync(dir, { withFileTypes: true });
+		const items: PlanSummary[] = [];
+
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue;
+			const planFile = join(dir, entry.name, "plan.md");
+			if (!existsSync(planFile)) continue;
+
+			try {
+				const { frontmatter } = parseFrontmatterFromFile(planFile);
+				items.push({ slug: entry.name, frontmatter });
+			} catch {
+				// Skip unparseable
+			}
+		}
+
+		items.sort((a, b) => {
+			const dateA = a.frontmatter.updated || "";
+			const dateB = b.frontmatter.updated || "";
+			return dateB.localeCompare(dateA);
+		});
+		return items;
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Move an item (file or directory) between directories.
+ * Handles both flat .md files and folders.
+ */
+export function moveItem(slug: string, fromDir: string, toDir: string): void {
+	if (!existsSync(toDir)) {
+		mkdirSync(toDir, { recursive: true });
+	}
+
+	// Check for folder first
+	const folderSrc = join(fromDir, slug);
+	if (existsSync(folderSrc) && statSync(folderSrc).isDirectory()) {
+		const dest = join(toDir, slug);
+		cpSync(folderSrc, dest, { recursive: true });
+		rmSync(folderSrc, { recursive: true, force: true });
+		return;
+	}
+
+	// Then check for flat file
+	const fileSrc = join(fromDir, `${slug}.md`);
+	if (existsSync(fileSrc)) {
+		const dest = join(toDir, `${slug}.md`);
+		renameSync(fileSrc, dest);
+		return;
+	}
+
+	throw new Error(`Item not found: ${slug} in ${fromDir}`);
+}
+
+/**
+ * Promote a backlog item to plans/.
+ * Flat file → creates folder with plan.md. Folder → moves directly.
+ * Updates status to "draft".
+ */
+export function promoteBacklogItem(slug: string, basePath?: string): void {
+	const backlogDir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
+	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
+
+	if (!existsSync(plansDir)) {
+		mkdirSync(plansDir, { recursive: true });
+	}
+
+	const folderSrc = join(backlogDir, slug);
+	const fileSrc = join(backlogDir, `${slug}.md`);
+
+	if (existsSync(folderSrc) && statSync(folderSrc).isDirectory()) {
+		// Folder: move to plans, update status
+		const dest = join(plansDir, slug);
+		cpSync(folderSrc, dest, { recursive: true });
+		rmSync(folderSrc, { recursive: true, force: true });
+		updatePlanFrontmatter(slug, { status: "draft" });
+	} else if (existsSync(fileSrc)) {
+		// Flat file: create folder, move content to plan.md, update status
+		const dest = join(plansDir, slug);
+		mkdirSync(dest, { recursive: true });
+
+		const { frontmatter, content } = parseFrontmatterFromFile(fileSrc);
+		frontmatter.status = "draft";
+		frontmatter.updated = new Date().toISOString();
+		savePlan(slug, frontmatter, content);
+
+		rmSync(fileSrc);
+	} else {
+		throw new Error(`Backlog item not found: ${slug}`);
+	}
+}
+
+/**
+ * Shelve a plan to backlog/. Preserves folder structure.
+ * Updates status to "idea".
+ */
+export function shelveToBacklog(slug: string, basePath?: string): void {
+	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
+	const backlogDir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
+
+	const src = join(plansDir, slug);
+	if (!existsSync(src) || !statSync(src).isDirectory()) {
+		throw new Error(`Plan not found: ${slug}`);
+	}
+
+	if (!existsSync(backlogDir)) {
+		mkdirSync(backlogDir, { recursive: true });
+	}
+
+	const dest = join(backlogDir, slug);
+	cpSync(src, dest, { recursive: true });
+	rmSync(src, { recursive: true, force: true });
+
+	// Update status in the backlog copy
+	const planFile = join(dest, "plan.md");
+	if (existsSync(planFile)) {
+		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
+		frontmatter.status = "idea";
+		frontmatter.updated = new Date().toISOString();
+		const fm = serializeFrontmatter(frontmatter);
+		writeFileSync(planFile, `${fm}\n\n${content}`, "utf-8");
+	}
+}
+
+/**
+ * Archive a plan. Moves from plans/ to archive/.
+ * Updates status to "complete" or "abandoned" and sets completed date.
+ */
+export function archiveItem(slug: string, status: "complete" | "abandoned", basePath?: string): void {
+	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
+	const archiveDir = resolveDir(basePath, DEFAULT_ARCHIVE_DIR);
+
+	const src = join(plansDir, slug);
+	if (!existsSync(src) || !statSync(src).isDirectory()) {
+		throw new Error(`Plan not found: ${slug}`);
+	}
+
+	if (!existsSync(archiveDir)) {
+		mkdirSync(archiveDir, { recursive: true });
+	}
+
+	const dest = join(archiveDir, slug);
+	cpSync(src, dest, { recursive: true });
+	rmSync(src, { recursive: true, force: true });
+
+	// Update status and completed date in the archive copy
+	const planFile = join(dest, "plan.md");
+	if (existsSync(planFile)) {
+		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
+		frontmatter.status = status;
+		frontmatter.completed = new Date().toISOString();
+		frontmatter.updated = new Date().toISOString();
+		const fm = serializeFrontmatter(frontmatter);
+		writeFileSync(planFile, `${fm}\n\n${content}`, "utf-8");
+	}
+}
+
+/**
+ * Create a new backlog item as a flat .md file with default frontmatter.
+ * Returns the generated slug.
+ */
+export function createBacklogItem(title: string, basePath?: string): string {
+	const dir = resolveDir(basePath, DEFAULT_BACKLOG_DIR);
+	if (!existsSync(dir)) {
+		mkdirSync(dir, { recursive: true });
+	}
+
+	const slug = slugify(title);
+	if (!slug) {
+		throw new Error("Title must include letters or numbers");
+	}
+
+	const now = new Date().toISOString();
+	const frontmatter: PlanFrontmatter = {
+		title,
+		slug,
+		status: "idea",
+		size: "unknown",
+		tags: [],
+		created: now,
+		updated: now,
+		completed: null,
+		execution: null,
+		has_review: false,
+		has_pre_mortem: false,
+		has_prd: false,
+		steps: 0,
+	};
+
+	const fm = serializeFrontmatter(frontmatter);
+	writeFileSync(join(dir, `${slug}.md`), `${fm}\n\n# ${title}\n`, "utf-8");
+
+	return slug;
 }

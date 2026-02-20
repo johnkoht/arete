@@ -127,13 +127,11 @@ export function extractPrdFeatureSlug(artifactContent: string): string | null {
 	return match[1].trim();
 }
 
-/** Resolve which PRD feature slug to execute for a plan. */
+/** Resolve which PRD feature slug to execute for a plan.
+ * PRD is always co-located with the plan, so feature slug = plan slug.
+ */
 export function resolvePrdFeatureSlug(planSlug: string): string {
-	const artifact = loadPlanArtifact(planSlug, "prd.md");
-	if (!artifact) return planSlug;
-
-	const parsed = extractPrdFeatureSlug(artifact);
-	return parsed ?? planSlug;
+	return planSlug;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -277,7 +275,7 @@ async function handlePlanList(ctx: CommandContext, pi: CommandPi, state: PlanMod
 	const plans = listPlans();
 
 	if (plans.length === 0) {
-		ctx.ui.notify("No plans found in dev/plans/", "info");
+		ctx.ui.notify("No plans found in dev/work/plans/", "info");
 		return;
 	}
 
@@ -433,7 +431,7 @@ export async function handlePlanSave(
 		planSize: state.planSize,
 	});
 
-	ctx.ui.notify(`💾 Saved to dev/plans/${slug}/plan.md`, "info");
+	ctx.ui.notify(`💾 Saved to dev/work/plans/${slug}/plan.md`, "info");
 }
 
 /**
@@ -520,7 +518,7 @@ export async function handlePlanRename(
 		planSize: state.planSize,
 	});
 
-	ctx.ui.notify(`📝 Renamed '${oldSlug}' → '${newSlug}' (dev/plans/${newSlug}/)`, "info");
+	ctx.ui.notify(`📝 Renamed '${oldSlug}' → '${newSlug}' (dev/work/plans/${newSlug}/)`, "info");
 }
 
 function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
@@ -754,29 +752,14 @@ export async function handlePrd(
 		return;
 	}
 
-	const defaultFeatureName = state.currentSlug ?? slugify(plan.frontmatter.title);
-	const requestedFeatureName = await ctx.ui.editor(
-		"PRD feature name (used for dev/prds/{feature-name}/):",
-		defaultFeatureName,
-	);
-
-	if (!requestedFeatureName?.trim()) {
-		ctx.ui.notify("Skipped PRD conversion (feature name not provided).", "info");
-		return;
-	}
-
-	const featureSlug = slugify(requestedFeatureName.trim());
-	if (!featureSlug) {
-		ctx.ui.notify("PRD feature name must include letters or numbers.", "warning");
-		return;
-	}
+	const featureSlug = state.currentSlug ?? slugify(plan.frontmatter.title);
 
 	ctx.ui.notify(`📄 Converting plan to PRD as '${featureSlug}'...`, "info");
 
 	pi.sendUserMessage(
 		`Convert this plan to a PRD. Load .agents/skills/plan-to-prd/SKILL.md and follow its workflow.\n\n` +
 			`Use this exact feature name: ${featureSlug}.\n` +
-			`Create artifacts under dev/prds/${featureSlug}/ (do not derive a different slug).\n\n` +
+			`Create artifacts under dev/work/plans/${featureSlug}/ (do not derive a different slug).\n\n` +
 			`Plan: ${plan.frontmatter.title}\nSize: ${plan.frontmatter.size}\nSteps: ${plan.frontmatter.steps}\n\n` +
 			plan.content,
 	);
@@ -842,7 +825,7 @@ export async function handleBuild(
 		const prdFeatureSlug = resolvePrdFeatureSlug(state.currentSlug);
 		pi.sendUserMessage(
 			`Execute the ${prdFeatureSlug} PRD. Load the execute-prd skill from .pi/skills/execute-prd/SKILL.md. ` +
-				`The PRD is at dev/prds/${prdFeatureSlug}/prd.md and the task list is at dev/plans/${state.currentSlug}/prd.json. ` +
+				`The PRD is at dev/work/plans/${prdFeatureSlug}/prd.md and the task list is at dev/autonomous/prd.json. ` +
 				`Run the full workflow.`,
 		);
 	} else {
@@ -879,7 +862,7 @@ function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 	const progress = resolveExecutionProgress({
 		hasPrd,
 		todoItems: state.todoItems,
-		prdPath: state.currentSlug ? `dev/plans/${state.currentSlug}/prd.json` : undefined,
+		prdPath: "dev/autonomous/prd.json",
 	});
 
 	const lines = [`⚡ Build Status: ${progress.completed}/${progress.total} tasks complete`];

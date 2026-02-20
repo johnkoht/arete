@@ -224,7 +224,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				content: [
 					{
 						type: "text",
-						text: `Saved artifact to dev/plans/${state.currentSlug}/${params.filename}`,
+						text: `Saved artifact to dev/work/plans/${state.currentSlug}/${params.filename}`,
 					},
 				],
 				isError: false,
