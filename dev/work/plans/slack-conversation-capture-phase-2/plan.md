@@ -1,91 +1,137 @@
 ---
 title: Conversation Capture — Phase 2: People Modes & Improvements
 slug: slack-conversation-capture-phase-2
-status: idea
-size: unknown
+status: planned
+size: small
 tags: [feature]
 created: 2026-02-19T00:00:00Z
-updated: 2026-02-20T15:43:00Z
+updated: 2026-02-20T15:55:00Z
 completed: null
 execution: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-steps: 0
+steps: 4
 ---
 
-# Slack Conversation Capture — Phase 2: People Modes & Improvements
+# Conversation Capture — Phase 2: People Modes & Improvements
 
-Status: Backlog (gated on Phase 1 completion)
-Owner: Product
-Type: Feature enhancement
 Parent: `dev/work/plans/slack-conversation-capture/plan.md`
-Last updated: 2026-02-19
 
-## Gate Trigger
+## Problem
 
-Phase 1 must be complete with value proven (activation + quality + reuse metrics met) before this work begins.
+Phase 1 captures conversations with insights extraction, including a `stakeholders` list. But there's no connection to Areté's people intelligence system — participants aren't resolved to person files, and there's no `participant_ids` linking conversations to the people graph.
 
-## 1) Problem
+Different users also have different needs: some just want insights (summary, decisions, actions), while others want full people mapping. Without explicit modes, we either run people mapping for everyone or skip it for everyone.
 
-Phase 1 delivers conversation capture with insights extraction. However, different users have different needs around people intelligence:
+## Solution
 
-- **Insights-first users**: Want summary, decisions, actions, questions, risks only. People mapping is noise or overhead.
-- **Context-rich users**: Want insights plus people mapping/intelligence for relationship tracking.
+Add people-processing modes (off/ask/on) to conversation capture, reusing the existing `arete people intelligence digest` pipeline that `process-meetings` already uses. No new abstraction needed — `PeopleIntelligenceCandidate[]` → `EntityService.suggestPeopleIntelligence()` is already source-agnostic.
 
-Without explicit modes, either people mapping runs for everyone (slowing insights-first users) or is skipped for everyone (losing value for context-rich users).
+### Engineering Lead Assessment
 
-## 2) Proposed Solution: People-Processing Modes
+> "The architecture is already right. `EntityService` is the abstraction. What looks like duplication between the skills is actually domain-specific mapping that belongs in each skill. Go with minimal wiring. Revisit when the third consumer shows up."
 
-Introduce explicit modes for people intelligence during conversation capture:
+## Delivery Steps
 
-| Mode | Behavior |
-|------|----------|
-| `off` | Insights only — no people mapping |
-| `ask` | Prompt user each run, with "remember this" option |
-| `on` | Insights + people mapping always |
+### Step 1: Add `participantIds` to conversation types and save
 
-### Workspace Preference
+Add optional `participantIds` field to `ConversationForSave` and render it as `participant_ids` in YAML frontmatter when present. Follows the same pattern as `attendee_ids` in meetings.
 
-- Persisted in workspace config (e.g., `arete.yaml`) as `conversation.defaultPeopleMode: off | ask | on`
-- Scoped to workspace only (not global)
+**Files to change:**
+- `packages/core/src/integrations/conversations/types.ts` — add `participantIds?: string[]` to `ConversationForSave`
+- `packages/core/src/integrations/conversations/save.ts` — render `participant_ids` in frontmatter when array is non-empty
+- `packages/core/src/integrations/conversations/index.ts` — no change expected (re-exports types)
 
-### Precedence Rules
+**AC:**
+- `ConversationForSave` accepts optional `participantIds: string[]`
+- When `participantIds` is present and non-empty, saved markdown includes `participant_ids: [slug1, slug2]` in YAML frontmatter
+- When `participantIds` is absent or empty, frontmatter is unchanged (no empty field)
+- Existing tests still pass (backward compatible)
+- New unit tests for frontmatter rendering with and without `participantIds`
 
-1. Per-run override flag (`--people-mode ...`)
-2. Saved workspace preference (`conversation.defaultPeopleMode`)
-3. System default (`ask`)
+### Step 2: Add people-processing mode to workspace config
 
-## 3) Acceptance Criteria
+Add `conversations.peopleProcessing` preference to `AreteConfig` with values `off | ask | on`, defaulting to `ask`.
 
-1. Conversation insights extraction and save succeed when people mode is `off`.
-2. People mapping is a non-blocking secondary step when enabled.
-3. If people mapping fails/times out, insights artifact is still saved.
-4. Users can set and persist default mode at workspace level.
-5. Chat and CLI both respect the same mode semantics and precedence rules.
-6. Deterministic behavior table with examples documented.
+**Files to change:**
+- `packages/core/src/models/workspace.ts` — extend `AreteConfig.settings` with `conversations?: { peopleProcessing?: 'off' | 'ask' | 'on' }`
+- `packages/core/src/config.ts` — add default value (`ask`) to `DEFAULT_CONFIG.settings`
 
-## 4) Out of Scope
+**Precedence rules:**
+1. Workspace `arete.yaml` setting (`settings.conversations.peopleProcessing`)
+2. System default (`ask`)
 
+**AC:**
+- `AreteConfig` type includes `settings.conversations.peopleProcessing`
+- Default config returns `ask` when no workspace override
+- Config resolution correctly reads from `arete.yaml`
+- Type-safe: only `'off' | 'ask' | 'on'` accepted
+- Unit tests for config resolution with and without workspace override
+
+### Step 3: Update capture-conversation skill with people-processing flow
+
+Update the `capture-conversation` SKILL.md to add a people-processing step after save, gated by the mode setting.
+
+**Files to change:**
+- `packages/runtime/skills/capture-conversation/SKILL.md` — add people-processing workflow between save and confirm steps
+
+**Skill flow addition (after save, before final confirm):**
+1. Read mode from workspace config (`arete.yaml` → `settings.conversations.peopleProcessing`)
+2. If `off` → skip, go to confirm
+3. If `ask` → present participants/stakeholders list, ask user: "Map these people to your people directory? (yes/no/always/never)"
+   - "always" → set mode to `on` in config, proceed
+   - "never" → set mode to `off` in config, skip
+4. If `on` (or user confirmed) →
+   a. Build `PeopleIntelligenceCandidate[]` from conversation participants + stakeholders (source: `"conversation"`, include any available context as `text`)
+   b. Write candidates to temp JSON file
+   c. Call `arete people intelligence digest --input <path> --json`
+   d. Process digest results — create/update person files, present unknown_queue for user review
+   e. Write `participant_ids` back to the saved conversation file's frontmatter
+
+**AC:**
+- Skill instructions include people-processing flow with mode check
+- Mode `off` skips people mapping entirely
+- Mode `ask` prompts user with remember-choice options ("always"/"never")
+- Mode `on` runs people mapping without prompting
+- People mapping uses existing `arete people intelligence digest` CLI — no new commands
+- Failed/timed-out people mapping does not prevent conversation save (save happens first)
+- Skill references correct config path and CLI commands
+
+### Step 4: Verify end-to-end and context discoverability
+
+Verify the full flow works and that conversations with `participant_ids` are properly linked in the people graph.
+
+**Verification steps:**
+- Capture a conversation with people mode `on` → participants resolved → person files created/updated → `participant_ids` in frontmatter
+- Capture with mode `off` → no people mapping, no `participant_ids`
+- `arete people list` shows people created from conversations
+- `arete context --for "person-name"` finds conversations they participated in (via `participant_ids` or body mentions)
+- Person memory refresh (`arete people memory refresh`) picks up conversation signals (same as meeting signals)
+
+**AC:**
+- Full flow: paste → extract → save → people mapping → participant_ids written
+- People created from conversations appear in `arete people list`
+- Conversations discoverable when searching for a participant
+- No regression on existing meeting-based people flow
+
+## Out of Scope
+
+- Per-run CLI flag override (`--people-mode`) — can add later if needed
 - Advanced people enrichment workflows
-- Mandatory people graph updates
-- Any feature requiring people mapping before saving insights
+- Mandatory people graph updates (people mapping is always non-blocking)
+- Changes to EntityService or people intelligence pipeline (already generic)
 
-## 5) Success Signals
+## Risks
 
-- Higher conversation capture completion/save rate for insights-first workflows
-- Clear mode split in usage (off/ask/on)
-- Low abandonment on `ask` prompt
-- No regression for users who prefer people intelligence
+- `ask` mode friction if prompted too often → Mitigated by "always"/"never" remember-choice
+- Conversation participants may lack email (Slack usernames) → Already handled: `email` is optional in `PeopleIntelligenceCandidate`, confidence scores will be lower (correct behavior)
+- Frontmatter update after save requires re-reading the file → Low risk, small I/O
 
-## 6) Risks
-
-- `ask` mode may create friction if prompted too often → Mitigation: "remember this choice" + minimal prompt copy
-- Mode mismatch confusion → Mitigation: clear CLI output showing active mode
-- Hidden coupling in processing flow → Mitigation: ensure insights pipeline is fully independent of people mapping
-
-## 7) Related
+## Related
 
 - **Initiative**: `dev/work/plans/slack-conversation-capture/plan.md`
 - **Phase 1**: `dev/work/plans/slack-conversation-capture-phase-1/plan.md`
-- **Phase 3**: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App beta)
+- **Phase 3**: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App)
+- **Process meetings skill**: `packages/runtime/skills/process-meetings/SKILL.md` (pattern reference)
+- **Entity service**: `packages/core/src/services/entity.ts` (people intelligence pipeline)
