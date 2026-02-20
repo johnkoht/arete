@@ -1,7 +1,7 @@
 /**
  * Command handlers for plan mode (simplified).
  *
- * Commands: /plan [new|list|open|save|rename|status|delete|backlog|shelve|archive], /approve, /review, /pre-mortem, /prd, /build
+ * Commands: /plan [new|list|open|save|rename|status|delete|archive], /approve, /review, /pre-mortem, /prd, /build
  *
  * Plan mode is a planning-only tool. No enforced workflow or mandatory gates.
  * Agent adapts behavior based on work type and plan size.
@@ -15,14 +15,8 @@ import {
 	updatePlanFrontmatter,
 	loadPlanArtifact,
 	slugify,
-	listBacklog,
 	listArchive,
-	promoteBacklogItem,
-	shelveToBacklog,
 	archiveItem,
-	createBacklogItem,
-	parseFrontmatterFromFile,
-	DEFAULT_BACKLOG_DIR,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -31,11 +25,10 @@ import {
 	classifyPlanSize,
 	extractTodoItems,
 	PLAN_MODE_TOOLS,
+	getNormalModeTools,
 	type TodoItem,
 } from "./utils.js";
 import { resolveExecutionProgress } from "./execution-progress.js";
-
-const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 
 // ────────────────────────────────────────────────────────────
 // Shared types for command handlers
@@ -46,6 +39,7 @@ export interface PlanModeState {
 	planModeEnabled: boolean;
 	executionMode: boolean;
 	currentSlug: string | null;
+	planTitle: string | null;
 	planSize: PlanSize | null;
 	planText: string;
 	todoItems: TodoItem[];
@@ -60,6 +54,7 @@ export function createDefaultState(): PlanModeState {
 		planModeEnabled: false,
 		executionMode: false,
 		currentSlug: null,
+		planTitle: null,
 		planSize: null,
 		planText: "",
 		todoItems: [],
@@ -80,6 +75,7 @@ export interface CommandContext {
 		confirm(title: string, message: string): Promise<boolean>;
 		notify(message: string, type?: "info" | "warning" | "error"): void;
 		editor(title: string, prefill?: string): Promise<string | undefined>;
+		custom?<T>(factory: (tui: unknown, theme: unknown, keybindings: unknown, done: (result: T) => void) => unknown): Promise<T>;
 	};
 	hasUI: boolean;
 }
@@ -166,7 +162,7 @@ export async function handlePlan(
 			await handlePlanNew(subcommand.slice(1).join(" "), ctx, pi, state, togglePlanMode);
 			break;
 		case "list":
-			await handlePlanList(ctx, pi, state);
+			await handlePlanList(subcommand.slice(1).join(" "), ctx, pi, state);
 			break;
 		case "open":
 			await handlePlanOpen(subcommand[1], ctx, pi, state);
@@ -178,7 +174,7 @@ export async function handlePlan(
 			await handlePlanRename(subcommand[1], ctx, pi, state);
 			break;
 		case "status":
-			handlePlanStatus(ctx, state);
+			await handlePlanStatus(subcommand.slice(1).join(" "), ctx, state);
 			break;
 		case "delete": {
 			const slugToDelete = subcommand[1] ?? state.currentSlug;
@@ -189,18 +185,12 @@ export async function handlePlan(
 			}
 			break;
 		}
-		case "backlog":
-			await handleBacklog(subcommand.slice(1).join(" "), ctx, pi, state);
-			break;
-		case "shelve":
-			await handleShelve(ctx, pi, state);
-			break;
 		case "archive":
 			await handleArchive(subcommand.slice(1).join(" "), ctx, pi, state);
 			break;
 		default:
 			ctx.ui.notify(
-				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete, backlog, shelve, archive`,
+				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete, archive`,
 				"warning",
 			);
 	}
@@ -278,6 +268,7 @@ async function handlePlanNew(
 
 	// Reset state for new plan
 	state.currentSlug = null;
+	state.planTitle = null;
 	state.planText = "";
 	state.planSize = null;
 	state.todoItems = [];
@@ -285,52 +276,209 @@ async function handlePlanNew(
 	state.reviewRun = false;
 	state.prdConverted = false;
 
-	// Pre-set slug from name argument if provided
-	const trimmedName = nameArg.trim();
-	if (trimmedName) {
-		state.currentSlug = slugify(trimmedName);
-	}
-
 	if (!state.planModeEnabled) {
 		togglePlanMode();
 	}
 
-	if (state.currentSlug) {
-		ctx.ui.notify(`📋 Plan mode enabled for '${state.currentSlug}'. Describe your idea and I'll help shape it into a plan.`, "info");
+	const trimmedName = nameArg.trim();
+	let nameToUse: string | null = null;
+
+	if (trimmedName) {
+		// Path 1: Name provided as argument
+		nameToUse = trimmedName;
 	} else {
-		ctx.ui.notify("📋 Plan mode enabled. Describe your idea and I'll help shape it into a plan.", "info");
+		// Path 2/3: Prompt for name via editor
+		const editorResult = await ctx.ui.editor("Name this plan:", "");
+		if (editorResult?.trim()) {
+			nameToUse = editorResult.trim();
+		}
+	}
+
+	if (nameToUse) {
+		// Auto-save the plan stub to disk
+		const slug = slugify(nameToUse);
+		const title = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+		const now = new Date().toISOString();
+		const content = `# ${title}\n`;
+		const frontmatter: PlanFrontmatter = {
+			title,
+			slug,
+			status: "idea",
+			size: "unknown",
+			tags: [],
+			created: now,
+			updated: now,
+			completed: null,
+			execution: null,
+			has_review: false,
+			has_pre_mortem: false,
+			has_prd: false,
+			steps: 0,
+		};
+
+		savePlan(slug, frontmatter, content);
+
+		state.currentSlug = slug;
+		state.planTitle = title;
+		state.planText = content;
+
+		ctx.ui.notify(`📋 Plan '${slug}' created and saved. Describe your idea and I'll help shape it.`, "info");
+	} else {
+		// Path 3: Editor cancelled — no save, notify user
+		state.planTitle = null;
+		state.planText = "";
+
+		ctx.ui.notify("📋 Plan mode enabled. Plan not saved — use /plan save <name> to persist.", "info");
 	}
 }
 
-async function handlePlanList(ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {
-	const plans = listPlans();
+/** Status emoji mapping used for plan list items */
+const STATUS_EMOJI: Record<PlanStatus, string> = {
+	building: "⚡",
+	planned: "✅",
+	draft: "📝",
+	idea: "💡",
+	complete: "🎉",
+	abandoned: "🚫",
+};
 
-	if (plans.length === 0) {
+/** Status sort priority — lower number sorts first */
+const STATUS_PRIORITY: Record<PlanStatus, number> = {
+	building: 0,
+	planned: 1,
+	draft: 2,
+	idea: 3,
+	complete: 4,
+	abandoned: 5,
+};
+
+/** A prepared list item for the plan list UI */
+export interface PlanListItem {
+	value: string;
+	label: string;
+	description: string;
+}
+
+/** Filter type for plan list */
+export type PlanListFilter = "ideas" | "active" | "all";
+
+/** Parse filter flags from args string */
+export function parsePlanListFilter(args: string): PlanListFilter {
+	const trimmed = args.trim().toLowerCase();
+	if (trimmed.includes("--ideas")) return "ideas";
+	if (trimmed.includes("--active")) return "active";
+	return "all";
+}
+
+/** Filter and sort plans, then build list items. Pure function for testability. */
+export function preparePlanListItems(
+	plans: Array<{ slug: string; frontmatter: PlanFrontmatter }>,
+	filter: PlanListFilter,
+): PlanListItem[] {
+	let filtered = plans;
+
+	if (filter === "ideas") {
+		filtered = plans.filter((p) => p.frontmatter.status === "idea");
+	} else if (filter === "active") {
+		filtered = plans.filter((p) =>
+			p.frontmatter.status === "draft" ||
+			p.frontmatter.status === "planned" ||
+			p.frontmatter.status === "building",
+		);
+	}
+
+	const sorted = [...filtered].sort((a, b) => {
+		const pa = STATUS_PRIORITY[a.frontmatter.status] ?? 5;
+		const pb = STATUS_PRIORITY[b.frontmatter.status] ?? 5;
+		return pa - pb;
+	});
+
+	return sorted.map((p) => {
+		const emoji = STATUS_EMOJI[p.frontmatter.status] ?? "📄";
+		return {
+			value: p.slug,
+			label: `${emoji} ${p.frontmatter.title} (${p.slug})`,
+			description: `${p.frontmatter.size}, ${p.frontmatter.steps} steps`,
+		};
+	});
+}
+
+async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {
+	const plans = listPlans();
+	const filter = parsePlanListFilter(args);
+	const items = preparePlanListItems(plans, filter);
+
+	if (items.length === 0) {
 		ctx.ui.notify("No plans found in dev/work/plans/", "info");
 		return;
 	}
 
-	const statusEmoji: Record<PlanStatus, string> = {
-		idea: "💡",
-		draft: "📝",
-		planned: "✅",
-		building: "⚡",
-		complete: "🎉",
-		abandoned: "🚫",
-	};
+	let selectedSlug: string | null = null;
 
-	const options = plans.map((p) => {
-		const emoji = statusEmoji[p.frontmatter.status] ?? "📄";
-		return `${emoji} ${p.frontmatter.title} (${p.frontmatter.status}, ${p.frontmatter.size}, ${p.frontmatter.steps} steps)`;
-	});
+	// Try rich UI if available
+	if (ctx.hasUI && ctx.ui.custom) {
+		const { Container, SelectList, Text } = await import("@mariozechner/pi-tui");
+		const { DynamicBorder } = await import("@mariozechner/pi-coding-agent");
 
-	const selected = await ctx.ui.select("Plans", options);
-	if (selected) {
-		const index = options.indexOf(selected);
-		if (index >= 0) {
-			const plan = plans[index];
-			await handlePlanOpen(plan.slug, ctx, pi, state);
+		selectedSlug = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
+			const typedTheme = theme as {
+				fg(color: string, text: string): string;
+				bold(text: string): string;
+			};
+
+			const container = new Container();
+			container.addChild(new DynamicBorder((str: string) => typedTheme.fg("accent", str)));
+
+			// Header
+			const headerText = filter === "all" ? "Plans" : filter === "ideas" ? "Plans (ideas)" : "Plans (active)";
+			container.addChild(new Text(typedTheme.fg("accent", typedTheme.bold(headerText))));
+
+			// SelectList
+			const selectList = new SelectList(items, Math.min(items.length, 15), {
+				selectedPrefix: (text: string) => typedTheme.fg("accent", text),
+				selectedText: (text: string) => typedTheme.fg("accent", text),
+				description: (text: string) => typedTheme.fg("muted", text),
+				scrollInfo: (text: string) => typedTheme.fg("dim", text),
+				noMatch: (text: string) => typedTheme.fg("warning", text),
+			});
+
+			selectList.onSelect = (item: { value: string }) => done(item.value);
+			selectList.onCancel = () => done(null);
+
+			container.addChild(selectList);
+
+			// Footer hint
+			container.addChild(new Text(typedTheme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
+			container.addChild(new DynamicBorder((str: string) => typedTheme.fg("accent", str)));
+
+			const typedTui = tui as { requestRender(): void };
+			return {
+				render(width: number) {
+					return container.render(width);
+				},
+				invalidate() {
+					container.invalidate();
+				},
+				handleInput(data: string) {
+					selectList.handleInput(data);
+					typedTui.requestRender();
+				},
+			};
+		});
+	} else {
+		// Fallback: simple select
+		const options = items.map((item) => item.label);
+		const selected = await ctx.ui.select("Plans", options);
+		if (selected) {
+			const index = options.indexOf(selected);
+			if (index >= 0) {
+				selectedSlug = items[index].value;
+			}
 		}
+	}
+
+	if (selectedSlug) {
+		await handlePlanOpen(selectedSlug, ctx, pi, state);
 	}
 }
 
@@ -353,6 +501,7 @@ async function handlePlanOpen(
 
 	// Restore state from plan
 	state.currentSlug = slug;
+	state.planTitle = plan.frontmatter.title;
 	state.planText = plan.content;
 	state.planSize = plan.frontmatter.size;
 	state.preMortemRun = plan.frontmatter.has_pre_mortem;
@@ -552,9 +701,12 @@ export async function handlePlanRename(
 	ctx.ui.notify(`📝 Renamed '${oldSlug}' → '${newSlug}' (dev/work/plans/${newSlug}/)`, "info");
 }
 
-function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
+/** Statuses that can be set directly via /plan status <status> */
+const SETTABLE_STATUSES: ReadonlySet<PlanStatus> = new Set(["idea", "draft", "planned"]);
+
+export async function handlePlanStatus(args: string, ctx: CommandContext, state: PlanModeState): Promise<void> {
 	if (!state.currentSlug) {
-		ctx.ui.notify("No active plan. Use /plan open <slug> or /plan save to start.", "info");
+		ctx.ui.notify("No active plan. Use /plan open <slug> or /plan save to start.", "warning");
 		return;
 	}
 
@@ -564,13 +716,66 @@ function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
 		return;
 	}
 
-	const fm = plan.frontmatter;
+	const targetStatus = args.trim().split(/\s+/)[0]?.toLowerCase();
 
-	// Build artifact list
-	const artifacts: string[] = [];
-	if (fm.has_pre_mortem) artifacts.push("pre-mortem ✓");
-	if (fm.has_review) artifacts.push("review ✓");
-	if (fm.has_prd) artifacts.push("PRD ✓");
+	// If no args provided, show current status info
+	if (!targetStatus) {
+		showPlanStatusInfo(ctx, plan.frontmatter);
+		return;
+	}
+
+	// Handle restricted statuses
+	if (targetStatus === "building") {
+		ctx.ui.notify("Use /build to start execution", "error");
+		return;
+	}
+	if (targetStatus === "complete") {
+		ctx.ui.notify("Use /plan archive to complete a plan", "error");
+		return;
+	}
+	if (targetStatus === "abandoned") {
+		ctx.ui.notify("Use /plan archive to abandon a plan", "error");
+		return;
+	}
+
+	// Validate against settable statuses
+	if (!SETTABLE_STATUSES.has(targetStatus as PlanStatus)) {
+		ctx.ui.notify(
+			`Invalid status '${targetStatus}'. Valid options: idea, draft, planned (use /build or /plan archive for other transitions)`,
+			"error",
+		);
+		return;
+	}
+
+	const validTarget = targetStatus as PlanStatus;
+	const currentStatus = plan.frontmatter.status;
+
+	if (validTarget === currentStatus) {
+		ctx.ui.notify(`Status is already '${currentStatus}'`, "info");
+		return;
+	}
+
+	// Confirm with user
+	const confirmed = await ctx.ui.confirm(
+		"Change Status",
+		`Change status from '${currentStatus}' to '${validTarget}'?`,
+	);
+	if (!confirmed) {
+		ctx.ui.notify("Status change cancelled", "info");
+		return;
+	}
+
+	// Persist to disk
+	updatePlanFrontmatter(state.currentSlug, { status: validTarget });
+	ctx.ui.notify(`✅ Status changed: '${currentStatus}' → '${validTarget}'`, "info");
+}
+
+function showPlanStatusInfo(ctx: CommandContext, fm: PlanFrontmatter): void {
+	// Build gate list with ☑/☐
+	const gates: string[] = [];
+	gates.push(fm.has_pre_mortem ? "pre-mortem ☑" : "pre-mortem ☐");
+	gates.push(fm.has_review ? "review ☑" : "review ☐");
+	gates.push(fm.has_prd ? "PRD ☑" : "PRD ☐");
 
 	// Build recommendations based on size
 	const recommendations: string[] = [];
@@ -582,13 +787,10 @@ function handlePlanStatus(ctx: CommandContext, state: PlanModeState): void {
 	}
 
 	const lines = [
-		`📋 **${fm.title}**`,
+		`📋 **${fm.title}** (${fm.slug})`,
 		`Status: ${fm.status} | Size: ${fm.size} | Steps: ${fm.steps}`,
+		`Gates: ${gates.join(", ")}`,
 	];
-
-	if (artifacts.length > 0) {
-		lines.push(`Artifacts: ${artifacts.join(", ")}`);
-	}
 
 	if (recommendations.length > 0) {
 		lines.push(`\nRecommendations:\n${recommendations.map((r) => `  • ${r}`).join("\n")}`);
@@ -629,181 +831,6 @@ async function handlePlanDelete(
 		state.planSize = null;
 	}
 	ctx.ui.notify(`🗑 Plan deleted: ${slug}`, "info");
-}
-
-// ────────────────────────────────────────────────────────────
-// /plan backlog command handler
-// ────────────────────────────────────────────────────────────
-
-const backlogStatusEmoji: Record<PlanStatus, string> = {
-	idea: "💡",
-	draft: "📝",
-	planned: "✅",
-	building: "⚡",
-	complete: "🎉",
-	abandoned: "🚫",
-};
-
-export async function handleBacklog(
-	args: string,
-	ctx: CommandContext,
-	pi: CommandPi,
-	state: PlanModeState,
-): Promise<void> {
-	const parts = args.trim().split(/\s+/);
-	const subcmd = parts[0]?.toLowerCase() || "list";
-	const rest = parts.slice(1).join(" ");
-
-	switch (subcmd) {
-		case "list":
-			await handleBacklogList(ctx, pi, state);
-			break;
-		case "add":
-		case "new":
-			await handleBacklogAdd(rest, ctx);
-			break;
-		case "edit":
-			await handleBacklogEdit(rest, ctx, pi);
-			break;
-		case "promote":
-			await handleBacklogPromote(rest, ctx, pi, state);
-			break;
-		default:
-			// No recognized sub-subcommand: treat as "list"
-			await handleBacklogList(ctx, pi, state);
-	}
-}
-
-async function handleBacklogList(
-	ctx: CommandContext,
-	pi: CommandPi,
-	state: PlanModeState,
-): Promise<void> {
-	const items = listBacklog();
-
-	if (items.length === 0) {
-		ctx.ui.notify("No backlog items found in dev/work/backlog/", "info");
-		return;
-	}
-
-	const options = items.map((item) => {
-		const emoji = backlogStatusEmoji[item.frontmatter.status] ?? "📄";
-		const tags = item.frontmatter.tags.length > 0 ? ` [${item.frontmatter.tags.join(", ")}]` : "";
-		return `${emoji} ${item.frontmatter.title}${tags}`;
-	});
-
-	const selected = await ctx.ui.select("Backlog", options);
-	if (selected) {
-		const index = options.indexOf(selected);
-		if (index >= 0) {
-			const item = items[index];
-			ctx.ui.notify(`Selected: ${item.slug} — use /plan backlog edit ${item.slug} or /plan backlog promote ${item.slug}`, "info");
-		}
-	}
-}
-
-async function handleBacklogAdd(title: string, ctx: CommandContext): Promise<void> {
-	if (!title.trim()) {
-		ctx.ui.notify("Usage: /plan backlog add <title>", "warning");
-		return;
-	}
-
-	try {
-		const slug = createBacklogItem(title.trim());
-		ctx.ui.notify(`📝 Created backlog item: dev/work/backlog/${slug}.md`, "info");
-	} catch (err) {
-		ctx.ui.notify(`Failed to create backlog item: ${err instanceof Error ? err.message : String(err)}`, "error");
-	}
-}
-
-async function handleBacklogEdit(slug: string, ctx: CommandContext, pi: CommandPi): Promise<void> {
-	if (!slug.trim()) {
-		ctx.ui.notify("Usage: /plan backlog edit <slug>", "warning");
-		return;
-	}
-
-	const { existsSync, readFileSync } = await import("node:fs");
-	const { join } = await import("node:path");
-
-	// Try folder first, then flat file
-	const folderPath = join(DEFAULT_BACKLOG_DIR, slug, "plan.md");
-	const filePath = join(DEFAULT_BACKLOG_DIR, `${slug}.md`);
-
-	let content: string;
-	let path: string;
-	if (existsSync(folderPath)) {
-		content = readFileSync(folderPath, "utf-8");
-		path = folderPath;
-	} else if (existsSync(filePath)) {
-		content = readFileSync(filePath, "utf-8");
-		path = filePath;
-	} else {
-		ctx.ui.notify(`Backlog item not found: ${slug}`, "error");
-		return;
-	}
-
-	pi.sendUserMessage(
-		`Here is backlog item "${slug}" from ${path}. Review and suggest edits as needed:\n\n${content}`,
-	);
-}
-
-async function handleBacklogPromote(
-	slug: string,
-	ctx: CommandContext,
-	pi: CommandPi,
-	state: PlanModeState,
-): Promise<void> {
-	if (!slug.trim()) {
-		ctx.ui.notify("Usage: /plan backlog promote <slug>", "warning");
-		return;
-	}
-
-	try {
-		promoteBacklogItem(slug.trim());
-		ctx.ui.notify(`🚀 Promoted to dev/work/plans/${slug}/`, "info");
-
-		// Load the promoted plan into state
-		await handlePlanOpen(slug.trim(), ctx, pi, state);
-	} catch (err) {
-		ctx.ui.notify(`Failed to promote: ${err instanceof Error ? err.message : String(err)}`, "error");
-	}
-}
-
-// ────────────────────────────────────────────────────────────
-// /plan shelve command handler
-// ────────────────────────────────────────────────────────────
-
-export async function handleShelve(
-	ctx: CommandContext,
-	pi: CommandPi,
-	state: PlanModeState,
-): Promise<void> {
-	if (!state.currentSlug) {
-		ctx.ui.notify("No active plan to shelve.", "warning");
-		return;
-	}
-
-	const plan = loadPlan(state.currentSlug);
-	const title = plan?.frontmatter.title ?? state.currentSlug;
-
-	const confirmed = await ctx.ui.confirm("Shelve Plan", `Shelve '${title}' to backlog?`);
-	if (!confirmed) return;
-
-	try {
-		shelveToBacklog(state.currentSlug);
-		ctx.ui.notify(`📦 Shelved to dev/work/backlog/${state.currentSlug}/`, "info");
-
-		// Clear plan state
-		state.currentSlug = null;
-		state.planText = "";
-		state.planSize = null;
-		state.todoItems = [];
-		state.preMortemRun = false;
-		state.reviewRun = false;
-		state.prdConverted = false;
-	} catch (err) {
-		ctx.ui.notify(`Failed to shelve: ${err instanceof Error ? err.message : String(err)}`, "error");
-	}
 }
 
 // ────────────────────────────────────────────────────────────
@@ -891,8 +918,17 @@ async function handleArchiveList(ctx: CommandContext): Promise<void> {
 		return;
 	}
 
+	const statusEmoji: Record<PlanStatus, string> = {
+		idea: "💡",
+		draft: "📝",
+		planned: "✅",
+		building: "⚡",
+		complete: "🎉",
+		abandoned: "🚫",
+	};
+
 	const options = items.map((item) => {
-		const emoji = backlogStatusEmoji[item.frontmatter.status] ?? "📄";
+		const emoji = statusEmoji[item.frontmatter.status] ?? "📄";
 		return `${emoji} ${item.frontmatter.title}`;
 	});
 
@@ -1115,7 +1151,7 @@ export async function handleBuild(
 
 	state.planModeEnabled = false;
 	state.executionMode = true;
-	pi.setActiveTools(NORMAL_MODE_TOOLS);
+	pi.setActiveTools(getNormalModeTools());
 
 	ctx.ui.notify("⚡ Build started!", "info");
 

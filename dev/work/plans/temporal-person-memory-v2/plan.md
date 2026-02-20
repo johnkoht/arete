@@ -1,18 +1,16 @@
 ---
 title: Temporal + Person Memory v2 (Lean MVP)
 slug: temporal-person-memory-v2
-status: approved
+status: planned
 size: medium
 created: 2026-02-17T06:20:00Z
 updated: 2026-02-17T06:20:00Z
 completed: null
-blocked_reason: null
-previous_status: null
 has_review: false
 has_pre_mortem: true
 has_prd: true
-backlog_ref: dev/backlog/features/people-intelligence.md
 steps: 6
+tags: []
 ---
 
 # Plan

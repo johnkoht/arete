@@ -16,6 +16,23 @@ export type { PlanSize };
  */
 export const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire", "edit", "write"] as const;
 
+/**
+ * Active tools for normal (non-plan) mode.
+ *
+ * Initialized with built-in defaults, then replaced at session_start with the
+ * full tool list (including extension-registered tools like subagent) so that
+ * setActiveTools() restores everything instead of stripping dynamic tools.
+ */
+let _normalModeTools: string[] = ["read", "bash", "edit", "write"];
+
+export function getNormalModeTools(): string[] {
+	return _normalModeTools;
+}
+
+export function setNormalModeTools(tools: string[]): void {
+	_normalModeTools = tools;
+}
+
 // Destructive commands blocked in plan mode
 const DESTRUCTIVE_PATTERNS = [
 	/\brm\b/i,

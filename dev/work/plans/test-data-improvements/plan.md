@@ -6,13 +6,11 @@ size: large
 created: 2026-02-17T22:52:19.561Z
 updated: 2026-02-17T22:53:53.329Z
 completed: null
-blocked_reason: null
-previous_status: null
 has_review: false
 has_pre_mortem: true
 has_prd: true
-backlog_ref: null
 steps: 6
+tags: []
 ---
 
 Great question — and important distinction.

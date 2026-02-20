@@ -87,9 +87,9 @@ After creating an entry, add a line to `memory/MEMORY.md` (top of Index section)
 |---------|----------|----------|
 | **What happened** — decisions, changes, learnings | `memory/entries/` | Refactors, architectural decisions, methodology findings |
 | **Raw or underdeveloped ideas** | `scratchpad.md` | "We should eventually build onboarding"; quick capture, parking lot |
-| **Mature future work** — discussed, with a plan | `dev/work/backlog/` | Idea + general plan, enough detail to become a PRD |
+| **Mature future work** — discussed, with a plan | `dev/work/plans/` (status `idea` or `draft`) | Idea + general plan, enough detail to become a PRD |
 
-**Do not** put backlog items or future work in entries. Entries record what was decided or done; scratchpad and backlog record what might be done.
+**Do not** put future work items in entries. Entries record what was decided or done; scratchpad and plans (with `idea`/`draft` status) record what might be done.
 
 ## Collaboration Profile (collaboration.md)
 

@@ -160,7 +160,7 @@ Before implementing new helpers, services, or abstractions:
 - Apply DRY (Don't Repeat Yourself)
 - Apply KISS (Keep It Simple)
 
-If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/work/backlog/` — but don't block on it.
+If you find repetitive logic that isn't abstracted, create a refactor item in `dev/work/plans/` with status `idea` — but don't block on it.
 
 ### 7. Capability registry check (for tooling/platform changes)
 
@@ -256,7 +256,7 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 - [ ] Concept audit: If feature changes paths/structure, grep old paths
 - [ ] Related workflows: Check files that reference setup, install, or getting started
 
-**Anti-pattern:** Don't assume "documentation" = README + SETUP + AGENTS. ONBOARDING, scratchpad, and backlog frequently need updates.
+**Anti-pattern:** Don't assume "documentation" = README + SETUP + AGENTS. ONBOARDING, scratchpad, and plans frequently need updates.
 
 ## References
 

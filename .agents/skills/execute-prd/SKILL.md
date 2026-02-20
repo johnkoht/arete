@@ -1,6 +1,6 @@
 ---
 name: execute-prd
-description: Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Orchestrator owns PRD understanding, value/alignment, breakdown, context for subagents, and holistic post-completion review and report. Reviewer owns pre-work sanity check and post-work code review (technical, AC, quality, reuse). Includes pre-mortem, structured feedback on iterate, and refactor backlog.
+description: Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Orchestrator owns PRD understanding, value/alignment, breakdown, context for subagents, and holistic post-completion review and report. Reviewer owns pre-work sanity check and post-work code review (technical, AC, quality, reuse). Includes pre-mortem, structured feedback on iterate, and refactor items.
 category: build
 work_type: development
 primitives: []
@@ -89,7 +89,7 @@ Like a sr. engineering manager, the Orchestrator is a product thinker and techni
 The Reviewer acts as a sr. engineer in two moments:
 
 1. **Before work begins**: When a task is about to go to a subagent, the Reviewer reviews and confirms details, AC, and clarity on what to build. This is a **sanity check** before work begins.
-2. **After the subagent completes**: The Reviewer performs a **thorough code review** as a sr. engineer: validates the work, acceptance criteria, and tests (technical review, AC review, quality check DRY/KISS, reuse and duplication check, refactor backlog when applicable). Accept or iterate with structured feedback to the subagent.
+2. **After the subagent completes**: The Reviewer performs a **thorough code review** as a sr. engineer: validates the work, acceptance criteria, and tests (technical review, AC review, quality check DRY/KISS, reuse and duplication check, refactor items when applicable). Accept or iterate with structured feedback to the subagent.
 
 ## When to Use
 
@@ -179,7 +179,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    | **Dependencies** | Are dependencies clear? | "Can't do B1 until A3 is done" |
    | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
    | **State Tracking** | How to track progress? | "Update prd.json after each task" |
-   | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, backlog items with doc tasks" |
+   | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, plan items with doc tasks" |
 
 7. **Document Mitigations**
    
@@ -402,7 +402,7 @@ For each pending task (in dependency order):
        - **Subagent insights**: Synthesize reflections across all tasks (what helped them most, common suggestions)
        - **Collaboration patterns**: How did builder respond? What did they prefer?
        - **Recommendations for next PRD**: Specific improvements (prompts, workflow, rules)
-       - **Refactor backlog items**: Count and paths (if any)
+       - **Refactor items**: Count and paths (if any)
        - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
     
     2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
@@ -438,8 +438,8 @@ For each pending task (in dependency order):
     ## Pre-Mortem Review
     [Brief table: Risk | Materialized | Effective]
     
-    ## Refactor Backlog Items (if any)
-    - `dev/work/backlog/[file].md` — [One-line summary]
+    ## Refactor Items (if any)
+    - `dev/work/plans/refactor-[name]/plan.md` — [One-line summary]
     
     ## Recommendations
     - **Continue**: [3-5 patterns that worked]
@@ -453,7 +453,7 @@ For each pending task (in dependency order):
     ## Next Steps
     1. Review and merge
     2. Update AGENTS.md (if documentation gaps noted)
-    3. Address refactor backlog (if any)
+    3. Address refactor items (if any)
     ```
     
     (Build memory is already updated in step 20; do not list "create memory entry" as a next step.)
@@ -481,7 +481,7 @@ For each pending task (in dependency order):
 **Tests**: ✅ [total] passing
 **Quality**: ✅ [success-rate]% first-attempt
 **Pre-mortem**: [risks-materialized]/[risks-identified] risks hit
-**Refactor items added to backlog**: [N] (see list below if N > 0)
+**Refactor items added**: [N] (see list below if N > 0)
 
 ## Deliverables
 - [Feature 1]
@@ -491,8 +491,8 @@ For each pending task (in dependency order):
 ## Pre-Mortem Analysis
 [Table of risks vs outcomes]
 
-## Refactor Backlog Items (if any)
-- `dev/work/backlog/refactor-[name].md` — [one-line summary]
+## Refactor Items (if any)
+- `dev/work/plans/refactor-[name]/plan.md` — [one-line summary]
 - ...
 
 ## Key Learnings
@@ -566,15 +566,22 @@ After implementation:
 Proceed with implementation.
 ```
 
-### Refactor Backlog Item Example
+### Refactor Item Example
 
-When the orchestrator finds repetitive logic that isn't yet abstracted, create a short file in `dev/work/backlog/`:
+When the orchestrator finds repetitive logic that isn't yet abstracted, create a plan in `dev/work/plans/`:
+
+Create the folder `dev/work/plans/refactor-[name]/plan.md`:
 
 ```markdown
+---
+title: "Refactor: [Short description]"
+slug: refactor-[name]
+status: idea
+size: tiny | small | medium
+---
+
 # Refactor: [Short description]
 
-**Status**: Backlog  
-**Effort**: Tiny | Small | Medium  
 **Source**: PRD [name], Task [id] — orchestrator review
 
 ## What

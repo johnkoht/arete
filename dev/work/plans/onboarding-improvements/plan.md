@@ -9,8 +9,8 @@ completed: null
 has_review: true
 has_pre_mortem: true
 has_prd: true
-backlog_ref: null
 steps: 5
+tags: []
 ---
 
 # Onboarding Improvements

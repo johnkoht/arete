@@ -9,8 +9,8 @@ completed: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-backlog_ref: null
 steps: 8
+tags: []
 ---
 
 100% agree — this should be a **first-class mode**, not an edge case.

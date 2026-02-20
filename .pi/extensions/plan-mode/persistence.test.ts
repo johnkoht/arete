@@ -16,14 +16,12 @@ import {
 	parseFrontmatter,
 	parseFrontmatterFromFile,
 	migrateStatus,
-	listBacklog,
 	listArchive,
 	moveItem,
-	promoteBacklogItem,
-	shelveToBacklog,
 	archiveItem,
-	createBacklogItem,
+	migrateBacklogToPlans,
 	type PlanFrontmatter,
+	type MigrationResult,
 } from "./persistence.js";
 
 function makeFrontmatter(overrides: Partial<PlanFrontmatter> = {}): PlanFrontmatter {
@@ -479,89 +477,6 @@ describe("parseFrontmatterFromFile", () => {
 });
 
 // ────────────────────────────────────────────────────────────
-// listBacklog
-// ────────────────────────────────────────────────────────────
-
-describe("listBacklog", () => {
-	let tempDir: string;
-
-	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "backlog-test-"));
-	});
-
-	afterEach(() => {
-		rmSync(tempDir, { recursive: true, force: true });
-	});
-
-	it("returns empty array when directory does not exist", () => {
-		assert.deepEqual(listBacklog(join(tempDir, "nonexistent")), []);
-	});
-
-	it("lists flat .md files", () => {
-		const fm = serializeFrontmatter(makeFrontmatter({ title: "Flat Item", slug: "flat-item", status: "idea" }));
-		writeFileSync(join(tempDir, "flat-item.md"), `${fm}\n\n# Flat Item`, "utf-8");
-
-		const items = listBacklog(tempDir);
-		assert.equal(items.length, 1);
-		assert.equal(items[0].slug, "flat-item");
-		assert.equal(items[0].frontmatter.status, "idea");
-	});
-
-	it("lists folders with plan.md", () => {
-		const planDir = join(tempDir, "folder-item");
-		mkdirSync(planDir, { recursive: true });
-		const fm = serializeFrontmatter(makeFrontmatter({ title: "Folder Item", slug: "folder-item", status: "idea" }));
-		writeFileSync(join(planDir, "plan.md"), `${fm}\n\n# Folder Item`, "utf-8");
-
-		const items = listBacklog(tempDir);
-		assert.equal(items.length, 1);
-		assert.equal(items[0].slug, "folder-item");
-	});
-
-	it("lists mixed flat files and folders", () => {
-		// Flat file
-		const fm1 = serializeFrontmatter(makeFrontmatter({ title: "Flat", slug: "flat", updated: "2026-01-01T00:00:00Z" }));
-		writeFileSync(join(tempDir, "flat.md"), `${fm1}\n\n# Flat`, "utf-8");
-
-		// Folder
-		const planDir = join(tempDir, "folder");
-		mkdirSync(planDir, { recursive: true });
-		const fm2 = serializeFrontmatter(makeFrontmatter({ title: "Folder", slug: "folder", updated: "2026-02-01T00:00:00Z" }));
-		writeFileSync(join(planDir, "plan.md"), `${fm2}\n\n# Folder`, "utf-8");
-
-		const items = listBacklog(tempDir);
-		assert.equal(items.length, 2);
-		assert.equal(items[0].slug, "folder"); // newer first
-		assert.equal(items[1].slug, "flat");
-	});
-
-	it("handles file without frontmatter gracefully", () => {
-		writeFileSync(join(tempDir, "no-fm.md"), "# Just a Title\n\nNo frontmatter here.", "utf-8");
-
-		const items = listBacklog(tempDir);
-		assert.equal(items.length, 1);
-		assert.equal(items[0].slug, "no-fm");
-		assert.equal(items[0].frontmatter.status, "idea");
-	});
-
-	it("prefers folder on slug collision (foo.md + foo/)", () => {
-		// Create flat file
-		const fm1 = serializeFrontmatter(makeFrontmatter({ title: "File Version", slug: "dupe" }));
-		writeFileSync(join(tempDir, "dupe.md"), `${fm1}\n\n# File`, "utf-8");
-
-		// Create folder with same slug
-		const planDir = join(tempDir, "dupe");
-		mkdirSync(planDir, { recursive: true });
-		const fm2 = serializeFrontmatter(makeFrontmatter({ title: "Folder Version", slug: "dupe" }));
-		writeFileSync(join(planDir, "plan.md"), `${fm2}\n\n# Folder`, "utf-8");
-
-		const items = listBacklog(tempDir);
-		assert.equal(items.length, 1);
-		assert.equal(items[0].frontmatter.title, "Folder Version");
-	});
-});
-
-// ────────────────────────────────────────────────────────────
 // listArchive
 // ────────────────────────────────────────────────────────────
 
@@ -639,53 +554,16 @@ describe("moveItem", () => {
 });
 
 // ────────────────────────────────────────────────────────────
-// createBacklogItem
+// migrateBacklogToPlans
 // ────────────────────────────────────────────────────────────
 
-describe("createBacklogItem", () => {
-	let tempDir: string;
-
-	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "create-backlog-test-"));
-	});
-
-	afterEach(() => {
-		rmSync(tempDir, { recursive: true, force: true });
-	});
-
-	it("creates flat file with proper frontmatter", () => {
-		const slug = createBacklogItem("Slack Integration", tempDir);
-		assert.equal(slug, "slack-integration");
-
-		const filePath = join(tempDir, "slack-integration.md");
-		assert.ok(existsSync(filePath));
-
-		const result = parseFrontmatterFromFile(filePath);
-		assert.equal(result.frontmatter.title, "Slack Integration");
-		assert.equal(result.frontmatter.slug, "slack-integration");
-		assert.equal(result.frontmatter.status, "idea");
-		assert.equal(result.frontmatter.size, "unknown");
-		assert.deepEqual(result.frontmatter.tags, []);
-	});
-
-	it("creates directory if it does not exist", () => {
-		const nested = join(tempDir, "nested", "deep");
-		createBacklogItem("Test Item", nested);
-		assert.ok(existsSync(join(nested, "test-item.md")));
-	});
-});
-
-// ────────────────────────────────────────────────────────────
-// promoteBacklogItem
-// ────────────────────────────────────────────────────────────
-
-describe("promoteBacklogItem", () => {
+describe("migrateBacklogToPlans", () => {
 	let tempDir: string;
 	let backlogDir: string;
 	let plansDir: string;
 
 	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "promote-test-"));
+		tempDir = mkdtempSync(join(tmpdir(), "migrate-test-"));
 		backlogDir = join(tempDir, "backlog");
 		plansDir = join(tempDir, "plans");
 		mkdirSync(backlogDir, { recursive: true });
@@ -696,72 +574,116 @@ describe("promoteBacklogItem", () => {
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 
-	it("promotes flat file to folder with plan.md", () => {
+	it("returns empty result for nonexistent backlog dir", () => {
+		const result = migrateBacklogToPlans(join(tempDir, "nonexistent"), plansDir);
+		assert.deepEqual(result.moved, []);
+		assert.deepEqual(result.collisions, []);
+		assert.deepEqual(result.skipped, []);
+	});
+
+	it("returns empty result for empty backlog dir", () => {
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
+		assert.deepEqual(result.moved, []);
+		assert.deepEqual(result.collisions, []);
+		assert.deepEqual(result.skipped, []);
+	});
+
+	it("migrates flat .md file to plan folder", () => {
 		const fm = serializeFrontmatter(makeFrontmatter({ title: "My Idea", slug: "my-idea", status: "idea" }));
-		writeFileSync(join(backlogDir, "my-idea.md"), `${fm}\n\n# My Idea\n\nSome content.`, "utf-8");
+		writeFileSync(join(backlogDir, "my-idea.md"), `${fm}\n\n# My Idea\n\nContent here.`, "utf-8");
 
-		promoteBacklogItem("my-idea", backlogDir);
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
 
-		// Source should be gone
-		assert.ok(!existsSync(join(backlogDir, "my-idea.md")));
-		// Plan should exist with updated status
+		assert.deepEqual(result.moved, ["my-idea"]);
+		assert.deepEqual(result.collisions, []);
+		assert.deepEqual(result.skipped, []);
+
 		const planFile = join(plansDir, "my-idea", "plan.md");
 		assert.ok(existsSync(planFile));
-		const result = parseFrontmatterFromFile(planFile);
-		assert.equal(result.frontmatter.status, "draft");
+		const loaded = parseFrontmatterFromFile(planFile);
+		assert.equal(loaded.frontmatter.title, "My Idea");
+		assert.equal(loaded.frontmatter.status, "idea");
 	});
 
-	it("promotes folder to plans, updates status", () => {
-		const srcDir = join(backlogDir, "shelved-plan");
+	it("migrates flat file without frontmatter and sets status to idea", () => {
+		writeFileSync(join(backlogDir, "raw-thought.md"), "# Raw Thought\n\nJust text.", "utf-8");
+
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
+
+		assert.deepEqual(result.moved, ["raw-thought"]);
+		const planFile = join(plansDir, "raw-thought", "plan.md");
+		assert.ok(existsSync(planFile));
+		const loaded = parseFrontmatterFromFile(planFile);
+		assert.equal(loaded.frontmatter.status, "idea");
+	});
+
+	it("migrates folder with plan.md as-is", () => {
+		const srcDir = join(backlogDir, "folder-item");
 		mkdirSync(srcDir, { recursive: true });
-		const fm = serializeFrontmatter(makeFrontmatter({ title: "Shelved Plan", slug: "shelved-plan", status: "idea" }));
-		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Shelved`, "utf-8");
-		writeFileSync(join(srcDir, "prd.md"), "PRD content", "utf-8");
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "Folder Item", slug: "folder-item", status: "draft" }));
+		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Folder Item`, "utf-8");
+		writeFileSync(join(srcDir, "notes.md"), "Extra notes", "utf-8");
 
-		promoteBacklogItem("shelved-plan", backlogDir);
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
 
-		assert.ok(!existsSync(srcDir));
-		assert.ok(existsSync(join(plansDir, "shelved-plan", "plan.md")));
-		assert.ok(existsSync(join(plansDir, "shelved-plan", "prd.md")));
-	});
-});
-
-// ────────────────────────────────────────────────────────────
-// shelveToBacklog
-// ────────────────────────────────────────────────────────────
-
-describe("shelveToBacklog", () => {
-	let tempDir: string;
-	let backlogDir: string;
-	let plansDir: string;
-
-	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "shelve-test-"));
-		backlogDir = join(tempDir, "backlog");
-		plansDir = join(tempDir, "plans");
-		mkdirSync(backlogDir, { recursive: true });
-		mkdirSync(plansDir, { recursive: true });
+		assert.deepEqual(result.moved, ["folder-item"]);
+		assert.ok(existsSync(join(plansDir, "folder-item", "plan.md")));
+		assert.ok(existsSync(join(plansDir, "folder-item", "notes.md")));
+		const loaded = parseFrontmatterFromFile(join(plansDir, "folder-item", "plan.md"));
+		assert.equal(loaded.frontmatter.status, "draft");
 	});
 
-	afterEach(() => {
-		rmSync(tempDir, { recursive: true, force: true });
-	});
-
-	it("moves plan folder to backlog, updates status to idea", () => {
-		const srcDir = join(plansDir, "active-plan");
+	it("renames inner file to plan.md when folder has non-plan.md file", () => {
+		const srcDir = join(backlogDir, "oddly-named");
 		mkdirSync(srcDir, { recursive: true });
-		const fm = serializeFrontmatter(makeFrontmatter({ title: "Active Plan", slug: "active-plan", status: "draft" }));
-		writeFileSync(join(srcDir, "plan.md"), `${fm}\n\n# Active Plan`, "utf-8");
-		writeFileSync(join(srcDir, "prd.md"), "PRD content", "utf-8");
+		writeFileSync(join(srcDir, "my-idea.md"), "# My Idea\n\nContent.", "utf-8");
 
-		shelveToBacklog("active-plan", backlogDir);
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
 
-		assert.ok(!existsSync(srcDir));
-		assert.ok(existsSync(join(backlogDir, "active-plan", "plan.md")));
-		assert.ok(existsSync(join(backlogDir, "active-plan", "prd.md")));
+		assert.deepEqual(result.moved, ["oddly-named"]);
+		const planFile = join(plansDir, "oddly-named", "plan.md");
+		assert.ok(existsSync(planFile));
+		// Original name should not exist
+		assert.ok(!existsSync(join(plansDir, "oddly-named", "my-idea.md")));
+	});
 
-		const result = parseFrontmatterFromFile(join(backlogDir, "active-plan", "plan.md"));
-		assert.equal(result.frontmatter.status, "idea");
+	it("handles slug collision by suffixing with -idea", () => {
+		// Create existing plan
+		savePlan("my-idea", makeFrontmatter({ title: "Existing Plan", slug: "my-idea" }), "Existing content.", plansDir);
+
+		// Create backlog item with same slug
+		const fm = serializeFrontmatter(makeFrontmatter({ title: "My Idea", slug: "my-idea", status: "idea" }));
+		writeFileSync(join(backlogDir, "my-idea.md"), `${fm}\n\n# My Idea`, "utf-8");
+
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
+
+		assert.deepEqual(result.moved, ["my-idea-idea"]);
+		assert.equal(result.collisions.length, 1);
+		assert.equal(result.collisions[0].slug, "my-idea");
+		assert.ok(result.collisions[0].resolution.includes("my-idea-idea"));
+
+		// Both should exist
+		assert.ok(existsSync(join(plansDir, "my-idea", "plan.md")));
+		assert.ok(existsSync(join(plansDir, "my-idea-idea", "plan.md")));
+	});
+
+	it("skips non-.md files", () => {
+		writeFileSync(join(backlogDir, "readme.txt"), "not a plan", "utf-8");
+
+		const result = migrateBacklogToPlans(backlogDir, plansDir);
+
+		assert.deepEqual(result.moved, []);
+		assert.deepEqual(result.skipped, ["readme.txt"]);
+	});
+
+	it("creates plans dir if it does not exist", () => {
+		const newPlansDir = join(tempDir, "new-plans");
+		writeFileSync(join(backlogDir, "test.md"), "# Test", "utf-8");
+
+		const result = migrateBacklogToPlans(backlogDir, newPlansDir);
+
+		assert.deepEqual(result.moved, ["test"]);
+		assert.ok(existsSync(join(newPlansDir, "test", "plan.md")));
 	});
 });
 
