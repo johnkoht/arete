@@ -24,7 +24,7 @@ Conduct systematic post-mortem analysis after autonomous PRD execution. Extracts
 Read these files:
 - `dev/executions/{plan-slug}/prd.json` — Task outcomes, statuses, iteration counts, commit SHAs
 - `dev/executions/{plan-slug}/progress.md` — Subagent reflections, learnings, implementation notes
-- `dev/prds/{feature-name}/prd.md` — Original PRD with pre-mortem (if included)
+- `dev/work/plans/{feature-name}/prd.md` — Original PRD with pre-mortem (if included)
 
 ### 2. Analyze Metrics
 
@@ -83,7 +83,7 @@ Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 ```markdown
 # {Feature Name} - PRD Execution Learnings
 **Date**: YYYY-MM-DD
-**PRD**: dev/prds/{feature-name}/prd.md
+**PRD**: dev/work/plans/{feature-name}/prd.md
 **Branch**: {branch-name}
 **Status**: Complete
 

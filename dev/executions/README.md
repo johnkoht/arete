@@ -9,7 +9,7 @@ dev/executions/
 ├── README.md           # This file (committed)
 ├── .gitkeep            # Keeps directory in git
 └── <plan-slug>/        # One per execution run (gitignored)
-    ├── prd.json        # Copied from dev/plans/<slug>/prd.json at start; updated during execution
+    ├── prd.json        # Copied from dev/work/plans/<slug>/prd.json at start; updated during execution
     ├── status.json     # Run metadata and progress tracking
     └── progress.md     # Append-only log of task completions, learnings, reflections
 ```
@@ -17,7 +17,7 @@ dev/executions/
 ## Lifecycle
 
 1. **Builder** runs `/build` or invokes execute-prd manually
-2. **Orchestrator** creates `dev/executions/<plan-slug>/` and copies `prd.json` from `dev/plans/<slug>/prd.json`
+2. **Orchestrator** creates `dev/executions/<plan-slug>/` and copies `prd.json` from `dev/work/plans/<slug>/prd.json`
 3. **Orchestrator** creates `status.json` (see schema below) and `progress.md`
 4. **For each task**: Orchestrator dispatches to developer subagent → reviewer reviews → orchestrator updates `prd.json`, `status.json`, and `progress.md`
 5. **On completion**: Orchestrator performs holistic review, updates `status.json` to `completed`, creates memory entry
@@ -53,7 +53,7 @@ dev/executions/
 
 ## prd.json Format
 
-Same schema as `dev/autonomous/schema.ts` — unchanged from the existing format. The file is **copied** from `dev/plans/<slug>/prd.json` at execution start so the plan's source remains clean. Task statuses, commit SHAs, and attempt counts are updated in the execution copy only.
+Same schema as `dev/autonomous/schema.ts` — unchanged from the existing format. The file is **copied** from `dev/work/plans/<slug>/prd.json` at execution start so the plan's source remains clean. Task statuses, commit SHAs, and attempt counts are updated in the execution copy only.
 
 ## progress.md
 
@@ -96,10 +96,10 @@ Execution state directories (`dev/executions/*/`) are gitignored — they contai
 ## End-to-End Workflow
 
 ```
-1. Plan created          → dev/plans/<slug>/plan.md
-2. PRD written           → dev/prds/<slug>/prd.md
-3. Tasks generated       → dev/plans/<slug>/prd.json
-4. /build or manual      → Orchestrator reads prd.json from dev/plans/<slug>/
+1. Plan created          → dev/work/plans/<slug>/plan.md
+2. PRD written           → dev/work/plans/<slug>/prd.md
+3. Tasks generated       → dev/work/plans/<slug>/prd.json
+4. /build or manual      → Orchestrator reads prd.json from dev/work/plans/<slug>/
 5. Execution starts      → dev/executions/<slug>/ created with copied prd.json + status.json + progress.md
 6. Tasks execute         → Developer subagents work in worktree cwd, commit to branch
 7. State tracked         → prd.json + status.json + progress.md updated per task

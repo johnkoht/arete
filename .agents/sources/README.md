@@ -180,7 +180,7 @@ The compilation script is at `scripts/build-agents.ts`. It:
 
 ## References
 
-- **PRD (archived):** `dev/archive/prds/agents-md-compilation/prd.md`
+- **PRD (archived):** `dev/work/archive/agents-md-compilation/prd.md`
 - **Build script:** `scripts/build-agents.ts`
 - **Vercel research:** https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals
 - **Dev conventions:** `.cursor/rules/dev.mdc`

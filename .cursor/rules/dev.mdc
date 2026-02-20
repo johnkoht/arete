@@ -123,7 +123,7 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 **Scope Check:**
 - [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
+- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/work/backlog/*.md`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`

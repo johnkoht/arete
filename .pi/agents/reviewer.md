@@ -97,7 +97,7 @@ When iterating, provide **structured feedback**:
 #### Refactor Backlog (When Applicable)
 
 When you find repetitive logic that isn't yet abstracted (same pattern in multiple places, no shared util):
-1. Create `dev/backlog/improvements/refactor-[short-description].md`
+1. Create `dev/work/backlog/refactor-[short-description].md`
 2. Include: **What** (duplicated pattern and where), **Why** (DRY/maintainability), **Suggested direction**, **Effort** (Tiny/Small/Medium)
 3. Note the item in your review output
 
@@ -137,7 +137,7 @@ You also review plans and PRDs during plan-mode lifecycle progression:
 2. [Specific change]
 
 **Refactor Backlog** (if applicable):
-- [Item] → suggested file: dev/backlog/improvements/refactor-[name].md
+- [Item] → suggested file: dev/work/backlog/refactor-[name].md
 ```
 
 ## Expectations

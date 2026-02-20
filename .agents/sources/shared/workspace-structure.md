@@ -43,4 +43,4 @@ arete/                 # Build workspace root
 - Build workspace has `memory/` at root; user workspace has `.arete/memory/`
 - Build workspace has `.agents/skills/` for build skills; user workspace has product skills
 - Build workspace has `dev/` directory for backlog, plan artifacts, archive, and autonomous tooling
-- Current plan system of record: `dev/plans/`; legacy PRDs are archived in `dev/archive/prds/`
+- Plan system of record: `dev/work/plans/`; backlog: `dev/work/backlog/`; archive: `dev/work/archive/`

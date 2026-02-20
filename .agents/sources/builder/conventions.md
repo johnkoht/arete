@@ -160,7 +160,7 @@ Before implementing new helpers, services, or abstractions:
 - Apply DRY (Don't Repeat Yourself)
 - Apply KISS (Keep It Simple)
 
-If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/backlog/improvements/` — but don't block on it.
+If you find repetitive logic that isn't abstracted, create a refactor backlog item in `dev/work/backlog/` — but don't block on it.
 
 ### 7. Capability registry check (for tooling/platform changes)
 

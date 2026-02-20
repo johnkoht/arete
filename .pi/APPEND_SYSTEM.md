@@ -157,7 +157,7 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 **Scope Check:**
 - [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/backlog/*/*.md`
+- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/work/backlog/*.md`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
@@ -200,7 +200,7 @@ The plan-mode extension provides a full plan lifecycle with persistence, gates, 
 | `/plan` | Toggle plan mode (read-only exploration) |
 | `/plan list` | List all saved plans with status |
 | `/plan open <slug>` | Open a saved plan and restore its state |
-| `/plan save [slug]` | Save current plan to `dev/plans/{slug}/plan.md` |
+| `/plan save [slug]` | Save current plan to `dev/work/plans/{slug}/plan.md` |
 | `/plan status` | Show lifecycle info: status, size, gates, readiness |
 | `/plan next` | Smart gate orchestrator — shows checklist, runs gates, approves |
 | `/plan hold` | Put plan on hold (preserves previous status) |

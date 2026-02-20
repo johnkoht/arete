@@ -18,7 +18,7 @@ Convert a markdown PRD into structured JSON format (`prd.json`) for use with the
 
 ## Prerequisites
 
-- A markdown PRD exists (prefer `dev/prds/{name}/prd.md`; legacy: `projects/active/{name}/outputs/prd-*.md`)
+- A markdown PRD exists (prefer `dev/work/plans/{name}/prd.md`; legacy: `projects/active/{name}/outputs/prd-*.md`)
 - PRD has clear tasks/user stories with acceptance criteria
 
 ## Workflow
@@ -40,7 +40,7 @@ Ask the user for the PRD file path, or search for recent PRDs:
 
 ```bash
 # Find PRDs (preferred location)
-ls -la dev/prds/*/prd.md
+ls -la dev/work/plans/*/prd.md
 
 # Legacy: projects/active
 find projects/active -name "prd-*.md" -type f 2>/dev/null
@@ -121,13 +121,13 @@ Reference `dev/autonomous/schema.ts` for validation functions (schema location m
 
 ### 8. Write prd.json
 
-Write the JSON to `dev/plans/{feature-name}/prd.json` (alongside the plan):
+Write the JSON to `dev/work/plans/{feature-name}/prd.json` (alongside the plan):
 
 ```typescript
 import fs from 'fs';
 import path from 'path';
 
-const outputPath = `dev/plans/${featureName}/prd.json`;
+const outputPath = `dev/work/plans/${featureName}/prd.json`;
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, JSON.stringify(prd, null, 2));
 ```
@@ -151,7 +151,7 @@ Tasks:
 2. {task-2-title}
 ...
 
-Output: dev/plans/{feature-name}/prd.json
+Output: dev/work/plans/{feature-name}/prd.json
 
 Ready to execute? Use `/build` or invoke the execute-prd skill.
 ```
@@ -278,5 +278,5 @@ If no acceptance criteria found:
 ## Next Step
 
 After successful conversion, user can:
-1. Review/edit `dev/plans/{feature-name}/prd.json` manually if needed
+1. Review/edit `dev/work/plans/{feature-name}/prd.json` manually if needed
 2. Use `/build` or invoke the execute-prd skill to begin autonomous execution

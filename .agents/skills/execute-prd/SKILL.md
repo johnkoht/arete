@@ -66,8 +66,8 @@ The Reviewer acts as a sr. engineer in two moments:
 
 ## Prerequisites
 
-- PRD exists at `dev/prds/{feature-name}/prd.md`
-- Task breakdown exists in `dev/plans/{feature-name}/prd.json`
+- PRD exists at `dev/work/plans/{feature-name}/prd.md`
+- Task breakdown exists in `dev/autonomous/prd.json`
 - Working branch created (worktree recommended for isolation)
 
 ## Execution Context
@@ -82,8 +82,8 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 ### Phase 0: Understand the PRD (Orchestrator — Sr. Eng Manager)
 
 1. **Read and Internalize the PRD**
-   - Read `dev/prds/{feature-name}/prd.md` (path provided by user or derived from plan slug)
-   - Read `dev/plans/{feature-name}/prd.json` (task breakdown — path provided by user)
+   - Read `dev/work/plans/{feature-name}/prd.md` (path provided by user or derived from plan slug)
+   - Read `dev/autonomous/prd.json` (task breakdown — path provided by user)
    - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
    - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
    - Understand dependencies between tasks (A1→A2→A3→B1...).
@@ -94,7 +94,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 3. **Initialize Execution State**
    - Create `dev/executions/{plan-slug}/` directory
-   - Copy `dev/plans/{plan-slug}/prd.json` → `dev/executions/{plan-slug}/prd.json`
+   - Copy `dev/work/plans/{plan-slug}/prd.json` → `dev/executions/{plan-slug}/prd.json`
    - Create `dev/executions/{plan-slug}/status.json`:
      ```json
      {
@@ -402,7 +402,7 @@ For each pending task (in dependency order):
     [Brief table: Risk | Materialized | Effective]
     
     ## Refactor Backlog Items (if any)
-    - `dev/backlog/improvements/[file].md` — [One-line summary]
+    - `dev/work/backlog/[file].md` — [One-line summary]
     
     ## Recommendations
     - **Continue**: [3-5 patterns that worked]
@@ -455,7 +455,7 @@ For each pending task (in dependency order):
 [Table of risks vs outcomes]
 
 ## Refactor Backlog Items (if any)
-- `dev/backlog/improvements/refactor-[name].md` — [one-line summary]
+- `dev/work/backlog/refactor-[name].md` — [one-line summary]
 - ...
 
 ## Key Learnings
@@ -531,7 +531,7 @@ Proceed with implementation.
 
 ### Refactor Backlog Item Example
 
-When the orchestrator finds repetitive logic that isn't yet abstracted, create a short file in `dev/backlog/improvements/`:
+When the orchestrator finds repetitive logic that isn't yet abstracted, create a short file in `dev/work/backlog/`:
 
 ```markdown
 # Refactor: [Short description]
@@ -588,6 +588,6 @@ After fixing, run npm run typecheck and npm test again. Update prd.json and prog
 ## References
 
 - **Learnings**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
-- **PRD Template**: `dev/prds/intelligence-and-calendar/prd.md`
+- **PRD Template**: `dev/work/archive/intelligence-and-calendar/prd.md`
 - **Execution State**: `dev/executions/README.md`
 - **Task Schema**: `dev/autonomous/schema.ts` (may move in Phase 2)

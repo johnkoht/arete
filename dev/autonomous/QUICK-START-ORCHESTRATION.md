@@ -19,7 +19,7 @@ Please:
    - Phase 2: Task execution loop
    - Phase 3: Post-mortem and learnings
 
-The PRD is at: dev/prds/[feature-name]/prd.md
+The PRD is at: dev/work/plans/[feature-name]/prd.md
 Task breakdown: dev/autonomous/prd.json
 
 Let's start with Phase 0 and the pre-mortem.

@@ -111,7 +111,7 @@ npm run build:agents:dev && npm run build
 
 1. **BUILDER mode** - Building Areté itself (this repo)
    - Memory in `memory/entries/` indexed by `memory/MEMORY.md`
-   - PRDs in `dev/prds/{feature}/prd.md`
+   - PRDs in `dev/work/plans/{feature}/prd.md`
    - Build skills in `.agents/skills/`
    - Use `AGENT_MODE=BUILDER` to force this mode
 
@@ -464,7 +464,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 - `dev/autonomous/README.md` - Full documentation
 
 **How it works**:
-1. Write feature PRD in `dev/prds/{feature}/prd.md`
+1. Write feature PRD in `dev/work/plans/{feature}/prd.md`
 2. Convert to JSON: `arete skill prd-to-json`
 3. Execute: `arete skill execute-prd`
 4. Agent executes tasks sequentially, refreshing context each task
@@ -543,7 +543,7 @@ Date: YYYY-MM-DD
 
 For complex features, use the PRD execution system:
 
-1. **Write PRD**: `dev/prds/{feature}/prd.md`
+1. **Write PRD**: `dev/work/plans/{feature}/prd.md`
 2. **Convert to tasks**: Run `prd-to-json` skill
 3. **Review plan**: Run `review-plan` skill
 4. **Execute**: Run `execute-prd` skill
@@ -867,9 +867,9 @@ From `.cursor/rules/testing.mdc`:
 
 ### PRDs & Backlog
 
-- **dev/prds/** - Feature PRDs
-- **dev/backlog/features/** - Feature backlog
-- **dev/backlog/improvements/** - Improvement backlog
+- **dev/work/plans/ - Feature PRDs
+- **dev/work/backlog/ (features) - Feature backlog
+- **dev/work/backlog/ (improvements) - Improvement backlog
 
 ### Autonomous Development
 
@@ -885,7 +885,7 @@ We welcome contributions! To get started:
 
 1. Read this guide and AGENTS.md
 2. Review memory/MEMORY.md for recent changes
-3. Check dev/backlog/ for open work
+3. Check dev/work/backlog/ for open work
 4. Follow quality practices (pre-mortem, testing, memory)
 5. Submit PR with clear description
 
