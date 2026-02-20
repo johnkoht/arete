@@ -96,6 +96,39 @@ describe("serializeFrontmatter / parseFrontmatter", () => {
 		assert.equal(parsed.has_pre_mortem, true);
 	});
 
+	it("preserves simplified statuses through round-trip", () => {
+		for (const status of ["draft", "ready", "building", "complete"] as const) {
+			const fm = makeFrontmatter({ status });
+			const serialized = serializeFrontmatter(fm);
+			const parsed = parseFrontmatter(serialized);
+			assert.equal(parsed.status, status, `status '${status}' should survive round-trip`);
+		}
+	});
+
+	it("migrates legacy statuses to simplified equivalents", () => {
+		const legacyMappings: Array<[string, string]> = [
+			["planned", "draft"],
+			["reviewed", "draft"],
+			["approved", "ready"],
+			["in-progress", "building"],
+			["completed", "complete"],
+			["blocked", "draft"],
+			["on-hold", "draft"],
+		];
+
+		for (const [legacy, expected] of legacyMappings) {
+			const raw = `---\nstatus: ${legacy}\ntitle: Test\nslug: test\n---`;
+			const parsed = parseFrontmatter(raw);
+			assert.equal(parsed.status, expected, `legacy status '${legacy}' should migrate to '${expected}'`);
+		}
+	});
+
+	it("falls back to draft for unknown statuses", () => {
+		const raw = "---\nstatus: banana\ntitle: Test\nslug: test\n---";
+		const parsed = parseFrontmatter(raw);
+		assert.equal(parsed.status, "draft");
+	});
+
 	it("handles date strings with colons", () => {
 		const fm = makeFrontmatter({ created: "2026-02-16T15:30:45.123Z" });
 		const serialized = serializeFrontmatter(fm);

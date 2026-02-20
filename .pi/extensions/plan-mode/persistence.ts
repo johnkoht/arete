@@ -24,11 +24,20 @@ type LegacyPlanStatus =
 	| "blocked"
 	| "on-hold";
 
+/** The set of valid simplified statuses */
+const VALID_STATUSES = new Set<PlanStatus>(["draft", "ready", "building", "complete"]);
+
 /**
  * Migrate legacy status values to simplified statuses.
  * Preserves backward compatibility with existing plans.
+ * Returns the status as-is if it's already a valid simplified status.
  */
 function migrateStatus(status: string): PlanStatus {
+	// If already a valid simplified status, return as-is
+	if (VALID_STATUSES.has(status as PlanStatus)) {
+		return status as PlanStatus;
+	}
+
 	const migrations: Record<LegacyPlanStatus, PlanStatus> = {
 		draft: "draft",
 		planned: "draft",
