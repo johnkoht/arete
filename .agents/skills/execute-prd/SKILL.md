@@ -67,7 +67,7 @@ The Reviewer acts as a sr. engineer in two moments:
 ## Prerequisites
 
 - PRD exists at `dev/work/plans/{feature-name}/prd.md`
-- Task breakdown exists in `dev/autonomous/prd.json`
+- Task breakdown exists in `dev/work/plans/{feature-name}/prd.json`
 - Working branch created (worktree recommended for isolation)
 
 ## Execution Context
@@ -83,7 +83,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 1. **Read and Internalize the PRD**
    - Read `dev/work/plans/{feature-name}/prd.md` (path provided by user or derived from plan slug)
-   - Read `dev/autonomous/prd.json` (task breakdown — path provided by user)
+   - Read `dev/work/plans/{plan-slug}/prd.json` (task breakdown)
    - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
    - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
    - Understand dependencies between tasks (A1→A2→A3→B1...).
