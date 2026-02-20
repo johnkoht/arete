@@ -4,8 +4,8 @@
 **Owner**: Product + Engineering  
 **Size**: Medium (4 steps)  
 **Date**: 2026-02-20  
-**Plan**: `dev/work/plans/slack-integration/plan.md`  
-**Pre-mortem**: `dev/work/plans/slack-integration/pre-mortem.md`
+**Plan**: `dev/work/plans/slack-conversation-capture-phase-1/plan.md`  
+**Pre-mortem**: `dev/work/plans/slack-conversation-capture-phase-1/pre-mortem.md`
 
 ---
 

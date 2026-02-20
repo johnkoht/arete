@@ -87,5 +87,5 @@ Introduce explicit modes for people intelligence during conversation capture:
 ## 7) Related
 
 - **Initiative**: `dev/work/plans/slack-conversation-capture/plan.md`
-- **Phase 1**: `dev/work/plans/slack-integration/plan.md`
+- **Phase 1**: `dev/work/plans/slack-conversation-capture-phase-1/plan.md`
 - **Phase 3**: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App beta)

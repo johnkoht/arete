@@ -1,7 +1,7 @@
 # Pre-Mortem: Slack Conversation Capture — Phase 1
 
 **Plan**: Manual ingestion of Slack conversations into `conversation` artifacts with extracted insights  
-**PRD**: `dev/work/plans/slack-integration/prd.md`  
+**PRD**: `dev/work/plans/slack-conversation-capture-phase-1/prd.md`  
 **Date**: 2026-02-19  
 **Size**: Large (6 delivery steps)
 

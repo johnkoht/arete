@@ -1,7 +1,7 @@
 # Conversation Capture — Phase 1 Learnings
 
 **Date**: 2026-02-20
-**PRD**: dev/work/plans/slack-integration/prd.md
+**PRD**: dev/work/plans/slack-conversation-capture-phase-1/prd.md
 **Branch**: slack-integration
 
 ## Metrics

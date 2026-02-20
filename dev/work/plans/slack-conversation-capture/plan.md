@@ -110,9 +110,9 @@ Phase 3:
 
 ## 10) Related Artifacts
 
-- **Phase 1 Plan**: `dev/work/plans/slack-integration/plan.md` (Manual ingestion + intelligence core)
-- **Phase 1 PRD**: `dev/work/plans/slack-integration/prd.md`
-- **Phase 1 Pre-mortem**: `dev/work/plans/slack-integration/pre-mortem.md`
+- **Phase 1 Plan**: `dev/work/plans/slack-conversation-capture-phase-1/plan.md` (Manual ingestion + intelligence core)
+- **Phase 1 PRD**: `dev/work/plans/slack-conversation-capture-phase-1/prd.md`
+- **Phase 1 Pre-mortem**: `dev/work/plans/slack-conversation-capture-phase-1/pre-mortem.md`
 - **Phase 2 Plan**: `dev/work/plans/slack-conversation-capture-phase-2/plan.md` (People modes)
 - **Phase 3 Plan**: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App)
 

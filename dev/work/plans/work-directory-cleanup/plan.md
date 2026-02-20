@@ -46,7 +46,7 @@ dev/work/
 
 1. **Backlog items are flat files OR folders.** New ideas start as flat `.md` files. If a fleshed-out plan (with PRD, review, etc.) gets shelved, the whole folder moves to backlog — no artifact loss.
 
-2. **PRDs live inside the plan folder**, not separately. A PRD is an artifact *of* a plan: `dev/work/plans/slack-integration/prd.md`.
+2. **PRDs live inside the plan folder**, not separately. A PRD is an artifact *of* a plan: `dev/work/plans/slack-conversation-capture-phase-1/prd.md`.
 
 3. **No backlog subcategories.** Tags in frontmatter replace features/improvements/decisions folders.
 
@@ -167,14 +167,14 @@ has_prd: false
 backlog/slack-integration.md       → content has frontmatter + body
 
 # After promote:
-plans/slack-integration/plan.md    → content migrated, status updated to draft
+plans/slack-conversation-capture-phase-1/plan.md    → content migrated, status updated to draft
 ```
 
 ### Shelve behavior (folder stays folder)
 
 ```
 # Before shelve (/plan shelve):
-plans/slack-integration/           → folder with plan.md, maybe prd.md, review.md
+plans/slack-conversation-capture-phase-1/           → folder with plan.md, maybe prd.md, review.md
 
 # After shelve:
 backlog/slack-integration/         → entire folder moved, status updated to idea

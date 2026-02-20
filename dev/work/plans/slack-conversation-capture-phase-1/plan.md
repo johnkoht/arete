@@ -1,12 +1,12 @@
 ---
 title: Conversation Capture — Phase 1
-slug: slack-integration
-status: building
+slug: slack-conversation-capture-phase-1
+status: completed
 size: medium
 tags: [feature]
 created: 2026-02-18T19:59:27.611Z
 updated: 2026-02-20T16:12:41.410Z
-completed: null
+completed: 2026-02-20T17:16:00Z
 execution: null
 has_review: false
 has_pre_mortem: true
@@ -63,7 +63,7 @@ Manual paste-based conversation capture: user pastes text → system parses and 
 
 ## Pre-Mortem
 
-Completed: `dev/work/plans/slack-integration/pre-mortem.md`
+Completed: `dev/work/plans/slack-conversation-capture-phase-1/pre-mortem.md`
 
 Key mitigations incorporated:
 - Source-agnostic naming (not "Slack parser")
@@ -77,4 +77,4 @@ Key mitigations incorporated:
 - Initiative: `dev/work/plans/slack-conversation-capture/plan.md`
 - Phase 2: `dev/work/plans/slack-conversation-capture-phase-2/plan.md` (People modes)
 - Phase 3: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App)
-- PRD: `dev/work/plans/slack-integration/prd.md`
+- PRD: `dev/work/plans/slack-conversation-capture-phase-1/prd.md`

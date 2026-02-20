@@ -86,5 +86,5 @@ Advanced users can connect their own Slack app/token for direct thread import:
 ## 7) Related
 
 - **Initiative**: `dev/work/plans/slack-conversation-capture/plan.md`
-- **Phase 1**: `dev/work/plans/slack-integration/plan.md` (Manual capture — complete)
+- **Phase 1**: `dev/work/plans/slack-conversation-capture-phase-1/plan.md` (Manual capture — complete)
 - **Phase 2**: `dev/work/plans/slack-conversation-capture-phase-2/plan.md` (People modes)
