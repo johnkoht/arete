@@ -1,7 +1,7 @@
 /**
  * Command handlers for plan mode (simplified).
  *
- * Commands: /plan [new|list|open|save|rename|status|delete], /approve, /review, /pre-mortem, /prd, /build
+ * Commands: /plan [new|list|open|save|rename|status|delete|backlog|shelve|archive], /approve, /review, /pre-mortem, /prd, /build
  *
  * Plan mode is a planning-only tool. No enforced workflow or mandatory gates.
  * Agent adapts behavior based on work type and plan size.
@@ -15,6 +15,13 @@ import {
 	updatePlanFrontmatter,
 	loadPlanArtifact,
 	slugify,
+	listBacklog,
+	listArchive,
+	promoteBacklogItem,
+	shelveToBacklog,
+	archiveItem,
+	createBacklogItem,
+	parseFrontmatterFromFile,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -181,9 +188,18 @@ export async function handlePlan(
 			}
 			break;
 		}
+		case "backlog":
+			await handleBacklog(subcommand.slice(1).join(" "), ctx, pi, state);
+			break;
+		case "shelve":
+			await handleShelve(ctx, pi, state);
+			break;
+		case "archive":
+			await handleArchive(subcommand.slice(1).join(" "), ctx, pi, state);
+			break;
 		default:
 			ctx.ui.notify(
-				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete`,
+				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete, backlog, shelve, archive`,
 				"warning",
 			);
 	}
@@ -598,6 +614,273 @@ async function handlePlanDelete(
 		state.planSize = null;
 	}
 	ctx.ui.notify(`🗑 Plan deleted: ${slug}`, "info");
+}
+
+// ────────────────────────────────────────────────────────────
+// /plan backlog command handler
+// ────────────────────────────────────────────────────────────
+
+const backlogStatusEmoji: Record<PlanStatus, string> = {
+	idea: "💡",
+	draft: "📝",
+	planned: "✅",
+	building: "⚡",
+	complete: "🎉",
+	abandoned: "🚫",
+};
+
+export async function handleBacklog(
+	args: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	const parts = args.trim().split(/\s+/);
+	const subcmd = parts[0]?.toLowerCase() || "list";
+	const rest = parts.slice(1).join(" ");
+
+	switch (subcmd) {
+		case "list":
+			await handleBacklogList(ctx, pi, state);
+			break;
+		case "add":
+			await handleBacklogAdd(rest, ctx);
+			break;
+		case "edit":
+			await handleBacklogEdit(rest, ctx, pi);
+			break;
+		case "promote":
+			await handleBacklogPromote(rest, ctx, pi, state);
+			break;
+		default:
+			// No recognized sub-subcommand: treat as "list"
+			await handleBacklogList(ctx, pi, state);
+	}
+}
+
+async function handleBacklogList(
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	const items = listBacklog();
+
+	if (items.length === 0) {
+		ctx.ui.notify("No backlog items found in dev/work/backlog/", "info");
+		return;
+	}
+
+	const options = items.map((item) => {
+		const emoji = backlogStatusEmoji[item.frontmatter.status] ?? "📄";
+		const tags = item.frontmatter.tags.length > 0 ? ` [${item.frontmatter.tags.join(", ")}]` : "";
+		return `${emoji} ${item.frontmatter.title}${tags}`;
+	});
+
+	const selected = await ctx.ui.select("Backlog", options);
+	if (selected) {
+		const index = options.indexOf(selected);
+		if (index >= 0) {
+			const item = items[index];
+			ctx.ui.notify(`Selected: ${item.slug} — use /plan backlog edit ${item.slug} or /plan backlog promote ${item.slug}`, "info");
+		}
+	}
+}
+
+async function handleBacklogAdd(title: string, ctx: CommandContext): Promise<void> {
+	if (!title.trim()) {
+		ctx.ui.notify("Usage: /plan backlog add <title>", "warning");
+		return;
+	}
+
+	try {
+		const slug = createBacklogItem(title.trim());
+		ctx.ui.notify(`📝 Created backlog item: dev/work/backlog/${slug}.md`, "info");
+	} catch (err) {
+		ctx.ui.notify(`Failed to create backlog item: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
+}
+
+async function handleBacklogEdit(slug: string, ctx: CommandContext, pi: CommandPi): Promise<void> {
+	if (!slug.trim()) {
+		ctx.ui.notify("Usage: /plan backlog edit <slug>", "warning");
+		return;
+	}
+
+	const { existsSync, readFileSync } = await import("node:fs");
+	const { join } = await import("node:path");
+
+	// Try folder first, then flat file
+	const folderPath = join("dev/work/backlog", slug, "plan.md");
+	const filePath = join("dev/work/backlog", `${slug}.md`);
+
+	let content: string;
+	let path: string;
+	if (existsSync(folderPath)) {
+		content = readFileSync(folderPath, "utf-8");
+		path = folderPath;
+	} else if (existsSync(filePath)) {
+		content = readFileSync(filePath, "utf-8");
+		path = filePath;
+	} else {
+		ctx.ui.notify(`Backlog item not found: ${slug}`, "error");
+		return;
+	}
+
+	pi.sendUserMessage(
+		`Here is backlog item "${slug}" from ${path}. Review and suggest edits as needed:\n\n${content}`,
+	);
+}
+
+async function handleBacklogPromote(
+	slug: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	if (!slug.trim()) {
+		ctx.ui.notify("Usage: /plan backlog promote <slug>", "warning");
+		return;
+	}
+
+	try {
+		promoteBacklogItem(slug.trim());
+		ctx.ui.notify(`🚀 Promoted to dev/work/plans/${slug}/`, "info");
+
+		// Load the promoted plan into state
+		await handlePlanOpen(slug.trim(), ctx, pi, state);
+	} catch (err) {
+		ctx.ui.notify(`Failed to promote: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
+}
+
+// ────────────────────────────────────────────────────────────
+// /plan shelve command handler
+// ────────────────────────────────────────────────────────────
+
+export async function handleShelve(
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	if (!state.currentSlug) {
+		ctx.ui.notify("No active plan to shelve.", "warning");
+		return;
+	}
+
+	const plan = loadPlan(state.currentSlug);
+	const title = plan?.frontmatter.title ?? state.currentSlug;
+
+	const confirmed = await ctx.ui.confirm("Shelve Plan", `Shelve '${title}' to backlog?`);
+	if (!confirmed) return;
+
+	try {
+		shelveToBacklog(state.currentSlug);
+		ctx.ui.notify(`📦 Shelved to dev/work/backlog/${state.currentSlug}/`, "info");
+
+		// Clear plan state
+		state.currentSlug = null;
+		state.planText = "";
+		state.planSize = null;
+		state.todoItems = [];
+		state.preMortemRun = false;
+		state.reviewRun = false;
+		state.prdConverted = false;
+	} catch (err) {
+		ctx.ui.notify(`Failed to shelve: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
+}
+
+// ────────────────────────────────────────────────────────────
+// /plan archive command handler
+// ────────────────────────────────────────────────────────────
+
+export async function handleArchive(
+	args: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	const trimmed = args.trim().toLowerCase();
+
+	if (trimmed === "list") {
+		await handleArchiveList(ctx);
+		return;
+	}
+
+	if (trimmed && trimmed !== "") {
+		// Archive a specific plan by slug
+		const slug = trimmed;
+		const confirmed = await ctx.ui.confirm("Archive Plan", `Archive plan '${slug}'?`);
+		if (!confirmed) return;
+
+		const status = await ctx.ui.select("Archive as:", ["✅ Complete", "🚫 Abandoned"]);
+		if (!status) return;
+
+		const archiveStatus = status.includes("Complete") ? "complete" as const : "abandoned" as const;
+
+		try {
+			archiveItem(slug, archiveStatus);
+			ctx.ui.notify(`📁 Archived to dev/work/archive/${slug}/`, "info");
+
+			if (state.currentSlug === slug) {
+				state.currentSlug = null;
+				state.planText = "";
+				state.planSize = null;
+				state.todoItems = [];
+				state.preMortemRun = false;
+				state.reviewRun = false;
+				state.prdConverted = false;
+			}
+		} catch (err) {
+			ctx.ui.notify(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`, "error");
+		}
+		return;
+	}
+
+	// No args: archive current plan
+	if (!state.currentSlug) {
+		ctx.ui.notify("No active plan to archive. Usage: /plan archive [slug] or /plan archive list", "warning");
+		return;
+	}
+
+	const plan = loadPlan(state.currentSlug);
+	const title = plan?.frontmatter.title ?? state.currentSlug;
+
+	const status = await ctx.ui.select(`Archive '${title}' as:`, ["✅ Complete", "🚫 Abandoned"]);
+	if (!status) return;
+
+	const archiveStatus = status.includes("Complete") ? "complete" as const : "abandoned" as const;
+
+	try {
+		archiveItem(state.currentSlug, archiveStatus);
+		ctx.ui.notify(`📁 Archived to dev/work/archive/${state.currentSlug}/`, "info");
+
+		state.currentSlug = null;
+		state.planText = "";
+		state.planSize = null;
+		state.todoItems = [];
+		state.preMortemRun = false;
+		state.reviewRun = false;
+		state.prdConverted = false;
+	} catch (err) {
+		ctx.ui.notify(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
+}
+
+async function handleArchiveList(ctx: CommandContext): Promise<void> {
+	const items = listArchive();
+
+	if (items.length === 0) {
+		ctx.ui.notify("No archived items found in dev/work/archive/", "info");
+		return;
+	}
+
+	const options = items.map((item) => {
+		const emoji = backlogStatusEmoji[item.frontmatter.status] ?? "📄";
+		return `${emoji} ${item.frontmatter.title}`;
+	});
+
+	await ctx.ui.select("Archive", options);
 }
 
 // ────────────────────────────────────────────────────────────
