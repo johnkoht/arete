@@ -6,12 +6,11 @@ size: medium
 created: 2026-02-17T21:00:00Z
 updated: 2026-02-17T21:00:00Z
 completed: null
-blocked_reason: null
-previous_status: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
 steps: 6
+tags: []
 ---
 
 # Publish arete-workspace to npmjs

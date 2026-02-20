@@ -371,7 +371,7 @@ End-to-end workflows for typical product management tasks using Areté's skills 
    - Creates `projects/active/[name]-roadmap/`
    - Asks for scope: quarter, half, year
    - Reviews quarter goals from `goals/quarter.md`
-   - Reviews active projects and backlog
+   - Reviews active projects and plans
 
 3. **Agent guides prioritization**:
    - Applies framework (RICE, Value vs Effort, etc.)

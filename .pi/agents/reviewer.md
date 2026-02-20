@@ -67,7 +67,7 @@ git diff HEAD --name-status | grep '^D'
 #### Step 4: Reuse & Duplication Check
 
 - **New services/modules**: Does equivalent functionality already exist? Check AGENTS.md and `src/` (e.g. `src/core/`, `src/integrations/`). If yes, flag: "Reimplemented existing capability — use [X] instead."
-- **Repetitive but not abstracted**: If correct but you notice similar logic elsewhere without a shared abstraction, do **not** block acceptance. Instead: add a **refactor backlog item** (see below). Continue with accept/iterate based on other criteria.
+- **Repetitive but not abstracted**: If correct but you notice similar logic elsewhere without a shared abstraction, do **not** block acceptance. Instead: add a **refactor item** as a plan with status `idea` (see below). Continue with accept/iterate based on other criteria.
 
 #### Step 5: Verify Quality Gates
 
@@ -94,11 +94,11 @@ When iterating, provide **structured feedback**:
 3. **Files to check**: Specific paths or line ranges
 4. **Re-verify**: "After fixing, run npm run typecheck and npm test again"
 
-#### Refactor Backlog (When Applicable)
+#### Refactor Items (When Applicable)
 
 When you find repetitive logic that isn't yet abstracted (same pattern in multiple places, no shared util):
-1. Create `dev/work/backlog/refactor-[short-description].md`
-2. Include: **What** (duplicated pattern and where), **Why** (DRY/maintainability), **Suggested direction**, **Effort** (Tiny/Small/Medium)
+1. Create `dev/work/plans/refactor-[short-description]/plan.md` with status `idea`
+2. Include: **What** (duplicated pattern and where), **Why** (DRY/maintainability), **Suggested direction**, **Size** (tiny/small/medium)
 3. Note the item in your review output
 
 ### Role 3: Plan-Mode Lifecycle Gates
@@ -137,7 +137,7 @@ You also review plans and PRDs during plan-mode lifecycle progression:
 2. [Specific change]
 
 **Refactor Backlog** (if applicable):
-- [Item] → suggested file: dev/work/backlog/refactor-[name].md
+- [Item] → suggested file: dev/work/plans/refactor-[name]/plan.md
 ```
 
 ## Expectations

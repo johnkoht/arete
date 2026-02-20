@@ -25,6 +25,8 @@ import {
 	classifyPlanSize,
 	suggestPlanName,
 	PLAN_MODE_TOOLS,
+	getNormalModeTools,
+	setNormalModeTools,
 	type TodoItem,
 } from "./utils.js";
 import {
@@ -41,9 +43,6 @@ import {
 import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter, type PlanSize } from "./persistence.js";
 import { getAgentPrompt } from "./agents.js";
 import { renderFooterStatus, renderTodoWidget, type WidgetState } from "./widget.js";
-
-// Tools
-const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 
 // Allowed artifact filenames for the save tool
 const ALLOWED_ARTIFACTS = ["review.md", "pre-mortem.md", "prd.md", "notes.md"];
@@ -84,8 +83,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			planModeEnabled: state.planModeEnabled,
 			executionMode: state.executionMode,
 			planId: plan?.frontmatter.slug ?? state.currentSlug,
+			title: state.planTitle ?? plan?.frontmatter.title ?? null,
 			status: plan?.frontmatter.status ?? null,
 			planSize: state.planSize,
+			stepsCount: state.todoItems.length || (plan?.frontmatter.steps ?? 0),
 			todosCompleted: state.todoItems.filter((t) => t.completed).length,
 			todosTotal: state.todoItems.length,
 			hasPreMortem: state.preMortemRun,
@@ -118,7 +119,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 			ctx.ui.notify(`📋 Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
 		} else {
-			pi.setActiveTools(NORMAL_MODE_TOOLS);
+			pi.setActiveTools(getNormalModeTools());
 			ctx.ui.notify("Plan mode disabled. Full access restored.");
 		}
 		updateStatus(ctx);
@@ -235,7 +236,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// ── Command Registration ───────────────────────────────
 
 	pi.registerCommand("plan", {
-		description: "Plan mode — toggle or subcommands: new, list, open, save, rename, status, delete",
+		description: "Plan mode — toggle or subcommands: new, list, open, save, rename, status, delete, archive",
 		handler: async (args, ctx) => {
 			await handlePlan(args, ctx, pi, state, () => togglePlanMode(ctx));
 			updateStatus(ctx);
@@ -274,7 +275,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			inPrdConversion = true;
 			// PRD conversion writes files, so temporarily allow normal tools
-			pi.setActiveTools([...NORMAL_MODE_TOOLS, "save_plan_artifact"]);
+			pi.setActiveTools([...getNormalModeTools(), "save_plan_artifact"]);
 			await handlePrd(args, ctx, pi, state);
 			inPrdConversion = false;
 			if (state.planModeEnabled) {
@@ -491,7 +492,7 @@ After completing a step, include a [DONE:n] tag in your response.
 
 				state.executionMode = false;
 				state.todoItems = [];
-				pi.setActiveTools(NORMAL_MODE_TOOLS);
+				pi.setActiveTools(getNormalModeTools());
 				updateStatus(ctx);
 				persistState();
 			}
@@ -521,6 +522,13 @@ After completing a step, include a [DONE:n] tag in your response.
 
 	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
+		// Capture all available tools (built-in + extension-registered like subagent)
+		// before we restrict them, so we can restore the full set when leaving plan mode
+		const allTools = pi.getAllTools();
+		if (allTools.length > 0) {
+			setNormalModeTools(allTools.map((t: { name: string }) => t.name));
+		}
+
 		if (pi.getFlag("plan") === true) {
 			state.planModeEnabled = true;
 		}
@@ -607,7 +615,7 @@ After completing a step, include a [DONE:n] tag in your response.
 		// Set tools based on mode
 		if (state.executionMode) {
 			state.planModeEnabled = false;
-			pi.setActiveTools(NORMAL_MODE_TOOLS);
+			pi.setActiveTools(getNormalModeTools());
 		} else if (state.planModeEnabled) {
 			pi.setActiveTools(PLAN_MODE_TOOLS);
 		}

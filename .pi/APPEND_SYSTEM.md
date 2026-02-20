@@ -157,13 +157,13 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 **Scope Check:**
 - [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/work/backlog/*.md`
+- [ ] Plans with doc tasks: `grep -rl "update.*\.md\|docs" dev/work/plans/`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
 - [ ] Concept audit: If feature changes paths/structure, grep old paths in all `.md` files
 
-**Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and backlog frequently need updates.
+**Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and plans frequently need updates.
 
 ---
 
@@ -198,15 +198,20 @@ The plan-mode extension provides a full plan lifecycle with persistence, gates, 
 | Command | Description |
 |---------|-------------|
 | `/plan` | Toggle plan mode (read-only exploration) |
-| `/plan list` | List all saved plans with status |
+| `/plan new [name]` | Start a new plan, optionally pre-setting the slug from `name` |
+| `/plan list` | List all saved plans with status. Supports `--ideas` and `--active` filters |
 | `/plan open <slug>` | Open a saved plan and restore its state |
 | `/plan save [slug]` | Save current plan to `dev/work/plans/{slug}/plan.md` |
-| `/plan status` | Show lifecycle info: status, size, gates, readiness |
-| `/plan next` | Smart gate orchestrator — shows checklist, runs gates, approves |
-| `/plan hold` | Put plan on hold (preserves previous status) |
-| `/plan block <reason>` | Block plan with reason |
-| `/plan resume` | Resume from hold/blocked to previous status |
+| `/plan rename [new-name]` | Rename the current plan (moves folder, updates frontmatter) |
+| `/plan status` | Show lifecycle info: status, size, artifacts, recommendations |
 | `/plan delete <slug>` | Delete a plan and its artifacts |
+
+### Archive commands
+
+| Command | Description |
+|---------|-------------|
+| `/plan archive [slug]` | Archive a plan (current or by slug) as complete or abandoned |
+| `/plan archive list` | List archived plans |
 
 ### Gate commands
 
@@ -215,12 +220,13 @@ The plan-mode extension provides a full plan lifecycle with persistence, gates, 
 | `/review` | Run cross-model review (invokes review-plan skill) |
 | `/pre-mortem` | Run pre-mortem analysis (invokes run-pre-mortem skill) |
 | `/prd` | Convert plan to PRD (invokes plan-to-prd skill) |
-| `/build` | Start execution (transitions to in-progress) |
+| `/approve` | Mark plan as ready for building |
+| `/build` | Start execution (transitions to building) |
 | `/build status` | Show build progress |
 
 ### Lifecycle statuses
 
-`draft → planned → reviewed → approved → in-progress → completed` (+ `blocked`, `on-hold` from any)
+`idea → draft → planned → building → complete` (+ `abandoned` from any)
 
 ### Gate requirements by size
 

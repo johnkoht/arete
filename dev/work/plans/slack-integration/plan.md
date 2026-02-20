@@ -74,6 +74,7 @@ Key mitigations incorporated:
 
 ## Related
 
-- Initiative: `dev/work/backlog/slack-conversation-capture.md`
-- Phase 2 backlog: `dev/work/backlog/slack-conversation-capture-phase-2.md`
+- Initiative: `dev/work/plans/slack-conversation-capture/plan.md`
+- Phase 2: `dev/work/plans/slack-conversation-capture-phase-2/plan.md` (People modes)
+- Phase 3: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App)
 - PRD: `dev/work/plans/slack-integration/prd.md`

@@ -6,13 +6,11 @@ size: large
 created: 2026-02-17T16:22:45.821Z
 updated: 2026-02-19T01:16:01.170Z
 completed: null
-blocked_reason: null
-previous_status: null
 has_review: true
 has_pre_mortem: false
 has_prd: true
-backlog_ref: null
 steps: 8
+tags: []
 ---
 
 Great direction — your answers make the architecture much cleaner.

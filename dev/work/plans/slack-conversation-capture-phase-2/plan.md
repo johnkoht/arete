@@ -1,9 +1,25 @@
+---
+title: Conversation Capture — Phase 2: People Modes & Improvements
+slug: slack-conversation-capture-phase-2
+status: idea
+size: unknown
+tags: [feature]
+created: 2026-02-19T00:00:00Z
+updated: 2026-02-20T15:43:00Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 0
+---
+
 # Slack Conversation Capture — Phase 2: People Modes & Improvements
 
 Status: Backlog (gated on Phase 1 completion)
 Owner: Product
 Type: Feature enhancement
-Parent: `dev/work/backlog/slack-conversation-capture.md`
+Parent: `dev/work/plans/slack-conversation-capture/plan.md`
 Last updated: 2026-02-19
 
 ## Gate Trigger
@@ -68,7 +84,8 @@ Introduce explicit modes for people intelligence during conversation capture:
 - Mode mismatch confusion → Mitigation: clear CLI output showing active mode
 - Hidden coupling in processing flow → Mitigation: ensure insights pipeline is fully independent of people mapping
 
-## 7) Also Consider for Phase 2
+## 7) Related
 
-- BYO Slack App beta (thread URL import, user-provided token)
-- Setup success and support burden metrics from initiative backlog
+- **Initiative**: `dev/work/plans/slack-conversation-capture/plan.md`
+- **Phase 1**: `dev/work/plans/slack-integration/plan.md`
+- **Phase 3**: `dev/work/plans/slack-conversation-capture-phase-3/plan.md` (BYO Slack App beta)

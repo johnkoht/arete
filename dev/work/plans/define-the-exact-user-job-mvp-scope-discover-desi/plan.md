@@ -9,8 +9,8 @@ completed: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-backlog_ref: null
 steps: 14
+tags: []
 ---
 
 Great prompt. I’ll stay in **Product Manager mode**.
