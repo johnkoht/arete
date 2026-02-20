@@ -18,9 +18,9 @@
         "npm run typecheck passes",
         "Existing tests updated to compile with new types"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-2",
@@ -32,7 +32,7 @@
         "All items in dev/work/ with correct subdirectory based on triage",
         "PRDs from dev/prds/ merged into their plan folders",
         "All migrated backlog items have frontmatter (title, slug, status, tags)",
-        "No data loss — every item accounted for"
+        "No data loss \u2014 every item accounted for"
       ],
       "status": "pending",
       "passes": false,
@@ -77,7 +77,7 @@
     {
       "id": "task-5",
       "title": "Add Backlog Commands",
-      "description": "Add /plan backlog and /plan shelve commands. handleBacklog() with sub-routing: no args/list → listBacklog() with select UI; add <title> → createBacklogItem(); edit <slug> → read into context; promote <slug> → promoteBacklogItem() + load into state. handleShelve() → confirm, shelveToBacklog(), clear state. Update unknown subcommand message.",
+      "description": "Add /plan backlog and /plan shelve commands. handleBacklog() with sub-routing: no args/list \u2192 listBacklog() with select UI; add <title> \u2192 createBacklogItem(); edit <slug> \u2192 read into context; promote <slug> \u2192 promoteBacklogItem() + load into state. handleShelve() \u2192 confirm, shelveToBacklog(), clear state. Update unknown subcommand message.",
       "acceptanceCriteria": [
         "/plan backlog shows list of backlog items (not shelve action)",
         "/plan backlog list shows list with status emoji",
@@ -96,7 +96,7 @@
     {
       "id": "task-6",
       "title": "Add Archive Commands",
-      "description": "Add /plan archive commands. handleArchive() with sub-routing: no args → archive current plan with complete/abandoned choice via select UI; list → listArchive() with select UI; <slug> → archive specific plan with confirmation.",
+      "description": "Add /plan archive commands. handleArchive() with sub-routing: no args \u2192 archive current plan with complete/abandoned choice via select UI; list \u2192 listArchive() with select UI; <slug> \u2192 archive specific plan with confirmation.",
       "acceptanceCriteria": [
         "/plan archive with active plan shows complete/abandoned choice then archives",
         "/plan archive with no active plan shows warning",
@@ -112,14 +112,14 @@
     {
       "id": "task-7",
       "title": "Update Tests",
-      "description": "Update existing tests for new paths. Add comprehensive tests: frontmatter migration, tags parsing (empty/single/multiple/missing), listBacklog() with mixed formats and slug collision, promoteBacklogItem() flat→folder, shelveToBacklog() preservation, archiveItem(), moveItem(), createBacklogItem(). Update utils.test.ts path references.",
+      "description": "Update existing tests for new paths. Add comprehensive tests: frontmatter migration, tags parsing (empty/single/multiple/missing), listBacklog() with mixed formats and slug collision, promoteBacklogItem() flat\u2192folder, shelveToBacklog() preservation, archiveItem(), moveItem(), createBacklogItem(). Update utils.test.ts path references.",
       "acceptanceCriteria": [
         "npm run typecheck passes",
         "npm test passes (full suite)",
         "All new persistence functions have test coverage",
         "Tags parsing edge cases covered: empty [], single [feature], multiple [feature, integration, refactor], missing field",
         "listBacklog() tested with: flat files only, folders only, mixed, no-frontmatter files, slug collision",
-        "promoteBacklogItem() tested: flat file → folder conversion",
+        "promoteBacklogItem() tested: flat file \u2192 folder conversion",
         "shelveToBacklog() tested: folder preservation",
         "moveItem() tested: flat file and folder cases"
       ],
@@ -131,7 +131,7 @@
   "metadata": {
     "createdAt": "2026-02-19T16:20:00Z",
     "totalTasks": 7,
-    "completedTasks": 0,
+    "completedTasks": 1,
     "failedTasks": 0
   }
 }
