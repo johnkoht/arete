@@ -1,12 +1,12 @@
 ---
 title: Conversation Capture — Phase 1
 slug: slack-conversation-capture-phase-1
-status: completed
+status: complete
 size: medium
 tags: [feature]
 created: 2026-02-18T19:59:27.611Z
-updated: 2026-02-20T16:12:41.410Z
-completed: 2026-02-20T17:16:00Z
+updated: 2026-02-20T22:16:01.096Z
+completed: 2026-02-20T22:16:01.096Z
 execution: null
 has_review: false
 has_pre_mortem: true
