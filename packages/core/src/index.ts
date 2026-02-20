@@ -60,11 +60,16 @@ export type { MeetingForSave } from './integrations/meetings.js';
 export {
   saveConversationFile,
   conversationFilename,
+  parseConversation,
+  extractInsights,
 } from './integrations/conversations/index.js';
 export type {
   ConversationForSave,
   ConversationInsights,
   ConversationProvenance,
+  ParsedConversation,
+  ParsedMessage,
+  LLMCallFn,
 } from './integrations/conversations/index.js';
 
 // Service container factory

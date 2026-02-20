@@ -193,6 +193,15 @@ describe('extractInsights', () => {
     assert.equal(result.summary, 'Fenced response.');
   });
 
+  it('returns empty insights when LLM call throws', async () => {
+    const mockLLM: LLMCallFn = async () => {
+      throw new Error('Network error: rate limited');
+    };
+
+    const result = await extractInsights('Some conversation text.', mockLLM);
+    assert.deepEqual(result, {});
+  });
+
   it('returns only populated sections from LLM response', async () => {
     const mockLLM: LLMCallFn = async () =>
       JSON.stringify({ summary: 'Just a summary, nothing else.' });

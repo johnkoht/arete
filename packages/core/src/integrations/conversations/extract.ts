@@ -154,8 +154,15 @@ export async function extractInsights(
   }
 
   const prompt = buildExtractionPrompt(conversationText);
-  const response = await callLLM(prompt);
-  return parseExtractionResponse(response);
+  try {
+    const response = await callLLM(prompt);
+    return parseExtractionResponse(response);
+  } catch {
+    // LLM call failed (network error, rate limit, etc.) — return empty insights
+    // rather than propagating the error. The conversation can still be saved
+    // without insights; the user can re-extract later.
+    return {};
+  }
 }
 
 // Exported for testing

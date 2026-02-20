@@ -115,37 +115,70 @@ This is a conversational review flow — no custom UI or interactive prompts.
 
 ### 6. Save the Artifact
 
-On confirmation, save the conversation using `saveConversationFile()` from `@arete/core`.
+On confirmation, write the conversation file directly to the workspace.
 
-Build the `ConversationForSave` object:
-```typescript
-{
-  title: "Suggested or user-edited title",
-  date: "2026-02-20",  // today or user-provided
-  source: "manual",
-  participants: ["Alice", "Bob"],  // from parser or user
-  rawTranscript: "<original pasted text>",
-  normalizedContent: "<formatted version from parser>",
-  insights: {
-    summary: "...",
-    decisions: ["..."],
-    actionItems: ["..."],
-    // only populated sections
-  },
-  provenance: {
-    source: "manual",
-    capturedAt: "<ISO timestamp>",
-  }
-}
+**Directory**: Ensure `resources/conversations/` exists (create if needed).
+
+**Filename**: `resources/conversations/{date}-{title-slug}.md`
+- Date format: `YYYY-MM-DD`
+- Title slug: lowercase, spaces→hyphens, remove special characters
+
+**File format** — write this exact structure:
+
+```markdown
+---
+title: "{title}"
+date: "{date}"
+source: "manual"
+captured_at: "{ISO timestamp}"
+---
+
+# {title}
+**Date**: {date}
+**Source**: manual
+
+## Participants
+- {participant 1}
+- {participant 2}
+
+## Summary
+{extracted summary}
+
+## Decisions
+- {decision 1}
+- {decision 2}
+
+## Action Items
+- [ ] {action 1}
+- [ ] {action 2}
+
+## Open Questions
+- {question 1}
+
+## Stakeholders
+- {stakeholder 1}
+
+## Risks
+- {risk 1}
+
+## Conversation
+{normalized content from parser}
+
+## Raw Transcript
+{original pasted text}
 ```
 
-The file is saved to `resources/conversations/{date}-{title-slug}.md`.
+**Rules**:
+- Only include insight sections (Summary, Decisions, Action Items, etc.) that have content — skip empty sections entirely
+- Skip the Participants section if no participants were detected
+- Escape double quotes in the title frontmatter with `\"`
+- The `captured_at` field is the current ISO timestamp when saved
 
 ### 7. Confirm to User
 
 Report the result:
 - **Success**: "Saved to `resources/conversations/2026-02-20-sprint-planning.md`. The conversation is now discoverable via `arete context`."
-- **Already exists**: "A conversation with this title and date already exists. Save with a different title, or use `--force` to overwrite?"
+- **Already exists**: Check if the file already exists before writing. If so, ask: "A conversation with this title and date already exists. Save with a different title, or overwrite?"
 - **Error**: Share the error and suggest fixes.
 
 ## Example
