@@ -74,4 +74,16 @@ describe('ContextService (via compat)', () => {
     assert.ok(fileResult);
     assert.equal(fileResult?.category, 'projects');
   });
+
+  it('includes conversations matching the query', async () => {
+    writeFixtureFile(
+      'resources/conversations/2026-02-20-api-approach.md',
+      '---\ntitle: "API Approach Discussion"\ndate: "2026-02-20"\nsource: "manual"\n---\n\n# API Approach Discussion\n\n## Summary\nTeam decided on REST API approach for the new integration.\n',
+    );
+    const result = await getRelevantContext('API approach', paths);
+    const fileResult = result.files.find((file) =>
+      file.relativePath?.includes('resources/conversations/'),
+    );
+    assert.ok(fileResult, 'conversation file should be found by context query');
+  });
 });
