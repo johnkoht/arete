@@ -7,3 +7,5 @@ export { tokenize, STOP_WORDS } from './tokenize.js';
 export { getSearchProvider } from './factory.js';
 export { parseQmdJson, QMD_PROVIDER_NAME, getSearchProvider as getQmdSearchProvider } from './providers/qmd.js';
 export { FALLBACK_PROVIDER_NAME, getSearchProvider as getFallbackSearchProvider } from './providers/fallback.js';
+export { ensureQmdCollection, generateCollectionName } from './qmd-setup.js';
+export type { QmdSetupResult, QmdSetupDeps } from './qmd-setup.js';

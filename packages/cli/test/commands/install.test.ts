@@ -86,6 +86,29 @@ describe('install command', () => {
     });
   });
 
+  describe('qmd integration', () => {
+    it('--skip-qmd produces skipped qmd result in JSON output', () => {
+      const output = runCli(['install', tmpDir, '--json', '--skip-qmd']);
+      const parsed = JSON.parse(output) as {
+        success: boolean;
+        qmd: { skipped: boolean; created: boolean; indexed: boolean; available: boolean };
+      };
+
+      assert.equal(parsed.success, true);
+      assert.equal(parsed.qmd.skipped, true);
+      assert.equal(parsed.qmd.created, false);
+      assert.equal(parsed.qmd.indexed, false);
+    });
+
+    it('does not write qmd_collection to arete.yaml when --skip-qmd', () => {
+      runCli(['install', tmpDir, '--json', '--skip-qmd']);
+
+      const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      assert.equal(parsed.qmd_collection, undefined);
+    });
+  });
+
   describe('workspace structure', () => {
     it('creates base directories (context, projects, people)', () => {
       runCli(['install', tmpDir, '--json']);

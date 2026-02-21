@@ -2,19 +2,20 @@
  * arete update — pull latest skills/tools/integrations
  */
 
-import { createServices, getPackageRoot, getSourcePaths } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollection, loadConfig } from '@arete/core';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { header, listItem, success, error, info } from '../formatters.js';
+import { header, listItem, success, error, info, warn } from '../formatters.js';
 
 export function registerUpdateCommand(program: Command): void {
   program
     .command('update')
     .description('Pull latest skills/tools/integrations from upstream')
     .option('--check', 'Check for updates without applying')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { check?: boolean; json?: boolean }) => {
+    .action(async (opts: { check?: boolean; skipQmd?: boolean; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -45,6 +46,22 @@ export function registerUpdateCommand(program: Command): void {
 
       const result = await services.workspace.update(root, { sourcePaths });
 
+      // Auto-update qmd index (skip for --check and --skip-qmd)
+      let qmdResult;
+      if (!opts.check && !opts.skipQmd) {
+        const config = await loadConfig(services.storage, root);
+        const existingCollection = config.qmd_collection;
+        qmdResult = await ensureQmdCollection(root, existingCollection);
+        if (qmdResult.collectionName && qmdResult.created) {
+          // New collection created — persist to arete.yaml
+          await services.workspace.updateManifestField(
+            root,
+            'qmd_collection',
+            qmdResult.collectionName,
+          );
+        }
+      }
+
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -52,6 +69,7 @@ export function registerUpdateCommand(program: Command): void {
               success: true,
               mode: opts.check ? 'check' : 'update',
               result,
+              qmd: qmdResult ?? { skipped: true, available: false, created: false, indexed: false },
             },
             null,
             2,
@@ -65,6 +83,18 @@ export function registerUpdateCommand(program: Command): void {
         listItem('Added', result.added.length.toString());
         listItem('Updated', result.updated.length.toString());
         listItem('Preserved', result.preserved.length.toString());
+
+        if (qmdResult && !qmdResult.skipped) {
+          if (qmdResult.created) {
+            listItem('Search index', `qmd collection "${qmdResult.collectionName}" created`);
+          } else if (qmdResult.indexed) {
+            listItem('Search index', 'qmd index updated');
+          }
+          if (qmdResult.warning) {
+            warn(qmdResult.warning);
+          }
+        }
+
         console.log('');
         success('Update complete!');
         console.log('');

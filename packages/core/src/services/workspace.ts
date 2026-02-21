@@ -478,6 +478,31 @@ export class WorkspaceService {
     return { directoriesAdded, filesAdded };
   }
 
+  /**
+   * Update a single field in arete.yaml without overwriting the entire file.
+   * Reads, patches, and writes back. Non-fatal on error.
+   */
+  async updateManifestField(
+    workspaceRoot: string,
+    field: string,
+    value: unknown,
+  ): Promise<void> {
+    const manifestPath = join(workspaceRoot, 'arete.yaml');
+    const exists = await this.storage.exists(manifestPath);
+    if (!exists) return;
+
+    const content = await this.storage.read(manifestPath);
+    if (!content) return;
+
+    try {
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      parsed[field] = value;
+      await this.storage.write(manifestPath, stringifyYaml(parsed));
+    } catch {
+      // Non-fatal: if we can't update the manifest, the workspace still works
+    }
+  }
+
   async getStatus(workspaceRoot: string): Promise<WorkspaceStatus> {
     const errors: string[] = [];
     const manifestPath = join(workspaceRoot, 'arete.yaml');

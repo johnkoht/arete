@@ -21,6 +21,8 @@ export type AreteConfig = {
   ide_target?: IDETarget;
   /** Internal email domain for classifying meeting attendees */
   internal_email_domain?: string;
+  /** QMD collection name for this workspace (auto-generated on install) */
+  qmd_collection?: string;
   skills: {
     core: string[];
     overrides: string[];

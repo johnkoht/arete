@@ -377,6 +377,63 @@ describe('WorkspaceService', () => {
     });
   });
 
+  describe('updateManifestField', () => {
+    it('adds a new field to arete.yaml', async () => {
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        stringifyYaml({ schema: 1, version: '0.1.0', source: 'npm' }),
+      );
+      await service.updateManifestField(tmpDir, 'qmd_collection', 'my-ws-a3f2');
+
+      const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      assert.equal(parsed.qmd_collection, 'my-ws-a3f2');
+    });
+
+    it('preserves existing fields when adding new one', async () => {
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        stringifyYaml({ schema: 1, version: '0.1.0', source: 'npm', ide_target: 'cursor' }),
+      );
+      await service.updateManifestField(tmpDir, 'qmd_collection', 'test-coll');
+
+      const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      assert.equal(parsed.schema, 1);
+      assert.equal(parsed.version, '0.1.0');
+      assert.equal(parsed.source, 'npm');
+      assert.equal(parsed.ide_target, 'cursor');
+      assert.equal(parsed.qmd_collection, 'test-coll');
+    });
+
+    it('updates an existing field value', async () => {
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        stringifyYaml({ schema: 1, qmd_collection: 'old-name' }),
+      );
+      await service.updateManifestField(tmpDir, 'qmd_collection', 'new-name');
+
+      const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
+      const parsed = parseYaml(content) as Record<string, unknown>;
+      assert.equal(parsed.qmd_collection, 'new-name');
+    });
+
+    it('does nothing when manifest file does not exist', async () => {
+      // Should not throw
+      await service.updateManifestField(tmpDir, 'qmd_collection', 'test');
+      assert.equal(existsSync(join(tmpDir, 'arete.yaml')), false);
+    });
+
+    it('handles malformed YAML without throwing', async () => {
+      writeFileSync(join(tmpDir, 'arete.yaml'), '{{invalid yaml: [[[');
+      // Should not throw
+      await service.updateManifestField(tmpDir, 'qmd_collection', 'test');
+      // File should remain unchanged (no write on parse error)
+      const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
+      assert.equal(content, '{{invalid yaml: [[[');
+    });
+  });
+
   describe('getStatus', () => {
     it('returns status for workspace with manifest', async () => {
       writeFileSync(
