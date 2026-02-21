@@ -218,6 +218,8 @@ For each pending task (in dependency order):
    - **Read prior completed tasks**: Check what's been built (files, patterns, tests)
    - **Identify files to reference**: List specific files subagent should read first
    - **Check mitigations**: Review pre-mortem - which mitigations apply to this task?
+   - **Pre-task LEARNINGS.md check**: For each file the subagent will edit, check for LEARNINGS.md in the same directory and one level up. If found, add to "Context - Read These Files First":
+     - `packages/core/src/services/LEARNINGS.md` — component gotchas and invariants
 
 10. **Craft Subagent Prompt** (Orchestrator)
    

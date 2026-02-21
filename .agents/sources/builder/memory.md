@@ -160,8 +160,78 @@ See `memory/entries/` for real examples of well-structured entries:
 - `2026-02-13_multi-ide-path-fix.md` — Bug fix with architectural implications
 - `2026-02-13_quality-practices-abstraction.md` — Methodology change with pre-mortem analysis
 
+## LEARNINGS.md (Component-Local Knowledge)
+
+LEARNINGS.md files capture component-specific knowledge at the point of edit: incident-anchored gotchas, invariants, and proven patterns that live next to the code they describe. They complement memory entries (which record decisions and history) — they don't overlap.
+
+**Why they exist**: Memory entries capture what happened and why we decided something. LEARNINGS.md captures what will trip you up when you touch a specific directory — the short-circuit that prevents re-discovering the same bug.
+
+### Template (7 sections)
+
+```markdown
+## How This Works
+<!-- 5-10 lines: key files, entry points, dependencies, how pieces connect, where tests live -->
+
+## Key References
+<!-- Pointers to related source files, tests, docs, AGENTS.md sections -->
+
+## Gotchas
+<!-- Specific things that break and why — must reference file paths or past incidents -->
+
+## Invariants
+<!-- Things that must remain true — contracts, constraints, assumptions -->
+
+## Testing Gaps
+<!-- What's not covered, what to watch — stub initially, fill after incidents -->
+
+## Patterns That Work
+<!-- Proven approaches for this component — stub initially, fill when patterns emerge -->
+
+## Pre-Edit Checklist
+<!-- Specific verification steps before and after changes -->
+```
+
+Soft cap: **~100 lines per file**. Each section starts at 3-10 lines; grow it only when incidents warrant it.
+
+### Behavioral Rules
+
+1. Before editing files in a directory, check for LEARNINGS.md in the same directory as the file being edited, then each parent directory up to (but not including) the repository root. Stop at the first LEARNINGS.md found; read it. If editing files in multiple directories, check each.
+2. After fixing any bug or regression, add entry to nearest LEARNINGS.md describing what broke, why, and how to avoid it. If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one.
+3. Regression tests should include a comment explaining the failure mode they prevent.
+4. When an agent discovers something missing from or inaccurate in a LEARNINGS.md, update it immediately.
+
+### What LEARNINGS.md is NOT for
+
+- Not for architecture decisions or rationale (that's `memory/entries/`)
+- Not for TODO items or future work (that's `scratchpad.md` or `dev/work/plans/`)
+- Not for full API documentation (that's code comments or README)
+- Not for general coding standards (that's AGENTS.md / conventions)
+- Not for every directory (create organically after regressions, not proactively)
+
+### Seeded Paths (check these first)
+
+- `.pi/extensions/plan-mode/LEARNINGS.md`
+- `packages/core/src/search/LEARNINGS.md`
+- `packages/core/src/services/LEARNINGS.md`
+- `packages/core/src/integrations/LEARNINGS.md`
+- `packages/cli/src/commands/LEARNINGS.md`
+- `packages/runtime/rules/LEARNINGS.md`
+
+### LEARNINGS.md vs Memory Entries
+
+| | LEARNINGS.md | Memory Entries |
+|---|---|---|
+| **Scope** | Single component/directory | Whole-session decisions |
+| **Audience** | Next agent editing that code | Future builder reviewing history |
+| **Content** | Gotchas, invariants, patterns | What changed, why, learnings |
+| **Lifetime** | Grows with incidents | Immutable historical record |
+| **Location** | Next to source code | `memory/entries/` |
+
+They are complementary: memory entries say "we added the SearchProvider pattern on 2026-02-10"; LEARNINGS.md says "when you touch `packages/core/src/search/`, watch for X".
+
 ## References
 
 - **Memory index:** `memory/MEMORY.md`
 - **Collaboration profile:** `memory/collaboration.md`
 - **Synthesize skill:** `.agents/skills/synthesize-collaboration-profile/SKILL.md`
+- **Full LEARNINGS.md spec:** `.cursor/rules/dev.mdc` § LEARNINGS.md Convention
