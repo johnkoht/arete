@@ -60,6 +60,7 @@ export type { MeetingForSave } from './integrations/meetings.js';
 export {
   saveConversationFile,
   conversationFilename,
+  updateConversationFrontmatter,
   parseConversation,
   extractInsights,
 } from './integrations/conversations/index.js';

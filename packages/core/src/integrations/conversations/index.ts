@@ -8,7 +8,7 @@ export type {
   ConversationProvenance,
 } from './types.js';
 
-export { conversationFilename, saveConversationFile } from './save.js';
+export { conversationFilename, saveConversationFile, updateConversationFrontmatter } from './save.js';
 
 export type { ParsedMessage, ParsedConversation } from './parser.js';
 export { parseConversation } from './parser.js';

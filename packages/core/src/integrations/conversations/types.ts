@@ -39,4 +39,10 @@ export type ConversationForSave = {
   normalizedContent: string;
   insights: ConversationInsights;
   provenance: ConversationProvenance;
+  /**
+   * Resolved person slugs for participants. When undefined, no `participant_ids`
+   * field is written (backward compatible). When defined (even empty), the field
+   * is written to frontmatter and can be patched after people mapping.
+   */
+  participantIds?: string[];
 };

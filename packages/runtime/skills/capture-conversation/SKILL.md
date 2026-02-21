@@ -115,7 +115,12 @@ This is a conversational review flow — no custom UI or interactive prompts.
 
 ### 6. Save the Artifact
 
-On confirmation, write the conversation file directly to the workspace.
+On confirmation, **first check `settings.conversations.peopleProcessing`** in `arete.yaml` (read the file or use `arete context`). This determines what gets written to frontmatter:
+
+- **`off`** (or key absent) → save with `participantIds: undefined` — no `participant_ids` field written
+- **`ask` or `on`** → save with `participantIds: []` — writes `participant_ids: []` as a placeholder, ready to be patched after people mapping in Step 8
+
+Then write the conversation file directly to the workspace.
 
 **Directory**: Ensure `resources/conversations/` exists (create if needed).
 
@@ -177,9 +182,48 @@ captured_at: "{ISO timestamp}"
 ### 7. Confirm to User
 
 Report the result:
-- **Success**: "Saved to `resources/conversations/2026-02-20-sprint-planning.md`. The conversation is now discoverable via `arete context`."
+- **Success (mode `off`)**: "Saved to `resources/conversations/2026-02-20-sprint-planning.md`. *(Tip: set `settings.conversations.peopleProcessing: on` in `arete.yaml` to map participants to your people directory.)*"
+- **Success (mode `ask` or `on`)**: "Saved to `resources/conversations/2026-02-20-sprint-planning.md`. The conversation is now discoverable via `arete context`."
 - **Already exists**: Check if the file already exists before writing. If so, ask: "A conversation with this title and date already exists. Save with a different title, or overwrite?"
 - **Error**: Share the error and suggest fixes.
+
+### 8. People Processing (if mode is `ask` or `on`)
+
+After save confirmation, check `settings.conversations.peopleProcessing` in `arete.yaml` (use `arete context` or read the file directly).
+
+**If mode is `off`** → done (tip already shown in the confirmation message above). Pass `participantIds: undefined` (not `[]`) to `saveConversationFile()` so no `participant_ids` field appears in frontmatter.
+
+**If mode is `ask`** → Present the participants + stakeholders list and ask:
+> "Map these people to your people directory? (yes/no)"
+
+No "always/never remember" in v1 — yes/no per run only.
+
+**If mode is `on`** (or `ask` + user said yes):
+
+1. **Build candidates** from `participants` (speakers from parser) + `stakeholders` (from insights):
+   - Normalize names: lowercase + trim for dedup comparison
+   - If the same normalized name appears in both lists → keep one entry, prefer the `participants` version (they actually spoke)
+   - `source` field: `"conversation:participant"` for speakers, `"conversation:stakeholder"` for mentioned-only
+   - `text` field: for participants, include a sample of their spoken lines; for stakeholders, include the sentence where they were mentioned
+   - `email`: omit (Slack display names won't have email — low confidence is correct and expected)
+
+2. **Write candidates JSON** to a temp file (e.g. `/tmp/arete-candidates-{timestamp}.json`)
+
+3. **Call** `arete people intelligence digest --input <path> --json`
+   - On non-zero exit or malformed JSON response → warn user, skip `participant_ids` writeback, **do not fail the capture** (conversation file stays saved)
+
+4. **Process digest results**: create/update person files, surface `unknown_queue` items for user review (same pattern as `process-meetings` skill)
+
+5. **Patch `participant_ids`** in the saved conversation file using the write tool directly:
+   - Read the saved file
+   - In the YAML frontmatter block (between the opening `---` and closing `---`):
+     - If a `participant_ids:` line already exists → replace it with `participant_ids: [slug1, slug2]`
+     - If no `participant_ids:` line exists → insert `participant_ids: [slug1, slug2]` on the line immediately before the closing `---`
+   - Use flow style: `participant_ids: [slug1, slug2]` (not block style with `-` bullets)
+   - Write the file back
+   - If the file can't be read or written → warn: *"⚠ Participants mapped but couldn't update participant_ids in {filename}."* Do not fail.
+
+**Note on initial save**: When mode is `ask` or `on`, pass `participantIds: []` to `saveConversationFile()` so the `participant_ids: []` placeholder is written to frontmatter on initial save — ready for writeback after mapping.
 
 ## Example
 

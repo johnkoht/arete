@@ -1,11 +1,11 @@
 ---
 title: Conversation Capture — Phase 2: People Modes & Improvements
 slug: slack-conversation-capture-phase-2
-status: planned
+status: complete
 size: medium
 tags: [feature]
 created: 2026-02-19T00:00:00Z
-updated: 2026-02-21T03:57:11.543Z
+updated: 2026-02-21T04:04:37.144Z
 completed: null
 execution: null
 has_review: true

@@ -135,7 +135,7 @@ export type ResolvedEntity = {
 };
 
 /** Source type classification for entity mentions */
-export type MentionSourceType = 'context' | 'meeting' | 'memory' | 'project';
+export type MentionSourceType = 'context' | 'meeting' | 'memory' | 'project' | 'conversation';
 
 /** Mention of an entity in content */
 export type EntityMention = {

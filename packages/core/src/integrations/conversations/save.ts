@@ -32,17 +32,25 @@ export function conversationFilename(conversation: ConversationForSave): string 
  * Render a conversation as markdown with YAML frontmatter.
  */
 function renderConversationMarkdown(conversation: ConversationForSave): string {
-  const { title, date, source, participants, rawTranscript, normalizedContent, insights, provenance } = conversation;
+  const { title, date, source, participants, rawTranscript, normalizedContent, insights, provenance, participantIds } = conversation;
 
   // Frontmatter
-  const frontmatter = [
+  const frontmatterLines = [
     '---',
     `title: "${title.replace(/"/g, '\\"')}"`,
     `date: "${date}"`,
     `source: "${source}"`,
     `captured_at: "${provenance.capturedAt}"`,
-    '---',
-  ].join('\n');
+  ];
+
+  // Only write participant_ids when participantIds is defined (flow style: [slug1, slug2])
+  if (participantIds !== undefined) {
+    frontmatterLines.push(`participant_ids: [${participantIds.join(', ')}]`);
+  }
+
+  frontmatterLines.push('---');
+
+  const frontmatter = frontmatterLines.join('\n');
 
   // Sections
   const sections: string[] = [];
@@ -114,4 +122,57 @@ export async function saveConversationFile(
   await storage.mkdir(outputDir);
   await storage.write(fullPath, content);
   return fullPath;
+}
+
+/**
+ * Patch the `participant_ids` field in a saved conversation file's YAML frontmatter.
+ *
+ * Uses string-level replacement (not YAML round-trip) to preserve all other content.
+ * Inserts the field before the closing `---` if not already present.
+ * No-op if the file doesn't exist or has no recognizable frontmatter.
+ * Never throws.
+ */
+export async function updateConversationFrontmatter(
+  storage: StorageAdapter,
+  filePath: string,
+  participantIds: string[],
+): Promise<void> {
+  try {
+    const exists = await storage.exists(filePath);
+    if (!exists) return;
+
+    const content = await storage.read(filePath);
+    if (!content) return;
+
+    // Must start with a frontmatter block
+    if (!content.startsWith('---')) return;
+
+    // Find closing ---
+    const closingIdx = content.indexOf('\n---', 3);
+    if (closingIdx === -1) return;
+
+    const newLine = `participant_ids: [${participantIds.join(', ')}]`;
+
+    // Check if participant_ids already exists — scoped to frontmatter slice to avoid
+    // matching a `participant_ids:` occurrence in the body. When a match is found here,
+    // the first `^participant_ids:` in the full file is always the frontmatter line
+    // (frontmatter precedes body), so the full-content replace below is safe.
+    const frontmatter = content.slice(0, closingIdx);
+    const existingMatch = frontmatter.match(/^participant_ids:.*$/m);
+
+    let nextContent: string;
+    if (existingMatch) {
+      // Replace the existing line (safe: first match in file == frontmatter match)
+      nextContent = content.replace(/^participant_ids:.*$/m, newLine);
+    } else {
+      // Insert before the closing ---
+      nextContent = content.slice(0, closingIdx) + '\n' + newLine + content.slice(closingIdx);
+    }
+
+    if (nextContent !== content) {
+      await storage.write(filePath, nextContent);
+    }
+  } catch {
+    // Never throw — writeback failure is non-fatal
+  }
 }

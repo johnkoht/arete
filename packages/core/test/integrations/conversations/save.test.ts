@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { conversationFilename, saveConversationFile } from '../../../src/integrations/conversations/save.js';
+import { conversationFilename, saveConversationFile, updateConversationFrontmatter } from '../../../src/integrations/conversations/save.js';
 import type { ConversationForSave } from '../../../src/integrations/conversations/types.js';
 import type { StorageAdapter } from '../../../src/storage/adapter.js';
 
@@ -241,5 +241,101 @@ describe('saveConversationFile', () => {
     const filename = conversationFilename(conv);
     const content = storage.files.get(`/out/${filename}`)!;
     assert.ok(content.includes('title: "Discussion about \\"urgent\\" issue"'));
+  });
+
+  // participantIds frontmatter rendering
+  it('omits participant_ids field when participantIds is undefined (backward compat)', async () => {
+    const conv = makeConversation(); // no participantIds
+    await saveConversationFile(storage, conv, '/out');
+    const content = storage.files.get('/out/2026-02-20-sprint-planning-discussion.md')!;
+    assert.ok(!content.includes('participant_ids'));
+  });
+
+  it('writes participant_ids: [] when participantIds is empty array', async () => {
+    const conv = makeConversation({ participantIds: [] });
+    await saveConversationFile(storage, conv, '/out');
+    const content = storage.files.get('/out/2026-02-20-sprint-planning-discussion.md')!;
+    assert.ok(content.includes('participant_ids: []'));
+  });
+
+  it('writes participant_ids in flow style when participantIds has values', async () => {
+    const conv = makeConversation({ participantIds: ['alice-smith', 'bob-jones'] });
+    await saveConversationFile(storage, conv, '/out');
+    const content = storage.files.get('/out/2026-02-20-sprint-planning-discussion.md')!;
+    assert.ok(content.includes('participant_ids: [alice-smith, bob-jones]'));
+  });
+});
+
+describe('updateConversationFrontmatter', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('no-ops when file does not exist', async () => {
+    // Should not throw
+    await assert.doesNotReject(() =>
+      updateConversationFrontmatter(storage, '/out/nonexistent.md', ['alice'])
+    );
+  });
+
+  it('inserts participant_ids before closing --- when not present', async () => {
+    const content = '---\ntitle: "Test"\ndate: "2026-02-20"\n---\n\n# Test\n';
+    storage.files.set('/out/test.md', content);
+    await updateConversationFrontmatter(storage, '/out/test.md', ['alice-smith', 'bob-jones']);
+    const updated = storage.files.get('/out/test.md')!;
+    assert.ok(updated.includes('participant_ids: [alice-smith, bob-jones]'));
+    // Body still intact
+    assert.ok(updated.includes('# Test'));
+    // Title still intact
+    assert.ok(updated.includes('title: "Test"'));
+  });
+
+  it('replaces existing participant_ids line, not duplicated', async () => {
+    const content = '---\ntitle: "Test"\nparticipant_ids: []\n---\n\n# Test\n';
+    storage.files.set('/out/test.md', content);
+    await updateConversationFrontmatter(storage, '/out/test.md', ['carol']);
+    const updated = storage.files.get('/out/test.md')!;
+    const matches = [...updated.matchAll(/participant_ids:/g)];
+    assert.equal(matches.length, 1, 'participant_ids should appear exactly once');
+    assert.ok(updated.includes('participant_ids: [carol]'));
+  });
+
+  it('no-ops gracefully on malformed frontmatter (no closing ---)', async () => {
+    const content = '---\ntitle: "Test"\nno closing delimiter here';
+    storage.files.set('/out/test.md', content);
+    await assert.doesNotReject(() =>
+      updateConversationFrontmatter(storage, '/out/test.md', ['alice'])
+    );
+    // File should be unchanged
+    assert.equal(storage.files.get('/out/test.md'), content);
+  });
+
+  it('no-ops gracefully on content without frontmatter', async () => {
+    const content = '# Plain markdown\nNo frontmatter here.\n';
+    storage.files.set('/out/test.md', content);
+    await assert.doesNotReject(() =>
+      updateConversationFrontmatter(storage, '/out/test.md', ['alice'])
+    );
+    assert.equal(storage.files.get('/out/test.md'), content);
+  });
+
+  it('handles slugs with special chars in flow style YAML', async () => {
+    const content = '---\ntitle: "T"\ndate: "2026-02-20"\n---\n\n# T\n';
+    storage.files.set('/out/test.md', content);
+    await updateConversationFrontmatter(storage, '/out/test.md', ['john-oconnor', 'xu-lei']);
+    const updated = storage.files.get('/out/test.md')!;
+    assert.ok(updated.includes('participant_ids: [john-oconnor, xu-lei]'));
+  });
+
+  it('writes participant_ids: [] when called with empty array', async () => {
+    const content = '---\ntitle: "T"\ndate: "2026-02-20"\n---\n\n# T\n';
+    storage.files.set('/out/test.md', content);
+    await updateConversationFrontmatter(storage, '/out/test.md', []);
+    const updated = storage.files.get('/out/test.md')!;
+    assert.ok(updated.includes('participant_ids: []'));
+    // Body still intact
+    assert.ok(updated.includes('# T'));
   });
 });
