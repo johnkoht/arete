@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-18",
+  "lastUpdated": "2026-02-20",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -52,6 +52,25 @@
         "Exact upstream/base origin should be confirmed and recorded in a follow-up pass."
       ],
       "lastVerified": "2026-02-18"
+    },
+    {
+      "id": "pi-agent-memory-extension",
+      "name": "Pi Agent Memory Extension",
+      "type": "extension",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "pi",
+      "isPiCore": false,
+      "summary": "Auto-injects memory/collaboration.md into agent system prompt via before_agent_start.",
+      "implementationPaths": [".pi/extensions/agent-memory/index.ts"],
+      "readBeforeChange": [
+        ".pi/extensions/agent-memory/index.ts",
+        "memory/collaboration.md",
+        ".pi/APPEND_SYSTEM.md"
+      ],
+      "lastVerified": "2026-02-20"
     },
     {
       "id": "pi-append-system-dev-rules",

@@ -214,7 +214,8 @@ function compressMemorySection(content: string): string {
   return `[Memory]|entry:memory/MEMORY.md
 |before_work:scan MEMORY.md + collaboration.md
 |after_work:add entry to memory/entries/, update index
-|synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion`;
+|synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion
+|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/cli/src/commands/, packages/runtime/rules/`;
 }
 
 /**
@@ -337,7 +338,8 @@ function compressConventions(content: string): string {
 |tests:node:test + node:assert/strict
 |quality:npm run typecheck && npm test before commit
 |execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended
-|catalog:dev/catalog/capabilities.json — check before changing tooling/extensions/services; update after changes`;
+|catalog:dev/catalog/capabilities.json — check before changing tooling/extensions/services; update after changes
+|regressions:after regression fixes, update nearest LEARNINGS.md (see Memory § LEARNINGS.md for convention)`;
 }
 
 /**
