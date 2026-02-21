@@ -167,6 +167,17 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 ---
 
+## LEARNINGS.md Behavioral Rules
+
+<!-- SYNC: The 4 behavioral rules below are mirrored in .cursor/rules/dev.mdc §LEARNINGS.md. Update both together. -->
+
+1. Before editing files in a directory, check for LEARNINGS.md in the same directory as the file being edited, then each parent directory up to (but not including) the repository root. Stop at the first LEARNINGS.md found; read it. If editing files in multiple directories, check each.
+2. After fixing any bug or regression, add entry to nearest LEARNINGS.md describing what broke, why, and how to avoid it. If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one.
+3. Regression tests should include a comment explaining the failure mode they prevent.
+4. When an agent discovers something missing from or inaccurate in a LEARNINGS.md, update it immediately.
+
+---
+
 ## Capability Registry Check (tooling/platform changes)
 
 Before changing developer tooling or platform behavior (extensions, tools, services, rules integration, major external packages):

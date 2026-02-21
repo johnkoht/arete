@@ -18,7 +18,7 @@ describe('golden: memory search command', () => {
   });
 
   it('missing query produces error', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const { stdout, stderr, code } = runCliRaw(
       ['memory', 'search', '', '--json'],
       { cwd: tmpDir },
@@ -41,7 +41,7 @@ describe('golden: memory search command', () => {
   });
 
   it('in workspace produces memory search JSON structure', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(
       ['memory', 'search', 'test query', '--json'],
       { cwd: tmpDir },
@@ -54,7 +54,7 @@ describe('golden: memory search command', () => {
   });
 
   it('human output has Memory Search header and Found line', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(['memory', 'search', 'onboarding'], { cwd: tmpDir });
     assert.ok(/Memory Search/i.test(stdout));
     assert.ok(/Query:|Found:/i.test(stdout));

@@ -18,7 +18,7 @@ describe('golden: resolve command', () => {
   });
 
   it('missing reference produces error', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const { stdout, stderr, code } = runCliRaw(
       ['resolve', '', '--json'],
       { cwd: tmpDir },
@@ -40,7 +40,7 @@ describe('golden: resolve command', () => {
   });
 
   it('in workspace produces resolve JSON structure (single or all)', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(['resolve', 'SomePerson', '--json'], {
       cwd: tmpDir,
     });
@@ -55,7 +55,7 @@ describe('golden: resolve command', () => {
   });
 
   it('human output has Entity Resolution header', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(['resolve', 'Jane'], { cwd: tmpDir });
     assert.ok(/Entity Resolution|Reference:|Type:/i.test(stdout));
   });

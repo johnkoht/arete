@@ -13,7 +13,7 @@ describe('people intelligence digest command', () => {
 
   beforeEach(() => {
     tmpDir = createTmpDir('arete-test-people-intelligence');
-    runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
     mkdirSync(join(tmpDir, 'context'), { recursive: true });
   });
 

@@ -18,7 +18,7 @@ describe('golden: brief command', () => {
   });
 
   it('missing --for produces error', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const { stdout, stderr, code } = runCliRaw(
       ['brief', '--for', '', '--json'],
       { cwd: tmpDir },
@@ -41,7 +41,7 @@ describe('golden: brief command', () => {
   });
 
   it.skip('in workspace produces brief JSON structure', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(
       ['brief', '--for', 'create PRD', '--json'],
       { cwd: tmpDir },
@@ -55,7 +55,7 @@ describe('golden: brief command', () => {
   });
 
   it('human output contains markdown content', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(['brief', '--for', 'create PRD'], { cwd: tmpDir });
     assert.ok(stdout.length > 50);
     assert.ok(/^#|^##|context|memory|entities/i.test(stdout));

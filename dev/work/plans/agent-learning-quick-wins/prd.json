@@ -1,0 +1,100 @@
+{
+  "name": "agent-learning-quick-wins",
+  "branchName": "feature/agent-learning-quick-wins",
+  "goal": "Reduce agent regressions by adding component-local LEARNINGS.md files with real incident-based knowledge, auto-injecting memory/collaboration.md into every session via a pi extension, and integrating LEARNINGS.md into the execute-prd orchestrator workflow.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Define LEARNINGS.md Format and Add Rules",
+      "description": "Define the LEARNINGS.md template (7 sections, 3-10 lines each, ~100 line soft cap) and add behavioral rules to dev.mdc and .pi/APPEND_SYSTEM.md. dev.mdc gets the full template, rules, 'NOT for' guidance, and 6 seeded paths. APPEND_SYSTEM.md gets compressed behavioral rules only (4 rules). Both files get SYNC comments. Add APPEND_SYSTEM.md sync item to Skill/Rule Changes checklist in dev.mdc.",
+      "acceptanceCriteria": [
+        "dev.mdc contains full LEARNINGS.md section: 7-section template with per-section size guidance (~3-10 lines each, ~100 line soft cap), all 4 behavioral rules, 'NOT for' guidance, and 6 seeded paths",
+        "APPEND_SYSTEM.md contains all 4 behavioral rules in compressed form with SYNC comment pointing to dev.mdc",
+        "dev.mdc contains SYNC comment pointing to APPEND_SYSTEM.md",
+        "APPEND_SYSTEM.md sync item added to Skill/Rule Changes checklist in dev.mdc",
+        "Diff of the 4 behavioral rules between dev.mdc and APPEND_SYSTEM.md shows identical rule text",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Seed Initial LEARNINGS.md Files (6 files)",
+      "description": "Create 6 LEARNINGS.md files in high-regression areas from real past incidents. Read the specified source material for each file. Each file must follow the 7-section template from Task 1, include a 'How This Works' orientation (5-10 lines), and contain at least 3 concrete gotchas/invariants referencing specific file paths or past incidents. Quality bar: entries must be component-specific and incident-anchored, not generic advice. Files: .pi/extensions/plan-mode/LEARNINGS.md, packages/core/src/search/LEARNINGS.md, packages/core/src/services/LEARNINGS.md, packages/core/src/integrations/LEARNINGS.md, packages/cli/src/commands/LEARNINGS.md, packages/runtime/rules/LEARNINGS.md. Source material per file is documented in the PRD (dev/work/plans/agent-learning-quick-wins/prd.md, Task 2).",
+      "acceptanceCriteria": [
+        "6 LEARNINGS.md files exist at the specified paths",
+        "Each file follows the 7-section template from Task 1",
+        "Each file has a 'How This Works' section (5-10 lines) explaining key files, entry points, dependencies, and test locations",
+        "Each file has at least 3 concrete gotchas or invariants referencing specific file paths, line ranges, or named past incidents",
+        "No file contains generic advice that could appear in any coding guide (quality bar: incident-anchored, not abstract)",
+        "Builder review gate: present all 6 files for builder approval before marking complete"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Build Auto-Injection Pi Extension",
+      "description": "Create .pi/extensions/agent-memory/index.ts — a minimal pi extension that reads memory/collaboration.md on session_start (caches content) and injects it into the system prompt on before_agent_start. CRITICAL: use systemPrompt return (not message) to avoid token accumulation and multi-extension conflicts. Also create unit tests at .pi/extensions/agent-memory/agent-memory.test.ts. Update dev/catalog/capabilities.json with new entry. Implementation details and code example in PRD (dev/work/plans/agent-learning-quick-wins/prd.md, Task 3).",
+      "acceptanceCriteria": [
+        "Extension file exists at .pi/extensions/agent-memory/index.ts (~30-50 lines)",
+        "Extension uses systemPrompt return from before_agent_start (NOT message return)",
+        "Extension loads without errors in a new pi session",
+        "System prompt includes '## Builder Collaboration Profile' header with collaboration.md content",
+        "If collaboration.md is missing, extension silently does nothing (no error)",
+        "Extension works when plan-mode extension is also active (no conflict)",
+        "Unit tests exist at .pi/extensions/agent-memory/agent-memory.test.ts",
+        "Unit tests pass: tsx --test '.pi/extensions/agent-memory/agent-memory.test.ts'",
+        "dev/catalog/capabilities.json updated with pi-agent-memory-extension entry",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Update AGENTS.md Sources and Execute-PRD",
+      "description": "Update .agents/sources/builder/memory.md with LEARNINGS.md section (convention, template, rules, 'NOT for', 6 paths). Update .agents/sources/builder/conventions.md with LEARNINGS.md in commit workflow. Update .agents/skills/execute-prd/SKILL.md to add LEARNINGS.md lookup in the 'Prepare Context' step (step 9 of execution loop) — not as a generic footer. Rebuild with npm run build:agents:dev.",
+      "acceptanceCriteria": [
+        ".agents/sources/builder/memory.md contains LEARNINGS.md section with template, rules, seeded paths, and 'NOT for' guidance",
+        ".agents/sources/builder/conventions.md mentions LEARNINGS.md updates in commit/regression workflow",
+        ".agents/skills/execute-prd/SKILL.md has LEARNINGS.md lookup in 'Prepare Context' step with explicit directory inspection pattern",
+        "npm run build:agents:dev succeeds",
+        "Generated AGENTS.md contains LEARNINGS.md references"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Verification and Close-Out",
+      "description": "Run all verification checks: typecheck, tests, grep verifies for SYNC comments and LEARNINGS references, file existence checks, capabilities.json entry, extension tests, rule diff. Create memory entry documenting the new conventions. Update memory/MEMORY.md index.",
+      "acceptanceCriteria": [
+        "npm run typecheck passes",
+        "npm test passes (full suite, no regressions)",
+        "rg 'SYNC.*LEARNINGS' .cursor/rules/dev.mdc .pi/APPEND_SYSTEM.md returns hits in both files",
+        "rg 'LEARNINGS' .agents/skills/execute-prd/SKILL.md returns the Prepare Context addition",
+        "All 6 LEARNINGS.md files exist (ls verification)",
+        "grep 'agent-memory' dev/catalog/capabilities.json returns a match",
+        "Extension tests pass: tsx --test '.pi/extensions/agent-memory/agent-memory.test.ts'",
+        "Behavioral rules in dev.mdc and APPEND_SYSTEM.md are identical (diff check)",
+        "Memory entry created at memory/entries/2026-02-21_agent-learning-quick-wins.md",
+        "memory/MEMORY.md index updated with new entry"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-21T04:01:30.000Z",
+    "totalTasks": 5,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

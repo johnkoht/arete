@@ -242,6 +242,7 @@ Example: `feat: add builder AGENTS.md source files`
 2. `npm run test:all` (or `npm test` + `npm run test:py`)
 3. New code → new/updated tests
 4. Code review checklist (see above)
+5. After regression fixes: update the nearest LEARNINGS.md with what broke, why, and how to avoid it (see `memory.md` § LEARNINGS.md for full convention)
 
 ## Documentation Planning
 

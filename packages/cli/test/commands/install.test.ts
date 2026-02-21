@@ -23,7 +23,7 @@ describe('install command', () => {
 
   describe('arete.yaml manifest', () => {
     it('creates valid YAML with schema and ide_target', () => {
-      runCli(['install', tmpDir, '--json']);
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
 
       const manifestPath = join(tmpDir, 'arete.yaml');
       const content = readFileSync(manifestPath, 'utf8');
@@ -38,7 +38,7 @@ describe('install command', () => {
   describe('multi-IDE support', () => {
     describe('Cursor target', () => {
       it('creates Cursor workspace structure with --ide cursor', () => {
-        runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+        runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
         assert.ok(existsSync(join(tmpDir, '.cursor')), '.cursor directory should exist');
         assert.ok(existsSync(join(tmpDir, '.cursor', 'rules')), '.cursor/rules directory should exist');
@@ -47,7 +47,7 @@ describe('install command', () => {
       });
 
       it('copies product skills and rules into the new workspace', () => {
-        const output = runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+        const output = runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
         const parsed = JSON.parse(output) as {
           results: { skills: string[]; rules: string[] };
         };
@@ -65,7 +65,7 @@ describe('install command', () => {
       });
 
       it('creates rules directory with AGENTS.md', () => {
-        runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+        runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
         assert.ok(existsSync(join(tmpDir, '.cursor', 'rules')), 'Rules directory should exist');
         const agentsPath = join(tmpDir, 'AGENTS.md');
@@ -77,7 +77,7 @@ describe('install command', () => {
 
     describe('Claude target', () => {
       it('creates Claude workspace structure with --ide claude', () => {
-        runCli(['install', tmpDir, '--json', '--ide', 'claude']);
+        runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'claude']);
 
         assert.ok(existsSync(join(tmpDir, '.claude')), '.claude directory should exist');
         const parsed = parseYaml(readFileSync(join(tmpDir, 'arete.yaml'), 'utf8'));
@@ -88,7 +88,7 @@ describe('install command', () => {
 
   describe('qmd integration', () => {
     it('--skip-qmd produces skipped qmd result in JSON output', () => {
-      const output = runCli(['install', tmpDir, '--json', '--skip-qmd']);
+      const output = runCli(['install', tmpDir, '--skip-qmd', '--json']);
       const parsed = JSON.parse(output) as {
         success: boolean;
         qmd: { skipped: boolean; created: boolean; indexed: boolean; available: boolean };
@@ -101,7 +101,7 @@ describe('install command', () => {
     });
 
     it('does not write qmd_collection to arete.yaml when --skip-qmd', () => {
-      runCli(['install', tmpDir, '--json', '--skip-qmd']);
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
 
       const content = readFileSync(join(tmpDir, 'arete.yaml'), 'utf8');
       const parsed = parseYaml(content) as Record<string, unknown>;
@@ -111,7 +111,7 @@ describe('install command', () => {
 
   describe('workspace structure', () => {
     it('creates base directories (context, projects, people)', () => {
-      runCli(['install', tmpDir, '--json']);
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
 
       assert.ok(existsSync(join(tmpDir, 'context')), 'context/ should exist');
       assert.ok(existsSync(join(tmpDir, 'projects')), 'projects/ should exist');
@@ -119,7 +119,7 @@ describe('install command', () => {
     });
 
     it('creates credentials example file', () => {
-      runCli(['install', tmpDir, '--json']);
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
 
       const examplePath = join(tmpDir, '.credentials', 'credentials.yaml.example');
       assert.ok(existsSync(examplePath), '.credentials/credentials.yaml.example should exist');

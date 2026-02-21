@@ -82,6 +82,63 @@ If any item fails, fix before committing.
 
 ---
 
+## LEARNINGS.md Convention
+
+<!-- SYNC: The 4 behavioral rules below are mirrored in .pi/APPEND_SYSTEM.md §LEARNINGS.md. Update both together. -->
+
+Component-local knowledge files that capture incident-anchored gotchas, invariants, and patterns. Soft cap: ~100 lines per file.
+
+### Template (7 sections; each 3-10 lines initially)
+
+```markdown
+## How This Works
+<!-- 5-10 lines: key files, entry points, dependencies, how pieces connect, where tests live -->
+
+## Key References
+<!-- Pointers to related source files, tests, docs, AGENTS.md sections -->
+
+## Gotchas
+<!-- Specific things that break and why — must reference file paths or past incidents -->
+
+## Invariants
+<!-- Things that must remain true — contracts, constraints, assumptions -->
+
+## Testing Gaps
+<!-- What's not covered, what to watch — stub initially, fill after incidents -->
+
+## Patterns That Work
+<!-- Proven approaches for this component — stub initially, fill when patterns emerge -->
+
+## Pre-Edit Checklist
+<!-- Specific verification steps before and after changes -->
+```
+
+### Behavioral Rules
+
+1. Before editing files in a directory, check for LEARNINGS.md in the same directory as the file being edited, then each parent directory up to (but not including) the repository root. Stop at the first LEARNINGS.md found; read it. If editing files in multiple directories, check each.
+2. After fixing any bug or regression, add entry to nearest LEARNINGS.md describing what broke, why, and how to avoid it. If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one.
+3. Regression tests should include a comment explaining the failure mode they prevent.
+4. When an agent discovers something missing from or inaccurate in a LEARNINGS.md, update it immediately.
+
+### What LEARNINGS.md is NOT for
+
+- Not for architecture decisions or rationale (that's `memory/entries/`)
+- Not for TODO items or future work (that's `scratchpad.md` or `dev/work/plans/`)
+- Not for full API documentation (that's code comments or README)
+- Not for general coding standards (that's AGENTS.md / conventions)
+- Not for every directory (create organically after regressions, not proactively)
+
+### Seeded Paths (check these first)
+
+- `.pi/extensions/plan-mode/LEARNINGS.md`
+- `packages/core/src/search/LEARNINGS.md`
+- `packages/core/src/services/LEARNINGS.md`
+- `packages/core/src/integrations/LEARNINGS.md`
+- `packages/cli/src/commands/LEARNINGS.md`
+- `packages/runtime/rules/LEARNINGS.md`
+
+---
+
 ## Skill and Rule Changes (mandatory review)
 
 **When**: Before creating or modifying any skill or rule file.
@@ -90,6 +147,7 @@ If any item fails, fix before committing.
 - [ ] **Audience check**: Is this for BUILD (dev/, .cursor/, .agents/) or PRODUCT (runtime/)?
 - [ ] **AGENTS.md sources**: If the skill/rule changes workflows, update `.agents/sources/` and rebuild
 - [ ] **Cross-references**: Search for references to the skill/rule being changed; update them
+- [ ] **APPEND_SYSTEM.md sync**: If changing LEARNINGS.md rules, update `.pi/APPEND_SYSTEM.md` to match (and vice versa)
 
 **AGENTS.md is generated** — do not edit it directly. Update source files in `.agents/sources/` and rebuild:
 

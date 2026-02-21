@@ -13,7 +13,7 @@ describe('skill command', () => {
     workspaceDir = createTmpDir('arete-test-skill-workspace');
     fixtureDir = createTmpDir('arete-test-skill-fixture');
 
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const skillDir = join(fixtureDir, 'local-test-skill');
     mkdirSync(skillDir, { recursive: true });
