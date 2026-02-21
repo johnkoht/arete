@@ -8,6 +8,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - `commands.ts` — `PlanModeState`, `createDefaultState()`, all command handlers, `CommandContext`/`CommandPi` interfaces
 - `persistence.ts` — `savePlan()`, `loadPlan()`, `parseFrontmatter()`, `serializeFrontmatter()`, `slugify()`, `migrateStatus()`
 - `utils.ts` — `extractTodoItems()`, `classifyPlanSize()`, `suggestPlanName()`, `TodoItem` type
+- `agents.ts` — `loadAgentConfig()`, `getAgentPrompt()`, `getAgentModel()`, `resolveModel()`; loads agent model settings from `.pi/settings.json` and prompt definitions from `.pi/agents/{role}.md`
+- `execution-progress.ts` — `resolveExecutionProgress()`, `deriveActiveRole()`; reads PRD progress from prd.json during `/build` execution; used by `commands.ts`
 - `widget.ts` — footer and todo widget rendering
 - Tests: `.pi/extensions/plan-mode/*.test.ts` (run with `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'`)
 
@@ -21,7 +23,7 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **State restoration fields must stay in sync.** `index.ts` persists `enabled`, `todos`, `executing`, `currentSlug`, `planSize`, `preMortemRun`, `reviewRun`, `prdConverted` together. On resume, the frontmatter from disk overwrites in-memory flags — if `persistence.ts` and the persisted entry disagree, the frontmatter wins (see `session_start` reconciliation block). Adding a new flag requires updating both `pi.appendEntry()` calls and the session restore block.
 
-- **`inPrdConversion` temporarily lifts tool restrictions during `/prd`.** The `/prd` command handler sets `inPrdConversion = true` and switches to full tool access so the agent can write files. If this flag is not reset (e.g. command throws), plan mode stays in full-access. The flag is reset in a `finally`-style pattern in `index.ts` `/prd` handler — preserve that pattern on any refactor.
+- **`inPrdConversion` flag is NOT exception-safe — a throw from `/prd` leaves it stuck `true`.** The `/prd` handler sets `inPrdConversion = true`, grants full tool access, awaits `handlePrd()`, then resets it. There is no `try/finally`. If `handlePrd()` throws, the flag stays `true` for the rest of the session. Mitigation: if you add error handling to `/prd`, wrap the reset in `finally`.
 
 - **Plan mode no longer restricts tools — it relies on prompt guidance.** The tool restriction system (`isAllowedInPlanMode`, `PLAN_MODE_TOOLS`, bash allowlist) was removed in `e9a5194`. All tools remain available in plan mode. The `before_agent_start` hook injects plan-mode context via a `message` that instructs the agent to explore rather than execute. If you see references to tool blocking or `PLAN_MODE_TOOLS` in old memory entries, they are outdated.
 
@@ -48,4 +50,6 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - [ ] If adding a new state field: update `PlanModeState` (commands.ts), `createDefaultState()`, `persistState()` in index.ts, and the session restore block in `session_start`
 - [ ] If changing plan frontmatter fields: update `PlanFrontmatter` (persistence.ts), `serializeFrontmatter()`, `parseFrontmatter()`, and any callers that destructure frontmatter
 - [ ] Plan mode no longer restricts tools — if you need to change plan-mode behavior, modify the prompt injection in `index.ts` `before_agent_start`, not tool filtering
+- [ ] If editing agent prompt injection logic: read `agents.ts` — `/review` and `/pre-mortem` look up `.pi/agents/{role}.md` via `getAgentPrompt()`
+- [ ] If editing execution progress tracking: read `execution-progress.ts` — it reads prd.json by slug path; path assumptions must stay in sync with `persistence.ts`
 - [ ] Verify `npm run typecheck` still passes (catches packages/ — extension errors need separate `tsc`)
