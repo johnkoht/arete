@@ -103,6 +103,7 @@ export class WorkspaceService {
       directories: [],
       files: [],
       skills: [],
+      tools: [],
       rules: [],
       errors: [],
     };
@@ -165,6 +166,32 @@ export class WorkspaceService {
             } catch (err) {
               result.errors.push({
                 type: 'skill',
+                path: name,
+                error: (err as Error).message,
+              });
+            }
+          }
+        }
+      }
+
+      // Copy tools to IDE-specific tools directory (e.g. .cursor/tools/ or .claude/tools/)
+      // Regression fix: tools were copied in the old CLI install command but were never
+      // ported into WorkspaceService.create() during the CLI refactor (e3bc217, 2026-02-15).
+      if (sourcePaths.tools && await this.storage.exists(sourcePaths.tools)) {
+        const toolDirs = await this.storage.listSubdirectories(sourcePaths.tools);
+        for (const src of toolDirs) {
+          const name = src.split(/[/\\]/).pop() ?? '';
+          if (!name) continue;
+          const dest = join(paths.tools, name);
+          const destExists = await this.storage.exists(dest);
+          if (!destExists) {
+            try {
+              await this.storage.mkdir(paths.tools);
+              await this.storage.copy!(src, dest, { recursive: true });
+              result.tools.push(name);
+            } catch (err) {
+              result.errors.push({
+                type: 'tool',
                 path: name,
                 error: (err as Error).message,
               });
@@ -321,6 +348,30 @@ export class WorkspaceService {
       result.added.push(...syncResult.added);
       result.updated.push(...syncResult.updated);
       result.preserved.push(...syncResult.preserved);
+    }
+
+    // Backfill missing tools (add new tools from source, never overwrite existing)
+    if (options.sourcePaths?.tools && this.storage.copy) {
+      const toolsSrc = options.sourcePaths.tools;
+      const srcExists = await this.storage.exists(toolsSrc);
+      if (srcExists) {
+        const toolDirs = await this.storage.listSubdirectories(toolsSrc);
+        for (const src of toolDirs) {
+          const name = src.split(/[/\\]/).pop() ?? '';
+          if (!name) continue;
+          const dest = join(paths.tools, name);
+          const destExists = await this.storage.exists(dest);
+          if (!destExists) {
+            try {
+              await this.storage.mkdir(paths.tools);
+              await this.storage.copy!(src, dest, { recursive: true });
+              result.added.push(join('tools', name));
+            } catch {
+              // Non-fatal: skip individual tool on error
+            }
+          }
+        }
+      }
     }
 
     // Backfill GUIDE.md if missing (never overwrite existing)

@@ -200,6 +200,63 @@ describe('WorkspaceService', () => {
       assert.ok(content.includes('fathom:'));
       assert.ok(content.includes('api_key:'));
     });
+
+    it('copies tools from sourcePaths.tools to the IDE tools directory (regression: tools dropped in CLI refactor e3bc217)', async () => {
+      // Set up a fake source tools directory with one tool
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceTools = join(sourceRoot, 'tools');
+      mkdirSync(join(sourceTools, 'onboarding'), { recursive: true });
+      writeFileSync(
+        join(sourceTools, 'onboarding', 'TOOL.md'),
+        '# Onboarding Tool\n',
+        'utf8',
+      );
+
+      const result = await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: join(sourceRoot, 'skills'),
+          tools: sourceTools,
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      // Tool should be copied to .cursor/tools/onboarding/
+      const toolPath = join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md');
+      assert.equal(existsSync(toolPath), true, '.cursor/tools/onboarding/TOOL.md should exist after install');
+      const content = readFileSync(toolPath, 'utf8');
+      assert.ok(content.includes('Onboarding Tool'));
+      assert.ok(result.tools.includes('onboarding'), `Expected "onboarding" in result.tools, got: ${JSON.stringify(result.tools)}`);
+    });
+
+    it('copies tools to .claude/tools/ when ide is claude', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceTools = join(sourceRoot, 'tools');
+      mkdirSync(join(sourceTools, 'onboarding'), { recursive: true });
+      writeFileSync(join(sourceTools, 'onboarding', 'TOOL.md'), '# Onboarding Tool\n', 'utf8');
+
+      await service.create(tmpDir, {
+        ideTarget: 'claude',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: join(sourceRoot, 'skills'),
+          tools: sourceTools,
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      const toolPath = join(tmpDir, '.claude', 'tools', 'onboarding', 'TOOL.md');
+      assert.equal(existsSync(toolPath), true, '.claude/tools/onboarding/TOOL.md should exist after install with --ide claude');
+    });
   });
 
   describe('update', () => {
@@ -232,6 +289,65 @@ describe('WorkspaceService', () => {
 
       assert.ok(result.added.includes('.credentials/credentials.yaml.example'));
       assert.equal(existsSync(join(tmpDir, '.credentials', 'credentials.yaml.example')), true);
+    });
+
+    it('backfills missing tools from sourcePaths.tools during update', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      // Set up source tools dir with a new tool that wasn't there at install time
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceTools = join(sourceRoot, 'tools');
+      mkdirSync(join(sourceTools, 'onboarding'), { recursive: true });
+      writeFileSync(join(sourceTools, 'onboarding', 'TOOL.md'), '# Onboarding Tool\n', 'utf8');
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: join(sourceRoot, 'skills'),
+          tools: sourceTools,
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      const toolPath = join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md');
+      assert.equal(existsSync(toolPath), true, 'Tool should be backfilled on update');
+      assert.ok(
+        result.added.some((p) => p.includes('onboarding')),
+        `Expected tools/onboarding in result.added, got: ${JSON.stringify(result.added)}`,
+      );
+    });
+
+    it('does not overwrite existing tools during update', async () => {
+      // Pre-create a customised tool in the workspace
+      mkdirSync(join(tmpDir, '.cursor', 'tools', 'onboarding'), { recursive: true });
+      writeFileSync(join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md'), '# My Custom Version\n', 'utf8');
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
+
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceTools = join(sourceRoot, 'tools');
+      mkdirSync(join(sourceTools, 'onboarding'), { recursive: true });
+      writeFileSync(join(sourceTools, 'onboarding', 'TOOL.md'), '# Upstream Version\n', 'utf8');
+
+      await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: join(sourceRoot, 'skills'),
+          tools: sourceTools,
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      const content = readFileSync(join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md'), 'utf8');
+      assert.ok(content.includes('My Custom Version'), 'Existing tool should not be overwritten by update');
     });
 
     it('syncs core skills from source paths and preserves custom workspace skills', async () => {

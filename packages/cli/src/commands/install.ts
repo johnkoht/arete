@@ -159,6 +159,7 @@ export function registerInstallCommand(program: Command): void {
         listItem('Location', formatPath(targetDir));
         listItem('Source', source);
         listItem('Skills installed', result.skills.length.toString());
+        listItem('Tools installed', result.tools.length.toString());
         listItem('Rules installed', result.rules.length.toString());
 
         if (qmdResult && !qmdResult.skipped) {

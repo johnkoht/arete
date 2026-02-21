@@ -101,6 +101,7 @@ export type InstallResult = {
   directories: string[];
   files: string[];
   skills: string[];
+  tools: string[];
   rules: string[];
   errors: Array<{ type: string; path: string; error: string }>;
 };
