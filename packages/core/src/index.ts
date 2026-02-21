@@ -57,6 +57,21 @@ export {
   meetingFilename,
 } from './integrations/meetings.js';
 export type { MeetingForSave } from './integrations/meetings.js';
+export {
+  saveConversationFile,
+  conversationFilename,
+  updateConversationFrontmatter,
+  parseConversation,
+  extractInsights,
+} from './integrations/conversations/index.js';
+export type {
+  ConversationForSave,
+  ConversationInsights,
+  ConversationProvenance,
+  ParsedConversation,
+  ParsedMessage,
+  LLMCallFn,
+} from './integrations/conversations/index.js';
 
 // Service container factory
 export { createServices } from './factory.js';

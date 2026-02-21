@@ -215,6 +215,15 @@ User: "Create a meeting agenda for my leadership sync"
 - Optionally gathers context to suggest agenda items
 - Saves to `now/agendas/` or project folder
 
+**Capture a Conversation** - `capture-conversation` skill
+```
+User: "Capture this conversation" (with Slack/Teams/email text pasted)
+```
+- Parses pasted text (timestamped, structured, or raw — auto-detected)
+- Extracts insights via LLM: summary, decisions, action items, open questions, stakeholders, risks
+- Presents for conversational review before saving
+- Saves to `resources/conversations/` — discoverable via `arete context`
+
 **Save a Meeting** - `save-meeting` skill
 ```
 User: "Save this meeting" (with notes pasted or in context)
@@ -314,7 +323,7 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 | **Setup** | onboarding, rapid-context-dump |
 | **Planning** | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
 | **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap |
-| **Execution** | meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |
+| **Execution** | capture-conversation, meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |
 | **Operations** | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
 
 Run `arete skill list` to see all available skills.

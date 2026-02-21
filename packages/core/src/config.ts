@@ -29,6 +29,9 @@ const DEFAULT_CONFIG: AreteConfig = {
       decisions: { prompt_before_save: true },
       learnings: { prompt_before_save: true },
     },
+    conversations: {
+      peopleProcessing: 'off',
+    },
   },
 };
 
@@ -80,6 +83,20 @@ async function loadYamlFile(
   }
 }
 
+const VALID_PEOPLE_PROCESSING = new Set(['off', 'ask', 'on']);
+
+/**
+ * Normalize a resolved config to clamp any invalid enum values to safe defaults.
+ * Guards against invalid values written into arete.yaml (e.g. `peopleProcessing: "sometimes"`).
+ */
+function normalizeConfig(config: AreteConfig): AreteConfig {
+  const pp = config.settings?.conversations?.peopleProcessing;
+  if (!VALID_PEOPLE_PROCESSING.has(pp as string)) {
+    config.settings.conversations.peopleProcessing = 'off';
+  }
+  return config;
+}
+
 /**
  * Load resolved configuration for a workspace.
  */
@@ -103,7 +120,7 @@ export async function loadConfig(
     }
   }
 
-  return config as AreteConfig;
+  return normalizeConfig(config as AreteConfig);
 }
 
 export function getDefaultConfig(): AreteConfig {

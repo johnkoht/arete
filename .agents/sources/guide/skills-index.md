@@ -19,6 +19,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **prepare-meeting-agenda** | `runtime/skills/prepare-meeting-agenda/SKILL.md` | Create structured meeting agenda documents | "Create meeting agenda for leadership sync" |
 | **process-meetings** | `runtime/skills/process-meetings/SKILL.md` | Extract decisions/learnings from saved meetings | "Process my meetings" |
 | **quarter-plan** | `runtime/skills/quarter-plan/SKILL.md` | Set quarterly goals and outcomes | "Set my quarter goals" |
+| **capture-conversation** | `runtime/skills/capture-conversation/SKILL.md` | Capture pasted conversations with extracted insights | "Capture this conversation", "save this discussion" |
 | **save-meeting** | `runtime/skills/save-meeting/SKILL.md` | Save and structure meeting notes | "Save this meeting" |
 | **sync** | `runtime/skills/sync/SKILL.md` | Sync recent data from integrations | "Sync my meetings" |
 | **synthesize** | `runtime/skills/synthesize/SKILL.md` | Extract themes and insights from project inputs | "Synthesize what we've learned" |
@@ -44,6 +45,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 ### Execution
 - **meeting-prep** - Prep briefs with attendee context and history
 - **prepare-meeting-agenda** - Structured agenda document creation
+- **capture-conversation** - Capture and structure pasted conversations
 - **save-meeting** - Save and structure meeting notes
 - **process-meetings** - Extract decisions/learnings to memory
 - **sync** - Pull recent data from integrations

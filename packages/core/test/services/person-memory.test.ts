@@ -152,3 +152,107 @@ Jane Doe asked about budget timeline.
     assert.equal(markerMatches.length, 1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// refreshPersonMemory — conversation scanning
+// ---------------------------------------------------------------------------
+
+describe('EntityService.refreshPersonMemory — conversation scanning', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-conv-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeConversation(root: string, filename: string, content: string): void {
+    const dir = join(root, 'resources', 'conversations');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, filename), content, 'utf8');
+  }
+
+  it('scannedConversations is present in result', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+    writeConversation(
+      tmpDir,
+      '2026-02-20-discussion.md',
+      '---\ntitle: "Discussion"\ndate: "2026-02-20"\n---\n\nJane Doe mentioned the API.\n',
+    );
+    const result = await service.refreshPersonMemory(paths);
+    assert.notEqual(result.scannedConversations, undefined);
+    assert.equal(result.scannedConversations, 1);
+  });
+
+  it('scannedConversations is 0 when no conversations directory exists', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+    const result = await service.refreshPersonMemory(paths);
+    assert.equal(result.scannedConversations, 0);
+  });
+
+  it('scans conversation body for person mentions', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+
+    writeConversation(
+      tmpDir,
+      '2026-02-20-api.md',
+      `---
+title: "API Discussion"
+date: "2026-02-20"
+---
+
+Jane Doe asked about the API authentication approach.
+Jane Doe asked about the API authentication approach.
+`,
+    );
+
+    const result = await service.refreshPersonMemory(paths);
+    assert.equal(result.scannedConversations, 1);
+    // Verify signals were actually collected and the person file was written —
+    // not just that the section header exists (it's written even on zero signals)
+    assert.equal(result.updated, 1, 'Person file should be updated when conversation signals meet threshold');
+
+    const personContent = readFileSync(
+      join(tmpDir, 'people', 'internal', 'jane-doe.md'),
+      'utf8',
+    );
+    assert.ok(personContent.includes('## Memory Highlights (Auto)'));
+    assert.ok(personContent.includes('api authentication'), 'Signal keyword from conversation should appear in memory highlights');
+  });
+
+  it('meeting scan still works when conversations also exist (no regression)', async () => {
+    writePerson(tmpDir, 'internal', 'jane-doe', 'Jane Doe');
+
+    writeMeeting(
+      tmpDir,
+      '2026-02-18-sync.md',
+      `---
+title: "Sync"
+date: "2026-02-18"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about budget concerns.
+Jane Doe asked about budget concerns.
+`,
+    );
+
+    writeConversation(
+      tmpDir,
+      '2026-02-20-chat.md',
+      '---\ntitle: "Chat"\ndate: "2026-02-20"\n---\n\nJane Doe mentioned the timeline.\n',
+    );
+
+    const result = await service.refreshPersonMemory(paths);
+    assert.equal(result.scannedMeetings, 1);
+    assert.equal(result.scannedConversations, 1);
+    assert.equal(result.updated, 1);
+  });
+});

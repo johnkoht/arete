@@ -269,7 +269,7 @@ export class ContextService {
         else if (relPath.startsWith('goals/')) category = 'goals';
         else if (relPath.startsWith('projects/')) category = 'projects';
         else if (relPath.startsWith('people/')) category = 'people';
-        else if (relPath.startsWith('.arete/memory/')) category = 'memory';
+        else if (relPath.startsWith('.arete/memory/') || relPath.startsWith('resources/meetings') || relPath.startsWith('resources/conversations')) category = 'memory';
         await addFile(result.path, category, undefined, result.score);
       }
     } catch {
@@ -429,9 +429,10 @@ export class ContextService {
       paths.people,
     ];
 
-    // Also scan meetings and memory
+    // Also scan meetings, conversations, and memory
     const extraDirs = [
       join(paths.resources, 'meetings'),
+      join(paths.resources, 'conversations'),
       join(paths.memory, 'items'),
     ];
 
@@ -452,7 +453,7 @@ export class ContextService {
         else if (relPath.startsWith('goals/')) category = 'goals';
         else if (relPath.startsWith('projects/')) category = 'projects';
         else if (relPath.startsWith('people/')) category = 'people';
-        else if (relPath.startsWith('.arete/memory/') || relPath.startsWith('resources/meetings')) category = 'memory';
+        else if (relPath.startsWith('.arete/memory/') || relPath.startsWith('resources/meetings') || relPath.startsWith('resources/conversations')) category = 'memory';
 
         const summary = content ? extractSummary(content) : undefined;
         allFiles.push({

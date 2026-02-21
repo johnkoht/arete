@@ -348,7 +348,10 @@ async function resolveProject(
 
 function getSourceType(filePath: string, paths: WorkspacePaths): MentionSourceType {
   const meetingsDir = join(paths.resources, 'meetings');
-  if (filePath.startsWith(meetingsDir)) return 'meeting';
+  const conversationsDir = join(paths.resources, 'conversations');
+  // Use trailing '/' to prevent prefix collisions (e.g. 'meetings-archive' matching 'meetings')
+  if (filePath.startsWith(meetingsDir + '/')) return 'meeting';
+  if (filePath.startsWith(conversationsDir + '/')) return 'conversation';
   if (filePath.startsWith(paths.memory)) return 'memory';
   if (filePath.startsWith(paths.projects)) return 'project';
   return 'context';
@@ -701,6 +704,8 @@ export interface RefreshPersonMemoryResult {
   scannedPeople: number;
   scannedMeetings: number;
   skippedFresh: number;
+  /** Number of conversation files scanned. Optional for backward compatibility. */
+  scannedConversations?: number;
 }
 
 export interface PeopleIntelligenceOptions {
@@ -873,6 +878,7 @@ export class EntityService {
     const scanDirs: Array<{ dir: string; recursive: boolean }> = [
       { dir: workspacePaths.context, recursive: true },
       { dir: join(workspacePaths.resources, 'meetings'), recursive: false },
+      { dir: join(workspacePaths.resources, 'conversations'), recursive: false },
       { dir: join(workspacePaths.memory, 'items'), recursive: false },
     ];
 
@@ -1201,6 +1207,39 @@ export class EntityService {
       }
     }
 
+    // Scan conversation files — full body scan (no participant_ids dependency)
+    const conversationsDir = join(workspacePaths.resources, 'conversations');
+    const conversationsExist = await this.storage.exists(conversationsDir);
+    const conversationFiles = conversationsExist
+      ? (await this.storage.list(conversationsDir, { extensions: ['.md'] }))
+          .filter((p) => (p.split(/[/\\]/).pop() ?? '') !== 'index.md')
+      : [];
+
+    for (const convPath of conversationFiles) {
+      const content = await this.storage.read(convPath);
+      if (!content) continue;
+
+      const parsed = parseFrontmatter(content);
+      const fromFilename = extractDateFromPath(convPath);
+      const dateFromFrontmatter = parsed?.frontmatter.date;
+      const date = typeof dateFromFrontmatter === 'string'
+        ? dateFromFrontmatter.slice(0, 10)
+        : (fromFilename ?? new Date().toISOString().slice(0, 10));
+
+      const source = convPath.split(/[/\\]/).pop() ?? convPath;
+
+      for (const person of refreshablePeople) {
+        const signals = personSignals.get(person.slug);
+        if (!signals) continue;
+
+        const nameLower = person.name.toLowerCase();
+        const mentionedInBody = content.toLowerCase().includes(nameLower);
+        if (!mentionedInBody) continue;
+
+        signals.push(...collectSignalsForPerson(content, person.name, date, source));
+      }
+    }
+
     let updated = 0;
     for (const person of refreshablePeople) {
       const category = person.category;
@@ -1222,6 +1261,7 @@ export class EntityService {
       updated,
       scannedPeople: filteredPeople.length,
       scannedMeetings: meetingFiles.length,
+      scannedConversations: conversationFiles.length,
       skippedFresh,
     };
   }

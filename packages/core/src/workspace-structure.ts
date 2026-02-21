@@ -29,6 +29,7 @@ export const BASE_WORKSPACE_DIRS = [
   'people/users',
   'resources',
   'resources/meetings',
+  'resources/conversations',
   'resources/notes',
   'templates/plans',
   '.agents',

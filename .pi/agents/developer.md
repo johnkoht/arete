@@ -22,6 +22,7 @@ Before writing code:
 - Read the context files the Engineering Lead provided
 - Look at the patterns they pointed to
 - Understand the pre-mortem mitigations relevant to your task
+- **Check for LEARNINGS.md** in the working directory and parent directories — read it before making changes. It contains component-specific gotchas, invariants, and pre-edit checklists from past incidents.
 
 If something is unclear, **say so**. Don't guess.
 
@@ -94,7 +95,11 @@ npm run test:py     # Must pass
 
 **Do not skip these.** Do not mark complete if they fail.
 
-### 5. Commit
+### 5. Update LEARNINGS.md
+
+If you fixed a bug or regression: update the nearest LEARNINGS.md with what broke, why, and how to avoid it. Add to the appropriate section (Gotchas for traps, Invariants for rules that must hold, Pre-Edit Checklist for verification steps). If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one following the 7-section template in dev.mdc.
+
+### 6. Commit
 
 Only commit if all checks pass.
 
@@ -102,7 +107,7 @@ Format: `type: description` (e.g., `feat: add entity resolution caching`)
 
 Include in the commit only files related to this task.
 
-### 6. Update Progress
+### 7. Update Progress
 
 In the execution state directory provided by the orchestrator (e.g. `dev/executions/<plan-slug>/`):
 
@@ -115,7 +120,7 @@ In the execution state directory provided by the orchestrator (e.g. `dev/executi
 
 > **Important**: The orchestrator provides the execution state path in your task prompt under `**Execution State Path**`. Always use that path — never hardcode execution state paths.
 
-### 7. Report
+### 8. Report
 
 Return a completion report using this exact format:
 

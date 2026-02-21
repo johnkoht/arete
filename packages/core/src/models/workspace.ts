@@ -46,6 +46,10 @@ export type AreteConfig = {
         prompt_before_save: boolean;
       };
     };
+    conversations: {
+      /** Controls whether participants are mapped to the people directory after capture. */
+      peopleProcessing: 'off' | 'ask' | 'on';
+    };
   };
 };
 

@@ -51,11 +51,13 @@ git diff HEAD --name-status | grep '^D'
 - [ ] Tests for happy path and edge cases
 - [ ] Backward compatibility preserved (function signatures unchanged unless explicitly breaking)
 - [ ] Follows project patterns (see dev.mdc)
+- [ ] Read LEARNINGS.md in the working directory (if one exists) — verify the developer's changes don't violate documented invariants or gotchas
 
 #### Step 2: AC Review
 
 - Read all changed files. Verify implementation **matches acceptance criteria** for this task (no more, no less).
 - Flag scope drift (implemented more than asked) or missing criteria.
+- **If the task fixes a regression or bug**: verify the developer updated the nearest LEARNINGS.md (or created one). If not, flag it as a required change — regression knowledge that isn't captured will be lost.
 
 #### Step 3: Quality Check (DRY, KISS, Best Solution)
 

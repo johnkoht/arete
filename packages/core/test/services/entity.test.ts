@@ -16,7 +16,10 @@ import {
   updatePeopleIndex,
   slugifyPersonName,
 } from '../../src/compat/entity.js';
+import { EntityService } from '../../src/services/entity.js';
+import { FileStorageAdapter } from '../../src/storage/file.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
+import type { ResolvedEntity } from '../../src/models/entities.js';
 
 function makePaths(root: string): WorkspacePaths {
   return {
@@ -166,5 +169,110 @@ describe('EntityService (via compat)', () => {
       const content = readFileSync(join(paths.people, 'index.md'), 'utf8');
       assert.ok(content.includes('Jane Doe'));
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EntityService.findMentions — conversation scanning
+// ---------------------------------------------------------------------------
+
+describe('EntityService.findMentions — conversation sourceType', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'entity-findm-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeConversation(root: string, filename: string, content: string): void {
+    const dir = join(root, 'resources', 'conversations');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, filename), content, 'utf8');
+  }
+
+  function writeMeetingFile(root: string, filename: string, content: string): void {
+    const dir = join(root, 'resources', 'meetings');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, filename), content, 'utf8');
+  }
+
+  it('returns conversation sourceType for files under resources/conversations/', async () => {
+    writeConversation(
+      tmpDir,
+      '2026-02-20-api-discussion.md',
+      '---\ntitle: "API Discussion"\ndate: "2026-02-20"\n---\n\nAlice asked about the API timeline.\n',
+    );
+
+    writePersonFile(tmpDir, 'internal', 'alice', { name: 'Alice', category: 'internal' });
+    const entity: ResolvedEntity = {
+      type: 'person',
+      path: join(paths.people, 'internal', 'alice.md'),
+      name: 'Alice',
+      slug: 'alice',
+      metadata: {},
+      score: 1,
+    };
+
+    const mentions = await service.findMentions(entity, paths);
+    const convMention = mentions.find((m) => m.sourceType === 'conversation');
+    assert.ok(convMention, 'Expected a conversation sourceType mention');
+    assert.ok(convMention.sourcePath.includes('conversations'));
+  });
+
+  it('still returns meeting sourceType for files under resources/meetings/', async () => {
+    writeMeetingFile(
+      tmpDir,
+      '2026-02-20-standup.md',
+      '---\ntitle: "Standup"\ndate: "2026-02-20"\n---\n\nAlice asked about the deployment.\n',
+    );
+
+    writePersonFile(tmpDir, 'internal', 'alice', { name: 'Alice', category: 'internal' });
+    const entity: ResolvedEntity = {
+      type: 'person',
+      path: join(paths.people, 'internal', 'alice.md'),
+      name: 'Alice',
+      slug: 'alice',
+      metadata: {},
+      score: 1,
+    };
+
+    const mentions = await service.findMentions(entity, paths);
+    const meetingMention = mentions.find((m) => m.sourceType === 'meeting');
+    assert.ok(meetingMention, 'Expected a meeting sourceType mention');
+  });
+
+  it('returns both meeting and conversation mentions for the same person', async () => {
+    writeMeetingFile(
+      tmpDir,
+      '2026-02-19-review.md',
+      '---\ntitle: "Review"\ndate: "2026-02-19"\n---\n\nAlice presented the plan.\n',
+    );
+    writeConversation(
+      tmpDir,
+      '2026-02-20-api-discussion.md',
+      '---\ntitle: "API Discussion"\ndate: "2026-02-20"\n---\n\nAlice asked about the API.\n',
+    );
+
+    writePersonFile(tmpDir, 'internal', 'alice', { name: 'Alice', category: 'internal' });
+    const entity: ResolvedEntity = {
+      type: 'person',
+      path: join(paths.people, 'internal', 'alice.md'),
+      name: 'Alice',
+      slug: 'alice',
+      metadata: {},
+      score: 1,
+    };
+
+    const mentions = await service.findMentions(entity, paths);
+    const types = new Set(mentions.map((m) => m.sourceType));
+    assert.ok(types.has('meeting'), 'Expected meeting mention');
+    assert.ok(types.has('conversation'), 'Expected conversation mention');
   });
 });
