@@ -11,6 +11,7 @@ Areté is a Product Management workspace for Cursor and Claude Code that helps p
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Developer Tooling (pi)](#developer-tooling-pi)
 - [Architecture Overview](#architecture-overview)
 - [Key Systems](#key-systems)
 - [Development Workflow](#development-workflow)
@@ -39,6 +40,79 @@ npm run build
 # Run tests
 npm test
 ```
+
+---
+
+## Developer Tooling (pi)
+
+Areté's build workflow uses [pi](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-coding-agent`) as its coding agent harness. Pi powers the build skills (execute-prd, plan-to-prd, review-plan, etc.), the plan-mode extension, and multi-agent orchestration.
+
+### Install pi and Extensions
+
+```bash
+# Install pi globally
+npm install -g @mariozechner/pi-coding-agent
+
+# Install the subagents extension (powers multi-agent orchestration)
+npm install -g pi-subagents
+
+# Verify
+pi --version
+```
+
+The [pi-subagents](https://www.npmjs.com/package/pi-subagents) extension enables agent delegation — it's what allows the execute-prd skill to spawn orchestrator, reviewer, and developer agents. Without it, any skill that uses subagent calls will fail.
+
+### .pi/ Directory
+
+The `.pi/` directory at the repo root configures pi for this project:
+
+```
+.pi/
+├── settings.json       # Agent model config + tool allowlist
+├── extensions/
+│   └── plan-mode/      # Plan lifecycle extension (plan, review, pre-mortem, PRD gates)
+├── skills/             # Build skills (execute-prd, plan-to-prd, review-plan, etc.)
+├── agents/             # Subagent definitions (requires pi-subagents extension)
+│   ├── orchestrator.md # Sr. Eng Manager — owns PRD execution
+│   ├── reviewer.md     # Sr. Engineer — code review + AC verification
+│   ├── developer.md    # Task execution agent
+│   ├── product-manager.md
+│   └── engineering-lead.md
+└── APPEND_SYSTEM.md    # System prompt additions
+```
+
+### Key Configuration
+
+**`.pi/settings.json`** defines which models power each agent role:
+
+| Agent | Purpose | Default Model |
+|-------|---------|---------------|
+| `product-manager` | Primary + secondary (cross-model review) | claude-opus-4-6 / gpt-5.3 |
+| `orchestrator` | PRD execution (Sr. Eng Manager) | claude-opus-4-6 |
+| `reviewer` | Code review (Sr. Engineer) | claude-sonnet-4-6 |
+| `developer` | Task execution | claude-sonnet-4-6 |
+
+### plan-mode Extension
+
+The `plan-mode` extension adds plan lifecycle commands (`/plan`, `/review`, `/pre-mortem`, `/prd`, `/approve`, `/build`). It's automatically loaded when pi runs in this repo. See the [Dev Practices](#development-workflow) section for plan lifecycle details.
+
+### Build Skills (pi-specific)
+
+These skills in `.pi/skills/` are used during development, not shipped to users:
+
+| Skill | Purpose |
+|-------|---------|
+| `execute-prd` | Autonomous PRD execution with orchestrator + reviewer agents |
+| `plan-to-prd` | Convert approved plan → PRD + prd.json |
+| `prd-to-json` | Convert markdown PRD → JSON task list |
+| `prd-post-mortem` | Post-mortem analysis after PRD execution |
+| `review-plan` | Cross-model second-opinion review |
+| `run-pre-mortem` | Pre-mortem risk analysis (8 categories) |
+| `synthesize-collaboration-profile` | Update builder collaboration profile from entries |
+
+> **Note**: Pi is a global developer tool — it is not an npm dependency of Areté. Each developer installs it on their machine alongside Node.js and their IDE.
+
+---
 
 ### Build System
 
