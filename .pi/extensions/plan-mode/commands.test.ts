@@ -152,8 +152,8 @@ function createTestPi(): CommandPi & { entries: unknown[] } {
 		sendUserMessage: () => {},
 		sendMessage: () => {},
 		appendEntry: (_type, data) => entries.push(data),
-		setActiveTools: () => {},
-		getActiveTools: () => [],
+
+
 	};
 }
 

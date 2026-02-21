@@ -92,7 +92,7 @@ export function installWorkspace(workspacePath: string, ide: IdeTarget): {
   path: string;
 } {
   assertOutsideRepo(workspacePath);
-  const output = runCli(['install', workspacePath, '--json', '--ide', ide]);
+  const output = runCli(['install', workspacePath, '--json', '--ide', ide, '--skip-qmd']);
   return JSON.parse(output) as { success: boolean; path: string };
 }
 
@@ -108,7 +108,7 @@ export function runUpdateJson(workspacePath: string): {
   success: boolean;
   mode: string;
 } {
-  const output = runCli(['update', '--json'], { cwd: workspacePath });
+  const output = runCli(['update', '--json', '--skip-qmd'], { cwd: workspacePath });
   return JSON.parse(output) as { success: boolean; mode: string };
 }
 

@@ -1,11 +1,11 @@
 /**
  * Plan Mode Extension (Simplified)
  *
- * A planning-only tool for safe code exploration.
+ * A planning-focused exploration mode. All tools remain available;
+ * the agent is guided by prompt context to focus on planning, not implementation.
  *
  * Features:
  * - /plan command or Ctrl+Alt+P to toggle plan mode
- * - Bash restricted to an allowlist of safe commands
  * - Extracts numbered plan steps from "Plan:" sections
  * - Auto-saves plans when agent produces them
  * - Optional: /pre-mortem, /review, /prd
@@ -20,13 +20,9 @@ import { Type } from "@sinclair/typebox";
 import { Key } from "@mariozechner/pi-tui";
 import {
 	extractTodoItems,
-	isAllowedInPlanMode,
 	markCompletedSteps,
 	classifyPlanSize,
 	suggestPlanName,
-	PLAN_MODE_TOOLS,
-	getNormalModeTools,
-	setNormalModeTools,
 	type TodoItem,
 } from "./utils.js";
 import {
@@ -66,10 +62,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// Track auto-save state
 	let lastAutoSavedContent = "";
-	let inPrdConversion = false;
 
 	pi.registerFlag("plan", {
-		description: "Start in plan mode (safe exploration)",
+		description: "Start in plan mode (planning-focused exploration)",
 		type: "boolean",
 		default: false,
 	});
@@ -116,11 +111,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		state.executionMode = false;
 
 		if (state.planModeEnabled) {
-			pi.setActiveTools(PLAN_MODE_TOOLS);
-			ctx.ui.notify(`📋 Plan mode enabled. Tools: ${PLAN_MODE_TOOLS.join(", ")}`);
+			ctx.ui.notify("📋 Plan mode enabled. Focus: explore ideas and shape plans.");
 		} else {
-			pi.setActiveTools(getNormalModeTools());
-			ctx.ui.notify("Plan mode disabled. Full access restored.");
+			ctx.ui.notify("Plan mode disabled.");
 		}
 		updateStatus(ctx);
 	}
@@ -273,14 +266,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("prd", {
 		description: "Convert the current plan to a PRD",
 		handler: async (args, ctx) => {
-			inPrdConversion = true;
-			// PRD conversion writes files, so temporarily allow normal tools
-			pi.setActiveTools([...getNormalModeTools(), "save_plan_artifact"]);
 			await handlePrd(args, ctx, pi, state);
-			inPrdConversion = false;
-			if (state.planModeEnabled) {
-				pi.setActiveTools(PLAN_MODE_TOOLS);
-			}
 			updateStatus(ctx);
 			persistState();
 		},
@@ -316,19 +302,6 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	// ── Event Handlers ─────────────────────────────────────
 
-	// Block destructive bash commands in plan mode
-	pi.on("tool_call", async (event) => {
-		if (!state.planModeEnabled || event.toolName !== "bash") return;
-
-		const command = event.input.command as string;
-		if (!isAllowedInPlanMode(command, inPrdConversion)) {
-			return {
-				block: true,
-				reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
-			};
-		}
-	});
-
 	// Filter out stale plan mode context when not in plan mode
 	pi.on("context", async (event) => {
 		if (state.planModeEnabled) return;
@@ -358,28 +331,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async () => {
 		if (state.planModeEnabled) {
 			const baseContext = `[PLAN MODE ACTIVE]
-You are in plan mode - a safe exploration mode for planning and controlled edits.
-
-## Restrictions
-- You can use: read, bash, grep, find, ls, questionnaire, edit, write
-- Bash is restricted to an allowlist of safe commands (dangerous bash commands are blocked)
+You are in plan mode. All tools are available, but your focus is on exploration and planning — not implementation.
 
 ## Your Role
-Help the user explore ideas and create clear, actionable plans.
+Help the user explore ideas and shape clear, actionable plans. You have full tool access to read code, explore the codebase, and save plan artifacts. Use read-only operations (reading files, grepping, checking git log) to understand context and inform the plan.
 
-Ask clarifying questions to understand:
-- What problem are we solving?
-- Who experiences this problem?
-- What does success look like?
+**Do not implement changes or execute the plan.** Focus on:
+- Clarifying what problem we're solving and what success looks like
+- Reading relevant code to ground the plan in reality
+- Shaping a concrete, numbered plan
 
-Create a detailed numbered plan under a "Plan:" header:
+When ready, create a detailed numbered plan under a "Plan:" header:
 
 Plan:
 1. First step description
 2. Second step description
 ...
 
-Do NOT attempt to make changes - just describe what you would do.
+When the user is satisfied, they'll use /approve and /build to start execution.
 
 ## Recommendations by Plan Size
 - **Tiny** (1-2 steps): Can execute directly
@@ -492,7 +461,6 @@ After completing a step, include a [DONE:n] tag in your response.
 
 				state.executionMode = false;
 				state.todoItems = [];
-				pi.setActiveTools(getNormalModeTools());
 				updateStatus(ctx);
 				persistState();
 			}
@@ -522,13 +490,6 @@ After completing a step, include a [DONE:n] tag in your response.
 
 	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
-		// Capture all available tools (built-in + extension-registered like subagent)
-		// before we restrict them, so we can restore the full set when leaving plan mode
-		const allTools = pi.getAllTools();
-		if (allTools.length > 0) {
-			setNormalModeTools(allTools.map((t: { name: string }) => t.name));
-		}
-
 		if (pi.getFlag("plan") === true) {
 			state.planModeEnabled = true;
 		}
@@ -612,12 +573,9 @@ After completing a step, include a [DONE:n] tag in your response.
 			markCompletedSteps(allText, state.todoItems);
 		}
 
-		// Set tools based on mode
+		// Ensure execution mode disables plan mode
 		if (state.executionMode) {
 			state.planModeEnabled = false;
-			pi.setActiveTools(getNormalModeTools());
-		} else if (state.planModeEnabled) {
-			pi.setActiveTools(PLAN_MODE_TOOLS);
 		}
 
 		updateStatus(ctx);

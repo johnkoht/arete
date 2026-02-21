@@ -9,6 +9,7 @@ import {
   getSourcePaths,
   getPackageRoot,
   getAdapter,
+  ensureQmdCollection,
 } from '@arete/core';
 import { join, resolve } from 'path';
 import type { Command } from 'commander';
@@ -29,11 +30,12 @@ export function registerInstallCommand(program: Command): void {
     .description('Initialize a new Areté workspace')
     .option('--source <source>', 'Installation source: npm, symlink, or local:/path', 'npm')
     .option('--ide <target>', 'Target IDE: cursor or claude', 'cursor')
+    .option('--skip-qmd', 'Skip automatic qmd collection setup')
     .option('--json', 'Output as JSON')
     .action(
       async (
         directory: string | undefined,
-        opts: { source?: string; ide?: string; json?: boolean },
+        opts: { source?: string; ide?: string; skipQmd?: boolean; json?: boolean },
       ) => {
         const targetDir = resolve(directory || '.');
         const source = opts.source ?? 'npm';
@@ -117,6 +119,23 @@ export function registerInstallCommand(program: Command): void {
           sourcePaths,
         });
 
+        // Auto-setup qmd collection if available
+        let qmdResult;
+        if (!opts.skipQmd) {
+          if (!opts.json) {
+            console.log(chalk.dim('  Setting up search index...'));
+          }
+          qmdResult = await ensureQmdCollection(targetDir);
+          if (qmdResult.collectionName && qmdResult.created) {
+            // Persist collection name to arete.yaml
+            await services.workspace.updateManifestField(
+              targetDir,
+              'qmd_collection',
+              qmdResult.collectionName,
+            );
+          }
+        }
+
         if (opts.json) {
           console.log(
             JSON.stringify(
@@ -125,6 +144,7 @@ export function registerInstallCommand(program: Command): void {
                 path: targetDir,
                 source: sourceInfo,
                 results: result,
+                qmd: qmdResult ?? { skipped: true, available: false, created: false, indexed: false },
               },
               null,
               2,
@@ -140,6 +160,21 @@ export function registerInstallCommand(program: Command): void {
         listItem('Source', source);
         listItem('Skills installed', result.skills.length.toString());
         listItem('Rules installed', result.rules.length.toString());
+
+        if (qmdResult && !qmdResult.skipped) {
+          if (qmdResult.created) {
+            listItem('Search index', `qmd collection "${qmdResult.collectionName}" created`);
+          } else if (qmdResult.indexed) {
+            listItem('Search index', `qmd collection "${qmdResult.collectionName}" updated`);
+          }
+          if (qmdResult.warning) {
+            warn(qmdResult.warning);
+          }
+        } else if (qmdResult && qmdResult.skipped) {
+          listItem('Search index', chalk.dim('qmd not installed, skipping'));
+        } else if (!qmdResult) {
+          listItem('Search index', chalk.dim('skipped (--skip-qmd)'));
+        }
 
         if (result.errors.length > 0) {
           console.log('');
