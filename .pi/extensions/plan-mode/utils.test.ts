@@ -1,75 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-	isSafeCommand,
-	isAllowedInPlanMode,
 	extractTodoItems,
 	cleanStepText,
 	extractDoneSteps,
 	markCompletedSteps,
 	classifyPlanSize,
 	suggestPlanName,
-	PLAN_MODE_TOOLS,
 	type TodoItem,
 } from "./utils.js";
-
-// ────────────────────────────────────────────────────────────
-// Toolset + command safety checks
-// ────────────────────────────────────────────────────────────
-
-describe("PLAN_MODE_TOOLS", () => {
-	it("includes edit and write so plan mode can persist artifacts", () => {
-		assert.ok(PLAN_MODE_TOOLS.includes("edit"));
-		assert.ok(PLAN_MODE_TOOLS.includes("write"));
-		assert.ok(PLAN_MODE_TOOLS.includes("read"));
-		assert.ok(PLAN_MODE_TOOLS.includes("bash"));
-	});
-});
-
-describe("isSafeCommand", () => {
-	it("allows read-only commands", () => {
-		assert.equal(isSafeCommand("cat file.txt"), true);
-		assert.equal(isSafeCommand("ls -la"), true);
-		assert.equal(isSafeCommand("grep -r 'foo' src/"), true);
-		assert.equal(isSafeCommand("git status"), true);
-		assert.equal(isSafeCommand("npm test"), true);
-		assert.equal(isSafeCommand("rg pattern"), true);
-	});
-
-	it("blocks destructive commands", () => {
-		assert.equal(isSafeCommand("rm -rf /"), false);
-		assert.equal(isSafeCommand("git commit -m 'test'"), false);
-		assert.equal(isSafeCommand("npm install foo"), false);
-		assert.equal(isSafeCommand("mv file1 file2"), false);
-	});
-
-	it("blocks commands not in allowlist", () => {
-		assert.equal(isSafeCommand("some-unknown-cmd"), false);
-	});
-
-	it("allows npm run typecheck", () => {
-		assert.equal(isSafeCommand("npm run typecheck"), true);
-	});
-
-	it("allows npm run test:all", () => {
-		assert.equal(isSafeCommand("npm run test:all"), true);
-	});
-});
-
-describe("isAllowedInPlanMode", () => {
-	it("allows safe read-only commands during normal plan mode", () => {
-		assert.equal(isAllowedInPlanMode("ls -la", false), true);
-	});
-
-	it("allows mkdir -p only during prd conversion", () => {
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/work/plans/plan-mode-ux", true), true);
-		assert.equal(isAllowedInPlanMode("mkdir -p dev/work/plans/plan-mode-ux", false), false);
-	});
-
-	it("still blocks dangerous commands during prd conversion", () => {
-		assert.equal(isAllowedInPlanMode("rm -rf /", true), false);
-	});
-});
 
 // ────────────────────────────────────────────────────────────
 // Todo extraction and step tracking

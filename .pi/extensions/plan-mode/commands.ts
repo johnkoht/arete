@@ -24,8 +24,7 @@ import {
 import {
 	classifyPlanSize,
 	extractTodoItems,
-	PLAN_MODE_TOOLS,
-	getNormalModeTools,
+
 	type TodoItem,
 } from "./utils.js";
 import { resolveExecutionProgress } from "./execution-progress.js";
@@ -87,8 +86,8 @@ export interface CommandPi {
 		options?: { triggerTurn?: boolean },
 	): void;
 	appendEntry<T>(customType: string, data?: T): void;
-	setActiveTools(tools: string[]): void;
-	getActiveTools(): string[];
+
+
 }
 
 // ────────────────────────────────────────────────────────────
@@ -510,7 +509,6 @@ async function handlePlanOpen(
 	state.todoItems = extractTodoItems(plan.content);
 	state.planModeEnabled = true;
 	state.executionMode = false;
-	pi.setActiveTools(PLAN_MODE_TOOLS);
 
 	// Build status indicators
 	const artifacts: string[] = [];
@@ -1151,7 +1149,6 @@ export async function handleBuild(
 
 	state.planModeEnabled = false;
 	state.executionMode = true;
-	pi.setActiveTools(getNormalModeTools());
 
 	ctx.ui.notify("⚡ Build started!", "info");
 
