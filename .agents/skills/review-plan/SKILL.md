@@ -60,6 +60,7 @@ Use the appropriate checklist based on review type.
 | Patterns | Does it follow existing patterns or introduce unnecessary novelty? |
 | Multi-IDE | Does work touch `runtime/`, `.agents/sources/`, or multi-IDE content? |
 | Backward compatibility | Will this break existing functionality? |
+| Catalog | If work touches tooling/extensions/services, are `dev/catalog/capabilities.json` entries current? |
 | Completeness | Are there missing steps or implicit assumptions? |
 
 **PRD Review** (pre-implementation):
@@ -73,6 +74,7 @@ Use the appropriate checklist based on review type.
 | Scope boundaries | Is out-of-scope clearly defined? |
 | Dependencies | Are external dependencies identified? |
 | Multi-IDE | Will changes affect both Cursor and Claude installations? |
+| Catalog | If work touches tooling/extensions/services, are `dev/catalog/capabilities.json` entries current? |
 | Test coverage | Are test requirements clear? |
 
 **Implementation Review** (post-execution):
@@ -84,6 +86,7 @@ Use the appropriate checklist based on review type.
 | Acceptance criteria | Are all criteria met? |
 | Code quality | Patterns followed, proper error handling, no shortcuts? |
 | Multi-IDE | Did changes to `runtime/` or `.agents/sources/` follow consistency rules? |
+| Catalog | If work touches tooling/extensions/services, are `dev/catalog/capabilities.json` entries current? |
 | Test coverage | Are happy path and edge cases tested? |
 | Backward compatibility | Did existing functionality survive? |
 | Documentation | Are changes reflected in docs if needed? |

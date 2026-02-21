@@ -129,6 +129,9 @@ Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 - [Item 1] - Priority: Low/Medium/High
 - [Item 2] - ...
 
+## Catalog Updates Needed
+Did this PRD add, change, or remove any capabilities tracked in `dev/catalog/capabilities.json`? If yes, list what needs updating.
+
 ## Learnings
 [Key insights for collaboration.md or future reference]
 ```
