@@ -33,14 +33,14 @@ export type QmdSetupResult = {
 };
 
 /** Injectable test dependencies */
-export interface QmdSetupDeps {
+export type QmdSetupDeps = {
   whichSync: () => { status: number | null; stdout?: string };
   execFileAsync: (
     file: string,
     args: string[],
     opts: { timeout: number; cwd: string; maxBuffer?: number },
   ) => Promise<{ stdout?: string; stderr?: string }>;
-}
+};
 
 /**
  * Generate a unique collection name from workspace path.

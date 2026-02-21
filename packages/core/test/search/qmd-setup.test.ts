@@ -69,6 +69,12 @@ describe('generateCollectionName', () => {
     assert.match(name, /^workspace-[a-f0-9]{4}$/);
   });
 
+  it('resolves relative paths to absolute before hashing', () => {
+    const abs = generateCollectionName(process.cwd());
+    const rel = generateCollectionName('.');
+    assert.equal(abs, rel);
+  });
+
   it('is deterministic for the same path', () => {
     const a = generateCollectionName('/Users/john/projects/test');
     const b = generateCollectionName('/Users/john/projects/test');
@@ -103,6 +109,11 @@ describe('ensureQmdCollection', () => {
     assert.deepEqual(calls[0].args.slice(0, 2), ['collection', 'add']);
     assert.ok(calls[0].args.includes('--mask'));
     assert.ok(calls[0].args.includes('**/*.md'));
+    assert.ok(calls[0].args.includes('--name'));
+    const nameIndex = calls[0].args.indexOf('--name');
+    const collectionNameArg = calls[0].args[nameIndex + 1];
+    assert.ok(collectionNameArg?.match(/^[a-z0-9-]+-[a-f0-9]{4}$/), `Expected collection name format, got: ${collectionNameArg}`);
+    assert.equal(collectionNameArg, generateCollectionName('/workspace'));
     assert.equal(calls[0].cwd, '/workspace');
     assert.deepEqual(calls[1].args, ['update']);
     assert.equal(calls[1].cwd, '/workspace');

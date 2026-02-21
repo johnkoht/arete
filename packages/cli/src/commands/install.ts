@@ -172,6 +172,8 @@ export function registerInstallCommand(program: Command): void {
           }
         } else if (qmdResult && qmdResult.skipped) {
           listItem('Search index', chalk.dim('qmd not installed, skipping'));
+        } else if (!qmdResult) {
+          listItem('Search index', chalk.dim('skipped (--skip-qmd)'));
         }
 
         if (result.errors.length > 0) {

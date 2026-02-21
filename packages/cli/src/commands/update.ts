@@ -28,6 +28,10 @@ export function registerUpdateCommand(program: Command): void {
         process.exit(1);
       }
 
+      // Load config once for ideTarget and qmd_collection
+      const config = await loadConfig(services.storage, root);
+      const ideTarget = config.ide_target ?? 'cursor';
+
       const packageRoot = getPackageRoot();
       const useRuntime = !packageRoot.includes('node_modules');
       const basePaths = getSourcePaths(packageRoot, useRuntime);
@@ -37,7 +41,7 @@ export function registerUpdateCommand(program: Command): void {
         tools: basePaths.tools,
         rules: join(
           basePaths.rules,
-          ((await services.workspace.getStatus(root)).ideTarget ?? 'cursor') === 'claude' ? 'claude-code' : 'cursor',
+          ideTarget === 'claude' ? 'claude-code' : 'cursor',
         ),
         integrations: basePaths.integrations,
         templates: basePaths.templates,
@@ -49,7 +53,6 @@ export function registerUpdateCommand(program: Command): void {
       // Auto-update qmd index (skip for --check and --skip-qmd)
       let qmdResult;
       if (!opts.check && !opts.skipQmd) {
-        const config = await loadConfig(services.storage, root);
         const existingCollection = config.qmd_collection;
         qmdResult = await ensureQmdCollection(root, existingCollection);
         if (qmdResult.collectionName && qmdResult.created) {
