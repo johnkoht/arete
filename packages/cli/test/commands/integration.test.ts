@@ -18,7 +18,7 @@ describe('integration command', () => {
   });
 
   it('configures calendar integration with default macos provider', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const output = runCli(['integration', 'configure', 'calendar', '--json'], {
       cwd: workspaceDir,
@@ -49,7 +49,7 @@ describe('integration command', () => {
   });
 
   it('configures calendar with selected calendars', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const output = runCli(
       ['integration', 'configure', 'calendar', '--calendars', 'Work, Team , Personal', '--json'],
@@ -77,7 +77,7 @@ describe('integration command', () => {
   });
 
   it('configures calendar with all calendars scope', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const output = runCli(['integration', 'configure', 'calendar', '--all', '--json'], {
       cwd: workspaceDir,
@@ -104,7 +104,7 @@ describe('integration command', () => {
   });
 
   it('configures fathom so pull checks API key instead of reporting inactive integration', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const configureOutput = runCli(['integration', 'configure', 'fathom', '--json'], {
       cwd: workspaceDir,

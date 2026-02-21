@@ -18,7 +18,7 @@ describe('golden: context command', () => {
   });
 
   it('missing --for produces error', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const { stdout, stderr, code } = runCliRaw(
       ['context', '--for', '', '--json'],
       { cwd: tmpDir },
@@ -40,7 +40,7 @@ describe('golden: context command', () => {
   });
 
   it.skip('in workspace produces context JSON structure', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(
       ['context', '--for', 'create PRD', '--json'],
       { cwd: tmpDir },
@@ -55,7 +55,7 @@ describe('golden: context command', () => {
   });
 
   it('human output has Context Injection header and query', () => {
-    runCli(['install', tmpDir, '--json']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json']);
     const stdout = runCli(['context', '--for', 'build a feature'], {
       cwd: tmpDir,
     });

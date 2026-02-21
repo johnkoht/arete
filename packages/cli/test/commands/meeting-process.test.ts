@@ -13,7 +13,7 @@ describe('meeting process command', () => {
 
   beforeEach(() => {
     tmpDir = createTmpDir('arete-test-meeting-process');
-    runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
     mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
     mkdirSync(join(tmpDir, 'context'), { recursive: true });
   });

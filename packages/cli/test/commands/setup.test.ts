@@ -15,7 +15,7 @@ describe('setup command', () => {
   });
 
   it('shows direct setup guidance without legacy-cli wording', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const output = runCli(['setup'], { cwd: workspaceDir });
 

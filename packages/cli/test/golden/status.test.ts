@@ -40,7 +40,7 @@ describe('golden: status command', () => {
   });
 
   it('in workspace produces status structure with path, version, ide', () => {
-    runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
     const stdout = runCli(['status', '--json'], { cwd: tmpDir });
     const json = JSON.parse(stdout);
     assert.equal(json.success, true);

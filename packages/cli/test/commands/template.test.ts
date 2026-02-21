@@ -10,7 +10,7 @@ describe('template resolve command', () => {
 
   beforeEach(() => {
     workspaceDir = createTmpDir('arete-test-template');
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
   });
 
   afterEach(() => {
@@ -94,7 +94,7 @@ describe('template list command', () => {
 
   beforeEach(() => {
     workspaceDir = createTmpDir('arete-test-template-list');
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
   });
 
   afterEach(() => {
@@ -138,7 +138,7 @@ describe('template view command', () => {
 
   beforeEach(() => {
     workspaceDir = createTmpDir('arete-test-template-view');
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
   });
 
   afterEach(() => {

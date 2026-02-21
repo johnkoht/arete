@@ -21,7 +21,7 @@ describe('seed command', () => {
   });
 
   it('seeds test-data fixtures into a workspace', () => {
-    runCli(['install', workspaceDir, '--json', '--ide', 'cursor']);
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
     const output = runCli(['seed', 'test-data', '--json'], { cwd: workspaceDir });
     const result = JSON.parse(output) as {

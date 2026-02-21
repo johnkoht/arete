@@ -27,7 +27,7 @@ describe('status command', () => {
 
   describe('ide_target path resolution', () => {
     it('uses adapter from config so ide_target is respected when both .cursor and .claude exist', async () => {
-      runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+      runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
       const claudeConfigsDir = join(
         tmpDir,

@@ -13,7 +13,7 @@ describe('people command', () => {
 
   beforeEach(() => {
     tmpDir = createTmpDir('arete-test-people');
-    runCli(['install', tmpDir, '--json', '--ide', 'cursor']);
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
   });
 
   afterEach(() => {
