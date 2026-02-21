@@ -5,7 +5,7 @@ status: planned
 size: medium
 tags: [feature]
 created: 2026-02-19T00:00:00Z
-updated: 2026-02-20T22:00:00Z
+updated: 2026-02-21T03:57:11.543Z
 completed: null
 execution: null
 has_review: true
@@ -152,7 +152,7 @@ Cover: default value, workspace YAML override, sibling settings not clobbered, m
     ```typescript
     { dir: join(workspacePaths.resources, 'conversations'), recursive: false }
     ```
-  - `refreshPersonMemory()` (~line 1155): add conversation file scanning alongside meetings. Use **full body scan** (same as meeting body scan — no `participant_ids` dependency, avoids chicken-and-egg on first capture). Add `scannedConversations: number` to the return value for observability.
+  - `refreshPersonMemory()` (~line 1155): add conversation file scanning alongside meetings. Use **full body scan** (same as meeting body scan — no `participant_ids` dependency, avoids chicken-and-egg on first capture). Add `scannedConversations?: number` (optional) to `RefreshPersonMemoryResult` for observability. **Before adding this field, audit all existing `refreshPersonMemory()` test result assertions** — if any use `assert.deepEqual()` on the full result object, adding a required field would break them. Making it optional (`?:`) avoids this safely.
 
 **Note on signal quality:** `collectSignalsForPerson()` uses regex patterns tuned for meeting transcripts ("asked about X", "concerned about Y", speaker-turn patterns). Free-form conversation text will produce fewer signals — this is **expected, not a bug**. Zero signals from a conversation is correct behavior.
 
@@ -198,10 +198,16 @@ Do **not** show the tip if mode is `ask` or `on` (user already knows about the f
    c. Call `arete people intelligence digest --input <path> --json`
       - On non-zero exit or malformed JSON response → warn user, skip `participant_ids` writeback, **do not fail the capture**
    d. Process digest results: create/update person files, surface `unknown_queue` items for user review (same pattern as `process-meetings` skill)
-   e. Call `updateConversationFrontmatter()` (via write tool) to replace `participant_ids: []` with resolved slugs
-      - On failure → warn: *"⚠ Participants mapped but couldn't update participant_ids in {filename}."* Do not fail.
+   e. Patch `participant_ids` in the saved conversation file using the write tool directly:
+      - Read the saved file
+      - Find the line `participant_ids: []` in the YAML frontmatter block
+      - Replace it with `participant_ids: [slug1, slug2]` (flow style, using the resolved slugs from the digest)
+      - Write the file back
+      - If the file can't be read or written → warn: *"⚠ Participants mapped but couldn't update participant_ids in {filename}."* Do not fail.
+      - Note: `updateConversationFrontmatter()` is a TypeScript SDK function for programmatic use — the skill agent uses the write tool directly for this step.
 
 **AC:**
+- Mode `off` → skill passes `participantIds: undefined` (not `[]`) to `saveConversationFile()` → no `participant_ids` field appears in frontmatter
 - Mode `off` → passive tip inline in save confirmation, no prompt, no mapping
 - Mode `ask` → yes/no prompt only, no YAML writes by agent
 - Mode `on` → mapping runs without prompting
@@ -264,7 +270,7 @@ arete people list  # meeting attendees still resolved correctly
 
 ## Review
 
-Two cross-model reviewer passes completed. Key findings incorporated:
+Three review passes completed (2× cross-model engineering reviews + 1× review-plan skill). Key findings incorporated:
 - `MentionSourceType` missing `'conversation'` (blocker — now in Step 3)
 - `updateConversationFrontmatter()` must take `StorageAdapter`, use string-level patching
 - Write `participant_ids: []` in initial save → eliminates add-new-field failure mode
@@ -274,6 +280,9 @@ Two cross-model reviewer passes completed. Key findings incorporated:
 - Step 5 now has concrete commands and expected outputs
 - Passive tip folded into save confirmation line, not a separate step
 - CLI `--input` confirmed generic (not meeting-specific) — approach validated
+- `scannedConversations` made optional (`?:`) — avoids breaking existing `deepEqual` test assertions on `RefreshPersonMemoryResult`
+- Skill writeback instruction rewritten — agent uses write tool directly (string-replace `participant_ids: []`), not a TypeScript function call
+- `off` mode AC explicit — skill passes `participantIds: undefined` (not `[]`) so no `participant_ids` field appears in frontmatter
 
 ## Related
 
