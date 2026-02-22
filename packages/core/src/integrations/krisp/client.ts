@@ -16,6 +16,7 @@ import {
   saveKrispCredentials,
   type KrispCredentials,
 } from './config.js';
+import type { KrispMeeting, KrispDocument } from './types.js';
 
 const AUTH_BASE = 'https://api.krisp.ai/platform/v1/oauth2';
 const REGISTRATION_URL = 'https://mcp.krisp.ai/.well-known/oauth-registration';
@@ -380,17 +381,25 @@ export class KrispMcpClient {
 
   /**
    * List meetings within an optional date range.
-   * Tool name is unverified — confirm with tools/list in Task 1b.
+   * Uses search_meetings with after/before params and requests all content fields.
    */
-  async listMeetings(options: { startDate?: string; endDate?: string }): Promise<unknown> {
-    return this.callTool('search_meetings', options as Record<string, unknown>);
+  async listMeetings(options: { after?: string; before?: string; limit?: number; offset?: number } = {}): Promise<KrispMeeting[]> {
+    const result = await this.callTool('search_meetings', {
+      ...options,
+      fields: ['name', 'date', 'url', 'attendees', 'speakers', 'transcript',
+               'meeting_notes', 'detailed_summary', 'key_points', 'action_items'],
+    });
+    // search_meetings may return array directly or wrapped in a results field
+    if (Array.isArray(result)) return result as KrispMeeting[];
+    const wrapped = result as { results?: KrispMeeting[] };
+    return wrapped.results ?? [];
   }
 
   /**
-   * Fetch the full document (transcript, summary, action items) for a meeting.
-   * Tool name is unverified — confirm with tools/list in Task 1b.
+   * Fetch a document by its 32-character hex ID.
    */
-  async getDocument(id: string): Promise<unknown> {
-    return this.callTool('get_document', { id });
+  async getDocument(documentId: string): Promise<KrispDocument> {
+    const result = await this.callTool('get_document', { documentId });
+    return result as KrispDocument;
   }
 }

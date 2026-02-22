@@ -22,6 +22,10 @@ import {
   saveKrispCredentials,
   type KrispCredentials,
 } from '../../src/integrations/krisp/config.js';
+import { meetingFromKrisp } from '../../src/integrations/krisp/save.js';
+import { pullKrisp } from '../../src/integrations/krisp/index.js';
+import type { KrispMeeting } from '../../src/integrations/krisp/types.js';
+import type { WorkspacePaths } from '../../src/models/index.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 
 // ---------------------------------------------------------------------------
@@ -492,5 +496,198 @@ fathom:
     const parsed = parseYaml(content) as Record<string, Record<string, unknown>>;
     assert.ok(parsed.krisp, 'krisp section must be present');
     assert.equal(parsed.krisp.access_token, creds.access_token);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// meetingFromKrisp transform (tests 13–14)
+// ---------------------------------------------------------------------------
+
+describe('meetingFromKrisp', () => {
+  it('(13) transforms a full KrispMeeting to correct MeetingForSave shape', () => {
+    const meeting: KrispMeeting = {
+      id: 'abc123',
+      name: 'Team Standup',
+      date: '2026-01-15',
+      url: 'https://krisp.ai/meetings/abc123',
+      attendees: [{ name: 'Alice', email: 'a@x.com' }],
+      transcript: [{ speaker: 'Bob', text: 'Hello', timestamp: '0:01' }],
+      key_points: ['Point A'],
+      action_items: [{ text: 'Review doc', assignee: 'Alice' }],
+      detailed_summary: 'Great meeting',
+    };
+
+    const result = meetingFromKrisp(meeting);
+
+    assert.equal(result.title, 'Team Standup', 'title must come from name');
+    assert.equal(result.date, '2026-01-15', 'date must be preserved');
+    assert.equal(result.url, 'https://krisp.ai/meetings/abc123', 'url must be preserved');
+    assert.deepEqual(result.highlights, ['Point A'], 'highlights must come from key_points');
+    assert.deepEqual(result.action_items, ['Review doc (@Alice)'], 'action_items must be plain strings with assignee');
+    assert.ok(result.transcript.includes('**[0:01] Bob**: Hello'), 'transcript must include formatted speaker line');
+    assert.equal(result.summary, 'Great meeting', 'summary must come from detailed_summary');
+    assert.equal(result.duration_minutes, 0, 'duration_minutes must always be 0');
+    assert.deepEqual(
+      result.attendees,
+      [{ name: 'Alice', email: 'a@x.com' }],
+      'attendees must be mapped correctly'
+    );
+  });
+
+  it('(14) handles missing/absent fields without throwing', () => {
+    const meeting: KrispMeeting = { id: 'minimal-id' };
+
+    const result = meetingFromKrisp(meeting);
+
+    assert.equal(result.title, 'Untitled Meeting', 'title must default to "Untitled Meeting"');
+    assert.equal(result.url, '', 'url must default to empty string');
+    assert.deepEqual(result.highlights, [], 'highlights must default to empty array');
+    assert.deepEqual(result.action_items, [], 'action_items must default to empty array');
+    assert.equal(result.transcript, '', 'transcript must default to empty string');
+    assert.equal(result.summary, '', 'summary must default to empty string');
+    assert.equal(result.duration_minutes, 0, 'duration_minutes must be 0');
+    assert.deepEqual(result.attendees, [], 'attendees must default to empty array');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KrispMcpClient.listMeetings and getDocument (tests 15–16)
+// ---------------------------------------------------------------------------
+
+describe('KrispMcpClient.listMeetings and getDocument', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let client: KrispMcpClient;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    client = new KrispMcpClient(storage, WORKSPACE);
+    setupFetchMock();
+
+    // Write valid credentials so callTool proceeds
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+  });
+
+  afterEach(() => {
+    teardownFetchMock();
+  });
+
+  it('(15) listMeetings passes after, before, AND fields including "transcript"', async () => {
+    queueFetch({ jsonrpc: '2.0', id: 1, result: [] });
+
+    await client.listMeetings({ after: '2026-01-01', before: '2026-01-31' });
+
+    assert.equal(fetchCaptures.length, 1, 'fetch must be called once');
+    const body = JSON.parse(fetchCaptures[0].init.body as string) as Record<string, unknown>;
+    const params = body['params'] as Record<string, unknown>;
+    assert.equal(params['name'], 'search_meetings', 'tool name must be search_meetings');
+    const args = params['arguments'] as Record<string, unknown>;
+    assert.equal(args['after'], '2026-01-01', 'after param must be passed');
+    assert.equal(args['before'], '2026-01-31', 'before param must be passed');
+    assert.ok(Array.isArray(args['fields']), 'fields must be an array');
+    assert.ok(
+      (args['fields'] as string[]).includes('transcript'),
+      'fields must include "transcript"'
+    );
+  });
+
+  it('(16) getDocument passes documentId (not id)', async () => {
+    const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    queueFetch({ jsonrpc: '2.0', id: 1, result: { id: docId } });
+
+    await client.getDocument(docId);
+
+    assert.equal(fetchCaptures.length, 1, 'fetch must be called once');
+    const body = JSON.parse(fetchCaptures[0].init.body as string) as Record<string, unknown>;
+    const params = body['params'] as Record<string, unknown>;
+    assert.equal(params['name'], 'get_document', 'tool name must be get_document');
+    const args = params['arguments'] as Record<string, unknown>;
+    assert.equal(args['documentId'], docId, 'must pass documentId, not id');
+    assert.ok(!('id' in args), 'must NOT pass an "id" field');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pullKrisp (tests 17–18)
+// ---------------------------------------------------------------------------
+
+function makeTestPaths(root: string): WorkspacePaths {
+  return {
+    root,
+    manifest: `${root}/arete.yaml`,
+    ideConfig: `${root}/.cursor/rules`,
+    rules: `${root}/.cursor/rules`,
+    agentSkills: `${root}/.agents/skills`,
+    tools: `${root}/.agents/tools`,
+    integrations: `${root}/.agents/integrations`,
+    context: `${root}/context`,
+    memory: `${root}/.arete/memory`,
+    now: `${root}/now`,
+    goals: `${root}/goals`,
+    projects: `${root}/projects`,
+    resources: `${root}/resources`,
+    people: `${root}/people`,
+    credentials: `${root}/.credentials`,
+    templates: `${root}/templates`,
+  };
+}
+
+describe('pullKrisp', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    paths = makeTestPaths(WORKSPACE);
+    setupFetchMock();
+  });
+
+  afterEach(() => {
+    teardownFetchMock();
+  });
+
+  it('(17) happy path: saves 2 meetings and returns { saved: 2, errors: [] }', async () => {
+    // Write valid credentials
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    // Queue fetch response for listMeetings → callTool
+    const meetings: KrispMeeting[] = [
+      { id: 'aaaa1111aaaa1111aaaa1111aaaa1111', name: 'Standup', date: '2026-01-15' },
+      { id: 'bbbb2222bbbb2222bbbb2222bbbb2222', name: 'Retro', date: '2026-01-16' },
+    ];
+    queueFetch({ jsonrpc: '2.0', id: 1, result: meetings });
+
+    const result = await pullKrisp(storage, WORKSPACE, paths, 7);
+
+    assert.equal(result.saved, 2, 'must have saved 2 meetings');
+    assert.deepEqual(result.errors, [], 'must have no errors');
+    assert.equal(result.success, true, 'success must be true when no errors');
+  });
+
+  it('(18) no credentials: returns { success: false, saved: 0, errors: [...] }', async () => {
+    // storage is empty — no credentials
+
+    const result = await pullKrisp(storage, WORKSPACE, paths, 7);
+
+    assert.equal(result.success, false, 'success must be false when creds missing');
+    assert.equal(result.saved, 0, 'saved must be 0');
+    assert.equal(result.errors.length, 1, 'must have exactly one error');
+    assert.ok(
+      result.errors[0].includes('Krisp credentials not found'),
+      `error must mention "Krisp credentials not found"; got: "${result.errors[0]}"`
+    );
   });
 });
