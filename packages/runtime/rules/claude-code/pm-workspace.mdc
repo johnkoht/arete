@@ -12,7 +12,7 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 
 ## ⚠️ CRITICAL: Skill-Based Workflow Required
 
-**Before responding to ANY PM action** (including tour/orientation, meeting prep, **agenda creation**, synthesis, planning, discovery, PRD, onboarding, etc.):
+**Before responding to ANY PM action** (including tour/orientation, meeting prep, **agenda creation**, synthesis, planning, discovery, PRD, getting-started setup, onboarding tool, etc.):
 
 1. **ROUTE**: `arete skill route "<user message>"` or `arete route "<user message>"`
 2. **CHECK TYPE**: Router returns `type: 'skill'` or `type: 'tool'`
