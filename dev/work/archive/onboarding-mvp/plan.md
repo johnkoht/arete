@@ -1,12 +1,12 @@
 ---
 title: Onboarding Mvp
 slug: onboarding-mvp
-status: idea
+status: complete
 size: unknown
 tags: [feature]
 created: 2026-02-20T03:47:16Z
 updated: 2026-02-20T03:47:16Z
-completed: null
+completed: 2026-02-22T21:04:27Z
 execution: null
 has_review: false
 has_pre_mortem: false

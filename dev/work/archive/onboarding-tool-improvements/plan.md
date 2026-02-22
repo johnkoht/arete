@@ -1,12 +1,12 @@
 ---
 title: Onboarding Tool Improvements
 slug: onboarding-tool-improvements
-status: building
+status: complete
 size: medium
 tags: [onboarding, templates, tools]
 created: 2026-02-22T04:22:37.918Z
 updated: 2026-02-22T05:04:45.901Z
-completed: null
+completed: 2026-02-22T21:04:27Z
 execution: null
 has_review: false
 has_pre_mortem: true

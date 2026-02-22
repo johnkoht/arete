@@ -1,12 +1,12 @@
 ---
 title: "SkillService.list() API Alignment with ToolService"
 slug: skill-service-list-api-alignment
-status: idea
+status: abandoned
 size: small
 tags: [refactor, core]
 created: 2026-02-22T19:45:00Z
 updated: 2026-02-22T19:45:00Z
-completed: null
+completed: 2026-02-22T21:17:43Z
 execution: null
 has_review: false
 has_pre_mortem: false

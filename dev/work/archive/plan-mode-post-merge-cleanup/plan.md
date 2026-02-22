@@ -1,12 +1,12 @@
 ---
 title: Plan Mode Post-Merge Cleanup
 slug: plan-mode-post-merge-cleanup
-status: idea
+status: abandoned
 size: small
 tags: [improvement]
 created: 2026-02-20T04:33:00Z
 updated: 2026-02-20T04:33:00Z
-completed: null
+completed: 2026-02-22T21:17:43Z
 execution: null
 has_review: false
 has_pre_mortem: false

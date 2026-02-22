@@ -1,11 +1,11 @@
 ---
 title: Define The Exact User Job Mvp Scope Discover Desi
 slug: define-the-exact-user-job-mvp-scope-discover-desi
-status: draft
+status: abandoned
 size: large
 created: 2026-02-18T19:54:24.935Z
 updated: 2026-02-18T19:54:24.935Z
-completed: null
+completed: 2026-02-22T21:04:27Z
 has_review: false
 has_pre_mortem: false
 has_prd: false
