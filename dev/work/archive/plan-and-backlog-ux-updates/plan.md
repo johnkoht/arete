@@ -1,12 +1,12 @@
 ---
 title: Plan and Backlog UX Updates
 slug: plan-and-backlog-ux-updates
-status: building
+status: complete
 size: large
 tags: [plan-mode, ux, refactor]
 created: 2026-02-20T17:12:00.000Z
-updated: 2026-02-20T18:55:22.343Z
-completed: null
+updated: 2026-02-22T12:00:00.000Z
+completed: 2026-02-20
 execution: null
 has_review: true
 has_pre_mortem: true

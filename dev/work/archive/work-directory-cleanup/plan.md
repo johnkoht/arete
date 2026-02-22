@@ -1,11 +1,11 @@
 ---
 title: Work Directory Cleanup & Consolidation
 slug: work-directory-cleanup
-status: building
+status: complete
 size: large
 created: 2026-02-19T14:39:00Z
-updated: 2026-02-20T03:41:28.066Z
-completed: null
+updated: 2026-02-22T12:00:00.000Z
+completed: 2026-02-20
 has_review: true
 has_pre_mortem: true
 has_prd: true

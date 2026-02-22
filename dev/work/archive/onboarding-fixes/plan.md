@@ -1,12 +1,12 @@
 ---
 title: Onboarding Fixes
 slug: onboarding-fixes
-status: building
+status: complete
 size: small-medium
 tags: []
 created: 2026-02-21T21:13:54.383Z
-updated: 2026-02-21T23:58:16.802Z
-completed: null
+updated: 2026-02-22T12:00:00.000Z
+completed: 2026-02-21
 execution: null
 has_review: true
 has_pre_mortem: true

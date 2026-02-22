@@ -1,10 +1,11 @@
 ---
 title: Agent Learning Quick Wins
 slug: agent-learning-quick-wins
-status: building
+status: complete
 size: medium
 created: 2026-02-21T03:30:00.000Z
-updated: 2026-02-21T04:05:52.557Z
+updated: 2026-02-22T12:00:00.000Z
+completed: 2026-02-21
 steps: 5
 tags: []
 has_review: true
