@@ -497,6 +497,9 @@ export class KrispMcpClient {
   /**
    * List meetings within an optional date range.
    * Uses search_meetings with after/before params and requests all content fields.
+   *
+   * Krisp's structuredContent returns: { criteria, meetings: [...], count }
+   * The text content returns a human-readable string with embedded JSON.
    */
   async listMeetings(options: { after?: string; before?: string; limit?: number; offset?: number } = {}): Promise<KrispMeeting[]> {
     const result = await this.callTool('search_meetings', {
@@ -504,10 +507,11 @@ export class KrispMcpClient {
       fields: ['name', 'date', 'url', 'attendees', 'speakers', 'transcript',
                'meeting_notes', 'detailed_summary', 'key_points', 'action_items'],
     });
-    // search_meetings may return array directly or wrapped in a results field
+    // Direct array (unlikely but defensive)
     if (Array.isArray(result)) return result as KrispMeeting[];
-    const wrapped = result as { results?: KrispMeeting[] };
-    return wrapped.results ?? [];
+    // Krisp structuredContent wraps in { meetings: [...] }
+    const wrapped = result as { meetings?: KrispMeeting[]; results?: KrispMeeting[] };
+    return wrapped.meetings ?? wrapped.results ?? [];
   }
 
   /**
