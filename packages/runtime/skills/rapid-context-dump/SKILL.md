@@ -294,6 +294,8 @@ To promote: "promote [filename]" or edit the file and remove the [DRAFT] header.
 Files remain drafts until you explicitly promote them.
 ```
 
+After all files are saved (draft or promoted), run `arete index` to make the context immediately searchable by brief, meeting-prep, and other skills.
+
 ---
 
 ## Contract v1 Compliance

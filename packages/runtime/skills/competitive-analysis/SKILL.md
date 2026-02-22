@@ -268,7 +268,8 @@ After completing:
 1. Update `context/competitive-landscape.md`
 2. Archive old competitive context
 3. Log key learnings
-4. Set reminders for refresh (quarterly typical)
+4. Run `arete index` to make all saved competitive profiles and analysis immediately searchable
+5. Set reminders for refresh (quarterly typical)
 
 ## Research Sources
 
