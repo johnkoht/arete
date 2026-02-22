@@ -1,0 +1,123 @@
+{
+  "name": "onboard-setup-unification",
+  "branchName": "feature/onboard-setup-unification",
+  "goal": "Unify arete onboard and arete setup into a single rerun-safe post-install command that handles identity and integration setup, then retire arete setup.",
+  "userStories": [
+    {
+      "id": "add-inquirer-prompts",
+      "title": "Add @inquirer/prompts dependency",
+      "description": "Add @inquirer/prompts (tree-shakeable v2, ESM-compatible) to packages/cli/package.json. Verify NodeNext module resolution compatibility.",
+      "acceptanceCriteria": [
+        "@inquirer/prompts added to dependencies in packages/cli/package.json",
+        "npm install succeeds without errors",
+        "npm run typecheck passes",
+        "Test import of input, confirm, checkbox from @inquirer/prompts resolves correctly"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "list-icalbuddy-calendars",
+      "title": "Add listIcalBuddyCalendars() to core",
+      "description": "Create a function in packages/core/src/integrations/calendar/ical-buddy.ts that lists available macOS calendars by parsing icalBuddy calendars output. Export from the calendar module. Reference packages/core/src/integrations/LEARNINGS.md for icalBuddy output parsing gotchas (lines starting with • are names, following lines are metadata).",
+      "acceptanceCriteria": [
+        "listIcalBuddyCalendars() returns { available: boolean, calendars: string[] }",
+        "Parses icalBuddy calendars output correctly: filters •-prefixed lines, strips prefix, ignores metadata lines",
+        "Returns { available: false, calendars: [] } when icalBuddy binary is not found (no throw)",
+        "Unit test in packages/core/test/integrations/calendar.test.ts with fixture data covering: multiple calendars, metadata lines, empty output, missing binary",
+        "Exported from packages/core/src/integrations/calendar/index.ts"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "rerun-safe-identity",
+      "title": "Upgrade arete onboard — identity phase (rerun-safe)",
+      "description": "Replace the current bail-early behavior in packages/cli/src/commands/onboard.ts with rerun-safe prompts using @inquirer/prompts. Read existing context/profile.md if present, parse frontmatter, pre-fill prompts with existing values. Preserve the --json + --name/--email/--company non-interactive path.",
+      "acceptanceCriteria": [
+        "If context/profile.md exists with real values, parse frontmatter and pre-fill prompts",
+        "Uses @inquirer/prompts input() with default set to existing values",
+        "Press enter keeps current value; typing replaces it",
+        "First run (no profile): prompts for name, email, company, website",
+        "Profile written in exact same format as current (frontmatter: name, email, company, website, created)",
+        "--json + --name/--email/--company non-interactive path preserved and unchanged",
+        "Domain extraction logic preserved (email domain, website domain → domain-hints.md)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "integration-phase",
+      "title": "Upgrade arete onboard — integration phase",
+      "description": "After identity, present skippable integration prompts for Calendar, Fathom, and Krisp. Calendar: always show prompt, check icalBuddy availability after user says yes (show install instructions if missing, checkbox picker if available). Fathom: prompt for API key paste, save to .credentials/credentials.yaml. Krisp: invoke KrispMcpClient.configure() with 120s timeout. Add CLI flags for non-interactive testing.",
+      "acceptanceCriteria": [
+        "Calendar: always shows prompt 'Set up calendar integration? (y/N)' defaulting to N",
+        "Calendar: if yes + icalBuddy not available: prints 'brew install ical-buddy' instructions and continues",
+        "Calendar: if yes + icalBuddy available: shows checkbox picker with pageSize 12 and 'All calendars' option",
+        "Calendar: writes config via services.integrations.configure() with provider 'macos'",
+        "Calendar: if already active shows '[active]' status, defaults to N for reconfigure",
+        "Fathom: shows prompt defaulting to N, prints 'Get your API key from https://fathom.video/customize'",
+        "Fathom: writes key to .credentials/credentials.yaml under fathom.api_key (read-modify-write preserving existing keys)",
+        "Fathom: marks integration active via services.integrations.configure()",
+        "Fathom: if already active shows '[active]' status, defaults to N for reconfigure",
+        "Krisp: shows prompt defaulting to N, invokes KrispMcpClient.configure() with 120s timeout",
+        "Krisp: if timeout prints friendly fallback message and continues flow",
+        "Krisp: if already active shows '[active]' status, defaults to N for reconfigure",
+        "--skip-integrations flag skips entire integration phase",
+        "--fathom-key <key> sets Fathom key without prompt",
+        "--calendar with --calendars <list> configures calendar without prompt",
+        "All flags work with --json mode"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "retire-setup-and-docs",
+      "title": "Update install next steps + retire arete setup + doc sweep",
+      "description": "Update install.ts next steps to 3-step flow (no setup mention). Delete setup.ts command. Remove import/registration from index.ts. Update all doc references: ONBOARDING.md, packages/runtime/GUIDE.md, packages/cli/src/commands/LEARNINGS.md. Verify with rg that no references remain.",
+      "acceptanceCriteria": [
+        "arete install next steps shows 3 steps (cd, onboard, chat) with no mention of arete setup",
+        "packages/cli/src/commands/setup.ts deleted",
+        "registerSetupCommand import and call removed from packages/cli/src/index.ts",
+        "Help text in index.ts no longer lists setup command",
+        "ONBOARDING.md references arete onboard not arete setup",
+        "packages/runtime/GUIDE.md references arete onboard not arete setup",
+        "LEARNINGS.md updated: UX pattern references use arete onboard, note @inquirer/prompts is the real dependency",
+        "rg 'arete setup' --type md returns zero hits outside dev/work/plans/"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "tests",
+      "title": "Tests",
+      "description": "Expand onboard tests to cover rerun-safe identity, integration flags, Fathom key storage, and icalBuddy missing behavior. Remove setup tests. Run full quality gates.",
+      "acceptanceCriteria": [
+        "Test: first run creates profile with correct format",
+        "Test: rerun with existing profile — values preserved when using --json + same flags",
+        "Test: rerun with existing profile — values updated when different flags passed",
+        "Test: --skip-integrations skips integration phase",
+        "Test: --fathom-key writes key to .credentials/credentials.yaml",
+        "Test: --json mode returns complete output including integration status",
+        "Test: domain extraction still works (existing tests preserved)",
+        "setup.test.ts removed if it exists",
+        "npm run typecheck passes",
+        "npm test passes (full suite)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-22T19:18:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

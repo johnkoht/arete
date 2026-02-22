@@ -1,17 +1,10 @@
 ---
-title: Onboard + Setup Unification
-slug: onboard-setup-unification
-status: draft
-size: small
-tags: [cli, onboarding, dx]
-created: 2026-02-21T17:55:00Z
-updated: 2026-02-21T17:55:00Z
-completed: null
-execution: null
-has_review: false
-has_pre_mortem: false
-has_prd: false
-steps: 4
+status: building
+size: medium
+created: 2026-02-22
+updated: 2026-02-22T20:48:46.621Z
+tags: []
+has_prd: true
 ---
 
 # Onboard + Setup Unification
@@ -43,62 +36,127 @@ Update `arete install` next steps copy to reflect the new two-step flow.
 
 ---
 
-## What Changes
+## Decisions (resolved)
 
-### 1. Upgrade `arete onboard` — identity phase (rerun-safe)
+- **Dependency**: Add `@inquirer/prompts` (tree-shakeable v2 package) to `packages/cli`. Use for calendar checkbox picker, confirm prompts, and input with defaults. Update LEARNINGS.md to reflect this is now the real dependency (not the monolithic `inquirer`).
+- **Fathom**: Prompt inline for API key paste, write to `.credentials/credentials.yaml` under `fathom.api_key`, mark integration active. URL: `https://fathom.video/customize`. No API key validation in this phase.
+- **Rerun behavior**: Pre-fill and allow editing, don't blow away existing config.
+- **Integration defaults**: All default to `N` (skip) — integrations are optional, don't pressure.
+- **Already-configured integrations**: Show `[active]` status, default to `N` for reconfigure.
+- **`arete setup` retirement**: Remove cleanly — keep the CLI surface small.
 
-Current behavior: bails early if profile already exists.
+---
 
-New behavior:
-- Read existing `context/profile.md` if present
-- Pre-fill prompts with existing values (show current value, user can edit or press enter to keep)
-- Write updated profile on completion
+## Plan
 
-### 2. Upgrade `arete onboard` — integration phase
+### 1. Add `@inquirer/prompts` dependency
 
-After identity questions, prompt for each integration with a y/N default:
+Add `@inquirer/prompts` to `packages/cli/package.json`. Verify it works with NodeNext module resolution and ESM setup.
 
-**Calendar:**
-- "Set up calendar integration? (y/N)"
-- If yes: fetch available calendars via ical-buddy, present checkbox list, let user select (or "all")
-- Skip if already configured and user doesn't opt to reconfigure
+**AC**: `npm run typecheck` passes. Import of `@inquirer/prompts` resolves correctly.
+
+### 2. Add `listIcalBuddyCalendars()` to core
+
+Create a `listIcalBuddyCalendars()` function in `packages/core/src/integrations/calendar/ical-buddy.ts` that:
+- Runs `icalBuddy calendars`
+- Parses output: filters lines starting with `• `, strips prefix
+- Returns `string[]` of calendar names
+- Returns empty array if icalBuddy is not available
+
+Add fixture-based unit test in `packages/core/test/integrations/calendar.test.ts`.
+
+**AC**: Function returns clean calendar names from fixture data. Handles missing icalBuddy gracefully (empty array, no throw).
+
+### 3. Upgrade `arete onboard` — identity phase (rerun-safe)
+
+Replace the current bail-early behavior with rerun-safe prompts:
+- Read existing `context/profile.md` if present, parse frontmatter
+- Use `@inquirer/prompts` `input()` with `default` set to existing values
+- User can edit or press enter to keep current value
+- Write updated profile on completion (same format as today)
+- Preserve the `--json` + `--name/--email/--company` non-interactive path
+
+**AC**: 
+- First run: prompts for all fields, creates profile
+- Second run: shows current values as defaults, enter keeps them, typing replaces
+- `--json` mode unchanged
+- Profile format identical to current (frontmatter schema preserved)
+
+### 4. Upgrade `arete onboard` — integration phase
+
+After identity, present integration prompts:
+
+**Calendar (macOS only):**
+- Always show the calendar prompt: "Set up calendar integration? (y/N)"
+- If yes: check if icalBuddy is available
+  - If **not available**: print install instructions (`brew install ical-buddy`) and "Then rerun: `arete onboard`", continue to next integration
+  - If **available**: checkbox picker of available calendars (+ "All calendars" option), `pageSize: 12`
+- Write calendar config via `services.integrations.configure()`
+- If already active: "Calendar [active] — reconfigure? (y/N)" defaulting to N
 
 **Fathom:**
 - "Set up Fathom (meeting recordings)? (y/N)"
-- If yes: prompt for API key, validate, save
-- Skip if already configured
+- If yes: print "Get your API key from https://fathom.video/customize", prompt "Paste your Fathom API key:"
+- Write key to `.credentials/credentials.yaml` under `fathom.api_key`
+- Mark integration active via `services.integrations.configure()`
+- If already active: "Fathom [active] — reconfigure? (y/N)" defaulting to N
 
 **Krisp:**
-- "Set up Krisp? (y/N)"
-- If yes: invoke `KrispMcpClient.configure()` as today
-- Skip if already configured
+- "Set up Krisp (meeting recordings)? (y/N)"
+- If yes: invoke `KrispMcpClient.configure()` with 120s timeout
+- If timeout: print friendly fallback message, continue flow
+- If already active: "Krisp [active] — reconfigure? (y/N)" defaulting to N
 
-Each integration shows current status if already configured:
-```
-Calendar [active] — reconfigure? (y/N)
-```
+Add CLI flags for non-interactive testing: `--skip-integrations`, `--calendar`, `--fathom-key <key>`, `--skip-krisp`.
 
-### 3. Update `install.ts` next steps copy
+**AC**:
+- Each integration skippable independently
+- Already-configured shows [active] status
+- Calendar prompt always shown; missing icalBuddy prints install instructions and continues
+- Fathom key written to credentials.yaml
+- Krisp has timeout protection
+- Non-interactive flags work for testing
 
-From:
-```
-1. cd my-project
-2. arete onboard   ← set up your profile
-3. arete setup     ← configure integrations (optional)
-4. Say "Let's get started" in chat
-```
+### 5. Update `install.ts` next steps copy
 
-To:
+Change from 4-step to 3-step post-install instructions:
+
 ```
 1. cd my-project
 2. arete onboard   ← set up your profile and integrations
 3. Say "Let's get started" in chat
 ```
 
-### 4. Retire `arete setup`
+**AC**: `arete install` output shows 3 steps, no mention of `arete setup`.
 
-- Remove `setup.ts` command registration
-- If someone runs `arete setup`, either remove the command entirely or print a deprecation message pointing to `arete onboard`
+### 6. Retire `arete setup` + doc sweep
+
+- Delete `packages/cli/src/commands/setup.ts`
+- Remove import and registration from `packages/cli/src/index.ts`
+- Remove or update `packages/cli/test/commands/setup.test.ts`
+- Update all doc references:
+  - `ONBOARDING.md` L84: change `arete setup` → `arete onboard`
+  - `packages/runtime/GUIDE.md` L144: update to reference `arete onboard`
+  - `packages/cli/src/commands/LEARNINGS.md`: update references from `arete setup` to `arete onboard` (UX pattern references)
+- Verify: `rg "arete setup" --type md` returns zero hits in non-plan files
+
+**AC**: 
+- `setup.ts` deleted, no import in `index.ts`
+- `rg "arete setup"` finds no references outside `dev/work/plans/` (plan history is fine)
+- All user-facing docs point to `arete onboard`
+
+### 7. Tests
+
+- Update `packages/cli/test/commands/onboard.test.ts`:
+  - Rerun with existing profile: values preserved
+  - Rerun with existing profile: values updated when changed
+  - Integration skip via flags
+  - Fathom key written to credentials.yaml
+  - Missing icalBuddy: prints install instructions, continues flow
+  - `--json` mode still works
+- Remove `packages/cli/test/commands/setup.test.ts` (if it exists)
+
+**AC**: `npm run typecheck` && `npm test` pass. All new test cases pass.
 
 ---
 
@@ -106,46 +164,42 @@ To:
 
 | File | Change |
 |------|--------|
+| `packages/cli/package.json` | Add `@inquirer/prompts` |
+| `packages/core/src/integrations/calendar/ical-buddy.ts` | Add `listIcalBuddyCalendars()` |
+| `packages/core/test/integrations/calendar.test.ts` | Fixture test for calendar listing |
 | `packages/cli/src/commands/onboard.ts` | Identity rerun-safety + integration prompts |
 | `packages/cli/src/commands/install.ts` | Update next steps copy |
-| `packages/cli/src/commands/setup.ts` | Retire (remove or deprecate) |
-| `packages/cli/src/index.ts` | Remove setup command registration |
-| `packages/cli/test/commands/onboard.test.ts` | Update/expand tests |
-| `packages/cli/test/commands/setup.test.ts` | Remove or update tests |
-
----
-
-## Key Decisions
-
-- **Rerun behavior**: Pre-fill and allow editing, don't blow away existing config
-- **Integration defaults**: All default to `N` (skip) — integrations are optional, don't pressure
-- **Already-configured integrations**: Show `[active]` status, default to `N` for reconfigure
-- **Fathom**: Currently `integration configure fathom` has no prompts (just marks active). Will need to determine if Fathom needs an API key captured via CLI or if it's config-only. Investigate before building.
-- **`arete setup` retirement**: Remove cleanly rather than alias — keep the CLI surface small
-
----
-
-## Open Questions
-
-1. **Fathom config**: Does Fathom need an API key or credential captured at the CLI level, or is it purely workspace config? Need to check `services.integrations.configure` for fathom to understand what it actually persists.
-2. **Calendar interactive prompt**: The current `integration configure calendar` has no interactive prompts — only CLI flags (`--calendars`, `--all`). We'll need to add an ical-buddy calendar list + checkbox picker inside onboard. Confirm ical-buddy is available before showing that prompt.
+| `packages/cli/src/commands/setup.ts` | **Delete** |
+| `packages/cli/src/index.ts` | Remove setup import + registration |
+| `packages/cli/test/commands/onboard.test.ts` | Expand tests |
+| `packages/cli/test/commands/setup.test.ts` | **Delete** |
+| `ONBOARDING.md` | Update `arete setup` → `arete onboard` |
+| `packages/runtime/GUIDE.md` | Update integration setup reference |
+| `packages/cli/src/commands/LEARNINGS.md` | Update UX pattern references |
 
 ---
 
 ## Relationship to the Onboarding Skill
 
-The `onboarding` skill (in-agent, `packages/runtime/skills/onboarding/SKILL.md`) is explicitly aware of the CLI command. It checks whether `context/profile.md` exists with real values — if so, it skips Q0 (identity) and jumps straight to data sources and context bootstrap.
+The `onboarding` skill (in-agent, `packages/runtime/skills/onboarding/SKILL.md`) checks `context/profile.md` for real values — if found, it skips Q0 (identity). The CLI command is pre-IDE bootstrap; the skill is deep in-agent onboarding. Two-stage handoff, not alternatives.
 
-The CLI command is the pre-IDE bootstrap. The skill is the deep in-agent onboarding. They are a two-stage handoff, not alternatives.
+**Constraint**: Profile format (`name`, `email`, `company`, `website`, `created` frontmatter) must be preserved exactly.
 
-**Constraint**: The unified `arete onboard` must continue producing `context/profile.md` in the exact format the skill expects. Don't change the frontmatter schema or field names without updating the skill's detection logic.
-
-> ⚠️ **Before finalizing this plan**: The onboarding skill is being updated. Pull in those changes and review them before building — the skill's identity detection logic and handoff contract may change, which affects what `arete onboard` needs to produce.
+**Note**: The skill's Path C tells users to run `arete integration configure calendar` — this still works (standalone command isn't removed), but the onboard flow is now the primary path. Consider updating the skill in a follow-up.
 
 ---
 
 ## Out of Scope
 
-- `arete init` (wrapping install + onboard) — discussed, deferred. `install` naming is already correct (analogous to `git init` scaffolding). Not worth the added surface.
+- `arete init` (wrapping install + onboard) — deferred
 - Conversational/in-agent onboarding — separate plan (`onboarding-mvp`)
 - Adding new integrations to the onboard flow
+- Fathom API key validation (see Future Work)
+- Updating the onboarding skill's Path C references
+
+---
+
+## Future Work / Backlog Candidates
+
+- **Fathom API key validation**: After saving the key, make a lightweight `GET /api/recordings?limit=1` call to verify it works. Warn but don't block if validation fails (network issues, API down).
+- **Onboarding skill Path C update**: Update skill to check integration status before suggesting standalone CLI commands.
