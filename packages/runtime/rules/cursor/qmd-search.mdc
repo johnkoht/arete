@@ -169,6 +169,21 @@ Before continuing, you may want to update the search index:
 This ensures recent changes are searchable.
 ```
 
+## After Writing Files
+
+When you write `.md` files to the workspace (e.g., saving a conversation, creating a project, adding context docs), run:
+
+```bash
+arete index
+```
+
+This re-indexes the qmd collection so the new content is immediately searchable. Applies to:
+- After `capture-conversation` saves a conversation to `resources/conversations/`
+- After creating new project files, context docs, or memory entries
+- After any agent-driven write of `.md` content to the workspace
+
+Skip this only if the write produced no new files.
+
 ## Search Tips
 
 1. **Start broad, then narrow**: Begin with `qmd query` then use specific `qmd search` for exact terms
