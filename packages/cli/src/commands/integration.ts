@@ -123,6 +123,62 @@ export function registerIntegrationCommands(program: Command): void {
           return;
         }
 
+        if (name === 'google-calendar') {
+          // 1. Run OAuth flow
+          const { authenticateGoogle, listCalendars } = await import('@arete/core');
+          console.log('');
+          info('Opening browser for Google Calendar authorization...');
+          info('If you see an "unverified app" warning, click "Advanced" → "Go to Areté"');
+          console.log('');
+          await authenticateGoogle(services.storage, root);
+          success('Google Calendar authenticated');
+
+          // 2. Fetch and select calendars
+          const calendars = await listCalendars(services.storage, root);
+
+          let selectedCalendarIds: string[] = [];
+          if (opts.all) {
+            selectedCalendarIds = calendars.map(c => c.id);
+          } else if (opts.calendars) {
+            selectedCalendarIds = opts.calendars.split(',').map(s => s.trim()).filter(Boolean);
+          } else if (calendars.length > 0) {
+            // Interactive calendar selection
+            const { checkbox } = await import('@inquirer/prompts');
+            const selected = await checkbox({
+              message: 'Select calendars to sync',
+              choices: calendars.map(c => ({
+                name: `${c.summary}${c.primary ? ' (primary)' : ''}`,
+                value: c.id,
+                checked: c.primary === true,
+              })),
+              pageSize: 12,
+            });
+            selectedCalendarIds = selected;
+          }
+
+          // 3. Write config — provider: 'google' (producer-consumer: factory reads this exact string)
+          const calendarConfig: Record<string, unknown> = {
+            provider: 'google',  // getCalendarProvider reads this — keep in sync
+            status: 'active',
+            calendars: selectedCalendarIds,
+          };
+          await services.integrations.configure(root, 'calendar', calendarConfig);
+
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: true,
+              integration: 'google-calendar',
+              provider: 'google',
+              calendars: selectedCalendarIds,
+            }));
+          } else {
+            success('Google Calendar configured');
+            info(`Syncing ${selectedCalendarIds.length} calendar(s)`);
+            info('Run: arete pull calendar');
+          }
+          return;
+        }
+
         if (name === 'krisp') {
           const client = new KrispMcpClient(services.storage, root);
           const creds = await client.configure(services.storage, root);

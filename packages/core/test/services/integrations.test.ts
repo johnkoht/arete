@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { parse as parseYaml } from 'yaml';
 import { IntegrationService } from '../../src/services/integrations.js';
 import { saveKrispCredentials, type KrispCredentials } from '../../src/integrations/krisp/config.js';
+import { saveGoogleCredentials, type GoogleCalendarCredentials } from '../../src/integrations/calendar/google-auth.js';
 import { getDefaultConfig } from '../../src/config.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 
@@ -238,5 +239,84 @@ integrations:
       creds.access_token,
       'access_token must be persisted before configure',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: getIntegrationStatus for google-calendar
+// ---------------------------------------------------------------------------
+
+describe('IntegrationService.getIntegrationStatus — google-calendar', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let service: IntegrationService;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    service = makeService(storage);
+  });
+
+  it('returns "active" when google_calendar credentials exist', async () => {
+    const creds: GoogleCalendarCredentials = {
+      access_token: 'google-access-token',
+      refresh_token: 'google-refresh-token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    };
+    await saveGoogleCredentials(storage, WORKSPACE, creds);
+
+    const status = await (service as unknown as { getIntegrationStatus: (root: string, name: string) => Promise<string> })
+      .getIntegrationStatus(WORKSPACE, 'google-calendar');
+
+    assert.equal(status, 'active', 'Status must be "active" when valid Google credentials exist');
+  });
+
+  it('returns "inactive" when no google_calendar credentials exist', async () => {
+    const status = await (service as unknown as { getIntegrationStatus: (root: string, name: string) => Promise<string> })
+      .getIntegrationStatus(WORKSPACE, 'google-calendar');
+
+    assert.equal(status, 'inactive', 'Status must be "inactive" when no Google credentials');
+  });
+
+  it('returns "inactive" when credentials.yaml exists but no google_calendar section', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-id
+  client_secret: test-secret
+  access_token: krisp-token
+  refresh_token: krisp-refresh
+  expires_at: 9999999999
+`.trim());
+
+    const status = await (service as unknown as { getIntegrationStatus: (root: string, name: string) => Promise<string> })
+      .getIntegrationStatus(WORKSPACE, 'google-calendar');
+
+    assert.equal(status, 'inactive', 'Status must be "inactive" when google_calendar section is absent');
+  });
+
+  it('preserves other credentials when saving google credentials', async () => {
+    // Pre-populate with krisp credentials
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: krisp-id
+  client_secret: krisp-secret
+  access_token: krisp-token
+  refresh_token: krisp-refresh
+  expires_at: 9999999999
+`.trim());
+
+    const googleCreds: GoogleCalendarCredentials = {
+      access_token: 'google-access-token',
+      refresh_token: 'google-refresh-token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    };
+    await saveGoogleCredentials(storage, WORKSPACE, googleCreds);
+
+    // Both should be active
+    const googleStatus = await (service as unknown as { getIntegrationStatus: (root: string, name: string) => Promise<string> })
+      .getIntegrationStatus(WORKSPACE, 'google-calendar');
+    const krispStatus = await (service as unknown as { getIntegrationStatus: (root: string, name: string) => Promise<string> })
+      .getIntegrationStatus(WORKSPACE, 'krisp');
+
+    assert.equal(googleStatus, 'active', 'Google Calendar status must be active');
+    assert.equal(krispStatus, 'active', 'Krisp status must still be active');
   });
 });
