@@ -1,7 +1,7 @@
 ---
 title: "Agent Persona Enrichment: Orchestrator Identity, Reviewer Doc Awareness, Close-Out Checklist"
 slug: agent-learning-fixes
-status: building
+status: complete
 size: small
 tags: []
 updated: 2026-02-22T04:49:04.023Z
