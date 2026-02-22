@@ -64,7 +64,9 @@
       "platform": "pi",
       "isPiCore": false,
       "summary": "Auto-injects memory/collaboration.md into agent system prompt via before_agent_start.",
-      "implementationPaths": [".pi/extensions/agent-memory/index.ts"],
+      "implementationPaths": [
+        ".pi/extensions/agent-memory/index.ts"
+      ],
       "readBeforeChange": [
         ".pi/extensions/agent-memory/index.ts",
         "memory/collaboration.md",
@@ -113,8 +115,8 @@
         "url": "https://github.com/tobi/qmd"
       },
       "implementationPaths": [
-        "packages/core/src/search-providers/qmd.ts",
-        "packages/core/src/services/search.ts",
+        "packages/core/src/search/providers/qmd.ts",
+        "packages/core/src/search/qmd-setup.ts",
         "SETUP.md"
       ],
       "entrypoints": [
@@ -126,8 +128,8 @@
         "qmd embed"
       ],
       "readBeforeChange": [
-        "packages/core/src/search-providers/qmd.ts",
-        "packages/core/src/services/search.ts",
+        "packages/core/src/search/providers/qmd.ts",
+        "packages/core/src/search/qmd-setup.ts",
         "SETUP.md"
       ],
       "testCommands": [

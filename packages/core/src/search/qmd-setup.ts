@@ -72,6 +72,75 @@ function isQmdAvailable(deps?: QmdSetupDeps): boolean {
   }
 }
 
+/** Result of a qmd refresh attempt */
+export type QmdRefreshResult = {
+  /** Whether the index was updated */
+  indexed: boolean;
+  /** Warning message if something went wrong (non-fatal) */
+  warning?: string;
+  /** Whether refresh was skipped entirely */
+  skipped: boolean;
+};
+
+/**
+ * Refresh the qmd index for an existing collection.
+ *
+ * - If `ARETE_SEARCH_FALLBACK` env var is set, returns `{ skipped: true }`.
+ * - If qmd is not on PATH, returns `{ skipped: true }`.
+ * - If `existingCollectionName` is undefined or empty, returns `{ skipped: true }`.
+ * - Otherwise runs `qmd update` in workspaceRoot.
+ * - All failures are non-fatal (returns warning, never throws).
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param existingCollectionName - Collection name from arete.yaml (must be set)
+ * @param deps - Injectable dependencies for testing
+ * @returns Refresh result
+ */
+export async function refreshQmdIndex(
+  workspaceRoot: string,
+  existingCollectionName: string | undefined,
+  deps?: QmdSetupDeps,
+): Promise<QmdRefreshResult> {
+  const skippedResult: QmdRefreshResult = { indexed: false, skipped: true };
+
+  if (process.env.ARETE_SEARCH_FALLBACK) {
+    return skippedResult;
+  }
+
+  if (!existingCollectionName) {
+    return skippedResult;
+  }
+
+  if (!isQmdAvailable(deps)) {
+    return skippedResult;
+  }
+
+  const execImpl =
+    deps?.execFileAsync ??
+    (async (
+      file: string,
+      args: string[],
+      opts: { timeout: number; cwd: string; maxBuffer?: number },
+    ) => {
+      const result = await execFileAsync(file, args, opts);
+      return { stdout: result.stdout, stderr: result.stderr };
+    });
+
+  try {
+    await execImpl('qmd', ['update'], {
+      timeout: QMD_UPDATE_TIMEOUT_MS,
+      cwd: workspaceRoot,
+    });
+    return { indexed: true, skipped: false };
+  } catch (err) {
+    return {
+      indexed: false,
+      warning: `qmd update failed: ${(err as Error).message}`,
+      skipped: false,
+    };
+  }
+}
+
 /**
  * Ensure a qmd collection exists for the workspace and index it.
  *
