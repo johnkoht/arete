@@ -91,6 +91,8 @@ GUIDE.md
 !packages/runtime/templates/
 !packages/runtime/skills/*/templates/
 !packages/runtime/skills/*/templates/**
+!packages/runtime/tools/*/templates/
+!packages/runtime/tools/*/templates/**
 # Exception: packages/runtime/GUIDE.md is the source (shipped with CLI)
 !packages/runtime/GUIDE.md
 
