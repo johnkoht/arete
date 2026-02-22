@@ -280,7 +280,7 @@ export class KrispMcpClient {
    */
   async refreshTokens(
     creds: KrispCredentials
-  ): Promise<{ access_token: string; expires_at: number }> {
+  ): Promise<{ access_token: string; expires_at: number; refresh_token?: string }> {
     const tokenBody = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: creds.refresh_token,
@@ -309,6 +309,10 @@ export class KrispMcpClient {
     return {
       access_token: tokens.access_token,
       expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+      // Capture rotated refresh token if the server issues one (RFC 6749 §10.4).
+      // Omitting this causes the old token to be preserved indefinitely, which
+      // silently breaks auth if the provider enforces single-use refresh tokens.
+      ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
     };
   }
 
@@ -338,6 +342,8 @@ export class KrispMcpClient {
         ...creds,
         access_token: refreshed.access_token,
         expires_at: refreshed.expires_at,
+        // Apply rotated refresh token if the server issued a new one.
+        ...(refreshed.refresh_token ? { refresh_token: refreshed.refresh_token } : {}),
       };
       await saveKrispCredentials(this.storage, this.workspaceRoot, updatedCreds);
       creds = updatedCreds;

@@ -275,6 +275,30 @@ krisp:
       }
     );
   });
+
+  it('401 on callTool: throws "Krisp session expired"', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    queueFetch({ error: 'Unauthorized' }, 401);
+
+    await assert.rejects(
+      () => client.callTool('test_tool', {}),
+      (err: Error) => {
+        assert.ok(
+          err.message.includes('Krisp session expired'),
+          `Error must mention "Krisp session expired"; got: "${err.message}"`
+        );
+        return true;
+      }
+    );
+  });
 });
 
 describe('KrispMcpClient.refreshTokens', () => {
@@ -318,6 +342,13 @@ describe('KrispMcpClient.refreshTokens', () => {
       'refresh_token',
       'Body must contain grant_type=refresh_token'
     );
+
+    // Verify body sends the stored refresh_token value
+    assert.equal(
+      body.get('refresh_token'),
+      creds.refresh_token,
+      'Body must send the stored refresh_token value'
+    );
   });
 });
 
@@ -333,6 +364,39 @@ describe('KrispMcpClient.callTool persistence', () => {
 
   afterEach(() => {
     teardownFetchMock();
+  });
+
+  it('token rotation: when refreshTokens returns a new refresh_token, it is persisted', async () => {
+    const expiredCreds = makeExpiredCreds();
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: ${expiredCreds.client_id}
+  client_secret: ${expiredCreds.client_secret}
+  access_token: ${expiredCreds.access_token}
+  refresh_token: old-refresh-token
+  expires_at: ${expiredCreds.expires_at}
+`.trim());
+
+    const rotatedRefreshToken = 'rotated-refresh-token';
+
+    // Simulate server-side refresh token rotation
+    client.refreshTokens = async (_creds: KrispCredentials) => ({
+      access_token: 'new-access-token',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      refresh_token: rotatedRefreshToken,
+    });
+
+    queueFetch(mcpSuccessResponse());
+
+    await client.callTool('test_tool', {});
+
+    const saved = await loadKrispCredentials(storage, WORKSPACE);
+    assert.ok(saved, 'credentials must exist after callTool');
+    assert.equal(
+      saved.refresh_token,
+      rotatedRefreshToken,
+      'Rotated refresh_token must be persisted, not the old one'
+    );
   });
 
   it('(4) persists refreshed access_token and expires_at to credentials after callTool', async () => {
