@@ -7,6 +7,8 @@ import { getIcalBuddyProvider } from './ical-buddy.js';
 import type { CalendarProvider } from './ical-buddy.js';
 
 export type { CalendarEvent, CalendarOptions, CalendarProvider } from './ical-buddy.js';
+export { listIcalBuddyCalendars, parseIcalBuddyCalendars } from './ical-buddy.js';
+export type { IcalBuddyCalendarDeps } from './ical-buddy.js';
 
 export async function getCalendarProvider(
   config: AreteConfig
