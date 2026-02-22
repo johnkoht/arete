@@ -187,6 +187,8 @@ Report the result:
 - **Already exists**: Check if the file already exists before writing. If so, ask: "A conversation with this title and date already exists. Save with a different title, or overwrite?"
 - **Error**: Share the error and suggest fixes.
 
+After saving, run `arete index` to make the conversation immediately searchable by other skills (brief, meeting-prep, context).
+
 ### 8. People Processing (if mode is `ask` or `on`)
 
 After save confirmation, check `settings.conversations.peopleProcessing` in `arete.yaml` (use `arete context` or read the file directly).

@@ -224,7 +224,8 @@ When discovery is complete:
 1. Review findings with user
 2. Identify context updates (users, competitive landscape, etc.)
 3. Log key learnings to `.arete/memory/items/learnings.md`
-4. Use `finalize-project` skill to archive
+4. Run `arete index` to make all saved research and findings immediately searchable
+5. Use `finalize-project` skill to archive
 
 ## Anti-patterns
 

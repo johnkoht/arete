@@ -5,9 +5,10 @@
  * Uses StorageAdapter for all file I/O (no direct fs imports).
  */
 
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
+import type { SearchProvider } from '../search/types.js';
 import type {
   EntityType,
   ResolvedEntity,
@@ -31,6 +32,13 @@ import type {
 } from '../models/index.js';
 
 const PEOPLE_CATEGORIES: PersonCategory[] = ['internal', 'customers', 'users'];
+
+/**
+ * Maximum number of results to request from SearchProvider when pre-filtering
+ * meeting candidates for a person. If the provider returns this many results,
+ * the index may be incomplete — we fall back to a full scan.
+ */
+const SEARCH_PROVIDER_CANDIDATE_LIMIT = 100;
 
 const INDEX_HEADER = `# People Index
 
@@ -819,7 +827,7 @@ function buildRationale(
 }
 
 export class EntityService {
-  constructor(private storage: StorageAdapter) {}
+  constructor(private storage: StorageAdapter, private searchProvider?: SearchProvider) {}
 
   async resolve(
     reference: string,
@@ -1170,32 +1178,78 @@ export class EntityService {
       personSignals.set(person.slug, []);
     }
 
-    for (const meetingPath of meetingFiles) {
-      const content = await this.storage.read(meetingPath);
-      if (!content) continue;
+    // Meeting content cache — keyed by normalized absolute path so that the
+    // same physical file is read at most once, regardless of whether the path
+    // came from storage.list() (absolute) or SearchProvider (possibly relative).
+    const meetingContentCache = new Map<string, string | null>();
 
-      const parsed = parseFrontmatter(content);
-      const fromFilename = extractDateFromPath(meetingPath);
-      const dateFromFrontmatter = parsed?.frontmatter.date;
-      const date = typeof dateFromFrontmatter === 'string'
-        ? dateFromFrontmatter.slice(0, 10)
-        : (fromFilename ?? new Date().toISOString().slice(0, 10));
+    // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
+    // CRITICAL invariant: if SearchProvider returns 0 results for a person,
+    // fall back to the full meetingFiles list — never skip scanning entirely.
+    const personCandidateMeetings = new Map<string, string[]>();
+    for (const person of refreshablePeople) {
+      if (this.searchProvider) {
+        const results = await this.searchProvider.semanticSearch(person.name, {
+          limit: SEARCH_PROVIDER_CANDIDATE_LIMIT,
+        });
+        // If the provider hit the limit, the index may be incomplete — fall back to full scan.
+        if (results.length > 0 && results.length < SEARCH_PROVIDER_CANDIDATE_LIMIT) {
+          // Normalize paths: SearchProvider may return relative paths (e.g. from qmd
+          // running with cwd: workspaceRoot). resolve() is a no-op for absolute paths.
+          personCandidateMeetings.set(
+            person.slug,
+            results.map((r) => resolve(workspacePaths.root, r.path)),
+          );
+        } else {
+          // 0 results (person not indexed yet) OR limit hit (incomplete) → full scan
+          personCandidateMeetings.set(person.slug, meetingFiles);
+        }
+      } else {
+        personCandidateMeetings.set(person.slug, meetingFiles);
+      }
+    }
 
-      const source = meetingPath.split(/[/\\]/).pop() ?? meetingPath;
-      const attendeeIds = parsed && Array.isArray(parsed.frontmatter.attendee_ids)
-        ? parsed.frontmatter.attendee_ids.map(String)
-        : [];
+    for (const person of refreshablePeople) {
+      const signals = personSignals.get(person.slug);
+      if (!signals) continue;
 
-      const attendeesRaw = parsed?.frontmatter.attendees;
-      const attendeeNames = Array.isArray(attendeesRaw)
-        ? attendeesRaw.map(String).map((s) => s.toLowerCase())
-        : typeof attendeesRaw === 'string'
-          ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
+      const candidatePaths = personCandidateMeetings.get(person.slug) ?? meetingFiles;
+
+      for (const meetingPath of candidatePaths) {
+        // Cache lookup — normalized absolute path as key
+        const normalizedPath = resolve(workspacePaths.root, meetingPath);
+        let content: string | null | undefined;
+        if (meetingContentCache.has(normalizedPath)) {
+          content = meetingContentCache.get(normalizedPath);
+        } else {
+          content = await this.storage.read(normalizedPath);
+          meetingContentCache.set(normalizedPath, content ?? null);
+        }
+        if (!content) continue;
+
+        // parseFrontmatter is called once per person × meeting pair — O(people × meetings)
+        // in the worst case. The meetingContentCache above reduces storage.read() to O(meetings),
+        // but the parse itself still repeats for meetings shared across multiple people's candidate
+        // lists. parseFrontmatter is a regex + YAML parse and is fast in practice; a parsed-result
+        // cache would reduce this to O(meetings) if workspaces grow large enough to matter.
+        const parsed = parseFrontmatter(content);
+        const fromFilename = extractDateFromPath(meetingPath);
+        const dateFromFrontmatter = parsed?.frontmatter.date;
+        const date = typeof dateFromFrontmatter === 'string'
+          ? dateFromFrontmatter.slice(0, 10)
+          : (fromFilename ?? new Date().toISOString().slice(0, 10));
+
+        const source = meetingPath.split(/[/\\]/).pop() ?? meetingPath;
+        const attendeeIds = parsed && Array.isArray(parsed.frontmatter.attendee_ids)
+          ? parsed.frontmatter.attendee_ids.map(String)
           : [];
 
-      for (const person of refreshablePeople) {
-        const signals = personSignals.get(person.slug);
-        if (!signals) continue;
+        const attendeesRaw = parsed?.frontmatter.attendees;
+        const attendeeNames = Array.isArray(attendeesRaw)
+          ? attendeesRaw.map(String).map((s) => s.toLowerCase())
+          : typeof attendeesRaw === 'string'
+            ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
+            : [];
 
         const inAttendeeIds = attendeeIds.includes(person.slug);
         const nameLower = person.name.toLowerCase();

@@ -64,7 +64,7 @@ export async function createServices(
   // Core services (depend on storage + search)
   const context = new ContextService(storage, search);
   const memory = new MemoryService(storage, search);
-  const entity = new EntityService(storage);
+  const entity = new EntityService(storage, search);
 
   // Orchestration (depends on core services)
   const intelligence = new IntelligenceService(context, memory, entity);

@@ -134,40 +134,43 @@ qmd get "path/to/file.md" --full
 
 ## Keeping Index Updated
 
-### When to Prompt User to Run `qmd update`
+### Automatic (CLI operations)
 
-Prompt the user to run `qmd update` at these moments:
+When users run `arete pull`, `arete meeting add`, or `arete meeting process`, the index is refreshed automatically after files are written. No action needed.
 
-1. **After finalizing a project**: "Now that the project is archived, run `qmd update` to index the new content."
+### Manual (files written outside the CLI)
 
-2. **Before major synthesis work**: "Before I search for related content, you may want to run `qmd update` if you've added new files recently."
-
-3. **After adding multiple inputs**: If user has added several files to a project, suggest: "Consider running `qmd update` to make these files searchable."
-
-4. **If search seems incomplete**: If results seem to be missing recent content, suggest updating.
-
-### Commands
+If the user adds or edits `.md` files directly (context docs, notes, manual meeting files), run:
 
 ```bash
-# Re-index the workspace (fast, run frequently)
-qmd update
-
-# Re-generate embeddings (slower, run occasionally)
-qmd embed
-
-# Check index status
-qmd status
+arete index
 ```
 
-### Prompt Format
+This re-indexes the collection immediately. It is fast and idempotent — safe to run anytime.
 
-When prompting user to update, use this format:
+**Do not prompt users to run `qmd update` directly.** Use `arete index` instead — it handles the qmd collection configuration automatically and provides consistent output.
 
+### If search results seem stale or incomplete
+
+```bash
+arete index          # re-index now
+arete index --status # check what collection is configured
 ```
-Before continuing, you may want to update the search index:
-  qmd update
-This ensures recent changes are searchable.
+
+## After Writing Files
+
+When you write `.md` files to the workspace (e.g., saving a conversation, creating a project, adding context docs), run:
+
+```bash
+arete index
 ```
+
+This re-indexes the qmd collection so the new content is immediately searchable. Applies to:
+- After `capture-conversation` saves a conversation to `resources/conversations/`
+- After creating new project files, context docs, or memory entries
+- After any agent-driven write of `.md` content to the workspace
+
+Skip this only if the write produced no new files.
 
 ## Search Tips
 

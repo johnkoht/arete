@@ -26,6 +26,14 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **After fixing a meaningful UX gap that the builder had to report: add a memory entry and learnings.** In 2026-02-11, the calendar integration was fixed (binary name, list parsing, checkbox UX) but no memory entry was added. "The same kind of miss could repeat." From `2026-02-11_calendar-integration-ux-and-learnings.md`.
 
+- **Commands that call `refreshQmdIndex()` need both `--skip-qmd` AND a `loadConfig` call — check for both.** Any command that triggers `refreshQmdIndex()` after a write requires: (1) `--skip-qmd` option added to the Commander.js command, (2) `loadConfig(services.storage, root)` called after `findRoot()` so `config.qmd_collection` is available to pass to `refreshQmdIndex()`. `meeting.ts` had NO `loadConfig` at all; `pull.ts` only called it in the `pullCalendar()` branch, not the fathom branch. Before wiring `refreshQmdIndex()` into a command, grep for `loadConfig` in that file to confirm it's present in the right action scope. See `update.ts` as the canonical complete pattern.
+
+- **JSON mode behavior for qmd-wiring must be explicitly designed — it's always ambiguous.** When adding `refreshQmdIndex()` to a command that has `--json` output, the call must happen BEFORE the `if (opts.json) { console.log(...); return; }` block, and the JSON output must include a `qmd: { indexed, skipped, warning? }` field. Follow `update.ts` — it runs qmd before the JSON return and includes the `qmd:` field in the JSON object. Without explicit spec, developers will place the qmd call after the JSON block (where it never runs in JSON mode) or omit the `qmd:` field from JSON output.
+
+- **Use `displayQmdResult()` to display qmd results — don't inline the pattern.** Added 2026-02-21: A shared helper at `packages/cli/src/lib/qmd-output.ts` handles the three-state display (indexed → listItem, warning → warn, skipped/undefined → no output). Import as `import { displayQmdResult } from '../lib/qmd-output.js'` and call `displayQmdResult(qmdResult)`. The function accepts an optional `deps` argument for testability (mock.fn() in tests). Do NOT copy the `if (qmdResult && !qmdResult.skipped) { ... }` block into a new command — there were already 3 copies before extraction.
+
+- **Test audit scope for qmd-wiring is wider than the unit test file — check integration tests too.** When adding `refreshQmdIndex()` to a command, audit BOTH `packages/cli/test/commands/<command>.test.ts` AND `packages/cli/test/integration/<command>.integration.test.ts` for invocations that write files. Add `--skip-qmd` to all of them. In 2026-02-21, `meeting-process.integration.test.ts` was initially missed — the PR would have been fine due to `ARETE_SEARCH_FALLBACK=1` in the test env, but belt-and-suspenders requires `--skip-qmd` too.
+
 ## Invariants
 
 - Every command that reads/writes workspace data calls `createServices(process.cwd())` — not a custom service instantiation.

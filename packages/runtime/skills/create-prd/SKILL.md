@@ -160,6 +160,8 @@ After creating the PRD:
 
 5. **Note open questions**: Highlight areas needing more info
 
+6. **Re-index**: Run `arete index` so the PRD is immediately findable by brief, context, and other skills.
+
 ### 9. Special Modes
 
 **Devil's Advocate Mode** (on request):

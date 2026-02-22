@@ -513,6 +513,7 @@ When user activates this tool:
    - Start **documenting what you learn as you learn it** (data dictionaries, process maps) — save in `outputs/leverage-docs/`
    - Focus on **breadth over depth** — resist rabbit holes, use fresh eyes window
    - Share curated reading resources: see `resources/reading-list.md` in this tool's directory — recommend 2-3 links based on the user's situation (new domain, familiar domain, or leadership role)
+   - Run `arete index` so all project files created above are immediately searchable by `arete brief`, `meeting-prep`, and other skills
 
 ## Progress Tracking
 
@@ -566,6 +567,7 @@ Track progress in the project README.md:
 - Weekly check-in (see template below)
 - Synthesize key learnings
 - Adjust next week's plan if needed
+- Run `arete index` if you added notes, 1:1 records, or observations this week
 
 ## Graduation Criteria
 

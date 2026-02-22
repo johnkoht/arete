@@ -127,7 +127,7 @@ describe('integration command', () => {
     assert.equal(fathomEntry?.configured, 'active');
     assert.equal(fathomEntry?.active, true);
 
-    const pullOutput = runCli(['pull', 'fathom', '--days', '1', '--json'], {
+    const pullOutput = runCli(['pull', 'fathom', '--days', '1', '--skip-qmd', '--json'], {
       cwd: workspaceDir,
     });
     const pullResult = JSON.parse(pullOutput) as {

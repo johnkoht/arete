@@ -17,6 +17,8 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-21: [qmd-improvements-review-fixes](entries/2026-02-21_qmd-improvements-review-fixes.md) — Engineering lead review fixes: meeting content cache (O(meetings) reads), limit 20→100 + overflow fallback, path normalization, displayQmdResult() helper, clarifying comments. 2/2 tasks, 0 iterations, +9 tests.
+- 2026-02-21: [qmd-improvements-learnings](entries/2026-02-21_qmd-improvements-learnings.md) — QMD auto-indexing: refreshQmdIndex() helper, write-path CLI wiring (pull fathom, meeting add/process), arete index command, agent rule update, EntityService SearchProvider injection. 6/6 tasks, 0 iterations, +22 tests.
 - 2026-02-21: [tools-copy-regression-fix](entries/2026-02-21_tools-copy-regression-fix.md) — Regression fix: tools (e.g. onboarding 30/60/90) were never copied to user workspaces by `arete install`/`update` since CLI refactor (e3bc217, 2026-02-15). Fixed WorkspaceService.create() + update(), added `tools` field to InstallResult, 4 regression tests. The tool content was complete; only install delivery was broken.
 - 2026-02-21: [krisp-recorder-integration](entries/2026-02-21_krisp-integration.md) — Added Krisp meeting recorder integration: OAuth MCP client, pull orchestrator, CLI wiring
 - 2026-02-21: [agent-learning-quick-wins](entries/2026-02-21_agent-learning-quick-wins.md) — Added LEARNINGS.md convention (6 component-local files seeded from past incidents) + auto-injection pi extension for collaboration.md. 5/5 tasks, 0/7 pre-mortem risks materialized. systemPrompt vs message design decision was key.

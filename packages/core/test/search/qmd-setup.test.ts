@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ensureQmdCollection,
   generateCollectionName,
+  refreshQmdIndex,
 } from '../../src/search/qmd-setup.js';
 import type { QmdSetupDeps } from '../../src/search/qmd-setup.js';
 
@@ -194,5 +195,87 @@ describe('ensureQmdCollection', () => {
     // The path argument comes after 'add'
     const addIndex = addCall.args.indexOf('add');
     assert.equal(addCall.args[addIndex + 1], workspaceRoot);
+  });
+});
+
+describe('refreshQmdIndex', () => {
+  it('skips when qmd is not on PATH', async () => {
+    const deps = makeDeps({ whichStatus: 1 });
+    const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.indexed, false);
+    assert.equal(result.warning, undefined);
+  });
+
+  it('skips when existingCollectionName is undefined', async () => {
+    const deps = makeDeps();
+    const result = await refreshQmdIndex('/workspace', undefined, deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.indexed, false);
+  });
+
+  it('skips when existingCollectionName is empty string', async () => {
+    const deps = makeDeps();
+    const result = await refreshQmdIndex('/workspace', '', deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.indexed, false);
+  });
+
+  it('skips when ARETE_SEARCH_FALLBACK env var is set', async () => {
+    const deps = makeDeps();
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      process.env.ARETE_SEARCH_FALLBACK = '1';
+      const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, true);
+      assert.equal(result.indexed, false);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('runs qmd update and returns indexed:true on success', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const deps = makeDeps({ calls });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, false);
+      assert.equal(result.indexed, true);
+      assert.equal(result.warning, undefined);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].file, 'qmd');
+      assert.deepEqual(calls[0].args, ['update']);
+      assert.equal(calls[0].cwd, '/workspace');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns warning and skipped:false on qmd update failure', async () => {
+    const deps = makeDeps({ updateFail: true, updateError: 'update timed out' });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, false);
+      assert.equal(result.indexed, false);
+      assert.ok(result.warning?.includes('update timed out'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
   });
 });
