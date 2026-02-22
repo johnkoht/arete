@@ -7,6 +7,13 @@
 
 import type { PlanSize, PlanStatus } from "./persistence.js";
 
+/** PRD progress snapshot for build-mode footer */
+export interface WidgetPrdProgress {
+	completed: number;
+	total: number;
+	currentTask: { index: number; title: string } | null;
+}
+
 /** State for widget rendering */
 export interface WidgetState {
 	planModeEnabled: boolean;
@@ -21,6 +28,8 @@ export interface WidgetState {
 	hasPreMortem: boolean;
 	hasReview: boolean;
 	hasPrd: boolean;
+	/** PRD progress for build-mode footer (populated when hasPrd && executionMode) */
+	prdProgress?: WidgetPrdProgress;
 }
 
 /** Minimal theme interface for widget rendering (subset of Pi's Theme) */
@@ -45,7 +54,15 @@ export interface WidgetTheme {
 export function renderFooterStatus(state: WidgetState, theme: WidgetTheme, width?: number): string | undefined {
 	const { planModeEnabled, executionMode, planId, title, status, planSize, stepsCount, todosCompleted, todosTotal, hasPreMortem, hasReview, hasPrd } = state;
 
-	// Execution mode: show progress
+	// Execution mode: show progress (PRD-based)
+	if (executionMode && state.prdProgress && state.prdProgress.total > 0) {
+		const label = planId ?? "build";
+		const raw = buildExecutionFooter(label, state.prdProgress);
+		const truncated = width != null ? truncateExecutionFooter(raw, label, state.prdProgress, width) : raw;
+		return theme.fg("accent", truncated);
+	}
+
+	// Execution mode: show progress (todo-based)
 	if (executionMode && todosTotal > 0) {
 		const label = planId ?? "build";
 		return theme.fg("accent", `⚡ ${label} — ${todosCompleted}/${todosTotal} steps`);
@@ -255,6 +272,64 @@ function visualLength(str: string): number {
 		}
 	}
 	return len;
+}
+
+// ────────────────────────────────────────────────────────────
+// Execution (build) mode footer
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Build the full execution footer string.
+ * Format: ⚡ {slug} — X/Y tasks • current: #N {title} • building
+ */
+function buildExecutionFooter(label: string, progress: WidgetPrdProgress): string {
+	const parts = [`⚡ ${label} — ${progress.completed}/${progress.total} tasks`];
+	if (progress.currentTask) {
+		parts.push(`current: #${progress.currentTask.index} ${progress.currentTask.title}`);
+	}
+	parts.push(progress.completed === progress.total ? "complete" : "building");
+	return parts.join(" • ");
+}
+
+/**
+ * Truncate execution footer to fit within width.
+ * Priority: 1) truncate current task title, 2) drop current task, 3) drop status.
+ * Minimum: ⚡ {slug} — X/Y tasks
+ */
+function truncateExecutionFooter(
+	full: string,
+	label: string,
+	progress: WidgetPrdProgress,
+	width: number,
+): string {
+	if (visualLength(full) <= width) return full;
+
+	const statusLabel = progress.completed === progress.total ? "complete" : "building";
+	const base = `⚡ ${label} — ${progress.completed}/${progress.total} tasks`;
+
+	// Try: truncate current task title
+	if (progress.currentTask) {
+		const withoutCurrent = `${base} • ${statusLabel}`;
+		if (visualLength(withoutCurrent) > width) {
+			// Drop status too — just base
+			return visualLength(base) <= width ? base : base;
+		}
+
+		// Binary search for max title length
+		const prefix = `${base} • current: #${progress.currentTask.index} `;
+		const suffix = ` • ${statusLabel}`;
+		const available = width - visualLength(prefix) - visualLength(suffix);
+		if (available >= 2) {
+			const truncTitle = truncateText(progress.currentTask.title, available);
+			return `${prefix}${truncTitle}${suffix}`;
+		}
+		return withoutCurrent;
+	}
+
+	// No current task — just base + status
+	const withStatus = `${base} • ${statusLabel}`;
+	if (visualLength(withStatus) <= width) return withStatus;
+	return base;
 }
 
 /**

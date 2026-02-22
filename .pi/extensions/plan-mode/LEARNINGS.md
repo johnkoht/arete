@@ -4,8 +4,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 ## Key References
 
-- `index.ts` — extension entry, Pi event hooks, `PlanModeState`, `autoSavePlan()`
-- `commands.ts` — `PlanModeState`, `createDefaultState()`, all command handlers, `CommandContext`/`CommandPi` interfaces
+- `index.ts` — extension entry, Pi event hooks, `PlanModeState`, `autoSavePlan()`, `handleExecutionComplete()` (shared completion handler for both todo and PRD paths)
+- `commands.ts` — `PlanModeState`, `createDefaultState()`, all command handlers, `checkPrdExecutionComplete()`, `CommandContext`/`CommandPi` interfaces
 - `persistence.ts` — `savePlan()`, `loadPlan()`, `parseFrontmatter()`, `serializeFrontmatter()`, `slugify()`, `migrateStatus()`
 - `utils.ts` — `extractTodoItems()`, `classifyPlanSize()`, `suggestPlanName()`, `TodoItem` type
 - `agents.ts` — `loadAgentConfig()`, `getAgentPrompt()`, `getAgentModel()`, `resolveModel()`; loads agent model settings from `.pi/settings.json` and prompt definitions from `.pi/agents/{role}.md`
@@ -14,6 +14,12 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - Tests: `.pi/extensions/plan-mode/*.test.ts` (run with `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'`)
 
 ## Gotchas
+
+- **PRD-based plans never auto-completed.** The `agent_end` completion handler only checked `todoItems.every(t => t.completed)` — but PRD plans don't use todoItems. They track progress in `prd.json` via the execute-prd skill. Result: plan status stayed at "building" forever after a PRD finished. Fixed by adding a parallel PRD progress check in `agent_end` using `resolveExecutionProgress()`.
+
+- **`/build` had no guard for "building" status.** Only checked `"draft"` (promote?) and `"complete"` (block). A plan stuck at "building" (see above) would fall through and re-trigger `sendUserMessage("Execute the PRD...")`, causing the agent to re-execute an already-completed PRD. Fixed by checking execution progress when status is "building" — if complete, mark done; if in progress, confirm with user.
+
+- **Two execution paths need parallel handling.** Todo-based (no PRD) and PRD-based plans have fundamentally different progress tracking. Any new feature touching execution completion, progress display, or status transitions must handle both paths. The `WidgetState.prdProgress` field was added to bridge this gap for the footer.
 
 - **Pi uses jiti — no compile step, no `npm run typecheck` coverage.** TypeScript errors in extension files will not surface from `npm run typecheck`. To type-check the extension, run `npx tsc --noEmit` in the extension directory with a local `tsconfig.json`, or catch errors at runtime. Discovered in `2026-02-16_plan-lifecycle-system-learnings.md`.
 
@@ -52,4 +58,5 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - [ ] Plan mode no longer restricts tools — if you need to change plan-mode behavior, modify the prompt injection in `index.ts` `before_agent_start`, not tool filtering
 - [ ] If editing agent prompt injection logic: read `agents.ts` — `/review` and `/pre-mortem` look up `.pi/agents/{role}.md` via `getAgentPrompt()`
 - [ ] If editing execution progress tracking: read `execution-progress.ts` — it reads prd.json by slug path; path assumptions must stay in sync with `persistence.ts`
+- [ ] If changing execution completion logic: both todo-based (`todoItems.every()`) and PRD-based (`resolveExecutionProgress()`) paths in `agent_end` must be updated together — they share `handleExecutionComplete()` but have different detection triggers
 - [ ] Verify `npm run typecheck` still passes (catches packages/ — extension errors need separate `tsc`)

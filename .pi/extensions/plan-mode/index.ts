@@ -33,11 +33,13 @@ import {
 	handlePrd,
 	handleBuild,
 	handlePlanSave,
+	resolvePrdFeatureSlug,
 	type PlanModeState,
 	createDefaultState,
 } from "./commands.js";
 import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter, type PlanSize } from "./persistence.js";
 import { getAgentPrompt } from "./agents.js";
+import { resolveExecutionProgress } from "./execution-progress.js";
 import { renderFooterStatus, renderTodoWidget, type WidgetState } from "./widget.js";
 
 // Allowed artifact filenames for the save tool
@@ -73,6 +75,27 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function getWidgetState(): WidgetState {
 		const plan = state.currentSlug ? loadPlan(state.currentSlug) : null;
+		const hasPrd = state.prdConverted || Boolean(plan?.frontmatter.has_prd);
+
+		// Resolve PRD progress for build-mode footer
+		let prdProgress: WidgetState["prdProgress"];
+		if (state.executionMode && hasPrd && state.currentSlug) {
+			const prdSlug = resolvePrdFeatureSlug(state.currentSlug);
+			const progress = resolveExecutionProgress({
+				hasPrd: true,
+				todoItems: [],
+				prdPath: `dev/work/plans/${prdSlug}/prd.json`,
+			});
+			if (progress.total > 0) {
+				prdProgress = {
+					completed: progress.completed,
+					total: progress.total,
+					currentTask: progress.currentTask
+						? { index: progress.currentTask.index, title: progress.currentTask.title }
+						: null,
+				};
+			}
+		}
 
 		return {
 			planModeEnabled: state.planModeEnabled,
@@ -86,7 +109,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			todosTotal: state.todoItems.length,
 			hasPreMortem: state.preMortemRun,
 			hasReview: state.reviewRun,
-			hasPrd: state.prdConverted,
+			hasPrd: hasPrd,
+			prdProgress,
 		};
 	}
 
@@ -129,6 +153,48 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			reviewRun: state.reviewRun,
 			prdConverted: state.prdConverted,
 		});
+	}
+
+	/**
+	 * Shared completion handler for both todo-based and PRD-based execution.
+	 * Marks plan complete, shows completion message, and offers post-completion options.
+	 */
+	async function handleExecutionComplete(completionMessage: string, ctx: ExtensionContext): Promise<void> {
+		pi.sendMessage(
+			{
+				customType: "plan-complete",
+				content: completionMessage,
+				display: true,
+			},
+			{ triggerTurn: false },
+		);
+
+		// Update plan status
+		if (state.currentSlug) {
+			updatePlanFrontmatter(state.currentSlug, {
+				status: "complete",
+				completed: new Date().toISOString(),
+			});
+		}
+
+		// Offer post-completion options
+		if (ctx.hasUI) {
+			const choice = await ctx.ui.select("Plan complete — what next?", [
+				"Capture learnings to memory",
+				"Done",
+			]);
+
+			if (choice === "Capture learnings to memory") {
+				pi.sendUserMessage(
+					"Capture learnings from this completed plan to memory/entries/. Include what worked well, what didn't, and recommendations for next time.",
+				);
+			}
+		}
+
+		state.executionMode = false;
+		state.todoItems = [];
+		updateStatus(ctx);
+		persistState();
 	}
 
 	/**
@@ -424,45 +490,36 @@ After completing a step, include a [DONE:n] tag in your response.
 
 	// Handle plan extraction and completion
 	pi.on("agent_end", async (event, ctx) => {
-		// Check if execution is complete
+		// Check if execution is complete — todo-based path
 		if (state.executionMode && state.todoItems.length > 0) {
 			if (state.todoItems.every((t) => t.completed)) {
-				const completedList = state.todoItems.map((t) => `~~${t.text}~~`).join("\n");
-				pi.sendMessage(
-					{
-						customType: "plan-complete",
-						content: `**Plan Complete!** ✓\n\n${completedList}`,
-						display: true,
-					},
-					{ triggerTurn: false },
+				await handleExecutionComplete(
+					`**Plan Complete!** ✓\n\n${state.todoItems.map((t) => `~~${t.text}~~`).join("\n")}`,
+					ctx,
 				);
+			}
+			return;
+		}
 
-				// Update plan status
-				if (state.currentSlug) {
-					updatePlanFrontmatter(state.currentSlug, {
-						status: "complete",
-						completed: new Date().toISOString(),
-					});
+		// Check if execution is complete — PRD-based path
+		if (state.executionMode && state.currentSlug) {
+			const plan = loadPlan(state.currentSlug);
+			if (plan?.frontmatter.has_prd) {
+				const prdSlug = resolvePrdFeatureSlug(state.currentSlug);
+				const progress = resolveExecutionProgress({
+					hasPrd: true,
+					todoItems: [],
+					prdPath: `dev/work/plans/${prdSlug}/prd.json`,
+				});
+				if (progress.total > 0 && progress.completed === progress.total) {
+					const taskList = progress.tasks
+						.map((t) => `~~${t.title}~~`)
+						.join("\n");
+					await handleExecutionComplete(
+						`**PRD Complete!** ✓ (${progress.completed}/${progress.total} tasks)\n\n${taskList}`,
+						ctx,
+					);
 				}
-
-				// Offer post-completion options
-				if (ctx.hasUI) {
-					const choice = await ctx.ui.select("Plan complete — what next?", [
-						"Capture learnings to memory",
-						"Done",
-					]);
-
-					if (choice === "Capture learnings to memory") {
-						pi.sendUserMessage(
-							"Capture learnings from this completed plan to memory/entries/. Include what worked well, what didn't, and recommendations for next time.",
-						);
-					}
-				}
-
-				state.executionMode = false;
-				state.todoItems = [];
-				updateStatus(ctx);
-				persistState();
 			}
 			return;
 		}

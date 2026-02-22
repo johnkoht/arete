@@ -137,6 +137,24 @@ export function resolvePrdFeatureSlug(planSlug: string): string {
 	return planSlug;
 }
 
+/**
+ * Check whether a PRD-based (or todo-based) execution is fully complete.
+ * Used to guard against re-triggering a finished build.
+ */
+export function checkPrdExecutionComplete(
+	planSlug: string,
+	hasPrd?: boolean,
+	resolveProgressFn = resolveExecutionProgress,
+): boolean {
+	const prdFeatureSlug = resolvePrdFeatureSlug(planSlug);
+	const progress = resolveProgressFn({
+		hasPrd: Boolean(hasPrd),
+		todoItems: [],
+		prdPath: `dev/work/plans/${prdFeatureSlug}/prd.json`,
+	});
+	return progress.total > 0 && progress.completed === progress.total;
+}
+
 // ────────────────────────────────────────────────────────────
 // /plan command handler
 // ────────────────────────────────────────────────────────────
@@ -1142,6 +1160,26 @@ export async function handleBuild(
 	if (plan.frontmatter.status === "complete") {
 		ctx.ui.notify("This plan is already complete.", "info");
 		return;
+	}
+
+	// Guard: plan already in "building" — check if execution finished
+	if (plan.frontmatter.status === "building") {
+		const isComplete = checkPrdExecutionComplete(state.currentSlug, plan.frontmatter.has_prd);
+		if (isComplete) {
+			updatePlanFrontmatter(state.currentSlug, {
+				status: "complete",
+				completed: new Date().toISOString(),
+			});
+			state.executionMode = false;
+			ctx.ui.notify("This plan's build already completed. Marked as complete.", "info");
+			return;
+		}
+		// Still in progress — confirm re-trigger
+		const proceed = await ctx.ui.confirm(
+			"Build Already In Progress",
+			"This plan is already being built. Re-trigger execution?",
+		);
+		if (!proceed) return;
 	}
 
 	// Transition to building
