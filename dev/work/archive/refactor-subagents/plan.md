@@ -1,11 +1,11 @@
 ---
 title: Refactor Subagents
 slug: refactor-subagents
-status: draft
+status: complete
 size: large
 created: 2026-02-19T03:34:57.042Z
-updated: 2026-02-20T00:49:07.001Z
-completed: null
+updated: 2026-02-22T11:55:00.000Z
+completed: 2026-02-19
 has_review: true
 has_pre_mortem: true
 has_prd: true

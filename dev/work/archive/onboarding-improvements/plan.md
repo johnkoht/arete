@@ -1,11 +1,11 @@
 ---
 title: Onboarding Improvements
 slug: onboarding-improvements
-status: draft
+status: complete
 size: large
 created: 2026-02-18T03:12:45.227Z
-updated: 2026-02-18T03:12:45.227Z
-completed: null
+updated: 2026-02-22T11:55:00.000Z
+completed: 2026-02-18
 has_review: true
 has_pre_mortem: true
 has_prd: true

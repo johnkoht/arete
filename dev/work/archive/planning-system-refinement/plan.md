@@ -1,11 +1,11 @@
 ---
 title: Planning System Refinement
 slug: planning-system-refinement
-status: in-progress
+status: complete
 size: large
 created: 2026-02-18T03:46:41.229Z
-updated: 2026-02-18T04:10:03.632Z
-completed: null
+updated: 2026-02-22T11:55:00.000Z
+completed: 2026-02-18
 blocked_reason: null
 previous_status: null
 has_review: true
