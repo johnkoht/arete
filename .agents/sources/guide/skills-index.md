@@ -13,7 +13,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **discovery** | `runtime/skills/discovery/SKILL.md` | Guide problem discovery and research synthesis | "Start discovery", "research [topic]" |
 | **finalize-project** | `runtime/skills/finalize-project/SKILL.md` | Archive completed projects and extract learnings | "Finalize this project" |
 | **generate-prototype-prompt** | `runtime/skills/generate-prototype-prompt/SKILL.md` | Create prompts for quick UI/UX prototyping | "Generate prototype prompt for..." |
-| **getting-started** | `runtime/skills/getting-started/SKILL.md` | Get started with Areté - conversational setup that bootstraps your workspace | 15-30 min |
+| **getting-started** | `runtime/skills/getting-started/SKILL.md` | Get started with Areté - conversational workspace setup | "Let's get started", "I'm new to Areté" |
 | **goals-alignment** | `runtime/skills/goals-alignment/SKILL.md` | Compare your goals to org strategy | "Show my goal alignment" |
 | **meeting-prep** | `runtime/skills/meeting-prep/SKILL.md` | Build prep brief for meetings with attendee context | "Prep for my meeting with Jane" |
 | **periodic-review** | `runtime/skills/periodic-review/SKILL.md` | Audit and refresh workspace context | "Review my workspace" |

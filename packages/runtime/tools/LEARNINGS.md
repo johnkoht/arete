@@ -36,7 +36,6 @@
 
 - ~~No test that exercises the tool routing (`arete route "I'm starting a new job"`) end-to-end in an installed workspace.~~ Fixed 2026-02-22: golden route tests and disambiguation tests added.
 - No test that runs `diff -r packages/runtime/tools/ dist/tools/` and asserts they are identical. This sync is currently verified only manually. A CI check would prevent the dist/ drift failure mode.
-- No test that exercises the tool routing (`arete route "I'm starting a new job"`) end-to-end in an installed workspace.
 
 ## Patterns That Work
 
