@@ -8,6 +8,7 @@
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
+import type { SearchProvider } from '../search/types.js';
 import type {
   EntityType,
   ResolvedEntity,
@@ -819,7 +820,7 @@ function buildRationale(
 }
 
 export class EntityService {
-  constructor(private storage: StorageAdapter) {}
+  constructor(private storage: StorageAdapter, private searchProvider?: SearchProvider) {}
 
   async resolve(
     reference: string,
@@ -1170,32 +1171,50 @@ export class EntityService {
       personSignals.set(person.slug, []);
     }
 
-    for (const meetingPath of meetingFiles) {
-      const content = await this.storage.read(meetingPath);
-      if (!content) continue;
+    // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
+    // CRITICAL invariant: if SearchProvider returns 0 results for a person,
+    // fall back to the full meetingFiles list — never skip scanning entirely.
+    const personCandidateMeetings = new Map<string, string[]>();
+    for (const person of refreshablePeople) {
+      if (this.searchProvider) {
+        const results = await this.searchProvider.semanticSearch(person.name, { limit: 20 });
+        personCandidateMeetings.set(
+          person.slug,
+          results.length > 0 ? results.map((r) => r.path) : meetingFiles,
+        );
+      } else {
+        personCandidateMeetings.set(person.slug, meetingFiles);
+      }
+    }
 
-      const parsed = parseFrontmatter(content);
-      const fromFilename = extractDateFromPath(meetingPath);
-      const dateFromFrontmatter = parsed?.frontmatter.date;
-      const date = typeof dateFromFrontmatter === 'string'
-        ? dateFromFrontmatter.slice(0, 10)
-        : (fromFilename ?? new Date().toISOString().slice(0, 10));
+    for (const person of refreshablePeople) {
+      const signals = personSignals.get(person.slug);
+      if (!signals) continue;
 
-      const source = meetingPath.split(/[/\\]/).pop() ?? meetingPath;
-      const attendeeIds = parsed && Array.isArray(parsed.frontmatter.attendee_ids)
-        ? parsed.frontmatter.attendee_ids.map(String)
-        : [];
+      const candidatePaths = personCandidateMeetings.get(person.slug) ?? meetingFiles;
 
-      const attendeesRaw = parsed?.frontmatter.attendees;
-      const attendeeNames = Array.isArray(attendeesRaw)
-        ? attendeesRaw.map(String).map((s) => s.toLowerCase())
-        : typeof attendeesRaw === 'string'
-          ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
+      for (const meetingPath of candidatePaths) {
+        const content = await this.storage.read(meetingPath);
+        if (!content) continue;
+
+        const parsed = parseFrontmatter(content);
+        const fromFilename = extractDateFromPath(meetingPath);
+        const dateFromFrontmatter = parsed?.frontmatter.date;
+        const date = typeof dateFromFrontmatter === 'string'
+          ? dateFromFrontmatter.slice(0, 10)
+          : (fromFilename ?? new Date().toISOString().slice(0, 10));
+
+        const source = meetingPath.split(/[/\\]/).pop() ?? meetingPath;
+        const attendeeIds = parsed && Array.isArray(parsed.frontmatter.attendee_ids)
+          ? parsed.frontmatter.attendee_ids.map(String)
           : [];
 
-      for (const person of refreshablePeople) {
-        const signals = personSignals.get(person.slug);
-        if (!signals) continue;
+        const attendeesRaw = parsed?.frontmatter.attendees;
+        const attendeeNames = Array.isArray(attendeesRaw)
+          ? attendeesRaw.map(String).map((s) => s.toLowerCase())
+          : typeof attendeesRaw === 'string'
+            ? attendeesRaw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0)
+            : [];
 
         const inAttendeeIds = attendeeIds.includes(person.slug);
         const nameLower = person.name.toLowerCase();

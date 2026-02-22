@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { EntityService } from '../../src/services/entity.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
+import type { SearchProvider, SearchResult } from '../../src/search/types.js';
 
 function makePaths(root: string): WorkspacePaths {
   return {
@@ -254,5 +255,189 @@ Jane Doe asked about budget concerns.
     assert.equal(result.scannedMeetings, 1);
     assert.equal(result.scannedConversations, 1);
     assert.equal(result.updated, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refreshPersonMemory — SearchProvider pre-filter
+// ---------------------------------------------------------------------------
+
+function makeMockSearchProvider(resultsByPersonName: Map<string, string[]>): SearchProvider {
+  return {
+    name: 'mock',
+    isAvailable: async () => true,
+    search: async (): Promise<SearchResult[]> => [],
+    semanticSearch: async (query: string): Promise<SearchResult[]> => {
+      const paths = resultsByPersonName.get(query) ?? [];
+      return paths.map((p) => ({ path: p, content: '', score: 1.0, matchType: 'semantic' as const }));
+    },
+  };
+}
+
+describe('EntityService.refreshPersonMemory — SearchProvider pre-filter', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-search-'));
+    paths = makePaths(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('CRITICAL: empty SearchProvider results → falls back to full scan and finds signals', async () => {
+    // Write a person file
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+
+    // Write meeting with repeated signals
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-02-10-sync.md'),
+      `---
+title: "Status Sync"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about deployment timeline.
+Jane Doe asked about deployment timeline.
+`,
+      'utf8',
+    );
+
+    // SearchProvider returns [] for "Jane Doe" → must fall back to full scan
+    const emptyProvider = makeMockSearchProvider(new Map([['Jane Doe', []]]));
+    const service = new EntityService(new FileStorageAdapter(), emptyProvider);
+
+    const result = await service.refreshPersonMemory(paths);
+
+    // Should have found and written signals — full scan executed
+    assert.equal(result.updated, 1, 'Must update person even when SearchProvider returns empty results');
+    assert.equal(result.scannedMeetings, 1, 'scannedMeetings reflects total available meetings');
+
+    const personContent = readFileSync(join(personDir, 'jane-doe.md'), 'utf8');
+    assert.ok(
+      personContent.includes('deployment timeline'),
+      'Full-scan fallback must find signals from all meeting files',
+    );
+  });
+
+  it('SearchProvider with results → only candidate files are scanned per person', async () => {
+    // Write two people
+    const internalDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(internalDir, { recursive: true });
+    writeFileSync(
+      join(internalDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(internalDir, 'bob-smith.md'),
+      '---\nname: "Bob Smith"\ncategory: "internal"\n---\n\n# Bob Smith\n',
+      'utf8',
+    );
+
+    // Write two meeting files
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    const janesFile = join(meetingDir, '2026-02-10-jane.md');
+    const bobsFile = join(meetingDir, '2026-02-11-bob.md');
+
+    writeFileSync(
+      janesFile,
+      `---
+title: "Jane Sync"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about release schedule.
+Jane Doe asked about release schedule.
+`,
+      'utf8',
+    );
+
+    writeFileSync(
+      bobsFile,
+      `---
+title: "Bob Sync"
+date: "2026-02-11"
+attendee_ids:
+  - bob-smith
+---
+
+Bob Smith asked about release schedule.
+Bob Smith asked about release schedule.
+`,
+      'utf8',
+    );
+
+    // Provider returns only Jane's file for "Jane Doe" and only Bob's file for "Bob Smith"
+    const filteredProvider = makeMockSearchProvider(
+      new Map([
+        ['Jane Doe', [janesFile]],
+        ['Bob Smith', [bobsFile]],
+      ]),
+    );
+    const service = new EntityService(new FileStorageAdapter(), filteredProvider);
+
+    const result = await service.refreshPersonMemory(paths);
+
+    assert.equal(result.updated, 2, 'Both people should be updated from their respective candidate files');
+    // scannedMeetings = total available meetings, not candidate count
+    assert.equal(result.scannedMeetings, 2);
+
+    const janeContent = readFileSync(join(internalDir, 'jane-doe.md'), 'utf8');
+    const bobContent = readFileSync(join(internalDir, 'bob-smith.md'), 'utf8');
+    assert.ok(janeContent.includes('release schedule'), "Jane's memory should have signals from her candidate file");
+    assert.ok(bobContent.includes('release schedule'), "Bob's memory should have signals from his candidate file");
+  });
+
+  it('no SearchProvider → behavior identical to existing implementation', async () => {
+    // Write person and meeting
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-02-10-sync.md'),
+      `---
+title: "Sync"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about pricing strategy.
+Jane Doe asked about pricing strategy.
+`,
+      'utf8',
+    );
+
+    // No search provider passed — second arg omitted
+    const service = new EntityService(new FileStorageAdapter());
+
+    const result = await service.refreshPersonMemory(paths);
+
+    assert.equal(result.updated, 1);
+    const personContent = readFileSync(join(personDir, 'jane-doe.md'), 'utf8');
+    assert.ok(personContent.includes('pricing strategy'), 'Signals should be found without a SearchProvider');
   });
 });
