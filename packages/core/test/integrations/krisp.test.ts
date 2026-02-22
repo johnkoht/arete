@@ -85,7 +85,7 @@ function makeExpiredCreds(overrides: Partial<KrispCredentials> = {}): KrispCrede
 type FetchCapture = { url: string; init: RequestInit };
 
 let fetchCaptures: FetchCapture[] = [];
-let fetchQueue: Array<{ body: unknown; status?: number }> = [];
+let fetchQueue: Array<{ body: unknown; status?: number; contentType?: string; rawBody?: string }> = [];
 const originalFetch = globalThis.fetch;
 
 function setupFetchMock(): void {
@@ -98,9 +98,11 @@ function setupFetchMock(): void {
       throw new Error(`Unexpected fetch call to ${url.toString()} — no response queued`);
     }
     const status = queued.status ?? 200;
-    return new Response(JSON.stringify(queued.body), {
+    const ct = queued.contentType ?? 'application/json';
+    const responseBody = queued.rawBody ?? JSON.stringify(queued.body);
+    return new Response(responseBody, {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': ct },
     });
   };
 }
@@ -113,6 +115,11 @@ function teardownFetchMock(): void {
 
 function queueFetch(body: unknown, status = 200): void {
   fetchQueue.push({ body, status });
+}
+
+function queueSSEFetch(body: unknown, status = 200): void {
+  const sseBody = `data: ${JSON.stringify(body)}\n\n`;
+  fetchQueue.push({ body: null, status, contentType: 'text/event-stream', rawBody: sseBody });
 }
 
 function mcpSuccessResponse(result: unknown = { content: 'ok' }): unknown {
@@ -274,6 +281,48 @@ krisp:
         return true;
       }
     );
+  });
+
+  it('sends Accept header with application/json and text/event-stream (MCP Streamable HTTP spec)', async () => {
+    // 406 Not Acceptable is returned when Accept header is missing — this test
+    // prevents regression by verifying the header is always sent.
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    queueFetch(mcpSuccessResponse());
+    await client.callTool('test_tool', {});
+
+    const headers = fetchCaptures[0].init.headers as Record<string, string>;
+    assert.ok(
+      headers['Accept']?.includes('application/json'),
+      `Accept header must include application/json; got: "${headers['Accept']}"`
+    );
+    assert.ok(
+      headers['Accept']?.includes('text/event-stream'),
+      `Accept header must include text/event-stream; got: "${headers['Accept']}"`
+    );
+  });
+
+  it('handles SSE (text/event-stream) response from MCP server', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    queueSSEFetch({ jsonrpc: '2.0', id: 1, result: { meetings: [] } });
+    const result = await client.callTool('test_tool', {});
+
+    assert.deepEqual(result, { meetings: [] }, 'must extract result from SSE stream');
   });
 
   it('401 on callTool: throws "Krisp session expired"', async () => {

@@ -76,6 +76,41 @@ function basicAuth(clientId: string, clientSecret: string): string {
 }
 
 /**
+ * Parse an SSE (text/event-stream) response to extract the JSON-RPC result.
+ *
+ * MCP Streamable HTTP allows servers to respond with SSE instead of plain JSON.
+ * Each SSE event has `data:` lines containing JSON. We find the last JSON-RPC
+ * response (the one with a `result` or `error` field) in the stream.
+ */
+async function parseSSEResponse(res: Response): Promise<JsonRpcResponse> {
+  const text = await res.text();
+  const lines = text.split('\n');
+  let lastResponse: JsonRpcResponse | undefined;
+
+  for (const line of lines) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') continue;
+
+    try {
+      const parsed = JSON.parse(data) as JsonRpcResponse;
+      // Keep the last message that looks like a JSON-RPC response (has result or error)
+      if (parsed.jsonrpc === '2.0' && (parsed.result !== undefined || parsed.error !== undefined)) {
+        lastResponse = parsed;
+      }
+    } catch {
+      // Skip non-JSON data lines (e.g. keep-alive comments)
+    }
+  }
+
+  if (!lastResponse) {
+    throw new Error('Krisp MCP SSE stream did not contain a JSON-RPC response');
+  }
+
+  return lastResponse;
+}
+
+/**
  * Krisp MCP client.
  *
  * Encapsulates OAuth flow (configure), token refresh, and MCP tool calls.
@@ -353,6 +388,7 @@ export class KrispMcpClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
         Authorization: `Bearer ${creds.access_token}`,
       },
       body: JSON.stringify({
@@ -377,7 +413,17 @@ export class KrispMcpClient {
       throw new Error(`Krisp MCP error: ${res.status} ${res.statusText}`);
     }
 
-    const json = (await res.json()) as JsonRpcResponse;
+    const contentType = res.headers.get('content-type') ?? '';
+    let json: JsonRpcResponse;
+
+    if (contentType.includes('text/event-stream')) {
+      // MCP Streamable HTTP: server may respond with SSE.
+      // Parse the SSE stream and extract the JSON-RPC response from data lines.
+      json = await parseSSEResponse(res);
+    } else {
+      json = (await res.json()) as JsonRpcResponse;
+    }
+
     if (json.error) {
       throw new Error(`Krisp MCP tool error: ${json.error.message}`);
     }
