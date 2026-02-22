@@ -262,3 +262,159 @@ describe("renderTodoWidget", () => {
 		assert.ok(result[1].includes("☐"));
 	});
 });
+
+// ────────────────────────────────────────────────────────────
+// PRD-based build mode footer tests
+// ────────────────────────────────────────────────────────────
+
+describe("renderFooterStatus — PRD build mode", () => {
+	it("shows PRD progress with current task", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "qmd-improvements",
+				hasPrd: true,
+				prdProgress: {
+					completed: 3,
+					total: 6,
+					currentTask: { index: 4, title: "Wire SearchProvider" },
+				},
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("⚡"), "should have build indicator");
+		assert.ok(inner.includes("qmd-improvements"), "should include slug");
+		assert.ok(inner.includes("3/6 tasks"), "should show progress");
+		assert.ok(inner.includes("current: #4 Wire SearchProvider"), "should show current task");
+		assert.ok(inner.includes("building"), "should show building status");
+		assert.ok(result.includes("accent"), "should use accent color");
+	});
+
+	it("shows complete status when all tasks done", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "my-plan",
+				hasPrd: true,
+				prdProgress: {
+					completed: 4,
+					total: 4,
+					currentTask: null,
+				},
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("4/4 tasks"), "should show full progress");
+		assert.ok(inner.includes("complete"), "should show complete status");
+		assert.ok(!inner.includes("current:"), "should not show current task");
+	});
+
+	it("shows progress without current task", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "feature",
+				hasPrd: true,
+				prdProgress: {
+					completed: 2,
+					total: 5,
+					currentTask: null,
+				},
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("2/5 tasks"));
+		assert.ok(inner.includes("building"));
+		assert.ok(!inner.includes("current:"));
+	});
+
+	it("truncates current task title at narrow width", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "feat",
+				hasPrd: true,
+				prdProgress: {
+					completed: 1,
+					total: 3,
+					currentTask: { index: 2, title: "A Very Long Task Title That Should Be Truncated" },
+				},
+			}),
+			mockTheme,
+			60,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("feat"), "slug should be present");
+		assert.ok(inner.includes("1/3 tasks"), "progress should be present");
+		// Full title should be truncated
+		assert.ok(!inner.includes("A Very Long Task Title That Should Be Truncated"), "full title should be truncated");
+	});
+
+	it("drops current task entirely at very narrow width", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "my-feature-plan",
+				hasPrd: true,
+				prdProgress: {
+					completed: 2,
+					total: 6,
+					currentTask: { index: 3, title: "Some task" },
+				},
+			}),
+			mockTheme,
+			35,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("2/6 tasks"), "progress should be present");
+		// At very narrow, current task is dropped
+		assert.ok(!inner.includes("current:"), "current task should be dropped");
+	});
+
+	it("prefers PRD progress over todo progress when both exist", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "feature",
+				hasPrd: true,
+				todosCompleted: 1,
+				todosTotal: 3,
+				prdProgress: {
+					completed: 4,
+					total: 6,
+					currentTask: null,
+				},
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("4/6 tasks"), "should use PRD progress, not todos");
+		assert.ok(!inner.includes("1/3"), "should not show todo progress");
+	});
+
+	it("falls back to todo-based footer when prdProgress is undefined", () => {
+		const result = renderFooterStatus(
+			makeState({
+				executionMode: true,
+				planId: "feature",
+				hasPrd: true,
+				todosCompleted: 2,
+				todosTotal: 5,
+				// prdProgress undefined — falls back to todo path
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		const inner = extractThemeContent(result);
+		assert.ok(inner.includes("2/5 steps"), "should fall back to todo-based");
+	});
+});

@@ -14,10 +14,12 @@ import {
 	handlePlanStatus,
 	parsePlanListFilter,
 	preparePlanListItems,
+	checkPrdExecutionComplete,
 	type PlanModeState,
 	type CommandContext,
 	type CommandPi,
 } from "./commands.js";
+import type { ExecutionProgressSnapshot } from "./execution-progress.js";
 
 describe("createDefaultState", () => {
 	it("returns fresh default state", () => {
@@ -1190,6 +1192,56 @@ steps: ${steps}
 			rmSync(join(PLANS_DIR, ideaSlug), { recursive: true, force: true });
 			rmSync(join(PLANS_DIR, buildingSlug), { recursive: true, force: true });
 		}
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// checkPrdExecutionComplete tests
+// ────────────────────────────────────────────────────────────
+
+describe("checkPrdExecutionComplete", () => {
+	function makeProgressFn(completed: number, total: number) {
+		return (): ExecutionProgressSnapshot => ({
+			source: "prd",
+			total,
+			completed,
+			currentTask: null,
+			tasks: [],
+		});
+	}
+
+	it("returns true when all PRD tasks are complete", () => {
+		const result = checkPrdExecutionComplete("my-plan", true, makeProgressFn(6, 6));
+		assert.equal(result, true);
+	});
+
+	it("returns false when some tasks are pending", () => {
+		const result = checkPrdExecutionComplete("my-plan", true, makeProgressFn(3, 6));
+		assert.equal(result, false);
+	});
+
+	it("returns false when total is 0 (no PRD found)", () => {
+		const result = checkPrdExecutionComplete("my-plan", true, makeProgressFn(0, 0));
+		assert.equal(result, false);
+	});
+
+	it("returns false when hasPrd is false and no tasks found", () => {
+		// When hasPrd is false, resolveExecutionProgress falls back to todo-based
+		// which returns 0/0 for empty todoItems
+		const result = checkPrdExecutionComplete("my-plan", false, makeProgressFn(0, 0));
+		assert.equal(result, false);
+	});
+
+	it("passes correct prdPath to resolveProgressFn", () => {
+		let capturedParams: Parameters<typeof import("./execution-progress.js").resolveExecutionProgress>[0] | undefined;
+		const spy = (params: Parameters<typeof import("./execution-progress.js").resolveExecutionProgress>[0]): ExecutionProgressSnapshot => {
+			capturedParams = params;
+			return { source: "prd", total: 3, completed: 3, currentTask: null, tasks: [] };
+		};
+		checkPrdExecutionComplete("my-feature", true, spy);
+		assert.ok(capturedParams);
+		assert.equal(capturedParams.prdPath, "dev/work/plans/my-feature/prd.json");
+		assert.equal(capturedParams.hasPrd, true);
 	});
 });
 
