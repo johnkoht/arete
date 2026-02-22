@@ -12,6 +12,7 @@ import {
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import type { SkillCandidate } from '@arete/core';
+import { toolsToCandidates } from '../lib/tool-candidates.js';
 import {
   header,
   listItem,
@@ -249,6 +250,10 @@ export function registerSkillCommands(program: Command): void {
         intelligence: s.intelligence,
         requires_briefing: s.requiresBriefing,
       }));
+
+      const paths = services.workspace.getPaths(root);
+      const tools = await services.tools.list(paths.tools);
+      candidates.push(...toolsToCandidates(tools));
 
       const routed = services.intelligence.routeToSkill(query, candidates);
 
