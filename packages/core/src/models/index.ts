@@ -62,6 +62,7 @@ export type {
   RoutedSkill,
   InstallSkillOptions,
   InstallSkillResult,
+  ToolDefinition,
 } from './skills.js';
 
 // Entities domain

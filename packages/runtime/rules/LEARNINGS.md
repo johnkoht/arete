@@ -27,6 +27,8 @@
 
 - **Rule content changes must be manually mirrored to both `cursor/` and `claude-code/`.** There is no build step that auto-generates `claude-code/` from `cursor/`. Editing only `cursor/` leaves `claude-code/` out of sync. Always update both subdirectories.
 
+- **Skill rename `onboarding` → `getting-started` (2026-02-22)**: The onboarding _skill_ (Areté workspace setup) was renamed to `getting-started` to eliminate a naming collision with the onboarding _tool_ (30/60/90 job onboarding). When updating rules: "onboarding" in `pm-workspace.mdc` and `routing-mandatory.mdc` mostly refers to the **tool**, not the skill. The skill references were changed to `getting-started`; tool references (`.cursor/tools/onboarding/TOOL.md`, intent table entries, example queries) were preserved. **Lesson**: When a name is overloaded across skills, tools, and PM concepts, categorize each occurrence before changing. The pre-mortem Risk #3 flagged this and prevented accidental tool reference changes.
+
 ## Invariants
 
 - Rule files in `cursor/` must contain only `.cursor/` path references — never `.claude/`, never `or .claude/` alternatives.

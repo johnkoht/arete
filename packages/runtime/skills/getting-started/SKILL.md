@@ -1,19 +1,22 @@
 ---
-name: onboarding
+name: getting-started
 description: Get started with Areté - conversational setup that bootstraps your workspace in 15-30 minutes
 category: core
-work_type: activation
+work_type: operations
 requires_briefing: false
 triggers:
   - "Let's get started"
   - "Help me set up Areté"
-  - "Onboard me"
+  - "Help me setup arete"
+  - "Help me set up my workspace"
+  - "Set up Areté"
   - "I'm new to Areté"
-  - "Set up my workspace"
-  - "Get started with Areté"
+  - "Get started"
+  - "Onboard me to Areté"
+  - "Getting started"
 ---
 
-# Onboarding Skill
+# Getting Started
 
 A conversational onboarding flow that gets a new user from empty workspace to first meaningful value in 15-30 minutes.
 

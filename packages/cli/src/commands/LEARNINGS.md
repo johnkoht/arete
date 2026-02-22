@@ -34,6 +34,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **Test audit scope for qmd-wiring is wider than the unit test file — check integration tests too.** When adding `refreshQmdIndex()` to a command, audit BOTH `packages/cli/test/commands/<command>.test.ts` AND `packages/cli/test/integration/<command>.integration.test.ts` for invocations that write files. Add `--skip-qmd` to all of them. In 2026-02-21, `meeting-process.integration.test.ts` was initially missed — the PR would have been fine due to `ARETE_SEARCH_FALLBACK=1` in the test env, but belt-and-suspenders requires `--skip-qmd` too.
 
+- **Route commands now merge tools + skills into the candidate pool (2026-02-22)**: `route.ts` and `skill.ts` (route subcommand) previously only loaded skills via `services.skills.list(root)`. Now they also call `services.tools.list(paths.tools)` and merge tool candidates via a shared helper in `packages/cli/src/lib/tool-candidates.ts`. The `tool.ts` list/show subcommands were refactored from ad-hoc `getToolsList()`/`getToolInfo()` functions to use `services.tools.list()`/`services.tools.get()`. **Lesson**: When both `route.ts` and `skill.ts` need the same mapping logic, extract a shared helper in `packages/cli/src/lib/` to avoid duplication (pre-mortem Risk #8).
+
 ## Invariants
 
 - Every command that reads/writes workspace data calls `createServices(process.cwd())` — not a custom service instantiation.

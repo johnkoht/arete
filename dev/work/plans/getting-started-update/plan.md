@@ -1,16 +1,16 @@
 ---
 title: Router Fix + Skill Rename
 slug: getting-started-update
-status: planned
+status: building
 size: medium
 tags: [router, skills, tools, naming]
 created: 2026-02-22T19:00:56.294Z
-updated: 2026-02-22T19:13:50.797Z
+updated: 2026-02-22T19:23:26.996Z
 completed: null
 execution: null
 has_review: true
 has_pre_mortem: true
-has_prd: false
+has_prd: true
 steps: 10
 ---
 

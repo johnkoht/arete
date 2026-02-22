@@ -5,7 +5,6 @@
 import { createServices } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { join } from 'path';
 import { header, listItem, error, success } from '../formatters.js';
 
 export function registerToolCommands(program: Command): void {
@@ -28,10 +27,20 @@ export function registerToolCommands(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
-      const tools = await getToolsList(services.storage, paths.tools);
+      const tools = await services.tools.list(paths.tools);
 
       if (opts.json) {
-        console.log(JSON.stringify({ success: true, tools, count: tools.length }, null, 2));
+        console.log(JSON.stringify({
+          success: true,
+          tools: tools.map((t) => ({
+            name: t.name,
+            description: t.description || undefined,
+            lifecycle: t.lifecycle,
+            duration: t.duration,
+            triggers: t.triggers.length > 0 ? t.triggers : undefined,
+          })),
+          count: tools.length,
+        }, null, 2));
         return;
       }
 
@@ -72,9 +81,9 @@ export function registerToolCommands(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
-      const toolPath = join(paths.tools, name);
-      const exists = await services.storage.exists(toolPath);
-      if (!exists) {
+      const tool = await services.tools.get(name, paths.tools);
+
+      if (!tool) {
         if (opts.json) {
           console.log(JSON.stringify({ success: false, error: `Tool '${name}' not found` }));
         } else {
@@ -83,86 +92,38 @@ export function registerToolCommands(program: Command): void {
         process.exit(1);
       }
 
-      const info = await getToolInfo(services.storage, toolPath);
       if (opts.json) {
-        console.log(JSON.stringify({ success: true, tool: info }, null, 2));
+        console.log(JSON.stringify({
+          success: true,
+          tool: {
+            name: tool.name,
+            description: tool.description || undefined,
+            lifecycle: tool.lifecycle,
+            duration: tool.duration,
+            triggers: tool.triggers.length > 0 ? tool.triggers : undefined,
+            path: tool.path,
+          },
+        }, null, 2));
         return;
       }
 
-      header(`Tool: ${info.name}`);
+      header(`Tool: ${tool.name}`);
       console.log('');
-      if (info.description) {
-        console.log(`Description: ${info.description}`);
+      if (tool.description) {
+        console.log(`Description: ${tool.description}`);
       }
-      if (info.lifecycle) {
-        console.log(`Lifecycle: ${info.lifecycle}`);
+      if (tool.lifecycle) {
+        console.log(`Lifecycle: ${tool.lifecycle}`);
       }
-      if (info.duration) {
-        console.log(`Duration: ${info.duration}`);
+      if (tool.duration) {
+        console.log(`Duration: ${tool.duration}`);
       }
-      if (info.triggers && info.triggers.length > 0) {
+      if (tool.triggers && tool.triggers.length > 0) {
         console.log(`\nTriggers:`);
-        info.triggers.forEach((t) => listItem(t));
+        tool.triggers.forEach((t) => listItem(t));
       }
       console.log('');
-      listItem('Path', toolPath);
+      listItem('Path', tool.path);
       console.log('');
     });
-}
-
-interface ToolInfo {
-  name: string;
-  description?: string;
-  lifecycle?: string;
-  duration?: string;
-  triggers?: string[];
-}
-
-async function getToolsList(
-  storage: {
-    exists: (p: string) => Promise<boolean>;
-    listSubdirectories: (dir: string) => Promise<string[]>;
-    read: (p: string) => Promise<string | null>;
-  },
-  toolsDir: string,
-): Promise<ToolInfo[]> {
-  const exists = await storage.exists(toolsDir);
-  if (!exists) return [];
-  const subdirs = await storage.listSubdirectories(toolsDir);
-  const tools: ToolInfo[] = [];
-  for (const subdir of subdirs) {
-    const info = await getToolInfo(storage, subdir);
-    tools.push(info);
-  }
-  return tools;
-}
-
-async function getToolInfo(
-  storage: {
-    read: (p: string) => Promise<string | null>;
-    exists: (p: string) => Promise<boolean>;
-  },
-  toolPath: string,
-): Promise<ToolInfo> {
-  const toolFile = join(toolPath, 'TOOL.md');
-  const name = toolPath.split(/[/\\]/).pop() ?? 'unknown';
-  const info: ToolInfo = { name };
-  const exists = await storage.exists(toolFile);
-  if (!exists) return info;
-  const content = await storage.read(toolFile);
-  if (!content) return info;
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (match) {
-    const { parse: parseYaml } = await import('yaml');
-    try {
-      const fm = parseYaml(match[1]) as Record<string, unknown>;
-      info.description = (fm.description as string) || undefined;
-      info.lifecycle = (fm.lifecycle as string) || undefined;
-      info.duration = (fm.duration as string) || undefined;
-      info.triggers = Array.isArray(fm.triggers) ? (fm.triggers as string[]) : undefined;
-    } catch {
-      // ignore
-    }
-  }
-  return info;
 }

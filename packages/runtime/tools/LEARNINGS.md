@@ -30,10 +30,12 @@
 - TOOL.md files must not contain hardcoded `.cursor/` or `.claude/` path prefixes in their content.
 - `_template/` is a scaffold for new tools — it is intentionally copied to user workspaces as a reference.
 
+- **Tools are now routable via `arete route` and `arete skill route` (2026-02-22)**: Previously only skills from `.agents/skills/` were in the routing candidate pool. Tools in `.cursor/tools/` (or `.claude/tools/`) were invisible to the router, even though `SkillCandidate` already had `type: 'tool'` support. Fixed by creating `ToolService` in `@arete/core` (mirrors `SkillService`) and merging tool candidates into the routing pipeline. The tool-to-candidate mapping includes all scoring-relevant fields (`triggers`, `description`, `work_type`, `category`). **Lesson**: If a TOOL.md is missing `triggers` in its frontmatter, the tool will never score > 0 and won't be routable. Always include `triggers` when creating new tools.
+
 ## Testing Gaps
 
+- ~~No test that exercises the tool routing (`arete route "I'm starting a new job"`) end-to-end in an installed workspace.~~ Fixed 2026-02-22: golden route tests and disambiguation tests added.
 - No test that runs `diff -r packages/runtime/tools/ dist/tools/` and asserts they are identical. This sync is currently verified only manually. A CI check would prevent the dist/ drift failure mode.
-- No test that exercises the tool routing (`arete route "I'm starting a new job"`) end-to-end in an installed workspace.
 
 ## Patterns That Work
 
