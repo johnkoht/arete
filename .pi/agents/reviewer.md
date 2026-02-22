@@ -66,6 +66,17 @@ git diff HEAD --name-status | grep '^D'
 - [ ] **Best solution**: Appropriate for context and constraints (used existing provider instead of reimplementing; didn't hardcode what should be config).
 - Flag lazy or fragile choices: hardcoding, bypassing abstractions, doing the minimum in a brittle way.
 
+#### Step 3.5: Documentation Impact
+
+If the implementation changes any of these, flag it for the orchestrator:
+- User-facing behavior or workflows
+- CLI commands, flags, or output
+- File paths or workspace structure
+- Setup, install, or configuration steps
+- Skill or tool interfaces
+
+You don't need to update docs yourself — flag what's affected so the orchestrator can include it in the close-out documentation audit.
+
 #### Step 4: Reuse & Duplication Check
 
 - **New services/modules**: Does equivalent functionality already exist? Check AGENTS.md and `src/` (e.g. `src/core/`, `src/integrations/`). If yes, flag: "Reimplemented existing capability — use [X] instead."
@@ -132,6 +143,7 @@ You also review plans and PRDs during plan-mode lifecycle progression:
 **AC Review**: ✅ all criteria met | ❌ [gaps]
 **Quality (DRY/KISS)**: ✅ pass | ❌ [issues]
 **Reuse Check**: ✅ pass | ❌ [issues]
+**Documentation Impact**: ✅ no user-facing changes | ⚠️ [what changed that may need doc updates]
 **Tests**: ✅ pass (N tests) | ❌ [issues]
 
 **Required Changes** (if ITERATE):
