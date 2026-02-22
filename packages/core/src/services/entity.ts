@@ -1227,6 +1227,11 @@ export class EntityService {
         }
         if (!content) continue;
 
+        // parseFrontmatter is called once per person × meeting pair — O(people × meetings)
+        // in the worst case. The meetingContentCache above reduces storage.read() to O(meetings),
+        // but the parse itself still repeats for meetings shared across multiple people's candidate
+        // lists. parseFrontmatter is a regex + YAML parse and is fast in practice; a parsed-result
+        // cache would reduce this to O(meetings) if workspaces grow large enough to matter.
         const parsed = parseFrontmatter(content);
         const fromFilename = extractDateFromPath(meetingPath);
         const dateFromFrontmatter = parsed?.frontmatter.date;

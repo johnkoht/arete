@@ -16,7 +16,7 @@ import type { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { success, error, info, warn, listItem } from '../formatters.js';
+import { success, error, info, warn } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
 type AttendeeCandidate = {

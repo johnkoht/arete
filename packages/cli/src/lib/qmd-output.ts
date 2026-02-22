@@ -34,5 +34,8 @@ export function displayQmdResult(
     if (result.warning) {
       _warn(result.warning);
     }
+    // { indexed: false, skipped: false, warning: undefined } is intentionally silent.
+    // This state means qmd update ran and exited cleanly but reported no indexed files
+    // (e.g. collection exists but zero .md files changed). No user action is needed.
   }
 }

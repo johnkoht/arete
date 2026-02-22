@@ -122,9 +122,10 @@
         "All existing person-memory.test.ts tests continue to pass",
         "npm run typecheck && npm test pass"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "09093eb"
     },
     {
       "id": "task-r2",
@@ -141,16 +142,17 @@
         "Comment added to ensureQmdCollection() explaining existingCollectionName same way",
         "npm run typecheck && npm test pass"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "831e303"
     }
   ],
   "metadata": {
     "createdAt": "2026-02-21T22:30:00.000Z",
-    "updatedAt": "2026-02-21T23:30:00.000Z",
+    "updatedAt": "2026-02-21T21:15:00.000Z",
     "totalTasks": 8,
-    "completedTasks": 6,
+    "completedTasks": 8,
     "failedTasks": 0,
     "phase2": "engineering-lead-review-fixes",
     "phase2AddedAt": "2026-02-21T23:30:00.000Z",
