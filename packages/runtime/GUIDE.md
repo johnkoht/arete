@@ -751,6 +751,7 @@ arete meeting process --file <path> [--json]    # Process a specific meeting fil
 arete integration configure <name>                  # Configure integration
 arete pull calendar [--today|--days N]              # Pull calendar events
 arete pull fathom [--days N]                        # Pull Fathom recordings
+arete pull krisp [--days N]                         # Pull recorded meetings from Krisp into resources/meetings/
 ```
 
 ---
@@ -834,6 +835,24 @@ arete pull fathom --days 7  # Pull last 7 days
 ```
 
 **Seed**: Import historical meetings for workspace bootstrap (see `seed-context` tool).
+
+### Krisp
+
+AI-powered meeting recorder. Records meetings, generates transcripts, summaries, and action items. Requires a Krisp Core plan or higher.
+
+**First-time setup** (one-time browser OAuth):
+```
+arete integration configure krisp
+```
+Opens a browser window for Krisp authentication. Credentials are stored automatically in `.credentials/credentials.yaml`.
+
+**Pull meetings**:
+```
+arete pull krisp [--days N]
+```
+Fetches meetings from the last N days (default: 7). Saves markdown files to `resources/meetings/`.
+
+> **Note**: The configure step is one-time. After authenticating, `arete pull krisp` runs silently — no browser interaction needed. Tokens refresh automatically.
 
 ---
 

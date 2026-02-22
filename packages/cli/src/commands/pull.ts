@@ -72,17 +72,47 @@ export function registerPullCommand(program: Command): void {
           return;
         }
 
+        if (integration === 'krisp') {
+          const result = await services.integrations.pull(root, 'krisp', { integration: 'krisp', days });
+          if (opts.json) {
+            console.log(
+              JSON.stringify(
+                {
+                  success: result.errors.length === 0,
+                  integration: 'krisp',
+                  itemsProcessed: result.itemsProcessed,
+                  itemsCreated: result.itemsCreated,
+                  errors: result.errors,
+                },
+                null,
+                2,
+              ),
+            );
+            return;
+          }
+          header('Pull Latest Data');
+          listItem('Integration', 'Krisp');
+          listItem('Time range', `Last ${days} days`);
+          console.log('');
+          if (result.errors.length === 0) {
+            success(`Krisp pull complete! ${result.itemsCreated} item(s) saved.`);
+          } else {
+            error(`Krisp pull failed: ${result.errors.join(', ')}`);
+          }
+          return;
+        }
+
         if (opts.json) {
           console.log(
             JSON.stringify({
               success: false,
               error: `Unknown integration: ${integration}`,
-              available: ['calendar', 'fathom'],
+              available: ['calendar', 'fathom', 'krisp'],
             }),
           );
         } else {
           error(`Unknown integration: ${integration}`);
-          info('Available: calendar, fathom');
+          info('Available: calendar, fathom, krisp');
         }
         process.exit(1);
       },

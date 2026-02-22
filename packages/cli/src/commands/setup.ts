@@ -48,6 +48,7 @@ export function registerSetupCommand(program: Command): void {
       console.log(chalk.dim('Quick config:'));
       console.log(`  • ${chalk.cyan('arete integration configure fathom')} - Configure Fathom integration`);
       console.log(`  • ${chalk.cyan('arete integration configure calendar')} - Configure calendar`);
+      console.log(`  • ${chalk.cyan('arete integration configure krisp')} - Configure Krisp integration`);
       console.log('');
     });
 }
