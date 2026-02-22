@@ -16,19 +16,19 @@ triggers:
 
 # Rapid Context Dump Skill
 
-A reusable capability that converts user-provided inputs (pasted text, folder contents, website URL) into reviewable draft context artifacts. Supports standalone use or invocation from the onboarding flow.
+A reusable capability that converts user-provided inputs (pasted text, folder contents, website URL) into reviewable draft context artifacts. Supports standalone use or invocation from the getting-started flow.
 
 ## When to Use
 
 - User has existing docs/content they want to import
 - User wants to bootstrap context from their company website
-- Called from onboarding skill Path A
+- Called from getting-started skill Path A
 - User says "dump my context" or "import my docs"
 
 ## When NOT to Use
 
 - User wants to import meeting history (use `seed-context` tool)
-- User wants guided Q&A to build context (use `onboarding` skill Path B)
+- User wants guided Q&A to build context (use `getting-started` skill Path B)
 - Context files already exist and are populated
 
 ---
@@ -345,7 +345,7 @@ Automatically extracted domain signals for downstream use.
 
 ## Related Skills
 
-- `onboarding` — Parent flow that invokes this skill (Path A)
+- `getting-started` — Parent flow that invokes this skill (Path A)
 - `seed-context` — For historical data import from integrations
 - `synthesize` — For deeper analysis after context is populated
 
