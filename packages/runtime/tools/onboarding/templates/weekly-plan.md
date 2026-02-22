@@ -86,6 +86,11 @@
 ### Adjustments for Next Week
 - [What to change]
 
+### Say/Do Ratio Check
+- Commitments made this week: [List]
+- Commitments delivered: [List]
+- In progress (on track): [List]
+
 ---
 
 ## Notes

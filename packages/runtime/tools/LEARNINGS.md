@@ -15,7 +15,7 @@
 
 ## Gotchas
 
-- **`dist/tools/` must be manually mirrored after any content change.** `getSourcePaths()` resolves to `dist/` when `useRuntime = false` (the default for npm installs). `dist/tools/` is a committed directory — there is no build script that syncs it from `packages/runtime/tools/`. Any new file, updated TOOL.md, or new subdirectory added to `packages/runtime/tools/` must also be copied to `dist/tools/` before committing. Verify with: `diff -r --exclude='LEARNINGS.md' packages/runtime/tools/ dist/tools/` — must return empty output. (LEARNINGS.md is a developer artifact and is intentionally excluded from `dist/`.) This was identified during the 2026-02-21 onboarding fixes and is Pre-mortem Risk 2 for that work.
+- **`dist/tools/` does NOT need manual mirroring.** `dist/` is gitignored and is not a committed directory. The npm package ships `packages/runtime/` directly via the `files` field in `package.json` (`"files": ["packages/cli/bin/", "packages/core/dist/", "packages/runtime/", ...]`). When `useRuntime = false` (npm install context), `getSourcePaths()` resolves to `dist/` — but this `dist/` is created by the build pipeline during `npm publish` (via `prepublishOnly` → `npm run build`), not manually maintained. For development, `useRuntime = true` (set when `!packageRoot.includes('node_modules')`) resolves directly to `packages/runtime/`. **No manual mirroring step is needed for content changes to `packages/runtime/tools/`.** (Previous entry incorrectly stated dist/tools/ was a committed directory requiring manual sync — corrected 2026-02-22.)
 
 - **TOOL.md content is never IDE-transformed — always use path-agnostic references.** `ClaudeAdapter.transformRuleContent()` (`.cursor/` → `.claude/`) only applies to rule files (`.mdc`). TOOL.md files are copied verbatim. Never write hardcoded `.cursor/tools/...` or `.claude/tools/...` paths inside a TOOL.md — they will be wrong for users on the other IDE. Use relative, path-agnostic references instead (e.g., "see `resources/reading-list.md` in this tool's directory"). Contrast with rules in `packages/runtime/rules/` which correctly use `.cursor/` paths and get transformed at install time.
 
@@ -26,7 +26,7 @@
 ## Invariants
 
 - Every tool directory must contain a `TOOL.md` with frontmatter (`name`, `description`, `lifecycle`, `duration`, `triggers`).
-- Content changes to `packages/runtime/tools/` must be mirrored to `dist/tools/` before committing. No exceptions. (LEARNINGS.md is the only intentional exception — it is a developer artifact and is not shipped.)
+- Content changes to `packages/runtime/tools/` do not require manual dist/ mirroring — `packages/runtime/` is shipped directly via npm `files` field. (LEARNINGS.md is a developer artifact and is not shipped.)
 - TOOL.md files must not contain hardcoded `.cursor/` or `.claude/` path prefixes in their content.
 - `_template/` is a scaffold for new tools — it is intentionally copied to user workspaces as a reference.
 
@@ -37,13 +37,13 @@
 
 ## Patterns That Work
 
-- **`diff -r --exclude='LEARNINGS.md' packages/runtime/tools/ dist/tools/`** — run this after any content change before committing. Empty output = in sync. The `--exclude` is needed because `LEARNINGS.md` is a developer artifact intentionally absent from `dist/`.
+- **No dist/ sync check needed** — `packages/runtime/` ships directly. The old `diff -r` pattern is obsolete since `dist/` is gitignored and created only during `npm publish`.
 - **Relative paths in TOOL.md**: reference sibling files as `templates/filename.md` or `resources/filename.md` without any IDE prefix. Agents know where they loaded the TOOL.md from and can resolve relative references.
 - **File-level backfill pattern** (for future tool-adjacent service work): `storage.list(srcDir, { recursive: true })` → `srcFile.slice(srcDir.length + 1)` for relative path → check `destExists` → `mkdir(join(dest, '..'))` + `write`. See `workspace.ts` `update()` tools block.
 
 ## Pre-Edit Checklist
 
-- [ ] After editing any file in `packages/runtime/tools/`: run `diff -r --exclude='LEARNINGS.md' packages/runtime/tools/ dist/tools/` and mirror any differences to `dist/tools/`
+- [ ] No manual dist/ mirroring needed — `packages/runtime/` ships directly via npm `files` field
 - [ ] Do not add hardcoded `.cursor/` or `.claude/` path prefixes to TOOL.md content
 - [ ] If adding a new tool directory: ensure it has a valid `TOOL.md` with `triggers` frontmatter field (required for routing)
 - [ ] Run `npm run typecheck && npm test` if any `workspace.ts` changes were made alongside content changes
