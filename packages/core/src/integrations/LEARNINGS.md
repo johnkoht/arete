@@ -49,3 +49,41 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 - [ ] Verify `which icalBuddy` (camelCase) is used, not `which ical-buddy`, in any availability check
 - [ ] Run `npm test` to verify regression tests still pass: `packages/core/test/integrations/calendar.test.ts` and `packages/cli/test/commands/integration.test.ts`
 - [ ] If adding a new integration: register it in `registry.ts`, implement provider interface, add factory to `calendar/index.ts` pattern
+
+---
+
+## Krisp Integration (2026-02-21)
+
+Patterns learned from the Krisp MCP OAuth integration. Applicable to any future MCP-based OAuth integration.
+
+### 1. Dynamic Client Registration
+
+No developer portal required. `POST https://mcp.krisp.ai/.well-known/oauth-registration` with no auth returns `{ client_id, client_secret }` immediately. Register once per configure run (or reuse stored `client_id`). Include `redirect_uri` (with the actual dynamic port) in the registration body.
+
+**Pattern**: Call register before building the auth URL; skip if `client_id` already in credentials.
+
+### 2. Confidential Client + PKCE — Both Required
+
+Krisp requires **`client_secret_basic`** at the token endpoint (`Authorization: Basic base64(client_id:client_secret)`) AND PKCE (`code_verifier` in body). Pure PKCE without `client_secret_basic` returns a 401 that passes all mocked tests but fails in production. Always check `token_endpoint_auth_methods_supported` in AS metadata before assuming public client.
+
+**Pattern**: Check AS metadata. If `client_secret_basic` is listed, you need Basic auth at token exchange — PKCE alone is not sufficient.
+
+### 3. Dynamic Port Binding (port 0)
+
+Use port `0` for the localhost OAuth callback server — the OS assigns an available port. Read the actual bound port after `server.listen(0)` via `(server.address() as AddressInfo).port`. Re-register the `redirect_uri` per configure run so the dynamic port is always valid. This avoids `EADDRINUSE` errors from hardcoded ports.
+
+### 4. 5-Field Credential Storage — Atomic Write, Unix Timestamp
+
+Krisp credentials require 5 fields: `client_id`, `client_secret`, `access_token`, `refresh_token`, `expires_at`. Write all 5 atomically (read-modify-write on credentials.yaml) or write nothing — never partial state.
+
+**`expires_at` is stored as a Unix timestamp in seconds** (not an ISO string): `Math.floor(Date.now() / 1000) + expires_in`. Check `expires_at < Math.floor(Date.now() / 1000)` before each API call to trigger silent refresh.
+
+### 5. No MCP SDK Needed
+
+The Krisp MCP server uses plain JSON-RPC POST over HTTPS — no `@modelcontextprotocol/client` SDK required. A `fetch` wrapper (~30 lines) is sufficient:
+```typescript
+POST https://mcp.krisp.ai/mcp
+Authorization: Bearer <access_token>
+Body: { jsonrpc: "2.0", method: "tools/call", params: { name, arguments: args }, id: 1 }
+```
+Before adding any SDK dependency, verify the transport protocol. If it's JSON-RPC over HTTP/HTTPS, `fetch` is enough.

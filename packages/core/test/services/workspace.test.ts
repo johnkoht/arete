@@ -323,7 +323,7 @@ describe('WorkspaceService', () => {
       );
     });
 
-    it('does not overwrite existing tools during update', async () => {
+    it('does not overwrite existing tool files during update', async () => {
       // Pre-create a customised tool in the workspace
       mkdirSync(join(tmpDir, '.cursor', 'tools', 'onboarding'), { recursive: true });
       writeFileSync(join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md'), '# My Custom Version\n', 'utf8');
@@ -347,7 +347,50 @@ describe('WorkspaceService', () => {
       });
 
       const content = readFileSync(join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md'), 'utf8');
-      assert.ok(content.includes('My Custom Version'), 'Existing tool should not be overwritten by update');
+      assert.ok(content.includes('My Custom Version'), 'Existing tool file should not be overwritten by update');
+    });
+
+    it('backfills missing files within an existing tool dir on update (regression: partial tool dirs skipped at directory level)', async () => {
+      // Simulate the real-world regression: workspace has onboarding/TOOL.md but
+      // templates/ subdir is absent (e.g. installed before the regression fix).
+      mkdirSync(join(tmpDir, '.cursor', 'tools', 'onboarding'), { recursive: true });
+      writeFileSync(join(tmpDir, '.cursor', 'tools', 'onboarding', 'TOOL.md'), '# Onboarding Tool\n', 'utf8');
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
+
+      // Source has TOOL.md + a templates subdir with a plan template
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceTools = join(sourceRoot, 'tools');
+      mkdirSync(join(sourceTools, 'onboarding', 'templates'), { recursive: true });
+      writeFileSync(join(sourceTools, 'onboarding', 'TOOL.md'), '# Onboarding Tool\n', 'utf8');
+      writeFileSync(join(sourceTools, 'onboarding', 'templates', '30-60-90-plan.md'), '# 30/60/90 Plan\n', 'utf8');
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: join(sourceRoot, 'skills'),
+          tools: sourceTools,
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      // The template file should now exist in the workspace
+      const templatePath = join(tmpDir, '.cursor', 'tools', 'onboarding', 'templates', '30-60-90-plan.md');
+      assert.equal(existsSync(templatePath), true, 'Missing template inside existing tool dir should be backfilled');
+
+      // TOOL.md already existed — should not appear in added
+      assert.ok(
+        !result.added.some((p) => p === join('tools', 'onboarding', 'TOOL.md')),
+        'Pre-existing TOOL.md should not be in result.added',
+      );
+
+      // The new template file should be in added
+      assert.ok(
+        result.added.some((p) => p.includes('30-60-90-plan.md')),
+        `Expected 30-60-90-plan.md in result.added, got: ${JSON.stringify(result.added)}`,
+      );
     });
 
     it('syncs core skills from source paths and preserves custom workspace skills', async () => {

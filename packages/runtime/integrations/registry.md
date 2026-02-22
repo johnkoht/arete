@@ -18,6 +18,7 @@ Track available integrations, their status, and configuration.
 | Integration | Type | Status | Capabilities | Config |
 |-------------|------|--------|--------------|--------|
 | Fathom | Meeting Recorder | Available | Pull, Seed | [fathom.yaml](configs/fathom.yaml) |
+| Krisp | Meeting Recorder | Available | Pull | [krisp.yaml](configs/krisp.yaml) |
 | Granola | Meeting Recorder | Planned | Pull, Seed | - |
 | Apple Calendar | Calendar | Available | Pull, Push, Seed | [calendar.yaml](configs/calendar.yaml) |
 | Google Calendar | Calendar | Planned | Pull, Push | - |
@@ -76,3 +77,4 @@ Track recent sync operations for debugging and auditing.
 - **Priority 1** integrations (Meetings & Communication) are being implemented first
 - See individual config files in `configs/` for detailed settings
 - Credentials are stored outside this repo in `~/.arete/credentials.yaml`
+- **Krisp**: Requires Core plan or higher. Auth: OAuth 2.0 with dynamic client registration (browser flow). Commands: `arete integration configure krisp` (one-time) / `arete pull krisp [--days N]`

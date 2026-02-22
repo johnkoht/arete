@@ -26,4 +26,12 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     auth: { type: 'none' },
     status: 'available',
   },
+  krisp: {
+    name: 'krisp',
+    displayName: 'Krisp',
+    description: 'Meeting recording with AI summaries, transcripts, and action items',
+    implements: ['meeting-recordings'],
+    auth: { type: 'oauth' },
+    status: 'available',
+  },
 };

@@ -1,0 +1,68 @@
+# Krisp Integration
+# Meeting recording with AI summaries, transcripts, and action items
+# https://krisp.ai
+
+# === Identity ===
+name: krisp
+display_name: Krisp
+type: meeting-recorder
+status: inactive  # Change to 'active' after running: arete integration configure krisp
+
+# === Capabilities ===
+capabilities:
+  pull: true        # Can fetch meetings, transcripts, summaries
+  push: false       # Krisp is read-only
+  seed: false       # Krisp API doesn't support broad historical backfill
+  webhook: false    # No webhook support currently
+
+# === Authentication ===
+auth:
+  type: oauth
+  # Dynamic client registration + OAuth authorization code flow with PKCE
+  # Run: arete integration configure krisp
+  #
+  # This opens a browser window to authorize Areté with your Krisp account.
+  # Credentials are stored in .credentials/credentials.yaml (never committed).
+  #
+  # Required scopes:
+  #   user::me::read
+  #   user::meetings::list
+  #   user::meetings:metadata::read
+  #   user::meetings:notes::read
+  #   user::meetings:transcripts::read
+
+# === Sync Settings ===
+sync:
+  frequency: manual       # manual | daily | after_meeting
+  last_sync: null         # Updated automatically after sync
+
+# === Data Mapping ===
+mapping:
+  destination: resources/meetings/
+  naming: "{date}-{title_slug}.md"    # e.g., 2026-02-05-product-roadmap-review.md
+  template: templates/inputs/integration-meeting.md
+
+# === Field Mapping ===
+# How Krisp data maps to template fields
+fields:
+  title: meeting.name
+  date: meeting.date                  # ISO format (YYYY-MM-DD)
+  attendees: meeting.attendees        # Array of {name, email}
+  summary: meeting.detailed_summary
+  key_points: meeting.key_points      # Array of key moment strings
+  action_items: meeting.action_items  # Array of {text, assignee}
+  transcript: meeting.transcript      # Array of {speaker, text, timestamp}
+  meeting_url: meeting.url
+
+# === Rate Limits ===
+rate_limits:
+  requests_per_minute: 60
+  batch_size: 10                      # Items per batch request
+
+# === Error State ===
+# Populated automatically if sync fails
+error: null
+# error:
+#   code: auth_expired
+#   message: "Access token expired — run: arete integration configure krisp"
+#   timestamp: 2026-02-05T10:00:00Z

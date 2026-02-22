@@ -1,0 +1,89 @@
+{
+  "name": "krisp-mcp-integration",
+  "branchName": "feature/krisp-mcp-integration",
+  "goal": "Add Krisp as a meeting recorder integration in Areté. Users run `arete integration configure krisp` once to authenticate via browser OAuth, then `arete pull krisp [--days N]` to pull recorded meetings into resources/meetings/. Krisp uses a hosted MCP server with OAuth 2.0 dynamic client registration (confidential client — client_secret_basic + PKCE). All blockers resolved in pre-build discovery session.",
+  "userStories": [
+    {
+      "id": "task-1a",
+      "title": "Build Krisp MCP client — types skeleton, client, config",
+      "description": "Create packages/core/src/integrations/krisp/ with types (unverified skeleton), OAuth client, and credential helpers. Does NOT include save.ts or index.ts — those require verified tool schemas from a builder gate after this task.\n\nCRITICAL — read before implementing:\n- packages/core/src/integrations/fathom/client.ts (loadFathomApiKey — credential loading pattern)\n- packages/core/src/integrations/fathom/index.ts (orchestrator pattern)\n- packages/core/src/integrations/meetings.ts (MeetingForSave interface)\n- dev/work/plans/krisp-recorder-integration/prd.md (full auth model)\n\nKEY RULES:\n1. ALL OAuth logic lives in KrispMcpClient.configure() — nothing OAuth in integration.ts\n2. Token exchange is CONFIDENTIAL CLIENT: Authorization: Basic base64(client_id:client_secret) header AND PKCE code_verifier. Both required. Pure PKCE returns 401.\n3. Localhost callback on port 0 (OS-assigned dynamic port) — re-register redirect_uri per configure run\n4. configure() returns tokens — does NOT persist. Caller persists atomically.\n5. refreshTokens() returns new tokens — does NOT persist. Caller persists.\n6. No @modelcontextprotocol/client SDK — plain fetch JSON-RPC only\n\nFILES TO CREATE:\n- krisp/types.ts: KrispMeeting, KrispDocument, KrispTranscriptSegment, KrispSummary, KrispActionItem — all annotated // UNVERIFIED\n- krisp/config.ts: loadKrispCredentials() reads 5 fields from credentials.yaml krisp: section; saveKrispCredentials() atomic write (all 5 or nothing)\n- krisp/client.ts: KrispMcpClient with register(port), configure(), refreshTokens(creds), callTool(name, args), listMeetings(options), getDocument(id)\n\nTESTS (packages/core/test/integrations/krisp.test.ts):\n1. callTool — valid token: assert fetch called with Authorization: Bearer <token> header AND body { jsonrpc: '2.0', method: 'tools/call', params: { name, arguments }, id: 1 } — two explicit assertions\n2. callTool — expired access_token: assert refreshTokens called, new tokens persisted via saveKrispCredentials, then fetch called with new bearer token\n3. refreshTokens — verify Authorization: Basic base64(client_id:client_secret) header and grant_type: refresh_token in body\n4. refreshTokens — assert new access_token AND updated expires_at persisted to credentials (not just returned)\n5. Both tokens expired (refresh_token exchange returns 401): assert throws 'Both tokens expired' error, not silent failure\n6. 403 on callTool: assert throws 'Krisp Core plan required' error\n7. loadKrispCredentials — complete credentials: returns all 5 fields\n8. loadKrispCredentials — missing krisp: section: returns null\n9. saveKrispCredentials — atomic write: verify credentials.yaml has all 5 fields after save; verify no partial state on simulated failure\n\nBUILDER GATE after this task completes:\n- Authenticate with Krisp Core account\n- Call tools/list\n- Save response as dev/work/plans/krisp-recorder-integration/krisp-tools-schema.json\n- Only then proceed to task-1b",
+      "acceptanceCriteria": [
+        "packages/core/src/integrations/krisp/types.ts exists with // UNVERIFIED annotation on all types and fields",
+        "packages/core/src/integrations/krisp/config.ts exports loadKrispCredentials() returning all 5 fields or null, and saveKrispCredentials() with atomic write",
+        "packages/core/src/integrations/krisp/client.ts exports KrispMcpClient with configure(), refreshTokens(), callTool(), listMeetings(), getDocument()",
+        "configure() runs full OAuth flow (dynamic registration, PKCE, client_secret_basic token exchange) and returns tokens — does not persist",
+        "callTool() checks expires_at before each call; if expired calls refreshTokens() and persists via saveKrispCredentials() before proceeding",
+        "All 9 test scenarios pass including dual assertion on callTool, Basic auth on refreshTokens, both-tokens-expired error, 403 error, and atomic write verification",
+        "@modelcontextprotocol/client is NOT in packages/core/package.json",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-1b",
+      "title": "Implement save.ts and index.ts using verified schemas (builder-gated)",
+      "description": "Pre-requisite: dev/work/plans/krisp-recorder-integration/krisp-tools-schema.json must exist with real tools/list output before starting.\n\nUsing the verified Krisp tool schemas from krisp-tools-schema.json:\n1. Update krisp/types.ts — replace all // UNVERIFIED types with types matching actual schema; add // Verified against tools/list YYYY-MM-DD at top\n2. Create krisp/save.ts — transform KrispDocument to MeetingForSave (from ../meetings.ts); handle missing/null fields gracefully (summary ?? '', transcript ?? '', actionItems ?? [])\n3. Create krisp/index.ts — pullKrisp(storage, workspaceRoot, paths, days) orchestrator following fathom/index.ts exactly\n4. Update .credentials/credentials.yaml.example — add krisp: section with all 5 fields and explanatory comments\n\nADD TO packages/core/test/integrations/krisp.test.ts:\n10. Transform — full document: mock complete KrispDocument → assert MeetingForSave has title, date, summary, transcript, actionItems, source: 'krisp'\n11. Transform — null/missing fields: mock KrispDocument with summary: null, transcript: undefined, actionItems: [] → assert empty strings/arrays (no throw, no undefined)\n12. pullKrisp() — happy path: mock listMeetings returning 2 items + getDocument returning full docs → assert { saved: 2, errors: [] }\n13. pullKrisp() — partial failure: mock getDocument throwing on second item → assert { saved: 1, errors: ['...'] } (no crash)",
+      "acceptanceCriteria": [
+        "packages/core/src/integrations/krisp/types.ts has // Verified against tools/list YYYY-MM-DD comment; no // UNVERIFIED annotations remain",
+        "packages/core/src/integrations/krisp/save.ts transforms KrispDocument to MeetingForSave matching the meetings.ts interface; handles null/missing fields without throwing",
+        "packages/core/src/integrations/krisp/index.ts exports pullKrisp(storage, workspaceRoot, paths, days) following fathom/index.ts pattern",
+        ".credentials/credentials.yaml.example has krisp: section with all 5 fields (client_id, client_secret, access_token, refresh_token, expires_at) and auto-set comments",
+        "Test 10 passes: full document transform produces correct MeetingForSave shape",
+        "Test 11 passes: null/missing fields produce empty strings/arrays, not throws or undefined",
+        "Test 12 passes: pullKrisp returns saved:2, errors:[] for 2 mocked successful meetings",
+        "Test 13 passes: pullKrisp returns saved:1, errors:[...] when one getDocument throws",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Wire into the integration framework",
+      "description": "Register Krisp in the integration registry, extend IntegrationService, add CLI commands. Read packages/core/src/services/integrations.ts and packages/cli/src/commands/pull.ts IN FULL before making changes.\n\nFILES TO MODIFY/CREATE:\n\n1. packages/core/src/integrations/registry.ts — add krisp entry with auth: { type: 'oauth' } NOT 'oauth2' (IntegrationAuth type union is 'api_key' | 'oauth' | 'none'; 'oauth2' is a typecheck failure)\n\n2. packages/core/src/services/integrations.ts:\n   - Add krisp branch in pull() calling pullKrisp(this.storage, workspaceRoot, paths, days)\n   - Extend getIntegrationStatus() for krisp: loadKrispCredentials(); return 'active' if access_token present and non-empty, 'inactive' otherwise\n   - Extract private loadOAuthTokenStatus(workspaceRoot, name) helper for reuse\n\n3. packages/cli/src/commands/pull.ts — read fully before editing:\n   - Add krisp dispatch branch following Fathom pattern\n   - Update available: ['calendar', 'fathom'] → ['calendar', 'fathom', 'krisp'] (line ~80)\n   - Update info('Available: calendar, fathom') → info('Available: calendar, fathom, krisp') (line ~85)\n\n4. packages/cli/src/commands/integration.ts — add configure krisp:\n   - Calls client.configure() for OAuth flow (do NOT re-implement OAuth here)\n   - DUAL-WRITE on success:\n     a. saveKrispCredentials(storage, workspaceRoot, creds) → writes to .credentials/credentials.yaml\n     b. integrationService.configure(workspaceRoot, 'krisp', { status: 'active' }) → writes to arete.yaml\n   - If credentials write fails, do not write to arete.yaml\n   - Show: '✅ Krisp connected. Run `arete pull krisp` to sync meetings.'\n\n5. packages/runtime/integrations/configs/krisp.yaml — CREATE (does not exist; follow fathom.yaml pattern)\n\n6. packages/cli/src/commands/setup.ts — add Krisp to post-install integration suggestions\n\nTESTS:\n1. arete pull krisp dispatches to pullKrisp() with correct days (mock pullKrisp)\n2. arete pull krisp with invalid integration → 'Available: calendar, fathom, krisp'\n3. configure krisp success: credentials.yaml has all 5 fields AND arete.yaml has krisp.status: active (dual-write, both verified in same test)\n4. configure krisp with existing client_id: skips registration, goes to browser flow\n5. getIntegrationStatus('krisp') with access_token present → 'active'\n6. getIntegrationStatus('krisp') with missing krisp: section → 'inactive'\n7. getIntegrationStatus('krisp') with empty access_token → 'inactive'",
+      "acceptanceCriteria": [
+        "packages/core/src/integrations/registry.ts has krisp entry with auth: { type: 'oauth' } — npm run typecheck passes with no type errors",
+        "packages/core/src/services/integrations.ts pull() dispatches to pullKrisp() for integration === 'krisp'",
+        "getIntegrationStatus('krisp') returns 'active'/'inactive' based on credentials.yaml state — all 3 states tested",
+        "Private loadOAuthTokenStatus(workspaceRoot, name) helper extracted",
+        "packages/cli/src/commands/pull.ts: krisp branch added; both available string references updated to include 'krisp'",
+        "arete integration configure krisp performs dual-write: credentials.yaml AND arete.yaml both updated (verified by test)",
+        "packages/runtime/integrations/configs/krisp.yaml created",
+        "Krisp added to setup.ts post-install suggestions",
+        "npm run typecheck passes",
+        "npm test passes including all 7 new tests"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Tests, documentation, and memory entry",
+      "description": "Run full test suite, create integration docs (several files DO NOT EXIST and must be created, not updated), add LEARNINGS.md, and create build memory entry.\n\nSTEPS:\n1. npm run typecheck && npm test — full suite, zero regressions\n\n2. packages/runtime/integrations/registry.md — this file EXISTS; add Krisp:\n   - Name: Krisp | Available | auth: oauth | Requires Core plan\n   - Commands: arete integration configure krisp / arete pull krisp [--days N]\n\n3. packages/runtime/GUIDE.md — CREATE this file (does not exist):\n   - Document arete pull krisp [--days N]\n   - Note Core plan requirement\n   - Note configure-first (one-time browser auth; subsequent pulls are silent)\n\n4. packages/core/src/integrations/LEARNINGS.md — CREATE this file (does not exist). Must cover all 5 patterns:\n   a. Dynamic client registration: POST /oauth-registration with no auth → client_id + client_secret. No developer portal needed.\n   b. Confidential client + PKCE: client_secret_basic required at token endpoint AND PKCE code_verifier. Always check token_endpoint_auth_methods_supported in AS metadata before assuming public client.\n   c. Dynamic port binding: port 0 (OS-assigned); re-register redirect_uri per configure run. Avoids EADDRINUSE.\n   d. 5-field atomic credential storage: write all 5 at once or nothing; expires_at ISO for silent refresh.\n   e. No MCP SDK: fetch + JSON-RPC wrapper sufficient for JSON-RPC-over-HTTP; check before adding SDK dependency.\n\n5. memory/entries/2026-02-XX_krisp-integration.md — CREATE with today's date:\n   - Title, summary, key architectural decisions, pre-mortem effectiveness (which risks materialized)\n   - Learnings section\n\n6. memory/MEMORY.md — add new entry at top of index",
+      "acceptanceCriteria": [
+        "npm run typecheck passes with zero type errors",
+        "npm test passes full suite with no regressions vs. pre-Krisp baseline",
+        "packages/runtime/integrations/registry.md updated with Krisp entry (Available, auth: oauth, Core plan, both commands)",
+        "packages/runtime/GUIDE.md created with arete pull krisp documentation, Core plan note, configure-first instruction",
+        "packages/core/src/integrations/LEARNINGS.md created covering all 5 patterns: dynamic registration, confidential client + PKCE, dynamic port, atomic 5-field storage, no-SDK JSON-RPC",
+        "memory/entries/2026-02-XX_krisp-integration.md created with date, summary, architectural decisions, pre-mortem effectiveness",
+        "memory/MEMORY.md index updated with new entry at top"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-21T20:30:00.000Z",
+    "totalTasks": 4,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

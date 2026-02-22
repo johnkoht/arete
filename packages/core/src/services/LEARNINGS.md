@@ -48,6 +48,10 @@ The services layer provides seven domain-specific classes: `ContextService`, `Me
 
 - **`WorkspaceService.create()` must copy tools — check all three asset types (skills, tools, rules) when porting install logic.** During the CLI refactor (commit `e3bc217`, 2026-02-15), `WorkspaceService.create()` ported skills and rules from the old `install.ts` but silently dropped tools. The old command had an explicit `copyDirectoryContents(sourcePaths.tools, workspacePaths.tools)` block; the new service never got it. Result: `install` and `update` left `.cursor/tools/` empty, so the onboarding tool's `TOOL.md` was never present in user workspaces — agents looking for `.cursor/tools/onboarding/TOOL.md` couldn't find it. Fixed 2026-02-21: added tools copy in `create()` and tools backfill in `update()`, with regression tests keyed to the commit hash. **Lesson**: when refactoring "copy assets" logic into a service, explicitly enumerate all asset types (skills, **tools**, rules, templates, guide) and confirm each has a corresponding copy block before closing the PR.
 
+- **`KrispMcpClient.configure()` requires `(storage, workspaceRoot)` — not zero args** (2026-02-21): The task description described calling `client.configure()` with no arguments, but the actual method signature is `configure(storage: StorageAdapter, workspaceRoot: string): Promise<KrispCredentials>`. Always read the actual TypeScript signature before wiring in a CLI command.
+
+- **`KrispCredentials.expires_at` is a Unix timestamp `number`, not an ISO string** (2026-02-21): The task description mentioned computing `new Date(...).toISOString()` for `expires_at`, but the type definition is `number` (seconds since epoch) and `loadKrispCredentials` validates `typeof expires_at !== 'number'`. The client's `configure()` already computes it correctly as `Math.floor(Date.now() / 1000) + tokens.expires_in`. Pass the returned credentials directly to `saveKrispCredentials`.
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new service: add it to `factory.ts` (wire dependencies), `services/index.ts` (barrel export), and `AreteServices` type; run `npm run typecheck`
