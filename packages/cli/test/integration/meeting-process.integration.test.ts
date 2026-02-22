@@ -37,7 +37,7 @@ describe('integration: meeting process with people intelligence', () => {
       'utf8',
     );
 
-    const output = runCli(['meeting', 'process', '--latest', '--json'], { cwd: workspace });
+    const output = runCli(['meeting', 'process', '--latest', '--skip-qmd', '--json'], { cwd: workspace });
     const result = JSON.parse(output) as {
       success: boolean;
       applied: Array<{ slug: string; category: string }>;

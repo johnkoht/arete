@@ -4,17 +4,19 @@
 
 import {
   createServices,
+  loadConfig,
   saveMeetingFile,
   meetingFilename,
   slugifyPersonName,
   PEOPLE_CATEGORIES,
+  refreshQmdIndex,
 } from '@arete/core';
-import type { MeetingForSave, PersonCategory } from '@arete/core';
+import type { MeetingForSave, PersonCategory, QmdRefreshResult } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { success, error, info, warn } from '../formatters.js';
+import { success, error, info, warn, listItem } from '../formatters.js';
 
 type AttendeeCandidate = {
   name?: string;
@@ -49,9 +51,10 @@ export function registerMeetingCommands(program: Command): void {
     .description('Add a meeting from JSON file or stdin')
     .option('--file <path>', 'Path to JSON file')
     .option('--stdin', 'Read JSON from stdin')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
     .action(
-      async (opts: { file?: string; stdin?: boolean; json?: boolean }) => {
+      async (opts: { file?: string; stdin?: boolean; skipQmd?: boolean; json?: boolean }) => {
         if (!opts.file && !opts.stdin) {
           if (opts.json) {
             console.log(
@@ -77,6 +80,8 @@ export function registerMeetingCommands(program: Command): void {
           }
           process.exit(1);
         }
+
+        const config = await loadConfig(services.storage, root);
 
         let raw: Record<string, unknown>;
         try {
@@ -113,6 +118,12 @@ export function registerMeetingCommands(program: Command): void {
           { integration: 'Manual', force: false },
         );
 
+        // Auto-refresh qmd index after write (skip if meeting already existed or --skip-qmd)
+        let qmdResult: QmdRefreshResult | undefined;
+        if (fullPath !== null && !opts.skipQmd) {
+          qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        }
+
         if (opts.json) {
           console.log(
             JSON.stringify({
@@ -120,6 +131,7 @@ export function registerMeetingCommands(program: Command): void {
               saved: !!fullPath,
               path: fullPath,
               filename: fullPath ? meetingFilename(meeting) : null,
+              qmd: qmdResult ?? { indexed: false, skipped: true },
             }),
           );
           return;
@@ -129,6 +141,14 @@ export function registerMeetingCommands(program: Command): void {
           success(`Saved: ${fullPath}`);
         } else {
           info(`Skipped (already exists): ${meetingFilename(meeting)}`);
+        }
+        if (qmdResult && !qmdResult.skipped) {
+          if (qmdResult.indexed) {
+            listItem('Search index', 'qmd index updated');
+          }
+          if (qmdResult.warning) {
+            warn(qmdResult.warning);
+          }
         }
       },
     );
@@ -142,6 +162,7 @@ export function registerMeetingCommands(program: Command): void {
     .option('--feature-extraction-tuning', 'Enable extraction tuning for this run')
     .option('--feature-enrichment', 'Enable optional enrichment for this run')
     .option('--dry-run', 'Analyze only; do not write people files or attendee_ids')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
     .action(async (opts: {
       file?: string;
@@ -150,6 +171,7 @@ export function registerMeetingCommands(program: Command): void {
       featureExtractionTuning?: boolean;
       featureEnrichment?: boolean;
       dryRun?: boolean;
+      skipQmd?: boolean;
       json?: boolean;
     }) => {
       const services = await createServices(process.cwd());
@@ -162,6 +184,8 @@ export function registerMeetingCommands(program: Command): void {
         }
         process.exit(1);
       }
+
+      const config = await loadConfig(services.storage, root);
 
       if (!opts.file && !opts.latest) {
         if (opts.json) {
@@ -282,6 +306,12 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // Auto-refresh qmd index after write (skip if nothing written or dry-run or --skip-qmd)
+      let qmdResult: QmdRefreshResult | undefined;
+      if (applied.length > 0 && !opts.skipQmd) {
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
       const response = {
         success: true,
         meeting: meetingPath,
@@ -294,6 +324,7 @@ export function registerMeetingCommands(program: Command): void {
           confidence: u.confidence,
           rationale: u.rationale,
         })),
+        qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
       if (opts.json) {
@@ -307,6 +338,14 @@ export function registerMeetingCommands(program: Command): void {
       info(`Unknown queue: ${unknownQueue.length}`);
       if (unknownQueue.length > 0) {
         warn('Some attendees remain in unknown_queue and require review.');
+      }
+      if (qmdResult && !qmdResult.skipped) {
+        if (qmdResult.indexed) {
+          listItem('Search index', 'qmd index updated');
+        }
+        if (qmdResult.warning) {
+          warn(qmdResult.warning);
+        }
       }
     });
 }

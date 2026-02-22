@@ -34,6 +34,7 @@ describe('meeting process command', () => {
       'process',
       '--latest',
       '--dry-run',
+      '--skip-qmd',
       '--json',
     ], { cwd: tmpDir });
 
@@ -74,6 +75,7 @@ describe('meeting process command', () => {
       'process',
       '--file',
       'resources/meetings/2026-02-19-product-review.md',
+      '--skip-qmd',
       '--json',
     ], { cwd: tmpDir });
 
@@ -94,5 +96,60 @@ describe('meeting process command', () => {
     const meetingContent = readFileSync(meetingPath, 'utf8');
     assert.ok(meetingContent.includes('attendee_ids'));
     assert.ok(meetingContent.includes('sam-teammate'));
+  });
+
+  describe('qmd integration', () => {
+    it('--skip-qmd produces qmd.skipped:true in JSON output', () => {
+      writeFileSync(
+        join(tmpDir, 'resources', 'meetings', '2026-02-20-qmd-test.md'),
+        `---\ntitle: "QMD Test"\ndate: "2026-02-20"\n---\n\n# QMD Test\n\n**Attendees**: Mystery Attendee\n`,
+        'utf8',
+      );
+
+      const stdout = runCli([
+        'meeting',
+        'process',
+        '--latest',
+        '--dry-run',
+        '--skip-qmd',
+        '--json',
+      ], { cwd: tmpDir });
+
+      const result = JSON.parse(stdout) as {
+        success: boolean;
+        qmd: { indexed: boolean; skipped: boolean };
+      };
+
+      assert.equal(result.success, true);
+      assert.equal(result.qmd.skipped, true);
+      assert.equal(result.qmd.indexed, false);
+    });
+
+    it('includes qmd field in JSON output even when nothing applied', () => {
+      writeFileSync(
+        join(tmpDir, 'resources', 'meetings', '2026-02-20-no-apply.md'),
+        `---\ntitle: "No Apply"\ndate: "2026-02-20"\n---\n\n# No Apply\n\n**Attendees**: Unknown Person\n`,
+        'utf8',
+      );
+
+      const stdout = runCli([
+        'meeting',
+        'process',
+        '--latest',
+        '--skip-qmd',
+        '--json',
+      ], { cwd: tmpDir });
+
+      const result = JSON.parse(stdout) as {
+        success: boolean;
+        applied: Array<unknown>;
+        qmd: { indexed: boolean; skipped: boolean };
+      };
+
+      assert.equal(result.success, true);
+      // When nothing applied, qmd is always skipped (no write occurred)
+      assert.equal(result.qmd.skipped, true);
+      assert.equal(result.qmd.indexed, false);
+    });
   });
 });

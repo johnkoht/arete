@@ -2,10 +2,11 @@
  * arete pull [integration] — fetch data from integrations
  */
 
-import { createServices, loadConfig, getCalendarProvider } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex } from '@arete/core';
+import type { QmdRefreshResult } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { header, listItem, success, error, info } from '../formatters.js';
+import { header, listItem, success, error, info, warn } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
 
 const DEFAULT_DAYS = 7;
@@ -16,11 +17,12 @@ export function registerPullCommand(program: Command): void {
     .description('Fetch latest data from integrations or calendar')
     .option('--days <n>', 'Number of days to fetch', String(DEFAULT_DAYS))
     .option('--today', 'Fetch only today\'s events (calendar only)')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
     .action(
       async (
         integration: string | undefined,
-        opts: { days?: string; today?: boolean; json?: boolean },
+        opts: { days?: string; today?: boolean; skipQmd?: boolean; json?: boolean },
       ) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -41,7 +43,15 @@ export function registerPullCommand(program: Command): void {
         }
 
         if (integration === 'fathom' || !integration) {
+          const config = await loadConfig(services.storage, root);
           const result = await services.integrations.pull(root, 'fathom', { integration: 'fathom', days });
+
+          // Auto-refresh qmd index after write (skip if nothing new or --skip-qmd)
+          let qmdResult: QmdRefreshResult | undefined;
+          if (result.itemsCreated > 0 && !opts.skipQmd) {
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+          }
+
           if (opts.json) {
             console.log(
               JSON.stringify(
@@ -51,6 +61,7 @@ export function registerPullCommand(program: Command): void {
                   itemsProcessed: result.itemsProcessed,
                   itemsCreated: result.itemsCreated,
                   errors: result.errors,
+                  qmd: qmdResult ?? { indexed: false, skipped: true },
                 },
                 null,
                 2,
@@ -68,6 +79,14 @@ export function registerPullCommand(program: Command): void {
             success(`Fathom pull complete! ${result.itemsCreated} item(s) saved.`);
           } else {
             error(`Fathom pull failed: ${result.errors.join(', ')}`);
+          }
+          if (qmdResult && !qmdResult.skipped) {
+            if (qmdResult.indexed) {
+              listItem('Search index', 'qmd index updated');
+            }
+            if (qmdResult.warning) {
+              warn(qmdResult.warning);
+            }
           }
           return;
         }
