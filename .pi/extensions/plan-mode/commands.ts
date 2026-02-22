@@ -213,6 +213,9 @@ export async function handlePlan(
 		case "new":
 			await handlePlanNew(subcommand.slice(1).join(" "), ctx, pi, state, togglePlanMode);
 			break;
+		case "close":
+			await handlePlanClose(ctx, pi, state);
+			break;
 		case "list":
 			await handlePlanList(subcommand.slice(1).join(" "), ctx, pi, state);
 			break;
@@ -242,7 +245,7 @@ export async function handlePlan(
 			break;
 		default:
 			ctx.ui.notify(
-				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, status, delete, archive`,
+				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, close, status, delete, archive`,
 				"warning",
 			);
 	}
@@ -382,6 +385,52 @@ async function handlePlanNew(
 
 		ctx.ui.notify("📋 Plan mode enabled. Plan not saved — use /plan save <name> to persist.", "info");
 	}
+}
+
+/**
+ * Close the current plan and return to default mode.
+ * Offers to save unsaved changes before closing.
+ */
+export async function handlePlanClose(
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	// Check for unsaved changes before closing
+	if (hasUnsavedPlanChanges(state)) {
+		const shouldSave = await ctx.ui.confirm(
+			"Unsaved plan changes",
+			"You have unsaved plan changes. Save before closing?",
+		);
+		if (shouldSave) {
+			await handlePlanSave(undefined, ctx, pi, state);
+		}
+	}
+
+	// Clear all plan state
+	state.planModeEnabled = false;
+	state.executionMode = false;
+	state.currentSlug = null;
+	state.planTitle = null;
+	state.planText = "";
+	state.planSize = null;
+	state.todoItems = [];
+	state.preMortemRun = false;
+	state.reviewRun = false;
+	state.prdConverted = false;
+
+	pi.appendEntry("plan-mode", {
+		enabled: false,
+		todos: [],
+		executing: false,
+		currentSlug: null,
+		planSize: null,
+		preMortemRun: false,
+		reviewRun: false,
+		prdConverted: false,
+	});
+
+	ctx.ui.notify("Plan closed. Back to default mode.", "info");
 }
 
 /** Status emoji mapping used for plan list items */

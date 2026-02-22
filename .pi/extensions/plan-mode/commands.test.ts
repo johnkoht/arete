@@ -485,6 +485,85 @@ describe("handlePlan — /plan new", () => {
 	});
 });
 
+describe("handlePlan — /plan close", () => {
+	it("clears all plan state and returns to default mode", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planModeEnabled: true,
+			executionMode: false,
+			currentSlug: "my-plan",
+			planTitle: "My Plan",
+			planText: "Plan:\n1. Do something",
+			planSize: "medium",
+			todoItems: [{ step: 1, text: "Do something", completed: false }],
+			preMortemRun: true,
+			reviewRun: true,
+			prdConverted: true,
+		});
+		const togglePlanMode = () => {};
+
+		await handlePlan("close", ctx, pi, state, togglePlanMode);
+
+		assert.equal(state.planModeEnabled, false, "Should disable plan mode");
+		assert.equal(state.executionMode, false, "Should disable execution mode");
+		assert.equal(state.currentSlug, null, "Should clear currentSlug");
+		assert.equal(state.planTitle, null, "Should clear planTitle");
+		assert.equal(state.planText, "", "Should clear planText");
+		assert.equal(state.planSize, null, "Should clear planSize");
+		assert.deepEqual(state.todoItems, [], "Should clear todoItems");
+		assert.equal(state.preMortemRun, false, "Should reset preMortemRun");
+		assert.equal(state.reviewRun, false, "Should reset reviewRun");
+		assert.equal(state.prdConverted, false, "Should reset prdConverted");
+		assert.ok(notifyMessage.includes("default mode"), "Should mention default mode");
+	});
+
+	it("offers to save unsaved changes before closing", async () => {
+		let confirmCalled = false;
+		const ctx = createTestContext({
+			confirm: async () => {
+				confirmCalled = true;
+				return false; // Don't save
+			},
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planModeEnabled: true,
+			planText: "Plan:\n1. Unsaved step",
+			todoItems: [{ step: 1, text: "Unsaved step", completed: false }],
+		});
+		const togglePlanMode = () => {};
+
+		await handlePlan("close", ctx, pi, state, togglePlanMode);
+
+		assert.ok(confirmCalled, "Should prompt to save unsaved changes");
+		assert.equal(state.planModeEnabled, false, "Should still close after declining save");
+	});
+
+	it("persists cleared state via appendEntry", async () => {
+		const ctx = createTestContext({ notify: () => {} });
+		const pi = createTestPi();
+		const state = createTestState({
+			planModeEnabled: true,
+			currentSlug: "test-plan",
+		});
+		const togglePlanMode = () => {};
+
+		await handlePlan("close", ctx, pi, state, togglePlanMode);
+
+		assert.ok(pi.entries.length > 0, "Should persist state");
+		const lastEntry = pi.entries[pi.entries.length - 1] as Record<string, unknown>;
+		assert.equal(lastEntry.enabled, false);
+		assert.equal(lastEntry.currentSlug, null);
+	});
+});
+
 describe("handlePlanStatus", () => {
 	beforeEach(() => setupTestPlansDir());
 	afterEach(() => cleanupTestPlansDir());

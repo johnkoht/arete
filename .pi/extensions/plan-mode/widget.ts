@@ -69,7 +69,7 @@ export function renderFooterStatus(state: WidgetState, theme: WidgetTheme, width
 	}
 
 	// Completed
-	if (status === "complete") {
+	if (status === "complete" && planId) {
 		const label = planId ?? "plan";
 		return theme.fg("success", `✅ ${label} complete`);
 	}
