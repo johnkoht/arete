@@ -6,6 +6,7 @@
   "scripts": { "build": "tsc", "typecheck": "tsc --noEmit" },
   "dependencies": {
     "@arete/core": "0.1.0",
+    "@inquirer/prompts": "^7.3.2",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "yaml": "^2.4.0"
