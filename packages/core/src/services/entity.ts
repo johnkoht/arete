@@ -5,7 +5,7 @@
  * Uses StorageAdapter for all file I/O (no direct fs imports).
  */
 
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
@@ -32,6 +32,13 @@ import type {
 } from '../models/index.js';
 
 const PEOPLE_CATEGORIES: PersonCategory[] = ['internal', 'customers', 'users'];
+
+/**
+ * Maximum number of results to request from SearchProvider when pre-filtering
+ * meeting candidates for a person. If the provider returns this many results,
+ * the index may be incomplete — we fall back to a full scan.
+ */
+const SEARCH_PROVIDER_CANDIDATE_LIMIT = 100;
 
 const INDEX_HEADER = `# People Index
 
@@ -1171,17 +1178,32 @@ export class EntityService {
       personSignals.set(person.slug, []);
     }
 
+    // Meeting content cache — keyed by normalized absolute path so that the
+    // same physical file is read at most once, regardless of whether the path
+    // came from storage.list() (absolute) or SearchProvider (possibly relative).
+    const meetingContentCache = new Map<string, string | null>();
+
     // Pre-compute per-person meeting file candidates (SearchProvider pre-filter).
     // CRITICAL invariant: if SearchProvider returns 0 results for a person,
     // fall back to the full meetingFiles list — never skip scanning entirely.
     const personCandidateMeetings = new Map<string, string[]>();
     for (const person of refreshablePeople) {
       if (this.searchProvider) {
-        const results = await this.searchProvider.semanticSearch(person.name, { limit: 20 });
-        personCandidateMeetings.set(
-          person.slug,
-          results.length > 0 ? results.map((r) => r.path) : meetingFiles,
-        );
+        const results = await this.searchProvider.semanticSearch(person.name, {
+          limit: SEARCH_PROVIDER_CANDIDATE_LIMIT,
+        });
+        // If the provider hit the limit, the index may be incomplete — fall back to full scan.
+        if (results.length > 0 && results.length < SEARCH_PROVIDER_CANDIDATE_LIMIT) {
+          // Normalize paths: SearchProvider may return relative paths (e.g. from qmd
+          // running with cwd: workspaceRoot). resolve() is a no-op for absolute paths.
+          personCandidateMeetings.set(
+            person.slug,
+            results.map((r) => resolve(workspacePaths.root, r.path)),
+          );
+        } else {
+          // 0 results (person not indexed yet) OR limit hit (incomplete) → full scan
+          personCandidateMeetings.set(person.slug, meetingFiles);
+        }
       } else {
         personCandidateMeetings.set(person.slug, meetingFiles);
       }
@@ -1194,7 +1216,15 @@ export class EntityService {
       const candidatePaths = personCandidateMeetings.get(person.slug) ?? meetingFiles;
 
       for (const meetingPath of candidatePaths) {
-        const content = await this.storage.read(meetingPath);
+        // Cache lookup — normalized absolute path as key
+        const normalizedPath = resolve(workspacePaths.root, meetingPath);
+        let content: string | null | undefined;
+        if (meetingContentCache.has(normalizedPath)) {
+          content = meetingContentCache.get(normalizedPath);
+        } else {
+          content = await this.storage.read(normalizedPath);
+          meetingContentCache.set(normalizedPath, content ?? null);
+        }
         if (!content) continue;
 
         const parsed = parseFrontmatter(content);

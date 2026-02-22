@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { EntityService } from '../../src/services/entity.js';
@@ -439,5 +439,164 @@ Jane Doe asked about pricing strategy.
     assert.equal(result.updated, 1);
     const personContent = readFileSync(join(personDir, 'jane-doe.md'), 'utf8');
     assert.ok(personContent.includes('pricing strategy'), 'Signals should be found without a SearchProvider');
+  });
+
+  it('limit-overflow fallback: SearchProvider returning exactly LIMIT results triggers full scan', async () => {
+    // Write a person
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+
+    // Write a meeting file that is NOT in the 100 provider results
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    const hiddenMeeting = join(meetingDir, '2026-02-15-hidden.md');
+    writeFileSync(
+      hiddenMeeting,
+      `---
+title: "Hidden Meeting"
+date: "2026-02-15"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about infrastructure costs.
+Jane Doe asked about infrastructure costs.
+`,
+      'utf8',
+    );
+
+    // Create a SearchProvider that returns exactly 100 results (all fake paths
+    // except none point to `hiddenMeeting`). This triggers the limit-overflow
+    // fallback, which should cause a full scan that finds hiddenMeeting.
+    const hundredFakePaths = Array.from({ length: 100 }, (_, i) =>
+      join(meetingDir, `fake-meeting-${i}.md`),
+    );
+    const overflowProvider = makeMockSearchProvider(
+      new Map([['Jane Doe', hundredFakePaths]]),
+    );
+    const service = new EntityService(new FileStorageAdapter(), overflowProvider);
+
+    const result = await service.refreshPersonMemory(paths);
+
+    // Full scan should have found the hidden meeting
+    assert.equal(result.updated, 1, 'Limit-overflow fallback must trigger full scan');
+    const personContent = readFileSync(join(personDir, 'jane-doe.md'), 'utf8');
+    assert.ok(
+      personContent.includes('infrastructure costs'),
+      'Full scan after limit overflow must find signals from meeting NOT in the 100 results',
+    );
+  });
+
+  it('path normalization: SearchProvider returning relative path → person file updated', async () => {
+    // Write a person
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+
+    // Write meeting file
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-02-10-sync.md'),
+      `---
+title: "Sync"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe asked about migration plan.
+Jane Doe asked about migration plan.
+`,
+      'utf8',
+    );
+
+    // SearchProvider returns a RELATIVE path (as qmd might when running with cwd: workspaceRoot)
+    const relativeProvider = makeMockSearchProvider(
+      new Map([['Jane Doe', ['resources/meetings/2026-02-10-sync.md']]]),
+    );
+    const service = new EntityService(new FileStorageAdapter(), relativeProvider);
+
+    const result = await service.refreshPersonMemory(paths);
+
+    assert.equal(result.updated, 1, 'Relative path from SearchProvider must be resolved and read successfully');
+    const personContent = readFileSync(join(personDir, 'jane-doe.md'), 'utf8');
+    assert.ok(
+      personContent.includes('migration plan'),
+      'Signals should be found when SearchProvider returns a relative path',
+    );
+  });
+
+  it('meeting content cache: two people in the same meeting → storage.read called once for that file', async () => {
+    // Write two people
+    const internalDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(internalDir, { recursive: true });
+    writeFileSync(
+      join(internalDir, 'jane-doe.md'),
+      '---\nname: "Jane Doe"\ncategory: "internal"\n---\n\n# Jane Doe\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(internalDir, 'bob-smith.md'),
+      '---\nname: "Bob Smith"\ncategory: "internal"\n---\n\n# Bob Smith\n',
+      'utf8',
+    );
+
+    // Write one meeting that mentions both people
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    const sharedMeeting = join(meetingDir, '2026-02-10-team.md');
+    writeFileSync(
+      sharedMeeting,
+      `---
+title: "Team Sync"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+  - bob-smith
+---
+
+Jane Doe asked about deployment timing.
+Jane Doe asked about deployment timing.
+Bob Smith asked about deployment timing.
+Bob Smith asked about deployment timing.
+`,
+      'utf8',
+    );
+
+    // Track read calls with a wrapping storage adapter
+    const realStorage = new FileStorageAdapter();
+    const readCalls: string[] = [];
+    const trackingStorage: typeof realStorage = Object.create(realStorage);
+    trackingStorage.read = async (path: string) => {
+      readCalls.push(path);
+      return realStorage.read(path);
+    };
+
+    // No search provider — both people get the full meetingFiles list
+    const service = new EntityService(trackingStorage);
+    const result = await service.refreshPersonMemory(paths);
+
+    assert.equal(result.updated, 2, 'Both people should be updated');
+
+    // Count how many times the shared meeting file was read in the meeting scan.
+    // The normalized path is used as cache key; the file should be read at most once
+    // during the meeting scan (plus reads for person files, which we exclude).
+    const normalizedShared = resolve(sharedMeeting);
+    const meetingReadCount = readCalls.filter((p) => resolve(p) === normalizedShared).length;
+    assert.equal(
+      meetingReadCount,
+      1,
+      `Meeting file should be read exactly once (cache hit for second person), but was read ${meetingReadCount} times`,
+    );
   });
 });
