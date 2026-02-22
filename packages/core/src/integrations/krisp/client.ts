@@ -110,6 +110,69 @@ async function parseSSEResponse(res: Response): Promise<JsonRpcResponse> {
   return lastResponse;
 }
 
+/** MCP CallToolResult content item. */
+type McpContentItem = {
+  type: string;
+  text?: string;
+  [key: string]: unknown;
+};
+
+/** MCP CallToolResult envelope from tools/call. */
+type McpToolResult = {
+  content?: McpContentItem[];
+  structuredContent?: unknown;
+  isError?: boolean;
+};
+
+/**
+ * Unwrap the MCP tools/call result envelope.
+ *
+ * MCP tools/call returns: { content: [{ type: "text", text: "..." }], isError: false }
+ * We need to extract the actual data from the content array.
+ *
+ * Priority:
+ * 1. structuredContent (if present, already parsed)
+ * 2. First text content item, parsed as JSON
+ * 3. First text content item as raw string
+ * 4. The raw result if it doesn't look like an MCP envelope
+ */
+function unwrapToolResult(result: unknown): unknown {
+  if (result == null || typeof result !== 'object') return result;
+
+  const envelope = result as McpToolResult;
+
+  // Not an MCP envelope — return as-is (e.g. already unwrapped or plain object)
+  if (!Array.isArray(envelope.content) && envelope.structuredContent === undefined) {
+    return result;
+  }
+
+  if (envelope.isError) {
+    const errorText = envelope.content
+      ?.filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('\n') ?? 'Unknown tool error';
+    throw new Error(`Krisp MCP tool error: ${errorText}`);
+  }
+
+  // Prefer structuredContent if available
+  if (envelope.structuredContent !== undefined) {
+    return envelope.structuredContent;
+  }
+
+  // Extract text from content array
+  const textItems = envelope.content?.filter((c) => c.type === 'text') ?? [];
+  if (textItems.length === 0) return result;
+
+  const text = textItems[0].text ?? '';
+
+  // Try to parse as JSON (most MCP tools return JSON in text content)
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 /**
  * Krisp MCP client.
  *
@@ -428,7 +491,7 @@ export class KrispMcpClient {
       throw new Error(`Krisp MCP tool error: ${json.error.message}`);
     }
 
-    return json.result;
+    return unwrapToolResult(json.result);
   }
 
   /**

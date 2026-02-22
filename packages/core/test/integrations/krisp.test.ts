@@ -122,7 +122,15 @@ function queueSSEFetch(body: unknown, status = 200): void {
   fetchQueue.push({ body: null, status, contentType: 'text/event-stream', rawBody: sseBody });
 }
 
-function mcpSuccessResponse(result: unknown = { content: 'ok' }): unknown {
+/** Wrap a value in the MCP tools/call envelope: { content: [{ type: "text", text: JSON }] } */
+function mcpToolEnvelope(data: unknown): unknown {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data) }],
+    isError: false,
+  };
+}
+
+function mcpSuccessResponse(result: unknown = mcpToolEnvelope({ ok: true })): unknown {
   return { jsonrpc: '2.0', id: 1, result };
 }
 
@@ -307,6 +315,57 @@ krisp:
       headers['Accept']?.includes('text/event-stream'),
       `Accept header must include text/event-stream; got: "${headers['Accept']}"`
     );
+  });
+
+  it('unwraps MCP content envelope from tools/call result', async () => {
+    // MCP tools/call wraps results in { content: [{ type: "text", text: "..." }] }.
+    // Without unwrapping, listMeetings returns [] because the envelope isn't an array.
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    const innerData = [{ id: '1', name: 'Test Meeting' }];
+    queueFetch({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: JSON.stringify(innerData) }],
+        isError: false,
+      },
+    });
+
+    const result = await client.callTool('search_meetings', {});
+    assert.deepEqual(result, innerData, 'callTool must unwrap MCP content envelope and parse JSON');
+  });
+
+  it('prefers structuredContent over text content when present', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    const structured = { meetings: [{ id: '1' }] };
+    queueFetch({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: '{"meetings":[{"id":"1"}]}' }],
+        structuredContent: structured,
+        isError: false,
+      },
+    });
+
+    const result = await client.callTool('test_tool', {});
+    assert.deepEqual(result, structured, 'must prefer structuredContent when available');
   });
 
   it('handles SSE (text/event-stream) response from MCP server', async () => {
@@ -692,7 +751,7 @@ krisp:
   });
 
   it('(15) listMeetings passes after, before, AND fields including "transcript"', async () => {
-    queueFetch({ jsonrpc: '2.0', id: 1, result: [] });
+    queueFetch({ jsonrpc: '2.0', id: 1, result: mcpToolEnvelope([]) });
 
     await client.listMeetings({ after: '2026-01-01', before: '2026-01-31' });
 
@@ -712,7 +771,7 @@ krisp:
 
   it('(16) getDocument passes documentId (not id)', async () => {
     const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    queueFetch({ jsonrpc: '2.0', id: 1, result: { id: docId } });
+    queueFetch({ jsonrpc: '2.0', id: 1, result: mcpToolEnvelope({ id: docId }) });
 
     await client.getDocument(docId);
 
@@ -776,12 +835,12 @@ krisp:
   expires_at: ${Math.floor(Date.now() / 1000) + 3600}
 `.trim());
 
-    // Queue fetch response for listMeetings → callTool
+    // Queue fetch response for listMeetings → callTool (MCP envelope format)
     const meetings: KrispMeeting[] = [
       { id: 'aaaa1111aaaa1111aaaa1111aaaa1111', name: 'Standup', date: '2026-01-15' },
       { id: 'bbbb2222bbbb2222bbbb2222bbbb2222', name: 'Retro', date: '2026-01-16' },
     ];
-    queueFetch({ jsonrpc: '2.0', id: 1, result: meetings });
+    queueFetch({ jsonrpc: '2.0', id: 1, result: mcpToolEnvelope(meetings) });
 
     const result = await pullKrisp(storage, WORKSPACE, paths, 7);
 
