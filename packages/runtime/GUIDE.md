@@ -136,19 +136,25 @@ Skills live in `.agents/skills/` for both IDEs (shared).
 
 ### First 15 Minutes
 
-1. **Fill in basic context**
-   - Open `context/business-overview.md` - Add company name, mission, what you do
-   - Open `context/users-personas.md` - Add who uses your product
-   - Open `context/products-services.md` - Add what you're building
+1. **Set up your profile** *(if you haven't already)*
+   - Run `arete onboard` in your terminal
+   - Collects your name, email, and company — bootstraps `context/profile.md`
 
-2. **Take a tour**
-   - Ask the AI: "Give me a tour" or "How does this workspace work?"
-   - The `workspace-tour` skill will orient you to what's available
+2. **Connect integrations** *(optional but recommended)*
+   - Run `arete setup` to configure calendar, Fathom, or other sources
+   - Enables meeting-prep and context-pull features from day one
 
-3. **Try a quick action**
-   - "What's on my plate today?" - Get today's focus and priorities
-   - "Start a discovery project for [topic]" - Begin exploring a problem
-   - "Save this meeting" - Paste meeting notes and they'll be processed
+3. **Start guided onboarding in chat**
+   - Say **"Let's get started"** to your AI assistant
+   - The `onboarding` skill walks you through a 15–30 min guided setup:
+     - Imports existing docs, notes, or a company website URL
+     - Bootstraps your core context files (`business-overview`, `users-personas`, `goals`)
+     - Connects integrations if not done yet
+     - Ends with your first valuable skill use (meeting-prep, week-plan, etc.)
+
+4. **Take a tour** *(optional)*
+   - Ask: "Give me a tour" or "How does this workspace work?"
+   - The `workspace-tour` skill orients you to what's available
 
 ---
 

@@ -478,10 +478,11 @@ When user activates this tool:
 
 3. **Create project**: Set up the project structure in `projects/active/onboarding/`
 
-4. **Initialize plans**:
-   - Create 30-60-90 high-level plan
-   - Create detailed 30-day plan
-   - Create Week 1 plan
+4. **Initialize plans** using the templates in `templates/`:
+   - Copy `templates/30-60-90-plan.md` → `plan/30-60-90.md`, fill in role/company/start date/scope
+   - Copy `templates/weekly-plan.md` → `plan/weekly/week-01.md`, fill in week 1 dates
+   - Copy `templates/stakeholder-map.md` → `working/stakeholders.md` as the org/people map
+   - Copy `templates/1-1-note.md` to `inputs/1-1s/` as a blank starter for each 1:1 (rename to `[person]-[date].md` at use time)
 
 4.5. **Create enhanced working files**:
 
@@ -511,6 +512,7 @@ When user activates this tool:
    - Ask manager, eng lead, design lead: **"Is there a burning problem I can investigate and diagnose?"** (aim for 2-3)
    - Start **documenting what you learn as you learn it** (data dictionaries, process maps) — save in `outputs/leverage-docs/`
    - Focus on **breadth over depth** — resist rabbit holes, use fresh eyes window
+   - Share curated reading resources: see `resources/reading-list.md` in this tool's directory — recommend 2-3 links based on the user's situation (new domain, familiar domain, or leadership role)
 
 ## Progress Tracking
 
