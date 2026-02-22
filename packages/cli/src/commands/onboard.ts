@@ -5,9 +5,16 @@
  * before full conversational onboarding.
  */
 
-import { createServices } from '@arete/core';
+import {
+  createServices,
+  KrispMcpClient,
+  saveKrispCredentials,
+  listIcalBuddyCalendars,
+  saveFathomApiKey,
+} from '@arete/core';
+import type { AreteServices, IntegrationListEntry } from '@arete/core';
 import type { Command } from 'commander';
-import { input } from '@inquirer/prompts';
+import { input, confirm, checkbox } from '@inquirer/prompts';
 import { join } from 'node:path';
 import chalk from 'chalk';
 import { parse as parseYaml } from 'yaml';
@@ -18,6 +25,20 @@ interface OnboardAnswers {
   email: string;
   company: string;
   website?: string;
+}
+
+interface IntegrationResult {
+  calendar: { configured: boolean; calendars?: string[]; skipped?: boolean; installRequired?: boolean };
+  fathom: { configured: boolean; skipped?: boolean };
+  krisp: { configured: boolean; skipped?: boolean; timedOut?: boolean };
+}
+
+interface IntegrationOpts {
+  json?: boolean;
+  skipIntegrations?: boolean;
+  calendar?: boolean;
+  calendars?: string;
+  fathomKey?: string;
 }
 
 export interface ParsedProfile {
@@ -60,6 +81,164 @@ function extractDomainFromUrl(url: string): string | null {
   }
 }
 
+function findIntegration(entries: IntegrationListEntry[], name: string): IntegrationListEntry | undefined {
+  return entries.find(e => e.name === name);
+}
+
+function statusLabel(entry: IntegrationListEntry | undefined): string {
+  return entry?.active ? chalk.green(' [active]') : '';
+}
+
+async function runIntegrationPhase(
+  services: AreteServices,
+  root: string,
+  opts: IntegrationOpts,
+): Promise<IntegrationResult> {
+  const result: IntegrationResult = {
+    calendar: { configured: false, skipped: true },
+    fathom: { configured: false, skipped: true },
+    krisp: { configured: false, skipped: true },
+  };
+
+  const hasExplicitFlags = !!(opts.calendar || opts.fathomKey);
+  const skipPrompts = opts.skipIntegrations || opts.json;
+
+  // Load integration status only if we need it (for prompts or explicit flags)
+  const entries = hasExplicitFlags || !skipPrompts
+    ? await services.integrations.list(root)
+    : [];
+  const calendarEntry = findIntegration(entries, 'calendar');
+  const fathomEntry = findIntegration(entries, 'fathom');
+  const krispEntry = findIntegration(entries, 'krisp');
+
+  // --- Calendar ---
+  if (opts.calendar) {
+    // Non-interactive: --calendar flag
+    const selectedCalendars = (opts.calendars ?? '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(v => v.length > 0);
+
+    await services.integrations.configure(root, 'calendar', {
+      provider: 'macos',
+      status: 'active',
+      calendars: selectedCalendars,
+    });
+    result.calendar = { configured: true, calendars: selectedCalendars };
+  } else if (!skipPrompts) {
+    // Interactive calendar prompt
+    const calStatus = statusLabel(calendarEntry);
+    const wantCalendar = await confirm({
+      message: `Set up calendar integration?${calStatus}`,
+      default: false,
+    });
+
+    if (wantCalendar) {
+      const { available, calendars } = await listIcalBuddyCalendars();
+
+      if (!available) {
+        console.log('');
+        info('icalBuddy is required for macOS calendar integration.');
+        console.log(chalk.dim('  Install: brew install ical-buddy'));
+        console.log(chalk.dim('  Then rerun: arete onboard'));
+        console.log('');
+        result.calendar = { configured: false, installRequired: true };
+      } else if (calendars.length > 0) {
+        const choices = [
+          { name: 'All calendars', value: '__all__' },
+          ...calendars.map(c => ({ name: c, value: c })),
+        ];
+        const selected = await checkbox({
+          message: 'Select calendars to sync:',
+          choices,
+          pageSize: 12,
+        });
+
+        const useAll = selected.includes('__all__');
+        const selectedCalendars = useAll ? [] : selected;
+
+        await services.integrations.configure(root, 'calendar', {
+          provider: 'macos',
+          status: 'active',
+          calendars: selectedCalendars,
+        });
+        result.calendar = {
+          configured: true,
+          calendars: useAll ? calendars : selectedCalendars,
+        };
+      } else {
+        // icalBuddy available but no calendars found
+        await services.integrations.configure(root, 'calendar', {
+          provider: 'macos',
+          status: 'active',
+          calendars: [],
+        });
+        result.calendar = { configured: true, calendars: [] };
+      }
+    }
+  }
+
+  // --- Fathom ---
+  if (opts.fathomKey) {
+    // Non-interactive: --fathom-key flag
+    await saveFathomApiKey(services.storage, root, opts.fathomKey);
+    await services.integrations.configure(root, 'fathom', { status: 'active' });
+    result.fathom = { configured: true };
+  } else if (!skipPrompts) {
+    // Interactive fathom prompt
+    const fathomStatus = statusLabel(fathomEntry);
+    const wantFathom = await confirm({
+      message: `Set up Fathom meeting transcripts?${fathomStatus}`,
+      default: false,
+    });
+
+    if (wantFathom) {
+      console.log(chalk.dim('  Get your API key from https://fathom.video/customize'));
+      const apiKey = await input({
+        message: 'Fathom API key:',
+      });
+
+      if (apiKey.trim()) {
+        await saveFathomApiKey(services.storage, root, apiKey.trim());
+        await services.integrations.configure(root, 'fathom', { status: 'active' });
+        result.fathom = { configured: true };
+      }
+    }
+  }
+
+  // --- Krisp ---
+  if (!skipPrompts) {
+    const krispStatus = statusLabel(krispEntry);
+    const wantKrisp = await confirm({
+      message: `Set up Krisp meeting notes?${krispStatus}`,
+      default: false,
+    });
+
+    if (wantKrisp) {
+      const client = new KrispMcpClient(services.storage, root);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 120_000)
+      );
+
+      try {
+        info('Opening browser for Krisp authorization...');
+        const creds = await Promise.race([client.configure(services.storage, root), timeout]);
+        await saveKrispCredentials(services.storage, root, creds);
+        await services.integrations.configure(root, 'krisp', { status: 'active' });
+        result.krisp = { configured: true };
+      } catch {
+        console.log('');
+        info('Krisp setup timed out or was cancelled. You can set it up later:');
+        console.log(chalk.dim('  arete integration configure krisp'));
+        console.log('');
+        result.krisp = { configured: false, timedOut: true };
+      }
+    }
+  }
+
+  return result;
+}
+
 export function registerOnboardCommand(program: Command): void {
   program
     .command('onboard')
@@ -69,12 +248,20 @@ export function registerOnboardCommand(program: Command): void {
     .option('--email <email>', 'Your work email')
     .option('--company <company>', 'Your company name')
     .option('--website <url>', 'Company website URL (optional)')
+    .option('--skip-integrations', 'Skip integration setup prompts')
+    .option('--calendar', 'Configure calendar integration (non-interactive)')
+    .option('--calendars <list>', 'Calendar names to sync (comma-separated, use with --calendar)')
+    .option('--fathom-key <key>', 'Fathom API key (non-interactive)')
     .action(async (opts: {
       json?: boolean;
       name?: string;
       email?: string;
       company?: string;
       website?: string;
+      skipIntegrations?: boolean;
+      calendar?: boolean;
+      calendars?: string;
+      fathomKey?: string;
     }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
@@ -228,6 +415,9 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         await services.storage.write(domainHintsPath, domainHintsContent);
       }
 
+      // Run integration phase
+      const integrations = await runIntegrationPhase(services, root, opts);
+
       if (opts.json) {
         console.log(JSON.stringify({
           success: true,
@@ -238,6 +428,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
             website: answers.website,
             domains,
           },
+          integrations,
           files: {
             profile: profilePath,
             domainHints: domains.length > 0 ? join(root, 'context', 'domain-hints.md') : null,
@@ -246,19 +437,35 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         return;
       }
 
+      // Interactive summary
       console.log('');
-      success('Profile created!');
-      console.log('');
-      console.log(chalk.dim('  Profile saved to: context/profile.md'));
-      if (domains.length > 0) {
-        console.log(chalk.dim('  Domain hints saved to: context/domain-hints.md'));
+      success('Profile saved');
+
+      // Calendar status
+      if (integrations.calendar.configured) {
+        const calNames = integrations.calendar.calendars?.length
+          ? integrations.calendar.calendars.join(', ')
+          : 'all';
+        console.log(chalk.dim(`  Calendar: configured (${calNames})`));
+      } else if (integrations.calendar.installRequired) {
+        console.log(chalk.dim('  Calendar: install icalBuddy to enable'));
+      } else {
+        console.log(chalk.dim('  Calendar: skipped'));
       }
+
+      // Fathom status
+      console.log(chalk.dim(`  Fathom: ${integrations.fathom.configured ? 'configured' : 'skipped'}`));
+
+      // Krisp status
+      if (integrations.krisp.configured) {
+        console.log(chalk.dim('  Krisp: connected'));
+      } else if (integrations.krisp.timedOut) {
+        console.log(chalk.dim('  Krisp: timed out'));
+      } else {
+        console.log(chalk.dim('  Krisp: skipped'));
+      }
+
       console.log('');
       info('Continue onboarding by saying "Let\'s get started" in chat');
-      console.log('');
-      console.log(chalk.dim('The agent will help you:'));
-      console.log(chalk.dim('  • Import your existing docs and context'));
-      console.log(chalk.dim('  • Connect integrations (calendar, Fathom)'));
-      console.log(chalk.dim('  • Get your first quick win'));
     });
 }

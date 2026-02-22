@@ -51,7 +51,8 @@ export { getPackageRoot } from './package-root.js';
 // Adapters and integrations
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export type { IDEAdapter, IDETarget } from './adapters/index.js';
-export { getCalendarProvider } from './integrations/calendar/index.js';
+export { getCalendarProvider, listIcalBuddyCalendars } from './integrations/calendar/index.js';
+export type { IcalBuddyCalendarDeps } from './integrations/calendar/index.js';
 export {
   saveMeetingFile,
   meetingFilename,
@@ -72,6 +73,9 @@ export type {
   ParsedMessage,
   LLMCallFn,
 } from './integrations/conversations/index.js';
+
+// Fathom integration
+export { loadFathomApiKey, saveFathomApiKey } from './integrations/fathom/client.js';
 
 // Service container factory
 export { createServices } from './factory.js';

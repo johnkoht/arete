@@ -12,6 +12,47 @@ import type {
   RecordingTranscriptResponse,
 } from './types.js';
 
+/**
+ * Save a Fathom API key to `.credentials/credentials.yaml`.
+ *
+ * Reads the existing file first, deep-merges the `fathom:` section,
+ * and writes the entire file in one operation. Existing credentials
+ * (krisp, slack, etc.) are preserved.
+ */
+export async function saveFathomApiKey(
+  storage: StorageAdapter,
+  workspaceRoot: string,
+  apiKey: string
+): Promise<void> {
+  const { join } = await import('path');
+  const { stringify: stringifyYaml } = await import('yaml');
+  const credPath = join(workspaceRoot, '.credentials', 'credentials.yaml');
+
+  let existing: Record<string, unknown> = {};
+
+  const exists = await storage.exists(credPath);
+  if (exists) {
+    const content = await storage.read(credPath);
+    if (content) {
+      try {
+        const parsed = parseYaml(content);
+        if (parsed && typeof parsed === 'object') {
+          existing = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // If YAML is malformed, start fresh
+      }
+    }
+  }
+
+  const merged: Record<string, unknown> = {
+    ...existing,
+    fathom: { api_key: apiKey },
+  };
+
+  await storage.write(credPath, stringifyYaml(merged));
+}
+
 export async function loadFathomApiKey(
   storage: StorageAdapter,
   workspaceRoot: string | null

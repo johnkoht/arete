@@ -4,6 +4,7 @@ import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { parse as parseYaml } from 'yaml';
 import { parseProfileFrontmatter } from '../../src/commands/onboard.js';
 
 const CLI_PATH = join(import.meta.dirname, '../../src/index.ts');
@@ -315,5 +316,155 @@ company: null
     assert.equal(result.name, undefined);
     assert.equal(result.email, undefined);
     assert.equal(result.company, undefined);
+  });
+});
+
+describe('onboard integration phase', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'arete-onboard-integ-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('--skip-integrations skips integration phase', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.success, true);
+    assert.ok(output.integrations, 'Should include integrations in output');
+    assert.equal(output.integrations.calendar.configured, false);
+    assert.equal(output.integrations.calendar.skipped, true);
+    assert.equal(output.integrations.fathom.configured, false);
+    assert.equal(output.integrations.fathom.skipped, true);
+    assert.equal(output.integrations.krisp.configured, false);
+    assert.equal(output.integrations.krisp.skipped, true);
+  });
+
+  it('--fathom-key writes key to credentials.yaml and marks active', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations --fathom-key "test-api-key-123"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.success, true);
+    assert.equal(output.integrations.fathom.configured, true);
+
+    // Verify credentials file
+    const credContent = await readFile(join(tempDir, '.credentials', 'credentials.yaml'), 'utf8');
+    const creds = parseYaml(credContent) as Record<string, Record<string, string>>;
+    assert.equal(creds.fathom.api_key, 'test-api-key-123');
+
+    // Verify integration marked active in arete.yaml
+    const areteContent = await readFile(join(tempDir, 'arete.yaml'), 'utf8');
+    const areteConfig = parseYaml(areteContent) as Record<string, Record<string, Record<string, string>>>;
+    assert.equal(areteConfig.integrations?.fathom?.status, 'active');
+  });
+
+  it('--fathom-key preserves existing credentials (read-modify-write)', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    // Pre-existing krisp credentials
+    await mkdir(join(tempDir, '.credentials'), { recursive: true });
+    await writeFile(
+      join(tempDir, '.credentials', 'credentials.yaml'),
+      'krisp:\n  client_id: existing-id\n  client_secret: existing-secret\n'
+    );
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations --fathom-key "my-fathom-key"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+
+    const credContent = await readFile(join(tempDir, '.credentials', 'credentials.yaml'), 'utf8');
+    const creds = parseYaml(credContent) as Record<string, Record<string, string>>;
+    // Fathom key was added
+    assert.equal(creds.fathom.api_key, 'my-fathom-key');
+    // Krisp credentials preserved
+    assert.equal(creds.krisp.client_id, 'existing-id');
+    assert.equal(creds.krisp.client_secret, 'existing-secret');
+  });
+
+  it('--calendar configures calendar integration without prompt', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations --calendar --calendars "Work,Personal"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.integrations.calendar.configured, true);
+    assert.deepEqual(output.integrations.calendar.calendars, ['Work', 'Personal']);
+
+    // Verify arete.yaml
+    const areteContent = await readFile(join(tempDir, 'arete.yaml'), 'utf8');
+    const areteConfig = parseYaml(areteContent) as Record<string, Record<string, unknown>>;
+    assert.equal(areteConfig.integrations?.calendar?.provider, 'macos');
+    assert.equal(areteConfig.integrations?.calendar?.status, 'active');
+    assert.deepEqual(areteConfig.integrations?.calendar?.calendars, ['Work', 'Personal']);
+  });
+
+  it('--calendar without --calendars configures with empty array (all)', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations --calendar',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.integrations.calendar.configured, true);
+    assert.deepEqual(output.integrations.calendar.calendars, []);
+  });
+
+  it('--json mode includes integrations in output', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.ok(output.integrations, 'JSON output must include integrations');
+    assert.ok('calendar' in output.integrations);
+    assert.ok('fathom' in output.integrations);
+    assert.ok('krisp' in output.integrations);
+  });
+
+  it('combines --fathom-key and --calendar flags', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --name "Jane" --email "jane@acme.com" --company "Acme" --skip-integrations --fathom-key "key123" --calendar --calendars "Home"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0, `Failed with: ${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.integrations.fathom.configured, true);
+    assert.equal(output.integrations.calendar.configured, true);
+    assert.deepEqual(output.integrations.calendar.calendars, ['Home']);
+    // Krisp still skipped (no flag for non-interactive krisp)
+    assert.equal(output.integrations.krisp.configured, false);
   });
 });
