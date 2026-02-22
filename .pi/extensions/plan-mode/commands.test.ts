@@ -6,6 +6,7 @@ import {
 	createDefaultState,
 	getChangesSince,
 	extractPrdFeatureSlug,
+	commitPlanToGit,
 	hasUnsavedPlanChanges,
 	getSuggestedNextActions,
 	handlePlan,
@@ -68,6 +69,18 @@ Some content here`;
 	it("handles feature line with extra whitespace", () => {
 		const content = "Feature:   spaced-feature   \nMore content";
 		assert.equal(extractPrdFeatureSlug(content), "spaced-feature");
+	});
+});
+
+describe("commitPlanToGit", () => {
+	it("returns false for non-existent plan directory", () => {
+		// No plan dir exists at this path, git add will fail silently
+		const result = commitPlanToGit("nonexistent-plan-slug-xyz");
+		assert.equal(result, false);
+	});
+
+	it("is exported and callable", () => {
+		assert.equal(typeof commitPlanToGit, "function");
 	});
 });
 

@@ -123,6 +123,41 @@ export function getChangesSince(sinceDate: string): PlanDiff {
 	}
 }
 
+/**
+ * Commit plan folder to git before build starts.
+ * Stages everything under dev/work/plans/{slug}/ and commits.
+ * Silently no-ops if git is unavailable, not a repo, or nothing to commit.
+ */
+export function commitPlanToGit(slug: string): boolean {
+	try {
+		const planDir = `dev/work/plans/${slug}/`;
+		execSync(`git add "${planDir}"`, {
+			encoding: "utf-8",
+			timeout: 5000,
+			stdio: ["pipe", "pipe", "pipe"],
+		});
+		execSync(`git diff --cached --quiet "${planDir}"`, {
+			encoding: "utf-8",
+			timeout: 5000,
+			stdio: ["pipe", "pipe", "pipe"],
+		});
+		// diff --cached --quiet exits 0 if nothing staged → nothing to commit
+		return false;
+	} catch {
+		// diff --cached --quiet exits 1 if there ARE staged changes — that's the happy path
+		try {
+			execSync(`git commit -m "plan: ${slug}"`, {
+				encoding: "utf-8",
+				timeout: 10000,
+				stdio: ["pipe", "pipe", "pipe"],
+			});
+			return true;
+		} catch {
+			return false;
+		}
+	}
+}
+
 /** Parse "Feature: <slug>" metadata from a plan PRD artifact. */
 export function extractPrdFeatureSlug(artifactContent: string): string | null {
 	const match = artifactContent.match(/^Feature:\s+([a-z0-9-]+)\s*$/im);
@@ -1184,6 +1219,9 @@ export async function handleBuild(
 
 	// Transition to building
 	updatePlanFrontmatter(state.currentSlug, { status: "building" });
+
+	// Auto-commit plan and artifacts before build begins
+	commitPlanToGit(state.currentSlug);
 
 	state.planModeEnabled = false;
 	state.executionMode = true;
