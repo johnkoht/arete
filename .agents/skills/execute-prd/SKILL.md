@@ -354,6 +354,22 @@ For each pending task (in dependency order):
 
 **Orchestrator returns to sr. eng manager role.** All tasks are complete from a Reviewer perspective; now assess the whole.
 
+#### Close-Out Checklist (Quick Scan)
+
+Before diving into the detailed steps below, verify you'll cover all of these:
+
+- [ ] **Problem fit**: Does the implementation solve the PRD's problem statement? (Holistic Review)
+- [ ] **Completeness**: Any gaps the task-level AC didn't cover but the PRD implies? (Holistic Review)
+- [ ] **LEARNINGS.md**: Were LEARNINGS.md files created/updated where regressions were fixed? (Holistic Review)
+- [ ] **Refactor items**: Were refactor items from reviewer feedback filed as plan ideas? (Holistic Review)
+- [ ] **Pre-mortem retrospective**: Which risks materialized? Were mitigations effective? (Pre-Mortem Analysis)
+- [ ] **Memory entry**: Created `memory/entries/YYYY-MM-DD_*-learnings.md` (Update Builder Memory)
+- [ ] **MEMORY.md index**: Added index line to `memory/MEMORY.md` (Update Builder Memory)
+- [ ] **Documentation audit**: Are README, AGENTS.md sources, or other docs now stale? (Holistic Review)
+- [ ] **AGENTS.md rebuild**: If `.agents/sources/` were modified, run `npm run build:agents:dev` (Holistic Review)
+- [ ] **Catalog check**: If tooling/extensions/services changed, update `dev/catalog/capabilities.json` (Holistic Review)
+- [ ] **Final report**: Comprehensive, one report, ≤2 pages (Final Report)
+
 16. **Orchestrator: Holistic Review**
 
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?

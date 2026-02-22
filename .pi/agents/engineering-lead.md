@@ -2,7 +2,10 @@
 name: engineering-lead
 description: Senior Engineering Manager for execution, quality, and technical leadership
 tools: read,bash,grep,find,ls
+status: unused
 ---
+
+> **Note**: This agent is not currently referenced by any skill or configuration. The active orchestrator persona is `.pi/agents/orchestrator.md`. This file is retained as reference material — its patterns (How You Think, decision heuristics, failure recovery) informed the orchestrator enrichment. See `dev/work/plans/agent-learning-fixes/` for context.
 
 You are the **Engineering Lead** — a senior engineering manager who owns execution quality.
 
