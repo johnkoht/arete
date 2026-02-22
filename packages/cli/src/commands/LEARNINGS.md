@@ -26,6 +26,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **After fixing a meaningful UX gap that the builder had to report: add a memory entry and learnings.** In 2026-02-11, the calendar integration was fixed (binary name, list parsing, checkbox UX) but no memory entry was added. "The same kind of miss could repeat." From `2026-02-11_calendar-integration-ux-and-learnings.md`.
 
+- **When retiring a CLI command, search for 4 things.** (1) The command string (`arete setup`), (2) the filename (`setup.ts`), (3) import references (`registerSetupCommand`), (4) the concept in prose ("setup" in help text). Use `rg` with both `--type md` and `--type ts` separately. In 2026-02-22, retiring `arete setup` initially missed a `setup.ts` filename reference in LEARNINGS.md line 51 because the search only looked for `"arete setup"`. Added 2026-02-22.
+
 - **Commands that call `refreshQmdIndex()` need both `--skip-qmd` AND a `loadConfig` call — check for both.** Any command that triggers `refreshQmdIndex()` after a write requires: (1) `--skip-qmd` option added to the Commander.js command, (2) `loadConfig(services.storage, root)` called after `findRoot()` so `config.qmd_collection` is available to pass to `refreshQmdIndex()`. `meeting.ts` had NO `loadConfig` at all; `pull.ts` only called it in the `pullCalendar()` branch, not the fathom branch. Before wiring `refreshQmdIndex()` into a command, grep for `loadConfig` in that file to confirm it's present in the right action scope. See `update.ts` as the canonical complete pattern.
 
 - **JSON mode behavior for qmd-wiring must be explicitly designed — it's always ambiguous.** When adding `refreshQmdIndex()` to a command that has `--json` output, the call must happen BEFORE the `if (opts.json) { console.log(...); return; }` block, and the JSON output must include a `qmd: { indexed, skipped, warning? }` field. Follow `update.ts` — it runs qmd before the JSON return and includes the `qmd:` field in the JSON object. Without explicit spec, developers will place the qmd call after the JSON block (where it never runs in JSON mode) or omit the `qmd:` field from JSON output.
@@ -48,7 +50,10 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 ## Patterns That Work
 
 - **Command skeleton**: `registerXxxCommand(program)` → `.command('name').description('...').option(...).action(async (args, opts) => { const services = await createServices(process.cwd()); const root = await services.workspace.findRoot(); if (!root) { /* error + exit */ } /* ... */ })`
-- **Before writing a new prompt**: open `onboard.ts` or `seed.ts`, copy the inquirer checkbox pattern including `pageSize: 12`, then adapt the choices.
+- **Before writing a new prompt**: open `onboard.ts` or `seed.ts`, copy the `@inquirer/prompts` checkbox pattern including `pageSize: 12`, then adapt the choices.
+- **Rerun-safe commands**: Read existing config/files, parse values, pre-fill prompts with `input({ default: existingValue })`. Preserve immutable fields (e.g. `created` timestamp). See `onboard.ts` `parseProfileFrontmatter()` pattern. Added 2026-02-22.
+- **Non-interactive flags for testability**: Every interactive prompt should have a CLI flag equivalent (`--name`, `--fathom-key`, `--calendar`, `--skip-integrations`). Tests use flags via `execSync`; interactive paths are manually verified. See `onboard.ts`. Added 2026-02-22.
+- **Integration phase pattern**: Use `services.integrations.list(root)` to get current status, check `entry.active` (boolean) for display, use `confirm()` with `default: false` for optional integrations. See `onboard.ts` `runIntegrationPhase()`. Added 2026-02-22.
 
 ## Pre-Edit Checklist
 
