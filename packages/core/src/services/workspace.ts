@@ -350,24 +350,37 @@ export class WorkspaceService {
       result.preserved.push(...syncResult.preserved);
     }
 
-    // Backfill missing tools (add new tools from source, never overwrite existing)
-    if (options.sourcePaths?.tools && this.storage.copy) {
+    // Backfill missing tools and missing files within existing tools.
+    // Uses file-level backfill (mirrors template backfill pattern below) so that partial
+    // tool directories (e.g. onboarding/ exists but templates/ subdir is absent) get
+    // completed on update, not just wholly-missing tool directories.
+    if (options.sourcePaths?.tools) {
       const toolsSrc = options.sourcePaths.tools;
       const srcExists = await this.storage.exists(toolsSrc);
       if (srcExists) {
         const toolDirs = await this.storage.listSubdirectories(toolsSrc);
-        for (const src of toolDirs) {
-          const name = src.split(/[/\\]/).pop() ?? '';
-          if (!name) continue;
-          const dest = join(paths.tools, name);
-          const destExists = await this.storage.exists(dest);
-          if (!destExists) {
-            try {
-              await this.storage.mkdir(paths.tools);
-              await this.storage.copy!(src, dest, { recursive: true });
-              result.added.push(join('tools', name));
-            } catch {
-              // Non-fatal: skip individual tool on error
+        for (const srcToolDir of toolDirs) {
+          const toolName = srcToolDir.split(/[/\\]/).pop() ?? '';
+          if (!toolName) continue;
+          const destToolDir = join(paths.tools, toolName);
+          // Walk all files within the tool dir and backfill any that are missing.
+          // The +1 on slice skips the trailing path separator — mirrors templateSrc pattern.
+          const srcFiles = await this.storage.list(srcToolDir, { recursive: true });
+          for (const srcFile of srcFiles) {
+            const rel = srcFile.slice(srcToolDir.length + 1);
+            const destFile = join(destToolDir, rel);
+            const destExists = await this.storage.exists(destFile);
+            if (!destExists) {
+              try {
+                const content = await this.storage.read(srcFile);
+                if (content != null) {
+                  await this.storage.mkdir(join(destFile, '..'));
+                  await this.storage.write(destFile, content);
+                  result.added.push(join('tools', toolName, rel));
+                }
+              } catch {
+                // Non-fatal: skip individual file on error
+              }
             }
           }
         }
