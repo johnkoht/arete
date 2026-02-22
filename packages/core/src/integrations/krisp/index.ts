@@ -30,6 +30,9 @@ const DEFAULT_TEMPLATE = `# {title}
 
 function dateRange(days: number): { after: string; before: string } {
   const end = new Date();
+  // Add 1 day to `before` so meetings with UTC dates on the current day aren't
+  // excluded (e.g. 9pm CST = next day UTC).
+  end.setDate(end.getDate() + 1);
   const start = new Date();
   start.setDate(start.getDate() - days);
   return {
@@ -64,7 +67,19 @@ export async function pullKrisp(
 
   for (const m of meetings) {
     try {
-      const meeting = meetingFromKrisp(m);
+      // Fetch transcript via getDocument if Krisp returned a reference
+      let transcriptText = '';
+      if (m.transcript && !Array.isArray(m.transcript) && typeof m.transcript === 'object' && 'status' in m.transcript) {
+        // Krisp returns transcript as a reference — fetch via getDocument using meeting_id
+        try {
+          const doc = await client.getDocument(m.meeting_id);
+          transcriptText = doc.document ?? '';
+        } catch {
+          // Transcript fetch failed — proceed without it
+        }
+      }
+
+      const meeting = meetingFromKrisp(m, transcriptText);
       const fullPath = await saveMeetingFile(
         storage,
         meeting,

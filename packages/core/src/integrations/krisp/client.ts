@@ -76,6 +76,104 @@ function basicAuth(clientId: string, clientSecret: string): string {
 }
 
 /**
+ * Parse an SSE (text/event-stream) response to extract the JSON-RPC result.
+ *
+ * MCP Streamable HTTP allows servers to respond with SSE instead of plain JSON.
+ * Each SSE event has `data:` lines containing JSON. We find the last JSON-RPC
+ * response (the one with a `result` or `error` field) in the stream.
+ */
+async function parseSSEResponse(res: Response): Promise<JsonRpcResponse> {
+  const text = await res.text();
+  const lines = text.split('\n');
+  let lastResponse: JsonRpcResponse | undefined;
+
+  for (const line of lines) {
+    if (!line.startsWith('data:')) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') continue;
+
+    try {
+      const parsed = JSON.parse(data) as JsonRpcResponse;
+      // Keep the last message that looks like a JSON-RPC response (has result or error)
+      if (parsed.jsonrpc === '2.0' && (parsed.result !== undefined || parsed.error !== undefined)) {
+        lastResponse = parsed;
+      }
+    } catch {
+      // Skip non-JSON data lines (e.g. keep-alive comments)
+    }
+  }
+
+  if (!lastResponse) {
+    throw new Error('Krisp MCP SSE stream did not contain a JSON-RPC response');
+  }
+
+  return lastResponse;
+}
+
+/** MCP CallToolResult content item. */
+type McpContentItem = {
+  type: string;
+  text?: string;
+  [key: string]: unknown;
+};
+
+/** MCP CallToolResult envelope from tools/call. */
+type McpToolResult = {
+  content?: McpContentItem[];
+  structuredContent?: unknown;
+  isError?: boolean;
+};
+
+/**
+ * Unwrap the MCP tools/call result envelope.
+ *
+ * MCP tools/call returns: { content: [{ type: "text", text: "..." }], isError: false }
+ * We need to extract the actual data from the content array.
+ *
+ * Priority:
+ * 1. structuredContent (if present, already parsed)
+ * 2. First text content item, parsed as JSON
+ * 3. First text content item as raw string
+ * 4. The raw result if it doesn't look like an MCP envelope
+ */
+function unwrapToolResult(result: unknown): unknown {
+  if (result == null || typeof result !== 'object') return result;
+
+  const envelope = result as McpToolResult;
+
+  // Not an MCP envelope — return as-is (e.g. already unwrapped or plain object)
+  if (!Array.isArray(envelope.content) && envelope.structuredContent === undefined) {
+    return result;
+  }
+
+  if (envelope.isError) {
+    const errorText = envelope.content
+      ?.filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('\n') ?? 'Unknown tool error';
+    throw new Error(`Krisp MCP tool error: ${errorText}`);
+  }
+
+  // Prefer structuredContent if available
+  if (envelope.structuredContent !== undefined) {
+    return envelope.structuredContent;
+  }
+
+  // Extract text from content array
+  const textItems = envelope.content?.filter((c) => c.type === 'text') ?? [];
+  if (textItems.length === 0) return result;
+
+  const text = textItems[0].text ?? '';
+
+  // Try to parse as JSON (most MCP tools return JSON in text content)
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
  * Krisp MCP client.
  *
  * Encapsulates OAuth flow (configure), token refresh, and MCP tool calls.
@@ -353,6 +451,7 @@ export class KrispMcpClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
         Authorization: `Bearer ${creds.access_token}`,
       },
       body: JSON.stringify({
@@ -377,17 +476,30 @@ export class KrispMcpClient {
       throw new Error(`Krisp MCP error: ${res.status} ${res.statusText}`);
     }
 
-    const json = (await res.json()) as JsonRpcResponse;
+    const contentType = res.headers.get('content-type') ?? '';
+    let json: JsonRpcResponse;
+
+    if (contentType.includes('text/event-stream')) {
+      // MCP Streamable HTTP: server may respond with SSE.
+      // Parse the SSE stream and extract the JSON-RPC response from data lines.
+      json = await parseSSEResponse(res);
+    } else {
+      json = (await res.json()) as JsonRpcResponse;
+    }
+
     if (json.error) {
       throw new Error(`Krisp MCP tool error: ${json.error.message}`);
     }
 
-    return json.result;
+    return unwrapToolResult(json.result);
   }
 
   /**
    * List meetings within an optional date range.
    * Uses search_meetings with after/before params and requests all content fields.
+   *
+   * Krisp's structuredContent returns: { criteria, meetings: [...], count }
+   * The text content returns a human-readable string with embedded JSON.
    */
   async listMeetings(options: { after?: string; before?: string; limit?: number; offset?: number } = {}): Promise<KrispMeeting[]> {
     const result = await this.callTool('search_meetings', {
@@ -395,10 +507,11 @@ export class KrispMcpClient {
       fields: ['name', 'date', 'url', 'attendees', 'speakers', 'transcript',
                'meeting_notes', 'detailed_summary', 'key_points', 'action_items'],
     });
-    // search_meetings may return array directly or wrapped in a results field
+    // Direct array (unlikely but defensive)
     if (Array.isArray(result)) return result as KrispMeeting[];
-    const wrapped = result as { results?: KrispMeeting[] };
-    return wrapped.results ?? [];
+    // Krisp structuredContent wraps in { meetings: [...] }
+    const wrapped = result as { meetings?: KrispMeeting[]; results?: KrispMeeting[] };
+    return wrapped.meetings ?? wrapped.results ?? [];
   }
 
   /**

@@ -1,7 +1,6 @@
 /**
  * Krisp MCP integration types.
- * Verified against tools/list 2026-02-21
- * Source: live Krisp Core account — krisp-tools-schema.json
+ * Verified against live API responses 2026-02-21
  */
 
 export type KrispAttendee = {
@@ -9,9 +8,8 @@ export type KrispAttendee = {
   email?: string;
 };
 
-export type KrispSpeaker = {
-  name?: string;
-};
+/** Krisp returns speakers as plain strings, not objects. */
+export type KrispSpeaker = string;
 
 export type KrispTranscriptSegment = {
   speaker?: string;
@@ -26,25 +24,42 @@ export type KrispActionItem = {
   completed?: boolean;
 };
 
-/** Response from search_meetings with all content fields requested */
+/**
+ * Transcript field from search_meetings — Krisp doesn't inline transcripts.
+ * Instead it returns a reference to fetch via getDocument.
+ */
+export type KrispTranscriptRef = {
+  status?: string;
+  note?: string;
+};
+
+/**
+ * Response from search_meetings.
+ *
+ * Key differences from initial assumptions (verified via live API):
+ * - Uses `meeting_id` not `id`
+ * - `speakers` are plain strings, not objects
+ * - `transcript` is a reference object, not inline segments
+ */
 export type KrispMeeting = {
-  id: string;
+  meeting_id: string;
   name?: string;
   date?: string;
   url?: string;
   is_recurring?: boolean;
   attendees?: KrispAttendee[];
   speakers?: KrispSpeaker[];
-  transcript?: KrispTranscriptSegment[];
-  agenda?: string;
+  transcript?: KrispTranscriptRef | KrispTranscriptSegment[];
+  agenda?: string | { agenda_id?: string; note?: string };
   meeting_notes?: string;
   detailed_summary?: string;
   key_points?: string[];
   action_items?: KrispActionItem[];
 };
 
-/** Response from get_document */
+/** Response from get_document — returns full document content as markdown. */
 export type KrispDocument = {
-  id?: string;
+  documentId?: string;
+  document?: string;
   [key: string]: unknown;
 };

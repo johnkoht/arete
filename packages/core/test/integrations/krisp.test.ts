@@ -85,7 +85,7 @@ function makeExpiredCreds(overrides: Partial<KrispCredentials> = {}): KrispCrede
 type FetchCapture = { url: string; init: RequestInit };
 
 let fetchCaptures: FetchCapture[] = [];
-let fetchQueue: Array<{ body: unknown; status?: number }> = [];
+let fetchQueue: Array<{ body: unknown; status?: number; contentType?: string; rawBody?: string }> = [];
 const originalFetch = globalThis.fetch;
 
 function setupFetchMock(): void {
@@ -98,9 +98,11 @@ function setupFetchMock(): void {
       throw new Error(`Unexpected fetch call to ${url.toString()} — no response queued`);
     }
     const status = queued.status ?? 200;
-    return new Response(JSON.stringify(queued.body), {
+    const ct = queued.contentType ?? 'application/json';
+    const responseBody = queued.rawBody ?? JSON.stringify(queued.body);
+    return new Response(responseBody, {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': ct },
     });
   };
 }
@@ -115,7 +117,20 @@ function queueFetch(body: unknown, status = 200): void {
   fetchQueue.push({ body, status });
 }
 
-function mcpSuccessResponse(result: unknown = { content: 'ok' }): unknown {
+function queueSSEFetch(body: unknown, status = 200): void {
+  const sseBody = `data: ${JSON.stringify(body)}\n\n`;
+  fetchQueue.push({ body: null, status, contentType: 'text/event-stream', rawBody: sseBody });
+}
+
+/** Wrap a value in the MCP tools/call envelope: { content: [{ type: "text", text: JSON }] } */
+function mcpToolEnvelope(data: unknown): unknown {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data) }],
+    isError: false,
+  };
+}
+
+function mcpSuccessResponse(result: unknown = mcpToolEnvelope({ ok: true })): unknown {
   return { jsonrpc: '2.0', id: 1, result };
 }
 
@@ -274,6 +289,99 @@ krisp:
         return true;
       }
     );
+  });
+
+  it('sends Accept header with application/json and text/event-stream (MCP Streamable HTTP spec)', async () => {
+    // 406 Not Acceptable is returned when Accept header is missing — this test
+    // prevents regression by verifying the header is always sent.
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    queueFetch(mcpSuccessResponse());
+    await client.callTool('test_tool', {});
+
+    const headers = fetchCaptures[0].init.headers as Record<string, string>;
+    assert.ok(
+      headers['Accept']?.includes('application/json'),
+      `Accept header must include application/json; got: "${headers['Accept']}"`
+    );
+    assert.ok(
+      headers['Accept']?.includes('text/event-stream'),
+      `Accept header must include text/event-stream; got: "${headers['Accept']}"`
+    );
+  });
+
+  it('unwraps MCP content envelope from tools/call result', async () => {
+    // MCP tools/call wraps results in { content: [{ type: "text", text: "..." }] }.
+    // Without unwrapping, listMeetings returns [] because the envelope isn't an array.
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    const innerData = [{ id: '1', name: 'Test Meeting' }];
+    queueFetch({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: JSON.stringify(innerData) }],
+        isError: false,
+      },
+    });
+
+    const result = await client.callTool('search_meetings', {});
+    assert.deepEqual(result, innerData, 'callTool must unwrap MCP content envelope and parse JSON');
+  });
+
+  it('prefers structuredContent over text content when present', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    const structured = { meetings: [{ id: '1' }] };
+    queueFetch({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        content: [{ type: 'text', text: '{"meetings":[{"id":"1"}]}' }],
+        structuredContent: structured,
+        isError: false,
+      },
+    });
+
+    const result = await client.callTool('test_tool', {});
+    assert.deepEqual(result, structured, 'must prefer structuredContent when available');
+  });
+
+  it('handles SSE (text/event-stream) response from MCP server', async () => {
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    queueSSEFetch({ jsonrpc: '2.0', id: 1, result: { meetings: [] } });
+    const result = await client.callTool('test_tool', {});
+
+    assert.deepEqual(result, { meetings: [] }, 'must extract result from SSE stream');
   });
 
   it('401 on callTool: throws "Krisp session expired"', async () => {
@@ -570,25 +678,24 @@ fathom:
 describe('meetingFromKrisp', () => {
   it('(13) transforms a full KrispMeeting to correct MeetingForSave shape', () => {
     const meeting: KrispMeeting = {
-      id: 'abc123',
+      meeting_id: 'abc123',
       name: 'Team Standup',
       date: '2026-01-15',
       url: 'https://krisp.ai/meetings/abc123',
       attendees: [{ name: 'Alice', email: 'a@x.com' }],
-      transcript: [{ speaker: 'Bob', text: 'Hello', timestamp: '0:01' }],
       key_points: ['Point A'],
       action_items: [{ text: 'Review doc', assignee: 'Alice' }],
       detailed_summary: 'Great meeting',
     };
 
-    const result = meetingFromKrisp(meeting);
+    const result = meetingFromKrisp(meeting, 'Full transcript text here');
 
     assert.equal(result.title, 'Team Standup', 'title must come from name');
     assert.equal(result.date, '2026-01-15', 'date must be preserved');
     assert.equal(result.url, 'https://krisp.ai/meetings/abc123', 'url must be preserved');
     assert.deepEqual(result.highlights, ['Point A'], 'highlights must come from key_points');
     assert.deepEqual(result.action_items, ['Review doc (@Alice)'], 'action_items must be plain strings with assignee');
-    assert.ok(result.transcript.includes('**[0:01] Bob**: Hello'), 'transcript must include formatted speaker line');
+    assert.equal(result.transcript, 'Full transcript text here', 'transcript must use fetched text');
     assert.equal(result.summary, 'Great meeting', 'summary must come from detailed_summary');
     assert.equal(result.duration_minutes, 0, 'duration_minutes must always be 0');
     assert.deepEqual(
@@ -598,8 +705,24 @@ describe('meetingFromKrisp', () => {
     );
   });
 
+  it('uses speakers as attendees when attendees list is empty', () => {
+    const meeting: KrispMeeting = {
+      meeting_id: 'spk1',
+      name: 'Quick Call',
+      speakers: ['Anna', 'Bob'],
+    };
+
+    const result = meetingFromKrisp(meeting);
+
+    assert.deepEqual(
+      result.attendees,
+      [{ name: 'Anna', email: null }, { name: 'Bob', email: null }],
+      'speakers must be used as attendees when no attendees field'
+    );
+  });
+
   it('(14) handles missing/absent fields without throwing', () => {
-    const meeting: KrispMeeting = { id: 'minimal-id' };
+    const meeting: KrispMeeting = { meeting_id: 'minimal-id' };
 
     const result = meetingFromKrisp(meeting);
 
@@ -643,7 +766,14 @@ krisp:
   });
 
   it('(15) listMeetings passes after, before, AND fields including "transcript"', async () => {
-    queueFetch({ jsonrpc: '2.0', id: 1, result: [] });
+    // Return structuredContent shape matching real Krisp API
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 0 meetings' }],
+        structuredContent: { criteria: {}, meetings: [], count: 0 },
+      },
+    });
 
     await client.listMeetings({ after: '2026-01-01', before: '2026-01-31' });
 
@@ -661,9 +791,28 @@ krisp:
     );
   });
 
+  it('listMeetings extracts meetings from structuredContent.meetings', async () => {
+    const meetings = [
+      { meeting_id: 'aaa', name: 'Standup' },
+      { meeting_id: 'bbb', name: 'Retro' },
+    ];
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 2 meetings' }],
+        structuredContent: { criteria: {}, meetings, count: 2 },
+      },
+    });
+
+    const result = await client.listMeetings();
+    assert.equal(result.length, 2, 'must return 2 meetings');
+    assert.equal(result[0].meeting_id, 'aaa');
+    assert.equal(result[1].meeting_id, 'bbb');
+  });
+
   it('(16) getDocument passes documentId (not id)', async () => {
     const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    queueFetch({ jsonrpc: '2.0', id: 1, result: { id: docId } });
+    queueFetch({ jsonrpc: '2.0', id: 1, result: mcpToolEnvelope({ id: docId }) });
 
     await client.getDocument(docId);
 
@@ -727,12 +876,20 @@ krisp:
   expires_at: ${Math.floor(Date.now() / 1000) + 3600}
 `.trim());
 
-    // Queue fetch response for listMeetings → callTool
+    // Queue fetch response for listMeetings → callTool (real Krisp structuredContent shape)
     const meetings: KrispMeeting[] = [
-      { id: 'aaaa1111aaaa1111aaaa1111aaaa1111', name: 'Standup', date: '2026-01-15' },
-      { id: 'bbbb2222bbbb2222bbbb2222bbbb2222', name: 'Retro', date: '2026-01-16' },
+      { meeting_id: 'aaaa1111aaaa1111aaaa1111aaaa1111', name: 'Standup', date: '2026-01-15' },
+      { meeting_id: 'bbbb2222bbbb2222bbbb2222bbbb2222', name: 'Retro', date: '2026-01-16' },
     ];
-    queueFetch({ jsonrpc: '2.0', id: 1, result: meetings });
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 2 meetings' }],
+        structuredContent: { criteria: {}, meetings, count: 2 },
+      },
+    });
+    // Queue 2 getDocument calls for transcript fetching (meetings have no transcript ref)
+    // No getDocument calls needed — meetings don't have transcript refs
 
     const result = await pullKrisp(storage, WORKSPACE, paths, 7);
 
