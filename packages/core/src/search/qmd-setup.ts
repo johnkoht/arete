@@ -92,7 +92,10 @@ export type QmdRefreshResult = {
  * - All failures are non-fatal (returns warning, never throws).
  *
  * @param workspaceRoot - Absolute path to the workspace
- * @param existingCollectionName - Collection name from arete.yaml (must be set)
+ * @param existingCollectionName - Used only as a "qmd configured?" gate: when
+ *   undefined or empty the refresh is skipped. The name is **not** passed to the
+ *   qmd CLI — qmd infers the active collection from the working directory
+ *   (`cwd: workspaceRoot`).
  * @param deps - Injectable dependencies for testing
  * @returns Refresh result
  */
@@ -150,7 +153,10 @@ export async function refreshQmdIndex(
  * - All failures are non-fatal (returns warning, never throws).
  *
  * @param workspaceRoot - Absolute path to the workspace
- * @param existingCollectionName - Collection name from arete.yaml, if any
+ * @param existingCollectionName - Used only as a "qmd configured?" gate: when
+ *   provided, skips collection creation and runs `qmd update` only. The name is
+ *   **not** passed to the qmd CLI — qmd infers the active collection from the
+ *   working directory (`cwd: workspaceRoot`).
  * @param deps - Injectable dependencies for testing
  * @returns Result with status and optional collection name to persist
  */

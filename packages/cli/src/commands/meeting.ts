@@ -17,6 +17,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { success, error, info, warn, listItem } from '../formatters.js';
+import { displayQmdResult } from '../lib/qmd-output.js';
 
 type AttendeeCandidate = {
   name?: string;
@@ -142,14 +143,7 @@ export function registerMeetingCommands(program: Command): void {
         } else {
           info(`Skipped (already exists): ${meetingFilename(meeting)}`);
         }
-        if (qmdResult && !qmdResult.skipped) {
-          if (qmdResult.indexed) {
-            listItem('Search index', 'qmd index updated');
-          }
-          if (qmdResult.warning) {
-            warn(qmdResult.warning);
-          }
-        }
+        displayQmdResult(qmdResult);
       },
     );
 
@@ -339,14 +333,7 @@ export function registerMeetingCommands(program: Command): void {
       if (unknownQueue.length > 0) {
         warn('Some attendees remain in unknown_queue and require review.');
       }
-      if (qmdResult && !qmdResult.skipped) {
-        if (qmdResult.indexed) {
-          listItem('Search index', 'qmd index updated');
-        }
-        if (qmdResult.warning) {
-          warn(qmdResult.warning);
-        }
-      }
+      displayQmdResult(qmdResult);
     });
 }
 

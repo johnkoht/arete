@@ -8,6 +8,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, success, error, info, warn } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
+import { displayQmdResult } from '../lib/qmd-output.js';
 
 const DEFAULT_DAYS = 7;
 
@@ -80,14 +81,7 @@ export function registerPullCommand(program: Command): void {
           } else {
             error(`Fathom pull failed: ${result.errors.join(', ')}`);
           }
-          if (qmdResult && !qmdResult.skipped) {
-            if (qmdResult.indexed) {
-              listItem('Search index', 'qmd index updated');
-            }
-            if (qmdResult.warning) {
-              warn(qmdResult.warning);
-            }
-          }
+          displayQmdResult(qmdResult);
           return;
         }
 
