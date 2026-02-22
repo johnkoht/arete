@@ -1,6 +1,6 @@
 ## How This Works
 
-CLI commands are registered via `registerXxxCommand(program: Command)` functions imported and called in `packages/cli/src/index.ts`. Commander.js is the CLI framework. Each command file exports a single `registerXxxCommand` function that attaches subcommands/options to the Commander `program`. The established pattern for every action: `createServices(process.cwd())` → `services.workspace.findRoot()` (exit if null) → execute service method → format output via `formatters.ts`. JSON output (`--json` flag) is supported across commands for programmatic use. Interactive prompts use `inquirer` with checkbox, confirm, and list types — always match the `arete setup` and `arete seed` UX patterns (checkbox for multi-select, `pageSize: 12`, clear copy). Tests for command behavior are in `packages/cli/test/commands/`.
+CLI commands are registered via `registerXxxCommand(program: Command)` functions imported and called in `packages/cli/src/index.ts`. Commander.js is the CLI framework. Each command file exports a single `registerXxxCommand` function that attaches subcommands/options to the Commander `program`. The established pattern for every action: `createServices(process.cwd())` → `services.workspace.findRoot()` (exit if null) → execute service method → format output via `formatters.ts`. JSON output (`--json` flag) is supported across commands for programmatic use. Interactive prompts use `@inquirer/prompts` (added 2026-02-22; this is the real interactive prompt dependency, not the monolithic `inquirer` package) with checkbox, confirm, and list types — always match the `arete onboard` and `arete seed` UX patterns (checkbox for multi-select, `pageSize: 12`, clear copy). Tests for command behavior are in `packages/cli/test/commands/`.
 
 ## Key References
 
@@ -14,7 +14,7 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 ## Gotchas
 
-- **Use established UX patterns (checkbox, `pageSize: 12`) — not bare minimum.** In 2026-02-11, the calendar integration configure command used number-based selection and displayed raw `icalBuddy` output instead of matching the `arete setup` / `arete seed` UX (inquirer checkbox with parsed calendar names). The builder corrected this explicitly: "When updating or adding CLI features, use established design patterns and experience rather than the bare minimum." Before writing interactive prompts, read `setup.ts` and `seed.ts` to see what they use. Correction from `memory/collaboration.md`.
+- **Use established UX patterns (checkbox, `pageSize: 12`) — not bare minimum.** In 2026-02-11, the calendar integration configure command used number-based selection and displayed raw `icalBuddy` output instead of matching the `arete onboard` / `arete seed` UX (@inquirer/prompts checkbox with parsed calendar names). The builder corrected this explicitly: "When updating or adding CLI features, use established design patterns and experience rather than the bare minimum." Before writing interactive prompts, read `onboard.ts` and `seed.ts` to see what they use. Correction from `memory/collaboration.md`.
 
 - **Always check `services.workspace.findRoot()` and exit if null before doing any workspace operation.** Every command that requires a workspace does: `const root = await services.workspace.findRoot(); if (!root) { error('Not in an Areté workspace'); process.exit(1); }`. Commands that skip this will produce confusing errors (file not found, undefined paths) when run outside a workspace. See `pull.ts` L22-29 for the canonical pattern.
 
@@ -48,11 +48,11 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 ## Patterns That Work
 
 - **Command skeleton**: `registerXxxCommand(program)` → `.command('name').description('...').option(...).action(async (args, opts) => { const services = await createServices(process.cwd()); const root = await services.workspace.findRoot(); if (!root) { /* error + exit */ } /* ... */ })`
-- **Before writing a new prompt**: open `setup.ts` or `seed.ts`, copy the inquirer checkbox pattern including `pageSize: 12`, then adapt the choices.
+- **Before writing a new prompt**: open `onboard.ts` or `seed.ts`, copy the inquirer checkbox pattern including `pageSize: 12`, then adapt the choices.
 
 ## Pre-Edit Checklist
 
-- [ ] Check `arete setup` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command
+- [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command
 - [ ] Verify all exit paths check `opts.json` before printing formatted output
 - [ ] Ensure `services.workspace.findRoot()` guard is present for any command that needs a workspace root
 - [ ] Run `npm test` from repo root — includes CLI golden file tests

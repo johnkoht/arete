@@ -78,10 +78,10 @@ arete pull calendar --today
 
 ### Integrations
 
-Configure additional integrations:
+Configure integrations during onboarding or anytime after:
 
 ```bash
-arete setup                              # See available integrations
+arete onboard                            # Includes integration setup
 arete integration configure fathom       # Meeting recordings
 arete integration configure calendar     # Calendar sync
 ```

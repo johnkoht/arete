@@ -141,7 +141,7 @@ Skills live in `.agents/skills/` for both IDEs (shared).
    - Collects your name, email, and company — bootstraps `context/profile.md`
 
 2. **Connect integrations** *(optional but recommended)*
-   - Run `arete setup` to configure calendar, Fathom, or other sources
+   - Run `arete onboard` to configure calendar, Fathom, or other sources
    - Enables meeting-prep and context-pull features from day one
 
 3. **Start guided onboarding in chat**
