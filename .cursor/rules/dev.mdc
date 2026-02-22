@@ -67,6 +67,37 @@ User approves plan
 
 ---
 
+## Direct Execution Protocol (non-PRD changes)
+
+When implementing code changes directly (not via execute-prd), follow these steps **in order**. This applies to all tiny/small changes — bug fixes, refactors, feature tweaks, etc.
+
+### Steps
+
+1. **Implement** — Write code following project patterns. Stay in scope.
+2. **Test** — Add/update tests. Same rules as PRD work: no exceptions.
+3. **Verify** — `npm run typecheck` && `npm test` must pass.
+4. **Review** — Spawn the `engineering-lead` agent to review your changes. Include: diff summary, files changed, what the change does, and any concerns.
+5. **Fix** — Address any review feedback. Re-verify (step 3).
+6. **Commit** — `git add` only related files. Use conventional commit format (`feat:`, `fix:`, `refactor:`, etc.).
+7. **Report** — Tell the user: what changed, files touched, commit hash, anything notable.
+
+### Scope Escalation Rule
+
+If the change touches more than ~5 files or you discover hidden complexity, **stop and tell the user**:
+
+> "This is bigger than expected — want to plan this properly?"
+
+Don't silently expand a small change into a medium one without the medium-change safeguards.
+
+### Cleanup Check
+
+Before committing, verify:
+- No leftover `console.log` or debug statements
+- No commented-out code
+- No temp files or scratch work left behind
+
+---
+
 ## Code Review Checklist (for any substantial change)
 
 Apply this 6-point checklist before committing:
