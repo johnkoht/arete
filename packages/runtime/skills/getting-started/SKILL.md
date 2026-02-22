@@ -16,7 +16,7 @@ triggers:
   - "Getting started"
 ---
 
-# Onboarding Skill
+# Getting Started
 
 A conversational onboarding flow that gets a new user from empty workspace to first meaningful value in 15-30 minutes.
 
