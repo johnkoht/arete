@@ -330,6 +330,7 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 | **Planning** | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
 | **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap |
 | **Execution** | capture-conversation, meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |
+| **Intelligence** | people-intelligence |
 | **Operations** | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
 
 Run `arete skill list` to see all available skills.
@@ -690,6 +691,7 @@ New types are picked up immediately — no reinstall needed.
 arete install [directory] [--ide cursor|claude]  # Install workspace
 arete update                                      # Update structure and rules
 arete status                                      # Check workspace health
+arete index                                       # Re-index search collection (after manual file edits)
 ```
 
 ### Intelligence Services
@@ -819,9 +821,13 @@ qmd embed                   # Regenerate embeddings
 qmd status                  # Check index health
 ```
 
-**When to Update**:
-- `qmd update`: After adding/editing files, before major search tasks
-- `qmd embed`: Weekly/monthly, or after adding lots of content
+**Automatic Index Refresh**:
+Areté automatically refreshes the QMD index after operations that add or modify files — including `arete pull fathom`, `arete pull krisp`, `arete meeting add`, and `arete meeting process`. You don't need to manually re-index after these commands.
+
+**Manual Re-indexing**:
+- `arete index`: Re-index the search collection after manually adding or editing files outside the CLI
+- `qmd update`: Alternative direct QMD command for re-indexing
+- `qmd embed`: Regenerate embeddings — run weekly/monthly, or after adding lots of content
 
 ### Fathom
 

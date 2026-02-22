@@ -200,6 +200,7 @@ arete memory search "pricing decisions"
 arete memory timeline "onboarding" --days 90            # temporal view
 arete resolve "Jane"
 arete brief --for "competitive analysis"
+arete index                                              # re-index search after manual edits
 ```
 
 ### Templates & Customization
@@ -233,6 +234,7 @@ Connect to external tools:
 
 - **Calendar** (macOS) - Pull events for meeting prep and planning
 - **Fathom** - Import meeting recordings and transcripts
+- **Krisp** - Pull meeting recordings, transcripts, summaries, and action items
 - (Future: Google Calendar, Slack, Linear, Notion)
 
 See SETUP.md for configuration.
