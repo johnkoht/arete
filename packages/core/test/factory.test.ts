@@ -16,6 +16,7 @@ import { IntelligenceService } from '../src/services/intelligence.js';
 import { WorkspaceService } from '../src/services/workspace.js';
 import { SkillService } from '../src/services/skills.js';
 import { IntegrationService } from '../src/services/integrations.js';
+import { ToolService } from '../src/services/tools.js';
 import { FileStorageAdapter } from '../src/storage/file.js';
 import { getDefaultConfig } from '../src/config.js';
 
@@ -42,6 +43,7 @@ describe('createServices', () => {
       'search',
       'skills',
       'storage',
+      'tools',
       'workspace',
     ]);
   });
@@ -55,6 +57,7 @@ describe('createServices', () => {
     assert.ok(services.intelligence instanceof IntelligenceService, 'intelligence is IntelligenceService');
     assert.ok(services.workspace instanceof WorkspaceService, 'workspace is WorkspaceService');
     assert.ok(services.skills instanceof SkillService, 'skills is SkillService');
+    assert.ok(services.tools instanceof ToolService, 'tools is ToolService');
     assert.ok(services.integrations instanceof IntegrationService, 'integrations is IntegrationService');
   });
 
