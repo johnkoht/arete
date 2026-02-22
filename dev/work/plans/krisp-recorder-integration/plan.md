@@ -1,17 +1,17 @@
 ---
 title: Krisp Recorder Integration
 slug: krisp-recorder-integration
-status: idea
+status: building
 size: large
 tags: [integration, meeting-recorder, mcp, oauth]
 created: 2026-02-21T17:38:59.395Z
-updated: 2026-02-21T17:50:00.000Z
+updated: 2026-02-22T00:19:11.278Z
 completed: null
 execution: null
-has_review: false
-has_pre_mortem: false
-has_prd: false
-steps: 4
+has_review: true
+has_pre_mortem: true
+has_prd: true
+steps: 0
 ---
 
 # Krisp Recorder Integration
