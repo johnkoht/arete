@@ -43,6 +43,12 @@ The services layer provides seven domain-specific classes: `ContextService`, `Me
 - **DI via constructor**: Each service takes only what it needs at the constructor level. `ContextService(storage, search)`, `EntityService(storage)`, `IntelligenceService(context, memory, entity)`. Test by passing mocks.
 - **`createServices()` as the only wiring point**: CLI commands never import service classes directly. They import `createServices` from `@arete/core` and destructure what they need. Each command becomes 10-30 lines: parse args → create services → call method → format output (from `2026-02-15` entry).
 
+## Gotchas (continued)
+
+- **`KrispMcpClient.configure()` requires `(storage, workspaceRoot)` — not zero args** (2026-02-21): The task description described calling `client.configure()` with no arguments, but the actual method signature is `configure(storage: StorageAdapter, workspaceRoot: string): Promise<KrispCredentials>`. Always read the actual TypeScript signature before wiring in a CLI command.
+
+- **`KrispCredentials.expires_at` is a Unix timestamp `number`, not an ISO string** (2026-02-21): The task description mentioned computing `new Date(...).toISOString()` for `expires_at`, but the type definition is `number` (seconds since epoch) and `loadKrispCredentials` validates `typeof expires_at !== 'number'`. The client's `configure()` already computes it correctly as `Math.floor(Date.now() / 1000) + tokens.expires_in`. Pass the returned credentials directly to `saveKrispCredentials`.
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new service: add it to `factory.ts` (wire dependencies), `services/index.ts` (barrel export), and `AreteServices` type; run `npm run typecheck`
