@@ -31,6 +31,7 @@ import { registerMeetingCommands } from './commands/meeting.js';
 import { registerTemplateCommands } from './commands/template.js';
 import { registerSeedCommand } from './commands/seed.js';
 import { registerOnboardCommand } from './commands/onboard.js';
+import { registerIndexSearchCommand } from './commands/index-search.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,6 +51,7 @@ ${chalk.bold('Setup & Workspace')}
   onboard                          Quick identity setup (name, email, company)
   setup                            Configure API keys and credentials
   update                           Update skills, tools, and integrations
+  index                            Re-index the search collection
   status                           Check workspace health
 
 ${chalk.bold('Intelligence')}
@@ -94,6 +96,7 @@ registerInstallCommand(program);
 registerOnboardCommand(program);
 registerSetupCommand(program);
 registerUpdateCommand(program);
+registerIndexSearchCommand(program);
 registerStatusCommand(program);
 registerRouteCommand(program);
 registerContextCommand(program);
