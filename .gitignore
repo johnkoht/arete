@@ -55,7 +55,6 @@ venv/
 # Node modules
 node_modules
 node_modules/
-package-lock.json
 
 # TypeScript build output
 dist/
