@@ -4,11 +4,13 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 ## Key References
 
-- `packages/core/src/integrations/calendar/index.ts` — `getCalendarProvider(config)`, `'macos'` alias handling
-- `packages/core/src/integrations/calendar/ical-buddy.ts` — `CalendarProvider` interface, `getIcalBuddyProvider()`, `icalBuddy` binary, calendar list parsing
-- `packages/core/src/integrations/registry.ts` — `INTEGRATIONS` map (`fathom`, `apple-calendar`)
+- `packages/core/src/integrations/calendar/index.ts` — `getCalendarProvider(config)`, `listIcalBuddyCalendars()`, `'macos'` alias handling
+- `packages/core/src/integrations/calendar/ical-buddy.ts` — `CalendarProvider` interface, `getIcalBuddyProvider()`, `listIcalBuddyCalendars()`, `parseIcalBuddyCalendars()`, `icalBuddy` binary
+- `packages/core/src/integrations/fathom/client.ts` — `loadFathomApiKey()`, `saveFathomApiKey()`, Fathom API client
+- `packages/core/src/integrations/registry.ts` — `INTEGRATIONS` map (`fathom`, `apple-calendar`, `krisp`)
 - `packages/core/src/services/integrations.ts` — `IntegrationService`, pull orchestration
 - `packages/cli/src/commands/integration.ts` — `configureCalendar()`, writes `provider: 'macos'` to `arete.yaml`
+- `packages/cli/src/commands/onboard.ts` — `runIntegrationPhase()`, interactive calendar/Fathom/Krisp setup
 - `packages/cli/src/commands/pull.ts` — `pullCalendar()`, calls `getCalendarProvider(config)`
 - Memory entries: `2026-02-11_calendar-provider-macos-alias.md`, `2026-02-11_calendar-integration-ux-and-learnings.md`
 
@@ -26,6 +28,12 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 - **`getCalendarProvider()` returns `null` (not throws) when the provider is unavailable.** Callers in `pull.ts` check for `null` before using the provider. Adding a new provider that might not be installed must follow this null-return pattern — never throw from the factory when the dependency is simply absent.
 
+- **`listIcalBuddyCalendars()` uses DI for testability.** Accepts optional `deps` parameter `{ which?, exec? }` with production defaults. Tests inject mocks instead of requiring the real icalBuddy binary. Returns `{ available: boolean, calendars: string[] }` — never throws. Added 2026-02-22.
+
+- **`saveFathomApiKey()` does shallow merge on the `fathom` block.** It reads `.credentials/credentials.yaml`, spreads `{ ...existing, fathom: { api_key } }`, and writes back. This preserves other integration credentials (e.g., krisp) but replaces the entire `fathom` section. If Fathom adds more config fields in the future, they'd be overwritten. Currently safe since only `api_key` exists. Added 2026-02-22.
+
+- **Credential files live in `.credentials/credentials.yaml` (gitignored).** Both Fathom (`fathom.api_key`) and Krisp (`krisp.client_id`, `krisp.client_secret`, etc.) store credentials here. Always use read-modify-write to avoid clobbering other integrations' keys. The `loadFathomApiKey()` function also checks `FATHOM_API_KEY` env var first (env var takes precedence).
+
 ## Invariants
 
 - All integration providers must implement the provider interface (e.g. `CalendarProvider` with `name`, `isAvailable()`, and event-fetch methods). `getCalendarProvider()` must call `isAvailable()` and return `null` if false.
@@ -35,7 +43,7 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 ## Testing Gaps
 
 - Calendar provider edge cases (all-day events, events with no attendees, multi-line notes fields in icalBuddy output) had reduced test coverage after the monorepo refactor cleanup (`2026-02-15` risk 5 note: "calendar provider edge cases" specifically called out).
-- No test covers the `icalBuddy calendars` multi-line parsing against real icalBuddy output fixtures.
+- ~~No test covers the `icalBuddy calendars` multi-line parsing against real icalBuddy output fixtures.~~ **Resolved 2026-02-22**: `parseIcalBuddyCalendars()` + `listIcalBuddyCalendars()` added with 11 fixture-based tests covering multi-calendar, metadata lines, empty output, missing binary, and exec errors.
 
 ## Patterns That Work
 

@@ -12,7 +12,6 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { registerInstallCommand } from './commands/install.js';
-import { registerSetupCommand } from './commands/setup.js';
 import { registerUpdateCommand } from './commands/update.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerRouteCommand } from './commands/route.js';
@@ -49,7 +48,6 @@ program
 ${chalk.bold('Setup & Workspace')}
   install [directory]              Initialize workspace
   onboard                          Quick identity setup (name, email, company)
-  setup                            Configure API keys and credentials
   update                           Update skills, tools, and integrations
   index                            Re-index the search collection
   status                           Check workspace health
@@ -94,7 +92,6 @@ ${chalk.bold('Meetings & Templates')}
 // Register commands
 registerInstallCommand(program);
 registerOnboardCommand(program);
-registerSetupCommand(program);
 registerUpdateCommand(program);
 registerIndexSearchCommand(program);
 registerStatusCommand(program);

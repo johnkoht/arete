@@ -3,7 +3,7 @@
  * Integrations may use fs/child_process (infrastructure).
  */
 
-import { execFile } from 'child_process';
+import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -185,4 +185,51 @@ export function getIcalBuddyProvider(): CalendarProvider {
       return parseIcalBuddyOutput(stdout ?? '', options?.calendars?.[0]);
     },
   };
+}
+
+/**
+ * Parse `icalBuddy calendars` output into calendar names.
+ * Calendar names are lines starting with `• ` (U+2022 bullet + space).
+ * Metadata lines (type, UID, etc.) are indented and do not start with `• `.
+ */
+export function parseIcalBuddyCalendars(stdout: string): string[] {
+  if (!stdout.trim()) return [];
+  return stdout
+    .split('\n')
+    .filter((line) => line.startsWith('\u2022 '))
+    .map((line) => line.slice(2).trim());
+}
+
+export interface IcalBuddyCalendarDeps {
+  which?: (cmd: string) => { status: number | null; stdout: string };
+  exec?: (cmd: string, args: string[]) => Promise<{ stdout: string }>;
+}
+
+/**
+ * List available macOS calendars via `icalBuddy calendars`.
+ * Returns `{ available: false, calendars: [] }` when icalBuddy is not found
+ * or the command fails for any reason (no throw).
+ */
+export async function listIcalBuddyCalendars(
+  deps?: IcalBuddyCalendarDeps
+): Promise<{ available: boolean; calendars: string[] }> {
+  const whichFn =
+    deps?.which ??
+    ((cmd: string) => spawnSync('which', [cmd], { encoding: 'utf8' }));
+  const execFn =
+    deps?.exec ??
+    ((cmd: string, args: string[]) => execFileAsync(cmd, args, { timeout: 10000 }));
+
+  try {
+    const whichResult = whichFn('icalBuddy');
+    if (whichResult.status !== 0) {
+      return { available: false, calendars: [] };
+    }
+
+    const { stdout } = await execFn('icalBuddy', ['calendars']);
+    const calendars = parseIcalBuddyCalendars(stdout ?? '');
+    return { available: true, calendars };
+  } catch {
+    return { available: false, calendars: [] };
+  }
 }
