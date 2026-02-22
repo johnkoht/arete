@@ -7,17 +7,43 @@
 
 import { createServices } from '@arete/core';
 import type { Command } from 'commander';
-import { createInterface } from 'node:readline/promises';
-import { stdin as input, stdout as output } from 'node:process';
+import { input } from '@inquirer/prompts';
 import { join } from 'node:path';
 import chalk from 'chalk';
-import { header, success, error, info, warn } from '../formatters.js';
+import { parse as parseYaml } from 'yaml';
+import { header, success, error, info } from '../formatters.js';
 
 interface OnboardAnswers {
   name: string;
   email: string;
   company: string;
   website?: string;
+}
+
+export interface ParsedProfile {
+  name?: string;
+  email?: string;
+  company?: string;
+  website?: string;
+  created?: string;
+}
+
+export function parseProfileFrontmatter(content: string): ParsedProfile {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  try {
+    const parsed = parseYaml(match[1]) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return {
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
+      email: typeof parsed.email === 'string' ? parsed.email : undefined,
+      company: typeof parsed.company === 'string' ? parsed.company : undefined,
+      website: typeof parsed.website === 'string' ? parsed.website : undefined,
+      created: typeof parsed.created === 'string' ? parsed.created : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function extractDomainFromEmail(email: string): string | null {
@@ -63,18 +89,14 @@ export function registerOnboardCommand(program: Command): void {
         process.exit(1);
       }
 
-      // Check if profile already exists
+      // Read existing profile for rerun-safe defaults
       const profilePath = join(root, 'context', 'profile.md');
       const profileExists = await services.storage.exists(profilePath);
-
-      if (profileExists && !opts.json) {
-        const existingContent = await services.storage.read(profilePath);
-        if (existingContent && !existingContent.includes('[Your name]')) {
-          warn('Profile already exists at context/profile.md');
-          info('To update, edit the file directly or delete it first');
-          console.log('');
-          info('Continue onboarding by saying "Let\'s get started" in chat');
-          return;
+      let existing: ParsedProfile = {};
+      if (profileExists) {
+        const content = await services.storage.read(profilePath);
+        if (content) {
+          existing = parseProfileFrontmatter(content);
         }
       }
 
@@ -96,42 +118,45 @@ export function registerOnboardCommand(program: Command): void {
         }));
         process.exit(1);
       } else {
-        // Interactive mode
+        // Interactive mode with rerun-safe defaults
         header('Areté Onboarding');
         console.log('Let me get to know you before we set up your workspace.');
         console.log('');
 
-        const rl = createInterface({ input, output });
-
-        try {
-          const name = await rl.question(chalk.cyan('What\'s your name? '));
-          if (!name.trim()) {
-            error('Name is required');
-            process.exit(1);
-          }
-
-          const email = await rl.question(chalk.cyan('What\'s your work email? '));
-          if (!email.trim() || !email.includes('@')) {
-            error('Valid email is required');
-            process.exit(1);
-          }
-
-          const company = await rl.question(chalk.cyan('What company are you at? '));
-          if (!company.trim()) {
-            error('Company name is required');
-            process.exit(1);
-          }
-
-          // Ask for website optionally
-          const websiteInput = await rl.question(
-            chalk.dim('Company website? (optional, press enter to skip) ')
-          );
-          const website = websiteInput.trim() || undefined;
-
-          answers = { name: name.trim(), email: email.trim(), company: company.trim(), website };
-        } finally {
-          rl.close();
+        const name = await input({
+          message: 'What\'s your name?',
+          default: existing.name,
+        });
+        if (!name.trim()) {
+          error('Name is required');
+          process.exit(1);
         }
+
+        const email = await input({
+          message: 'What\'s your work email?',
+          default: existing.email,
+        });
+        if (!email.trim() || !email.includes('@')) {
+          error('Valid email is required');
+          process.exit(1);
+        }
+
+        const company = await input({
+          message: 'What company are you at?',
+          default: existing.company,
+        });
+        if (!company.trim()) {
+          error('Company name is required');
+          process.exit(1);
+        }
+
+        const websiteInput = await input({
+          message: 'Company website? (optional, press enter to skip)',
+          default: existing.website,
+        });
+        const website = websiteInput.trim() || undefined;
+
+        answers = { name: name.trim(), email: email.trim(), company: company.trim(), website };
       }
 
       // Extract domains for People Intelligence
@@ -145,8 +170,8 @@ export function registerOnboardCommand(program: Command): void {
         }
       }
 
-      // Generate profile content
-      const now = new Date().toISOString();
+      // Generate profile content — preserve created timestamp on rerun
+      const now = existing.created || new Date().toISOString();
       const profileContent = `---
 name: ${answers.name}
 email: ${answers.email}
