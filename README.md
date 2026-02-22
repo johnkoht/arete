@@ -61,6 +61,49 @@ cd ~/my-pm-workspace
 
 ---
 
+## Not Sure Where to Start? Let AI Set It Up
+
+If you're new to the CLI or just want a guided experience, copy and paste the prompt below into **Claude Code**, **Claude Desktop**, or **Cursor**. The AI will walk you through everything — no CLI experience needed.
+
+<details>
+<summary><strong>📋 Copy this prompt → paste into Claude Code, Claude Desktop, or Cursor</strong></summary>
+
+```
+I want to set up Areté — a product management workspace that helps me work better with AI. Please guide me through the full setup process step by step.
+
+Here's what I need help with:
+
+1. **Check prerequisites** — Verify I have Node.js 18+ installed. If not, tell me how to install it for my operating system.
+
+2. **Install the Areté CLI** — Run: `npm install -g @arete/cli`
+
+3. **Create my workspace** — Ask me:
+   - Where I want to create it (suggest `~/pm-workspace` as a default)
+   - Which AI tool I'm using: Cursor or Claude Code
+   Then run: `arete install ~/pm-workspace --ide [cursor or claude]`
+
+4. **Run onboarding** — Navigate into the folder and run `arete onboard`. It'll ask for my name, email, and company to personalize the workspace.
+
+5. **Verify setup** — Run `arete status` and show me the output. Explain what it means.
+
+6. **Open the workspace** — Tell me how to open the workspace folder in my IDE (Cursor or Claude Code).
+
+7. **Fill in my first context files** — Once I'm in the workspace, help me fill in the three most important files:
+   - `context/business-overview.md` — my company and what we do
+   - `context/users-personas.md` — who uses my product
+   - `context/products-services.md` — what I'm building
+
+8. **First quick win** — Once setup is done, suggest 2–3 things I can ask the AI to do right away (like "prep for a meeting", "start a discovery project", or "what's on my plate today").
+
+Please be conversational and explain what each step does in plain language. I'm a product manager, not a developer. If anything fails or looks unexpected, help me troubleshoot before moving on.
+```
+
+</details>
+
+> **Tip**: After pasting the prompt, answer any questions the AI asks (like which OS you're on, or where to put your workspace). It will run the commands and guide you the rest of the way.
+
+---
+
 ## Core Capabilities
 
 ### Context Management
