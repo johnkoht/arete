@@ -215,6 +215,87 @@ describe('IntelligenceService (via compat)', () => {
     });
   });
 
+  describe('disambiguation: getting-started skill vs onboarding tool', () => {
+    const GETTING_STARTED_SKILL: SkillCandidate = {
+      id: 'getting-started',
+      name: 'getting-started',
+      description: 'Get started with Areté - conversational setup that bootstraps your workspace in 15-30 minutes',
+      path: '/ws/.agents/skills/getting-started',
+      triggers: ["Let's get started", "Help me set up Areté", "Help me setup arete", "Help me set up my workspace", "Set up Areté", "I'm new to Areté", "Get started", "Onboard me to Areté", "Getting started"],
+      type: 'skill',
+      work_type: 'operations',
+      category: 'core',
+    };
+
+    const ONBOARDING_TOOL: SkillCandidate = {
+      id: 'onboarding',
+      name: 'onboarding',
+      description: '30/60/90 day plan for thriving at a new job - learn, contribute, lead',
+      path: '/ws/.cursor/tools/onboarding',
+      triggers: ["I'm starting a new job", 'onboarding', '30/60/90', 'new role', 'ramp up'],
+      type: 'tool',
+      lifecycle: 'time-bound',
+      duration: '90-150 days',
+    };
+
+    const STALE_ONBOARDING_SKILL: SkillCandidate = {
+      id: 'onboarding',
+      name: 'onboarding',
+      description: 'Get started with Areté - conversational setup that bootstraps your workspace in 15-30 minutes',
+      path: '/ws/.agents/skills/onboarding',
+      triggers: ["Let's get started", "Help me set up Areté", "Onboard me", "I'm new to Areté", "Set up my workspace", "Get started with Areté"],
+      type: 'skill',
+      work_type: 'operations',
+      category: 'core',
+    };
+
+    const DISAMBIGUATION_CANDIDATES = [GETTING_STARTED_SKILL, ONBOARDING_TOOL, ...SAMPLE_SKILLS];
+
+    it('routes "help me setup arete" to getting-started skill', () => {
+      const r = routeToSkill('help me setup arete', DISAMBIGUATION_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'getting-started');
+      assert.equal(r!.type, 'skill');
+      assert.equal(r!.action, 'load');
+    });
+
+    it('routes "I\'m starting a new job" to onboarding tool', () => {
+      const r = routeToSkill("I'm starting a new job", DISAMBIGUATION_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'onboarding');
+      assert.equal(r!.type, 'tool');
+      assert.equal(r!.action, 'activate');
+    });
+
+    it('routes "onboarding at my new company" to onboarding tool', () => {
+      const r = routeToSkill('onboarding at my new company', DISAMBIGUATION_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'onboarding');
+      assert.equal(r!.type, 'tool');
+      assert.equal(r!.action, 'activate');
+    });
+
+    describe('stale workspace with both onboarding skill and getting-started skill', () => {
+      const STALE_CANDIDATES = [STALE_ONBOARDING_SKILL, GETTING_STARTED_SKILL, ONBOARDING_TOOL, ...SAMPLE_SKILLS];
+
+      it('routes "help me setup arete" to getting-started skill (not stale onboarding)', () => {
+        const r = routeToSkill('help me setup arete', STALE_CANDIDATES);
+        assert.ok(r, 'Should route to something');
+        assert.equal(r!.skill, 'getting-started');
+        assert.equal(r!.type, 'skill');
+        assert.ok(r!.path.includes('getting-started'), `Expected path to include getting-started, got ${r!.path}`);
+      });
+
+      it('routes "I\'m starting a new job" to onboarding tool (not stale onboarding skill)', () => {
+        const r = routeToSkill("I'm starting a new job", STALE_CANDIDATES);
+        assert.ok(r, 'Should route to something');
+        assert.equal(r!.skill, 'onboarding');
+        assert.equal(r!.type, 'tool');
+        assert.equal(r!.action, 'activate');
+      });
+    });
+  });
+
   describe('routeToSkill with mixed skills + tools', () => {
     const SAMPLE_TOOLS: SkillCandidate[] = [
       {
