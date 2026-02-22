@@ -2,7 +2,7 @@
  * Integration commands — list, add, configure, remove
  */
 
-import { createServices } from '@arete/core';
+import { createServices, KrispMcpClient, saveKrispCredentials } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, success, error, warn, info } from '../formatters.js';
@@ -119,6 +119,19 @@ export function registerIntegrationCommands(program: Command): void {
             } else {
               info('Calendar scope: provider configured (add --calendars or --all to set scope)');
             }
+          }
+          return;
+        }
+
+        if (name === 'krisp') {
+          const client = new KrispMcpClient(services.storage, root);
+          const creds = await client.configure(services.storage, root);
+          await saveKrispCredentials(services.storage, root, creds);
+          await services.integrations.configure(root, 'krisp', { status: 'active' });
+          if (opts.json) {
+            console.log(JSON.stringify({ success: true, integration: 'krisp' }));
+          } else {
+            success('✅ Krisp connected. Run `arete pull krisp` to sync meetings.');
           }
           return;
         }

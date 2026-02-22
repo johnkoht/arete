@@ -14,6 +14,8 @@ import type {
 } from '../models/index.js';
 import { INTEGRATIONS } from '../integrations/registry.js';
 import { pullFathom } from '../integrations/fathom/index.js';
+import { pullKrisp } from '../integrations/krisp/index.js';
+import { loadKrispCredentials } from '../integrations/krisp/config.js';
 import { getWorkspaceConfigPath } from '../config.js';
 import { getAdapterFromConfig } from '../adapters/index.js';
 
@@ -49,6 +51,18 @@ export class IntegrationService {
         paths,
         days
       );
+      return {
+        integration,
+        itemsProcessed: result.saved + result.errors.length,
+        itemsCreated: result.saved,
+        itemsUpdated: 0,
+        errors: result.errors,
+      };
+    }
+
+    if (integration === 'krisp') {
+      const days = options.days ?? 7;
+      const result = await pullKrisp(this.storage, workspaceRoot, paths, days);
       return {
         integration,
         itemsProcessed: result.saved + result.errors.length,
@@ -254,6 +268,22 @@ export class IntegrationService {
       if (process.env.FATHOM_API_KEY) return 'active';
       return null;
     }
+
+    if (integration === 'krisp') {
+      return this.loadOAuthTokenStatus(workspaceRoot, 'krisp');
+    }
+
     return null;
+  }
+
+  private async loadOAuthTokenStatus(
+    workspaceRoot: string,
+    name: string,
+  ): Promise<IntegrationStatus> {
+    if (name === 'krisp') {
+      const creds = await loadKrispCredentials(this.storage, workspaceRoot);
+      return creds ? 'active' : 'inactive';
+    }
+    return 'inactive';
   }
 }

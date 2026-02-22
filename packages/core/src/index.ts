@@ -76,3 +76,11 @@ export type {
 // Service container factory
 export { createServices } from './factory.js';
 export type { AreteServices, CreateServicesOptions } from './factory.js';
+
+// Krisp integration
+export { KrispMcpClient } from './integrations/krisp/client.js';
+export {
+  loadKrispCredentials,
+  saveKrispCredentials,
+} from './integrations/krisp/config.js';
+export type { KrispCredentials } from './integrations/krisp/config.js';
