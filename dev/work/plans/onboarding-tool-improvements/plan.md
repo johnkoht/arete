@@ -1,11 +1,11 @@
 ---
 title: Onboarding Tool Improvements
 slug: onboarding-tool-improvements
-status: planned
+status: building
 size: medium
 tags: [onboarding, templates, tools]
 created: 2026-02-22T04:22:37.918Z
-updated: 2026-02-22T05:01:28.707Z
+updated: 2026-02-22T05:04:45.901Z
 completed: null
 execution: null
 has_review: false
@@ -67,7 +67,7 @@ The result: agents produce generic plans when the TOOL.md has the material for d
 
 **File**: `packages/runtime/tools/onboarding/templates/30-60-90-plan.md`
 
-**a) Add "Risks and Watch-Outs" section** (after Phase 3 / Graduation, before Key Relationships)
+**a) Add "Risks and Watch-Outs" section** — insert after the `## Phase 3: Lead` section (including its Graduation subsection and Phase 3 Success Criteria), before `## Key Relationships to Build`
 - Template with categories: Role Scope, Technical/Domain, Relationship, Pace/Burnout
 - Each risk row: Description, Mitigation, Watch-For signals
 - Pre-populated with 2-3 universal risks as examples agents should customize (e.g., "drinking from the firehose", "scope creep before credibility")
@@ -78,13 +78,14 @@ The result: agents produce generic plans when the TOOL.md has the material for d
 - Include note: "Run `arete skill list` to see all available skills"
 
 **c) Update Phase 1 exit milestones**
-- Add situational playback as explicit completion criterion
-- Add burning-problems reference ("Ask for 2-3 burning problems to diagnose")
-- Add checkpoint deliverable: `outputs/day-30-learnings.md`
+- Add to Phase 1 Success Criteria as checklist items:
+  - `- [ ] Held situational conversation with manager (see outputs/day-30-learnings.md)`
+  - `- [ ] Identified 2-3 burning problems to diagnose (see working/working-tracker.md)`
+  - `- [ ] Day 30 learnings documented (outputs/day-30-learnings.md)`
 
 **d) Update Phase 2 and Phase 3 exit milestones**
-- Phase 2: Add checkpoint deliverable: `outputs/day-60-assessment.md`
-- Phase 3: Add checkpoint deliverable: `outputs/day-90-retro.md`
+- Add to Phase 2 Success Criteria: `- [ ] Day 60 assessment documented (outputs/day-60-assessment.md)`
+- Add to Phase 3 Success Criteria: `- [ ] Day 90 retrospective documented (outputs/day-90-retro.md)`
 
 **AC**:
 - [ ] Risks section has 4 categories with example entries
@@ -100,7 +101,7 @@ The result: agents produce generic plans when the TOOL.md has the material for d
 
 **File**: `packages/runtime/tools/onboarding/templates/stakeholder-map.md`
 
-- Add a `Cadence` column to Key Stakeholders tables (Product, Engineering, Design, Data, Other Functions) with values: Weekly / Bi-weekly / Monthly / Quarterly (matching TOOL.md: Essential=weekly, Important=bi-weekly, Valuable=monthly)
+- Add a `Cadence` column to Key Stakeholders tables (Product, Engineering, Design, Data, Other Functions) — insert after `Priority`, before `1:1 Status`. Values: Weekly / Bi-weekly / Monthly / Quarterly (matching TOOL.md: Essential=weekly, Important=bi-weekly, Valuable=monthly). Note: Other Functions table uses `Function` instead of `Relationship` — apply same relative position (after `Priority`, before `1:1 Status`).
 - Add a **"Relationship Hit List"** section (after Key Stakeholders, before Organizational Structure) — a phased checklist of who to meet:
   - Week 1-2 (Essential): Manager, key peers, HR/People partner
   - Week 2-4 (Important): Skip-level, cross-functional partners (Eng, Design, Data)
@@ -114,7 +115,8 @@ The result: agents produce generic plans when the TOOL.md has the material for d
 **File**: `packages/runtime/tools/onboarding/templates/weekly-plan.md`
 
 - Add a "Say/Do Ratio Check" section at the bottom of the "End of Week Check-in" block
-- Fields: Commitments Made, Commitments Delivered, In Progress (on track), Overdue
+- Fields: Commitments made this week, Commitments delivered, In progress (on track)
+- Match TOOL.md's Weekly Check-in Template format exactly (it uses these 3 fields — do not add "Overdue" as a 4th)
 
 **AC**:
 - [ ] stakeholder-map.md tables include Cadence column
@@ -191,28 +193,36 @@ Header should explain: "This file tracks your active thinking work during onboar
 **a) Update "Activation Workflow" step 4.5**
 - Change from inline "Create enhanced working files" to template-copy pattern:
   - Copy `templates/working-tracker.md` → `working/working-tracker.md`
-  - Copy `templates/day-30-learnings.md` → `outputs/day-30-learnings.md` (create at Phase 1 exit, not activation)
-  - Copy `templates/day-60-assessment.md` → `outputs/day-60-assessment.md` (create at Phase 2 exit)
-  - Copy `templates/day-90-retro.md` → `outputs/day-90-retro.md` (create at Phase 3 exit)
-- Note: checkpoint templates are provided for reference but created when the phase is reached, not at project activation
+  - Copy `templates/day-30-learnings.md` → `outputs/day-30-learnings.md` (blank, fill at Phase 1 exit)
+  - Copy `templates/day-60-assessment.md` → `outputs/day-60-assessment.md` (blank, fill at Phase 2 exit)
+  - Copy `templates/day-90-retro.md` → `outputs/day-90-retro.md` (blank, fill at Phase 3 exit)
+- All files are copied at activation. Checkpoint templates include a note: "Fill in this document when you reach Phase N exit."
+- No phase-transition mechanism needed — simpler to copy all upfront.
 
-**b) Update "Project Structure" section**
-- Replace individual working files (learning-backlog.md, relationship-backlog.md, burning-problems.md, quick-wins.md) with single `working-tracker.md`
-- Add `outputs/day-30-learnings.md`, `outputs/day-60-assessment.md`, `outputs/day-90-retro.md`
-- Remove `plan/situational-playback.md` (merged into day-30-learnings.md)
+**b) Update "Project Structure" section AND "New Files in This Enhancement" section**
+- Project Structure tree: Replace individual working files (learning-backlog.md, relationship-backlog.md, burning-problems.md, quick-wins.md) with single `working-tracker.md`
+- Project Structure tree: Add `outputs/day-30-learnings.md`, `outputs/day-60-assessment.md`, `outputs/day-90-retro.md`
+- Project Structure tree: Remove `plan/situational-playback.md` (merged into day-30-learnings.md)
+- "New Files in This Enhancement" section: Rewrite to reflect consolidated layout — `working-tracker.md` replaces the 4 individual working files; add 3 checkpoint templates; remove `situational-playback.md` reference. Keep `leverage-docs/` reference.
 
-**c) Keep "Working File Templates" prose section as-is**
-- These inline descriptions serve as reference documentation for the guidance sections
-- Don't remove — they provide context even though standalone templates now exist
+**c) Update "Working File Templates" prose section**
+- Add a note at the top: "These descriptions document the sections within `working-tracker.md` and `day-30-learnings.md`. See those templates for the files you'll actually use."
+- Keep the detailed descriptions (Learning Backlog, Burning Problems, Quick Wins, Situational Playback) as reference documentation
+- Remove standalone Relationship Backlog description (folded into stakeholder-map.md)
 
 **d) Verify consistency** (Pre-mortem Risk #3)
 - Diff new template structures against TOOL.md prose descriptions — no structural divergence
+- Verify weekly-plan.md Say/Do format matches TOOL.md Weekly Check-in Template
+- Verify "New Files in This Enhancement" section matches actual `templates/` directory listing
+- Verify Project Structure tree matches actual file layout
 
 **AC**:
-- [ ] Activation workflow step 4.5 references template files (working-tracker at activation, checkpoints at phase exits)
-- [ ] Project structure reflects consolidated file layout
-- [ ] Working File Templates prose section preserved
-- [ ] No structural divergence between templates and TOOL.md descriptions
+- [ ] Activation workflow step 4.5 copies all templates at activation (working-tracker + 3 checkpoints)
+- [ ] Project structure tree reflects consolidated file layout
+- [ ] "New Files in This Enhancement" section reflects consolidated layout
+- [ ] "Working File Templates" prose section updated with consolidation note, descriptions preserved
+- [ ] Relationship Backlog description removed from Working File Templates (now in stakeholder-map.md)
+- [ ] No structural divergence between templates and TOOL.md descriptions (weekly Say/Do, project structure, new files section all verified)
 - [ ] No TOOL.md content/guidance changes
 
 ---
@@ -224,9 +234,10 @@ See `pre-mortem.md` for full analysis. Key risks (updated for v2):
 | # | Risk | Mitigation |
 |---|------|------------|
 | 1 | Skills table goes stale as skills change | Descriptive names + "check `arete skill list`" note |
-| 2 | TOOL.md activation workflow inconsistency | Diff templates against TOOL.md prose at Step 5 |
+| 2 | TOOL.md activation workflow inconsistency | Diff templates against TOOL.md prose at Step 5 — including New Files section, Working File Templates, project structure tree |
 | 3 | Checkpoint templates duplicate graduation criteria | Reference TOOL.md criteria, don't duplicate |
 | 4 | Update backfill won't enhance existing templates | Accepted — by design. New files backfill; edits don't. |
+| 5 | Stale LEARNINGS.md re: dist/ mirroring | Update LEARNINGS.md — dist/ is gitignored, `packages/runtime/` ships directly via npm `files` field |
 
 ## File Summary
 
@@ -244,3 +255,5 @@ See `pre-mortem.md` for full analysis. Key risks (updated for v2):
 **4 edits + 4 new files = 8 total** (down from 12 in v1)
 
 **No code changes** — all markdown template work. No typecheck/test impact.
+
+**Housekeeping**: Update `packages/runtime/tools/LEARNINGS.md` to correct stale dist/ mirroring claim (dist/ is gitignored; `packages/runtime/` ships directly via npm `files` field).

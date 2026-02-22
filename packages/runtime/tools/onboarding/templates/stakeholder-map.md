@@ -39,44 +39,67 @@ This document maps the key people in your professional ecosystem during onboardi
 
 ### Product/PM Team
 
-| Name | Role | Relationship | Priority | 1:1 Status | Notes |
-|------|------|--------------|----------|------------|-------|
-| | | | Essential | | |
-| | | | Essential | | |
-| | | | Important | | |
+| Name | Role | Relationship | Priority | Cadence | 1:1 Status | Notes |
+|------|------|--------------|----------|---------|------------|-------|
+| | | | Essential | Weekly | | |
+| | | | Essential | Weekly | | |
+| | | | Important | Bi-weekly | | |
 
 ### Engineering
 
-| Name | Role | Relationship | Priority | 1:1 Status | Notes |
-|------|------|--------------|----------|------------|-------|
-| | | | | | |
-| | | | | | |
-| | | | | | |
+| Name | Role | Relationship | Priority | Cadence | 1:1 Status | Notes |
+|------|------|--------------|----------|---------|------------|-------|
+| | | | | | | |
+| | | | | | | |
+| | | | | | | |
 
 ### Design
 
-| Name | Role | Relationship | Priority | 1:1 Status | Notes |
-|------|------|--------------|----------|------------|-------|
-| | | | | | |
-| | | | | | |
+| Name | Role | Relationship | Priority | Cadence | 1:1 Status | Notes |
+|------|------|--------------|----------|---------|------------|-------|
+| | | | | | | |
+| | | | | | | |
 
 ### Data/Analytics
 
-| Name | Role | Relationship | Priority | 1:1 Status | Notes |
-|------|------|--------------|----------|------------|-------|
-| | | | | | |
-| | | | | | |
+| Name | Role | Relationship | Priority | Cadence | 1:1 Status | Notes |
+|------|------|--------------|----------|---------|------------|-------|
+| | | | | | | |
+| | | | | | | |
 
 ### Other Functions
 
-| Name | Role | Function | Priority | 1:1 Status | Notes |
-|------|------|----------|----------|------------|-------|
-| | | Marketing | | | |
-| | | Sales | | | |
-| | | Customer Success | | | |
-| | | Finance | | | |
-| | | Legal | | | |
-| | | HR/People | | | |
+| Name | Role | Function | Priority | Cadence | 1:1 Status | Notes |
+|------|------|----------|----------|---------|------------|-------|
+| | | Marketing | | | | |
+| | | Sales | | | | |
+| | | Customer Success | | | | |
+| | | Finance | | | | |
+| | | Legal | | | | |
+| | | HR/People | | | | |
+
+---
+
+## Relationship Hit List
+
+A phased checklist of who to meet during onboarding. As you meet people and process meetings, Areté creates person files in `people/`. This list becomes your progress tracker — check off as connections are made.
+
+### Week 1-2 (Essential)
+- [ ] [Manager name] — Align on expectations, goals, and success criteria → `people/[slug].md`
+- [ ] [Key peer] — Understand team dynamics and current priorities → `people/[slug].md`
+- [ ] [Key peer] — Learn about ongoing projects and ownership areas → `people/[slug].md`
+- [ ] [HR/People partner] — Benefits, policies, onboarding logistics → `people/[slug].md`
+
+### Week 2-4 (Important)
+- [ ] [Skip-level manager] — Understand broader org goals and context → `people/[slug].md`
+- [ ] [Engineering lead] — Technical landscape, architecture, dev process → `people/[slug].md`
+- [ ] [Design lead] — Design process, research, user understanding → `people/[slug].md`
+- [ ] [Data/Analytics lead] — Metrics, dashboards, data access → `people/[slug].md`
+
+### Week 4-8 (Valuable)
+- [ ] [Customer-facing role] — Customer perspective and pain points → `people/[slug].md`
+- [ ] [Other PM] — PM culture, processes, cross-team context → `people/[slug].md`
+- [ ] [Tenured employee] — Historical context and institutional knowledge → `people/[slug].md`
 
 ---
 

@@ -419,7 +419,6 @@ projects/active/onboarding/
 ├── plan/
 │   ├── 30-60-90.md              # High-level phase plan
 │   ├── 30-day-detailed.md       # Detailed first 30 days
-│   ├── situational-playback.md  # NEW: Prep for situational conversation with manager
 │   └── weekly/                  # Week-by-week plans
 │       ├── week-01.md
 │       ├── week-02.md
@@ -436,33 +435,32 @@ projects/active/onboarding/
 │   │   └── ...
 │   ├── questions.md             # Open questions to answer
 │   ├── stakeholders.md          # People/org map
-│   ├── learning-backlog.md      # NEW: 4-category learning tracker
-│   ├── relationship-backlog.md  # NEW: Stakeholder relationship map
-│   ├── burning-problems.md      # NEW: Problems to diagnose
-│   └── quick-wins.md            # NEW: Quick win opportunities tracker
+│   └── working-tracker.md       # Learning backlog, burning problems, quick wins
 └── outputs/
     ├── context/                 # Finalized context files (to promote)
     ├── wins.md                  # Documented wins and contributions
-    └── leverage-docs/           # NEW: Documentation created during onboarding
+    ├── day-30-learnings.md      # Phase 1 exit: situational playback + learnings
+    ├── day-60-assessment.md     # Phase 2 exit: contributions + trust battery
+    ├── day-90-retro.md          # Phase 3 exit: retrospective + graduation
+    └── leverage-docs/           # Documentation created during onboarding
 ```
 
-### New Files in This Enhancement
+### Enhanced Files
 
-The enhanced onboarding tool includes new working files to support tactical best practices:
-
-**Plan Files:**
-- `situational-playback.md` — Prep for situational conversation (playback what you learned to validate understanding). Used at end of Phase 1.
+The onboarding tool includes enhanced working files and checkpoint deliverables:
 
 **Working Files:**
-- `learning-backlog.md` — 4-category matrix (PM Craft, Product, Market, Business) for tracking what you need to learn
-- `relationship-backlog.md` — Stakeholder relationship tracker with cadence, strategy, and next touch planning
-- `burning-problems.md` — Tracker for 2-3 burning problems identified by manager/eng lead/design for diagnosis
-- `quick-wins.md` — Opportunity tracker with criteria check (Fast, Visible, Low-risk, Unowned)
+- `working-tracker.md` — Consolidated tracker with three sections: Learning Backlog (4-category matrix for Phase 1), Burning Problems (investigation tracker for Phase 1), and Quick Wins (opportunity tracker for Phase 2). See `templates/working-tracker.md`.
+
+**Checkpoint Deliverables:**
+- `day-30-learnings.md` — Phase 1 exit artifact combining situational playback and learnings reflection. Prep for the manager conversation where you play back what you've learned.
+- `day-60-assessment.md` — Phase 2 exit artifact covering contributions, trust battery, quick wins, and Phase 3 ownership target.
+- `day-90-retro.md` — Phase 3 exit / graduation artifact with full retrospective, relationship summary, and 6-month vision.
 
 **Output Directories:**
 - `leverage-docs/` — Documentation you create during onboarding (data dictionaries, process maps, guides) that provides leverage for the team
 
-See "Working File Templates" section for templates to populate these files.
+See "Working File Templates" section for detailed descriptions of each section's content.
 
 ## Activation Workflow
 
@@ -484,25 +482,18 @@ When user activates this tool:
    - Copy `templates/stakeholder-map.md` → `working/stakeholders.md` as the org/people map
    - Copy `templates/1-1-note.md` to `inputs/1-1s/` as a blank starter for each 1:1 (rename to `[person]-[date].md` at use time)
 
-4.5. **Create enhanced working files**:
+4.5. **Copy enhanced working files and checkpoint templates**:
 
-   Create in `working/`:
+   Copy from `templates/` to project:
    
-   - `learning-backlog.md` — Use 4-category matrix template (PM Craft, Product, Market, Business)
-   - `relationship-backlog.md` — Include week 1-2 hit list:
-     - Week 1-2 (Essential): Manager, key peers, HR/People partner
-     - Week 2-4 (Important): Skip-level, cross-functional partners (Eng, Design, Data)
-     - Week 4-8 (Valuable): Customers (if possible), other PMs, tenured employees
-   - `burning-problems.md` — Include prompt: "Ask your manager, eng lead, and design lead: 'Is there a burning problem I can investigate and diagnose (not solve)? 2-3 would be ideal.'"
-   - `quick-wins.md` — Empty tracker, to populate in Phase 2
+   - `templates/working-tracker.md` → `working/working-tracker.md` — Learning backlog, burning problems, and quick wins tracker. Fill in learning backlog and burning problems during Phase 1; add quick wins in Phase 2.
+   - `templates/day-30-learnings.md` → `outputs/day-30-learnings.md` — Fill in when you reach Phase 1 exit.
+   - `templates/day-60-assessment.md` → `outputs/day-60-assessment.md` — Fill in when you reach Phase 2 exit.
+   - `templates/day-90-retro.md` → `outputs/day-90-retro.md` — Fill in when you reach Phase 3 exit / graduation.
    
-   Create in `plan/`:
+   Create directory:
    
-   - `situational-playback.md` — Template for end-of-Phase-1 situational conversation
-   
-   Create in `outputs/`:
-   
-   - `leverage-docs/` — Directory for documentation created during onboarding
+   - `outputs/leverage-docs/` — Directory for documentation created during onboarding
 
 5. **Populate starter questions**: Add common onboarding questions to `working/questions.md`
 
@@ -655,11 +646,13 @@ When graduation criteria are met:
 
 ## Working File Templates
 
-These are optional working files you can create in the `working/` directory to support your onboarding process. They align with the tactical guidance in each phase and help you track key activities systematically.
+> **Note:** These descriptions document the sections within `working/working-tracker.md` and `outputs/day-30-learnings.md`. See those templates in the `templates/` directory for the files you'll actually use.
+
+These working file sections align with the tactical guidance in each phase and help you track key activities systematically.
 
 ### Learning Backlog
 
-Track what you need to learn and how you'll learn it. Create as `working/learning-backlog.md`:
+Track what you need to learn and how you'll learn it. This is a section in `working/working-tracker.md`:
 
 ```markdown
 ## PM Craft
@@ -689,21 +682,9 @@ Track what you need to learn and how you'll learn it. Create as `working/learnin
 
 Use this to prioritize learning and identify mentors early. Update weekly as new gaps emerge.
 
-### Relationship Backlog
-
-Track relationship-building cadence and strategy. Create as `working/relationship-backlog.md`:
-
-```markdown
-| Name | Role | Importance | Relationship Strategy | Cadence | Next Touch |
-|------|------|------------|----------------------|---------|------------|
-| [Person] | [Title] | Essential/Important/Valuable | [How to build rapport] | Weekly/Bi-weekly/Monthly | [Date] |
-```
-
-This helps you maintain the **Relationship Maintenance Cadence** from 1:1 Guidance. Use it to track when you last connected and when you should reach out again. Include notes on how to build rapport with each person (their communication style, what they care about, what you can help them with).
-
 ### Burning Problems Tracker
 
-Track problems you're investigating in Phase 1. Create as `working/burning-problems.md`:
+Track problems you're investigating in Phase 1. This is a section in `working/working-tracker.md`:
 
 ```markdown
 | Problem | Flagged By | Investigation Notes | Diagnosis | Recommendation Timing |
@@ -715,7 +696,7 @@ Use this when stakeholders flag **burning problems** (see Phase 1). Track your i
 
 ### Quick Win Tracker
 
-Identify and track quick win opportunities in Phase 2. Create as `working/quick-wins.md`:
+Identify and track quick win opportunities in Phase 2. This is a section in `working/working-tracker.md`:
 
 ```markdown
 | Opportunity | Effort (days) | Visibility | Risk | Owner Status | Criteria Met? |
@@ -727,7 +708,7 @@ This helps you apply the **Quick Win Finder** criteria from Phase 2: Fast (2-3 w
 
 ### Situational Playback
 
-Prepare for your situational conversation with your manager (Phase 1 graduation). Create as `plan/situational-playback.md`:
+Prepare for your situational conversation with your manager (Phase 1 graduation). This is now part of `outputs/day-30-learnings.md`:
 
 ```markdown
 ## What I Learned
@@ -820,7 +801,7 @@ Track your 1:1 frequency to ensure relationships stay warm and you maintain visi
 - **Important contacts** (cross-functional partners, skip-level, other PMs): Bi-weekly or monthly check-ins
 - **Valuable contacts** (customers, tenured employees, network): Monthly or quarterly conversations
 
-Use the Relationship Backlog template (see Working File Templates below) to track cadence, next touch dates, and relationship strategy for each person.
+Use the Cadence column in your stakeholder map (`working/stakeholders.md`) and the Relationship Hit List to track touch frequency and connection progress for each person.
 
 ## Resources
 
