@@ -1,0 +1,118 @@
+{
+  "name": "qmd-improvements",
+  "branchName": "feature/qmd-improvements",
+  "goal": "Keep the qmd search index current automatically by triggering re-indexing after every CLI write operation, add a standalone `arete index` command for manual use, update agent rules for write-path awareness, and inject qmd into EntityService as a semantic pre-filter for meeting scans.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Extract refreshQmdIndex() helper",
+      "description": "Create a lightweight `refreshQmdIndex(workspaceRoot, existingCollectionName, deps?)` function in `packages/core/src/search/qmd-setup.ts`, separate from `ensureQmdCollection()`. This is the shared primitive used by all write-path commands. Uses the `testDeps` injection pattern (same as `ensureQmdCollection`) so tests never spawn real qmd processes. Also fix the stale `qmd-semantic-search` entry in `dev/catalog/capabilities.json` (wrong implementation paths).\n\nFiles to read first:\n- packages/core/src/search/qmd-setup.ts\n- packages/core/src/search/LEARNINGS.md\n- packages/core/test/search/qmd-setup.test.ts\n- dev/catalog/capabilities.json",
+      "acceptanceCriteria": [
+        "refreshQmdIndex(workspaceRoot, existingCollectionName, deps?) exported from packages/core/src/search/index.ts and @arete/core",
+        "Skips gracefully (returns skipped:true) when qmd binary not on PATH",
+        "Skips gracefully when existingCollectionName is undefined or empty",
+        "Skips gracefully when ARETE_SEARCH_FALLBACK=1 env var is set",
+        "Runs `qmd update` in workspaceRoot when all checks pass",
+        "Returns { indexed: false, warning: string } on update failure — never throws",
+        "Uses testDeps injection (whichSync + execFileAsync) — no real qmd processes in tests",
+        "Unit tests cover all 5 cases above",
+        "dev/catalog/capabilities.json qmd-semantic-search entry: implementationPaths corrected from search-providers/qmd.ts to search/providers/qmd.ts; non-existent search.ts removed; search/qmd-setup.ts added",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Wire refreshQmdIndex() into write-path CLI commands",
+      "description": "Add post-write re-indexing to `arete pull fathom`, `arete meeting add`, and `arete meeting process`. Each command calls `refreshQmdIndex()` after writing files, but only if files were actually written (count > 0). Key gotcha: `meeting.ts` currently has no `loadConfig` call — it must be added.\n\nFiles to read first:\n- packages/cli/src/commands/pull.ts (loadConfig at L98)\n- packages/cli/src/commands/meeting.ts (no loadConfig currently)\n- packages/cli/src/commands/install.ts (--skip-qmd flag pattern)\n- packages/cli/src/commands/update.ts (--skip-qmd flag pattern)\n- packages/cli/src/commands/LEARNINGS.md\n- packages/cli/test/commands/meeting-process.test.ts (audit for missing --skip-qmd)",
+      "acceptanceCriteria": [
+        "arete pull fathom triggers refreshQmdIndex() after saving meetings; skips if 0 new meetings saved",
+        "arete meeting add triggers refreshQmdIndex() after saving; skips if meeting already existed (saveMeetingFile returned null)",
+        "arete meeting process triggers refreshQmdIndex() after writing person files; skips if nothing applied (applied.length === 0)",
+        "--skip-qmd flag added to pull fathom, meeting add, and meeting process subcommands",
+        "meeting.ts adds loadConfig(services.storage, root) after findRoot() succeeds, following pull.ts pattern; config.qmd_collection passed to refreshQmdIndex()",
+        "Audit complete: all existing meeting-process.test.ts and related test invocations of `meeting process` have --skip-qmd added where needed to prevent CI hangs",
+        "Output format: listItem('Search index', 'qmd index updated') if indexed; silent if skipped; warn(result.warning) if warning",
+        "npm run typecheck && npm test pass",
+        "ARETE_SEARCH_FALLBACK=1 npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Add `arete index` standalone command",
+      "description": "Add a new top-level `arete index` command for users who add or edit files outside the CLI. Help text must clearly distinguish this from `arete update` (which also updates rules, skills, and other assets).\n\nFiles to read first:\n- packages/cli/src/index.ts (where to register)\n- packages/cli/src/commands/update.ts (qmd output pattern)\n- packages/cli/src/commands/LEARNINGS.md (command skeleton pattern)\n- packages/cli/src/formatters.ts",
+      "acceptanceCriteria": [
+        "arete index command registered in packages/cli/src/index.ts",
+        "Default run: calls refreshQmdIndex(), shows 'Search index updated' if indexed",
+        "arete index --status: prints collection name from arete.yaml config; if none: 'No collection configured — run arete install first'; does NOT run qmd update",
+        "arete index when qmd not installed: graceful message (not an error), exit 0",
+        "arete index is idempotent — safe to run multiple times",
+        "Help text: 'Re-index the search collection. For full workspace update (rules, skills, assets), use arete update.'",
+        "Unit tests: (a) default triggers update, (b) --status does not trigger update, (c) graceful when no qmd, (d) graceful when no collection",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Update qmd-search.mdc rule for write-path awareness",
+      "description": "Update both agent-facing qmd rule files to document the write-path indexing pattern. Agents should run `arete index` after writing files. Both rule files must remain byte-for-byte identical.\n\nFiles to read first:\n- packages/runtime/rules/cursor/qmd-search.mdc\n- packages/runtime/rules/claude-code/qmd-search.mdc",
+      "acceptanceCriteria": [
+        "New 'After Writing Files' section added to qmd-search.mdc describing when to run `arete index`",
+        "capture-conversation explicitly named as a trigger",
+        "Both files updated: packages/runtime/rules/cursor/qmd-search.mdc AND packages/runtime/rules/claude-code/qmd-search.mdc",
+        "diff packages/runtime/rules/cursor/qmd-search.mdc packages/runtime/rules/claude-code/qmd-search.mdc produces zero output",
+        "No 'either/or' IDE path patterns in rule content (multi-IDE consistency rule)",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Inject SearchProvider into EntityService",
+      "description": "Add an optional `searchProvider?: SearchProvider` parameter to EntityService's constructor. In `refreshPersonMemory()`, use it to pre-filter which meeting files to scan for a person. Critical invariant: if qmd returns 0 results, ALWAYS fall back to full scan — never skip the scan based on empty results, as the person may exist but not yet be indexed.\n\nFiles to read first:\n- packages/core/src/services/entity.ts (constructor and refreshPersonMemory)\n- packages/core/src/services/LEARNINGS.md (DI pattern, no direct fs)\n- packages/core/src/search/types.ts (SearchProvider interface)\n- packages/core/test/services/people-intelligence.test.ts\n- packages/core/test/services/relationships.test.ts\n- packages/core/test/integration/intelligence.test.ts",
+      "acceptanceCriteria": [
+        "EntityService constructor: constructor(storage: StorageAdapter, searchProvider?: SearchProvider)",
+        "All 5 existing new EntityService(storage) construction sites compile without modification",
+        "When SearchProvider provided AND returns results: refreshPersonMemory() scans only matched file paths",
+        "When SearchProvider provided AND returns 0 results: refreshPersonMemory() falls back to full scan (not skipped)",
+        "Explicit test case: mock SearchProvider returning [] → full scan executes and finds the person",
+        "When no SearchProvider: behavior identical to current implementation",
+        "No direct fs imports added to EntityService (StorageAdapter invariant)",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Wire SearchProvider into EntityService via factory",
+      "description": "Pass the SearchProvider instance from createServices() to EntityService. No user-visible behavior change — same outputs, potentially faster on large workspaces. Task 5 must be complete before starting.\n\nFiles to read first:\n- packages/core/src/factory.ts (createServices wiring, AreteServices type)\n- packages/core/src/services/LEARNINGS.md (factory patterns, AreteServices change checklist)\n- packages/core/test/integration/intelligence.test.ts",
+      "acceptanceCriteria": [
+        "factory.ts: new EntityService(storage) changed to new EntityService(storage, search)",
+        "All existing entity tests pass without modification (they bypass factory)",
+        "New integration test: createServices() passes a non-undefined SearchProvider to EntityService when qmd is available (or a fallback provider when it is not)",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-21T22:30:00.000Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

@@ -32,16 +32,19 @@ The services layer provides seven domain-specific classes: `ContextService`, `Me
 - `AreteServices` returned by `createServices()` is a flat object — no lazy loading, no proxies. All services are fully constructed at call time.
 - The single `FileStorageAdapter` instance is shared across all services that need storage. Sharing is intentional (no state in adapter; it's stateless read/write).
 - `SearchProvider` returned by `getSearchProvider(workspaceRoot)` in `factory.ts` is determined once at service creation — it will be QMD or fallback based on what's installed at that moment.
+- **EntityService SearchProvider empty-results → full scan invariant**: When `EntityService` uses its optional `searchProvider` to pre-filter meetings for a person, zero results MUST fall back to a full scan — never skip. Empty results mean the person may not yet be indexed, not that they have no meetings. Tested explicitly in `packages/core/test/services/person-memory.test.ts`. Violating this silently produces empty memory highlights with no error.
 
 ## Testing Gaps
 
-- No integration test exercises the full `createServices()` → `services.X.method()` path with a real temp workspace directory.
+- ~~No integration test exercises the full `createServices()` → `services.X.method()` path~~ — Added 2026-02-21: `packages/core/test/integration/intelligence.test.ts` now contains a `createServices factory wires SearchProvider to EntityService` test that calls the real factory and exercises `entity.refreshPersonMemory(null)`.
 - `IntelligenceService` briefing assembly (`assembleBriefing()`) is tested in `packages/core/test/` but the entity extraction heuristic (capitalized proper nouns, skip-words list) has thin edge case coverage.
 
 ## Patterns That Work
 
-- **DI via constructor**: Each service takes only what it needs at the constructor level. `ContextService(storage, search)`, `EntityService(storage)`, `IntelligenceService(context, memory, entity)`. Test by passing mocks.
+- **DI via constructor**: Each service takes only what it needs at the constructor level. `ContextService(storage, search)`, `EntityService(storage, searchProvider?)`, `IntelligenceService(context, memory, entity)`. Test by passing mocks. Note: `EntityService` now accepts an optional second `SearchProvider` param (added 2026-02-21).
 - **`createServices()` as the only wiring point**: CLI commands never import service classes directly. They import `createServices` from `@arete/core` and destructure what they need. Each command becomes 10-30 lines: parse args → create services → call method → format output (from `2026-02-15` entry).
+
+- **`EntityService` accepts an optional `SearchProvider` as its second constructor parameter — all existing `new EntityService(storage)` calls remain valid.** Added 2026-02-21: `constructor(storage: StorageAdapter, searchProvider?: SearchProvider)`. The factory (`createServices()`) now passes `search` to EntityService. In `refreshPersonMemory()`, a provided SearchProvider is used to pre-filter which meeting files to scan per person (reducing O(n×m) full scans). Critical invariant: empty `semanticSearch()` results → always fall back to full scan. There are 14+ construction sites across tests and compat/ — all use `new EntityService(storage)` and compile without changes.
 
 - **`WorkspaceService.create()` must copy tools — check all three asset types (skills, tools, rules) when porting install logic.** During the CLI refactor (commit `e3bc217`, 2026-02-15), `WorkspaceService.create()` ported skills and rules from the old `install.ts` but silently dropped tools. The old command had an explicit `copyDirectoryContents(sourcePaths.tools, workspacePaths.tools)` block; the new service never got it. Result: `install` and `update` left `.cursor/tools/` empty, so the onboarding tool's `TOOL.md` was never present in user workspaces — agents looking for `.cursor/tools/onboarding/TOOL.md` couldn't find it. Fixed 2026-02-21: added tools copy in `create()` and tools backfill in `update()`, with regression tests keyed to the commit hash. **Lesson**: when refactoring "copy assets" logic into a service, explicitly enumerate all asset types (skills, **tools**, rules, templates, guide) and confirm each has a corresponding copy block before closing the PR.
 

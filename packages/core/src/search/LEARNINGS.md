@@ -9,7 +9,9 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 - `packages/core/src/search/providers/fallback.ts` — `getSearchProvider(workspaceRoot, storage)`, token scoring
 - `packages/core/src/search/types.ts` — `SearchProvider`, `SearchOptions`, `SearchResult`, `SearchMatchType`
 - `packages/core/src/search/tokenize.ts` — `tokenize()`, `STOP_WORDS`
+- `packages/core/src/search/qmd-setup.ts` — `ensureQmdCollection()` (full setup), `refreshQmdIndex()` (write-path update), `QmdSetupDeps` (testDeps interface)
 - `packages/core/test/search/providers.test.ts` — provider tests, `ARETE_SEARCH_FALLBACK` usage
+- `packages/core/test/search/qmd-setup.test.ts` — `refreshQmdIndex` tests, `try/finally` env cleanup pattern
 
 ## Gotchas
 
@@ -24,6 +26,10 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 - **Mocking QMD calls uses the `testDeps` injection pattern, not module mocking.** `qmd.ts` `getSearchProvider(workspaceRoot, testDeps?)` accepts optional `testDeps: QmdTestDeps` with `whichSync` and `execFileAsync` replacements. This pattern avoids dynamic import mocking and keeps tests deterministic. See `providers.test.ts` for usage; defined at `providers/qmd.ts` L42-49.
 
 - **Fallback provider's `semanticSearch()` delegates to `search()`.** There is no real semantic capability in the fallback — it's pure token matching. Code that calls `semanticSearch()` on the fallback will get keyword results silently. This is by design but can produce misleading results if callers expect embedding-based ranking.
+
+- **`ARETE_SEARCH_FALLBACK=1` is set globally by the npm test script — tests that check this env var need `try/finally` cleanup.** The root `package.json` test script runs with `ARETE_SEARCH_FALLBACK=1` always set. If you're writing tests for a function that itself checks `process.env.ARETE_SEARCH_FALLBACK` (e.g. `refreshQmdIndex()`), the success/failure cases must delete the env var before the test body and restore it in `finally`: `const prev = process.env.ARETE_SEARCH_FALLBACK; delete process.env.ARETE_SEARCH_FALLBACK; try { /* test */ } finally { if (prev !== undefined) process.env.ARETE_SEARCH_FALLBACK = prev; }`. Without this, all qmd-exercising tests will always get the skip path. See `packages/core/test/search/qmd-setup.test.ts` for the established pattern.
+
+- **`refreshQmdIndex()` vs `ensureQmdCollection()` — use the right one.** `refreshQmdIndex(root, collectionName, deps?)` is the lightweight "just run `qmd update`" primitive for write-path commands (pull, meeting, index command). `ensureQmdCollection(root, collectionName, deps?)` handles full setup: creates the collection if it doesn't exist, then indexes. Use `refreshQmdIndex` after writes; use `ensureQmdCollection` in `install` and `update`. The key difference: `refreshQmdIndex` skips gracefully when `collectionName` is undefined/empty; `ensureQmdCollection` generates a new collection name if none is provided.
 
 ## Invariants
 
