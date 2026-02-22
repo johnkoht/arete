@@ -4,9 +4,9 @@
 
 import type { AreteConfig } from '../../models/workspace.js';
 import { getIcalBuddyProvider } from './ical-buddy.js';
-import type { CalendarProvider } from './ical-buddy.js';
+import type { CalendarProvider } from './types.js';
 
-export type { CalendarEvent, CalendarOptions, CalendarProvider } from './ical-buddy.js';
+export type { CalendarEvent, CalendarOptions, CalendarProvider } from './types.js';
 
 export async function getCalendarProvider(
   config: AreteConfig
