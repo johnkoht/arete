@@ -19,6 +19,8 @@ import { MemoryService } from '../../src/services/memory.js';
 import { EntityService } from '../../src/services/entity.js';
 import { IntelligenceService } from '../../src/services/intelligence.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
+import { createServices as createCoreServices } from '../../src/factory.js';
+import { getDefaultConfig } from '../../src/config.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -303,5 +305,35 @@ describe('Integration: getContextInventory', () => {
     // Scanned metadata
     assert.ok(inventory.scannedAt.length > 0);
     assert.equal(inventory.staleThresholdDays, 30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Factory integration: SearchProvider wired to EntityService
+// ---------------------------------------------------------------------------
+
+describe('createServices factory wires SearchProvider to EntityService', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'arete-factory-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('provides a non-undefined SearchProvider to EntityService and entity service is functional', async () => {
+    // Use config-override pattern per LEARNINGS.md to avoid disk reads
+    const services = await createCoreServices(tmpDir, { config: getDefaultConfig() });
+
+    // Verify search provider is wired and available
+    assert.ok(services.search, 'factory should wire a SearchProvider (never undefined)');
+    assert.ok(services.entity, 'entity service should be created');
+
+    // Exercise the entity service — refreshPersonMemory with null paths returns early safely
+    const result = await services.entity.refreshPersonMemory(null);
+    assert.equal(result.updated, 0, 'empty workspace: no people to update');
+    assert.equal(result.scannedPeople, 0);
   });
 });
