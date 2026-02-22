@@ -39,8 +39,7 @@ export function meetingFromKrisp(meeting: KrispMeeting, fetchedTranscript?: stri
   // Speakers are plain strings in Krisp — add them as attendees if no attendees list
   if (attendees.length === 0 && meeting.speakers) {
     for (const speaker of meeting.speakers) {
-      const name = typeof speaker === 'string' ? speaker : speaker;
-      attendees.push({ name, email: null });
+      attendees.push({ name: speaker, email: null });
     }
   }
 
