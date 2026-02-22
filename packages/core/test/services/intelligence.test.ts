@@ -214,4 +214,47 @@ describe('IntelligenceService (via compat)', () => {
       assert.equal(r!.lifecycle, 'time-bound');
     });
   });
+
+  describe('routeToSkill with mixed skills + tools', () => {
+    const SAMPLE_TOOLS: SkillCandidate[] = [
+      {
+        id: 'onboarding',
+        name: 'onboarding',
+        description: '30/60/90 day plan for thriving at a new job - learn, contribute, lead',
+        path: '/ws/.cursor/tools/onboarding',
+        triggers: ["I'm starting a new job", 'onboarding', '30/60/90', 'new role', 'ramp up'],
+        type: 'tool',
+        lifecycle: 'time-bound',
+        duration: '90-150 days',
+      },
+    ];
+
+    const MIXED_CANDIDATES = [...SAMPLE_SKILLS, ...SAMPLE_TOOLS];
+
+    it('routes "I\'m starting a new job" to onboarding tool over skills', () => {
+      const r = routeToSkill("I'm starting a new job", MIXED_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'onboarding');
+      assert.equal(r!.type, 'tool');
+      assert.equal(r!.action, 'activate');
+      assert.equal(r!.lifecycle, 'time-bound');
+      assert.equal(r!.duration, '90-150 days');
+    });
+
+    it('routes "prep for meeting with Jane" to meeting-prep skill (not affected by tools)', () => {
+      const r = routeToSkill('prep for meeting with Jane', MIXED_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'meeting-prep');
+      assert.equal(r!.type, 'skill');
+      assert.equal(r!.action, 'load');
+    });
+
+    it('routes "give me a tour" to workspace-tour skill (no regression)', () => {
+      const r = routeToSkill('give me a tour', MIXED_CANDIDATES);
+      assert.ok(r, 'Should route to something');
+      assert.equal(r!.skill, 'workspace-tour');
+      assert.equal(r!.type, 'skill');
+      assert.equal(r!.action, 'load');
+    });
+  });
 });
