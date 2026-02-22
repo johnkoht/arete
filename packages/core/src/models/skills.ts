@@ -77,6 +77,19 @@ export type RoutedSkill = {
   duration?: string;
 };
 
+/** Full tool definition with all metadata */
+export type ToolDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  triggers: string[];
+  lifecycle?: 'time-bound' | 'condition-bound' | 'cyclical' | 'one-time';
+  duration?: string;
+  workType?: WorkType;
+  category?: SkillCategory;
+};
+
 /** Options for installing a skill */
 export type InstallSkillOptions = {
   name?: string;
