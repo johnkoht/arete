@@ -1,156 +1,366 @@
 ---
 title: Google Calendar Provider
 slug: google-calendar-provider
-status: idea
-size: unknown
-tags: [feature]
+status: building
+size: large
+tags: [feature, integration, oauth]
 created: 2026-02-20T03:47:16Z
-updated: 2026-02-20T03:47:16Z
+updated: 2026-02-22T22:11:47.793Z
 completed: null
 execution: null
-has_review: false
-has_pre_mortem: false
+has_review: true
+has_pre_mortem: true
 has_prd: false
-steps: 0
+steps: 7
 ---
 
 # Google Calendar Provider
 
-**Status**: Ready for PRD  
-**Priority**: High  
-**Effort**: Medium (4–6 tasks)  
-**Owner**: TBD
-
----
-
-## Overview
-
-Add `GoogleCalendarProvider` to the calendar system to enable cross-platform calendar access via the Google Calendar API. This removes the macOS/ical-buddy-only limitation and provides direct API control for users on Windows, Linux, or macOS who use Google Calendar.
+**Status**: Draft (reviewed, pre-mortem complete, ready for PRD)
+**Priority**: High
+**Size**: Large (7 steps)
 
 ---
 
 ## Problem
 
-Current calendar integration:
-- ✅ Works on macOS via ical-buddy (Apple Calendar)
-- ❌ Requires macOS + ical-buddy installed
-- ❌ No Windows/Linux support
-- ❌ Indirect access (ical-buddy → Calendar.app → synced calendars)
+Current calendar integration only works on macOS via ical-buddy (Apple Calendar). No Windows/Linux support, no direct Google Calendar API access. Many PMs use Google Calendar as primary and want cross-platform, direct API access.
 
-Many PMs use:
-- Windows/Linux machines
-- Google Calendar as primary calendar
-- Want direct API access for reliability and cross-platform use
+## Success Criteria
+
+- `arete integration configure google-calendar` opens browser → user consents → done (no GCP setup required from user)
+- `arete pull calendar` works identically for Google Calendar as it does for ical-buddy
+- Existing macOS/ical-buddy flow is completely unaffected (regression-free)
+- `arete integration list` shows Google Calendar status correctly
+- Token refresh is transparent — user doesn't re-auth unless refresh token is revoked
 
 ---
 
-## Solution
+## Key Design Decisions
 
-Implement `GoogleCalendarProvider` behind the existing `CalendarProvider` interface in `src/core/calendar.ts`. The integration registry already has a `google-calendar` entry (`src/integrations/registry.ts`) with `implements: ['calendar']`, `auth: { type: 'oauth' }`, and `status: 'planned'`. This feature implements the provider and wires it into the calendar factory and configure flow.
+### Client ID Distribution: Shared (Option B)
 
-**Provider shape** (matches existing interface):
+Areté ships a **shared client ID/secret embedded in the source code**. Users never create a Google Cloud project.
 
-```typescript
-// src/core/calendar-providers/google-calendar.ts
-// Reuses CalendarProvider from src/core/calendar.ts
-function getProvider(options?: GoogleCalendarProviderOptions): CalendarProvider {
-  return {
-    name: 'google-calendar',
-    async isAvailable(): Promise<boolean> { /* valid OAuth token present */ },
-    async getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ },
-    async getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]> { /* ... */ },
-  };
-}
-```
+**Rationale**: Areté's target audience is PMs. Asking them to create a GCP project kills adoption. For Desktop/native OAuth apps, the client secret is not treated as a secret per Google's own docs — security comes from the consent screen and PKCE, not secret hiding.
+
+**What this means**:
+- Client ID/secret are constants in `packages/core/src/integrations/calendar/google-auth.ts`
+- They ship with the npm package
+- Env var override (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) available as escape hatch for power users who want their own project
+- Until Google OAuth verification is completed, users see "unverified app" warning and click "Advanced → Go to Arete (unsafe)"
+
+**Future**: Submit for Google OAuth verification to remove the "unverified app" warning. This requires a privacy policy URL and homepage. Not blocking for initial release.
+
+### Thin REST Client (no `googleapis`)
+
+Use `fetch` for Google Calendar API calls. No `googleapis` dependency (~80MB). Consistent with Krisp integration pattern.
+
+### Localhost Redirect OAuth
+
+Dynamic port 0, `http://127.0.0.1:{port}/callback`. Google deprecated OOB flow in 2022. Desktop app type in GCP console enables loopback redirect without pre-registered port.
+
+---
+
+## Canonical String Table
+
+> Every step references this table. Prevents the producer-consumer mismatch from 2026-02-11.
+
+| Context | Value |
+|---------|-------|
+| Registry name | `google-calendar` |
+| Config provider | `google` |
+| Factory match | `provider === 'google'` |
+| Credential key | `google_calendar` |
+| Configure command | `arete integration configure google-calendar` |
+| Display name | `Google Calendar` |
+
+---
+
+## Google OAuth Specifics
+
+| Detail | Value |
+|--------|-------|
+| Authorization URL | `https://accounts.google.com/o/oauth2/v2/auth` |
+| Token URL | `https://oauth2.googleapis.com/token` |
+| Scopes | `https://www.googleapis.com/auth/calendar.readonly` |
+| Auth params | `access_type=offline`, `prompt=consent` (required for refresh token) |
+| Client auth at token endpoint | POST body (client_id + client_secret in body, not Basic auth) |
+| Redirect | `http://127.0.0.1:{port}/callback` (loopback IP, dynamic port) |
+| App type | Desktop app (already created in Areté's GCP project) |
+| Client ID source | Embedded constants in code; env var override available |
+
+---
+
+## Plan
+
+### Step 1: Extract shared calendar types + resolve duplicate CalendarEvent
+
+Move `CalendarProvider`, `CalendarEvent`, `CalendarOptions` interfaces from `ical-buddy.ts` to `packages/core/src/integrations/calendar/types.ts`. Update imports in `ical-buddy.ts`, `index.ts`, and re-exports.
+
+**Also resolve**: `packages/core/src/models/integrations.ts` has a different `CalendarEvent` type (uses `string` dates, `string[]` attendees, has `id` field). Verified zero consumers (only re-exported from `models/index.ts`, never imported). Remove the dead type.
+
+**Acceptance criteria**:
+- [ ] `types.ts` exists with `CalendarProvider`, `CalendarEvent`, `CalendarOptions`
+- [ ] `ical-buddy.ts` imports types from `./types.js`
+- [ ] `index.ts` re-exports from `./types.js`
+- [ ] Dead `CalendarEvent` in `models/integrations.ts` is removed
+- [ ] `npm run typecheck` passes
+- [ ] `npm test` passes (all existing calendar tests green)
+
+**Files**: `packages/core/src/integrations/calendar/ical-buddy.ts`, `packages/core/src/integrations/calendar/index.ts`, `packages/core/src/models/integrations.ts`, `packages/core/src/models/index.ts`
+
+---
+
+### Step 2: Add Google Calendar registry entry
+
+Add `google-calendar` to `INTEGRATIONS` in `packages/core/src/integrations/registry.ts`.
+
+**Acceptance criteria**:
+- [ ] Registry entry: `name: 'google-calendar'`, `displayName: 'Google Calendar'`, `implements: ['calendar']`, `auth: { type: 'oauth' }`, `status: 'available'`
+- [ ] `arete integration list` shows Google Calendar (not yet active)
+- [ ] `npm run typecheck` passes
+
+**Files**: `packages/core/src/integrations/registry.ts`
+
+---
+
+### Step 3: Implement OAuth2 flow + credential storage (with tests)
+
+Create `packages/core/src/integrations/calendar/google-auth.ts`.
 
 **Key behaviors**:
-- OAuth2 authentication (consent screen; token storage under `.credentials/`)
-- Token refresh handling (transparent to callers)
-- Calendar filtering via `CalendarOptions.calendars` (match ical-buddy semantics)
-- Person matching: attendee emails → workspace people (same as existing `pull-calendar` behavior)
-- Graceful degradation and clear errors (rate limits, network, invalid/expired token)
+- **Embedded client ID/secret** as exported constants (ship with npm package)
+- Env var override: if `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set, use those instead (power user escape hatch)
+- Localhost redirect with port 0 (dynamic), using `http://127.0.0.1:{port}/callback`
+- Open browser for consent, wait for callback
+- Token exchange: POST to `https://oauth2.googleapis.com/token` with `client_id`, `client_secret`, `code`, `redirect_uri`, `grant_type=authorization_code` in body
+- Include `access_type=offline` and `prompt=consent` in auth URL for refresh token
+- Atomic credential write to `.credentials/credentials.yaml` under `google_calendar` key (follow read-modify-write pattern from `packages/core/src/integrations/krisp/config.ts`)
+- Token refresh: check `expires_at - now < 300` (5-min buffer); on refresh, write new tokens atomically before returning
+- On 401 API response: retry once after refreshing (handles clock skew)
+- Credential fields stored: `access_token`, `refresh_token`, `expires_at` (Unix timestamp seconds)
+- Client ID/secret are NOT stored in credentials (they're in the code)
+
+**Tests** (in `packages/core/test/integrations/calendar/google-auth.test.ts`):
+- [ ] Token exchange with mocked token endpoint
+- [ ] Token refresh when expired (mocked)
+- [ ] Token refresh with 5-minute buffer
+- [ ] Credential read-modify-write doesn't clobber other keys
+- [ ] Env var override takes precedence over embedded constants
+- [ ] Expired refresh token returns actionable error message
+
+**Acceptance criteria**:
+- [ ] OAuth flow functions exported: `authenticate()`, `refreshToken()`, `loadGoogleCredentials()`, `isTokenValid()`
+- [ ] Client ID/secret embedded as constants with env var override
+- [ ] Credentials stored atomically under `google_calendar` key
+- [ ] Existing credentials (Fathom, Krisp) not affected by write
+- [ ] `npm run typecheck` && `npm test` passes
+
+**Files**: `packages/core/src/integrations/calendar/google-auth.ts`, `packages/core/test/integrations/calendar/google-auth.test.ts`
+**Reference**: `packages/core/src/integrations/krisp/config.ts` (credential storage pattern), `packages/core/src/integrations/LEARNINGS.md`
 
 ---
 
-## Current State (for implementation)
+### Step 4: Implement Google Calendar API client + provider (with tests)
 
-- **Calendar factory** (`src/core/calendar.ts`): Today accepts `provider: 'ical-buddy' | 'macos'`. Add a branch for `provider === 'google'` (or `'google-calendar'`) that dynamic-imports the Google provider and returns it iff `isAvailable()`.
-- **Configure calendar** (`src/commands/integration.ts`): Currently macOS-only — checks icalBuddy, calls `listCalendars()`, writes `provider: 'macos'` and `calendars: [...]`. Must be extended to support provider selection (macOS vs Google); for Google: OAuth flow → fetch calendar list from API → user selects calendars → write `provider: 'google'` and `calendars: [...]`.
-- **Pull calendar** (`src/commands/pull-calendar.ts`): Uses `getCalendarProvider(config)`; no change needed once the factory returns the Google provider for `integrations.calendar.provider: 'google'`.
-- **Credentials**: Existing pattern is `.credentials/credentials.yaml` for API keys (e.g. Fathom); workspace has `.credentials/README.md` and `.gitignore` for `credentials.yaml`. OAuth tokens can live in the same file under a key (e.g. `google_calendar`) or in a dedicated file (e.g. `.credentials/google-calendar.json`); decide in PRD.
+Create `packages/core/src/integrations/calendar/google-calendar.ts`. Thin REST wrapper — no `googleapis` dependency.
+
+**Key behaviors**:
+- Implement `CalendarProvider` interface from `types.ts`
+- `name: 'google-calendar'`
+- `isAvailable()`: credentials exist AND (token valid OR token can be refreshed). Attempt refresh before returning false. Return `false` (not throw) when unavailable.
+- `getTodayEvents(options?)`: Query Google Calendar API events list for today
+- `getUpcomingEvents(days, options?)`: Query events for date range
+- Always pass `singleEvents=true` (expands recurring events) and `orderBy=startTime`
+- Handle `date` (all-day) vs `dateTime` (timed) fields in API response → map to `CalendarEvent.isAllDay`
+- Map `attendees[].email` and `attendees[].displayName` to `CalendarEvent.attendees`
+- Handle pagination (`nextPageToken`) with `maxResults=250`
+- Calendar filtering via `options.calendars` — query each calendar ID separately or use `calendarId` parameter
+- `listCalendars()`: fetch calendar list for configure step (used by Step 5)
+- Error mapping: 403 → permission error, 404 → calendar not found, 429 → rate limit, 401 → trigger refresh
+
+**Tests** (in `packages/core/test/integrations/calendar/google-calendar.test.ts`):
+- [ ] Maps timed event correctly (dateTime field)
+- [ ] Maps all-day event correctly (date field)
+- [ ] Maps multi-day event
+- [ ] Handles empty attendees and missing attendees field
+- [ ] Handles pagination (nextPageToken)
+- [ ] Calendar filtering works
+- [ ] `isAvailable()` returns false when no credentials
+- [ ] `isAvailable()` attempts refresh before returning false
+- [ ] 401 triggers token refresh and retry
+- [ ] 429 returns rate limit error message
+- [ ] macOS regression: `provider: 'macos'` config still returns ical-buddy provider
+
+**Acceptance criteria**:
+- [ ] `CalendarProvider` interface fully implemented
+- [ ] `singleEvents=true` always sent
+- [ ] All-day vs timed events correctly mapped
+- [ ] Pagination handled
+- [ ] Error responses mapped to clear messages
+- [ ] No `googleapis` dependency added
+- [ ] `npm run typecheck` && `npm test` passes
+
+**Files**: `packages/core/src/integrations/calendar/google-calendar.ts`, `packages/core/test/integrations/calendar/google-calendar.test.ts`
+**Reference**: `packages/core/src/integrations/calendar/ical-buddy.ts` (provider pattern), `packages/core/src/integrations/LEARNINGS.md`
 
 ---
 
-## Tasks (Draft)
+### Step 5: Wire into factory, configure command, pull command, and integration status
 
-1. **OAuth2 flow**
-   - Google Cloud Project setup (doc or in-repo instructions)
-   - OAuth2 consent screen + client ID/secret (or env)
-   - Token acquisition (CLI: open browser, paste code / redirect callback)
-   - Token persistence and refresh logic
-   - Where to store tokens: `.credentials/` (see Open Questions)
+**5a. Factory** — Update `getCalendarProvider()` in `packages/core/src/integrations/calendar/index.ts`:
+- When `provider === 'google'`, dynamic-import Google provider, call `isAvailable()`, return if available
+- Comment: `// configure writes 'google' — keep in sync`
 
-2. **Google Calendar API client**
-   - Thin wrapper around Google Calendar API (e.g. `googleapis` package)
-   - Map API responses to `CalendarEvent` / `CalendarAttendee`
-   - `getTodayEvents(options?)` and `getUpcomingEvents(days, options?)`
-   - Calendar list and filtering by `options.calendars`
+**5b. Configure** — Add handler in `packages/cli/src/commands/integration.ts`:
+- `arete integration configure google-calendar` as separate handler
+- Simplified flow (shared client ID): run OAuth flow → browser opens → user consents → tokens stored → fetch calendar list via API → user selects calendars (or `--calendars` / `--all`) → write `integrations.calendar.provider: 'google'` and `calendars: [...]` to config
+- No "provide your client ID" prompt (it's embedded)
+- Follow existing CLI patterns (match setup/seed UX)
 
-3. **Provider integration**
-   - Implement `CalendarProvider` in `src/core/calendar-providers/google-calendar.ts` (e.g. `getProvider()` returning the interface).
-   - In `getCalendarProvider()`: when `integrations.calendar.provider === 'google'` (or `'google-calendar'`), load Google provider and return it if `isAvailable()`.
-   - Config already supports `integrations.calendar.provider` and `calendars`; no schema change required.
+**5c. Pull command** — Update `pullCalendar()` in `packages/cli/src/commands/pull.ts`:
+- Remove hardcoded icalBuddy error messages (lines ~139-153)
+- Make `isAvailable()` failure message provider-aware: use `provider.name` to show appropriate error
+- Google: "Google Calendar tokens expired — run: arete integration configure google-calendar"
+- icalBuddy: "icalBuddy not installed — run: brew install ical-buddy"
 
-4. **Configuration command**
-   - Extend `configureCalendar()` to support provider choice: **macOS Calendar** vs **Google Calendar** (or first prompt “Which provider?” then branch).
-   - For Google: run OAuth flow, persist tokens, fetch calendar list via API, prompt for which calendars to include (or support `--calendars "A,B"` / `--all` for non-interactive).
-   - Write `integrations.calendar.provider: 'google'` and `calendars: [...]` to `arete.yaml`.
-   - Follow existing CLI patterns (see `dev/collaboration.md`: established patterns over bare minimum; match setup/seed UX where applicable).
+**5d. Integration status** — Update `IntegrationService` in `packages/core/src/services/integrations.ts`:
+- Add `google-calendar` case to status check (look for stored credentials)
+- Ensures `arete integration list` shows correct status
 
-5. **Testing and documentation**
-   - Unit tests with mocked Google API (or mocked wrapper) so we don’t call the real API in CI. Mirror patterns from `test/core/calendar.test.ts` and ical-buddy provider tests (testDeps / injectable deps).
-   - **Docs**: SETUP.md (Google Calendar setup steps); AGENTS.md §10 Calendar System (provider table already has “(Future) GoogleCalendarProvider” — update when implemented; “Adding a new provider” steps are already correct); ONBOARDING.md if Google becomes a first-class config option.
+**Tests**:
+- [ ] Factory returns Google provider for `provider: 'google'`
+- [ ] Factory still returns ical-buddy for `provider: 'macos'` (regression)
+- [ ] Factory still returns ical-buddy for `provider: 'ical-buddy'` (regression)
+- [ ] Configure writes exact string `provider: 'google'` (producer-consumer regression test)
+- [ ] Pull command shows provider-appropriate error when unavailable
+- [ ] Integration list shows Google Calendar as active when configured
 
-6. **Error handling and edge cases**
-   - Rate limiting (backoff or clear message)
-   - Token expired / revoked (re-auth guidance)
-   - Network failures (graceful message)
-   - Permission errors (scope or consent guidance)
+**Acceptance criteria**:
+- [ ] `arete integration configure google-calendar` completes OAuth and writes config
+- [ ] `arete pull calendar` works with Google provider
+- [ ] `arete integration list` shows Google Calendar status
+- [ ] Existing macOS flow completely unaffected
+- [ ] No hardcoded icalBuddy references in provider-agnostic code paths
+- [ ] `npm run typecheck` && `npm test` passes
+
+**Files**: `packages/core/src/integrations/calendar/index.ts`, `packages/cli/src/commands/integration.ts`, `packages/cli/src/commands/pull.ts`, `packages/core/src/services/integrations.ts`
+
+---
+
+### Step 6: Integration tests and round-trip regression tests
+
+End-to-end test coverage that validates the full flow with mocked Google API.
+
+**Tests**:
+- [ ] Configure → Pull round-trip: config written by configure is accepted by factory and returns events
+- [ ] macOS configure → Pull round-trip still works (regression)
+- [ ] Token expiry → auto-refresh → successful pull (mocked)
+- [ ] Expired refresh token → actionable error message
+- [ ] Calendar with 0 events returns empty array (not error)
+- [ ] Google API fixture tests with realistic response shapes (timed, all-day, multi-day, recurring expanded, declined)
+
+**Acceptance criteria**:
+- [ ] Round-trip regression test exists for Google provider
+- [ ] Round-trip regression test exists for macOS provider
+- [ ] All tests pass: `npm run typecheck` && `npm test`
+
+**Files**: `packages/core/test/integrations/calendar/` (new test files), `packages/cli/test/commands/` (integration configure + pull tests)
+
+---
+
+### Step 7: Error handling hardening + documentation
+
+**Error handling**:
+- Rate limiting: clear message with retry guidance
+- Token expired/revoked: actionable re-auth message
+- Network failures: graceful message, not stack trace
+- "Unverified app" warning: document in setup that users click "Advanced → Go to Arete (unsafe)" until OAuth verification is completed
+
+**Documentation updates** (explicit list):
+
+| File | Change |
+|------|--------|
+| `SETUP.md` | Add "Google Calendar Setup" section — just `arete integration configure google-calendar` + note about "unverified app" warning |
+| `ONBOARDING.md` | Update "Calendar (macOS only)" → "Calendar (macOS or Google)". Add configure command. |
+| `packages/runtime/GUIDE.md` | Update "Calendar (macOS)" section. Remove "Future: Google Calendar support planned" → show as available. |
+| `packages/runtime/integrations/README.md` | Update Google Calendar from "Planned" → "Available" |
+| `packages/runtime/integrations/registry.md` | Update Google Calendar row from "Planned" → "Available" |
+| `.agents/sources/guide/intelligence.md` | Add `configure google-calendar` command |
+| `.agents/sources/shared/cli-commands.md` | Add `configure google-calendar` command |
+| `packages/core/src/integrations/LEARNINGS.md` | Add Google Calendar section (patterns, gotchas, OAuth specifics) |
+| `dev/catalog/capabilities.json` | Add `google-calendar-provider` entry |
+
+After updating AGENTS.md sources, rebuild:
+```bash
+npm run build:agents:dev   # Rebuild BUILD AGENTS.md
+npm run build              # Rebuild GUIDE AGENTS.md
+```
+
+**Acceptance criteria**:
+- [ ] All error paths produce user-friendly messages (no raw stack traces)
+- [ ] SETUP.md has Google Calendar instructions (simple: just run configure)
+- [ ] "Unverified app" warning documented
+- [ ] All 9 docs in the table above updated
+- [ ] AGENTS.md rebuilt after source updates
+- [ ] LEARNINGS.md updated with Google Calendar patterns
+- [ ] capabilities.json updated
+- [ ] `npm run typecheck` && `npm test` passes
 
 ---
 
 ## Dependencies
 
-- ✅ Calendar system and `CalendarProvider` interface
-- ✅ Integration registry entry for `google-calendar`
-- ✅ Pull calendar and skills use `getCalendarProvider(config)` — no change for callers
-- ⚠️ Google Cloud Project (user or org creates project; we document or script)
-- ⚠️ OAuth library: e.g. `googleapis` (or minimal OAuth2 + Calendar API); decide in PRD
+```
+Step 1 (types) → Step 2 (registry) → Step 3 (OAuth) → Step 4 (provider) → Step 5 (wiring) → Step 6 (integration tests) → Step 7 (docs)
+```
+
+- Steps 1-2: Low risk, mechanical. Gate: `npm run typecheck` after each.
+- Steps 3-4: Core implementation. Step 4 depends on Step 3 (auth for API calls).
+- Step 5: Wiring layer. Depends on all prior steps.
+- Step 6: Integration tests. Validates full round-trip.
+- Step 7: Docs and institutional memory. Should reflect final state.
+
+**Critical gate**: After Step 5, run full test suite before proceeding.
 
 ---
 
-## Benefits
+## Out of Scope
 
-- **Cross-platform**: Windows, Linux, macOS
-- **Direct API**: No ical-buddy dependency for Google users
-- **Reliable**: Explicit error handling and token refresh
-- **Extensible**: Same pattern for future providers (e.g. Microsoft Graph)
-
----
-
-## Open Questions (for PRD)
-
-1. **OAuth UX**: CLI out-of-band (open browser, paste auth code) vs local redirect server. Out-of-band is common for CLIs and avoids binding to a port; document in PRD.
-2. **Credentials storage**: Single file (e.g. `.credentials/credentials.yaml` key) vs dedicated `.credentials/google-calendar.json`. Keychain/OS credential store can be a follow-up.
-3. **Multi-account**: Support multiple Google accounts in one workspace (e.g. profile or named credential)? Defer to “single account first” unless we have a clear use case.
-4. **Shared calendars**: Include shared calendars in list and filter by name like owned calendars; document behavior in PRD.
+- Multi-account Google Calendar support
+- Microsoft Calendar / Outlook provider
+- Keychain / OS credential store
+- User-created GCP projects (shared client ID only; env var override as escape hatch)
+- Interactive calendar browser/picker during configure (use `--calendars` flag)
+- Calendar write operations (create/update/delete events)
+- Google OAuth verification submission (future — document "unverified app" workaround for now)
 
 ---
 
-## Related
+## Key Risks (from pre-mortem and review)
 
-- **Existing**: IcalBuddy provider `src/core/calendar-providers/ical-buddy.ts` (pattern: `getProvider()`, testDeps for tests).
-- **AGENTS.md**: §10 Calendar System, “Adding a new provider” steps.
-- **Registry**: `src/integrations/registry.ts` — `google-calendar` entry already present.
-- **Next**: Microsoft Calendar provider (same interface, different OAuth/API).
-- **Person matching**: Same as today — `pull-calendar` and skills use attendee emails; no change required.
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Producer-consumer string mismatch | High | Canonical string table above; regression test in Step 6 |
+| Duplicate CalendarEvent types | High | Resolved in Step 1 (remove dead type) |
+| `pullCalendar()` hardcoded icalBuddy errors | High | Fixed in Step 5c |
+| Google OAuth ≠ Krisp OAuth | Medium | Google-specific details table above; don't cargo-cult |
+| "Unverified app" warning scares users | Medium | Document workaround; submit for verification later |
+| REST client missing API edge cases | Medium | Realistic fixtures in tests; `singleEvents=true` always |
+| Types extraction breaks imports | Medium | `npm run typecheck` gate after Step 1 |
+| Credential storage clobbers other keys | Medium | Atomic read-modify-write pattern from Krisp |
+
+---
+
+## References
+
+- **Existing provider**: `packages/core/src/integrations/calendar/ical-buddy.ts`
+- **LEARNINGS.md**: `packages/core/src/integrations/LEARNINGS.md`
+- **Krisp credential pattern**: `packages/core/src/integrations/krisp/config.ts`
+- **Registry**: `packages/core/src/integrations/registry.ts`
+- **Factory**: `packages/core/src/integrations/calendar/index.ts`
+- **Configure**: `packages/cli/src/commands/integration.ts`
+- **Pull**: `packages/cli/src/commands/pull.ts`
+- **Review**: `dev/work/plans/google-calendar-provider/review.md`
+- **Pre-mortem**: `dev/work/plans/google-calendar-provider/pre-mortem.md`
