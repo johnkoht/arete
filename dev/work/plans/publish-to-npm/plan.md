@@ -4,10 +4,10 @@ slug: publish-to-npm
 status: draft
 size: medium
 created: 2026-02-17T21:00:00Z
-updated: 2026-02-23T00:26:53.161Z
+updated: 2026-02-23T04:08:25.998Z
 completed: null
 has_review: false
-has_pre_mortem: false
+has_pre_mortem: true
 has_prd: false
 steps: 3
 tags: []
