@@ -33,7 +33,7 @@ Track available integrations, their status, and configuration.
 | Linear | Project Management | Planned | Pull, Push | - |
 | Jira | Project Management | Planned | Pull, Push | - |
 | Asana | Project Management | Planned | Pull, Push | - |
-| Notion | Documentation | Planned | Pull, Push | - |
+| Notion | Documentation | Available | Pull | [notion.yaml](configs/notion.yaml) |
 
 ## Analytics & Customer Voice
 

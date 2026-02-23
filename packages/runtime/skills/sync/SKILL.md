@@ -217,6 +217,41 @@ Use a **numeric** recording ID (e.g. `12345`), not the literal `<recording_id>`.
 3. For each meeting with a Fathom ID, run `arete fathom get <recording_id>`. The integration fetches summary and transcript and saves (overwrites/updates the file); the meetings service updates `resources/meetings/index.md` automatically.
 4. After all fetches, run post-sync actions (registry, extract decisions/learnings if applicable).
 
+### Notion (Documentation)
+
+**Pull capabilities**:
+- Pages as markdown with frontmatter (title, notion_id, url)
+- Database page properties preserved
+- Nested blocks (headings, lists, code, tables, callouts)
+- Linked database mentions resolved to titles
+
+**Useful commands**:
+- `arete pull notion --page <url>` — Pull a single page by URL
+- `arete pull notion --page <url1> --page <url2> --destination projects/research/` — Batch pull multiple pages
+- `arete pull notion --page <url> --dry-run` — Preview what would be pulled without writing files
+
+**⚠️ Common gotcha**: If you get a 404 error, the page probably isn't shared with your integration. Notion returns 404 (not 403) when a page exists but isn't accessible. Fix: Open the page in Notion → "..." menu → "Connect to" → select your integration.
+
+**Data mapping**:
+- Destination: `resources/notes/`
+- Naming: `{title_slug}.md`
+- Template: None (direct markdown conversion)
+
+**API Script** (for agent execution):
+```bash
+# Pull a single page by URL
+arete pull notion --page "https://notion.so/My-Page-abc123"
+
+# Pull multiple pages to a specific location
+arete pull notion \
+  --page "https://notion.so/Page-1-abc123" \
+  --page "https://notion.so/Page-2-def456" \
+  --destination projects/research/
+
+# Preview without writing (useful for debugging)
+arete pull notion --page "https://notion.so/My-Page-abc123" --dry-run
+```
+
 ### Calendar
 
 **Pull capabilities**:

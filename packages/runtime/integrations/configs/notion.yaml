@@ -1,0 +1,78 @@
+# Notion Integration
+# Documentation and knowledge base platform
+# https://notion.so
+
+# === Identity ===
+name: notion
+display_name: Notion
+type: documentation
+status: inactive  # Change to 'active' after configuring credentials
+
+# === Capabilities ===
+capabilities:
+  pull: true        # Can fetch pages as markdown
+  push: false       # Not implemented (Phase 2)
+  seed: false       # Not implemented (Phase 2)
+  webhook: false    # Not implemented
+
+# === Authentication ===
+auth:
+  type: api_key
+  # Get your API key from: https://www.notion.so/my-integrations
+  # 
+  # 1. Create an integration at the URL above
+  # 2. Copy the "Internal Integration Token"
+  # 3. IMPORTANT: Share pages with your integration!
+  #    - Open the page in Notion
+  #    - Click "..." menu → "Connect to" → select your integration
+  #    - Without this step, the API returns 404 (not 403!)
+  # 
+  # Store credentials outside repo:
+  #   Option 1 - Environment variable:
+  #     export NOTION_API_KEY="secret_xxxxx"
+  #   
+  #   Option 2 - Credentials file (~/.arete/credentials.yaml):
+  #     notion:
+  #       api_key: "secret_xxxxx"
+
+# === Sync Settings ===
+sync:
+  frequency: manual       # manual only for now
+  last_sync: null         # Updated automatically after sync
+
+# === Data Mapping ===
+mapping:
+  destination: resources/notes/
+  naming: "{title_slug}.md"    # e.g., product-roadmap-q1.md
+  # No template needed - Notion pages convert directly to markdown
+
+# === Field Mapping ===
+# How Notion page data maps to markdown frontmatter
+fields:
+  title: page.title           # Page title (from title property)
+  notion_id: page.id          # UUID for future reference
+  notion_url: page.url        # Original Notion URL
+  last_edited: page.last_edited_time
+  created: page.created_time
+  # Additional properties extracted based on page type:
+  # - Database pages: all visible properties become frontmatter
+  # - Regular pages: icon, cover if present
+
+# === Filtering Defaults ===
+defaults:
+  include_child_pages: false   # Pull child pages recursively (future)
+  include_databases: false     # Pull database entries (future)
+
+# === Rate Limits ===
+# Notion API rate limit: 3 requests per second
+rate_limits:
+  requests_per_second: 3
+  batch_size: 10              # Items per batch operation
+
+# === Error State ===
+# Populated automatically if sync fails
+error: null
+# error:
+#   code: not_found
+#   message: "Page not shared with integration (Notion returns 404, not 403)"
+#   timestamp: 2026-02-22T10:00:00Z
