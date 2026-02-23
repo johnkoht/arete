@@ -5,7 +5,7 @@ status: building
 size: large
 tags: [integration, notion, pull, mcp]
 created: 2026-02-22T21:15:50.725Z
-updated: 2026-02-22T23:18:39.564Z
+updated: 2026-02-23T00:07:44.093Z
 completed: null
 execution: null
 has_review: true
