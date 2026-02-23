@@ -36,6 +36,7 @@ const AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
 const CREDENTIAL_KEY = 'google_calendar';
+const CONFIGURE_COMMAND = 'arete integration configure google-calendar';
 
 /** Internal token endpoint response shape. */
 type TokenResponse = {
@@ -164,6 +165,21 @@ export async function saveGoogleCredentials(
 }
 
 // ---------------------------------------------------------------------------
+// Error formatting
+// ---------------------------------------------------------------------------
+
+function isOAuthError(
+  value: unknown,
+  expected: string
+): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return record.error === expected;
+}
+
+// ---------------------------------------------------------------------------
 // Token refresh
 // ---------------------------------------------------------------------------
 
@@ -188,32 +204,52 @@ export async function refreshToken(
     refresh_token: credentials.refresh_token,
   });
 
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
+  let res: Response;
+  try {
+    res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+  } catch {
+    throw new Error('Unable to contact Google Calendar. Check your network and try again.');
+  }
 
+  let errorBody: unknown = null;
   if (!res.ok) {
-    let errorBody: Record<string, unknown> = {};
     try {
-      errorBody = (await res.json()) as Record<string, unknown>;
+      errorBody = await res.json();
     } catch {
-      // Ignore parse errors
+      errorBody = null;
     }
 
-    if (errorBody.error === 'invalid_grant') {
+    if (isOAuthError(errorBody, 'invalid_grant')) {
+      throw new Error(`Google Calendar authorization expired — run: ${CONFIGURE_COMMAND}`);
+    }
+
+    if (isOAuthError(errorBody, 'invalid_client')) {
       throw new Error(
-        'Google Calendar authorization expired — run: arete integration configure google-calendar'
+        'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET or use the packaged defaults and try again.'
       );
     }
 
+    if (res.status === 429) {
+      throw new Error('Google Calendar is rate limiting requests. Wait a minute and retry.');
+    }
+
+    if (res.status >= 500) {
+      throw new Error('Google Calendar is temporarily unavailable. Please try again shortly.');
+    }
+
     throw new Error(
-      `Google Calendar token refresh failed: ${res.status} ${res.statusText}`
+      `Google Calendar token refresh failed (HTTP ${res.status}) — run: ${CONFIGURE_COMMAND}`
     );
   }
 
-  const tokens = (await res.json()) as TokenResponse;
+  const tokens = (await res.json()) as Partial<TokenResponse>;
+  if (typeof tokens.access_token !== 'string' || typeof tokens.expires_in !== 'number') {
+    throw new Error('Google Calendar returned an invalid token response. Please retry setup.');
+  }
 
   return {
     access_token: tokens.access_token,
@@ -243,7 +279,7 @@ function openBrowser(url: string): Promise<void> {
     }
 
     exec(command, (err) => {
-      if (err) reject(new Error(`Failed to open browser: ${err.message}`));
+      if (err) reject(new Error('Unable to open your browser automatically.'));
       else resolve();
     });
   });
@@ -279,7 +315,7 @@ export async function authenticate(
   const addr = server.address() as AddressInfo | null;
   if (!addr) {
     server.close();
-    throw new Error('Failed to bind callback server');
+    throw new Error('Unable to start local callback server for Google Calendar setup. Please try again.');
   }
   const port = addr.port;
   const redirectUri = `http://127.0.0.1:${port}/callback`;
@@ -295,7 +331,13 @@ export async function authenticate(
     authUrl.searchParams.set('prompt', 'consent');
 
     // Step 3: Open browser
-    await openBrowser(authUrl.toString());
+    try {
+      await openBrowser(authUrl.toString());
+    } catch {
+      throw new Error(
+        `Could not open your browser automatically. Open this URL manually to continue:\n${authUrl.toString()}`
+      );
+    }
 
     // Step 4: Wait for callback
     const authorizationCode = await new Promise<string>((resolve, reject) => {
@@ -312,9 +354,11 @@ export async function authenticate(
           if (error) {
             res.writeHead(400, { 'Content-Type': 'text/html' });
             res.end('<html><body><p>Authorization failed. You may close this window.</p></body></html>');
-            reject(new Error(
-              `Google Calendar authorization failed: ${error} — run: arete integration configure google-calendar`
-            ));
+            reject(
+              new Error(
+                `Google Calendar authorization was cancelled or denied (${error}) — run: ${CONFIGURE_COMMAND}`
+              )
+            );
             return;
           }
 
@@ -322,17 +366,17 @@ export async function authenticate(
           if (!code) {
             res.writeHead(400, { 'Content-Type': 'text/html' });
             res.end('<html><body><p>No authorization code received. You may close this window.</p></body></html>');
-            reject(new Error(
-              'No authorization code received — run: arete integration configure google-calendar'
-            ));
+            reject(
+              new Error(`No authorization code received from Google — run: ${CONFIGURE_COMMAND}`)
+            );
             return;
           }
 
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end('<html><body><p>✅ Google Calendar connected! You may close this window.</p></body></html>');
           resolve(code);
-        } catch (e) {
-          reject(e);
+        } catch {
+          reject(new Error('Failed to process Google Calendar callback response. Please retry setup.'));
         }
       });
     });
@@ -346,23 +390,56 @@ export async function authenticate(
       client_secret: clientSecret,
     });
 
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenBody.toString(),
-    });
+    let tokenRes: Response;
+    try {
+      tokenRes = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenBody.toString(),
+      });
+    } catch {
+      throw new Error('Unable to contact Google during authorization. Check your network and retry.');
+    }
 
     if (!tokenRes.ok) {
+      let tokenErrorBody: unknown = null;
+      try {
+        tokenErrorBody = await tokenRes.json();
+      } catch {
+        tokenErrorBody = null;
+      }
+
+      if (isOAuthError(tokenErrorBody, 'invalid_grant')) {
+        throw new Error(`Google rejected the authorization code — run: ${CONFIGURE_COMMAND}`);
+      }
+
+      if (isOAuthError(tokenErrorBody, 'invalid_client')) {
+        throw new Error(
+          'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET or use the packaged defaults and retry.'
+        );
+      }
+
+      if (tokenRes.status >= 500) {
+        throw new Error('Google authorization service is temporarily unavailable. Please try again shortly.');
+      }
+
+      throw new Error(`Google Calendar token exchange failed (HTTP ${tokenRes.status}) — run: ${CONFIGURE_COMMAND}`);
+    }
+
+    const tokens = (await tokenRes.json()) as Partial<TokenResponse>;
+    if (
+      typeof tokens.access_token !== 'string' ||
+      typeof tokens.expires_in !== 'number' ||
+      !tokens.refresh_token
+    ) {
       throw new Error(
-        `Google Calendar token exchange failed: ${tokenRes.status} ${tokenRes.statusText} — run: arete integration configure google-calendar`
+        'Google Calendar did not return complete OAuth tokens. Re-run setup and make sure you grant requested access.'
       );
     }
 
-    const tokens = (await tokenRes.json()) as TokenResponse;
-
     const credentials: GoogleCalendarCredentials = {
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token ?? '',
+      refresh_token: tokens.refresh_token,
       expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
     };
 

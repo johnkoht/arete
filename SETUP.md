@@ -120,32 +120,36 @@ qmd status                  # Check index health
 
 The agent will prompt you to run `qmd update` at key moments (after finalizing projects, before synthesis).
 
-### 3. Calendar Setup (macOS)
+### 3. Calendar Setup (macOS or Google Calendar)
 
-The calendar integration enables automatic daily planning with meeting context. Currently supports macOS Calendar via ical-buddy.
+The calendar integration enables automatic daily planning with meeting context. Areté supports:
 
-#### Installation
+- **macOS Calendar** via `ical-buddy`
+- **Google Calendar** via OAuth
 
-**Install ical-buddy**:
+#### Option A: macOS Calendar (ical-buddy)
 
 ```bash
 brew install ical-buddy
-```
-
-#### Configuration
-
-```bash
-# Interactive setup — select which calendars to include
 arete integration configure calendar
-
-# Test the integration
 arete pull calendar --today
 ```
 
-The configure command will:
-1. List all your macOS calendars
-2. Let you select which ones to include (e.g. Work, Personal)
-3. Save the selection to `arete.yaml` under `integrations.calendar.calendars`
+The configure command lists your local macOS calendars and saves your selected list to `arete.yaml` under `integrations.calendar.calendars`.
+
+#### Option B: Google Calendar (OAuth)
+
+```bash
+arete integration configure google-calendar
+arete pull calendar --today
+```
+
+During configure, Areté opens your browser for Google OAuth. If you see an **"unverified app"** screen, click:
+
+1. **Advanced**
+2. **Go to Areté (unsafe)**
+
+Then grant read-only calendar access and return to the terminal.
 
 #### Usage
 
@@ -153,7 +157,7 @@ The configure command will:
 # View today's events
 arete pull calendar --today
 
-# View next 7 days
+# View next N days
 arete pull calendar --days 7
 
 # JSON output (for skills/automation)
@@ -163,8 +167,6 @@ arete pull calendar --today --json
 **Person Matching**: Calendar attendees are automatically matched to people in your workspace (by email). When viewing events, you'll see person slugs and file paths for attendees in your workspace, making it easy to pull up context before meetings.
 
 **Skills Integration**: The **daily-plan** skill uses calendar data to build meeting context for each of today's meetings. It shows who you're meeting with, what you owe them, recent meetings, and prep suggestions.
-
-**Future Providers**: Google Calendar and Microsoft 365 calendar support are planned. The calendar system is designed to support multiple providers — configuration in `arete.yaml` will support provider selection when additional providers are available.
 
 ### 4. Optional: MCP Integrations
 
@@ -241,13 +243,17 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 
 **QMD search seems slow**: First search after `qmd embed` loads models (~30s). Subsequent searches are fast.
 
-### Calendar Not Working (macOS)
+### Calendar Not Working
 
-**icalBuddy not found**: Install with `brew install ical-buddy`.
+**macOS (ical-buddy) not found**: Install with `brew install ical-buddy`.
 
-**No events showing**: Check that `arete integration configure calendar` selected calendars.
+**Google Calendar auth expired**: Re-run `arete integration configure google-calendar`.
 
-**Permission denied**: Grant terminal (iTerm, Terminal.app) access to Calendar in System Settings → Privacy & Security → Calendar.
+**Google unverified-app screen**: Continue via **Advanced** → **Go to Areté (unsafe)**.
+
+**No events showing**: Re-run configure for your provider and confirm calendars are selected.
+
+**macOS permission denied**: Grant terminal (iTerm, Terminal.app) access to Calendar in System Settings → Privacy & Security → Calendar.
 
 ### Common Errors
 

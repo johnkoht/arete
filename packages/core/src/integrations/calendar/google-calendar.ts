@@ -20,6 +20,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
+const CONFIGURE_COMMAND = 'arete integration configure google-calendar';
 
 // ---------------------------------------------------------------------------
 // Google API response types
@@ -80,28 +81,44 @@ async function googleFetch(
 ): Promise<Response> {
   let credentials = await loadGoogleCredentials(storage, workspaceRoot);
   if (!credentials) {
-    throw new Error(
-      'Google Calendar not authenticated — run: arete integration configure google-calendar'
-    );
+    throw new Error(`Google Calendar not authenticated — run: ${CONFIGURE_COMMAND}`);
   }
 
   // Refresh if expired before making the request
   if (!isTokenValid(credentials)) {
-    credentials = await refreshToken(credentials);
-    await saveGoogleCredentials(storage, workspaceRoot, credentials);
+    try {
+      credentials = await refreshToken(credentials);
+      await saveGoogleCredentials(storage, workspaceRoot, credentials);
+    } catch {
+      throw new Error(`Google Calendar authentication expired — run: ${CONFIGURE_COMMAND}`);
+    }
   }
 
-  let res = await fetch(url, {
-    headers: { Authorization: `Bearer ${credentials.access_token}` },
-  });
-
-  // On 401, attempt one refresh and retry
-  if (res.status === 401) {
-    credentials = await refreshToken(credentials);
-    await saveGoogleCredentials(storage, workspaceRoot, credentials);
+  let res: Response;
+  try {
     res = await fetch(url, {
       headers: { Authorization: `Bearer ${credentials.access_token}` },
     });
+  } catch {
+    throw new Error('Unable to contact Google Calendar. Check your network and try again.');
+  }
+
+  // On 401, attempt one refresh and retry
+  if (res.status === 401) {
+    try {
+      credentials = await refreshToken(credentials);
+      await saveGoogleCredentials(storage, workspaceRoot, credentials);
+    } catch {
+      throw new Error(`Google Calendar authentication failed — run: ${CONFIGURE_COMMAND}`);
+    }
+
+    try {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${credentials.access_token}` },
+      });
+    } catch {
+      throw new Error('Unable to contact Google Calendar. Check your network and try again.');
+    }
   }
 
   return res;
@@ -111,12 +128,12 @@ async function googleFetch(
 // Error handling
 // ---------------------------------------------------------------------------
 
-function handleApiError(status: number, statusText: string, calendarId?: string): never {
+function handleApiError(status: number, calendarId?: string): never {
   switch (status) {
+    case 400:
+      throw new Error('Google Calendar request was invalid. Please retry.');
     case 401:
-      throw new Error(
-        'Google Calendar authentication failed after refresh — run: arete integration configure google-calendar'
-      );
+      throw new Error(`Google Calendar authentication failed — run: ${CONFIGURE_COMMAND}`);
     case 403:
       throw new Error(
         `Permission denied for calendar ${calendarId ?? 'unknown'}. Check sharing settings.`
@@ -126,7 +143,10 @@ function handleApiError(status: number, statusText: string, calendarId?: string)
     case 429:
       throw new Error('Google Calendar rate limit exceeded. Try again in a few minutes.');
     default:
-      throw new Error(`Google Calendar API error: ${status} ${statusText}`);
+      if (status >= 500) {
+        throw new Error('Google Calendar is temporarily unavailable. Try again in a few minutes.');
+      }
+      throw new Error(`Google Calendar request failed (HTTP ${status}).`);
   }
 }
 
@@ -180,7 +200,7 @@ async function fetchEvents(
 
     const res = await googleFetch(url.toString(), storage, workspaceRoot);
     if (!res.ok) {
-      handleApiError(res.status, res.statusText, calendarId);
+      handleApiError(res.status, calendarId);
     }
 
     const data = (await res.json()) as GoogleEventsResponse;
@@ -213,7 +233,7 @@ async function fetchCalendarList(
 
     const res = await googleFetch(url.toString(), storage, workspaceRoot);
     if (!res.ok) {
-      handleApiError(res.status, res.statusText);
+      handleApiError(res.status);
     }
 
     const data = (await res.json()) as GoogleCalendarListResponse;

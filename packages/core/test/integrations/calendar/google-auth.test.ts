@@ -393,6 +393,39 @@ describe('refreshToken', () => {
     );
   });
 
+  it('throws actionable message when client credentials are invalid', async () => {
+    globalThis.fetch = (async () => {
+      return new Response(
+        JSON.stringify({ error: 'invalid_client' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }) as typeof fetch;
+
+    const creds = makeCredentials();
+    await assert.rejects(
+      () => refreshToken(creds),
+      (err: Error) => {
+        assert.ok(err.message.includes('client configuration is invalid'));
+        return true;
+      }
+    );
+  });
+
+  it('throws actionable message on network failures', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('socket hang up');
+    }) as typeof fetch;
+
+    const creds = makeCredentials();
+    await assert.rejects(
+      () => refreshToken(creds),
+      (err: Error) => {
+        assert.ok(err.message.includes('Unable to contact Google Calendar'));
+        return true;
+      }
+    );
+  });
+
   it('throws on other HTTP errors', async () => {
     globalThis.fetch = (async () => {
       return new Response('Server Error', { status: 500, statusText: 'Internal Server Error' });
@@ -402,8 +435,7 @@ describe('refreshToken', () => {
     await assert.rejects(
       () => refreshToken(creds),
       (err: Error) => {
-        assert.ok(err.message.includes('token refresh failed'));
-        assert.ok(err.message.includes('500'));
+        assert.ok(err.message.includes('temporarily unavailable'));
         return true;
       }
     );

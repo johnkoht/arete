@@ -496,6 +496,49 @@ describe('Google Calendar Provider', () => {
       assert.equal(events[0].title, 'Test Meeting');
     });
 
+    it('shows actionable message on network failure', async () => {
+      const storage = makeMockStorage({
+        [CRED_PATH]: makeCredentialsYaml(),
+      });
+
+      fetchMock.mock.mockImplementation(async (input: string | URL | Request) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.includes('calendarList')) {
+          return mockResponse(makeCalendarListResponse());
+        }
+        throw new Error('network down');
+      });
+
+      const provider = getGoogleCalendarProvider(storage, WORKSPACE);
+      await assert.rejects(
+        () => provider.getUpcomingEvents(1),
+        (err: Error) => {
+          assert.ok(err.message.includes('Unable to contact Google Calendar'));
+          return true;
+        }
+      );
+    });
+
+    it('5xx returns temporary availability message', async () => {
+      const storage = makeMockStorage({
+        [CRED_PATH]: makeCredentialsYaml(),
+      });
+
+      routeFetch({
+        'calendarList': mockResponse(makeCalendarListResponse()),
+        '/events': mockResponse({ error: 'Server failure' }, 503, 'Service Unavailable'),
+      });
+
+      const provider = getGoogleCalendarProvider(storage, WORKSPACE);
+      await assert.rejects(
+        () => provider.getUpcomingEvents(1),
+        (err: Error) => {
+          assert.ok(err.message.includes('temporarily unavailable'));
+          return true;
+        }
+      );
+    });
+
     it('429 returns rate limit error message', async () => {
       const storage = makeMockStorage({
         [CRED_PATH]: makeCredentialsYaml(),

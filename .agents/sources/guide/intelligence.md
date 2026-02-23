@@ -276,6 +276,8 @@ arete route "query" [--json]          # Route to skill/tool
 arete people list                     # List people
 arete people show <slug|email>        # Show person details
 arete people memory refresh           # Refresh person memory highlights
+arete integration configure calendar  # Configure macOS Calendar
+arete integration configure google-calendar  # Configure Google Calendar OAuth
 arete pull calendar [--today]         # Pull calendar events
 arete pull fathom [--days N]          # Pull Fathom recordings
 ```
