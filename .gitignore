@@ -119,3 +119,8 @@ dev/autonomous/progress.txt
 
 # Per-run execution state (transient — see dev/executions/README.md)
 dev/executions/*/
+
+# Test-generated plan artifacts (plan-mode extension tests)
+dev/work/plans/_overwrite-*
+dev/work/plans/fresh-plan-test
+dev/plans-test/
