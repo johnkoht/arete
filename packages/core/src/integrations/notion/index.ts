@@ -42,7 +42,9 @@ export async function pullNotionPages(
     };
   }
 
-  const client = new NotionClient(apiKey);
+  const client = new NotionClient(apiKey, {
+    baseUrl: process.env.ARETE_NOTION_API_BASE,
+  });
 
   // Process pages sequentially to respect rate limits
   for (const urlOrId of options.pages) {
