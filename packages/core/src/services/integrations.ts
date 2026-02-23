@@ -15,7 +15,9 @@ import type {
 import { INTEGRATIONS } from '../integrations/registry.js';
 import { pullFathom } from '../integrations/fathom/index.js';
 import { pullKrisp } from '../integrations/krisp/index.js';
+import { pullNotionPages } from '../integrations/notion/index.js';
 import { loadKrispCredentials } from '../integrations/krisp/config.js';
+import { loadNotionApiKey } from '../integrations/notion/config.js';
 import { loadGoogleCredentials } from '../integrations/calendar/google-auth.js';
 import { getWorkspaceConfigPath } from '../config.js';
 import { getAdapterFromConfig } from '../adapters/index.js';
@@ -70,6 +72,23 @@ export class IntegrationService {
         itemsCreated: result.saved,
         itemsUpdated: 0,
         errors: result.errors,
+      };
+    }
+
+    // TODO: Refactor to provider registry pattern when adding 4th integration
+    if (integration === 'notion') {
+      const pages = options.pages ?? [];
+      const destination = options.destination ?? 'resources/notion';
+      const result = await pullNotionPages(this.storage, workspaceRoot, paths, {
+        pages,
+        destination,
+      });
+      return {
+        integration,
+        itemsProcessed: result.saved.length + result.skipped.length + result.errors.length,
+        itemsCreated: result.saved.length,
+        itemsUpdated: 0,
+        errors: result.errors.map((e) => `${e.pageId}: ${e.error}`),
       };
     }
 
@@ -289,6 +308,20 @@ export class IntegrationService {
 
     if (integration === 'krisp') {
       return this.loadOAuthTokenStatus(workspaceRoot, 'krisp');
+    }
+
+    if (integration === 'notion') {
+      // Manifest-only: check arete.yaml config + credential loader (no legacy IDE config files)
+      const manifestIntegrations = await this.getManifestIntegrations(workspaceRoot);
+      const manifestCfg = manifestIntegrations.notion;
+      if (manifestCfg && typeof manifestCfg === 'object') {
+        const status = (manifestCfg as Record<string, unknown>).status;
+        if (status === 'active') {
+          return 'active';
+        }
+      }
+      const apiKey = await loadNotionApiKey(this.storage, workspaceRoot);
+      return apiKey ? 'active' : 'inactive';
     }
 
     if (integration === 'google-calendar') {

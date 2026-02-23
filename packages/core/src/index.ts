@@ -89,3 +89,9 @@ export {
   saveKrispCredentials,
 } from './integrations/krisp/config.js';
 export type { KrispCredentials } from './integrations/krisp/config.js';
+
+// Notion integration
+export { pullNotionPages } from './integrations/notion/index.js';
+export { loadNotionApiKey } from './integrations/notion/config.js';
+export { resolvePageId } from './integrations/notion/url.js';
+export type { NotionPullResult, NotionPageResult } from './integrations/notion/types.js';

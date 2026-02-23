@@ -5,12 +5,14 @@
 import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex } from '@arete/core';
 import type { QmdRefreshResult } from '@arete/core';
 import type { Command } from 'commander';
-import chalk from 'chalk';
-import { header, listItem, success, error, info, warn } from '../formatters.js';
+import { isAbsolute, join } from 'path';
+import { tmpdir } from 'os';
+import { header, listItem, success, error, info } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
 const DEFAULT_DAYS = 7;
+const DEFAULT_NOTION_DESTINATION = 'resources/notes';
 
 export function registerPullCommand(program: Command): void {
   program
@@ -18,12 +20,23 @@ export function registerPullCommand(program: Command): void {
     .description('Fetch latest data from integrations or calendar')
     .option('--days <n>', 'Number of days to fetch', String(DEFAULT_DAYS))
     .option('--today', 'Fetch only today\'s events (calendar only)')
+    .option('--page <url-or-id>', 'Notion page URL/ID (repeatable)', collectOptionValues, [])
+    .option('--destination <path>', 'Destination path for Notion pulls', DEFAULT_NOTION_DESTINATION)
+    .option('--dry-run', 'Fetch + convert and print markdown without saving (notion only)')
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
     .action(
       async (
         integration: string | undefined,
-        opts: { days?: string; today?: boolean; skipQmd?: boolean; json?: boolean },
+        opts: {
+          days?: string;
+          today?: boolean;
+          page?: string[];
+          destination?: string;
+          dryRun?: boolean;
+          skipQmd?: boolean;
+          json?: boolean;
+        },
       ) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -41,6 +54,16 @@ export function registerPullCommand(program: Command): void {
 
         if (integration === 'calendar') {
           return pullCalendar(services, root, opts.today ?? false, opts.json ?? false);
+        }
+
+        if (integration === 'notion') {
+          return pullNotion(services, root, {
+            pages: opts.page ?? [],
+            destination: opts.destination ?? DEFAULT_NOTION_DESTINATION,
+            dryRun: Boolean(opts.dryRun),
+            skipQmd: Boolean(opts.skipQmd),
+            json: Boolean(opts.json),
+          });
         }
 
         if (integration === 'fathom' || !integration) {
@@ -120,16 +143,183 @@ export function registerPullCommand(program: Command): void {
             JSON.stringify({
               success: false,
               error: `Unknown integration: ${integration}`,
-              available: ['calendar', 'fathom', 'krisp'],
+              available: ['calendar', 'fathom', 'krisp', 'notion'],
             }),
           );
         } else {
           error(`Unknown integration: ${integration}`);
-          info('Available: calendar, fathom, krisp');
+          info('Available: calendar, fathom, krisp, notion');
         }
         process.exit(1);
       },
     );
+}
+
+function collectOptionValues(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+export type PullNotionDeps = {
+  loadConfigFn: (
+    storage: Awaited<ReturnType<typeof import('@arete/core').createServices>>['storage'],
+    workspaceRoot: string,
+  ) => Promise<{ qmd_collection?: string }>;
+  refreshQmdIndexFn: (workspaceRoot: string, collectionName: string | undefined) => Promise<QmdRefreshResult>;
+};
+
+export async function pullNotion(
+  services: Awaited<ReturnType<typeof import('@arete/core').createServices>>,
+  workspaceRoot: string,
+  opts: {
+    pages: string[];
+    destination: string;
+    dryRun: boolean;
+    skipQmd: boolean;
+    json: boolean;
+  },
+  deps: PullNotionDeps = {
+    loadConfigFn: loadConfig,
+    refreshQmdIndexFn: refreshQmdIndex,
+  },
+): Promise<void> {
+  if (opts.pages.length === 0) {
+    if (opts.json) {
+      console.log(JSON.stringify({ success: false, error: 'Provide at least one --page <url-or-id>' }));
+    } else {
+      error('Provide at least one --page <url-or-id>');
+    }
+    process.exit(1);
+  }
+
+  if (opts.dryRun) {
+    const dryRunDestination = join(
+      tmpdir(),
+      `arete-notion-dry-run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+
+    try {
+      const result = await services.integrations.pull(workspaceRoot, 'notion', {
+        integration: 'notion',
+        pages: opts.pages,
+        destination: dryRunDestination,
+      });
+
+      const markdownFiles = (await services.storage.list(dryRunDestination, { extensions: ['.md'] }))
+        .sort((a, b) => a.localeCompare(b));
+
+      const previews: Array<{ path: string; markdown: string }> = [];
+      for (const filePath of markdownFiles) {
+        const content = await services.storage.read(filePath);
+        if (content) {
+          previews.push({
+            path: filePath,
+            markdown: stripFrontmatter(content),
+          });
+        }
+      }
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              success: result.errors.length === 0,
+              integration: 'notion',
+              dryRun: true,
+              itemsProcessed: result.itemsProcessed,
+              itemsCreated: result.itemsCreated,
+              errors: result.errors,
+              previews,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      header('Notion Pull (dry-run)');
+      listItem('Pages requested', String(opts.pages.length));
+      listItem('Pages converted', String(previews.length));
+      console.log('');
+
+      if (previews.length === 0) {
+        info('No markdown generated.');
+      }
+
+      for (const preview of previews) {
+        console.log(`--- ${preview.path} ---`);
+        console.log(preview.markdown);
+        if (!preview.markdown.endsWith('\n')) {
+          console.log('');
+        }
+      }
+
+      if (result.errors.length > 0) {
+        error(`Notion dry-run completed with errors: ${result.errors.join(', ')}`);
+      }
+      return;
+    } finally {
+      await services.storage.delete(dryRunDestination);
+    }
+  }
+
+  const destination = resolveDestinationPath(workspaceRoot, opts.destination);
+  const result = await services.integrations.pull(workspaceRoot, 'notion', {
+    integration: 'notion',
+    pages: opts.pages,
+    destination,
+  });
+
+  let qmdResult: QmdRefreshResult | undefined;
+  if (result.itemsCreated > 0 && !opts.skipQmd) {
+    const config = await deps.loadConfigFn(services.storage, workspaceRoot);
+    qmdResult = await deps.refreshQmdIndexFn(workspaceRoot, config.qmd_collection);
+  }
+
+  if (opts.json) {
+    console.log(
+      JSON.stringify(
+        {
+          success: result.errors.length === 0,
+          integration: 'notion',
+          destination,
+          pages: opts.pages,
+          itemsProcessed: result.itemsProcessed,
+          itemsCreated: result.itemsCreated,
+          errors: result.errors,
+          qmd: qmdResult ?? { indexed: false, skipped: true },
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  header('Pull Latest Data');
+  listItem('Integration', 'Notion');
+  listItem('Pages', String(opts.pages.length));
+  listItem('Destination', destination);
+  console.log('');
+
+  if (result.errors.length === 0) {
+    success(`Notion pull complete! ${result.itemsCreated} page(s) saved.`);
+  } else {
+    error(`Notion pull completed with errors: ${result.errors.join(', ')}`);
+  }
+  displayQmdResult(qmdResult);
+}
+
+function resolveDestinationPath(workspaceRoot: string, destination: string): string {
+  if (isAbsolute(destination)) {
+    return destination;
+  }
+  return join(workspaceRoot, destination);
+}
+
+function stripFrontmatter(content: string): string {
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
+  return match ? match[1] : content;
 }
 
 async function pullCalendar(

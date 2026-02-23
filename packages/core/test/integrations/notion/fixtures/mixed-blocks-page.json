@@ -1,0 +1,285 @@
+{
+  "page": {
+    "object": "page",
+    "id": "mixed12345-def6-7890-abcd-ef1234567890",
+    "created_time": "2026-01-20T08:00:00.000Z",
+    "last_edited_time": "2026-02-18T16:45:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/workspace/Technical-Architecture-mixed12345def67890abcdef1234567890",
+    "properties": {
+      "title": {
+        "id": "title",
+        "type": "title",
+        "title": [
+          {
+            "type": "text",
+            "text": { "content": "Technical Architecture", "link": null },
+            "plain_text": "Technical Architecture",
+            "annotations": {
+              "bold": false, "italic": false, "strikethrough": false,
+              "underline": false, "code": false, "color": "default"
+            }
+          }
+        ]
+      }
+    },
+    "parent": { "type": "workspace", "workspace": true }
+  },
+  "blocks": [
+    {
+      "object": "block",
+      "id": "mb-001",
+      "type": "heading_1",
+      "has_children": false,
+      "heading_1": {
+        "rich_text": [{ "type": "text", "text": { "content": "System Design", "link": null }, "plain_text": "System Design", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-002",
+      "type": "paragraph",
+      "has_children": false,
+      "paragraph": {
+        "rich_text": [
+          { "type": "text", "text": { "content": "The system uses a ", "link": null }, "plain_text": "The system uses a ", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": "microservices", "link": null }, "plain_text": "microservices", "annotations": { "bold": true, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": " architecture with ", "link": null }, "plain_text": " architecture with ", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": "event-driven", "link": null }, "plain_text": "event-driven", "annotations": { "bold": false, "italic": true, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": " communication.", "link": null }, "plain_text": " communication.", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }
+        ],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-003",
+      "type": "heading_2",
+      "has_children": false,
+      "heading_2": {
+        "rich_text": [{ "type": "text", "text": { "content": "Components", "link": null }, "plain_text": "Components", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-004",
+      "type": "numbered_list_item",
+      "has_children": false,
+      "numbered_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "API Gateway — handles routing and auth", "link": null }, "plain_text": "API Gateway — handles routing and auth", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-005",
+      "type": "numbered_list_item",
+      "has_children": false,
+      "numbered_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Event Bus — Kafka-based message broker", "link": null }, "plain_text": "Event Bus — Kafka-based message broker", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-006",
+      "type": "numbered_list_item",
+      "has_children": false,
+      "numbered_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Data Store — PostgreSQL with read replicas", "link": null }, "plain_text": "Data Store — PostgreSQL with read replicas", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-007",
+      "type": "heading_3",
+      "has_children": false,
+      "heading_3": {
+        "rich_text": [{ "type": "text", "text": { "content": "API Configuration", "link": null }, "plain_text": "API Configuration", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-008",
+      "type": "code",
+      "has_children": false,
+      "code": {
+        "rich_text": [{ "type": "text", "text": { "content": "const config = {\n  port: 3000,\n  database: {\n    host: 'localhost',\n    port: 5432,\n    name: 'myapp'\n  },\n  kafka: {\n    brokers: ['kafka:9092']\n  }\n};", "link": null }, "plain_text": "const config = {\n  port: 3000,\n  database: {\n    host: 'localhost',\n    port: 5432,\n    name: 'myapp'\n  },\n  kafka: {\n    brokers: ['kafka:9092']\n  }\n};", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "caption": [],
+        "language": "typescript"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-009",
+      "type": "quote",
+      "has_children": false,
+      "quote": {
+        "rich_text": [{ "type": "text", "text": { "content": "Design for failure. Every service should handle upstream outages gracefully.", "link": null }, "plain_text": "Design for failure. Every service should handle upstream outages gracefully.", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-010",
+      "type": "to_do",
+      "has_children": false,
+      "to_do": {
+        "rich_text": [{ "type": "text", "text": { "content": "Set up CI/CD pipeline", "link": null }, "plain_text": "Set up CI/CD pipeline", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "checked": true,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-011",
+      "type": "to_do",
+      "has_children": false,
+      "to_do": {
+        "rich_text": [{ "type": "text", "text": { "content": "Configure monitoring and alerting", "link": null }, "plain_text": "Configure monitoring and alerting", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "checked": false,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-012",
+      "type": "divider",
+      "has_children": false,
+      "divider": {}
+    },
+    {
+      "object": "block",
+      "id": "mb-013",
+      "type": "heading_2",
+      "has_children": false,
+      "heading_2": {
+        "rich_text": [{ "type": "text", "text": { "content": "Data Model", "link": null }, "plain_text": "Data Model", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-014",
+      "type": "table",
+      "has_children": true,
+      "table": {
+        "table_width": 3,
+        "has_column_header": true,
+        "has_row_header": false
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-014-row1",
+      "type": "table_row",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "mb-014" },
+      "table_row": {
+        "cells": [
+          [{ "type": "text", "text": { "content": "Field", "link": null }, "plain_text": "Field", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "Type", "link": null }, "plain_text": "Type", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "Description", "link": null }, "plain_text": "Description", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }]
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-014-row2",
+      "type": "table_row",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "mb-014" },
+      "table_row": {
+        "cells": [
+          [{ "type": "text", "text": { "content": "id", "link": null }, "plain_text": "id", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": true, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "UUID", "link": null }, "plain_text": "UUID", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "Primary key", "link": null }, "plain_text": "Primary key", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }]
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-014-row3",
+      "type": "table_row",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "mb-014" },
+      "table_row": {
+        "cells": [
+          [{ "type": "text", "text": { "content": "name", "link": null }, "plain_text": "name", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": true, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "VARCHAR(255)", "link": null }, "plain_text": "VARCHAR(255)", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+          [{ "type": "text", "text": { "content": "User display name", "link": null }, "plain_text": "User display name", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }]
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-015",
+      "type": "image",
+      "has_children": false,
+      "image": {
+        "type": "external",
+        "external": { "url": "https://example.com/architecture-diagram.png" },
+        "caption": [{ "type": "text", "text": { "content": "System Architecture Diagram", "link": null }, "plain_text": "System Architecture Diagram", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }]
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-016",
+      "type": "bookmark",
+      "has_children": false,
+      "bookmark": {
+        "url": "https://docs.example.com/api-reference",
+        "caption": [{ "type": "text", "text": { "content": "API Reference Documentation", "link": null }, "plain_text": "API Reference Documentation", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }]
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-017",
+      "type": "callout",
+      "has_children": false,
+      "callout": {
+        "rich_text": [{ "type": "text", "text": { "content": "Important: All services must implement health check endpoints at /health.", "link": null }, "plain_text": "Important: All services must implement health check endpoints at /health.", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "icon": { "type": "emoji", "emoji": "⚠️" },
+        "color": "yellow_background"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-018",
+      "type": "child_page",
+      "has_children": true,
+      "child_page": {
+        "title": "Deployment Guide"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-019",
+      "type": "child_database",
+      "has_children": true,
+      "child_database": {
+        "title": "Service Registry"
+      }
+    },
+    {
+      "object": "block",
+      "id": "mb-020",
+      "type": "paragraph",
+      "has_children": false,
+      "paragraph": {
+        "rich_text": [
+          { "type": "text", "text": { "content": "Use the ", "link": null }, "plain_text": "Use the ", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": "fetchData()", "link": null }, "plain_text": "fetchData()", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": true, "color": "default" } },
+          { "type": "text", "text": { "content": " function with ", "link": null }, "plain_text": " function with ", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": "caution", "link": null }, "plain_text": "caution", "annotations": { "bold": false, "italic": false, "strikethrough": true, "underline": false, "code": false, "color": "default" } },
+          { "type": "text", "text": { "content": " care.", "link": null }, "plain_text": " care.", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }
+        ],
+        "color": "default"
+      }
+    }
+  ]
+}

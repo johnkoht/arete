@@ -66,6 +66,10 @@ export type PullOptions = {
   integration: string;
   days?: number;
   force?: boolean;
+  /** Notion: array of page URLs or IDs to pull */
+  pages?: string[];
+  /** Notion: where to save pulled pages */
+  destination?: string;
 };
 
 /** Result of a pull operation */

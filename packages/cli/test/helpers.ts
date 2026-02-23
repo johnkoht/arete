@@ -36,6 +36,7 @@ export function cleanupTmpDir(dir: string): void {
 interface RunCliOptions {
   cwd?: string;
   encoding?: BufferEncoding;
+  env?: NodeJS.ProcessEnv;
 }
 
 /** tsx from monorepo root node_modules (tests run from repo root) */
@@ -55,7 +56,7 @@ function runCliInternal(
     cwd,
     encoding,
     maxBuffer: 10 * 1024 * 1024,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: { ...process.env, FORCE_COLOR: '0', ...options.env },
   });
   const stdout = (result.stdout ?? '').toString();
   const stderr = (result.stderr ?? '').toString();

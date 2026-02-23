@@ -34,6 +34,19 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     auth: { type: 'oauth' },
     status: 'available',
   },
+  notion: {
+    name: 'notion',
+    displayName: 'Notion',
+    description: 'Documentation and workspace pages',
+    implements: ['documentation'],
+    auth: {
+      type: 'api_key',
+      envVar: 'NOTION_API_KEY',
+      configKey: 'api_key',
+      instructions: 'Create an internal integration at notion.so/profile/integrations',
+    },
+    status: 'available',
+  },
   'google-calendar': {
     name: 'google-calendar',
     displayName: 'Google Calendar',

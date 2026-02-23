@@ -4,6 +4,11 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
+import type { StorageAdapter } from '@arete/core';
+import {
+  configureNotionIntegration,
+  resolveNotionToken,
+} from '../../src/commands/integration.js';
 import { createTmpDir, cleanupTmpDir, runCli } from '../helpers.js';
 
 describe('integration command', () => {
@@ -147,6 +152,10 @@ describe('integration command', () => {
     );
   });
 
+  // NOTE: CLI-level test for notion configure with HTTP server caused test runner hangs.
+  // The configureNotionIntegration helper is tested thoroughly in the unit tests below,
+  // which verify: token validation, credential storage, integration service calls, and error handling.
+
   it('blocks google-calendar configure when credentials are placeholders', () => {
     // Pre-flight check should prevent OAuth flow when no real credentials are set
     runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
@@ -217,3 +226,110 @@ describe('integration command', () => {
     assert.equal(googleEntry?.active, true);
   });
 });
+
+describe('integration command (notion configure helpers)', () => {
+  it('configures notion successfully with valid token and writes notion.api_key', async () => {
+    const storage = new MemoryStorageAdapter();
+    const calls: Array<{ workspaceRoot: string; integration: string; config: Record<string, unknown> }> = [];
+
+    await configureNotionIntegration({
+      storage,
+      integrationService: {
+        async configure(workspaceRoot, integration, config) {
+          calls.push({ workspaceRoot, integration, config });
+        },
+      },
+      workspaceRoot: '/workspace',
+      token: 'ntn_valid_token',
+      fetchFn: async () => createJsonResponse(200, { object: 'user', id: 'user_123' }),
+      baseUrl: 'http://example.test',
+    });
+
+    const content = await storage.read('/workspace/.credentials/credentials.yaml');
+    assert.ok(content, 'credentials should be written');
+
+    const parsed = parseYaml(content) as { notion?: { api_key?: string } };
+    assert.equal(parsed.notion?.api_key, 'ntn_valid_token');
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].integration, 'notion');
+    assert.deepEqual(calls[0].config, { status: 'active' });
+  });
+
+  it('returns clear error for invalid notion token', async () => {
+    const storage = new MemoryStorageAdapter();
+
+    await assert.rejects(
+      async () => {
+        await configureNotionIntegration({
+          storage,
+          integrationService: {
+            async configure() {
+              throw new Error('should not be called');
+            },
+          },
+          workspaceRoot: '/workspace',
+          token: 'ntn_invalid',
+          fetchFn: async () => createJsonResponse(401, { object: 'error' }),
+          baseUrl: 'http://example.test',
+        });
+      },
+      /Invalid Notion API token/,
+    );
+  });
+
+  it('uses --token mode without prompting when token is provided', async () => {
+    let prompted = false;
+    const token = await resolveNotionToken('ntn_from_flag', async () => {
+      prompted = true;
+      return 'ntn_prompted';
+    });
+
+    assert.equal(token, 'ntn_from_flag');
+    assert.equal(prompted, false);
+  });
+});
+
+class MemoryStorageAdapter implements StorageAdapter {
+  private files = new Map<string, string>();
+
+  async read(path: string): Promise<string | null> {
+    return this.files.get(path) ?? null;
+  }
+
+  async write(path: string, content: string): Promise<void> {
+    this.files.set(path, content);
+  }
+
+  async exists(path: string): Promise<boolean> {
+    return this.files.has(path);
+  }
+
+  async delete(path: string): Promise<void> {
+    this.files.delete(path);
+  }
+
+  async list(_dir: string): Promise<string[]> {
+    return [];
+  }
+
+  async listSubdirectories(_dir: string): Promise<string[]> {
+    return [];
+  }
+
+  async mkdir(_dir: string): Promise<void> {
+    return;
+  }
+
+  async getModified(_path: string): Promise<Date | null> {
+    return null;
+  }
+}
+
+function createJsonResponse(status: number, payload: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(payload),
+  } as Response;
+}
