@@ -320,3 +320,83 @@ krisp:
     assert.equal(krispStatus, 'active', 'Krisp status must still be active');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: list() calendar provider mapping
+// ---------------------------------------------------------------------------
+
+describe('IntegrationService.list — calendar provider mapping', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let service: IntegrationService;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    service = makeService(storage);
+  });
+
+  it('maps integrations.calendar.provider=google to google-calendar entry', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  calendar:
+    provider: google
+    status: active
+`.trim());
+
+    const entries = await service.list(WORKSPACE);
+    const google = entries.find((entry) => entry.name === 'google-calendar');
+    const apple = entries.find((entry) => entry.name === 'apple-calendar');
+
+    assert.ok(google, 'google-calendar entry must exist');
+    assert.equal(google?.configured, 'active');
+    assert.equal(google?.active, true);
+
+    assert.ok(apple, 'apple-calendar entry must exist');
+    assert.equal(apple?.configured, null);
+    assert.equal(apple?.active, false);
+  });
+
+  it('maps integrations.calendar.provider=macos to apple-calendar entry', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  calendar:
+    provider: macos
+    status: active
+`.trim());
+
+    const entries = await service.list(WORKSPACE);
+    const google = entries.find((entry) => entry.name === 'google-calendar');
+    const apple = entries.find((entry) => entry.name === 'apple-calendar');
+
+    assert.ok(apple, 'apple-calendar entry must exist');
+    assert.equal(apple?.configured, 'active');
+    assert.equal(apple?.active, true);
+
+    assert.ok(google, 'google-calendar entry must exist');
+    assert.equal(google?.configured, null);
+    assert.equal(google?.active, false);
+  });
+
+  it('maps integrations.calendar.provider=ical-buddy to apple-calendar entry', async () => {
+    storage.files.set(MANIFEST_PATH, `
+schema: 1
+integrations:
+  calendar:
+    provider: ical-buddy
+    status: active
+`.trim());
+
+    const entries = await service.list(WORKSPACE);
+    const google = entries.find((entry) => entry.name === 'google-calendar');
+    const apple = entries.find((entry) => entry.name === 'apple-calendar');
+
+    assert.ok(apple, 'apple-calendar entry must exist');
+    assert.equal(apple?.configured, 'active');
+    assert.equal(apple?.active, true);
+
+    assert.ok(google, 'google-calendar entry must exist');
+    assert.equal(google?.configured, null);
+    assert.equal(google?.active, false);
+  });
+});

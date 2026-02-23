@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
@@ -145,5 +145,50 @@ describe('integration command', () => {
       false,
       'pull should not report fathom as inactive after configure',
     );
+  });
+
+  it('shows google-calendar as active when integrations.calendar uses provider google', () => {
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+
+    const manifestPath = join(workspaceDir, 'arete.yaml');
+    const manifest = parseYaml(readFileSync(manifestPath, 'utf8')) as {
+      schema?: number;
+      integrations?: Record<string, unknown>;
+    };
+
+    manifest.integrations = {
+      ...(manifest.integrations ?? {}),
+      calendar: {
+        provider: 'google',
+        status: 'active',
+        calendars: ['primary'],
+      },
+    };
+
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+    const credentialsDir = join(workspaceDir, '.credentials');
+    mkdirSync(credentialsDir, { recursive: true });
+    writeFileSync(
+      join(credentialsDir, 'credentials.yaml'),
+      [
+        'google_calendar:',
+        '  access_token: test-access-token',
+        '  refresh_token: test-refresh-token',
+        '  expires_at: 9999999999',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const listOutput = runCli(['integration', 'list', '--json'], { cwd: workspaceDir });
+    const listResult = JSON.parse(listOutput) as {
+      success: boolean;
+      integrations: Array<{ name: string; configured: string | null; active: boolean }>;
+    };
+
+    const googleEntry = listResult.integrations.find((entry) => entry.name === 'google-calendar');
+    assert.ok(googleEntry, 'google-calendar should appear in integration list');
+    assert.equal(googleEntry?.configured, 'active');
+    assert.equal(googleEntry?.active, true);
   });
 });

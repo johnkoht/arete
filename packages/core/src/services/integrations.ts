@@ -99,6 +99,23 @@ export class IntegrationService {
       }
     }
 
+    // Calendar provider alias mapping:
+    // configure writes integrations.calendar.provider ('google' or 'macos').
+    // integration list entries are registry names ('google-calendar', 'apple-calendar').
+    const manifestCalendar = manifestIntegrations.calendar;
+    if (manifestCalendar && typeof manifestCalendar === 'object') {
+      const calendarProvider = (manifestCalendar as Record<string, unknown>).provider;
+      const calendarStatus = (manifestCalendar as Record<string, unknown>).status;
+      if (typeof calendarStatus === 'string') {
+        if (calendarProvider === 'google') {
+          configured['google-calendar'] = calendarStatus as IntegrationStatus;
+        }
+        if (calendarProvider === 'macos' || calendarProvider === 'ical-buddy') {
+          configured['apple-calendar'] = calendarStatus as IntegrationStatus;
+        }
+      }
+    }
+
     // Backward-compat source: IDE integration config files
     if (configsExist) {
       const files = await this.storage.list(configsDir, {
