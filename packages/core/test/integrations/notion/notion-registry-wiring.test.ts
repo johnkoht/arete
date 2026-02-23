@@ -48,6 +48,79 @@ const WORKSPACE = '/test-workspace';
 const CRED_PATH = `${WORKSPACE}/.credentials/credentials.yaml`;
 const MANIFEST_PATH = `${WORKSPACE}/arete.yaml`;
 
+function createNotionFetchMock(pages: Map<string, { title: string }>): typeof fetch {
+  return async (input: URL | RequestInfo): Promise<Response> => {
+    const url = String(input);
+    const pageMatch = url.match(/\/v1\/pages\/([^/?]+)/);
+    const blocksMatch = url.match(/\/v1\/blocks\/([^/?]+)\/children/);
+    const requestedId = (pageMatch?.[1] ?? blocksMatch?.[1] ?? '').replace(/-/g, '').toLowerCase();
+
+    for (const [pageId, payload] of pages.entries()) {
+      const normalized = pageId.replace(/-/g, '').toLowerCase();
+      if (requestedId !== normalized) {
+        continue;
+      }
+
+      if (pageMatch) {
+        return new Response(
+          JSON.stringify({
+            object: 'page',
+            id: pageId,
+            created_time: '2026-02-22T10:00:00.000Z',
+            last_edited_time: '2026-02-22T12:00:00.000Z',
+            url: `https://www.notion.so/${pageId.replace(/-/g, '')}`,
+            properties: {
+              title: {
+                type: 'title',
+                title: [{ plain_text: payload.title }],
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (blocksMatch) {
+        return new Response(
+          JSON.stringify({
+            object: 'list',
+            results: [
+              {
+                object: 'block',
+                id: `${pageId}-paragraph`,
+                type: 'paragraph',
+                has_children: false,
+                paragraph: {
+                  rich_text: [
+                    {
+                      type: 'text',
+                      plain_text: `Content for ${payload.title}`,
+                      href: null,
+                      annotations: {
+                        bold: false,
+                        italic: false,
+                        strikethrough: false,
+                        underline: false,
+                        code: false,
+                        color: 'default',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+            has_more: false,
+            next_cursor: null,
+          }),
+          { status: 200 }
+        );
+      }
+    }
+
+    return new Response('Not Found', { status: 404 });
+  };
+}
+
 function makeService(storage: StorageAdapter): IntegrationService {
   return new IntegrationService(storage, getDefaultConfig());
 }
@@ -159,16 +232,17 @@ integrations:
 // Tests: pull routing for notion
 // ---------------------------------------------------------------------------
 
-describe('IntegrationService.pull — notion routing', () => {
+describe('IntegrationService.pull — notion routing', { concurrency: 1 }, () => {
   let storage: ReturnType<typeof createMockStorage>;
   let service: IntegrationService;
   let savedEnv: string | undefined;
+  let savedFetch: typeof fetch;
 
   beforeEach(() => {
     storage = createMockStorage();
     service = makeService(storage);
     savedEnv = process.env.NOTION_API_KEY;
-    // Set up active status via env var
+    savedFetch = globalThis.fetch;
     process.env.NOTION_API_KEY = 'ntn_test_key';
   });
 
@@ -178,33 +252,41 @@ describe('IntegrationService.pull — notion routing', () => {
     } else {
       delete process.env.NOTION_API_KEY;
     }
+    globalThis.fetch = savedFetch;
   });
 
-  it('routes notion pull and returns PullResult shape', async () => {
+  it('routes notion pull and maps NotionPullResult to PullResult', async () => {
+    const pageId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    globalThis.fetch = createNotionFetchMock(
+      new Map([[pageId, { title: 'Registry Wiring Page' }]])
+    );
+
     const result = await service.pull(WORKSPACE, 'notion', {
       integration: 'notion',
-      pages: ['page-id-1'],
-      destination: 'resources/notion',
+      pages: [pageId, pageId],
+      destination: `${WORKSPACE}/resources/notion`,
     });
 
     assert.equal(result.integration, 'notion');
-    assert.equal(typeof result.itemsProcessed, 'number');
-    assert.equal(typeof result.itemsCreated, 'number');
-    assert.equal(typeof result.itemsUpdated, 'number');
-    assert.ok(Array.isArray(result.errors));
-  });
-
-  it('returns stub result (0 items) from placeholder implementation', async () => {
-    const result = await service.pull(WORKSPACE, 'notion', {
-      integration: 'notion',
-      pages: ['page-1', 'page-2'],
-    });
-
-    // Stub returns empty arrays → 0 items
-    assert.equal(result.itemsProcessed, 0);
-    assert.equal(result.itemsCreated, 0);
+    assert.equal(result.itemsProcessed, 2);
+    assert.ok(result.itemsCreated >= 1);
     assert.equal(result.itemsUpdated, 0);
     assert.deepEqual(result.errors, []);
+  });
+
+  it('formats pull errors with pageId prefix from orchestrator results', async () => {
+    const result = await service.pull(WORKSPACE, 'notion', {
+      integration: 'notion',
+      pages: ['missing-page-id'],
+      destination: `${WORKSPACE}/resources/notion`,
+    });
+
+    assert.equal(result.integration, 'notion');
+    assert.equal(result.itemsCreated, 0);
+    assert.equal(result.itemsUpdated, 0);
+    assert.ok(result.itemsProcessed >= 1);
+    assert.ok(result.errors.length >= 1);
+    assert.ok(result.errors[0].startsWith('missing-page-id: '));
   });
 
   it('returns error when notion is not active', async () => {
@@ -241,16 +323,16 @@ describe('IntegrationService.list — includes notion', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: stub index.ts exports
+// Tests: notion index.ts exports
 // ---------------------------------------------------------------------------
 
-describe('Notion stub index.ts', () => {
+describe('Notion index.ts', () => {
   it('exports pullNotionPages function', async () => {
     const mod = await import('../../../src/integrations/notion/index.js');
     assert.equal(typeof mod.pullNotionPages, 'function');
   });
 
-  it('stub returns empty result', async () => {
+  it('returns actionable error when API key is missing', async () => {
     const { pullNotionPages } = await import('../../../src/integrations/notion/index.js');
     const result = await pullNotionPages(
       createMockStorage(),
@@ -261,6 +343,7 @@ describe('Notion stub index.ts', () => {
 
     assert.deepEqual(result.saved, []);
     assert.deepEqual(result.skipped, []);
-    assert.deepEqual(result.errors, []);
+    assert.equal(result.errors.length, 1);
+    assert.ok(result.errors[0].error.includes('API key not found'));
   });
 });
