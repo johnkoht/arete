@@ -64,6 +64,29 @@ brew install ical-buddy
 icalBuddy -n eventsToday
 ```
 
+## Notion Setup
+
+1. Create an internal integration at [notion.so/my-integrations](https://www.notion.so/my-integrations)
+2. Copy the API key (starts with `secret_`)
+3. Configure via CLI (validates the token and saves credentials):
+   ```bash
+   arete integration configure notion
+   # Or non-interactive:
+   arete integration configure notion --token "secret_..."
+   ```
+
+**Page Sharing**: Before pulling a page, you must share it with your integration:
+1. Open the page in Notion
+2. Click "..." → "Add connections" → select your integration
+
+If you get a 404 error when pulling, the page hasn't been shared with your integration.
+
+Example credential entry:
+```yaml
+notion:
+  api_key: "secret_abc123..."
+```
+
 ## Security Notes
 
 - Never commit `credentials.yaml` to git
