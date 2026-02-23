@@ -1,14 +1,14 @@
 ---
 title: Engineering Debt
 slug: engineering-debt
-status: backlog
+status: idea
 created: 2026-02-22T00:00:00Z
 updated: 2026-02-22T09:23:00Z
 ---
 
 # Engineering Debt
 
-Consolidated backlog of small technical debt items. Each is self-contained (≤ small effort) and can be picked up independently. Sources noted per item.
+Consolidated set of small technical debt items. Each is self-contained (≤ small effort) and can be picked up independently. Sources noted per item.
 
 ---
 
