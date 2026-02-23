@@ -246,7 +246,8 @@ export function parseFrontmatterFromFile(filePath: string): { frontmatter: PlanF
  * Resolve the plans directory path.
  */
 function resolvePlansDir(basePath?: string): string {
-	return basePath ?? DEFAULT_PLANS_DIR;
+	// ARETE_TEST_PLANS_DIR allows tests to isolate plan I/O from real plans
+	return basePath ?? process.env.ARETE_TEST_PLANS_DIR ?? DEFAULT_PLANS_DIR;
 }
 
 /**

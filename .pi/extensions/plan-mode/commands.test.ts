@@ -1343,21 +1343,15 @@ describe("checkPrdExecutionComplete", () => {
 // unrelated agent responses containing numbered steps, and handlePlanSave
 // then writes that corrupted content to the plan file on disk.
 //
-// Tests that need loadPlan() to find the plan use dev/work/plans/ (the real
-// plans directory) because handlePlanSave and hasUnsavedPlanChanges call
-// loadPlan() without basePath. Plans are cleaned up in afterEach.
+// Tests use an isolated temp directory via ARETE_TEST_PLANS_DIR env var
+// so they never touch the real dev/work/plans/ directory.
 
-const OVERWRITE_TEST_SLUGS = [
-	"_overwrite-guard-test",
-	"_overwrite-cancel-test",
-	"_overwrite-proceed-test",
-	"_overwrite-match-test",
-	"_overwrite-unsaved-match",
-	"_overwrite-unsaved-differ",
-];
+import { tmpdir } from "node:os";
 
-function createRealPlan(slug: string, content: string): void {
-	const planDir = join("dev/work/plans", slug);
+const ISOLATED_PLANS_DIR = join(tmpdir(), `arete-plan-overwrite-test-${process.pid}`);
+
+function createIsolatedPlan(slug: string, content: string): void {
+	const planDir = join(ISOLATED_PLANS_DIR, slug);
 	mkdirSync(planDir, { recursive: true });
 	const frontmatter = `---
 title: ${slug}
@@ -1379,24 +1373,30 @@ steps: 0
 	writeFileSync(join(planDir, "plan.md"), frontmatter + content, "utf-8");
 }
 
-function cleanupRealPlans(): void {
-	for (const slug of OVERWRITE_TEST_SLUGS) {
-		const planDir = join("dev/work/plans", slug);
-		if (existsSync(planDir)) {
-			rmSync(planDir, { recursive: true, force: true });
-		}
+function setupIsolatedPlansDir(): void {
+	process.env.ARETE_TEST_PLANS_DIR = ISOLATED_PLANS_DIR;
+	if (existsSync(ISOLATED_PLANS_DIR)) {
+		rmSync(ISOLATED_PLANS_DIR, { recursive: true, force: true });
+	}
+	mkdirSync(ISOLATED_PLANS_DIR, { recursive: true });
+}
+
+function cleanupIsolatedPlansDir(): void {
+	delete process.env.ARETE_TEST_PLANS_DIR;
+	if (existsSync(ISOLATED_PLANS_DIR)) {
+		rmSync(ISOLATED_PLANS_DIR, { recursive: true, force: true });
 	}
 }
 
 describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
-	beforeEach(() => cleanupRealPlans());
-	afterEach(() => cleanupRealPlans());
+	beforeEach(() => setupIsolatedPlansDir());
+	afterEach(() => cleanupIsolatedPlansDir());
 
 	it("prompts for confirmation when loaded plan content differs from disk", async () => {
 		// Regression: agent_end could overwrite state.planText with unrelated content.
 		// Explicit /plan save must warn the user before writing corrupted content.
 		const slug = "_overwrite-guard-test";
-		createRealPlan(slug, "# Original Plan\n\n1. Step one\n2. Step two");
+		createIsolatedPlan(slug, "# Original Plan\n\n1. Step one\n2. Step two");
 
 		let confirmCalled = false;
 		let confirmMessage = "";
@@ -1423,7 +1423,7 @@ describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
 
 	it("cancels save when user declines confirmation for changed loaded plan", async () => {
 		const slug = "_overwrite-cancel-test";
-		createRealPlan(slug, "# Original Plan\nOriginal content");
+		createIsolatedPlan(slug, "# Original Plan\nOriginal content");
 
 		let notifyMessage = "";
 		const ctx = createTestContext({
@@ -1444,7 +1444,7 @@ describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
 
 	it("proceeds with save when user confirms changed loaded plan", async () => {
 		const slug = "_overwrite-proceed-test";
-		createRealPlan(slug, "# Original Plan\nOriginal content");
+		createIsolatedPlan(slug, "# Original Plan\nOriginal content");
 
 		let notifyMessage = "";
 		const ctx = createTestContext({
@@ -1489,7 +1489,7 @@ describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
 	it("skips confirmation when loaded plan content matches disk", async () => {
 		const slug = "_overwrite-match-test";
 		const content = "# Unchanged Plan\nSame content";
-		createRealPlan(slug, content);
+		createIsolatedPlan(slug, content);
 
 		let confirmCalled = false;
 		let notifyMessage = "";
@@ -1515,14 +1515,14 @@ describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
 });
 
 describe("hasUnsavedPlanChanges — loadedFromDisk scenarios", () => {
-	beforeEach(() => cleanupRealPlans());
-	afterEach(() => cleanupRealPlans());
+	beforeEach(() => setupIsolatedPlansDir());
+	afterEach(() => cleanupIsolatedPlansDir());
 
 	it("returns false when loaded plan text matches disk content", () => {
 		// Regression: after loading a plan and not changing it, close should not
 		// prompt "unsaved changes" — this was a vector for accidental overwrites.
 		const slug = "_overwrite-unsaved-match";
-		createRealPlan(slug, "# My Plan\nContent here");
+		createIsolatedPlan(slug, "# My Plan\nContent here");
 
 		const state = createTestState({
 			currentSlug: slug,
@@ -1535,7 +1535,7 @@ describe("hasUnsavedPlanChanges — loadedFromDisk scenarios", () => {
 
 	it("returns true when loaded plan text differs from disk", () => {
 		const slug = "_overwrite-unsaved-differ";
-		createRealPlan(slug, "# Original\nOriginal content");
+		createIsolatedPlan(slug, "# Original\nOriginal content");
 
 		const state = createTestState({
 			currentSlug: slug,
