@@ -19,6 +19,8 @@
 
 ## Integrations
 
+- `arete integration configure calendar` - Configure macOS Calendar (ical-buddy)
+- `arete integration configure google-calendar` - Configure Google Calendar OAuth
 - `arete pull` - Sync from integrations (meetings, calendar)
 - `arete pull calendar [--today|--days N]` - Pull calendar events
 - `arete pull fathom [--days N]` - Pull Fathom recordings

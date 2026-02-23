@@ -64,24 +64,30 @@ qmd embed
 
 *See SETUP.md → "Set Up QMD" for full instructions*
 
-### Calendar (macOS only)
+### Calendar (macOS or Google)
 
 Connect your calendar for automatic meeting context.
 
 ```bash
+# macOS Calendar
 brew install ical-buddy
 arete integration configure calendar
+
+# Google Calendar
+arete integration configure google-calendar
+
+# Test either provider
 arete pull calendar --today
 ```
 
-*See SETUP.md → "Calendar Setup" for details*
+*See SETUP.md → "Calendar Setup" for details (including Google unverified-app warning steps).*
 
 ### Integrations
 
-Configure additional integrations:
+Configure integrations during onboarding or anytime after:
 
 ```bash
-arete setup                              # See available integrations
+arete onboard                            # Includes integration setup
 arete integration configure fathom       # Meeting recordings
 arete integration configure calendar     # Calendar sync
 ```

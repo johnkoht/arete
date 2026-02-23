@@ -45,7 +45,7 @@ Each entry should include:
 
 - **What changed** — Brief summary of the work completed
 - **What worked well** — Patterns to repeat (e.g., "Parallel subagent execution for simple moves")
-- **What didn't work** — Patterns to avoid (e.g., "Assumed docs scope without checking backlog")
+- **What didn't work** — Patterns to avoid (e.g., "Assumed docs scope without checking idea-stage plans")
 - **Learnings for next time** — Concrete improvements (e.g., "Add documentation planning checklist to dev.mdc")
 
 ### Optional Sections

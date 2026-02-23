@@ -45,6 +45,9 @@ export interface PlanModeState {
 	preMortemRun: boolean;
 	reviewRun: boolean;
 	prdConverted: boolean;
+	/** Whether the current plan was loaded from disk (true) or created fresh (false).
+	 *  Auto-save is disabled for loaded plans to prevent accidental overwrites. */
+	loadedFromDisk: boolean;
 }
 
 /** Create a fresh default state */
@@ -60,6 +63,7 @@ export function createDefaultState(): PlanModeState {
 		preMortemRun: false,
 		reviewRun: false,
 		prdConverted: false,
+		loadedFromDisk: false,
 	};
 }
 
@@ -330,6 +334,7 @@ async function handlePlanNew(
 	state.preMortemRun = false;
 	state.reviewRun = false;
 	state.prdConverted = false;
+	state.loadedFromDisk = false; // Fresh plan: auto-save enabled
 
 	if (!state.planModeEnabled) {
 		togglePlanMode();
@@ -418,6 +423,7 @@ export async function handlePlanClose(
 	state.preMortemRun = false;
 	state.reviewRun = false;
 	state.prdConverted = false;
+	state.loadedFromDisk = false;
 
 	pi.appendEntry("plan-mode", {
 		enabled: false,
@@ -611,6 +617,7 @@ async function handlePlanOpen(
 	state.todoItems = extractTodoItems(plan.content);
 	state.planModeEnabled = true;
 	state.executionMode = false;
+	state.loadedFromDisk = true; // Disable auto-save for loaded plans
 
 	// Build status indicators
 	const artifacts: string[] = [];
@@ -973,6 +980,7 @@ export async function handleArchive(
 				state.preMortemRun = false;
 				state.reviewRun = false;
 				state.prdConverted = false;
+				state.loadedFromDisk = false;
 			}
 		} catch (err) {
 			ctx.ui.notify(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -1005,6 +1013,7 @@ export async function handleArchive(
 		state.preMortemRun = false;
 		state.reviewRun = false;
 		state.prdConverted = false;
+		state.loadedFromDisk = false;
 	} catch (err) {
 		ctx.ui.notify(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`, "error");
 	}

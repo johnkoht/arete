@@ -66,4 +66,4 @@ When picking this up:
 
 - [runtime/skills/competitive-analysis/SKILL.md](../../../runtime/skills/competitive-analysis/SKILL.md) — current skill
 - [dev/entries/2026-02-09_competitive-analysis-evaluation.md](../../entries/2026-02-09_competitive-analysis-evaluation.md) — evaluation vs OSS (keep native, enhance methodology)
-- [dev/backlog/improvements/skills-enhancement.md](skills-enhancement.md) — themed recommendations for all native skills including competitive-analysis
+- [dev/work/plans/skills-enhancement/plan.md](../skills-enhancement/plan.md) — themed recommendations for all native skills including competitive-analysis

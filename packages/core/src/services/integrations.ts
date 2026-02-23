@@ -18,6 +18,7 @@ import { pullKrisp } from '../integrations/krisp/index.js';
 import { pullNotionPages } from '../integrations/notion/index.js';
 import { loadKrispCredentials } from '../integrations/krisp/config.js';
 import { loadNotionApiKey } from '../integrations/notion/config.js';
+import { loadGoogleCredentials } from '../integrations/calendar/google-auth.js';
 import { getWorkspaceConfigPath } from '../config.js';
 import { getAdapterFromConfig } from '../adapters/index.js';
 
@@ -114,6 +115,23 @@ export class IntegrationService {
       const status = (value as Record<string, unknown>).status;
       if (typeof status === 'string') {
         configured[name] = status as IntegrationStatus;
+      }
+    }
+
+    // Calendar provider alias mapping:
+    // configure writes integrations.calendar.provider ('google' or 'macos').
+    // integration list entries are registry names ('google-calendar', 'apple-calendar').
+    const manifestCalendar = manifestIntegrations.calendar;
+    if (manifestCalendar && typeof manifestCalendar === 'object') {
+      const calendarProvider = (manifestCalendar as Record<string, unknown>).provider;
+      const calendarStatus = (manifestCalendar as Record<string, unknown>).status;
+      if (typeof calendarStatus === 'string') {
+        if (calendarProvider === 'google') {
+          configured['google-calendar'] = calendarStatus as IntegrationStatus;
+        }
+        if (calendarProvider === 'macos' || calendarProvider === 'ical-buddy') {
+          configured['apple-calendar'] = calendarStatus as IntegrationStatus;
+        }
       }
     }
 
@@ -306,6 +324,10 @@ export class IntegrationService {
       return apiKey ? 'active' : 'inactive';
     }
 
+    if (integration === 'google-calendar') {
+      return this.loadOAuthTokenStatus(workspaceRoot, 'google-calendar');
+    }
+
     return null;
   }
 
@@ -315,6 +337,10 @@ export class IntegrationService {
   ): Promise<IntegrationStatus> {
     if (name === 'krisp') {
       const creds = await loadKrispCredentials(this.storage, workspaceRoot);
+      return creds ? 'active' : 'inactive';
+    }
+    if (name === 'google-calendar') {
+      const creds = await loadGoogleCredentials(this.storage, workspaceRoot);
       return creds ? 'active' : 'inactive';
     }
     return 'inactive';

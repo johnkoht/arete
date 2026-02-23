@@ -30,6 +30,10 @@ export interface WidgetState {
 	hasPrd: boolean;
 	/** PRD progress for build-mode footer (populated when hasPrd && executionMode) */
 	prdProgress?: WidgetPrdProgress;
+	/** Whether the plan was loaded from disk (vs created fresh) */
+	loadedFromDisk: boolean;
+	/** Whether there are unsaved changes to the plan */
+	hasUnsavedChanges: boolean;
 }
 
 /** Minimal theme interface for widget rendering (subset of Pi's Theme) */
@@ -90,12 +94,13 @@ export function renderFooterStatus(state: WidgetState, theme: WidgetTheme, width
 	return undefined;
 }
 
-/** Format gate checkboxes */
-function formatGates(hasPreMortem: boolean, hasReview: boolean, hasPrd: boolean): string {
+/** Format gate checkboxes with optional unsaved indicator */
+function formatGates(hasPreMortem: boolean, hasReview: boolean, hasPrd: boolean, unsaved: boolean): string {
 	const pm = hasPreMortem ? "☑pm" : "☐pm";
 	const rv = hasReview ? "☑rv" : "☐rv";
 	const prd = hasPrd ? "☑prd" : "☐prd";
-	return `${pm} ${rv} ${prd}`;
+	const unsavedIndicator = unsaved ? " ⚠unsaved" : "";
+	return `${pm} ${rv} ${prd}${unsavedIndicator}`;
 }
 
 /** Internal structure for plan footer parts (before theme wrapping) */
@@ -106,6 +111,7 @@ interface PlanFooterParts {
 	sizeLabel: string | null;
 	stepsLabel: string | null;
 	gates: string;
+	unsaved: boolean;
 }
 
 /** Build the full plan footer string (no truncation) */
@@ -116,13 +122,15 @@ function buildPlanFooter(state: WidgetState): string {
 
 /** Extract footer parts from state */
 function getPlanFooterParts(state: WidgetState): PlanFooterParts {
+	const unsaved = state.loadedFromDisk && state.hasUnsavedChanges;
 	return {
 		title: state.title,
 		slug: state.planId ?? "plan",
 		statusLabel: state.status ?? "draft",
 		sizeLabel: state.planSize ?? null,
 		stepsLabel: state.stepsCount > 0 ? `${state.stepsCount} steps` : null,
-		gates: formatGates(state.hasPreMortem, state.hasReview, state.hasPrd),
+		gates: formatGates(state.hasPreMortem, state.hasReview, state.hasPrd, unsaved),
+		unsaved,
 	};
 }
 

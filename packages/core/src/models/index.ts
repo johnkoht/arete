@@ -100,7 +100,6 @@ export type {
 
 // Integrations domain
 export type {
-  CalendarEvent,
   FathomTranscript,
   IntegrationConfig,
   IntegrationAuth,

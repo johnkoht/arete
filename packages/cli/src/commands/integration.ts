@@ -10,7 +10,7 @@ import { join } from 'path';
 import { createInterface } from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { header, success, error, info } from '../formatters.js';
+import { header, success, error, info, warn } from '../formatters.js';
 
 const NOTION_VERSION = '2022-06-28';
 const DEFAULT_NOTION_API_BASE = 'https://api.notion.com';
@@ -180,6 +180,87 @@ export function registerIntegrationCommands(program: Command): void {
             info('Saved token to .credentials/credentials.yaml (notion.api_key)');
             info('MCP setup (.cursor/mcp.json):');
             console.log(mcpSnippet);
+          }
+          return;
+        }
+
+        if (name === 'google-calendar') {
+          // Pre-flight: check for real credentials (beta — no production keys shipped)
+          const { getClientCredentials } = await import('@arete/core');
+          const { clientId } = getClientCredentials();
+          if (clientId === 'PLACEHOLDER_CLIENT_ID') {
+            console.log('');
+            warn('Google Calendar integration is in beta');
+            console.log('');
+            console.log('  To connect Google Calendar, choose one of:');
+            console.log('');
+            console.log(`  ${chalk.bold('1. Bring your own API keys')}`);
+            console.log('     → Create a Google Cloud project with Calendar API enabled');
+            console.log('     → Create an OAuth 2.0 Client ID (Desktop app type)');
+            console.log('     → Set environment variables:');
+            console.log(`       ${chalk.cyan('export GOOGLE_CLIENT_ID="your-client-id"')}`);
+            console.log(`       ${chalk.cyan('export GOOGLE_CLIENT_SECRET="your-client-secret"')}`);
+            console.log('');
+            console.log(`  ${chalk.bold('2. Request beta access')}`);
+            console.log(`     → Email ${chalk.cyan('john.koht@gmail.com')} to be added as an approved tester`);
+            console.log('     → You\'ll receive credentials to set as environment variables');
+            console.log('');
+            console.log(`  Once configured, re-run: ${chalk.cyan('arete integration configure google-calendar')}`);
+            console.log('');
+            process.exit(1);
+          }
+
+          // 1. Run OAuth flow
+          const { authenticateGoogle, listCalendars } = await import('@arete/core');
+          console.log('');
+          info('Opening browser for Google Calendar authorization...');
+          info('If you see an "unverified app" warning, click "Advanced" → "Go to Areté"');
+          console.log('');
+          await authenticateGoogle(services.storage, root);
+          success('Google Calendar authenticated');
+
+          // 2. Fetch and select calendars
+          const calendars = await listCalendars(services.storage, root);
+
+          let selectedCalendarIds: string[] = [];
+          if (opts.all) {
+            selectedCalendarIds = calendars.map(c => c.id);
+          } else if (opts.calendars) {
+            selectedCalendarIds = opts.calendars.split(',').map(s => s.trim()).filter(Boolean);
+          } else if (calendars.length > 0) {
+            // Interactive calendar selection
+            const { checkbox } = await import('@inquirer/prompts');
+            const selected = await checkbox({
+              message: 'Select calendars to sync',
+              choices: calendars.map(c => ({
+                name: `${c.summary}${c.primary ? ' (primary)' : ''}`,
+                value: c.id,
+                checked: c.primary === true,
+              })),
+              pageSize: 12,
+            });
+            selectedCalendarIds = selected;
+          }
+
+          // 3. Write config — provider: 'google' (producer-consumer: factory reads this exact string)
+          const calendarConfig: Record<string, unknown> = {
+            provider: 'google',  // getCalendarProvider reads this — keep in sync
+            status: 'active',
+            calendars: selectedCalendarIds,
+          };
+          await services.integrations.configure(root, 'calendar', calendarConfig);
+
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: true,
+              integration: 'google-calendar',
+              provider: 'google',
+              calendars: selectedCalendarIds,
+            }));
+          } else {
+            success('Google Calendar configured');
+            info(`Syncing ${selectedCalendarIds.length} calendar(s)`);
+            info('Run: arete pull calendar');
           }
           return;
         }

@@ -47,4 +47,12 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     },
     status: 'available',
   },
+  'google-calendar': {
+    name: 'google-calendar',
+    displayName: 'Google Calendar',
+    description: 'Google Calendar integration via OAuth',
+    implements: ['calendar'],
+    auth: { type: 'oauth' },
+    status: 'available',
+  },
 };

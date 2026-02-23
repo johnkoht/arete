@@ -54,7 +54,7 @@ Areté's build workflow uses [pi](https://github.com/badlogic/pi-mono) (`@marioz
 npm install -g @mariozechner/pi-coding-agent
 
 # Install the subagents extension (powers multi-agent orchestration)
-npm install -g pi-subagents
+pi install npm:pi-subagents
 
 # Verify
 pi --version

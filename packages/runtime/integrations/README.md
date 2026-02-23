@@ -52,7 +52,7 @@ Integrations connect Areté to external tools, enabling bidirectional data flow 
 ├── README.md              # This file - framework documentation
 ├── registry.md            # Available integrations and their status
 └── configs/               # Per-integration configuration files
-    ├── calendar.yaml      # Google/Outlook calendar config
+    ├── calendar.yaml      # Apple/Google/Outlook calendar config
     ├── fathom.yaml        # Fathom meeting recorder config
     ├── slack.yaml         # Slack workspace config
     └── ...
@@ -113,6 +113,22 @@ Use the `sync` skill to manually pull or push data:
 - "Sync my meetings from this week"
 - "Pull my Fathom recordings from yesterday"
 - "Push this project update to Slack"
+
+For calendar integrations, use CLI configure + pull:
+
+```bash
+# macOS Calendar
+arete integration configure calendar
+
+# Google Calendar (beta — requires your own API credentials or beta access)
+# Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first, then:
+arete integration configure google-calendar
+
+# Pull events (either provider)
+arete pull calendar --today
+```
+
+If Google OAuth shows an unverified-app warning, continue via **Advanced** → **Go to Areté (unsafe)**.
 
 ### Seeding Historical Data
 

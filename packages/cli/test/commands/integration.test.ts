@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
@@ -155,6 +155,76 @@ describe('integration command', () => {
   // NOTE: CLI-level test for notion configure with HTTP server caused test runner hangs.
   // The configureNotionIntegration helper is tested thoroughly in the unit tests below,
   // which verify: token validation, credential storage, integration service calls, and error handling.
+
+  it('blocks google-calendar configure when credentials are placeholders', () => {
+    // Pre-flight check should prevent OAuth flow when no real credentials are set
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+
+    // Ensure env vars are NOT set (placeholders will be used)
+    const env = { ...process.env };
+    delete env.GOOGLE_CLIENT_ID;
+    delete env.GOOGLE_CLIENT_SECRET;
+
+    try {
+      runCli(['integration', 'configure', 'google-calendar'], {
+        cwd: workspaceDir,
+        env,
+      });
+      assert.fail('Should have exited with error');
+    } catch (err: unknown) {
+      const message = (err as Error).message ?? String(err);
+      // execSync throws on non-zero exit — verify it exited (beta gate)
+      assert.ok(
+        message.includes('beta') || message.includes('Command failed') || message.includes('status 1'),
+        `Expected beta gate exit, got: ${message}`,
+      );
+    }
+  });
+
+  it('shows google-calendar as active when integrations.calendar uses provider google', () => {
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+
+    const manifestPath = join(workspaceDir, 'arete.yaml');
+    const manifest = parseYaml(readFileSync(manifestPath, 'utf8')) as {
+      schema?: number;
+      integrations?: Record<string, unknown>;
+    };
+
+    manifest.integrations = {
+      ...(manifest.integrations ?? {}),
+      calendar: {
+        provider: 'google',
+        status: 'active',
+        calendars: ['primary'],
+      },
+    };
+
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+    const credentialsDir = join(workspaceDir, '.credentials');
+    mkdirSync(credentialsDir, { recursive: true });
+    writeFileSync(
+      join(credentialsDir, 'credentials.yaml'),
+      [
+        'google_calendar:',
+        '  access_token: test-access-token',
+        '  refresh_token: test-refresh-token',
+        '  expires_at: 9999999999',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const listOutput = runCli(['integration', 'list', '--json'], { cwd: workspaceDir });
+    const listResult = JSON.parse(listOutput) as {
+      success: boolean;
+      integrations: Array<{ name: string; configured: string | null; active: boolean }>;
+    };
+
+    const googleEntry = listResult.integrations.find((entry) => entry.name === 'google-calendar');
+    assert.ok(googleEntry, 'google-calendar should appear in integration list');
+    assert.equal(googleEntry?.configured, 'active');
+    assert.equal(googleEntry?.active, true);
+  });
 });
 
 describe('integration command (notion configure helpers)', () => {
