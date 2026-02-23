@@ -185,9 +185,12 @@ function setupTestPlansDir(): void {
 		rmSync(TEST_PLANS_DIR, { recursive: true, force: true });
 	}
 	mkdirSync(TEST_PLANS_DIR, { recursive: true });
+	// Redirect loadPlan/savePlan to the test directory
+	process.env.ARETE_TEST_PLANS_DIR = TEST_PLANS_DIR;
 }
 
 function cleanupTestPlansDir(): void {
+	delete process.env.ARETE_TEST_PLANS_DIR;
 	if (existsSync(TEST_PLANS_DIR)) {
 		rmSync(TEST_PLANS_DIR, { recursive: true, force: true });
 	}
@@ -358,6 +361,9 @@ describe("handlePlanRename", () => {
 });
 
 describe("handlePlan — /plan new", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
 	it("auto-saves when name argument is provided", async () => {
 		let notifyMessage = "";
 		const ctx = createTestContext({
@@ -479,7 +485,7 @@ describe("handlePlan — /plan new", () => {
 		// Clean up the auto-saved plan
 		const { existsSync: exists, rmSync: rm } = await import("node:fs");
 		const { join: pathJoin } = await import("node:path");
-		const planDir = pathJoin("dev/work/plans", "discoverable-test-plan");
+		const planDir = pathJoin(TEST_PLANS_DIR, "discoverable-test-plan");
 		if (exists(planDir)) {
 			rm(planDir, { recursive: true, force: true });
 		}
@@ -487,6 +493,9 @@ describe("handlePlan — /plan new", () => {
 });
 
 describe("handlePlan — /plan close", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
 	it("clears all plan state and returns to default mode", async () => {
 		let notifyMessage = "";
 		const ctx = createTestContext({
@@ -597,9 +606,7 @@ describe("handlePlanStatus", () => {
 		createTestPlan(slug, "# Test\n1. Step one\n2. Step two");
 		const state = createTestState({ currentSlug: slug });
 
-		// We need to make loadPlan find our test plan. Since loadPlan uses dev/work/plans by default,
-		// we'll create a plan in the real location and clean up after.
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -655,7 +662,7 @@ steps: 3
 			},
 		});
 		const slug = "set-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -706,7 +713,7 @@ steps: 1
 			},
 		});
 		const slug = "decline-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -756,7 +763,7 @@ steps: 0
 			},
 		});
 		const slug = "restricted-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -801,7 +808,7 @@ steps: 0
 			},
 		});
 		const slug = "complete-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -845,7 +852,7 @@ steps: 0
 			},
 		});
 		const slug = "abandoned-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -890,7 +897,7 @@ steps: 0
 			},
 		});
 		const slug = "invalid-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -936,7 +943,7 @@ steps: 0
 			},
 		});
 		const slug = "idea-status-plan";
-		const planDir = join("dev/work/plans", slug);
+		const planDir = join(TEST_PLANS_DIR, slug);
 		mkdirSync(planDir, { recursive: true });
 		writeFileSync(
 			join(planDir, "plan.md"),
@@ -1122,7 +1129,10 @@ describe("preparePlanListItems", () => {
 // ────────────────────────────────────────────────────────────
 
 describe("handlePlan list", () => {
-	const PLANS_DIR = "dev/work/plans";
+	const PLANS_DIR = TEST_PLANS_DIR;
+
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
 
 	function createPlanOnDisk(slug: string, status: string, size = "small", steps = 0): void {
 		const planDir = join(PLANS_DIR, slug);
@@ -1153,14 +1163,7 @@ steps: ${steps}
 	}
 
 	it("shows empty state notification when no plans exist", async () => {
-		// Temporarily rename plans dir if it exists
-		const backupDir = `${PLANS_DIR}-backup-${Date.now()}`;
-		const hadPlans = existsSync(PLANS_DIR);
-		if (hadPlans) {
-			const { execSync } = await import("node:child_process");
-			execSync(`mv ${PLANS_DIR} ${backupDir}`);
-		}
-
+		// setupTestPlansDir creates an empty isolated directory — no backup needed
 		let notified = "";
 		const ctx = createTestContext({
 			notify: (msg) => { notified = msg; },
@@ -1168,15 +1171,8 @@ steps: ${steps}
 		const pi = createTestPi();
 		const state = createTestState();
 
-		try {
-			await handlePlan("list", ctx, pi, state, () => {});
-			assert.ok(notified.includes("No plans found"), `Expected empty notification, got: ${notified}`);
-		} finally {
-			if (hadPlans) {
-				const { execSync } = await import("node:child_process");
-				execSync(`mv ${backupDir} ${PLANS_DIR}`);
-			}
-		}
+		await handlePlan("list", ctx, pi, state, () => {});
+		assert.ok(notified.includes("No plans found"), `Expected empty notification, got: ${notified}`);
 	});
 
 	it("falls back to simple select when custom is not available", async () => {
