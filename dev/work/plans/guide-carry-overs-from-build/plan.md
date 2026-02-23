@@ -91,7 +91,7 @@ steps: 0
 
 ### Backlog vs scratchpad
 
-- BUILD: Clear split — raw/exploratory → scratchpad; mature ideas with a plan → `dev/backlog/` (features/ vs improvements/). Entries = what happened; backlog = future work.
+- BUILD: Clear split — raw/exploratory → scratchpad; mature future work with a plan → `dev/work/plans/` (typically `status: idea`). Entries = what happened; plans = future work.
 - GUIDE: Has `now/scratchpad.md`. No formal "backlog" for the PM. Optional: document in pm-workspace or agent-memory that "park for later" → scratchpad; "we agreed to do this later" could also go to scratchpad or a simple `now/backlog.md` if we add it. Lower priority.
 
 ### Explicit autonomy / permission

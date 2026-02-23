@@ -212,13 +212,13 @@ When creating plans that touch code/features/structure, ask: **"Does this need d
 
 **Scope Check:**
 - [ ] All root docs: README, SETUP, AGENTS sources, scratchpad
-- [ ] Backlog items: `grep -l "update.*\.md\|docs" dev/work/backlog/*.md`
+- [ ] Idea-stage plans: `grep -l "update.*\.md\|docs" dev/work/plans/*/plan.md`
 
 **Search Strategy:**
 - [ ] Feature keywords: `rg "keyword1|keyword2" -g "*.md"`
 - [ ] Concept audit: If feature changes paths/structure, grep old paths in all `.md` files
 
-**Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and backlog frequently need updates.
+**Anti-pattern:** Do not assume "documentation" = README + SETUP. scratchpad and idea-stage plans frequently need updates.
 
 ---
 

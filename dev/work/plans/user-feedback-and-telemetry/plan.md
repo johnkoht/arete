@@ -149,6 +149,6 @@ This should be done in a way that reinforces trust and user agency.
 
 ## Related
 
-- `dev/backlog/features/workflow-patterns.md`
-- `dev/backlog/features/preference-model.md`
-- `dev/backlog/features/people-intelligence.md`
+- `dev/work/plans/workflow-patterns/plan.md`
+- `dev/work/plans/preference-model/plan.md`
+- `dev/work/plans/people-intelligence/plan.md`
