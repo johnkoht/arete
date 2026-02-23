@@ -305,7 +305,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.registerCommand("plan", {
 		description: "Plan mode — toggle or subcommands: new, list, open, save, rename, close, status, delete, archive",
 		handler: async (args, ctx) => {
+			const slugBefore = state.currentSlug;
 			await handlePlan(args, ctx, pi, state, () => togglePlanMode(ctx));
+			// Reset auto-save content hash on plan transitions (new/close/open/delete)
+			// to prevent stale hash from blocking auto-save on the next plan
+			if (state.currentSlug !== slugBefore) {
+				lastAutoSavedContent = "";
+			}
 			updateStatus(ctx);
 		},
 	});
@@ -540,12 +546,17 @@ After completing a step, include a [DONE:n] tag in your response.
 			const text = getTextContent(lastAssistant);
 			const extracted = extractTodoItems(text);
 			if (extracted.length > 0) {
-				state.todoItems = extracted;
-				state.planText = text;
-				state.planSize = classifyPlanSize(extracted, text);
+				// Only update plan state if this is a fresh plan (not loaded from disk).
+				// Prevents tangential agent responses with numbered steps from
+				// overwriting the loaded plan content. (Regression fix: plan-overwrite bug)
+				if (!state.loadedFromDisk) {
+					state.todoItems = extracted;
+					state.planText = text;
+					state.planSize = classifyPlanSize(extracted, text);
 
-				// Auto-save the plan
-				await autoSavePlan(ctx);
+					// Auto-save the plan
+					await autoSavePlan(ctx);
+				}
 			}
 		}
 

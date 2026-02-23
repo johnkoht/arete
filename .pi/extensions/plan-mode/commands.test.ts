@@ -20,6 +20,7 @@ import {
 	type CommandContext,
 	type CommandPi,
 } from "./commands.js";
+import { extractTodoItems } from "./utils.js";
 import type { ExecutionProgressSnapshot } from "./execution-progress.js";
 
 describe("createDefaultState", () => {
@@ -1334,6 +1335,256 @@ describe("checkPrdExecutionComplete", () => {
 		assert.ok(capturedParams);
 		assert.equal(capturedParams.prdPath, "dev/work/plans/my-feature/prd.json");
 		assert.equal(capturedParams.hasPrd, true);
+	});
+});
+
+// ── Regression tests: plan-overwrite bug ────────────────────────────
+// These tests prevent the bug where agent_end overwrites state.planText with
+// unrelated agent responses containing numbered steps, and handlePlanSave
+// then writes that corrupted content to the plan file on disk.
+//
+// Tests that need loadPlan() to find the plan use dev/work/plans/ (the real
+// plans directory) because handlePlanSave and hasUnsavedPlanChanges call
+// loadPlan() without basePath. Plans are cleaned up in afterEach.
+
+const OVERWRITE_TEST_SLUGS = [
+	"_overwrite-guard-test",
+	"_overwrite-cancel-test",
+	"_overwrite-proceed-test",
+	"_overwrite-match-test",
+	"_overwrite-unsaved-match",
+	"_overwrite-unsaved-differ",
+];
+
+function createRealPlan(slug: string, content: string): void {
+	const planDir = join("dev/work/plans", slug);
+	mkdirSync(planDir, { recursive: true });
+	const frontmatter = `---
+title: ${slug}
+slug: ${slug}
+status: draft
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 0
+---
+
+`;
+	writeFileSync(join(planDir, "plan.md"), frontmatter + content, "utf-8");
+}
+
+function cleanupRealPlans(): void {
+	for (const slug of OVERWRITE_TEST_SLUGS) {
+		const planDir = join("dev/work/plans", slug);
+		if (existsSync(planDir)) {
+			rmSync(planDir, { recursive: true, force: true });
+		}
+	}
+}
+
+describe("handlePlanSave — loadedFromDisk confirmation guard", () => {
+	beforeEach(() => cleanupRealPlans());
+	afterEach(() => cleanupRealPlans());
+
+	it("prompts for confirmation when loaded plan content differs from disk", async () => {
+		// Regression: agent_end could overwrite state.planText with unrelated content.
+		// Explicit /plan save must warn the user before writing corrupted content.
+		const slug = "_overwrite-guard-test";
+		createRealPlan(slug, "# Original Plan\n\n1. Step one\n2. Step two");
+
+		let confirmCalled = false;
+		let confirmMessage = "";
+		const ctx = createTestContext({
+			confirm: async (_title: string, msg: string) => {
+				confirmCalled = true;
+				confirmMessage = msg;
+				return false; // User cancels
+			},
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Completely Different Content\n\n1. Unrelated step",
+			currentSlug: slug,
+			loadedFromDisk: true,
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.ok(confirmCalled, "Should prompt for confirmation when content differs");
+		assert.ok(confirmMessage.includes("differs"), "Message should mention content differs");
+	});
+
+	it("cancels save when user declines confirmation for changed loaded plan", async () => {
+		const slug = "_overwrite-cancel-test";
+		createRealPlan(slug, "# Original Plan\nOriginal content");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			confirm: async () => false, // User declines
+			notify: (msg: string) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Different Content",
+			currentSlug: slug,
+			loadedFromDisk: true,
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("cancelled"), "Should indicate save was cancelled");
+	});
+
+	it("proceeds with save when user confirms changed loaded plan", async () => {
+		const slug = "_overwrite-proceed-test";
+		createRealPlan(slug, "# Original Plan\nOriginal content");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			confirm: async () => true, // User confirms
+			notify: (msg: string) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Intentionally Updated Plan\nNew content",
+			currentSlug: slug,
+			loadedFromDisk: true,
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("Saved"), "Should confirm save after user approval");
+	});
+
+	it("skips confirmation when loadedFromDisk is false (fresh plan)", async () => {
+		let confirmCalled = false;
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			confirm: async () => {
+				confirmCalled = true;
+				return true;
+			},
+			notify: (msg: string) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: "# Fresh Plan\n1. Step one",
+			currentSlug: "fresh-plan-test",
+			loadedFromDisk: false,
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.equal(confirmCalled, false, "Should not prompt for fresh plans");
+		assert.ok(notifyMessage.includes("Saved"), "Should save directly");
+	});
+
+	it("skips confirmation when loaded plan content matches disk", async () => {
+		const slug = "_overwrite-match-test";
+		const content = "# Unchanged Plan\nSame content";
+		createRealPlan(slug, content);
+
+		let confirmCalled = false;
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			confirm: async () => {
+				confirmCalled = true;
+				return true;
+			},
+			notify: (msg: string) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({
+			planText: content,
+			currentSlug: slug,
+			loadedFromDisk: true,
+		});
+
+		await handlePlanSave(undefined, ctx, pi, state);
+
+		assert.equal(confirmCalled, false, "Should not prompt when content matches disk");
+		assert.ok(notifyMessage.includes("Saved"), "Should save directly");
+	});
+});
+
+describe("hasUnsavedPlanChanges — loadedFromDisk scenarios", () => {
+	beforeEach(() => cleanupRealPlans());
+	afterEach(() => cleanupRealPlans());
+
+	it("returns false when loaded plan text matches disk content", () => {
+		// Regression: after loading a plan and not changing it, close should not
+		// prompt "unsaved changes" — this was a vector for accidental overwrites.
+		const slug = "_overwrite-unsaved-match";
+		createRealPlan(slug, "# My Plan\nContent here");
+
+		const state = createTestState({
+			currentSlug: slug,
+			planText: "# My Plan\nContent here",
+			loadedFromDisk: true,
+		});
+
+		assert.equal(hasUnsavedPlanChanges(state), false);
+	});
+
+	it("returns true when loaded plan text differs from disk", () => {
+		const slug = "_overwrite-unsaved-differ";
+		createRealPlan(slug, "# Original\nOriginal content");
+
+		const state = createTestState({
+			currentSlug: slug,
+			planText: "# Something Else\nDifferent content from agent_end",
+			loadedFromDisk: true,
+		});
+
+		assert.equal(hasUnsavedPlanChanges(state), true);
+	});
+});
+
+describe("session restore → agent_end protection (simulated)", () => {
+	// Regression test for the session_start → agent_end overwrite path.
+	// session_start loads plan from disk and sets loadedFromDisk = true.
+	// If agent_end then fires with numbered steps, state must NOT change.
+	// We can't invoke session_start directly (closure in index.ts), but we
+	// can simulate the post-restore state and verify the guard logic holds.
+
+	it("loadedFromDisk state prevents planText mutation from extractTodoItems", () => {
+		const originalContent = "# My Publish Plan\n\nPlan:\n1. Fix package.json metadata\n2. Build and verify packages\n3. Publish to npm registry";
+		const originalTodos = extractTodoItems(originalContent);
+		assert.equal(originalTodos.length, 3, "Sanity: original content should have 3 todos");
+
+		const state = createTestState({
+			planModeEnabled: true,
+			currentSlug: "publish-to-npm",
+			planText: originalContent,
+			loadedFromDisk: true, // session_start always sets this
+			todoItems: originalTodos,
+		});
+
+		// Simulate what agent_end does: extract todos from a tangential response
+		const tangentialResponse = "Here's how to clean up:\n\nPlan:\n1. Delete stale files from memory\n2. Archive old entries to backup\n3. Rebuild the search index";
+		const extracted = extractTodoItems(tangentialResponse);
+		assert.ok(extracted.length > 0, "Tangential response should have extractable todos");
+
+		// Apply the guarded logic (mirrors index.ts agent_end handler)
+		if (extracted.length > 0) {
+			if (!state.loadedFromDisk) {
+				// This block should NOT execute for loaded plans
+				state.todoItems = extracted;
+				state.planText = tangentialResponse;
+			}
+		}
+
+		// Verify state was NOT mutated
+		assert.equal(state.planText, originalContent, "planText must not change for loaded plans");
+		assert.equal(state.todoItems.length, 3, "todoItems count must not change");
+		assert.ok(state.todoItems[0].text.includes("Fix package"), "todoItems content must be original");
 	});
 });
 

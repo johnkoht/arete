@@ -403,9 +403,15 @@ export async function handlePlanClose(
 ): Promise<void> {
 	// Check for unsaved changes before closing
 	if (hasUnsavedPlanChanges(state)) {
+		// If plan was loaded from disk, content may have been changed by a tangential
+		// agent response — warn the user before saving. (Regression fix: plan-overwrite bug)
+		const message = state.loadedFromDisk
+			? "Plan content has changed since it was loaded. This may be from an unrelated " +
+			  "agent response. Review carefully before saving."
+			: "You have unsaved plan changes. Save before closing?";
 		const shouldSave = await ctx.ui.confirm(
 			"Unsaved plan changes",
-			"You have unsaved plan changes. Save before closing?",
+			message,
 		);
 		if (shouldSave) {
 			await handlePlanSave(undefined, ctx, pi, state);
@@ -686,6 +692,24 @@ export async function handlePlanSave(
 		}
 	}
 
+	// Guard: if plan was loaded from disk, check for unexpected content changes.
+	// This catches cases where agent_end previously overwrote state.planText
+	// (e.g. from a tangential response with numbered steps). (Regression fix: plan-overwrite bug)
+	if (state.loadedFromDisk && slug) {
+		const diskPlan = loadPlan(slug);
+		if (diskPlan && diskPlan.content.trim() !== state.planText.trim()) {
+			const proceed = await ctx.ui.confirm(
+				"Plan content changed",
+				"The plan content differs from what's on disk. This may be from an " +
+				"unrelated agent response. Save anyway? This will overwrite the original.",
+			);
+			if (!proceed) {
+				ctx.ui.notify("Save cancelled. Use /plan open to reload the original.", "info");
+				return;
+			}
+		}
+	}
+
 	const now = new Date().toISOString();
 	const existingPlan = loadPlan(slug);
 
@@ -936,6 +960,11 @@ async function handlePlanDelete(
 		state.currentSlug = null;
 		state.planText = "";
 		state.planSize = null;
+		state.todoItems = [];
+		state.preMortemRun = false;
+		state.reviewRun = false;
+		state.prdConverted = false;
+		state.loadedFromDisk = false;
 	}
 	ctx.ui.notify(`🗑 Plan deleted: ${slug}`, "info");
 }
