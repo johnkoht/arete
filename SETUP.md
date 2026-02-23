@@ -137,19 +137,25 @@ arete pull calendar --today
 
 The configure command lists your local macOS calendars and saves your selected list to `arete.yaml` under `integrations.calendar.calendars`.
 
-#### Option B: Google Calendar (OAuth)
+#### Option B: Google Calendar (OAuth) — Beta
+
+> **Beta**: Google Calendar integration requires your own API credentials. To get started:
+>
+> 1. **Bring your own keys**: Create a [Google Cloud project](https://console.cloud.google.com/), enable the Calendar API, create an OAuth 2.0 Client ID (Desktop app type), then set:
+>    ```bash
+>    export GOOGLE_CLIENT_ID="your-client-id"
+>    export GOOGLE_CLIENT_SECRET="your-client-secret"
+>    ```
+> 2. **Request beta access**: Email [john.koht@gmail.com](mailto:john.koht@gmail.com) to be added as an approved tester. You'll receive credentials to set as environment variables.
+
+Once credentials are configured:
 
 ```bash
 arete integration configure google-calendar
 arete pull calendar --today
 ```
 
-During configure, Areté opens your browser for Google OAuth. If you see an **"unverified app"** screen, click:
-
-1. **Advanced**
-2. **Go to Areté (unsafe)**
-
-Then grant read-only calendar access and return to the terminal.
+During configure, Areté opens your browser for Google OAuth. If you see an **"unverified app"** screen, click **Advanced** → **Go to Areté (unsafe)**, then grant read-only calendar access.
 
 #### Usage
 

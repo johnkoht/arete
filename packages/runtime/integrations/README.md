@@ -120,7 +120,8 @@ For calendar integrations, use CLI configure + pull:
 # macOS Calendar
 arete integration configure calendar
 
-# Google Calendar
+# Google Calendar (beta — requires your own API credentials or beta access)
+# Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first, then:
 arete integration configure google-calendar
 
 # Pull events (either provider)

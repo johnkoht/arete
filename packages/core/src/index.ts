@@ -79,7 +79,7 @@ export type { AreteServices, CreateServicesOptions } from './factory.js';
 
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
-export { authenticate as authenticateGoogle, loadGoogleCredentials } from './integrations/calendar/google-auth.js';
+export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCredentials } from './integrations/calendar/google-auth.js';
 export type { GoogleCalendarCredentials } from './integrations/calendar/google-auth.js';
 
 // Krisp integration

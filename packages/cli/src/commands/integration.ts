@@ -124,6 +124,31 @@ export function registerIntegrationCommands(program: Command): void {
         }
 
         if (name === 'google-calendar') {
+          // Pre-flight: check for real credentials (beta — no production keys shipped)
+          const { getClientCredentials } = await import('@arete/core');
+          const { clientId } = getClientCredentials();
+          if (clientId === 'PLACEHOLDER_CLIENT_ID') {
+            console.log('');
+            warn('Google Calendar integration is in beta');
+            console.log('');
+            console.log('  To connect Google Calendar, choose one of:');
+            console.log('');
+            console.log(`  ${chalk.bold('1. Bring your own API keys')}`);
+            console.log('     → Create a Google Cloud project with Calendar API enabled');
+            console.log('     → Create an OAuth 2.0 Client ID (Desktop app type)');
+            console.log('     → Set environment variables:');
+            console.log(`       ${chalk.cyan('export GOOGLE_CLIENT_ID="your-client-id"')}`);
+            console.log(`       ${chalk.cyan('export GOOGLE_CLIENT_SECRET="your-client-secret"')}`);
+            console.log('');
+            console.log(`  ${chalk.bold('2. Request beta access')}`);
+            console.log(`     → Email ${chalk.cyan('john.koht@gmail.com')} to be added as an approved tester`);
+            console.log('     → You\'ll receive credentials to set as environment variables');
+            console.log('');
+            console.log(`  Once configured, re-run: ${chalk.cyan('arete integration configure google-calendar')}`);
+            console.log('');
+            process.exit(1);
+          }
+
           // 1. Run OAuth flow
           const { authenticateGoogle, listCalendars } = await import('@arete/core');
           console.log('');

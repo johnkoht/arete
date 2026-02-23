@@ -229,7 +229,7 @@ export async function refreshToken(
 
     if (isOAuthError(errorBody, 'invalid_client')) {
       throw new Error(
-        'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET or use the packaged defaults and try again.'
+        'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables and try again.'
       );
     }
 
@@ -415,7 +415,7 @@ export async function authenticate(
 
       if (isOAuthError(tokenErrorBody, 'invalid_client')) {
         throw new Error(
-          'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET or use the packaged defaults and retry.'
+          'Google Calendar client configuration is invalid. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables and retry.'
         );
       }
 
