@@ -38,6 +38,18 @@ Block fetching uses a queue-based iterative approach with depth tracking, not re
 ### Tier 1 vs Tier 2 Block Support (2026-02-22)
 Not all Notion blocks have full markdown equivalents. Tier 1 blocks (paragraph, headings, lists, code, tables, images, bookmarks) have complete conversion. Tier 2 blocks (toggle, callout, column_list, synced_block, etc.) have fallback handling — often HTML comments or simplified text. Unknown block types emit `<!-- Unsupported block type: {type} -->` so users know content was skipped.
 
+### File URLs Expire (~1 Hour) (2026-02-22)
+Notion `file.url` values for images, files, audio, and video blocks are **time-limited S3 pre-signed URLs** that expire after approximately 1 hour. Downloaded markdown will have broken links to these assets after expiration. Users should:
+- Re-pull pages to get fresh URLs
+- Download assets separately if permanent storage is needed
+- Consider this a limitation for archival use cases
+
+### Synced Blocks Show Empty Content (2026-02-22)
+`synced_block` types reference content from another block. The Notion API returns the reference ID, not the actual content. Markdown output will be empty for synced blocks. The original block's content is not fetched — doing so would require additional API calls and could create circular references. Document this limitation for users who rely on synced blocks.
+
+### Multi-Column Layout is Flattened (2026-02-22)
+`column_list` and `column` blocks are structural containers for side-by-side layout in Notion. Markdown has no column equivalent, so these blocks are treated as structural passthroughs — their children are rendered sequentially. Visual layout information is lost. This is expected behavior, not a bug.
+
 ### Credential Cascade Matches Other Integrations (2026-02-22)
 `loadNotionApiKey()` checks `NOTION_API_KEY` env var first, then falls back to `.credentials/credentials.yaml` under `notion.api_key`. This matches the Fathom and Krisp patterns. Always test both paths in credentials loading tests.
 

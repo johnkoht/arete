@@ -98,7 +98,8 @@ export function blocksToMarkdown(blocks: FlatBlock[]): string {
           cells?: NotionRichText[][];
         };
         const cells = rowData.cells ?? [];
-        const cellTexts = cells.map((cell) => richTextToMarkdown(cell));
+        // Defensive check: handle undefined/malformed cells gracefully
+        const cellTexts = cells.map((cell) => (cell ? richTextToMarkdown(cell) : ''));
         lines.push(`| ${cellTexts.join(' | ')} |`);
 
         // Add separator after header row
