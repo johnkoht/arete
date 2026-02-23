@@ -16,6 +16,7 @@ function makeDeps(overrides?: {
   addError?: string;
   updateFail?: boolean;
   updateError?: string;
+  listOutput?: string; // Output from `qmd collection list`
   calls?: Array<{ file: string; args: string[]; cwd: string }>;
 }): QmdSetupDeps {
   const calls: Array<{ file: string; args: string[]; cwd: string }> = overrides?.calls ?? [];
@@ -39,6 +40,10 @@ function makeDeps(overrides?: {
       }
       if (overrides?.updateFail && args[0] === 'update') {
         throw new Error(overrides.updateError ?? 'update timed out');
+      }
+      // Handle `qmd collection list` — return configured collections
+      if (args.includes('collection') && args.includes('list')) {
+        return { stdout: overrides?.listOutput ?? '', stderr: '' };
       }
       return { stdout: '', stderr: '' };
     },
@@ -120,9 +125,10 @@ describe('ensureQmdCollection', () => {
     assert.equal(calls[1].cwd, '/workspace');
   });
 
-  it('only runs update when existing collection name is provided', async () => {
+  it('only runs update when existing collection name is provided and exists in qmd', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
-    const deps = makeDeps({ calls });
+    // Mock qmd collection list to return the existing collection
+    const deps = makeDeps({ calls, listOutput: 'my-collection\nother-collection\n' });
     const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
 
     assert.equal(result.skipped, false);
@@ -130,9 +136,28 @@ describe('ensureQmdCollection', () => {
     assert.equal(result.indexed, true);
     assert.equal(result.collectionName, 'my-collection');
 
-    // Should only have called update, not collection add
-    assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].args, ['update']);
+    // Should have called collection list then update, not collection add
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0].args, ['collection', 'list']);
+    assert.deepEqual(calls[1].args, ['update']);
+  });
+
+  it('creates collection when name is in config but not in qmd', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    // Mock qmd collection list to return empty (collection doesn't exist)
+    const deps = makeDeps({ calls, listOutput: '' });
+    const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
+
+    assert.equal(result.skipped, false);
+    assert.equal(result.created, true);
+    assert.equal(result.indexed, true);
+    assert.equal(result.collectionName, 'my-collection');
+
+    // Should have called collection list, then collection add, then update
+    assert.equal(calls.length, 3);
+    assert.deepEqual(calls[0].args, ['collection', 'list']);
+    assert.ok(calls[1].args.includes('collection') && calls[1].args.includes('add'));
+    assert.deepEqual(calls[2].args, ['update']);
   });
 
   it('returns warning when collection add fails', async () => {
@@ -157,7 +182,12 @@ describe('ensureQmdCollection', () => {
   });
 
   it('returns warning when update fails for existing collection', async () => {
-    const deps = makeDeps({ updateFail: true, updateError: 'timeout' });
+    // Mock qmd collection list to show the collection exists
+    const deps = makeDeps({
+      updateFail: true,
+      updateError: 'timeout',
+      listOutput: 'existing-collection\n',
+    });
     const result = await ensureQmdCollection(
       '/workspace',
       'existing-collection',

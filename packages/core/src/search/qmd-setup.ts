@@ -190,30 +190,50 @@ export async function ensureQmdCollection(
   const collectionName =
     existingCollectionName ?? generateCollectionName(workspaceRoot);
 
-  // If we already have a collection name stored, just update the index
+  // If we already have a collection name stored, verify it exists and update
   if (existingCollectionName) {
+    // Check if the collection actually exists in qmd
+    let collectionExists = false;
     try {
-      await execImpl('qmd', ['update'], {
+      const listResult = await execImpl('qmd', ['collection', 'list'], {
         timeout: QMD_UPDATE_TIMEOUT_MS,
         cwd: workspaceRoot,
       });
-      return {
-        available: true,
-        created: false,
-        indexed: true,
-        collectionName,
-        skipped: false,
-      };
-    } catch (err) {
-      return {
-        available: true,
-        created: false,
-        indexed: false,
-        collectionName,
-        skipped: false,
-        warning: `qmd update failed: ${(err as Error).message}`,
-      };
+      // qmd collection list outputs collection names, one per line
+      collectionExists = (listResult.stdout ?? '')
+        .split('\n')
+        .some((line) => line.trim() === existingCollectionName);
+    } catch {
+      // If list fails, assume collection doesn't exist and try to create it
+      collectionExists = false;
     }
+
+    if (collectionExists) {
+      // Collection exists, just update the index
+      try {
+        await execImpl('qmd', ['update'], {
+          timeout: QMD_UPDATE_TIMEOUT_MS,
+          cwd: workspaceRoot,
+        });
+        return {
+          available: true,
+          created: false,
+          indexed: true,
+          collectionName,
+          skipped: false,
+        };
+      } catch (err) {
+        return {
+          available: true,
+          created: false,
+          indexed: false,
+          collectionName,
+          skipped: false,
+          warning: `qmd update failed: ${(err as Error).message}`,
+        };
+      }
+    }
+    // Collection name is in config but doesn't exist in qmd - fall through to create it
   }
 
   // Create a new collection
