@@ -38,6 +38,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **Route commands now merge tools + skills into the candidate pool (2026-02-22)**: `route.ts` and `skill.ts` (route subcommand) previously only loaded skills via `services.skills.list(root)`. Now they also call `services.tools.list(paths.tools)` and merge tool candidates via a shared helper in `packages/cli/src/lib/tool-candidates.ts`. The `tool.ts` list/show subcommands were refactored from ad-hoc `getToolsList()`/`getToolInfo()` functions to use `services.tools.list()`/`services.tools.get()`. **Lesson**: When both `route.ts` and `skill.ts` need the same mapping logic, extract a shared helper in `packages/cli/src/lib/` to avoid duplication (pre-mortem Risk #8).
 
+- **HTTP server tests cause test runner hangs — use dependency injection instead (2026-02-22)**: CLI-level tests that spawn real HTTP servers (e.g., to mock Notion API for `configure notion`) cause the Node.js test runner to hang indefinitely. The servers don't properly drain connections before `server.close()` completes. **Solution**: Use dependency injection at the function level — export helpers like `configureNotionIntegration({ fetchFn, ... })` that accept a mock `fetchFn`, then test the helper directly instead of spawning `runCli()` with a real HTTP server. The Notion integration tests demonstrate this pattern: CLI-level tests were replaced with unit tests for `configureNotionIntegration()` and `pullNotion()` using mocked fetch/services. Same coverage, no stability issues.
+
 ## Invariants
 
 - Every command that reads/writes workspace data calls `createServices(process.cwd())` — not a custom service instantiation.
