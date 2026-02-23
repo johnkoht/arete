@@ -79,7 +79,8 @@ projects/
 people/
 resources/
 templates/
-memory/
+# Build memory is source-of-truth in this repo; keep tracked
+# (do not ignore memory/, or MEMORY.md can reference entries that never get committed)
 .arete/
 arete.yaml
 scratchpad.md
