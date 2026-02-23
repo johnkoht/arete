@@ -7,6 +7,9 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 
 import { createTmpDir, cleanupTmpDir, runCli, runCliRaw } from '../helpers.js';
 
@@ -130,5 +133,51 @@ describe('arete pull — unknown integration lists krisp', () => {
       combined.includes('krisp'),
       `Output must mention 'krisp' in the available list; got: ${combined}`,
     );
+  });
+});
+
+describe('arete pull calendar — provider-aware availability errors', () => {
+  let workspaceDir: string;
+
+  beforeEach(() => {
+    workspaceDir = createTmpDir('arete-test-pull-calendar-google');
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(workspaceDir);
+  });
+
+  it('returns google-specific error when provider is configured but unavailable', () => {
+    const manifestPath = join(workspaceDir, 'arete.yaml');
+    const manifest = parseYaml(readFileSync(manifestPath, 'utf8')) as {
+      schema?: number;
+      integrations?: Record<string, unknown>;
+    };
+
+    manifest.integrations = {
+      ...(manifest.integrations ?? {}),
+      calendar: {
+        provider: 'google',
+        status: 'active',
+        calendars: ['primary'],
+      },
+    };
+
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+    const { stdout } = runCliRaw(['pull', 'calendar', '--json'], {
+      cwd: workspaceDir,
+    });
+
+    const result = JSON.parse(stdout) as {
+      success: boolean;
+      error: string;
+      message: string;
+    };
+
+    assert.equal(result.success, false);
+    assert.equal(result.error, 'Google Calendar not available');
+    assert.equal(result.message, 'Run: arete integration configure google-calendar');
   });
 });

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20",
+  "lastUpdated": "2026-02-22",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -141,6 +141,44 @@
         "When unavailable, core should gracefully fall back to token/keyword search."
       ],
       "lastVerified": "2026-02-18"
+    },
+    {
+      "id": "google-calendar-provider",
+      "name": "Google Calendar Provider",
+      "type": "integration",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Cross-platform calendar integration via Google Calendar REST API with embedded OAuth client credentials and refresh-token persistence.",
+      "implementationPaths": [
+        "packages/core/src/integrations/calendar/google-auth.ts",
+        "packages/core/src/integrations/calendar/google-calendar.ts",
+        "packages/core/src/integrations/calendar/index.ts",
+        "packages/cli/src/commands/integration.ts",
+        "packages/cli/src/commands/pull.ts"
+      ],
+      "entrypoints": [
+        "arete integration configure google-calendar",
+        "arete pull calendar --today",
+        "arete pull calendar --days N"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/integrations/LEARNINGS.md",
+        "packages/core/src/integrations/calendar/google-auth.ts",
+        "packages/core/src/integrations/calendar/google-calendar.ts",
+        "packages/cli/src/commands/integration.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "OAuth callback uses localhost dynamic port and requires browser consent.",
+        "If Google shows an unverified-app warning, users continue via Advanced -> Go to Areté (unsafe)."
+      ],
+      "lastVerified": "2026-02-22"
     }
   ]
 }

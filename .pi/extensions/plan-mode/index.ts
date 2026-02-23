@@ -152,6 +152,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			preMortemRun: state.preMortemRun,
 			reviewRun: state.reviewRun,
 			prdConverted: state.prdConverted,
+			loadedFromDisk: state.loadedFromDisk,
 		});
 	}
 
@@ -200,11 +201,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	/**
 	 * Auto-save plan when agent produces numbered steps.
 	 * Only saves if: 2+ steps extracted AND content materially changed.
+	 * SKIPPED if plan was loaded from disk (prevents accidental overwrites).
 	 */
 	async function autoSavePlan(ctx: ExtensionContext): Promise<void> {
 		if (!state.planModeEnabled) return;
 		if (state.todoItems.length < 2) return;
 		if (!state.planText.trim()) return;
+
+		// Don't auto-save loaded plans — user must explicitly save to prevent overwrites
+		if (state.loadedFromDisk) return;
 
 		// Check if content materially changed
 		const contentHash = state.planText.slice(0, 500);
@@ -570,6 +575,7 @@ After completing a step, include a [DONE:n] tag in your response.
 						preMortemRun?: boolean;
 						reviewRun?: boolean;
 						prdConverted?: boolean;
+						loadedFromDisk?: boolean;
 					};
 			  }
 			| undefined;
@@ -583,6 +589,7 @@ After completing a step, include a [DONE:n] tag in your response.
 			state.preMortemRun = planModeEntry.data.preMortemRun ?? state.preMortemRun;
 			state.reviewRun = planModeEntry.data.reviewRun ?? state.reviewRun;
 			state.prdConverted = planModeEntry.data.prdConverted ?? state.prdConverted;
+			state.loadedFromDisk = planModeEntry.data.loadedFromDisk ?? state.loadedFromDisk;
 		}
 
 		// Reconcile with persisted plan frontmatter
@@ -595,6 +602,8 @@ After completing a step, include a [DONE:n] tag in your response.
 				state.preMortemRun = persistedPlan.frontmatter.has_pre_mortem;
 				state.reviewRun = persistedPlan.frontmatter.has_review;
 				state.prdConverted = persistedPlan.frontmatter.has_prd;
+				// Plan was loaded from disk (session resume), disable auto-save
+				state.loadedFromDisk = true;
 
 				// Resume execution if plan was building
 				if (persistedPlan.frontmatter.status === "building") {

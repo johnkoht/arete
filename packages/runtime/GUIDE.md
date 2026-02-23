@@ -760,13 +760,20 @@ arete pull krisp [--days N]                         # Pull recorded meetings fro
 
 ## Integrations
 
-### Calendar (macOS)
+### Calendar (macOS or Google)
 
-**Setup**:
+**Setup (macOS Calendar)**:
 ```bash
 brew install ical-buddy
 arete integration configure calendar
 ```
+
+**Setup (Google Calendar)**:
+```bash
+arete integration configure google-calendar
+```
+
+If Google shows an **"unverified app"** screen, click **Advanced** → **Go to Areté (unsafe)** to continue.
 
 **Usage**:
 ```bash
@@ -778,8 +785,6 @@ arete pull calendar --today --json    # JSON output (for skills)
 **Person Matching**: Calendar attendees are automatically matched to people in your workspace (by email). When viewing events, you'll see person slugs and file paths.
 
 **Skills Integration**: The `daily-plan` skill uses calendar data to build meeting context for each of today's meetings.
-
-**Future**: Google Calendar and Microsoft 365 support planned.
 
 ### QMD Search
 
@@ -1002,11 +1007,12 @@ npm install -g https://github.com/tobi/qmd
 - `internal_email_domain` remains a fallback signal, not your only classifier
 - Check `attendee_ids` in meeting frontmatter
 
-### Calendar Not Working (macOS)
+### Calendar Not Working
 
-- Verify ical-buddy installed: `brew list ical-buddy`
-- Run `arete integration configure calendar` to select calendars
-- Check `arete.yaml` has `integrations.calendar.calendars` list
+- **macOS provider**: Verify ical-buddy installed: `brew list ical-buddy`
+- **Google provider**: Re-run OAuth setup: `arete integration configure google-calendar`
+- If Google shows an unverified-app warning, continue via **Advanced** → **Go to Areté (unsafe)**
+- Check `arete.yaml` has `integrations.calendar.provider` and `integrations.calendar.calendars`
 - Test with `arete pull calendar --today`
 
 ---

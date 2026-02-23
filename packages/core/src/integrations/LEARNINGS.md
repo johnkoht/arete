@@ -60,6 +60,47 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 ---
 
+## Google Calendar Integration (2026-02-22)
+
+Patterns and gotchas from shipping `google-calendar` provider + OAuth flow.
+
+### 1. Keep OAuth errors user-actionable (no transport noise)
+
+Google OAuth and token endpoints return low-level statuses that are not useful to end users. Map errors to next actions:
+
+- `invalid_grant` → token/consent expired, rerun `arete integration configure google-calendar`
+- `invalid_client` → client credentials are wrong/missing; check `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+- network errors → tell user to retry/check connectivity
+- 5xx errors → provider temporarily unavailable
+
+Do not bubble raw Node/network messages or stack traces from integration internals.
+
+### 2. Calendar API failures should preserve context + remediation
+
+In `google-calendar.ts`, map common statuses to clear messages:
+
+- 401 → re-authenticate (`configure google-calendar`)
+- 403 → permission denied for specific calendar ID
+- 404 → calendar not found
+- 429 → rate limit, retry later
+
+For unknown statuses, prefer `HTTP <code>` messaging over raw `statusText` and always keep text user-safe.
+
+### 3. Document the unverified-app OAuth warning
+
+During setup, some users will see Google's unverified-app interstitial. Documentation must include:
+
+1. **Advanced**
+2. **Go to Areté (unsafe)**
+
+Without this note, setup appears broken even though flow is functioning.
+
+### 4. Producer-consumer invariant still applies to Google provider strings
+
+`integration configure google-calendar` writes calendar config under `integrations.calendar.provider: 'google'`. Factory readers must continue accepting `'google'` exactly. If the configure output string changes, update all consumers and regression tests together.
+
+---
+
 ## Krisp Integration (2026-02-21)
 
 Patterns learned from the Krisp MCP OAuth integration. Applicable to any future MCP-based OAuth integration.

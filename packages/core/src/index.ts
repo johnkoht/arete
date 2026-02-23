@@ -51,8 +51,7 @@ export { getPackageRoot } from './package-root.js';
 // Adapters and integrations
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export type { IDEAdapter, IDETarget } from './adapters/index.js';
-export { getCalendarProvider, listIcalBuddyCalendars } from './integrations/calendar/index.js';
-export type { IcalBuddyCalendarDeps } from './integrations/calendar/index.js';
+export { getCalendarProvider } from './integrations/calendar/index.js';
 export {
   saveMeetingFile,
   meetingFilename,
@@ -74,12 +73,14 @@ export type {
   LLMCallFn,
 } from './integrations/conversations/index.js';
 
-// Fathom integration
-export { loadFathomApiKey, saveFathomApiKey } from './integrations/fathom/client.js';
-
 // Service container factory
 export { createServices } from './factory.js';
 export type { AreteServices, CreateServicesOptions } from './factory.js';
+
+// Google Calendar integration
+export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
+export { authenticate as authenticateGoogle, loadGoogleCredentials } from './integrations/calendar/google-auth.js';
+export type { GoogleCalendarCredentials } from './integrations/calendar/google-auth.js';
 
 // Krisp integration
 export { KrispMcpClient } from './integrations/krisp/client.js';

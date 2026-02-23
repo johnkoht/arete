@@ -4,18 +4,6 @@
  * Imports from common.ts ONLY.
  */
 
-/** Calendar event from integration */
-export type CalendarEvent = {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  attendees?: string[];
-  location?: string;
-  description?: string;
-  calendarId?: string;
-};
-
 /** Fathom transcript from integration */
 export type FathomTranscript = {
   id: string;

@@ -15,6 +15,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 ## Gotchas
 
+- **Auto-save overwrote loaded plans with unrelated content.** When a plan was loaded via `/plan open`, auto-save would still fire whenever the agent produced numbered steps — even if those steps were from a tangential conversation. Since `state.currentSlug` was already set to the loaded plan, the new content would overwrite the original plan. Fixed by adding a `loadedFromDisk` flag to state. Plans loaded via `/plan open` (or session restore) set `loadedFromDisk = true`, which disables auto-save. Fresh plans from `/plan new` set `loadedFromDisk = false` and get auto-save. Users with loaded plans must explicitly use `/plan save` to persist changes.
+
 - **PRD-based plans never auto-completed.** The `agent_end` completion handler only checked `todoItems.every(t => t.completed)` — but PRD plans don't use todoItems. They track progress in `prd.json` via the execute-prd skill. Result: plan status stayed at "building" forever after a PRD finished. Fixed by adding a parallel PRD progress check in `agent_end` using `resolveExecutionProgress()`.
 
 - **`/build` had no guard for "building" status.** Only checked `"draft"` (promote?) and `"complete"` (block). A plan stuck at "building" (see above) would fall through and re-trigger `sendUserMessage("Execute the PRD...")`, causing the agent to re-execute an already-completed PRD. Fixed by checking execution progress when status is "building" — if complete, mark done; if in progress, confirm with user.
@@ -27,7 +29,7 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Extension tests are NOT run by `npm test`.** The package test runner doesn't discover `.pi/extensions/plan-mode/*.test.ts`. Run them explicitly: `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'`. Skipping this means command handler regressions won't be caught by CI.
 
-- **State restoration fields must stay in sync.** `index.ts` persists `enabled`, `todos`, `executing`, `currentSlug`, `planSize`, `preMortemRun`, `reviewRun`, `prdConverted` together. On resume, the frontmatter from disk overwrites in-memory flags — if `persistence.ts` and the persisted entry disagree, the frontmatter wins (see `session_start` reconciliation block). Adding a new flag requires updating both `pi.appendEntry()` calls and the session restore block.
+- **State restoration fields must stay in sync.** `index.ts` persists `enabled`, `todos`, `executing`, `currentSlug`, `planSize`, `preMortemRun`, `reviewRun`, `prdConverted`, `loadedFromDisk` together. On resume, the frontmatter from disk overwrites in-memory flags — if `persistence.ts` and the persisted entry disagree, the frontmatter wins (see `session_start` reconciliation block). Adding a new flag requires updating both `pi.appendEntry()` calls and the session restore block.
 
 - **`inPrdConversion` flag is NOT exception-safe — a throw from `/prd` leaves it stuck `true`.** The `/prd` handler sets `inPrdConversion = true`, grants full tool access, awaits `handlePrd()`, then resets it. There is no `try/finally`. If `handlePrd()` throws, the flag stays `true` for the rest of the session. Mitigation: if you add error handling to `/prd`, wrap the reset in `finally`.
 
@@ -53,7 +55,7 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 ## Pre-Edit Checklist
 
 - [ ] Run `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'` before and after changes to catch regressions
-- [ ] If adding a new state field: update `PlanModeState` (commands.ts), `createDefaultState()`, `persistState()` in index.ts, and the session restore block in `session_start`
+- [ ] If adding a new state field: update `PlanModeState` (commands.ts), `createDefaultState()`, `persistState()` in index.ts, and the session restore block in `session_start`. Also update all places that reset state (handlePlanNew, handlePlanClose, handleArchive, handlePlanDelete).
 - [ ] If changing plan frontmatter fields: update `PlanFrontmatter` (persistence.ts), `serializeFrontmatter()`, `parseFrontmatter()`, and any callers that destructure frontmatter
 - [ ] Plan mode no longer restricts tools — if you need to change plan-mode behavior, modify the prompt injection in `index.ts` `before_agent_start`, not tool filtering
 - [ ] If editing agent prompt injection logic: read `agents.ts` — `/review` and `/pre-mortem` look up `.pi/agents/{role}.md` via `getAgentPrompt()`

@@ -21,7 +21,7 @@ Track available integrations, their status, and configuration.
 | Krisp | Meeting Recorder | Available | Pull | [krisp.yaml](configs/krisp.yaml) |
 | Granola | Meeting Recorder | Planned | Pull, Seed | - |
 | Apple Calendar | Calendar | Available | Pull, Push, Seed | [calendar.yaml](configs/calendar.yaml) |
-| Google Calendar | Calendar | Planned | Pull, Push | - |
+| Google Calendar | Calendar | Available | Pull | [calendar.yaml](configs/calendar.yaml) |
 | Outlook Calendar | Calendar | Planned | Pull, Push | - |
 | Slack | Communication | Planned | Pull, Push | - |
 | Apple Mail | Communication | Planned | Pull | - |

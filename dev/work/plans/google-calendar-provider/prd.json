@@ -1,0 +1,141 @@
+{
+  "name": "google-calendar-provider",
+  "branchName": "google-calendar",
+  "goal": "Add GoogleCalendarProvider to enable cross-platform calendar access via the Google Calendar REST API, with embedded OAuth credentials for zero-friction setup",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Extract Shared Calendar Types",
+      "description": "Move CalendarProvider, CalendarEvent, CalendarOptions from ical-buddy.ts to types.ts. Remove dead CalendarEvent from models/integrations.ts.",
+      "acceptanceCriteria": [
+        "packages/core/src/integrations/calendar/types.ts exists with shared interfaces",
+        "ical-buddy.ts and index.ts import from types.ts",
+        "Dead CalendarEvent in models/integrations.ts removed",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "117b50c"
+    },
+    {
+      "id": "task-2",
+      "title": "Add Google Calendar Registry Entry",
+      "description": "Add google-calendar to INTEGRATIONS in registry.ts with implements: ['calendar'], auth: { type: 'oauth' }, status: 'available'.",
+      "acceptanceCriteria": [
+        "Registry entry with correct name, displayName, implements, auth, status",
+        "Registry structural validation tests added",
+        "npm run typecheck passes"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "55ddc1b"
+    },
+    {
+      "id": "task-3",
+      "title": "Implement OAuth2 Flow and Credential Storage",
+      "description": "Create google-auth.ts with full OAuth2 flow: embedded client ID/secret, localhost redirect (port 0), browser consent, token exchange, atomic credential persistence under google_calendar key, token refresh with 5-min buffer. Env var override for power users.",
+      "acceptanceCriteria": [
+        "Embedded client ID/secret constants with GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET env var override",
+        "Localhost redirect with dynamic port 0 using http://127.0.0.1:{port}/callback",
+        "access_type=offline and prompt=consent in auth URL",
+        "Atomic credential write under google_calendar key preserving other credentials",
+        "Token refresh with 5-minute expiry buffer",
+        "Tests: isTokenValid, getClientCredentials, loadGoogleCredentials, saveGoogleCredentials, refreshToken (23 tests)",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "df1cadd"
+    },
+    {
+      "id": "task-4",
+      "title": "Implement Google Calendar API Client and Provider",
+      "description": "Create google-calendar.ts — thin REST wrapper implementing CalendarProvider interface. No googleapis dependency. Handles event mapping (timed vs all-day), pagination, calendar filtering, error mapping, and listCalendars() for configure. Implementation and tests exist as uncommitted work — review, verify, and commit.",
+      "acceptanceCriteria": [
+        "CalendarProvider interface fully implemented with name 'google-calendar'",
+        "isAvailable() checks credentials and attempts refresh before returning false (never throws)",
+        "getTodayEvents() and getUpcomingEvents() query Google Calendar API",
+        "Always passes singleEvents=true and orderBy=startTime",
+        "All-day events (date field) vs timed events (dateTime field) correctly mapped",
+        "Attendees mapped: displayName to name, email to email",
+        "Pagination handled via nextPageToken with maxResults=250",
+        "Calendar filtering via options.calendars",
+        "listCalendars() exported for configure command",
+        "Error mapping: 401 refresh+retry, 403 permission, 404 not found, 429 rate limit",
+        "No googleapis dependency added",
+        "Tests: timed events, all-day, multi-day, attendees, pagination, filtering, isAvailable, errors, listCalendars",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Wire Into Factory, Configure, Pull, and Integration Status",
+      "description": "Connect all pieces: (5a) Update getCalendarProvider() factory for provider === 'google', (5b) Add 'arete integration configure google-calendar' handler with OAuth flow + calendar selection, (5c) Fix hardcoded icalBuddy error messages in pullCalendar() to be provider-aware, (5d) Add google-calendar to IntegrationService status check.",
+      "acceptanceCriteria": [
+        "Factory returns Google provider for provider: 'google'",
+        "Factory still returns ical-buddy for provider: 'macos' and 'ical-buddy' (regression tests)",
+        "arete integration configure google-calendar completes OAuth and writes config",
+        "Configure writes exact string provider: 'google' (producer-consumer regression test)",
+        "arete pull calendar works with Google provider",
+        "Pull command shows provider-appropriate errors (not hardcoded icalBuddy)",
+        "arete integration list shows Google Calendar status correctly",
+        "Existing macOS flow completely unaffected",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Integration Tests and Round-Trip Regression Tests",
+      "description": "End-to-end test coverage validating the full flow with mocked Google API. Configure-to-Pull round-trip tests for both Google and macOS providers.",
+      "acceptanceCriteria": [
+        "Configure then Pull round-trip: config written by configure accepted by factory and returns events",
+        "macOS configure then Pull round-trip still works (regression)",
+        "Token expiry then auto-refresh then successful pull (mocked)",
+        "Expired refresh token produces actionable error message",
+        "Calendar with 0 events returns empty array (not error)",
+        "Realistic Google API fixture tests (timed, all-day, multi-day, recurring, declined)",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Error Handling Hardening and Documentation",
+      "description": "Harden error paths and update all 9 documentation files: SETUP.md, ONBOARDING.md, GUIDE.md, integrations README/registry, AGENTS.md sources, LEARNINGS.md, capabilities.json. Rebuild AGENTS.md after source updates.",
+      "acceptanceCriteria": [
+        "All error paths produce user-friendly messages (no raw stack traces)",
+        "SETUP.md has Google Calendar instructions (just run configure)",
+        "Unverified app warning documented",
+        "ONBOARDING.md updated: Calendar (macOS or Google)",
+        "GUIDE.md updated: Google Calendar available, Future note removed",
+        "integrations README and registry: Google Calendar Planned to Available",
+        "AGENTS.md sources updated with configure google-calendar command",
+        "AGENTS.md rebuilt (npm run build:agents:dev and npm run build)",
+        "LEARNINGS.md updated with Google Calendar patterns and gotchas",
+        "capabilities.json updated with google-calendar-provider entry",
+        "npm run typecheck and npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-22T21:30:00Z",
+    "totalTasks": 7,
+    "completedTasks": 3,
+    "failedTasks": 0
+  }
+}

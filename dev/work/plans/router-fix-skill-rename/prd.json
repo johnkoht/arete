@@ -1,0 +1,146 @@
+{
+  "name": "router-fix-skill-rename",
+  "branchName": "feature/router-fix-skill-rename",
+  "goal": "Fix skill/tool router to include tools in the candidate pool and rename the onboarding skill to getting-started to eliminate naming collision with the onboarding tool.",
+  "userStories": [
+    {
+      "id": "create-tool-service",
+      "title": "Create ToolService in @arete/core",
+      "description": "Create packages/core/src/services/tools.ts mirroring SkillService.list(). Reads from WorkspacePaths.tools, parses TOOL.md frontmatter, returns tool definitions. Export from barrel files and wire into createServices() factory.",
+      "acceptanceCriteria": [
+        "ToolService class exists with list() and get(id) methods",
+        "Returns correct metadata from TOOL.md frontmatter (name, description, triggers, lifecycle, duration, work_type, category)",
+        "Exported from packages/core/src/services/index.ts and packages/core/src/index.ts",
+        "Wired into createServices() in packages/core/src/factory.ts as tools property on AreteServices type",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "merge-tools-into-route",
+      "title": "Merge tools into route commands",
+      "description": "Update route.ts and skill.ts (route subcommand) to call services.tools.list(), map to SkillCandidate[] with type: 'tool', and merge into candidates. Refactor tool.ts to use services.tools.list() and services.tools.get() instead of ad-hoc getToolsList()/getToolInfo().",
+      "acceptanceCriteria": [
+        "arete route and arete skill route include tools as candidates with type: 'tool'",
+        "tool.ts list and show subcommands use services.tools.list() / services.tools.get()",
+        "Ad-hoc getToolsList() and getToolInfo() functions removed from tool.ts",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "tool-service-and-routing-tests",
+      "title": "Tests for ToolService and routing",
+      "description": "Write packages/core/test/services/tools.test.ts with mock storage (happy path, missing dir, malformed TOOL.md, no TOOL.md subdir). Update intelligence.test.ts for mixed skills+tools candidates. Update golden route.test.ts for tool routing.",
+      "acceptanceCriteria": [
+        "ToolService unit tests cover: happy path (2+ tools), missing dir (returns []), malformed TOOL.md (name-only defaults), subdir with no TOOL.md (id from dirname)",
+        "Intelligence routing tests verify tools win for job-related queries with mixed candidate pool",
+        "Golden route tests include tool routing scenarios",
+        "npm run typecheck and npm test green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "rename-onboarding-skill",
+      "title": "Rename onboarding skill to getting-started",
+      "description": "Rename packages/runtime/skills/onboarding/ to packages/runtime/skills/getting-started/. Update frontmatter: name, description, work_type (activation → operations), and triggers list.",
+      "acceptanceCriteria": [
+        "Directory renamed from onboarding/ to getting-started/",
+        "Frontmatter updated: name: getting-started, work_type: operations",
+        "Triggers include: Let's get started, Help me set up Areté, Help me setup arete, Help me set up my workspace, Set up Areté, I'm new to Areté, Get started, Onboard me to Areté, Getting started",
+        "SKILL.md content unchanged beyond frontmatter",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "update-cross-references",
+      "title": "Update cross-references in skills and rules",
+      "description": "Update rapid-context-dump SKILL.md references. Update pm-workspace and routing-mandatory rules (both cursor and claude-code variants). Keep inputs/onboarding-dump/ references as-is. Run grep verification.",
+      "acceptanceCriteria": [
+        "rapid-context-dump SKILL.md: 'onboarding skill' → 'getting-started skill', 'onboarding skill Path B' → 'getting-started skill Path B'",
+        "pm-workspace.mdc updated in both cursor and claude-code variants",
+        "routing-mandatory.mdc updated in both cursor and claude-code variants, clarifying 'onboarding' refers to the tool",
+        "inputs/onboarding-dump/ references preserved unchanged",
+        "grep -rn 'skills/onboarding|onboarding.*skill' packages/runtime/ finds no stale references",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "update-documentation",
+      "title": "Update documentation — GUIDE.md + AGENTS.md sources",
+      "description": "Update GUIDE.md Getting Started section and skills table. Add getting-started to .agents/sources/guide/skills-index.md. Rebuild AGENTS.md via npm run build + npm run build:agents:dev.",
+      "acceptanceCriteria": [
+        "GUIDE.md updated: Getting Started section references getting-started skill, skills table updated",
+        ".agents/sources/guide/skills-index.md includes getting-started entry",
+        "Tool references to onboarding tool preserved unchanged",
+        "AGENTS.md rebuilt via npm run build and npm run build:agents:dev",
+        "npm run typecheck and npm test green after rebuild"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "disambiguation-tests",
+      "title": "Routing disambiguation tests",
+      "description": "Add tests verifying the rename resolves disambiguation: 'help me setup arete' → getting-started skill, 'I'm starting a new job' → onboarding tool, 'onboarding at my new company' → onboarding tool. Include both-candidates-present edge case.",
+      "acceptanceCriteria": [
+        "'help me setup arete' routes to getting-started skill",
+        "'I'm starting a new job' routes to onboarding tool",
+        "'onboarding at my new company' routes to onboarding tool",
+        "Both-candidates-present test: stale onboarding skill + getting-started skill + onboarding tool → correct routing",
+        "npm run typecheck and npm test green"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "update-learnings",
+      "title": "Update LEARNINGS.md files",
+      "description": "Add entries to 4 LEARNINGS.md files: packages/core/src/services/ (ToolService), packages/runtime/rules/ (skill rename), packages/runtime/tools/ (tools now routable), packages/cli/src/commands/ (route merges tools+skills).",
+      "acceptanceCriteria": [
+        "packages/core/src/services/LEARNINGS.md updated with ToolService entry",
+        "packages/runtime/rules/LEARNINGS.md updated with skill rename entry",
+        "packages/runtime/tools/LEARNINGS.md updated with tools-are-routable entry",
+        "packages/cli/src/commands/LEARNINGS.md updated with route merge entry",
+        "Each entry includes what changed, why, and how to avoid related issues"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "memory-entry-final-verification",
+      "title": "Memory entry + final verification",
+      "description": "Create memory/entries/2026-02-22_router-fix-skill-rename.md documenting changes. Update memory/MEMORY.md index. Run final quality gates and verify success criteria.",
+      "acceptanceCriteria": [
+        "Memory entry created with standard format (what, why, files, learnings)",
+        "memory/MEMORY.md index updated with new entry at top",
+        "npm run typecheck and npm test green",
+        "All 4 success criteria queries verified"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-22T19:15:00Z",
+    "totalTasks": 9,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

@@ -139,7 +139,7 @@ async function pullCalendar(
   json: boolean,
 ): Promise<void> {
   const config = await loadConfig(services.storage, workspaceRoot);
-  const provider = await getCalendarProvider(config);
+  const provider = await getCalendarProvider(config, services.storage, workspaceRoot);
 
   if (!provider) {
     if (json) {
@@ -159,17 +159,31 @@ async function pullCalendar(
 
   const available = await provider.isAvailable();
   if (!available) {
+    let errorMsg: string;
+    let helpMsg: string;
+
+    if (provider.name === 'ical-buddy') {
+      errorMsg = 'icalBuddy not installed';
+      helpMsg = 'Run: brew install ical-buddy';
+    } else if (provider.name === 'google-calendar') {
+      errorMsg = 'Google Calendar not available';
+      helpMsg = 'Run: arete integration configure google-calendar';
+    } else {
+      errorMsg = `Calendar provider "${provider.name}" not available`;
+      helpMsg = 'Check your integration configuration';
+    }
+
     if (json) {
       console.log(
         JSON.stringify({
           success: false,
-          error: 'icalBuddy not installed',
-          message: 'Run: brew install ical-buddy',
+          error: errorMsg,
+          message: helpMsg,
         }),
       );
     } else {
-      error('icalBuddy not installed');
-      info('Run: brew install ical-buddy');
+      error(errorMsg);
+      info(helpMsg);
     }
     process.exit(1);
   }

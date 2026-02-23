@@ -5,30 +5,9 @@
 
 import { execFile, spawnSync } from 'child_process';
 import { promisify } from 'util';
+import type { CalendarEvent, CalendarOptions, CalendarProvider } from './types.js';
 
 const execFileAsync = promisify(execFile);
-
-export interface CalendarEvent {
-  title: string;
-  startTime: Date;
-  endTime: Date;
-  calendar: string;
-  location?: string;
-  attendees: Array<{ name: string; email?: string }>;
-  notes?: string;
-  isAllDay: boolean;
-}
-
-export interface CalendarOptions {
-  calendars?: string[];
-}
-
-export interface CalendarProvider {
-  name: string;
-  isAvailable(): Promise<boolean>;
-  getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]>;
-  getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]>;
-}
 
 function parseAttendee(attendeeStr: string): { name: string; email?: string } {
   const trimmed = attendeeStr.trim();
