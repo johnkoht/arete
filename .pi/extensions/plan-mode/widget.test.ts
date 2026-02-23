@@ -31,6 +31,8 @@ function makeState(overrides: Partial<WidgetState> = {}): WidgetState {
 		hasPreMortem: false,
 		hasReview: false,
 		hasPrd: false,
+		loadedFromDisk: false,
+		hasUnsavedChanges: false,
 		...overrides,
 	};
 }
@@ -125,6 +127,54 @@ describe("renderFooterStatus", () => {
 		assert.ok(result.includes("☑pm"));
 		assert.ok(result.includes("☐rv"));
 		assert.ok(result.includes("☑prd"));
+	});
+
+	it("shows unsaved indicator for loaded plans with changes", () => {
+		const result = renderFooterStatus(
+			makeState({
+				planModeEnabled: true,
+				planId: "feature",
+				title: "Feature",
+				status: "draft",
+				loadedFromDisk: true,
+				hasUnsavedChanges: true,
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(result.includes("⚠unsaved"), "Should show unsaved indicator");
+	});
+
+	it("does not show unsaved indicator for fresh plans", () => {
+		const result = renderFooterStatus(
+			makeState({
+				planModeEnabled: true,
+				planId: "feature",
+				title: "Feature",
+				status: "draft",
+				loadedFromDisk: false,
+				hasUnsavedChanges: true, // Has changes but not loaded from disk
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(!result.includes("⚠unsaved"), "Should not show unsaved for fresh plans");
+	});
+
+	it("does not show unsaved indicator when no changes", () => {
+		const result = renderFooterStatus(
+			makeState({
+				planModeEnabled: true,
+				planId: "feature",
+				title: "Feature",
+				status: "draft",
+				loadedFromDisk: true,
+				hasUnsavedChanges: false, // Loaded but no changes
+			}),
+			mockTheme,
+		);
+		assert.ok(result);
+		assert.ok(!result.includes("⚠unsaved"), "Should not show unsaved when no changes");
 	});
 
 	it("uses stepsCount in output", () => {

@@ -34,6 +34,7 @@ import {
 	handleBuild,
 	handlePlanSave,
 	resolvePrdFeatureSlug,
+	hasUnsavedPlanChanges,
 	type PlanModeState,
 	createDefaultState,
 } from "./commands.js";
@@ -111,6 +112,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			hasReview: state.reviewRun,
 			hasPrd: hasPrd,
 			prdProgress,
+			loadedFromDisk: state.loadedFromDisk,
+			hasUnsavedChanges: hasUnsavedPlanChanges(state),
 		};
 	}
 
