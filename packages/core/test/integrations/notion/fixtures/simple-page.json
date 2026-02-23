@@ -1,0 +1,255 @@
+{
+  "page": {
+    "object": "page",
+    "id": "abc12345-def6-7890-abcd-ef1234567890",
+    "created_time": "2026-01-15T10:00:00.000Z",
+    "last_edited_time": "2026-02-20T14:30:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/workspace/Product-Requirements-abc12345def67890abcdef1234567890",
+    "properties": {
+      "title": {
+        "id": "title",
+        "type": "title",
+        "title": [
+          {
+            "type": "text",
+            "text": { "content": "Product Requirements", "link": null },
+            "plain_text": "Product Requirements",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ]
+      }
+    },
+    "parent": {
+      "type": "workspace",
+      "workspace": true
+    }
+  },
+  "blocks": [
+    {
+      "object": "block",
+      "id": "block-001",
+      "type": "heading_1",
+      "has_children": false,
+      "heading_1": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "Overview", "link": null },
+            "plain_text": "Overview",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "is_toggleable": false,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-002",
+      "type": "paragraph",
+      "has_children": false,
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "This document outlines the ", "link": null },
+            "plain_text": "This document outlines the ",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          },
+          {
+            "type": "text",
+            "text": { "content": "product requirements", "link": null },
+            "plain_text": "product requirements",
+            "annotations": {
+              "bold": true,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          },
+          {
+            "type": "text",
+            "text": { "content": " for the new onboarding flow.", "link": null },
+            "plain_text": " for the new onboarding flow.",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-003",
+      "type": "heading_2",
+      "has_children": false,
+      "heading_2": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "Goals", "link": null },
+            "plain_text": "Goals",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "is_toggleable": false,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-004",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "bulleted_list_item": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "Reduce time-to-value for new users", "link": null },
+            "plain_text": "Reduce time-to-value for new users",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-005",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "bulleted_list_item": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "Increase activation rate from ", "link": null },
+            "plain_text": "Increase activation rate from ",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          },
+          {
+            "type": "text",
+            "text": { "content": "40% to 65%", "link": null },
+            "plain_text": "40% to 65%",
+            "annotations": {
+              "bold": true,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-006",
+      "type": "divider",
+      "has_children": false,
+      "divider": {}
+    },
+    {
+      "object": "block",
+      "id": "block-007",
+      "type": "paragraph",
+      "has_children": false,
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": { "content": "See the ", "link": null },
+            "plain_text": "See the ",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          },
+          {
+            "type": "text",
+            "text": { "content": "design spec", "link": { "url": "https://figma.com/example" } },
+            "plain_text": "design spec",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          },
+          {
+            "type": "text",
+            "text": { "content": " for visual reference.", "link": null },
+            "plain_text": " for visual reference.",
+            "annotations": {
+              "bold": false,
+              "italic": false,
+              "strikethrough": false,
+              "underline": false,
+              "code": false,
+              "color": "default"
+            }
+          }
+        ],
+        "color": "default"
+      }
+    }
+  ]
+}

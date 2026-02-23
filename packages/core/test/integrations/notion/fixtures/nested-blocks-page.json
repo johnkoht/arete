@@ -1,0 +1,168 @@
+{
+  "page": {
+    "object": "page",
+    "id": "nested1234-def6-7890-abcd-ef1234567890",
+    "created_time": "2026-02-01T12:00:00.000Z",
+    "last_edited_time": "2026-02-22T10:00:00.000Z",
+    "archived": false,
+    "url": "https://www.notion.so/workspace/Meeting-Notes-Template-nested1234def67890abcdef1234567890",
+    "properties": {
+      "title": {
+        "id": "title",
+        "type": "title",
+        "title": [
+          {
+            "type": "text",
+            "text": { "content": "Meeting Notes Template", "link": null },
+            "plain_text": "Meeting Notes Template",
+            "annotations": {
+              "bold": false, "italic": false, "strikethrough": false,
+              "underline": false, "code": false, "color": "default"
+            }
+          }
+        ]
+      }
+    },
+    "parent": { "type": "workspace", "workspace": true }
+  },
+  "blocks": [
+    {
+      "object": "block",
+      "id": "nb-001",
+      "type": "heading_1",
+      "has_children": false,
+      "heading_1": {
+        "rich_text": [{ "type": "text", "text": { "content": "Agenda", "link": null }, "plain_text": "Agenda", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-002",
+      "type": "bulleted_list_item",
+      "has_children": true,
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Product updates", "link": null }, "plain_text": "Product updates", "annotations": { "bold": true, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-002-child1",
+      "type": "bulleted_list_item",
+      "has_children": true,
+      "parent": { "type": "block_id", "block_id": "nb-002" },
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Feature A progress", "link": null }, "plain_text": "Feature A progress", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-002-child1-grandchild1",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "nb-002-child1" },
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Backend API complete", "link": null }, "plain_text": "Backend API complete", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-002-child1-grandchild2",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "nb-002-child1" },
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Frontend in review", "link": null }, "plain_text": "Frontend in review", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-002-child2",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "nb-002" },
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Feature B kickoff", "link": null }, "plain_text": "Feature B kickoff", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-003",
+      "type": "bulleted_list_item",
+      "has_children": false,
+      "bulleted_list_item": {
+        "rich_text": [{ "type": "text", "text": { "content": "Engineering standup", "link": null }, "plain_text": "Engineering standup", "annotations": { "bold": true, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-004",
+      "type": "heading_2",
+      "has_children": false,
+      "heading_2": {
+        "rich_text": [{ "type": "text", "text": { "content": "Action Items", "link": null }, "plain_text": "Action Items", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "is_toggleable": false, "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-005",
+      "type": "to_do",
+      "has_children": true,
+      "to_do": {
+        "rich_text": [{ "type": "text", "text": { "content": "Schedule design review", "link": null }, "plain_text": "Schedule design review", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "checked": false,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-005-child1",
+      "type": "paragraph",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "nb-005" },
+      "paragraph": {
+        "rich_text": [{ "type": "text", "text": { "content": "Need to include both design and engineering leads", "link": null }, "plain_text": "Need to include both design and engineering leads", "annotations": { "bold": false, "italic": true, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-006",
+      "type": "to_do",
+      "has_children": false,
+      "to_do": {
+        "rich_text": [{ "type": "text", "text": { "content": "Update roadmap", "link": null }, "plain_text": "Update roadmap", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "checked": true,
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-007",
+      "type": "toggle",
+      "has_children": true,
+      "toggle": {
+        "rich_text": [{ "type": "text", "text": { "content": "Previous meeting notes (click to expand)", "link": null }, "plain_text": "Previous meeting notes (click to expand)", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    },
+    {
+      "object": "block",
+      "id": "nb-007-child1",
+      "type": "paragraph",
+      "has_children": false,
+      "parent": { "type": "block_id", "block_id": "nb-007" },
+      "paragraph": {
+        "rich_text": [{ "type": "text", "text": { "content": "Last week we discussed the migration timeline and agreed on a 2-week sprint cycle.", "link": null }, "plain_text": "Last week we discussed the migration timeline and agreed on a 2-week sprint cycle.", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" } }],
+        "color": "default"
+      }
+    }
+  ]
+}

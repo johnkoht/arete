@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-22: [notion-integration-learnings](entries/2026-02-22_notion-integration-learnings.md) — Notion integration Phase 1: pull pages as markdown with QMD indexing. 8/8 tasks, 0 iterations, +122 tests. Thin fetch over SDK, Tier 1/Tier 2 block split, iterative queue-based converter. CLI test stability issue discovered (HTTP servers don't close reliably).
 - 2026-02-22: [router-fix-skill-rename](entries/2026-02-22_router-fix-skill-rename.md) — Added ToolService + tool routing to candidate pool; renamed onboarding skill → getting-started to resolve naming collision with onboarding tool. 9/9 tasks, 0 iterations, +17 tests, 0/8 pre-mortem risks materialized.
 - 2026-02-21: [qmd-improvements-review-fixes](entries/2026-02-21_qmd-improvements-review-fixes.md) — Engineering lead review fixes: meeting content cache (O(meetings) reads), limit 20→100 + overflow fallback, path normalization, displayQmdResult() helper, clarifying comments. 2/2 tasks, 0 iterations, +9 tests.
 - 2026-02-21: [qmd-improvements-learnings](entries/2026-02-21_qmd-improvements-learnings.md) — QMD auto-indexing: refreshQmdIndex() helper, write-path CLI wiring (pull fathom, meeting add/process), arete index command, agent rule update, EntityService SearchProvider injection. 6/6 tasks, 0 iterations, +22 tests.
