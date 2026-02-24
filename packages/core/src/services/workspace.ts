@@ -435,6 +435,15 @@ export class WorkspaceService {
       }
     }
 
+
+    // Regenerate AGENTS.md / CLAUDE.md on update (always refreshes to latest version)
+    const rootFiles = adapter.generateRootFiles(config, workspaceRoot);
+    for (const [filename, content] of Object.entries(rootFiles)) {
+      const filePath = join(workspaceRoot, filename);
+      await this.storage.write(filePath, content);
+      result.updated.push(filename);
+    }
+
     return result;
   }
 

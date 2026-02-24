@@ -214,6 +214,7 @@ Soft cap: **~100 lines per file**. Each section starts at 3-10 lines; grow it on
 - `packages/core/src/search/LEARNINGS.md`
 - `packages/core/src/services/LEARNINGS.md`
 - `packages/core/src/integrations/LEARNINGS.md`
+- `packages/core/src/adapters/LEARNINGS.md`
 - `packages/cli/src/commands/LEARNINGS.md`
 - `packages/runtime/rules/LEARNINGS.md`
 

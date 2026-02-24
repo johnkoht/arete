@@ -208,14 +208,44 @@ function compressRulesList(content: string, rootPath: string, sectionName: strin
 }
 
 /**
- * Compress memory section
+ * Compress memory section - extracts seeded paths from source content
  */
 function compressMemorySection(content: string): string {
+  // Extract seeded paths from the source file
+  const seededPaths: string[] = [];
+  const lines = content.split('\n');
+  let inSeededSection = false;
+  
+  for (const line of lines) {
+    if (line.includes('Seeded Paths') || line.includes('check these first')) {
+      inSeededSection = true;
+      continue;
+    }
+    if (inSeededSection) {
+      // Stop at next section header or empty line after list
+      if (line.startsWith('#') || line.startsWith('##')) {
+        break;
+      }
+      // Extract path from markdown list item
+      const match = line.match(/^-\s+`([^`]+)`/);
+      if (match) {
+        // Extract just the directory path (remove LEARNINGS.md suffix)
+        const fullPath = match[1];
+        const dirPath = fullPath.replace(/\/LEARNINGS\.md$/, '/');
+        seededPaths.push(dirPath);
+      }
+    }
+  }
+  
+  const seededList = seededPaths.length > 0 
+    ? seededPaths.join(', ')
+    : '.pi/extensions/plan-mode/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/cli/src/commands/, packages/runtime/rules/';
+  
   return `[Memory]|entry:memory/MEMORY.md
 |before_work:scan MEMORY.md + collaboration.md
 |after_work:add entry to memory/entries/, update index
 |synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion
-|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/cli/src/commands/, packages/runtime/rules/`;
+|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: ${seededList}`;
 }
 
 /**

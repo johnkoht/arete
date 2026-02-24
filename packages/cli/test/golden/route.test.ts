@@ -126,3 +126,37 @@ describe('golden: route command', () => {
     });
   });
 });
+
+describe('no-match suggestion', () => {
+  let wsDir: string;
+
+  beforeEach(() => {
+    wsDir = mkdtempSync(join(tmpdir(), 'arete-golden-route-nomatch-'));
+    // Minimal workspace with no skills/tools that match
+    writeFileSync(join(wsDir, 'arete.yaml'), 'version: 1\n', 'utf8');
+    mkdirSync(join(wsDir, '.cursor', 'rules'), { recursive: true });
+    mkdirSync(join(wsDir, '.agents', 'skills'), { recursive: true });
+    mkdirSync(join(wsDir, '.cursor', 'tools'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(wsDir, { recursive: true, force: true });
+  });
+
+  it('JSON output includes suggestion when no skill matches', () => {
+    const stdout = runCli(['route', 'completely random unmatched query xyz123', '--json'], { cwd: wsDir });
+    const json = JSON.parse(stdout);
+    assert.equal(json.success, true);
+    assert.equal(json.skill, null, 'Should have no skill match');
+    assert.ok(json.suggestion, 'Should include suggestion field');
+    assert.ok(json.suggestion.includes('CLI commands') || json.suggestion.includes('AGENTS.md'), 
+      'Suggestion should reference CLI commands or AGENTS.md');
+  });
+
+  it('human output shows suggestion when no skill matches', () => {
+    const stdout = runCli(['route', 'completely random unmatched query xyz123'], { cwd: wsDir });
+    assert.ok(stdout.includes('(no match)'), 'Should show no match');
+    assert.ok(stdout.includes('💡') || stdout.includes('No skill match'), 
+      'Should show suggestion hint');
+  });
+});

@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-23: [agents-md-install-fix](entries/2026-02-23_agents-md-install-fix.md) — Fixed arete install/update to use comprehensive dist/AGENTS.md instead of generating minimal version. Added route command no-match suggestion. +27 tests.
 - 2026-02-22: [notion-integration-learnings](entries/2026-02-22_notion-integration-learnings.md) — Notion integration Phase 1: pull pages as markdown with QMD indexing. 8/8 tasks, 0 iterations, +122 tests. Thin fetch over SDK, Tier 1/Tier 2 block split, iterative queue-based converter. CLI test stability issue discovered (HTTP servers don't close reliably).
 - 2026-02-22: [google-calendar-provider-learnings](entries/2026-02-22_google-calendar-provider-learnings.md) — Executed Google Calendar provider PRD end-to-end (7/7 tasks, 0 iterate loops): provider + OAuth wiring, configure/pull/status integration, round-trip tests, docs/catalog updates, and error handling hardening.
 - 2026-02-22: [router-fix-skill-rename](entries/2026-02-22_router-fix-skill-rename.md) — Added ToolService + tool routing to candidate pool; renamed onboarding skill → getting-started to resolve naming collision with onboarding tool. 9/9 tasks, 0 iterations, +17 tests, 0/8 pre-mortem risks materialized.
