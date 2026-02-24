@@ -84,7 +84,13 @@ Ask: "Do you see any other risks? Are these mitigations sufficient?"
 
 ### 6. Store for Reference
 
-Save the pre-mortem analysis in context or to a file (e.g., plan header, scratchpad) so it can be referenced during execution.
+If there's an active plan (you're in plan mode with a saved plan), use the `save_plan_artifact` tool to save the analysis:
+
+```
+save_plan_artifact(filename: "pre-mortem.md", content: <full pre-mortem markdown>)
+```
+
+This saves to the plan's directory (e.g., `dev/work/plans/{slug}/pre-mortem.md`) so it can be referenced during execution.
 
 During work: Before each task, check "Which mitigations apply here?"
 

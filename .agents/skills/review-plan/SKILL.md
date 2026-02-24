@@ -133,7 +133,17 @@ This section is required. Don't skip it — adversarial thinking surfaces concer
 - [ ] **Revise** — Address concerns before proceeding
 ```
 
-### 6. Discuss and Close
+### 6. Save the Review
+
+If there's an active plan (you're in plan mode with a saved plan), use the `save_plan_artifact` tool to save the review:
+
+```
+save_plan_artifact(filename: "review.md", content: <full review markdown>)
+```
+
+This saves to the plan's directory (e.g., `dev/work/plans/{slug}/review.md`) for future reference.
+
+### 7. Discuss and Close
 
 - Present the review to the author
 - Discuss any concerns that need clarification

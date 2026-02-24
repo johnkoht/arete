@@ -338,4 +338,260 @@ describe('IntelligenceService (via compat)', () => {
       assert.equal(r!.action, 'load');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Content ingestion routing tests
+  // Tests for routing queries about adding/saving content to the workspace.
+  // Fixtures use realistic metadata from actual SKILL.md files.
+  // ---------------------------------------------------------------------------
+  describe('routing: content ingestion queries', () => {
+    // Realistic fixtures copied from packages/runtime/skills/*/SKILL.md
+    const CONTENT_SKILLS: SkillCandidate[] = [
+      {
+        id: 'rapid-context-dump',
+        name: 'rapid-context-dump',
+        description: 'Quickly bootstrap workspace context from docs, website, or pasted content with review-before-promote workflow',
+        path: '/ws/.agents/skills/rapid-context-dump',
+        triggers: [
+          'dump my context',
+          'import my docs',
+          'bootstrap context',
+          'ingest my content',
+          'extract context from',
+          'read my website',
+          'process my docs',
+        ],
+        work_type: 'activation',
+        category: 'core',
+      },
+      {
+        id: 'prepare-meeting-agenda',
+        name: 'prepare-meeting-agenda',
+        description: 'Create a structured meeting agenda with type-based sections and optional time allocation. Use when the user wants to build an agenda document for an upcoming meeting (leadership, customer, dev team, 1:1, or other).',
+        path: '/ws/.agents/skills/prepare-meeting-agenda',
+        triggers: [
+          'meeting agenda',
+          'create agenda',
+          'prepare agenda',
+          'agenda for',
+          'build agenda',
+          'create meeting agenda',
+          'prepare meeting agenda',
+        ],
+        primitives: ['User', 'Problem', 'Solution'],
+        work_type: 'planning',
+        category: 'essential',
+      },
+      {
+        id: 'save-meeting',
+        name: 'save-meeting',
+        description: 'Save pasted meeting content (summary, transcript, URL) to resources/meetings. Use when the user pastes meeting content and wants to save it, or says "save this meeting".',
+        path: '/ws/.agents/skills/save-meeting',
+        // Note: save-meeting has no explicit triggers in SKILL.md
+        work_type: 'operations',
+        category: 'essential',
+      },
+      {
+        id: 'capture-conversation',
+        name: 'capture-conversation',
+        description: 'Capture a pasted conversation into a structured artifact with extracted insights. Use when the user pastes a conversation from Slack, Teams, email, or any source and wants to save it.',
+        path: '/ws/.agents/skills/capture-conversation',
+        triggers: [
+          'capture this conversation',
+          'save this conversation',
+          'capture this slack thread',
+          'save this discussion',
+          'I have a conversation to capture',
+        ],
+        work_type: 'operations',
+        category: 'essential',
+      },
+    ];
+
+    describe('should route content ingestion queries to rapid-context-dump', () => {
+      // These are the original failing queries from user reports
+      it('routes "I have input data to add about Reserve, the product team, etc. Where should I add it?"', () => {
+        const query = 'I have input data to add about Reserve, the product team, etc. Where should I add it?';
+        const r = routeToSkill(query, CONTENT_SKILLS);
+        // Should route to rapid-context-dump OR return null, but NOT prepare-meeting-agenda
+        // The key assertion: must not false-positive to prepare-meeting-agenda
+        if (r) {
+          assert.equal(r.skill, 'rapid-context-dump', 'Should route to rapid-context-dump');
+          assert.notEqual(r.skill, 'prepare-meeting-agenda', 'Must NOT route to prepare-meeting-agenda');
+        }
+        // null is acceptable if no confident match
+      });
+
+      it('routes "save a lengthy AI vision and roadmap document, summarize it, and include it in context"', () => {
+        const query = 'save a lengthy AI vision and roadmap document, summarize it, and include it in context';
+        const r = routeToSkill(query, CONTENT_SKILLS);
+        // Should route to rapid-context-dump
+        assert.ok(r, 'Should find a match');
+        assert.equal(r!.skill, 'rapid-context-dump', 'Should route to rapid-context-dump');
+        assert.notEqual(r!.skill, 'prepare-meeting-agenda', 'Must NOT route to prepare-meeting-agenda');
+      });
+
+      // Pattern-based variations to prevent overfitting
+      it('routes "where should I put this content?" to rapid-context-dump', () => {
+        const r = routeToSkill('where should I put this content?', CONTENT_SKILLS);
+        if (r) {
+          assert.equal(r.skill, 'rapid-context-dump');
+        }
+      });
+
+      it('routes "add this document to my workspace context" to rapid-context-dump', () => {
+        const r = routeToSkill('add this document to my workspace context', CONTENT_SKILLS);
+        if (r) {
+          assert.equal(r.skill, 'rapid-context-dump');
+        }
+      });
+
+      it('routes "I need to import some docs about our product" to rapid-context-dump', () => {
+        const r = routeToSkill('I need to import some docs about our product', CONTENT_SKILLS);
+        assert.ok(r, 'Should find a match');
+        assert.equal(r!.skill, 'rapid-context-dump');
+      });
+    });
+
+    describe('should NOT false-positive to prepare-meeting-agenda', () => {
+      // Queries that previously routed to prepare-meeting-agenda incorrectly
+      // due to incidental word matches (e.g., "team" in description)
+      it('does not route "input data about the team" to prepare-meeting-agenda', () => {
+        const r = routeToSkill('input data about the team', CONTENT_SKILLS);
+        if (r) {
+          assert.notEqual(r.skill, 'prepare-meeting-agenda', 
+            'Should not route to prepare-meeting-agenda based on incidental "team" match');
+        }
+      });
+
+      it('does not route "save this document" to prepare-meeting-agenda', () => {
+        const r = routeToSkill('save this document', CONTENT_SKILLS);
+        if (r) {
+          assert.notEqual(r.skill, 'prepare-meeting-agenda');
+        }
+      });
+
+      it('does not route "where to add product context" to prepare-meeting-agenda', () => {
+        const r = routeToSkill('where to add product context', CONTENT_SKILLS);
+        if (r) {
+          assert.notEqual(r.skill, 'prepare-meeting-agenda');
+        }
+      });
+    });
+
+    describe('should correctly disambiguate between related skills', () => {
+      // Ensure trigger expansion doesn't steal from related skills
+      it('routes "save this meeting" to save-meeting, not rapid-context-dump', () => {
+        const r = routeToSkill('save this meeting', CONTENT_SKILLS);
+        assert.ok(r, 'Should find a match');
+        assert.equal(r!.skill, 'save-meeting', 'Should route to save-meeting');
+        assert.notEqual(r!.skill, 'rapid-context-dump', 'Should not route to rapid-context-dump');
+      });
+
+      it('routes "capture this conversation" to capture-conversation, not rapid-context-dump', () => {
+        const r = routeToSkill('capture this conversation', CONTENT_SKILLS);
+        assert.ok(r, 'Should find a match');
+        assert.equal(r!.skill, 'capture-conversation', 'Should route to capture-conversation');
+      });
+
+      it('routes "create a meeting agenda" to prepare-meeting-agenda', () => {
+        const r = routeToSkill('create a meeting agenda', CONTENT_SKILLS);
+        assert.ok(r, 'Should find a match');
+        assert.equal(r!.skill, 'prepare-meeting-agenda', 'Should route to prepare-meeting-agenda');
+      });
+
+      it('routes "save this slack thread" to capture-conversation', () => {
+        const r = routeToSkill('save this slack thread', CONTENT_SKILLS);
+        assert.ok(r, 'Should find a match');
+        // capture-conversation has "capture this slack thread" trigger
+        assert.equal(r!.skill, 'capture-conversation');
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Single-word routing regression tests
+  // Ensure scoring changes don't break skills that rely on keyword matching.
+  // These test that skills with distinctive names still route correctly.
+  // ---------------------------------------------------------------------------
+  describe('routing: single-word and keyword regression tests', () => {
+    // Fixtures for skills that might be affected by scoring threshold changes
+    const KEYWORD_SKILLS: SkillCandidate[] = [
+      {
+        id: 'discovery',
+        name: 'discovery',
+        description: 'Guide problem discovery and research synthesis. Use when the user wants to start discovery, understand a problem, research a topic, or validate assumptions.',
+        path: '/ws/.agents/skills/discovery',
+        // Note: discovery has no explicit triggers
+        primitives: ['Problem', 'User'],
+        work_type: 'discovery',
+        category: 'default',
+      },
+      {
+        id: 'construct-roadmap',
+        name: 'construct-roadmap',
+        description: 'Build and maintain product roadmaps. Use when the user wants to build, update, or plan a roadmap, do quarterly planning, or prioritize backlog.',
+        path: '/ws/.agents/skills/construct-roadmap',
+        // Note: construct-roadmap has no explicit triggers
+        primitives: ['Solution', 'Market', 'Risk'],
+        work_type: 'delivery',
+        category: 'default',
+      },
+      {
+        id: 'synthesize',
+        name: 'synthesize',
+        description: 'Process project inputs into insights and decisions. Use when the user wants to synthesize findings, process inputs, summarize learnings, or pull together research.',
+        path: '/ws/.agents/skills/synthesize',
+        // Note: synthesize has no explicit triggers
+        primitives: ['Problem', 'User', 'Solution'],
+        work_type: 'analysis',
+        category: 'essential',
+      },
+      // Include a skill with triggers to ensure mixed behavior works
+      ...SAMPLE_SKILLS,
+    ];
+
+    it('routes "discovery" to discovery skill', () => {
+      const r = routeToSkill('discovery', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'discovery');
+    });
+
+    it('routes "start discovery for this problem" to discovery skill', () => {
+      const r = routeToSkill('start discovery for this problem', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'discovery');
+    });
+
+    it('routes "roadmap planning" to construct-roadmap skill', () => {
+      const r = routeToSkill('roadmap planning', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'construct-roadmap');
+    });
+
+    it('routes "build a roadmap" to construct-roadmap skill', () => {
+      const r = routeToSkill('build a roadmap', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'construct-roadmap');
+    });
+
+    it('routes "synthesize" to synthesize skill', () => {
+      const r = routeToSkill('synthesize', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'synthesize');
+    });
+
+    it('routes "synthesize my findings" to synthesize skill', () => {
+      const r = routeToSkill('synthesize my findings', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'synthesize');
+    });
+
+    // Ensure existing trigger-based routing still works alongside keyword matching
+    it('still routes "prep for meeting" to meeting-prep (trigger-based)', () => {
+      const r = routeToSkill('prep for meeting', KEYWORD_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'meeting-prep');
+    });
+  });
 });
