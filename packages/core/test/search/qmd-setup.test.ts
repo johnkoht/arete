@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  embedQmdIndex,
   ensureQmdCollection,
   generateCollectionName,
   refreshQmdIndex,
@@ -16,6 +17,8 @@ function makeDeps(overrides?: {
   addError?: string;
   updateFail?: boolean;
   updateError?: string;
+  embedFail?: boolean;
+  embedError?: string;
   listOutput?: string; // Output from `qmd collection list`
   calls?: Array<{ file: string; args: string[]; cwd: string }>;
 }): QmdSetupDeps {
@@ -40,6 +43,9 @@ function makeDeps(overrides?: {
       }
       if (overrides?.updateFail && args[0] === 'update') {
         throw new Error(overrides.updateError ?? 'update timed out');
+      }
+      if (overrides?.embedFail && args[0] === 'embed') {
+        throw new Error(overrides.embedError ?? 'embed failed');
       }
       // Handle `qmd collection list` — return configured collections
       if (args.includes('collection') && args.includes('list')) {
@@ -98,66 +104,104 @@ describe('ensureQmdCollection', () => {
     assert.equal(result.indexed, false);
   });
 
-  it('creates collection and runs update when no existing collection', async () => {
+  it('creates collection, runs update, and embeds when no existing collection', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const deps = makeDeps({ calls });
-    const result = await ensureQmdCollection('/workspace', undefined, deps);
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollection('/workspace', undefined, deps);
 
-    assert.equal(result.skipped, false);
-    assert.equal(result.available, true);
-    assert.equal(result.created, true);
-    assert.equal(result.indexed, true);
-    assert.ok(result.collectionName);
-    assert.equal(result.warning, undefined);
+      assert.equal(result.skipped, false);
+      assert.equal(result.available, true);
+      assert.equal(result.created, true);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, true);
+      assert.ok(result.collectionName);
+      assert.equal(result.warning, undefined);
+      assert.equal(result.embedWarning, undefined);
 
-    // Should have called collection add then update
-    assert.equal(calls.length, 2);
-    assert.deepEqual(calls[0].args.slice(0, 2), ['collection', 'add']);
-    assert.ok(calls[0].args.includes('--mask'));
-    assert.ok(calls[0].args.includes('**/*.md'));
-    assert.ok(calls[0].args.includes('--name'));
-    const nameIndex = calls[0].args.indexOf('--name');
-    const collectionNameArg = calls[0].args[nameIndex + 1];
-    assert.ok(collectionNameArg?.match(/^[a-z0-9-]+-[a-f0-9]{4}$/), `Expected collection name format, got: ${collectionNameArg}`);
-    assert.equal(collectionNameArg, generateCollectionName('/workspace'));
-    assert.equal(calls[0].cwd, '/workspace');
-    assert.deepEqual(calls[1].args, ['update']);
-    assert.equal(calls[1].cwd, '/workspace');
+      // Should have called collection add, then update, then embed
+      assert.equal(calls.length, 3);
+      assert.deepEqual(calls[0].args.slice(0, 2), ['collection', 'add']);
+      assert.ok(calls[0].args.includes('--mask'));
+      assert.ok(calls[0].args.includes('**/*.md'));
+      assert.ok(calls[0].args.includes('--name'));
+      const nameIndex = calls[0].args.indexOf('--name');
+      const collectionNameArg = calls[0].args[nameIndex + 1];
+      assert.ok(collectionNameArg?.match(/^[a-z0-9-]+-[a-f0-9]{4}$/), `Expected collection name format, got: ${collectionNameArg}`);
+      assert.equal(collectionNameArg, generateCollectionName('/workspace'));
+      assert.equal(calls[0].cwd, '/workspace');
+      assert.deepEqual(calls[1].args, ['update']);
+      assert.equal(calls[1].cwd, '/workspace');
+      assert.deepEqual(calls[2].args, ['embed']);
+      assert.equal(calls[2].cwd, '/workspace');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
   });
 
-  it('only runs update when existing collection name is provided and exists in qmd', async () => {
+  it('runs update and embed when existing collection name is provided and exists in qmd', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     // Mock qmd collection list to return the existing collection
     const deps = makeDeps({ calls, listOutput: 'my-collection\nother-collection\n' });
-    const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
 
-    assert.equal(result.skipped, false);
-    assert.equal(result.created, false);
-    assert.equal(result.indexed, true);
-    assert.equal(result.collectionName, 'my-collection');
+      assert.equal(result.skipped, false);
+      assert.equal(result.created, false);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, true);
+      assert.equal(result.collectionName, 'my-collection');
 
-    // Should have called collection list then update, not collection add
-    assert.equal(calls.length, 2);
-    assert.deepEqual(calls[0].args, ['collection', 'list']);
-    assert.deepEqual(calls[1].args, ['update']);
+      // Should have called collection list, then update, then embed
+      assert.equal(calls.length, 3);
+      assert.deepEqual(calls[0].args, ['collection', 'list']);
+      assert.deepEqual(calls[1].args, ['update']);
+      assert.deepEqual(calls[2].args, ['embed']);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
   });
 
-  it('creates collection when name is in config but not in qmd', async () => {
+  it('creates collection and embeds when name is in config but not in qmd', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     // Mock qmd collection list to return empty (collection doesn't exist)
     const deps = makeDeps({ calls, listOutput: '' });
-    const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollection('/workspace', 'my-collection', deps);
 
-    assert.equal(result.skipped, false);
-    assert.equal(result.created, true);
-    assert.equal(result.indexed, true);
-    assert.equal(result.collectionName, 'my-collection');
+      assert.equal(result.skipped, false);
+      assert.equal(result.created, true);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, true);
+      assert.equal(result.collectionName, 'my-collection');
 
-    // Should have called collection list, then collection add, then update
-    assert.equal(calls.length, 3);
-    assert.deepEqual(calls[0].args, ['collection', 'list']);
-    assert.ok(calls[1].args.includes('collection') && calls[1].args.includes('add'));
-    assert.deepEqual(calls[2].args, ['update']);
+      // Should have called collection list, then collection add, then update, then embed
+      assert.equal(calls.length, 4);
+      assert.deepEqual(calls[0].args, ['collection', 'list']);
+      assert.ok(calls[1].args.includes('collection') && calls[1].args.includes('add'));
+      assert.deepEqual(calls[2].args, ['update']);
+      assert.deepEqual(calls[3].args, ['embed']);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
   });
 
   it('returns warning when collection add fails', async () => {
@@ -199,6 +243,59 @@ describe('ensureQmdCollection', () => {
     assert.equal(result.indexed, false);
     assert.equal(result.collectionName, 'existing-collection');
     assert.ok(result.warning?.includes('timeout'));
+  });
+
+  it('returns embedWarning when embed fails after successful create and update', async () => {
+    const deps = makeDeps({ embedFail: true, embedError: 'model download failed' });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollection('/workspace', undefined, deps);
+
+      assert.equal(result.available, true);
+      assert.equal(result.created, true);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, false);
+      assert.equal(result.warning, undefined);
+      assert.ok(result.embedWarning?.includes('model download failed'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns embedWarning when embed fails for existing collection', async () => {
+    // Mock qmd collection list to show the collection exists
+    const deps = makeDeps({
+      embedFail: true,
+      embedError: 'model download failed',
+      listOutput: 'existing-collection\n',
+    });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollection(
+        '/workspace',
+        'existing-collection',
+        deps,
+      );
+
+      assert.equal(result.available, true);
+      assert.equal(result.created, false);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, false);
+      assert.equal(result.warning, undefined);
+      assert.ok(result.embedWarning?.includes('model download failed'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
   });
 
   it('passes workspace root as cwd to all qmd commands', async () => {
@@ -268,7 +365,7 @@ describe('refreshQmdIndex', () => {
     }
   });
 
-  it('runs qmd update and returns indexed:true on success', async () => {
+  it('runs qmd update and embed, returns indexed:true and embedded:true on success', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const deps = makeDeps({ calls });
     const prev = process.env.ARETE_SEARCH_FALLBACK;
@@ -277,11 +374,41 @@ describe('refreshQmdIndex', () => {
       const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
       assert.equal(result.skipped, false);
       assert.equal(result.indexed, true);
+      assert.equal(result.embedded, true);
       assert.equal(result.warning, undefined);
-      assert.equal(calls.length, 1);
+      assert.equal(result.embedWarning, undefined);
+      // Should have called update then embed
+      assert.equal(calls.length, 2);
       assert.equal(calls[0].file, 'qmd');
       assert.deepEqual(calls[0].args, ['update']);
       assert.equal(calls[0].cwd, '/workspace');
+      assert.deepEqual(calls[1].args, ['embed']);
+      assert.equal(calls[1].cwd, '/workspace');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns indexed:true with embedWarning when embed fails', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const deps = makeDeps({ calls, embedFail: true, embedError: 'model download failed' });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await refreshQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, false);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, false);
+      assert.equal(result.warning, undefined);
+      assert.ok(result.embedWarning?.includes('model download failed'));
+      // Both commands were called
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls[0].args, ['update']);
+      assert.deepEqual(calls[1].args, ['embed']);
     } finally {
       if (prev === undefined) {
         delete process.env.ARETE_SEARCH_FALLBACK;
@@ -300,6 +427,88 @@ describe('refreshQmdIndex', () => {
       assert.equal(result.skipped, false);
       assert.equal(result.indexed, false);
       assert.ok(result.warning?.includes('update timed out'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+});
+
+describe('embedQmdIndex', () => {
+  it('skips when qmd is not on PATH', async () => {
+    const deps = makeDeps({ whichStatus: 1 });
+    const result = await embedQmdIndex('/workspace', 'my-collection', deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.embedded, false);
+    assert.equal(result.warning, undefined);
+  });
+
+  it('skips when existingCollectionName is undefined', async () => {
+    const deps = makeDeps();
+    const result = await embedQmdIndex('/workspace', undefined, deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.embedded, false);
+  });
+
+  it('skips when existingCollectionName is empty string', async () => {
+    const deps = makeDeps();
+    const result = await embedQmdIndex('/workspace', '', deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.embedded, false);
+  });
+
+  it('skips when ARETE_SEARCH_FALLBACK env var is set', async () => {
+    const deps = makeDeps();
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      process.env.ARETE_SEARCH_FALLBACK = '1';
+      const result = await embedQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, true);
+      assert.equal(result.embedded, false);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('runs qmd embed and returns embedded:true on success', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const deps = makeDeps({ calls });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await embedQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, false);
+      assert.equal(result.embedded, true);
+      assert.equal(result.warning, undefined);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].file, 'qmd');
+      assert.deepEqual(calls[0].args, ['embed']);
+      assert.equal(calls[0].cwd, '/workspace');
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns warning and skipped:false on qmd embed failure', async () => {
+    const deps = makeDeps({ embedFail: true, embedError: 'model download failed' });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await embedQmdIndex('/workspace', 'my-collection', deps);
+      assert.equal(result.skipped, false);
+      assert.equal(result.embedded, false);
+      assert.ok(result.warning?.includes('model download failed'));
     } finally {
       if (prev === undefined) {
         delete process.env.ARETE_SEARCH_FALLBACK;

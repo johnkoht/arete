@@ -29,10 +29,17 @@ export function displayQmdResult(
 
   if (result && !result.skipped) {
     if (result.indexed) {
-      _listItem('Search index', 'qmd index updated');
+      if (result.embedded) {
+        _listItem('Search index', 'updated and embedded');
+      } else {
+        _listItem('Search index', 'updated');
+      }
     }
     if (result.warning) {
       _warn(result.warning);
+    }
+    if (result.embedWarning) {
+      _warn(result.embedWarning);
     }
     // { indexed: false, skipped: false, warning: undefined } is intentionally silent.
     // This state means qmd update ran and exited cleanly but reported no indexed files

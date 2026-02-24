@@ -2,9 +2,28 @@
  * arete index — re-index the qmd search collection
  */
 
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createServices, loadConfig, refreshQmdIndex } from '@arete/core';
 import type { Command } from 'commander';
 import { listItem, success, info, warn, error } from '../formatters.js';
+
+const execFileAsync = promisify(execFile);
+const QMD_STATUS_TIMEOUT_MS = 5_000;
+
+/**
+ * Parse vector count from qmd status output.
+ * Looks for a line like "Vectors: 79 embedded" and returns the number.
+ * Returns undefined if the line is not found or parsing fails.
+ */
+export function parseVectorCount(statusOutput: string): number | undefined {
+  const match = statusOutput.match(/Vectors:\s*(\d+)\s*embedded/i);
+  if (match?.[1]) {
+    const count = parseInt(match[1], 10);
+    return isNaN(count) ? undefined : count;
+  }
+  return undefined;
+}
 
 export function registerIndexSearchCommand(program: Command): void {
   program
@@ -27,6 +46,20 @@ export function registerIndexSearchCommand(program: Command): void {
       if (opts.status) {
         if (config.qmd_collection) {
           listItem('Search collection', config.qmd_collection);
+
+          // Try to get vector count from qmd status
+          try {
+            const { stdout } = await execFileAsync('qmd', ['status'], {
+              timeout: QMD_STATUS_TIMEOUT_MS,
+              cwd: root,
+            });
+            const vectorCount = parseVectorCount(stdout);
+            if (vectorCount !== undefined) {
+              listItem('Vectors', `${vectorCount} embedded`);
+            }
+          } catch {
+            // qmd not installed or status failed — silently skip vector display
+          }
         } else {
           info('No collection configured — run `arete install` first');
         }
@@ -48,9 +81,17 @@ export function registerIndexSearchCommand(program: Command): void {
       }
 
       if (result.indexed) {
-        success('Search index updated');
+        if (result.embedded) {
+          success('Search index updated and embedded');
+        } else {
+          success('Search index updated');
+        }
       } else if (result.warning) {
         warn(result.warning);
+      }
+
+      if (result.embedWarning) {
+        warn(result.embedWarning);
       }
     });
 }

@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
+import { parseVectorCount } from '../../src/commands/index-search.js';
 
 /** Install a workspace and optionally inject a qmd_collection into arete.yaml */
 function setupWorkspace(tmpDir: string, collectionName?: string): void {
@@ -116,5 +117,51 @@ describe('index command', () => {
         'Should not call refreshQmdIndex when no collection configured',
       );
     });
+  });
+});
+
+describe('parseVectorCount', () => {
+  it('parses vector count from typical qmd status output', () => {
+    const output = `Collection: acme-workspace-1234
+Path: /Users/john/projects/acme
+Documents: 79 indexed
+Vectors: 79 embedded
+Last updated: 2026-02-23 10:30:00`;
+    assert.equal(parseVectorCount(output), 79);
+  });
+
+  it('parses vector count with different numbers', () => {
+    const output = 'Vectors: 1234 embedded';
+    assert.equal(parseVectorCount(output), 1234);
+  });
+
+  it('parses vector count of zero', () => {
+    const output = 'Vectors: 0 embedded';
+    assert.equal(parseVectorCount(output), 0);
+  });
+
+  it('returns undefined when no Vectors line is present', () => {
+    const output = `Collection: acme-workspace-1234
+Documents: 79 indexed`;
+    assert.equal(parseVectorCount(output), undefined);
+  });
+
+  it('returns undefined for empty output', () => {
+    assert.equal(parseVectorCount(''), undefined);
+  });
+
+  it('returns undefined when format is unexpected', () => {
+    const output = 'Vectors: not a number embedded';
+    assert.equal(parseVectorCount(output), undefined);
+  });
+
+  it('handles case-insensitive matching', () => {
+    const output = 'vectors: 42 EMBEDDED';
+    assert.equal(parseVectorCount(output), 42);
+  });
+
+  it('handles extra whitespace', () => {
+    const output = 'Vectors:    123    embedded';
+    assert.equal(parseVectorCount(output), 123);
   });
 });

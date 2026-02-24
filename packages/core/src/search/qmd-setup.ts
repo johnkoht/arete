@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile);
 
 const QMD_UPDATE_TIMEOUT_MS = 30_000;
 const QMD_COLLECTION_ADD_TIMEOUT_MS = 10_000;
+const QMD_EMBED_TIMEOUT_MS = 60_000; // Generous for first-run model download (~328MB)
 
 /** Result of qmd setup attempt */
 export type QmdSetupResult = {
@@ -30,6 +31,10 @@ export type QmdSetupResult = {
   warning?: string;
   /** Whether setup was skipped entirely */
   skipped: boolean;
+  /** Whether qmd embed succeeded (creates vector embeddings) */
+  embedded?: boolean;
+  /** Warning from qmd embed if it failed */
+  embedWarning?: string;
 };
 
 /** Injectable test dependencies */
@@ -80,7 +85,82 @@ export type QmdRefreshResult = {
   warning?: string;
   /** Whether refresh was skipped entirely */
   skipped: boolean;
+  /** Whether qmd embed succeeded (creates vector embeddings) */
+  embedded?: boolean;
+  /** Warning from qmd embed if it failed */
+  embedWarning?: string;
 };
+
+/** Result of a qmd embed attempt */
+export type QmdEmbedResult = {
+  /** Whether qmd embed succeeded */
+  embedded: boolean;
+  /** Warning message if something went wrong (non-fatal) */
+  warning?: string;
+  /** Whether embed was skipped entirely */
+  skipped: boolean;
+};
+
+/**
+ * Run qmd embed to create vector embeddings for semantic search.
+ *
+ * - If `ARETE_SEARCH_FALLBACK` env var is set, returns `{ skipped: true }`.
+ * - If qmd is not on PATH, returns `{ skipped: true }`.
+ * - If `existingCollectionName` is undefined or empty, returns `{ skipped: true }`.
+ * - Otherwise runs `qmd embed` in workspaceRoot.
+ * - All failures are non-fatal (returns warning, never throws).
+ *
+ * Note: First run may download the embedding model (~328MB), hence the generous timeout.
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param existingCollectionName - Used only as a "qmd configured?" gate
+ * @param deps - Injectable dependencies for testing
+ * @returns Embed result
+ */
+export async function embedQmdIndex(
+  workspaceRoot: string,
+  existingCollectionName: string | undefined,
+  deps?: QmdSetupDeps,
+): Promise<QmdEmbedResult> {
+  const skippedResult: QmdEmbedResult = { embedded: false, skipped: true };
+
+  if (process.env.ARETE_SEARCH_FALLBACK) {
+    return skippedResult;
+  }
+
+  if (!existingCollectionName) {
+    return skippedResult;
+  }
+
+  if (!isQmdAvailable(deps)) {
+    return skippedResult;
+  }
+
+  const execImpl =
+    deps?.execFileAsync ??
+    (async (
+      file: string,
+      args: string[],
+      opts: { timeout: number; cwd: string; maxBuffer?: number },
+    ) => {
+      const result = await execFileAsync(file, args, opts);
+      return { stdout: result.stdout, stderr: result.stderr };
+    });
+
+  try {
+    await execImpl('qmd', ['embed'], {
+      timeout: QMD_EMBED_TIMEOUT_MS,
+      cwd: workspaceRoot,
+    });
+    return { embedded: true, skipped: false };
+  } catch (err) {
+    return {
+      embedded: false,
+      warning: `qmd embed failed: ${(err as Error).message}`,
+      skipped: false,
+    };
+  }
+}
 
 /**
  * Refresh the qmd index for an existing collection.
@@ -134,7 +214,19 @@ export async function refreshQmdIndex(
       timeout: QMD_UPDATE_TIMEOUT_MS,
       cwd: workspaceRoot,
     });
-    return { indexed: true, skipped: false };
+
+    // Run embed after successful update (incremental, ~0.2s for no-op)
+    const embedResult = await embedQmdIndex(
+      workspaceRoot,
+      existingCollectionName,
+      deps,
+    );
+    return {
+      indexed: true,
+      skipped: false,
+      embedded: embedResult.embedded,
+      embedWarning: embedResult.warning,
+    };
   } catch (err) {
     return {
       indexed: false,
@@ -215,12 +307,17 @@ export async function ensureQmdCollection(
           timeout: QMD_UPDATE_TIMEOUT_MS,
           cwd: workspaceRoot,
         });
+
+        // Run embed after successful update
+        const embedResult = await embedQmdIndex(workspaceRoot, collectionName, deps);
         return {
           available: true,
           created: false,
           indexed: true,
           collectionName,
           skipped: false,
+          embedded: embedResult.embedded,
+          embedWarning: embedResult.warning,
         };
       } catch (err) {
         return {
@@ -271,12 +368,17 @@ export async function ensureQmdCollection(
       timeout: QMD_UPDATE_TIMEOUT_MS,
       cwd: workspaceRoot,
     });
+
+    // Run embed after successful update
+    const embedResult = await embedQmdIndex(workspaceRoot, collectionName, deps);
     return {
       available: true,
       created: true,
       indexed: true,
       collectionName,
       skipped: false,
+      embedded: embedResult.embedded,
+      embedWarning: embedResult.warning,
     };
   } catch (err) {
     return {
