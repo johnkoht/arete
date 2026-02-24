@@ -291,10 +291,11 @@ export async function ensureQmdCollection(
         timeout: QMD_UPDATE_TIMEOUT_MS,
         cwd: workspaceRoot,
       });
-      // qmd collection list outputs collection names, one per line
+      // qmd collection list outputs lines like: "reserv-121f (qmd://reserv-121f/)"
+      // Check if any line starts with the collection name
       collectionExists = (listResult.stdout ?? '')
         .split('\n')
-        .some((line) => line.trim() === existingCollectionName);
+        .some((line) => line.trim().startsWith(existingCollectionName));
     } catch {
       // If list fails, assume collection doesn't exist and try to create it
       collectionExists = false;
