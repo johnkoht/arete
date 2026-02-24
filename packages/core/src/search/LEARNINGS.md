@@ -10,6 +10,7 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 - `packages/core/src/search/types.ts` — `SearchProvider`, `SearchOptions`, `SearchResult`, `SearchMatchType`
 - `packages/core/src/search/tokenize.ts` — `tokenize()`, `STOP_WORDS`
 - `packages/core/src/search/qmd-setup.ts` — `ensureQmdCollection()` (full setup), `refreshQmdIndex()` (write-path update), `QmdSetupDeps` (testDeps interface)
+- `packages/core/src/search/qmd-setup.ts` — `embedQmdIndex()` (runs `qmd embed` after indexing for vector embeddings)
 - `packages/core/test/search/providers.test.ts` — provider tests, `ARETE_SEARCH_FALLBACK` usage
 - `packages/core/test/search/qmd-setup.test.ts` — `refreshQmdIndex` tests, `try/finally` env cleanup pattern
 
@@ -31,7 +32,9 @@ The search subsystem provides a `SearchProvider` interface with two strategies: 
 
 - **`refreshQmdIndex()` vs `ensureQmdCollection()` — use the right one.** `refreshQmdIndex(root, collectionName, deps?)` is the lightweight "just run `qmd update`" primitive for write-path commands (pull, meeting, index command). `ensureQmdCollection(root, collectionName, deps?)` handles full setup: creates the collection if it doesn't exist, then indexes. Use `refreshQmdIndex` after writes; use `ensureQmdCollection` in `install` and `update`. The key difference: `refreshQmdIndex` skips gracefully when `collectionName` is undefined/empty; `ensureQmdCollection` generates a new collection name if none is provided.
 
-- **`refreshQmdIndex()` is wired into 4 CLI call sites — all gated on "files were actually written."** Added 2026-02-21: (1) `pull fathom` — after saved count > 0; (2) `meeting add` — after `saveMeetingFile()` returns non-null; (3) `meeting process` — after `applied.length > 0`; (4) `arete index` command (explicit re-index). `ensureQmdCollection()` is called in `install` and `update`. If you're debugging a stale index, check which path is triggered and whether the write condition was met.
+- **`refreshQmdIndex()` now runs `qmd embed` after `qmd update` (2026-02-23).** Both functions (`refreshQmdIndex` and `ensureQmdCollection`) call `embedQmdIndex()` after successful update to create vector embeddings for semantic search. Embedding is incremental (hash-based, ~0.2s no-op) and failures are non-fatal (warning only, indexing still succeeds). The embedding model (~328MB) downloads on first use — `QMD_EMBED_TIMEOUT_MS = 60_000` handles this but may timeout on very slow connections.
+
+- **`refreshQmdIndex()` is wired into 4 CLI call sites — all gated on "files were actually written."** (1) `pull fathom` — after saved count > 0; (2) `meeting add` — after `saveMeetingFile()` returns non-null; (3) `meeting process` — after `applied.length > 0`; (4) `arete index` command (explicit re-index). `ensureQmdCollection()` is called in `install` and `update`. If you're debugging a stale index, check which path is triggered and whether the write condition was met.
 
 - **`refreshQmdIndex()` has 3 silent skip conditions — any one causes it to return `{ skipped: true }` with no output.** (1) `ARETE_SEARCH_FALLBACK=1` env var is set — always true in the test environment; (2) qmd binary not on PATH (`which qmd` fails); (3) `existingCollectionName` is `undefined` or empty — means the workspace was never set up with `arete install`. The `existingCollectionName` parameter is used ONLY as a gate — it is NOT passed to the qmd CLI (qmd infers the active collection from `cwd: workspaceRoot`). This is documented in JSDoc on both `refreshQmdIndex()` and `ensureQmdCollection()`.
 
