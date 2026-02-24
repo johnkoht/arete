@@ -9,6 +9,10 @@ triggers:
   - capture this slack thread
   - save this discussion
   - I have a conversation to capture
+  # Additional phrasings that work with tokenizer (avoids stop-word stripping issues)
+  - save slack thread
+  - save slack
+  - capture slack
 ---
 
 # Capture Conversation Skill

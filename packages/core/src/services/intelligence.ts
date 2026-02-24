@@ -72,17 +72,22 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
   }
 
   for (const phrase of triggerPhrases) {
-    const phraseWords = phrase.split(/\s+/).filter(w => w.length > 0);
     const exactMatch = q.includes(phrase);
-    const wholeWordMatch = phraseWords.length > 0 && phraseWords.every(w => qTokenSet.has(w));
-    if (exactMatch || wholeWordMatch) {
+    // Tokenize trigger phrase the same way we tokenize the query
+    // This ensures stop words like "in", "and", "this" don't break matching
+    const phraseTokens = tokenize(phrase);
+    const tokenMatch = phraseTokens.length > 0 && phraseTokens.every(t => qTokenSet.has(t));
+    if (exactMatch || tokenMatch) {
       score += 18;
     }
   }
 
   const descTokens = tokenize(desc);
   const overlap = qTokens.filter(t => descTokens.includes(t)).length;
-  if (overlap > 0) {
+  // Require minimum 2-token overlap for description scoring to reduce false positives
+  // from incidental single-word matches (e.g., "team" matching "dev team" in description).
+  // Single-word matches are too noisy; meaningful matches usually have 2+ overlapping words.
+  if (overlap >= 2) {
     score += overlap * 4;
   }
 

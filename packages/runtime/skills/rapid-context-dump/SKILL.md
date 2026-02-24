@@ -12,6 +12,19 @@ triggers:
   - "extract context from"
   - "read my website"
   - "process my docs"
+  # Natural language phrasings for adding/saving content
+  - "add to context"
+  - "add this to context"
+  - "include in context"
+  - "save this document"
+  - "save and summarize"
+  - "where should I put"
+  - "where to put"
+  - "where to add"
+  - "add input"
+  - "input data"
+  - "import content"
+  - "add to workspace"
 ---
 
 # Rapid Context Dump Skill

@@ -353,6 +353,7 @@ describe('IntelligenceService (via compat)', () => {
         description: 'Quickly bootstrap workspace context from docs, website, or pasted content with review-before-promote workflow',
         path: '/ws/.agents/skills/rapid-context-dump',
         triggers: [
+          // Original triggers
           'dump my context',
           'import my docs',
           'bootstrap context',
@@ -360,6 +361,19 @@ describe('IntelligenceService (via compat)', () => {
           'extract context from',
           'read my website',
           'process my docs',
+          // Natural language phrasings for adding/saving content
+          'add to context',
+          'add this to context',
+          'include in context',
+          'save this document',
+          'save and summarize',
+          'where should I put',
+          'where to put',
+          'where to add',
+          'add input',
+          'input data',
+          'import content',
+          'add to workspace',
         ],
         work_type: 'activation',
         category: 'core',
@@ -402,6 +416,10 @@ describe('IntelligenceService (via compat)', () => {
           'capture this slack thread',
           'save this discussion',
           'I have a conversation to capture',
+          // Additional phrasings that work with tokenizer
+          'save slack thread',
+          'save slack',
+          'capture slack',
         ],
         work_type: 'operations',
         category: 'essential',
