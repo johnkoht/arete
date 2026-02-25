@@ -838,7 +838,7 @@ arete calendar create --title "Project Review" --with jane@acme.com --start "mon
 - "Book time with John next week"
 - "Block 2 hours for deep work tomorrow morning"
 
-The skill finds mutual availability, presents slot options (A/B/C), and creates the event when you pick one.
+The skill finds mutual availability, presents numbered slot options grouped by day, and creates the event when you pick one. After booking, it offers to prepare a meeting agenda.
 
 ### QMD Search
 
