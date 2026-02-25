@@ -26,6 +26,14 @@
 - `arete pull calendar [--today|--days N]` - Pull calendar events
 - `arete pull fathom [--days N]` - Pull Fathom recordings
 
+## Calendar
+
+- `arete calendar create --title <title> --start <datetime>` - Create a calendar event
+  - `--duration <minutes>` - Duration (default: 30)
+  - `--with <person>` - Person name or email to invite
+  - `--description <text>` - Event description
+  - `--json` - Output as JSON
+
 ## Templates
 
 - `arete template resolve --skill <id> --variant <name>` - Resolve and print the active template for a skill (workspace override > skill default)

@@ -817,6 +817,29 @@ Options:
 - `--limit <n>` — Max slots to show (default: 5)
 - `--json` — Output as JSON (for scripts/skills)
 
+**Create Events** (Google Calendar only):
+
+Create calendar events through the CLI or conversational skill.
+
+**CLI Command**:
+```bash
+# Book a meeting with someone
+arete calendar create --title "1:1" --with sarah --start "tomorrow 2pm"
+
+# Block focus time
+arete calendar create --title "Focus time" --start "tomorrow 9am" --duration 120
+
+# With description
+arete calendar create --title "Project Review" --with jane@acme.com --start "monday 10am" --description "Q1 roadmap discussion"
+```
+
+**Conversational Skill** (`schedule-meeting`):
+- "Schedule a meeting with Sarah tomorrow"
+- "Book time with John next week"
+- "Block 2 hours for deep work tomorrow morning"
+
+The skill finds mutual availability, presents slot options (A/B/C), and creates the event when you pick one.
+
 ### QMD Search
 
 **Purpose**: Semantic search across your workspace. Combines keyword search, vector search, and LLM reranking—all running locally.
