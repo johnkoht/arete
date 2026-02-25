@@ -7,7 +7,14 @@ import type { StorageAdapter } from '../../storage/adapter.js';
 import { getIcalBuddyProvider } from './ical-buddy.js';
 import type { CalendarProvider } from './types.js';
 
-export type { CalendarEvent, CalendarOptions, CalendarProvider } from './types.js';
+export type {
+  BusyBlock,
+  CalendarEvent,
+  CalendarOptions,
+  CalendarProvider,
+  FreeBusyCalendarResult,
+  FreeBusyResult,
+} from './types.js';
 
 export async function getCalendarProvider(
   config: AreteConfig,

@@ -22,3 +22,8 @@ export type {
   ContextDumpArtifact,
   ContextDumpQualityReport,
 } from './context-dump-quality.js';
+export { findAvailableSlots } from './availability.js';
+export type {
+  AvailableSlot,
+  FindAvailableSlotsOptions,
+} from './availability.js';
