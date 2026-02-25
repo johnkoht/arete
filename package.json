@@ -10,6 +10,7 @@
   "types": "./packages/core/dist/index.d.ts",
   "files": [
     "packages/cli/bin/",
+    "packages/cli/dist/",
     "packages/core/dist/",
     "packages/runtime/",
     "AGENTS.md",
