@@ -11,25 +11,9 @@ import {
   type CreatedEvent,
 } from '@arete/core';
 import type { Command } from 'commander';
-import { header, listItem, error, info, success } from '../formatters.js';
+import { header, listItem, error, info, success, formatSlotTime } from '../formatters.js';
 
 const DEFAULT_DURATION = 30;
-
-/**
- * Format a date with timezone for display.
- * Output: "Mon, Feb 25, 2:30 PM CT"
- */
-function formatSlotTime(date: Date): string {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  });
-  return formatter.format(date);
-}
 
 /**
  * Parse natural language date strings into Date objects.

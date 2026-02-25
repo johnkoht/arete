@@ -49,3 +49,19 @@ export function formatPath(p: string): string {
   }
   return p;
 }
+
+/**
+ * Format a date with timezone for display.
+ * Output: "Mon, Feb 25, 2:30 PM CT"
+ */
+export function formatSlotTime(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+  return formatter.format(date);
+}

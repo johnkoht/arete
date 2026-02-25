@@ -11,27 +11,11 @@ import {
   type FreeBusyResult,
 } from '@arete/core';
 import type { Command } from 'commander';
-import { header, listItem, error, info } from '../formatters.js';
+import { header, listItem, error, info, formatSlotTime } from '../formatters.js';
 
 const DEFAULT_DURATION = 30;
 const DEFAULT_DAYS = 7;
 const DEFAULT_LIMIT = 5;
-
-/**
- * Format a date with timezone for display.
- * Output: "Mon, Feb 25, 2:30 PM CT"
- */
-function formatSlotTime(date: Date): string {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  });
-  return formatter.format(date);
-}
 
 export interface AvailabilityDeps {
   createServicesFn: typeof createServices;
