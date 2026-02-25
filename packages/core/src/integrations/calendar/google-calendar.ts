@@ -6,7 +6,14 @@
  */
 
 import type { StorageAdapter } from '../../storage/adapter.js';
-import type { CalendarEvent, CalendarOptions, CalendarProvider } from './types.js';
+import type {
+  BusyBlock,
+  CalendarEvent,
+  CalendarOptions,
+  CalendarProvider,
+  FreeBusyCalendarResult,
+  FreeBusyResult,
+} from './types.js';
 import {
   loadGoogleCredentials,
   isTokenValid,
@@ -20,7 +27,20 @@ import {
 // ---------------------------------------------------------------------------
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
+const FREEBUSY_URL = `${CALENDAR_API_BASE}/freeBusy`;
 const CONFIGURE_COMMAND = 'arete integration configure google-calendar';
+
+// ---------------------------------------------------------------------------
+// Dependency injection types (for testability)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dependencies that can be injected for testing the FreeBusy method.
+ * Follows the same pattern as IcalBuddyCalendarDeps in ical-buddy.ts.
+ */
+export interface FreeBusyDeps {
+  fetch?: typeof fetch;
+}
 
 // ---------------------------------------------------------------------------
 // Google API response types
@@ -61,9 +81,24 @@ type GoogleCalendarListResponse = {
   nextPageToken?: string;
 };
 
+type GoogleFreeBusyCalendar = {
+  busy: Array<{ start: string; end: string }>;
+  errors?: Array<{ domain: string; reason: string }>;
+};
+
+type GoogleFreeBusyResponse = {
+  calendars: Record<string, GoogleFreeBusyCalendar>;
+};
+
 // ---------------------------------------------------------------------------
 // Authenticated fetch helper
 // ---------------------------------------------------------------------------
+
+interface GoogleFetchOptions {
+  method?: 'GET' | 'POST';
+  body?: unknown;
+  fetchFn?: typeof fetch;
+}
 
 /**
  * Make an authenticated request to the Google Calendar API.
@@ -77,8 +112,12 @@ type GoogleCalendarListResponse = {
 async function googleFetch(
   url: string,
   storage: StorageAdapter,
-  workspaceRoot: string
+  workspaceRoot: string,
+  options?: GoogleFetchOptions
 ): Promise<Response> {
+  const fetchFn = options?.fetchFn ?? fetch;
+  const method = options?.method ?? 'GET';
+
   let credentials = await loadGoogleCredentials(storage, workspaceRoot);
   if (!credentials) {
     throw new Error(`Google Calendar not authenticated — run: ${CONFIGURE_COMMAND}`);
@@ -94,11 +133,23 @@ async function googleFetch(
     }
   }
 
+  const buildRequestInit = (token: string): RequestInit => {
+    const init: RequestInit = {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+    };
+    if (options?.body) {
+      init.body = JSON.stringify(options.body);
+    }
+    return init;
+  };
+
   let res: Response;
   try {
-    res = await fetch(url, {
-      headers: { Authorization: `Bearer ${credentials.access_token}` },
-    });
+    res = await fetchFn(url, buildRequestInit(credentials.access_token));
   } catch {
     throw new Error('Unable to contact Google Calendar. Check your network and try again.');
   }
@@ -113,9 +164,7 @@ async function googleFetch(
     }
 
     try {
-      res = await fetch(url, {
-        headers: { Authorization: `Bearer ${credentials.access_token}` },
-      });
+      res = await fetchFn(url, buildRequestInit(credentials.access_token));
     } catch {
       throw new Error('Unable to contact Google Calendar. Check your network and try again.');
     }
@@ -374,6 +423,81 @@ export function getGoogleCalendarProvider(
     ): Promise<CalendarEvent[]> {
       const { timeMin, timeMax } = getUpcomingRange(days);
       return queryEvents(timeMin, timeMax, storage, workspaceRoot, options);
+    },
+
+    async getFreeBusy(
+      emails: string[],
+      timeMin: Date,
+      timeMax: Date,
+      deps?: FreeBusyDeps
+    ): Promise<FreeBusyResult> {
+      // Build request body with primary calendar + all target emails
+      const requestBody = {
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        items: [
+          { id: 'primary' },
+          ...emails.map((email) => ({ id: email })),
+        ],
+      };
+
+      // Make authenticated POST request
+      const res = await googleFetch(FREEBUSY_URL, storage, workspaceRoot, {
+        method: 'POST',
+        body: requestBody,
+        fetchFn: deps?.fetch,
+      });
+
+      // Handle infrastructure errors (throw)
+      if (!res.ok) {
+        handleApiError(res.status);
+      }
+
+      const data = (await res.json()) as GoogleFreeBusyResponse;
+
+      // Helper to convert ISO strings to BusyBlock with Date objects
+      const toBusyBlocks = (
+        blocks: Array<{ start: string; end: string }>
+      ): BusyBlock[] =>
+        blocks.map((block) => ({
+          start: new Date(block.start),
+          end: new Date(block.end),
+        }));
+
+      // Extract user's busy blocks from 'primary'
+      const primaryCalendar = data.calendars.primary;
+      const userBusy: BusyBlock[] = primaryCalendar?.busy
+        ? toBusyBlocks(primaryCalendar.busy)
+        : [];
+
+      // Build per-email results
+      const calendars: Record<string, FreeBusyCalendarResult> = {};
+      for (const email of emails) {
+        const calendarData = data.calendars[email];
+        if (!calendarData) {
+          // Calendar not in response — treat as inaccessible
+          calendars[email] = {
+            busy: [],
+            accessible: false,
+            error: 'No response from API',
+          };
+        } else if (calendarData.errors?.length) {
+          // Calendar returned errors — mark as inaccessible
+          calendars[email] = {
+            busy: [],
+            accessible: false,
+            error: calendarData.errors[0].reason,
+          };
+        } else {
+          // Calendar accessible — return busy blocks
+          calendars[email] = {
+            busy: toBusyBlocks(calendarData.busy),
+            accessible: true,
+          };
+        }
+      }
+
+      return { userBusy, calendars };
     },
   };
 }
