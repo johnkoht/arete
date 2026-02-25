@@ -82,7 +82,15 @@ As the project progresses:
 4. Update Status Updates section regularly
 5. Check off Tasks and Success Criteria as completed
 
-### 5. Finalize
+### 5. Process Bulk Inputs (Optional)
+
+If the user has dropped multiple files into `inputs/`, use the **research_intake** pattern from PATTERNS.md.
+
+**Quick summary**: Scan inputs → analyze each → synthesize themes → update README → run `arete index` → cleanup intermediate files.
+
+See `packages/runtime/skills/PATTERNS.md § research_intake` for the full workflow.
+
+### 6. Finalize
 
 When the project is complete:
 
