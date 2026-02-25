@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-22",
+  "lastUpdated": "2026-02-25",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -156,13 +156,16 @@
         "packages/core/src/integrations/calendar/google-auth.ts",
         "packages/core/src/integrations/calendar/google-calendar.ts",
         "packages/core/src/integrations/calendar/index.ts",
+        "packages/core/src/utils/availability.ts",
         "packages/cli/src/commands/integration.ts",
-        "packages/cli/src/commands/pull.ts"
+        "packages/cli/src/commands/pull.ts",
+        "packages/cli/src/commands/availability.ts"
       ],
       "entrypoints": [
         "arete integration configure google-calendar",
         "arete pull calendar --today",
-        "arete pull calendar --days N"
+        "arete pull calendar --days N",
+        "arete availability find --with <person>"
       ],
       "readBeforeChange": [
         "packages/core/src/integrations/LEARNINGS.md",
@@ -178,7 +181,7 @@
         "OAuth callback uses localhost dynamic port and requires browser consent.",
         "If Google shows an unverified-app warning, users continue via Advanced -> Go to Areté (unsafe)."
       ],
-      "lastVerified": "2026-02-22"
+      "lastVerified": "2026-02-25"
     }
   ]
 }
