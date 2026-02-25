@@ -182,3 +182,64 @@ arete people memory refresh --person jane-doe
 **Outputs**: 2-3 risk-mitigation pairs; optional inclusion in deliverable.
 
 **Note**: For higher-stakes decisions (PRD execution, large refactors), use the full pre-mortem template at `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` with 8 risk categories.
+
+---
+
+## research_intake
+
+**Purpose**: Process bulk documents in a project's `inputs/` folder into structured analyses and synthesis.
+
+**Used by**: discovery, general-project
+
+**When to trigger**: When bulk files are detected in `inputs/`, **suggest** the pattern — do not auto-apply:
+> "I see several files in inputs/. Would you like me to process them using the research_intake pattern?"
+
+Wait for user confirmation before proceeding.
+
+**Steps**:
+
+1. **Scan inputs/** — List new/unprocessed files in `inputs/`. Note file types and count.
+
+2. **Analyze each document** — For each input file, create `working/analysis-[slug].md` using this template:
+
+   ```markdown
+   ## Summary
+   2-3 sentences. What is this document about?
+
+   ## Key Points
+   - [Point 1]
+   - [Point 2]
+   - [Point 3]
+   (5-7 bullet points max — if you have more, prioritize the most important)
+
+   ## Questions/Concerns
+   - What's unclear or needs follow-up?
+
+   ## Relevance to Project
+   How does this connect to the project goal?
+   ```
+
+   **Conciseness rule**: Keep each analysis tight. If you're writing paragraphs instead of bullets, you're being too verbose.
+
+3. **Synthesize themes** — After all individual analyses are complete, create `working/synthesis-[topic].md`:
+   - Identify patterns and themes across documents
+   - Note contradictions or tensions
+   - Surface actionable insights
+   - **Limit**: Focus on themes, not exhaustive summary. If you're writing more than 10 paragraphs, cut to the most important points.
+
+4. **Update project README** — Add key findings to the project README under a "Key Findings" or "Research Summary" section.
+
+5. **Index for searchability** — Run `arete index` to make all new content immediately searchable.
+
+6. **Cleanup (optional)** — After synthesis is complete and you're confident in the output, consider archiving or deleting individual analysis files. The synthesis is the primary deliverable; individual analyses are scaffolding.
+
+**Outputs**: 
+- Individual analysis files: `working/analysis-*.md` (one per input document)
+- Synthesis file: `working/synthesis-[topic].md`
+- Updated project README with key findings
+- Indexed content (searchable via `arete context`)
+
+**Conciseness guidance**:
+- Individual analyses: 5-7 bullet points max in Key Points; Summary is 2-3 sentences, not paragraphs
+- Synthesis: Max 10 paragraphs; focus on actionable themes, not exhaustive coverage
+- Overall: The synthesis is the primary deliverable. User's time > completeness.
