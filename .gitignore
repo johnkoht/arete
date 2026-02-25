@@ -56,9 +56,12 @@ venv/
 node_modules
 node_modules/
 
-# TypeScript build output
+# TypeScript build output (root dist/ only - packages/*/dist/ are committed for GitHub installs)
 dist/
 *.tsbuildinfo
+# Exception: package dist files are committed for GitHub install support
+!packages/core/dist/
+!packages/cli/dist/
 
 # CLI-managed / workspace directories (consumer workspaces only)
 # Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.

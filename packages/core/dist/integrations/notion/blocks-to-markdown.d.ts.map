@@ -1,0 +1,1 @@
+{"version":3,"file":"blocks-to-markdown.d.ts","sourceRoot":"","sources":["../../../src/integrations/notion/blocks-to-markdown.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,KAAK,EAAE,SAAS,EAAE,cAAc,EAAE,MAAM,YAAY,CAAC;AAM5D;;;;GAIG;AACH,wBAAgB,kBAAkB,CAAC,QAAQ,EAAE,cAAc,EAAE,GAAG,MAAM,CAkCrE;AAgBD;;GAEG;AACH,wBAAgB,gBAAgB,CAAC,MAAM,EAAE,SAAS,EAAE,GAAG,MAAM,CA0D5D"}

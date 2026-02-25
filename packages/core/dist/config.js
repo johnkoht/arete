@@ -1,0 +1,104 @@
+/**
+ * Configuration resolution
+ * Priority: workspace arete.yaml > global ~/.arete/config.yaml > defaults
+ *
+ * Uses StorageAdapter for file access (no direct fs in services).
+ */
+import { homedir } from 'os';
+import { join } from 'path';
+import { parse as parseYaml } from 'yaml';
+const DEFAULT_CONFIG = {
+    schema: 1,
+    version: null,
+    source: 'npm',
+    agent_mode: undefined,
+    ide_target: undefined,
+    skills: {
+        core: [],
+        overrides: [],
+        defaults: undefined,
+    },
+    tools: [],
+    integrations: {},
+    settings: {
+        memory: {
+            decisions: { prompt_before_save: true },
+            learnings: { prompt_before_save: true },
+        },
+        conversations: {
+            peopleProcessing: 'off',
+        },
+    },
+};
+function deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source)) {
+        const srcVal = source[key];
+        if (srcVal &&
+            typeof srcVal === 'object' &&
+            !Array.isArray(srcVal) &&
+            srcVal !== null) {
+            const tgt = result[key] || {};
+            result[key] = deepMerge(tgt, srcVal);
+        }
+        else {
+            result[key] = srcVal;
+        }
+    }
+    return result;
+}
+export function getGlobalConfigPath() {
+    return join(homedir(), '.arete', 'config.yaml');
+}
+export function getWorkspaceConfigPath(workspacePath) {
+    return join(workspacePath, 'arete.yaml');
+}
+async function loadYamlFile(storage, filePath) {
+    const exists = await storage.exists(filePath);
+    if (!exists)
+        return null;
+    const content = await storage.read(filePath);
+    if (!content)
+        return null;
+    try {
+        return parseYaml(content);
+    }
+    catch {
+        return null;
+    }
+}
+const VALID_PEOPLE_PROCESSING = new Set(['off', 'ask', 'on']);
+/**
+ * Normalize a resolved config to clamp any invalid enum values to safe defaults.
+ * Guards against invalid values written into arete.yaml (e.g. `peopleProcessing: "sometimes"`).
+ */
+function normalizeConfig(config) {
+    const pp = config.settings?.conversations?.peopleProcessing;
+    if (!VALID_PEOPLE_PROCESSING.has(pp)) {
+        config.settings.conversations.peopleProcessing = 'off';
+    }
+    return config;
+}
+/**
+ * Load resolved configuration for a workspace.
+ */
+export async function loadConfig(storage, workspacePath) {
+    let config = { ...DEFAULT_CONFIG };
+    const globalPath = getGlobalConfigPath();
+    const globalConfig = await loadYamlFile(storage, globalPath);
+    if (globalConfig) {
+        config = deepMerge(config, globalConfig);
+    }
+    if (workspacePath) {
+        const workspaceConfigPath = getWorkspaceConfigPath(workspacePath);
+        const workspaceConfig = await loadYamlFile(storage, workspaceConfigPath);
+        if (workspaceConfig) {
+            config = deepMerge(config, workspaceConfig);
+        }
+    }
+    return normalizeConfig(config);
+}
+export function getDefaultConfig() {
+    return { ...DEFAULT_CONFIG };
+}
+//# sourceMappingURL=config.js.map

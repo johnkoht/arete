@@ -1,0 +1,1 @@
+{"version":3,"file":"fallback.d.ts","sourceRoot":"","sources":["../../../src/search/providers/fallback.ts"],"names":[],"mappings":"AAAA;;;;GAIG;AAGH,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,0BAA0B,CAAC;AAE/D,OAAO,KAAK,EAAiB,cAAc,EAAgB,MAAM,aAAa,CAAC;AAE/E,eAAO,MAAM,sBAAsB,aAAa,CAAC;AAuEjD;;;GAGG;AACH,wBAAgB,iBAAiB,CAC/B,aAAa,EAAE,MAAM,EACrB,OAAO,EAAE,cAAc,GACtB,cAAc,CAmDhB"}
