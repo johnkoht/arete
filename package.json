@@ -16,9 +16,6 @@
     "AGENTS.md",
     "dist/"
   ],
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
     "dev": "tsx packages/cli/src/index.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
