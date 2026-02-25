@@ -5,13 +5,15 @@
  * before full conversational onboarding.
  */
 
-import { createServices } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex } from '@arete/core';
+import type { QmdRefreshResult } from '@arete/core';
 import type { Command } from 'commander';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { join } from 'node:path';
 import chalk from 'chalk';
 import { header, success, error, info, warn } from '../formatters.js';
+import { displayQmdResult } from '../lib/qmd-output.js';
 
 interface OnboardAnswers {
   name: string;
@@ -43,12 +45,14 @@ export function registerOnboardCommand(program: Command): void {
     .option('--email <email>', 'Your work email')
     .option('--company <company>', 'Your company name')
     .option('--website <url>', 'Company website URL (optional)')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .action(async (opts: {
       json?: boolean;
       name?: string;
       email?: string;
       company?: string;
       website?: string;
+      skipQmd?: boolean;
     }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
@@ -203,6 +207,13 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         await services.storage.write(domainHintsPath, domainHintsContent);
       }
 
+      // Auto-refresh qmd index after writes
+      let qmdResult: QmdRefreshResult | undefined;
+      if (!opts.skipQmd) {
+        const config = await loadConfig(services.storage, root);
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
       if (opts.json) {
         console.log(JSON.stringify({
           success: true,
@@ -217,6 +228,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
             profile: profilePath,
             domainHints: domains.length > 0 ? join(root, 'context', 'domain-hints.md') : null,
           },
+          qmd: qmdResult ?? { indexed: false, skipped: true },
         }, null, 2));
         return;
       }
@@ -228,6 +240,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
       if (domains.length > 0) {
         console.log(chalk.dim('  Domain hints saved to: context/domain-hints.md'));
       }
+      displayQmdResult(qmdResult);
       console.log('');
       info('Continue onboarding by saying "Let\'s get started" in chat');
       console.log('');

@@ -99,7 +99,7 @@ Last refreshed: ${today}
       'utf8',
     );
 
-    const stdout = runCli(['people', 'memory', 'refresh', '--person', 'jane-doe', '--if-stale-days', '7', '--json'], { cwd: tmpDir });
+    const stdout = runCli(['people', 'memory', 'refresh', '--person', 'jane-doe', '--if-stale-days', '7', '--skip-qmd', '--json'], { cwd: tmpDir });
     const result = JSON.parse(stdout);
     assert.equal(result.success, true);
     assert.equal(result.updated, 0);
@@ -155,7 +155,7 @@ Jane Doe is concerned about budget.
       'utf8',
     );
 
-    const stdout = runCli(['people', 'memory', 'refresh', '--json'], { cwd: tmpDir });
+    const stdout = runCli(['people', 'memory', 'refresh', '--skip-qmd', '--json'], { cwd: tmpDir });
     const result = JSON.parse(stdout);
 
     assert.equal(result.success, true);

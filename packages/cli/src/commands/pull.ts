@@ -109,7 +109,15 @@ export function registerPullCommand(program: Command): void {
         }
 
         if (integration === 'krisp') {
+          const config = await loadConfig(services.storage, root);
           const result = await services.integrations.pull(root, 'krisp', { integration: 'krisp', days });
+
+          // Auto-refresh qmd index after write (skip if nothing new or --skip-qmd)
+          let qmdResult: QmdRefreshResult | undefined;
+          if (result.itemsCreated > 0 && !opts.skipQmd) {
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+          }
+
           if (opts.json) {
             console.log(
               JSON.stringify(
@@ -119,6 +127,7 @@ export function registerPullCommand(program: Command): void {
                   itemsProcessed: result.itemsProcessed,
                   itemsCreated: result.itemsCreated,
                   errors: result.errors,
+                  qmd: qmdResult ?? { indexed: false, skipped: true },
                 },
                 null,
                 2,
@@ -135,6 +144,7 @@ export function registerPullCommand(program: Command): void {
           } else {
             error(`Krisp pull failed: ${result.errors.join(', ')}`);
           }
+          displayQmdResult(qmdResult);
           return;
         }
 

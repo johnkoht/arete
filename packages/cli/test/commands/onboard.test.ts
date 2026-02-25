@@ -57,7 +57,7 @@ describe('onboard command', () => {
     await createMinimalWorkspace(tempDir);
 
     const result = runCli(
-      'onboard --json --name "Jane Doe" --email "jane@acme.com" --company "Acme Corp"',
+      'onboard --json --skip-qmd --name "Jane Doe" --email "jane@acme.com" --company "Acme Corp"',
       tempDir
     );
 
@@ -80,7 +80,7 @@ describe('onboard command', () => {
     await createMinimalWorkspace(tempDir);
 
     const result = runCli(
-      'onboard --json --name "Bob" --email "bob@example.com" --company "Example" --website "https://example.io"',
+      'onboard --json --skip-qmd --name "Bob" --email "bob@example.com" --company "Example" --website "https://example.io"',
       tempDir
     );
 
@@ -109,7 +109,7 @@ describe('onboard command', () => {
     await createMinimalWorkspace(tempDir);
 
     const result = runCli(
-      'onboard --json --name "Test" --email "test@foo.org" --company "Foo" --website "www.foo.org/about"',
+      'onboard --json --skip-qmd --name "Test" --email "test@foo.org" --company "Foo" --website "www.foo.org/about"',
       tempDir
     );
 

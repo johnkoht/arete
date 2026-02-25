@@ -4,8 +4,11 @@
 
 import {
   createServices,
+  loadConfig,
+  refreshQmdIndex,
   PEOPLE_CATEGORIES,
   type PersonCategory,
+  type QmdRefreshResult,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { join } from 'node:path';
@@ -18,6 +21,7 @@ import {
   info,
   formatPath,
 } from '../formatters.js';
+import { displayQmdResult } from '../lib/qmd-output.js';
 
 export function registerPeopleCommands(program: Command): void {
   const peopleCmd = program
@@ -174,8 +178,9 @@ export function registerPeopleCommands(program: Command): void {
   peopleCmd
     .command('index')
     .description('Regenerate people/index.md')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { json?: boolean }) => {
+    .action(async (opts: { skipQmd?: boolean; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -191,18 +196,27 @@ export function registerPeopleCommands(program: Command): void {
       await services.entity.buildPeopleIndex(paths);
       const people = await services.entity.listPeople(paths);
 
+      // Auto-refresh qmd index after write
+      let qmdResult: QmdRefreshResult | undefined;
+      if (!opts.skipQmd) {
+        const config = await loadConfig(services.storage, root);
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
       if (opts.json) {
         console.log(
           JSON.stringify({
             success: true,
             path: `${paths.people}/index.md`,
             count: people.length,
+            qmd: qmdResult ?? { indexed: false, skipped: true },
           }),
         );
         return;
       }
 
       info(`Updated people/index.md with ${people.length} person(s).`);
+      displayQmdResult(qmdResult);
     });
 
   const intelligenceCmd = peopleCmd
@@ -357,8 +371,9 @@ export function registerPeopleCommands(program: Command): void {
     .option('--person <slug>', 'Refresh only one person by slug')
     .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
     .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { person?: string; minMentions?: string; ifStaleDays?: string; json?: boolean }) => {
+    .action(async (opts: { person?: string; minMentions?: string; ifStaleDays?: string; skipQmd?: boolean; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -386,8 +401,19 @@ export function registerPeopleCommands(program: Command): void {
         ifStaleDays,
       });
 
+      // Auto-refresh qmd index after writes (skip if nothing updated)
+      let qmdResult: QmdRefreshResult | undefined;
+      if (result.updated > 0 && !opts.skipQmd) {
+        const config = await loadConfig(services.storage, root);
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
       if (opts.json) {
-        console.log(JSON.stringify({ success: true, ...result }, null, 2));
+        console.log(JSON.stringify({
+          success: true,
+          ...result,
+          qmd: qmdResult ?? { indexed: false, skipped: true },
+        }, null, 2));
         return;
       }
 
@@ -395,6 +421,7 @@ export function registerPeopleCommands(program: Command): void {
       listItem('People scanned', String(result.scannedPeople));
       listItem('Meetings scanned', String(result.scannedMeetings));
       listItem('Skipped (fresh)', String(result.skippedFresh));
+      displayQmdResult(qmdResult);
       console.log('');
     });
 }
