@@ -4,12 +4,12 @@
   "description": "Areté - Product Management Workspace CLI",
   "type": "module",
   "bin": {
-    "arete": "./packages/cli/bin/arete.js"
+    "arete": "./bin/arete.js"
   },
   "main": "./packages/core/dist/index.js",
   "types": "./packages/core/dist/index.d.ts",
   "files": [
-    "packages/cli/bin/",
+    "bin/",
     "packages/cli/dist/",
     "packages/core/dist/",
     "packages/runtime/",
