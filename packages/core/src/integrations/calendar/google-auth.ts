@@ -34,7 +34,7 @@ export const GOOGLE_CLIENT_SECRET = 'PLACEHOLDER_CLIENT_SECRET';
 
 const AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.events.freebusy';
 const CREDENTIAL_KEY = 'google_calendar';
 const CONFIGURE_COMMAND = 'arete integration configure google-calendar';
 
