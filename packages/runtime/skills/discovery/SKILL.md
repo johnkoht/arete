@@ -140,7 +140,15 @@ arete template resolve --skill discovery --variant user-feedback
 - 
 ```
 
-### 5. Synthesis
+### 5. Process Bulk Inputs (Optional)
+
+If the user has dropped multiple files into `inputs/`, use the **research_intake** pattern from PATTERNS.md.
+
+**Quick summary**: Scan inputs → analyze each → synthesize themes → update README → run `arete index` → cleanup intermediate files.
+
+See `packages/runtime/skills/PATTERNS.md § research_intake` for the full workflow.
+
+### 6. Synthesis
 
 When ready to synthesize (use `synthesize` skill):
 
@@ -176,7 +184,7 @@ Create `working/synthesis.md`:
 1. [Recommendation]: Because [rationale]
 ```
 
-### 6. Outputs
+### 7. Outputs
 
 Final deliverable in `outputs/findings.md`:
 
@@ -217,7 +225,7 @@ Final deliverable in `outputs/findings.md`:
 - [Link to data]
 ```
 
-### 7. Finalize
+### 8. Finalize
 
 When discovery is complete:
 
