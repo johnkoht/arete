@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-02-25: [calendar-freebusy-learnings](entries/2026-02-25_calendar-freebusy-learnings.md) — Calendar FreeBusy integration: `arete availability find --with <person>` command for mutual availability. 6/6 tasks, 1 iteration, +59 tests, 0/7 pre-mortem risks materialized. DI patterns, pure algorithm separation, type exports lesson.
 - 2026-02-25: [project-updates-learnings](entries/2026-02-25_project-updates-learnings.md) — Added general-project skill, research_intake pattern, and index checkpoint guidance. 6/6 tasks, 0 iterations, +9 routing tests. All 7 pre-mortem risks mitigated.
 - 2026-02-23: [agents-md-install-fix](entries/2026-02-23_agents-md-install-fix.md) — Fixed arete install/update to use comprehensive dist/AGENTS.md instead of generating minimal version. Added route command no-match suggestion. +27 tests.
 - 2026-02-22: [notion-integration-learnings](entries/2026-02-22_notion-integration-learnings.md) — Notion integration Phase 1: pull pages as markdown with QMD indexing. 8/8 tasks, 0 iterations, +122 tests. Thin fetch over SDK, Tier 1/Tier 2 block split, iterative queue-based converter. CLI test stability issue discovered (HTTP servers don't close reliably).
