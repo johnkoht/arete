@@ -12,6 +12,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **daily-plan** | `runtime/skills/daily-plan/SKILL.md` | Plan your day with focus, meetings, and priorities | "What's on my plate today?" |
 | **discovery** | `runtime/skills/discovery/SKILL.md` | Guide problem discovery and research synthesis | "Start discovery", "research [topic]" |
 | **finalize-project** | `runtime/skills/finalize-project/SKILL.md` | Archive completed projects and extract learnings | "Finalize this project" |
+| **general-project** | `runtime/skills/general-project/SKILL.md` | Start generic projects for work that doesn't fit specialized categories | "Start a project", "new project for [topic]" |
 | **generate-prototype-prompt** | `runtime/skills/generate-prototype-prompt/SKILL.md` | Create prompts for quick UI/UX prototyping | "Generate prototype prompt for..." |
 | **getting-started** | `runtime/skills/getting-started/SKILL.md` | Get started with Areté - conversational workspace setup | "Let's get started", "I'm new to Areté" |
 | **goals-alignment** | `runtime/skills/goals-alignment/SKILL.md` | Compare your goals to org strategy | "Show my goal alignment" |
@@ -39,6 +40,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 
 ### Discovery & Definition
 - **discovery** - Problem/solution/market discovery projects
+- **general-project** - Generic projects for domain ownership, migrations, ad-hoc work
 - **create-prd** - Interactive PRD creation with context integration
 - **competitive-analysis** - Competitor research and synthesis
 - **construct-roadmap** - Roadmap building with prioritization

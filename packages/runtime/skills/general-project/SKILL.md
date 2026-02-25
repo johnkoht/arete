@@ -88,7 +88,7 @@ If the user has dropped multiple files into `inputs/`, use the **research_intake
 
 **Quick summary**: Scan inputs → analyze each → synthesize themes → update README → run `arete index` → cleanup intermediate files.
 
-See `packages/runtime/skills/PATTERNS.md § research_intake` for the full workflow.
+See [PATTERNS.md](../PATTERNS.md) § research_intake for the full workflow.
 
 ### 6. Finalize
 
