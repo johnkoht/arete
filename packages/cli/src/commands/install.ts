@@ -100,8 +100,7 @@ export function registerInstallCommand(program: Command): void {
         }
 
         const packageRoot = getPackageRoot();
-        const useRuntime = !packageRoot.includes('node_modules');
-        const basePaths = getSourcePaths(packageRoot, useRuntime);
+        const basePaths = getSourcePaths(packageRoot);
         const rulesSubdir = ide === 'cursor' ? 'cursor' : 'claude-code';
         const sourcePaths = {
           root: basePaths.root,

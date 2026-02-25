@@ -33,8 +33,7 @@ export function registerUpdateCommand(program: Command): void {
       const ideTarget = config.ide_target ?? 'cursor';
 
       const packageRoot = getPackageRoot();
-      const useRuntime = !packageRoot.includes('node_modules');
-      const basePaths = getSourcePaths(packageRoot, useRuntime);
+      const basePaths = getSourcePaths(packageRoot);
       const sourcePaths = {
         root: basePaths.root,
         skills: basePaths.skills,

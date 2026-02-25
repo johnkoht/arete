@@ -548,8 +548,7 @@ async function detectOverlapRole(
   installedWorkType: string | undefined,
 ): Promise<string | undefined> {
   const packageRoot = getPackageRoot();
-  const useRuntime = !packageRoot.includes('node_modules');
-  const sourcePaths = getSourcePaths(packageRoot, useRuntime);
+  const sourcePaths = getSourcePaths(packageRoot);
 
   if (!existsSync(sourcePaths.skills)) {
     return undefined;
