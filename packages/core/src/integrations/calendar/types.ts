@@ -20,9 +20,42 @@ export interface CalendarOptions {
   calendars?: string[];
 }
 
+/**
+ * A block of time when a calendar is busy.
+ */
+export interface BusyBlock {
+  start: Date;
+  end: Date;
+}
+
+/**
+ * FreeBusy result for a single calendar (identified by email).
+ */
+export interface FreeBusyCalendarResult {
+  busy: BusyBlock[];
+  accessible: boolean;
+  error?: string;
+}
+
+/**
+ * FreeBusy result for a query.
+ * - userBusy: busy blocks from the authenticated user's primary calendar
+ * - calendars: per-email results for requested calendars
+ */
+export interface FreeBusyResult {
+  userBusy: BusyBlock[];
+  calendars: Record<string, FreeBusyCalendarResult>;
+}
+
 export interface CalendarProvider {
   name: string;
   isAvailable(): Promise<boolean>;
   getTodayEvents(options?: CalendarOptions): Promise<CalendarEvent[]>;
   getUpcomingEvents(days: number, options?: CalendarOptions): Promise<CalendarEvent[]>;
+
+  /**
+   * Query free/busy information for a list of email addresses.
+   * Optional — not all providers support FreeBusy (e.g., ical-buddy).
+   */
+  getFreeBusy?(emails: string[], timeMin: Date, timeMax: Date): Promise<FreeBusyResult>;
 }
