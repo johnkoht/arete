@@ -89,6 +89,8 @@ Report the result:
 - **Skipped**: "Meeting file already exists (same date and title)."
 - **Error**: Share the error message and suggest fixes.
 
+After saving, run `arete index` to make the content immediately searchable by other skills (brief, meeting-prep, context).
+
 ## Example
 
 **User pastes:**

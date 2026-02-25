@@ -86,6 +86,8 @@ Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERN
 
 Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md). Refresh recurring asks/concerns for attendees so person files include quick-access memory highlights.
 
+After saving, run `arete index` to make the content immediately searchable by other skills (brief, meeting-prep, context).
+
 ### 6. Summary
 
 Report: meetings processed, people created/updated, decisions and learnings added, person memory highlights refreshed.
