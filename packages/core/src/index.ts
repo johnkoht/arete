@@ -57,6 +57,8 @@ export {
   type FreeBusyResult,
   type FreeBusyCalendarResult,
   type CalendarProvider,
+  type CreateEventInput,
+  type CreatedEvent,
 } from './integrations/calendar/index.js';
 export {
   saveMeetingFile,
