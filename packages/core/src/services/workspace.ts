@@ -387,23 +387,25 @@ export class WorkspaceService {
       }
     }
 
-    // Backfill GUIDE.md if missing (never overwrite existing)
+    // Always refresh GUIDE.md (reference docs, not user content)
     if (options.sourcePaths?.guide) {
       const guideSrc = options.sourcePaths.guide;
       const guideDest = join(workspaceRoot, 'GUIDE.md');
-      const guideExists = await this.storage.exists(guideDest);
-      if (!guideExists) {
-        const guideSrcExists = await this.storage.exists(guideSrc);
-        if (guideSrcExists) {
-          try {
-            const content = await this.storage.read(guideSrc);
-            if (content != null) {
-              await this.storage.write(guideDest, content);
+      const guideSrcExists = await this.storage.exists(guideSrc);
+      if (guideSrcExists) {
+        try {
+          const content = await this.storage.read(guideSrc);
+          if (content != null) {
+            const guideExisted = await this.storage.exists(guideDest);
+            await this.storage.write(guideDest, content);
+            if (guideExisted) {
+              result.updated.push('GUIDE.md');
+            } else {
               result.added.push('GUIDE.md');
             }
-          } catch {
-            // Non-fatal: skip GUIDE.md backfill on error
           }
+        } catch {
+          // Non-fatal: skip GUIDE.md refresh on error
         }
       }
     }

@@ -151,7 +151,7 @@ describe('integration: workspace install/update journeys', () => {
     );
   });
 
-  it('update backfills missing GUIDE.md without overwriting existing', () => {
+  it('update backfills missing GUIDE.md and always refreshes it', () => {
     const workspace = join(sandboxRoot, 'update-guide');
     installWorkspace(workspace, 'cursor');
 
@@ -167,11 +167,11 @@ describe('integration: workspace install/update journeys', () => {
     assert.equal(update.success, true, 'update should succeed');
     assert.equal(existsSync(guidePath), true, 'GUIDE.md should be backfilled by update');
 
-    // A second update must not overwrite customized content
+    // GUIDE.md is reference docs, so update always refreshes it (not user content)
     writeFileSync(guidePath, '# My custom guide', 'utf-8');
     runUpdateJson(workspace);
     const content = readFileSync(guidePath, 'utf-8');
-    assert.equal(content, '# My custom guide', 'update must not overwrite customized GUIDE.md');
+    assert.ok(content.includes('Areté User Guide'), 'update should refresh GUIDE.md with latest version');
   });
 
   it('update backfills missing templates without overwriting existing', () => {
