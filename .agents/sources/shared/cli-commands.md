@@ -16,6 +16,7 @@
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show person details
 - `arete people memory refresh [--person <slug>] [--if-stale-days N]` - Refresh person memory highlights from meetings (stale-aware)
+- `arete availability find --with <name|email>` - Find mutual availability with a person (uses Google Calendar FreeBusy)
 
 ## Integrations
 

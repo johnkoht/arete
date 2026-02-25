@@ -729,7 +729,7 @@ arete template list meeting-agendas                   # List agenda templates
 arete template view meeting-agenda --type <name>      # View template
 ```
 
-### People
+### People & Availability
 
 ```bash
 arete people list [--category internal|customers|users]  # List people
@@ -737,6 +737,12 @@ arete people show <slug|email>                           # Show person details
 arete people index                                       # Regenerate people index
 arete people memory refresh                              # Refresh person memory highlights
 arete people intelligence digest --input <path> [--json] # Batch people-intelligence suggestions
+
+arete availability find --with <name|email>              # Find mutual availability
+  --duration <min>                                       # Meeting length (default: 30)
+  --days <n>                                             # Days to search (default: 7)
+  --limit <n>                                            # Max slots to show (default: 5)
+  --json                                                 # Output as JSON
 ```
 
 ### Meetings
