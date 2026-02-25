@@ -1,0 +1,116 @@
+{
+  "name": "calendar-improvements",
+  "branchName": "feature/calendar-improvements",
+  "goal": "Enable users to find mutual availability with colleagues via FreeBusy API, with the CLI command 'arete availability find --with <person>'",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add FreeBusy method to Google Calendar provider",
+      "description": "Add getFreeBusy(emails: string[], timeMin: Date, timeMax: Date): Promise<FreeBusyResult> method to packages/core/src/integrations/calendar/google-calendar.ts. Calls Google Calendar FreeBusy API with items: [{ id: 'primary' }, ...emails.map(e => ({ id: e }))]. Returns busy blocks per calendar. Normalizes 'primary' → 'userBusy' in response. Handles errors gracefully (no access → { accessible: false } per calendar, not throw).",
+      "acceptanceCriteria": [
+        "Method exists and is exported from google-calendar.ts",
+        "Queries user's primary calendar AND target emails in one API request",
+        "Returns busy blocks for accessible calendars",
+        "Returns { accessible: false } for calendars without access (not an error)",
+        "Uses DI pattern (deps?: { fetch? }) for testability (per ical-buddy pattern in LEARNINGS.md)",
+        "Unit tests cover: happy path (both calendars accessible), no-access case (target returns 403), mixed case (user accessible, target not)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Add FreeBusy to CalendarProvider interface",
+      "description": "Extend packages/core/src/integrations/calendar/types.ts with FreeBusy types so other providers could implement FreeBusy in the future.",
+      "acceptanceCriteria": [
+        "BusyBlock type defined: { start: Date; end: Date; }",
+        "FreeBusyCalendarResult type defined: { busy: BusyBlock[], accessible: boolean, error?: string }",
+        "FreeBusyResult type defined: { userBusy: BusyBlock[]; calendars: Record<string, FreeBusyCalendarResult>; }",
+        "getFreeBusy is optional on CalendarProvider interface",
+        "Existing providers still compile (ical-buddy doesn't implement it)",
+        "Types exported from packages/core/src/index.ts"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Create availability-finding algorithm",
+      "description": "Create packages/core/src/utils/availability.ts (new — NOT services/). Pure algorithm: given busy blocks + constraints, find available slots. Input: userBusy: BusyBlock[], targetBusy: BusyBlock[], options: { duration, workingHours, days, excludeWeekends }. Output: AvailableSlot[] = { start: Date, end: Date, duration: number }. Logic: generate candidate slots for next N days within working hours, filter out overlaps with userBusy OR targetBusy, filter out weekends, return sorted.",
+      "acceptanceCriteria": [
+        "findAvailableSlots function exists and is exported",
+        "Finds slots when calendars have gaps",
+        "Returns empty array when no mutual availability",
+        "Respects working hours (default 9-5, configurable via options)",
+        "Handles all-day events correctly (full day = no slots that day)",
+        "Excludes weekends by default (configurable)",
+        "Timezone test: Unit test covers user in PST with 9am meeting, target in EST with 9am meeting — asserts correct overlap/non-overlap",
+        "Unit tests for edge cases: no overlap, completely full day, weekend handling, boundary times, DST transition day",
+        "Exported from packages/core/src/index.ts (not from services/index.ts)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "depends_on": ["task-2"]
+    },
+    {
+      "id": "task-4",
+      "title": "Verify person resolution works for availability",
+      "description": "Verify EntityService.resolve() in packages/core/src/services/entity.ts handles the availability command's needs. This is verification only — no code changes expected.",
+      "acceptanceCriteria": [
+        "Confirm resolve(reference, 'person', paths) returns email in metadata.email",
+        "Document: If person exists but has no email, metadata.email is undefined",
+        "Document: Score < 90 indicates ambiguous match (multiple candidates)",
+        "No code changes expected — verification only",
+        "Create a small verification report (can be a comment in PR or notes file)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Add CLI command for availability",
+      "description": "Create packages/cli/src/commands/availability.ts. Command: arete availability find --with <person-or-email> --duration 30 --days 7. Flow: resolve person → get calendar provider → check getFreeBusy exists → call FreeBusy → run algorithm → display slots in user's local timezone.",
+      "acceptanceCriteria": [
+        "arete availability find --with jamie@example.com --duration 30 works",
+        "arete availability find --with 'Jamie Smith' resolves name to email",
+        "Error: Person not found → 'Could not find Jamie in people/. Try: arete people list'",
+        "Error: Person has no email → 'Jamie found but no email on file — add email to people/internal/jamie.md'",
+        "Error: No calendar access → 'I couldn't see Jamie's availability — they may need to share their calendar with you'",
+        "Error: Provider doesn't support FreeBusy → 'Availability requires Google Calendar. Run: arete integration configure google-calendar'",
+        "Output shows date, time (with timezone label like 'CT'), duration for each slot",
+        "Supports --limit N flag (default 5)",
+        "Supports --json flag for structured output",
+        "Register command in packages/cli/src/index.ts"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "depends_on": ["task-3", "task-4"]
+    },
+    {
+      "id": "task-6",
+      "title": "Update capability registry",
+      "description": "After implementation, update dev/catalog/capabilities.json to reflect new google-calendar capability entrypoint.",
+      "acceptanceCriteria": [
+        "Add entrypoint: arete availability find --with <person>",
+        "Add implementation paths: packages/core/src/utils/availability.ts, packages/cli/src/commands/availability.ts",
+        "Update lastVerified date to today",
+        "Verify no other capability entries need updating"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "depends_on": ["task-5"]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-24T21:00:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
