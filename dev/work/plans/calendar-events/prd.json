@@ -1,0 +1,96 @@
+{
+  "name": "calendar-events",
+  "branchName": "feature/calendar-events",
+  "goal": "Enable users to create calendar events through CLI and conversational skill, completing the availability-to-booking flow",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add createEvent() to Google Calendar Provider",
+      "description": "Implement createEvent() method on the Google Calendar provider using the Google Calendar Events API. Before starting, read: packages/core/src/integrations/calendar/google-calendar.ts (existing provider, googleFetch helper), packages/core/src/integrations/calendar/google-auth.ts (credential loading), packages/core/src/integrations/LEARNINGS.md (integration patterns), packages/core/test/integrations/calendar/google-calendar.test.ts (test patterns). Add CreateEventInput and CreatedEvent types to types.ts. Implement createEvent() using POST to /calendars/{calendarId}/events. Use existing googleFetch() helper. Add CreateEventDeps interface for testability (matching FreeBusyDeps pattern). Add createEvent? as optional method on CalendarProvider interface. Export types and function from packages/core/src/index.ts.",
+      "acceptanceCriteria": [
+        "createEvent() creates event via Google Calendar API",
+        "Returns event ID, calendar link, and event details",
+        "Handles errors gracefully (401 → 'run: arete integration configure google-calendar', 403 → permission error)",
+        "Uses CreateEventDeps injection pattern for testability",
+        "createEvent? is optional on CalendarProvider interface",
+        "Unit tests using existing makeMockStorage(), makeCredentialsYaml() helpers",
+        "npm run typecheck passes (ical-buddy provider unchanged)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Add CLI Command arete calendar create",
+      "description": "Create a new CLI command for creating calendar events with person resolution and natural language date parsing. Before starting, read: packages/cli/src/commands/availability.ts (person resolution pattern), packages/cli/src/index.ts (command registration pattern). Create new calendar command group with create subcommand in packages/cli/src/commands/calendar.ts. Register in packages/cli/src/index.ts. Options: --title (required), --start (ISO or natural language), --duration (default 30), --with (person resolution), --description (optional), --json. Date parsing (no chrono-node): ISO dates, today, tomorrow, day+time (monday 2pm), relative (next monday, next week). Use Intl.DateTimeFormat for timezone. Display times with timezone abbreviation.",
+      "acceptanceCriteria": [
+        "Command registered as arete calendar create",
+        "Basic creation works: arete calendar create --title \"1:1\" --with sarah --start \"tomorrow 2pm\"",
+        "Block time works: arete calendar create --title \"Focus time\" --start \"tomorrow 9am\" --duration 120",
+        "Person resolution (name → email) works",
+        "Date parsing handles specified patterns (no chrono-node dependency added)",
+        "Times displayed with timezone abbreviation",
+        "Graceful error messages for auth issues, person-not-found, invalid dates",
+        "--json outputs structured response"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Create schedule-meeting Skill (v1)",
+      "description": "Create a conversational skill for scheduling meetings through natural language. Location: packages/runtime/skills/schedule-meeting/SKILL.md. Triggers: schedule a meeting, book time with, set up a call, 1:1 with, find time with, book a meeting. Workflow: parse request (extract person, time preference default today+2 days), resolve person to email, find availability via FreeBusy, present 1-3 slots with letters (A, B, C), handle response (case-insensitive, flexible), create event, confirm with calendar link. Time frame: no time = today+2 days, 'today' = today only, 'tomorrow' = tomorrow only, 'next week' = Mon-Fri. Block time flow is simpler: no person/FreeBusy. Response parsing: case-insensitive, trim whitespace/punctuation, invalid = re-prompt.",
+      "acceptanceCriteria": [
+        "Routes for scheduling triggers",
+        "Default time frame: today + 2 days",
+        "Respects user time preferences: today, tomorrow, next week",
+        "Simple letter response works: A books the slot",
+        "Times always displayed with timezone",
+        "Block time requests skip person/FreeBusy entirely",
+        "Invalid responses handled gracefully (re-prompt)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Update Documentation",
+      "description": "Update all relevant documentation for the new calendar event creation capability. Files to update: packages/runtime/GUIDE.md (add Create Events section under Calendar), .agents/sources/shared/cli-commands.md (add arete calendar create), packages/runtime/skills/README.md (add schedule-meeting skill), packages/runtime/integrations/registry.md (note event creation capability), dev/catalog/capabilities.json (add schedule-meeting entry). Then rebuild: npm run build:agents:dev. Verification: grep -r 'calendar create' packages/runtime/ .agents/ should show all relevant files.",
+      "acceptanceCriteria": [
+        "GUIDE.md documents event creation and skill usage",
+        "CLI reference includes new command with all options",
+        "AGENTS.md rebuilt with new command",
+        "Skills README lists schedule-meeting",
+        "Integrations registry notes event creation capability",
+        "dev/catalog/capabilities.json has schedule-meeting entry",
+        "Grep verification passes (command documented in all relevant files)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Tests",
+      "description": "Add comprehensive tests for the new functionality. Scope: Core API + CLI tests. Skill routing tests are out of scope. Core API tests (packages/core/test/integrations/calendar/): unit tests for createEvent() using existing helpers (makeMockStorage, makeCredentialsYaml), follow FreeBusyDeps pattern with CreateEventDeps, test cases: success, 401 error, 403 error, network error. CLI tests (packages/cli/test/commands/): person resolution (name to email, email passthrough), date parsing (all patterns), timezone handling edge cases, error handling (auth failure, person not found).",
+      "acceptanceCriteria": [
+        "npm test passes",
+        "createEvent() tests use existing makeMockStorage(), makeCredentialsYaml() helpers",
+        "Tests cover: happy path, auth errors (401, 403), person-not-found, invalid dates",
+        "Timezone edge cases tested (verify local time → correct UTC offset)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-25T17:30:00Z",
+    "totalTasks": 5,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
