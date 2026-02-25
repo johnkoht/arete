@@ -65,8 +65,11 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.
 
+- **New capabilities must be routable** (2026-02-25): When a PRD adds new user-facing capabilities (CLI commands, skills, tools), verify they can be discovered via `arete route "natural query"`. Missed for calendar FreeBusy integration — the `arete availability find` command was documented in AGENTS.md, but queries like "find availability with John" don't route because "availability" isn't in `WORK_TYPE_KEYWORDS`. See `IntelligenceService.routeToSkill()` for the scoring algorithm. For skills/tools, ensure `triggers` array in frontmatter includes natural language phrases users might say. For CLI commands that aren't skill-backed, document them clearly in AGENTS.md § CLI.
+
 - [ ] If adding a new service: add it to `factory.ts` (wire dependencies), `services/index.ts` (barrel export), and `AreteServices` type; run `npm run typecheck`
 - [ ] If a service needs `AreteConfig`: prefer passing it at `createServices()` call time via `options.config`, not by reading `arete.yaml` inside a service method
 - [ ] Verify new service methods do NOT import `fs`/`path` directly — use `StorageAdapter`
 - [ ] Run `npm test` to verify all service tests pass after changes
 - [ ] If changing `AreteServices` type: search for all `createServices()` call sites in `packages/cli/src/commands/` and update destructuring
+- [ ] If adding new user-facing capabilities (CLI, skill, tool): verify `arete route` finds them with natural queries; update triggers/keywords if not

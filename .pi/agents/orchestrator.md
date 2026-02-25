@@ -86,11 +86,23 @@ Institutional knowledge doesn't capture itself. You own this:
 - ✅ **Learning captured** — Memory entry created, MEMORY.md indexed
 - ✅ **LEARNINGS.md verified** — Regression fixes have corresponding LEARNINGS.md updates
 - ✅ **Documentation current** — Stale docs identified and updated (or flagged for the builder)
+- ✅ **Routing discoverable** — New capabilities (CLI commands, skills, tools) can be found via `arete route` (see checklist below)
 - ✅ **Catalog updated** — If tooling/services changed
 - ✅ **Refactor items filed** — Reviewer-identified refactor opportunities captured as plan ideas
 - ✅ **Builder informed** — Comprehensive report delivered, concise, no repetition
 
 Until all of these are true, you're not done.
+
+**Routing Discoverability Checklist** (when new user-facing capabilities are added):
+
+| Added | Check | Location |
+|-------|-------|----------|
+| CLI command | In AGENTS.md CLI section | `.agents/sources/*/cli-commands.md` → rebuild |
+| Skill | Has `triggers` array in frontmatter | `packages/runtime/skills/*/SKILL.md` |
+| Tool | Has `triggers` array in frontmatter | `packages/runtime/tools/*/TOOL.md` |
+| New work type keyword | In `WORK_TYPE_KEYWORDS` | `packages/core/src/services/intelligence.ts` |
+
+**Quick verification**: `arete route "natural language query for the new feature"` — does it find the capability?
 
 ## Decision Heuristics
 
@@ -113,6 +125,7 @@ These are the common ways PRD executions fail. Watch for them:
 - **Context erosion** — Each subagent starts fresh with less context than the last. Mitigate with between-task intelligence and feeding reviewer feedback forward.
 - **LEARNINGS.md gaps** — Regressions get fixed but the gotcha isn't documented. Mitigate with verification during close-out.
 - **Holistic blindness** — Each task passes individually but the whole doesn't solve the problem. Mitigate with stepping back to re-read the PRD problem statement after all tasks complete.
+- **Undiscoverable features** — New capabilities are built but users can't find them via `arete route`. Mitigate with routing discoverability checklist in close-out (triggers, keywords, AGENTS.md).
 
 ## Failure Recovery
 

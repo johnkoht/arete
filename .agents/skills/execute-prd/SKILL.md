@@ -367,6 +367,7 @@ Before diving into the detailed steps below, verify you'll cover all of these:
 - [ ] **MEMORY.md index**: Added index line to `memory/MEMORY.md` (Update Builder Memory)
 - [ ] **Documentation audit**: Are README, AGENTS.md sources, or other docs now stale? (Holistic Review)
 - [ ] **AGENTS.md rebuild**: If `.agents/sources/` were modified, run `npm run build:agents:dev` (Holistic Review)
+- [ ] **Routing discoverability**: If new CLI commands, skills, or tools were added, can `arete route` find them? (Holistic Review)
 - [ ] **Catalog check**: If tooling/extensions/services changed, update `dev/catalog/capabilities.json` (Holistic Review)
 - [ ] **Final report**: Comprehensive, one report, ≤2 pages (Final Report)
 
@@ -375,6 +376,11 @@ Before diving into the detailed steps below, verify you'll cover all of these:
    - **Does this solve the problem?** Re-read the PRD problem statement and success criteria. Does the implemented work satisfy the needs and problem statement of the PRD?
    - **Is there anything missing?** Gaps in functionality, edge cases, or integration points that the task-level AC didn't cover but the PRD implies?
    - **Documentation check**: Should AGENTS.md, README.md, or other docs be updated? If so, create a quick follow-up task or note for the builder.
+   - **Routing discoverability check**: If new CLI commands, skills, or tools were added, verify they're discoverable:
+     - CLI commands → documented in `.agents/sources/*/cli-commands.md` (then rebuild AGENTS.md)
+     - Skills/tools → have relevant `triggers` in frontmatter
+     - New work type keywords → added to `WORK_TYPE_KEYWORDS` in `packages/core/src/services/intelligence.ts`
+     - Quick test: `arete route "natural language query for new feature"` — does it find it?
    - **Catalog check**: If this PRD touched extensions, tools, services, integrations, or external packages, update `dev/catalog/capabilities.json` — add new entries, update paths/status/entrypoints, bump `lastUpdated`.
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
    - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.

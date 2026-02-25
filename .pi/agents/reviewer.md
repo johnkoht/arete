@@ -77,6 +77,24 @@ If the implementation changes any of these, flag it for the orchestrator:
 
 You don't need to update docs yourself — flag what's affected so the orchestrator can include it in the close-out documentation audit.
 
+#### Step 3.6: Discoverability Impact (Routing)
+
+If the implementation adds new user-facing capabilities, verify they can be discovered/routed:
+
+| Capability Type | What to Check | Where |
+|-----------------|---------------|-------|
+| **CLI command** | Documented in CLI section | `.agents/sources/*/cli-commands.md` (will update AGENTS.md on rebuild) |
+| **Skill** | Has relevant `triggers` in frontmatter | `packages/runtime/skills/*/SKILL.md` |
+| **Tool** | Has relevant `triggers` in frontmatter | `packages/runtime/tools/*/TOOL.md` |
+| **New work type or keyword** | Added to `WORK_TYPE_KEYWORDS` | `packages/core/src/services/intelligence.ts` |
+
+**Quick test**: If a user asked for this capability naturally, would the router find it?
+
+Example: New `arete availability find` command → Would "find availability with John" route correctly?
+
+- If routing keywords are missing, flag: "New capability [X] may not be discoverable — consider adding triggers/keywords."
+- If AGENTS.md sources were modified, note: "Rebuild AGENTS.md with `npm run build:agents:dev`."
+
 #### Step 4: Reuse & Duplication Check
 
 - **New services/modules**: Does equivalent functionality already exist? Check AGENTS.md and `src/` (e.g. `src/core/`, `src/integrations/`). If yes, flag: "Reimplemented existing capability — use [X] instead."
