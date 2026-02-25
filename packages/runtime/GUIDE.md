@@ -292,6 +292,16 @@ User: "Build roadmap for Q2 2026"
 - Timeline and dependencies
 - Output to `outputs/`
 
+**General Project** - `general-project` skill
+```
+User: "Start a project for domain ownership"
+User: "Create a project for the migration work"
+```
+- Creates project in `projects/active/{name}/`
+- For work that doesn't fit specialized categories (discovery, PRD, competitive, roadmap)
+- Use for: domain ownership, migrations, operational work, ad-hoc structures
+- Flexible template with inputs/, outputs/, and README
+
 **Working in Projects**
 
 **Synthesize** - `synthesize` skill
@@ -328,7 +338,7 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 |------|--------|
 | **Setup** | getting-started, rapid-context-dump |
 | **Planning** | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
-| **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap |
+| **Discovery & Definition** | discovery, create-prd, competitive-analysis, construct-roadmap, general-project |
 | **Execution** | capture-conversation, meeting-prep, prepare-meeting-agenda, save-meeting, process-meetings, sync, synthesize |
 | **Intelligence** | people-intelligence |
 | **Operations** | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
@@ -791,6 +801,21 @@ arete pull calendar --today --json    # JSON output (for skills)
 **Person Matching**: Calendar attendees are automatically matched to people in your workspace (by email). When viewing events, you'll see person slugs and file paths.
 
 **Skills Integration**: The `daily-plan` skill uses calendar data to build meeting context for each of today's meetings.
+
+**Find Availability** (Google Calendar only):
+```bash
+arete availability find --with "Jane Smith"     # Find open slots with Jane
+arete availability find --with jane@company.com # Or use email directly
+arete availability find --with jane --duration 60 --days 14  # 60-min slots, 2 weeks
+```
+
+Finds mutual free time by querying your calendar and the other person's calendar (via FreeBusy API). Shows slots in your local timezone. The person must be in your workspace (`people/`) with an email address, or you can pass their email directly.
+
+Options:
+- `--duration <minutes>` — Meeting length (default: 30)
+- `--days <n>` — Days to search ahead (default: 7)
+- `--limit <n>` — Max slots to show (default: 5)
+- `--json` — Output as JSON (for scripts/skills)
 
 ### QMD Search
 
