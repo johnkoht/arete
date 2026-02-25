@@ -47,6 +47,30 @@ export interface FreeBusyResult {
   calendars: Record<string, FreeBusyCalendarResult>;
 }
 
+/**
+ * Input for creating a calendar event.
+ */
+export interface CreateEventInput {
+  summary: string;
+  start: Date;
+  end: Date;
+  calendarId?: string; // default 'primary'
+  description?: string;
+  location?: string;
+  attendees?: string[]; // email addresses
+}
+
+/**
+ * Result of creating a calendar event.
+ */
+export interface CreatedEvent {
+  id: string;
+  htmlLink: string;
+  summary: string;
+  start: Date;
+  end: Date;
+}
+
 export interface CalendarProvider {
   name: string;
   isAvailable(): Promise<boolean>;
@@ -58,4 +82,10 @@ export interface CalendarProvider {
    * Optional — not all providers support FreeBusy (e.g., ical-buddy).
    */
   getFreeBusy?(emails: string[], timeMin: Date, timeMax: Date): Promise<FreeBusyResult>;
+
+  /**
+   * Create a calendar event.
+   * Optional — not all providers support event creation (e.g., ical-buddy).
+   */
+  createEvent?(input: CreateEventInput): Promise<CreatedEvent>;
 }

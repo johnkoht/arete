@@ -12,6 +12,8 @@ export type {
   CalendarEvent,
   CalendarOptions,
   CalendarProvider,
+  CreateEventInput,
+  CreatedEvent,
   FreeBusyCalendarResult,
   FreeBusyResult,
 } from './types.js';

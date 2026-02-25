@@ -11,6 +11,8 @@ import type {
   CalendarEvent,
   CalendarOptions,
   CalendarProvider,
+  CreateEventInput,
+  CreatedEvent,
   FreeBusyCalendarResult,
   FreeBusyResult,
 } from './types.js';
@@ -39,6 +41,13 @@ const CONFIGURE_COMMAND = 'arete integration configure google-calendar';
  * Follows the same pattern as IcalBuddyCalendarDeps in ical-buddy.ts.
  */
 export interface FreeBusyDeps {
+  fetch?: typeof fetch;
+}
+
+/**
+ * Dependencies that can be injected for testing the createEvent method.
+ */
+export interface CreateEventDeps {
   fetch?: typeof fetch;
 }
 
@@ -88,6 +97,14 @@ type GoogleFreeBusyCalendar = {
 
 type GoogleFreeBusyResponse = {
   calendars: Record<string, GoogleFreeBusyCalendar>;
+};
+
+type GoogleCreatedEventResponse = {
+  id: string;
+  htmlLink: string;
+  summary?: string;
+  start: GoogleEventTime;
+  end: GoogleEventTime;
 };
 
 // ---------------------------------------------------------------------------
@@ -498,6 +515,51 @@ export function getGoogleCalendarProvider(
       }
 
       return { userBusy, calendars };
+    },
+
+    async createEvent(
+      input: CreateEventInput,
+      deps?: CreateEventDeps
+    ): Promise<CreatedEvent> {
+      const calendarId = input.calendarId ?? 'primary';
+      const url = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`;
+
+      // Build request body — use dateTime with timezone offset for timed events
+      const requestBody: Record<string, unknown> = {
+        summary: input.summary,
+        start: { dateTime: input.start.toISOString() },
+        end: { dateTime: input.end.toISOString() },
+      };
+
+      if (input.description) {
+        requestBody.description = input.description;
+      }
+      if (input.location) {
+        requestBody.location = input.location;
+      }
+      if (input.attendees?.length) {
+        requestBody.attendees = input.attendees.map((email) => ({ email }));
+      }
+
+      const res = await googleFetch(url, storage, workspaceRoot, {
+        method: 'POST',
+        body: requestBody,
+        fetchFn: deps?.fetch,
+      });
+
+      if (!res.ok) {
+        handleApiError(res.status, calendarId);
+      }
+
+      const data = (await res.json()) as GoogleCreatedEventResponse;
+
+      return {
+        id: data.id,
+        htmlLink: data.htmlLink,
+        summary: data.summary ?? input.summary,
+        start: new Date(data.start.dateTime ?? data.start.date ?? input.start.toISOString()),
+        end: new Date(data.end.dateTime ?? data.end.date ?? input.end.toISOString()),
+      };
     },
   };
 }
