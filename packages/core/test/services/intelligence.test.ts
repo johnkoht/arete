@@ -612,4 +612,119 @@ describe('IntelligenceService (via compat)', () => {
       assert.equal(r!.skill, 'meeting-prep');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // general-project routing tests
+  // Test that general-project is routed for generic project queries but
+  // does NOT steal from specialized skills (discovery, competitive-analysis, etc.)
+  // ---------------------------------------------------------------------------
+  describe('routing: general-project skill', () => {
+    const GENERAL_PROJECT_SKILLS: SkillCandidate[] = [
+      {
+        id: 'general-project',
+        name: 'general-project',
+        description: "Start a general-purpose project for work that doesn't fit specialized categories. Use for domain ownership, migration projects, ongoing operational work, or ad-hoc project structures.",
+        path: '/ws/.agents/skills/general-project',
+        triggers: [
+          'start a project',
+          'new project',
+          'create project for',
+          'general project',
+          'project for',
+        ],
+        work_type: 'general',
+        category: 'default',
+      },
+      {
+        id: 'discovery',
+        name: 'discovery',
+        description: 'Guide problem discovery and research synthesis. Use when the user wants to start discovery, understand a problem, research a topic, or validate assumptions.',
+        path: '/ws/.agents/skills/discovery',
+        triggers: ['start discovery', 'discovery project', 'research', 'validate'],
+        primitives: ['Problem', 'User'],
+        work_type: 'discovery',
+        category: 'default',
+      },
+      {
+        id: 'competitive-analysis',
+        name: 'competitive-analysis',
+        description: 'Research competitors and market landscape. Use for competitive intel, market analysis, or understanding the competition.',
+        path: '/ws/.agents/skills/competitive-analysis',
+        triggers: ['competitive analysis', 'analyze competitors', 'competitor research'],
+        primitives: ['Market'],
+        work_type: 'analysis',
+        category: 'default',
+      },
+      {
+        id: 'create-prd',
+        name: 'create-prd',
+        description: 'Create product requirements documents. Use when the user wants to write a PRD, define requirements, or spec out a feature.',
+        path: '/ws/.agents/skills/create-prd',
+        triggers: ['create prd', 'write prd', 'prd for', 'requirements document'],
+        primitives: ['Solution'],
+        work_type: 'definition',
+        category: 'default',
+      },
+      {
+        id: 'construct-roadmap',
+        name: 'construct-roadmap',
+        description: 'Build and maintain product roadmaps. Use when the user wants to build, update, or plan a roadmap, do quarterly planning, or prioritize backlog.',
+        path: '/ws/.agents/skills/construct-roadmap',
+        triggers: ['roadmap', 'quarterly planning', 'roadmap planning'],
+        primitives: ['Solution', 'Market', 'Risk'],
+        work_type: 'delivery',
+        category: 'default',
+      },
+    ];
+
+    it('routes "start a project for domain ownership" to general-project', () => {
+      const r = routeToSkill('start a project for domain ownership', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'general-project');
+    });
+
+    it('routes "new project for migration" to general-project', () => {
+      const r = routeToSkill('new project for migration', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'general-project');
+    });
+
+    it('routes "create project for glance communications" to general-project', () => {
+      const r = routeToSkill('create project for glance communications', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'general-project');
+    });
+
+    // Critical disambiguation tests — specialized skills must win
+    it('routes "start a discovery project" to discovery, NOT general-project', () => {
+      const r = routeToSkill('start a discovery project', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'discovery', 'Should route to discovery, not general-project');
+      assert.notEqual(r!.skill, 'general-project');
+    });
+
+    it('routes "discovery project for search" to discovery, NOT general-project', () => {
+      const r = routeToSkill('discovery project for search', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'discovery');
+    });
+
+    it('routes "competitive analysis project" to competitive-analysis, NOT general-project', () => {
+      const r = routeToSkill('competitive analysis project', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'competitive-analysis');
+    });
+
+    it('routes "create prd for checkout" to create-prd, NOT general-project', () => {
+      const r = routeToSkill('create prd for checkout', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'create-prd');
+    });
+
+    it('routes "roadmap planning" to construct-roadmap, NOT general-project', () => {
+      const r = routeToSkill('roadmap planning', GENERAL_PROJECT_SKILLS);
+      assert.ok(r, 'Should find a match');
+      assert.equal(r!.skill, 'construct-roadmap');
+    });
+  });
 });
