@@ -102,17 +102,25 @@ When a person is specified:
    arete availability find --with <email> --days <N> --duration <D> --limit 3 --json
    ```
 
-3. **Present options** with letter selection:
+3. **Present options** with numbered selection, grouped by day:
    ```
-   Available times with Sarah:
-   A) Mon, Feb 26, 2:00 PM CT (30 min)
-   B) Tue, Feb 27, 10:00 AM CT (30 min)
-   C) Wed, Feb 28, 3:30 PM CT (30 min)
+   Here's availability with Sarah:
    
-   Which slot works? (A/B/C)
+   Tomorrow (Wed, Feb 26):
+   1) 2:00 PM CT
+   
+   Thursday (Feb 27):
+   2) 10:00 AM CT
+   3) 1:00 PM CT
+   
+   Which should I book?
    ```
 
-   **Time format**: Always include timezone abbreviation (CT, ET, PT, etc.).
+   **Format rules**:
+   - Group slots by day with date headers
+   - Use "Tomorrow" or "Today" when applicable
+   - Always include timezone abbreviation (CT, ET, PT, etc.)
+   - Number sequentially (1, 2, 3) not by day
 
 4. **Handle no availability**:
    ```
@@ -125,14 +133,13 @@ When a person is specified:
 ### 5. Handle User Response
 
 **Parse the response**:
-- Case-insensitive: "a" = "A"
-- Trim whitespace and punctuation: " A. " → "A"
-- Accept: A, B, C (matching the presented options)
+- Accept numbers: "1", "2", "3" (matching the presented options)
+- Trim whitespace and punctuation: " 2. " → "2"
 - Accept: "none", "cancel", "nevermind" → cancel gracefully
 
 **If invalid response**:
 ```
-I didn't catch that. Please pick A, B, or C (or type 'none' to cancel).
+I didn't catch that. Please pick a number (1, 2, or 3) or type 'none' to cancel.
 ```
 
 Re-prompt up to 2 times, then offer to start over.
@@ -151,7 +158,7 @@ Re-prompt up to 2 times, then offer to start over.
 
 3. **Parse response** for success or error.
 
-### 7. Confirm
+### 7. Confirm and Follow Up
 
 **On success**:
 ```
@@ -159,7 +166,13 @@ Re-prompt up to 2 times, then offer to start over.
    📅 Mon, Feb 26, 2:00 PM CT (30 min)
    📧 Invite sent to sarah@example.com
    🔗 Calendar link: <url>
+
+Would you like me to prepare a meeting agenda?
 ```
+
+**If user says yes**: Use the [meeting-prep](../meeting-prep/SKILL.md) skill to build context, then offer to create an agenda via [prepare-meeting-agenda](../prepare-meeting-agenda/SKILL.md).
+
+**If user says no or doesn't respond**: Done — no further action needed.
 
 **On error**:
 - Auth error → "Calendar not configured. Run: arete integration configure google-calendar"
@@ -178,18 +191,27 @@ Re-prompt up to 2 times, then offer to start over.
 3. Find: `arete availability find --with sarah@example.com --days 1 --duration 30 --limit 3 --json`
 4. Present:
    ```
-   Available times with Sarah:
-   A) Tue, Feb 27, 10:00 AM CT (30 min)
-   B) Tue, Feb 27, 2:00 PM CT (30 min)
+   Here's availability with Sarah:
    
-   Which slot works? (A/B)
+   Tomorrow (Tue, Feb 27):
+   1) 10:00 AM CT
+   2) 2:00 PM CT
+   
+   Which should I book?
    ```
 
-**User**: "A"
+**User**: "1"
 
 **Agent**:
 1. Create: `arete calendar create --title "1:1 with Sarah" --with sarah@example.com --start "2026-02-27T10:00:00" --duration 30 --json`
-2. Confirm: "✅ Booked: 1:1 with Sarah at Tue, Feb 27, 10:00 AM CT"
+2. Confirm:
+   ```
+   ✅ Booked: 1:1 with Sarah
+      📅 Tue, Feb 27, 10:00 AM CT (30 min)
+      📧 Invite sent to sarah@example.com
+   
+   Would you like me to prepare a meeting agenda?
+   ```
 
 ### Example 2: Block time
 
@@ -217,7 +239,7 @@ Re-prompt up to 2 times, then offer to start over.
 | Person not found | Ask for email or clarification |
 | No availability | Offer to check different range or send scheduling link |
 | Calendar not configured | Direct to: `arete integration configure google-calendar` |
-| Invalid slot selection | Re-prompt: "Please pick A, B, or C (or type 'none' to cancel)" |
+| Invalid slot selection | Re-prompt: "Please pick a number (1, 2, or 3) or type 'none' to cancel" |
 | API error | Show error, offer to retry |
 
 ## References
