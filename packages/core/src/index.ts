@@ -51,7 +51,13 @@ export { getPackageRoot } from './package-root.js';
 // Adapters and integrations
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export type { IDEAdapter, IDETarget } from './adapters/index.js';
-export { getCalendarProvider } from './integrations/calendar/index.js';
+export {
+  getCalendarProvider,
+  type BusyBlock,
+  type FreeBusyResult,
+  type FreeBusyCalendarResult,
+  type CalendarProvider,
+} from './integrations/calendar/index.js';
 export {
   saveMeetingFile,
   meetingFilename,

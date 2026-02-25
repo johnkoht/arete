@@ -31,6 +31,7 @@ import { registerTemplateCommands } from './commands/template.js';
 import { registerSeedCommand } from './commands/seed.js';
 import { registerOnboardCommand } from './commands/onboard.js';
 import { registerIndexSearchCommand } from './commands/index-search.js';
+import { registerAvailabilityCommands } from './commands/availability.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -82,6 +83,9 @@ ${chalk.bold('Integrations')}
   pull fathom [--days N]           Pull Fathom recordings
   seed [source]                    Import historical data
 
+${chalk.bold('Availability')}
+  availability find --with <name>  Find mutual availability with a colleague
+
 ${chalk.bold('Meetings & Templates')}
   meeting add --file <path>        Add meeting from JSON
   template list meeting-agendas    List templates
@@ -108,5 +112,6 @@ registerPullCommand(program);
 registerMeetingCommands(program);
 registerTemplateCommands(program);
 registerSeedCommand(program);
+registerAvailabilityCommands(program);
 
 program.parse();
