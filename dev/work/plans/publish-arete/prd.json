@@ -1,0 +1,72 @@
+{
+  "name": "publish-arete",
+  "branchName": "feature/publish-arete",
+  "goal": "Make Areté installable directly from GitHub so early users can try it without waiting for npm publish via `npm install -g github:johnkoht/arete`",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Fix root package.json for GitHub install",
+      "description": "Update root package.json to fix dependency resolution and add required metadata for GitHub-based npm installs. Change workspace:* to file: protocol, fix inquirer dependency mismatch, add repository and author fields.",
+      "acceptanceCriteria": [
+        "No `workspace:*` in dependencies — changed to `file:./packages/core`",
+        "`@inquirer/prompts` in dependencies (not `inquirer`)",
+        "`repository` field present with GitHub URL",
+        "`author` field set to 'John Koht'",
+        "`npm install` succeeds locally after changes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Fix getSourcePaths() for external install",
+      "description": "Simplify getSourcePaths() in packages/core/src/compat/workspace.ts to always return packages/runtime/ paths. Remove the useRuntime parameter and update all callers in packages/cli/src/commands/.",
+      "acceptanceCriteria": [
+        "`getSourcePaths()` signature is `getSourcePaths(packageRoot: string): SourcePaths`",
+        "Function always returns paths under `packages/runtime/`",
+        "No references to `useRuntime` in `packages/` directory",
+        "`npm run typecheck` passes",
+        "`npm test` passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Test fresh clone + local install",
+      "description": "Verify the fix works by cloning the repo fresh to /tmp and testing the install flow locally. Must push changes to GitHub first, then clone and test.",
+      "acceptanceCriteria": [
+        "Changes committed and pushed to GitHub",
+        "Fresh clone `npm install` completes without error",
+        "`npx arete --version` returns version string",
+        "`npx arete install ./test-workspace` creates workspace",
+        "Workspace contains `.cursor/rules/`, `.agents/skills/`, `context/`"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Test global GitHub install end-to-end",
+      "description": "Test the full user experience: global install from GitHub, then create a workspace. This is the final validation that the feature works as intended.",
+      "acceptanceCriteria": [
+        "`npm install -g github:johnkoht/arete` completes without error",
+        "`arete --version` works after global install",
+        "`arete install <dir>` creates a complete workspace",
+        "Workspace has: `.cursor/rules/`, `.agents/skills/`, `context/`, `now/`, `goals/`"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-25T23:10:00.000Z",
+    "totalTasks": 4,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

@@ -5,12 +5,12 @@ status: building
 size: small
 tags: [distribution, github, npm]
 created: 2026-02-25T22:45:00.000Z
-updated: 2026-02-25T23:03:56.647Z
+updated: 2026-02-25T23:05:50.293Z
 completed: null
 execution: null
 has_review: false
 has_pre_mortem: true
-has_prd: false
+has_prd: true
 steps: 4
 ---
 

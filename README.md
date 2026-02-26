@@ -37,8 +37,11 @@ Product builders face three persistent problems:
 ### Installation
 
 ```bash
-# Install globally
-npm install -g @arete/cli
+# Clone and install
+git clone https://github.com/johnkoht/arete.git
+cd arete
+npm install
+npm link
 
 # Create new workspace
 arete install ~/my-pm-workspace
@@ -51,6 +54,8 @@ cd ~/my-pm-workspace
 # Open in Cursor (or Claude Code)
 # Ask: "Give me a tour"
 ```
+
+> **Note:** npm publish coming soon. For now, clone + link is the installation method.
 
 ### First 15 Minutes
 
@@ -73,9 +78,15 @@ I want to set up Areté — a product management workspace that helps me work be
 
 Here's what I need help with:
 
-1. **Check prerequisites** — Verify I have Node.js 18+ installed. If not, tell me how to install it for my operating system.
+1. **Check prerequisites** — Verify I have Node.js 18+ and git installed. If not, tell me how to install them for my operating system.
 
-2. **Install the Areté CLI** — Run: `npm install -g @arete/cli`
+2. **Install the Areté CLI** — Clone and link the repo:
+   ```
+   git clone https://github.com/johnkoht/arete.git
+   cd arete
+   npm install
+   npm link
+   ```
 
 3. **Create my workspace** — Ask me:
    - Where I want to create it (suggest `~/pm-workspace` as a default)
