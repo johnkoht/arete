@@ -50,6 +50,21 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 - **Regression test at the config boundary**: Add a test that uses the exact value written by `configure` and asserts the `pull` command does NOT error. This catches the producer-consumer mismatch before it reaches production. Pattern from `2026-02-11_calendar-provider-macos-alias.md`.
 - **Comment at the consumer**: A one-line comment at the factory ("configure writes 'macos'; accept both") helps future refactors avoid dropping the alias. Already in `calendar/index.ts`.
 
+## Google Calendar OAuth Scopes (2026-02-25)
+
+**What broke**: After changing scopes from `calendar.readonly` to `calendar.events + calendar.events.freebusy`, the `listCalendars` endpoint started returning 403.
+
+**Why**: The `calendarList.list` API endpoint requires `calendar.readonly` scope. The `calendar.events` scope only allows CRUD on events, not listing which calendars exist.
+
+**Required scopes for full functionality**:
+- `calendar.readonly` — list calendars, read events
+- `calendar.events` — create/update/delete events  
+- `calendar.events.freebusy` — check free/busy for availability
+
+**How to avoid**: When changing OAuth scopes, verify ALL API endpoints still work. The Google Calendar API has different scope requirements for different endpoints.
+
+---
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new calendar config field: check every consumer in `pull.ts`, `integration.ts`, `status.ts` for alignment
