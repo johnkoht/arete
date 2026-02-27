@@ -3,9 +3,9 @@
  *
  * Imports from common.ts and workspace.ts.
  */
-import type { DateRange, ExtendedMemoryItemType, MemoryItemType } from './common.js';
+import type { DateRange, MemoryItemType } from './common.js';
 import type { WorkspacePaths } from './workspace.js';
-export type { ExtendedMemoryItemType, MemoryItemType } from './common.js';
+export type { MemoryItemType } from './common.js';
 /** A single memory entry (stored document) */
 export type MemoryEntry = {
     type: MemoryItemType;
@@ -19,7 +19,7 @@ export type MemoryEntry = {
 export type MemoryResult = {
     content: string;
     source: string;
-    type: ExtendedMemoryItemType;
+    type: MemoryItemType;
     date?: string;
     relevance: string;
     score?: number;
@@ -54,7 +54,7 @@ export type CreateMemoryRequest = {
 };
 /** A timeline item with relevance score */
 export type TimelineItem = {
-    type: ExtendedMemoryItemType;
+    type: MemoryItemType | 'meeting';
     title: string;
     content: string;
     date: string;

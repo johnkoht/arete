@@ -194,7 +194,7 @@ export function registerMemoryCommand(program) {
         .description('Search workspace memory');
     memoryCmd
         .command('search <query>')
-        .description('Search decisions, learnings, observations, meetings, and conversations')
+        .description('Search decisions, learnings, and observations')
         .option('--types <list>', 'Comma-separated types')
         .option('--limit <n>', 'Max results')
         .option('--json', 'Output as JSON')
@@ -252,11 +252,7 @@ export function registerMemoryCommand(program) {
                 ? chalk.cyan
                 : item.type === 'learnings'
                     ? chalk.green
-                    : item.type === 'meeting'
-                        ? chalk.magenta
-                        : item.type === 'conversation'
-                            ? chalk.blue
-                            : chalk.yellow;
+                    : chalk.yellow;
             const titleMatch = item.content.match(/^###\s+(?:\d{4}-\d{2}-\d{2}:\s*)?(.+)/m);
             const title = titleMatch
                 ? titleMatch[1].trim()

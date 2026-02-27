@@ -3,7 +3,7 @@
  *
  * Re-exports all domain types from a single entry point.
  */
-export type { ProductPrimitive, WorkType, SkillCategory, AgentMode, EntityType, ExtendedMemoryItemType, MemoryItemType, DateRange, } from './common.js';
+export type { ProductPrimitive, WorkType, SkillCategory, AgentMode, EntityType, MemoryItemType, DateRange, } from './common.js';
 export { PRODUCT_PRIMITIVES } from './common.js';
 export type { MemoryEntry, MemoryResult, MemorySearchRequest, MemorySearchResult, MemorySearchOptions, CreateMemoryRequest, TimelineItem, MemoryTimeline, MemoryIndex, } from './memory.js';
 export type { ContextFile, ContextFileFreshness, ContextGap, ContextBundle, ContextRequest, ContextInventory, ContextInjectionOptions, } from './context.js';
