@@ -11,6 +11,7 @@ export type {
   SkillCategory,
   AgentMode,
   EntityType,
+  ExtendedMemoryItemType,
   MemoryItemType,
   DateRange,
 } from './common.js';

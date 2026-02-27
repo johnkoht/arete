@@ -15,8 +15,10 @@ export type SkillCategory = 'essential' | 'default' | 'community';
 export type AgentMode = 'builder' | 'guide';
 /** Entity type for resolution */
 export type EntityType = 'person' | 'meeting' | 'project' | 'any';
-/** Memory item type */
+/** Memory item type (core memory files) */
 export type MemoryItemType = 'decisions' | 'learnings' | 'observations';
+/** Extended memory item type (includes meetings and conversations for search) */
+export type ExtendedMemoryItemType = MemoryItemType | 'meeting' | 'conversation';
 /** Date range filter used by search operations */
 export type DateRange = {
     start?: string;

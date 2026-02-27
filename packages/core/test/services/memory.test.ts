@@ -85,4 +85,87 @@ describe('MemoryService (via compat)', () => {
     assert.equal(result.results.length, 2);
     assert.equal(result.total, 3);
   });
+
+  it('searches meetings and returns type=meeting', async () => {
+    writeFixtureFile(
+      'resources/meetings/2026-02-25-glance-account-filtering.md',
+      `---
+title: "Glance Account Filtering Discussion"
+---
+
+# Glance Account Filtering Discussion
+
+## Discussion
+
+We discussed the multi-account filtering feature for Glance.
+The accounts need to be filterable by region and status.
+`,
+    );
+
+    const result = await searchMemory('account filtering', paths);
+    assert.ok(result.results.length >= 1, 'Should find at least one result');
+    const meetingResult = result.results.find(r => r.type === 'meeting');
+    assert.ok(meetingResult, 'Should have a meeting type result');
+    assert.equal(meetingResult.source, '2026-02-25-glance-account-filtering.md');
+    assert.ok(meetingResult.content.includes('multi-account'), 'Content should include meeting text');
+  });
+
+  it('searches conversations and returns type=conversation', async () => {
+    writeFixtureFile(
+      'resources/conversations/2026-02-25-glance-multi-account-filtering-request.md',
+      `---
+title: "Glance Multi-Account Filtering Request"
+---
+
+# Glance Multi-Account Filtering Request
+
+## Summary
+
+Customer requested multi-account filtering support.
+They need to filter by account status and region.
+`,
+    );
+
+    const result = await searchMemory('multi-account', paths);
+    assert.ok(result.results.length >= 1, 'Should find at least one result');
+    const conversationResult = result.results.find(r => r.type === 'conversation');
+    assert.ok(conversationResult, 'Should have a conversation type result');
+    assert.equal(conversationResult.source, '2026-02-25-glance-multi-account-filtering-request.md');
+    assert.ok(conversationResult.content.includes('multi-account'), 'Content should include conversation text');
+  });
+
+  it('combines results from memory files, meetings, and conversations', async () => {
+    writeFixtureFile(
+      '.arete/memory/items/decisions.md',
+      `# Decisions
+
+### 2026-02-20: Account structure decision
+**Decision**: Use hierarchical accounts.
+`,
+    );
+    writeFixtureFile(
+      'resources/meetings/2026-02-22-account-planning.md',
+      `---
+title: "Account Planning Meeting"
+---
+Discussion about account management features.
+`,
+    );
+    writeFixtureFile(
+      'resources/conversations/2026-02-24-account-feedback.md',
+      `---
+title: "Account Feature Feedback"
+---
+Customer feedback on account features.
+`,
+    );
+
+    const result = await searchMemory('account', paths);
+    assert.ok(result.total >= 3, 'Should find results from all three sources');
+    
+    const types = result.results.map(r => r.type);
+    assert.ok(types.includes('decisions'), 'Should include decisions');
+    assert.ok(types.includes('meeting'), 'Should include meetings');
+    assert.ok(types.includes('conversation'), 'Should include conversations');
+  });
 });

@@ -17,6 +17,7 @@ import type {
   DateRange,
   WorkspacePaths,
   MemoryItemType,
+  ExtendedMemoryItemType,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +192,10 @@ export class MemoryService {
     if (queryTokens.length === 0) {
       return { query, results: [], total: 0 };
     }
+
+    let allResults: { content: string; source: string; type: ExtendedMemoryItemType; date?: string; relevance: string; score?: number }[] = [];
+
+    // 1. Search memory files (decisions, learnings, observations)
     const memoryItemsDir = join(paths.memory, 'items');
     const typesToSearch: MemoryItemType[] = types && types.length > 0
       ? types
@@ -204,42 +209,40 @@ export class MemoryService {
         memoryFileRelPaths.push(join('.arete', 'memory', 'items', fileName));
       }
     }
-    if (memoryFileRelPaths.length === 0) {
-      return { query, results: [], total: 0 };
-    }
 
-    let allResults: { content: string; source: string; type: MemoryItemType; date?: string; relevance: string; score?: number }[] = [];
-
-    try {
-      const searchResults = await this.searchProvider.semanticSearch(query, {
-        paths: memoryFileRelPaths,
-        limit: limit * 3,
-      });
-      if (searchResults.length > 0) {
-        for (const sr of searchResults) {
-          const memType = getMemoryTypeFromPath(sr.path);
-          if (!memType) continue;
-          const sections = parseMemorySections(sr.content);
-          const fileName = sr.path.split(/[/\\]/).pop() || '';
-          for (const section of sections) {
-            const boostedScore = applyRecencyBoost(sr.score, section.date);
-            allResults.push({
-              content: section.raw,
-              source: fileName,
-              type: memType,
-              date: section.date,
-              relevance: `Semantic match (score: ${sr.score.toFixed(2)})`,
-              score: boostedScore,
-            });
+    // Try semantic search for memory files first
+    if (memoryFileRelPaths.length > 0) {
+      try {
+        const searchResults = await this.searchProvider.semanticSearch(query, {
+          paths: memoryFileRelPaths,
+          limit: limit * 3,
+        });
+        if (searchResults.length > 0) {
+          for (const sr of searchResults) {
+            const memType = getMemoryTypeFromPath(sr.path);
+            if (!memType) continue;
+            const sections = parseMemorySections(sr.content);
+            const fileName = sr.path.split(/[/\\]/).pop() || '';
+            for (const section of sections) {
+              const boostedScore = applyRecencyBoost(sr.score, section.date);
+              allResults.push({
+                content: section.raw,
+                source: fileName,
+                type: memType,
+                date: section.date,
+                relevance: `Semantic match (score: ${sr.score.toFixed(2)})`,
+                score: boostedScore,
+              });
+            }
           }
         }
+      } catch {
+        // Fall through to token-based fallback
       }
-    } catch {
-      // Fall through to token-based fallback
     }
 
-    if (allResults.length === 0) {
-      const fallbackResults: { content: string; source: string; type: MemoryItemType; date?: string; relevance: string; _rawScore: number }[] = [];
+    // Fallback to token-based search for memory files if semantic returned nothing
+    if (allResults.length === 0 && memoryFileRelPaths.length > 0) {
       for (const memType of typesToSearch) {
         const fileName = MEMORY_FILES[memType];
         const filePath = join(memoryItemsDir, fileName);
@@ -251,25 +254,114 @@ export class MemoryService {
         for (const section of sections) {
           const rawScore = scoreSection(section, queryTokens);
           if (rawScore > 0) {
-            fallbackResults.push({
+            const normalizedScore = Math.min(rawScore / (queryTokens.length * 4), 1);
+            const boostedScore = applyRecencyBoost(normalizedScore, section.date);
+            allResults.push({
               content: section.raw,
               source: fileName,
               type: memType,
               date: section.date,
               relevance: buildRelevance(section, queryTokens),
-              _rawScore: rawScore,
+              score: boostedScore,
             });
           }
         }
       }
-      const maxRaw = fallbackResults.length > 0 ? Math.max(...fallbackResults.map(r => r._rawScore)) : 1;
-      allResults = fallbackResults.map(({ _rawScore, ...rest }) => {
-        const normalizedScore = maxRaw > 0 ? _rawScore / maxRaw : 0;
-        const boostedScore = applyRecencyBoost(normalizedScore, rest.date);
-        return { ...rest, score: boostedScore };
-      });
     }
 
+    // 2. Search meetings (resources/meetings/*.md)
+    const meetingsDir = join(paths.resources, 'meetings');
+    const meetingsExist = await this.storage.exists(meetingsDir);
+    if (meetingsExist) {
+      const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
+      for (const meetingPath of meetingFiles) {
+        const baseName = meetingPath.split(/[/\\]/).pop() ?? '';
+        if (baseName === 'index.md') continue;
+
+        const content = await this.storage.read(meetingPath);
+        if (content === null) continue;
+
+        // Extract title from frontmatter or first heading
+        let title = baseName.replace(/\.md$/, '');
+        const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        } else {
+          const headingMatch = content.match(/^#\s+(.+)/m);
+          if (headingMatch) title = headingMatch[1].trim();
+        }
+
+        // Score against query
+        const combined = (title + ' ' + content).toLowerCase();
+        let rawScore = 0;
+        for (const token of queryTokens) {
+          if (combined.includes(token)) rawScore += 1;
+          if (title.toLowerCase().includes(token)) rawScore += 2;
+        }
+        if (rawScore <= 0) continue;
+
+        const meetingDate = extractDateFromFilename(baseName);
+        const normalizedScore = Math.min(rawScore / (queryTokens.length * 3), 1);
+        const boostedScore = meetingDate ? applyRecencyBoost(normalizedScore, meetingDate) : normalizedScore;
+
+        allResults.push({
+          content: content.slice(0, 500),
+          source: baseName,
+          type: 'meeting',
+          date: meetingDate,
+          relevance: `Meeting match (score: ${normalizedScore.toFixed(2)})`,
+          score: boostedScore,
+        });
+      }
+    }
+
+    // 3. Search conversations (resources/conversations/*.md)
+    const conversationsDir = join(paths.resources, 'conversations');
+    const conversationsExist = await this.storage.exists(conversationsDir);
+    if (conversationsExist) {
+      const conversationFiles = await this.storage.list(conversationsDir, { extensions: ['.md'] });
+      for (const conversationPath of conversationFiles) {
+        const baseName = conversationPath.split(/[/\\]/).pop() ?? '';
+        if (baseName === 'index.md') continue;
+
+        const content = await this.storage.read(conversationPath);
+        if (content === null) continue;
+
+        // Extract title from frontmatter or first heading
+        let title = baseName.replace(/\.md$/, '');
+        const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        } else {
+          const headingMatch = content.match(/^#\s+(.+)/m);
+          if (headingMatch) title = headingMatch[1].trim();
+        }
+
+        // Score against query
+        const combined = (title + ' ' + content).toLowerCase();
+        let rawScore = 0;
+        for (const token of queryTokens) {
+          if (combined.includes(token)) rawScore += 1;
+          if (title.toLowerCase().includes(token)) rawScore += 2;
+        }
+        if (rawScore <= 0) continue;
+
+        const conversationDate = extractDateFromFilename(baseName);
+        const normalizedScore = Math.min(rawScore / (queryTokens.length * 3), 1);
+        const boostedScore = conversationDate ? applyRecencyBoost(normalizedScore, conversationDate) : normalizedScore;
+
+        allResults.push({
+          content: content.slice(0, 500),
+          source: baseName,
+          type: 'conversation',
+          date: conversationDate,
+          relevance: `Conversation match (score: ${normalizedScore.toFixed(2)})`,
+          score: boostedScore,
+        });
+      }
+    }
+
+    // Sort by score (descending), then by date (descending)
     allResults.sort((a, b) => {
       const scoreA = a.score ?? 0;
       const scoreB = b.score ?? 0;
@@ -397,13 +489,65 @@ export class MemoryService {
       }
     }
 
-    // 3. Sort by date (chronological, newest first)
+    // 3. Search conversations (resources/conversations/*.md)
+    const conversationsDir = join(paths.resources, 'conversations');
+    const conversationsExist = await this.storage.exists(conversationsDir);
+    if (conversationsExist) {
+      const conversationFiles = await this.storage.list(conversationsDir, { extensions: ['.md'] });
+      for (const conversationPath of conversationFiles) {
+        const baseName = conversationPath.split(/[/\\]/).pop() ?? '';
+        if (baseName === 'index.md') continue;
+
+        const conversationDate = extractDateFromFilename(baseName);
+        if (conversationDate && !isInDateRange(conversationDate, range)) continue;
+
+        const content = await this.storage.read(conversationPath);
+        if (content === null) continue;
+
+        // Extract title from frontmatter or first heading
+        let title = baseName.replace(/\.md$/, '');
+        const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        } else {
+          const headingMatch = content.match(/^#\s+(.+)/m);
+          if (headingMatch) title = headingMatch[1].trim();
+        }
+
+        // Score against query
+        const combined = (title + ' ' + content).toLowerCase();
+        let score = 0;
+        for (const token of queryTokens) {
+          if (combined.includes(token)) score += 1;
+          if (title.toLowerCase().includes(token)) score += 2;
+        }
+        if (score <= 0 && queryTokens.length > 0) continue;
+
+        const date = conversationDate ?? '';
+        if (!date && !isInDateRange('', range)) continue;
+
+        const normalizedScore = queryTokens.length > 0
+          ? Math.min(score / (queryTokens.length * 3), 1)
+          : 0.5;
+
+        items.push({
+          type: 'conversation',
+          title,
+          content: content.slice(0, 500),
+          date,
+          source: baseName,
+          relevanceScore: date ? applyRecencyBoost(normalizedScore, date) : normalizedScore,
+        });
+      }
+    }
+
+    // 4. Sort by date (chronological, newest first)
     items.sort((a, b) => b.date.localeCompare(a.date));
 
-    // 4. Extract recurring themes
+    // 5. Extract recurring themes
     const themes = extractThemes(items);
 
-    // 5. Build effective date range
+    // 6. Build effective date range
     const dates = items.map(i => i.date).filter(d => d.length > 0);
     const effectiveRange: DateRange = {
       start: range?.start ?? (dates.length > 0 ? dates[dates.length - 1] : undefined),
