@@ -253,7 +253,13 @@ function compressMemorySection(content: string): string {
  */
 function compressCLICommands(content: string): string {
   const lines = content.split('\n');
-  const compressed: string[] = ['[CLI]'];
+  // Add tool selection guidance before command list
+  const compressed: string[] = [
+    '[CLI]',
+    '|tool_selection:"What do you know about X?"→context --for; "What decisions about X?"→memory search; "Who is X?"→resolve; "History of X?"→memory timeline; "Prep for X"→brief --for',
+    '|context_scope:context/, goals/, projects/, people/, meetings, conversations (broad search)',
+    '|memory_scope:.arete/memory/items/ only: decisions.md, learnings.md, observations.md (explicit institutional memory)',
+  ];
   
   let currentSection = '';
   for (const line of lines) {

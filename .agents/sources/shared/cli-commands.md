@@ -2,12 +2,27 @@
 
 ## Intelligence Services
 
+**Choosing the right tool:**
+- "What do you know about X?" / "Find info about X" → `context --for` (searches everything)
+- "What decisions were made about X?" → `memory search` (explicit institutional memory only)
+- "Who is X?" / "Which meeting?" → `resolve` (entity disambiguation)
+- "What's the history of X?" → `memory timeline` (temporal view)
+- "Prep me for task X" → `brief --for` (full briefing with context + memory + entities)
+
+| Command | Searches | Use when |
+|---------|----------|----------|
+| `context --for` | context/, goals/, projects/, people/, meetings, conversations | General knowledge queries, "what do we know about X" |
+| `memory search` | .arete/memory/items/ only (decisions.md, learnings.md, observations.md) | Looking for explicit recorded decisions or learnings |
+| `memory timeline` | memory items + meetings | Understanding how a topic evolved over time |
+| `resolve` | people/, meetings/, projects/ | Disambiguating "John" or "last week's sync" |
+| `brief --for` | All of the above combined | Preparing for a specific task or skill |
+
 - `arete route "<query>"` - Route user message to best skill and suggest model tier
 - `arete skill route "<query>"` - Route to skill only (for agents before loading skill)
 - `arete brief --for "task" --skill <name>` - Assemble primitive briefing (context + memory + entities + relationships)
-- `arete context --for "query"` - Get relevant workspace files for a task
+- `arete context --for "query"` - Get relevant workspace files for a task (includes meetings, conversations, projects)
 - `arete context --for "query" --inventory` - Show context freshness dashboard with coverage gaps
-- `arete memory search "query"` - Search decisions, learnings, and observations
+- `arete memory search "query"` - Search explicit decisions, learnings, and observations only
 - `arete memory timeline "query" [--days N] [--json]` - Temporal view of a topic with recurring themes
 - `arete resolve "reference"` - Resolve ambiguous names (people, meetings, projects)
 
