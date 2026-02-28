@@ -1,5 +1,5 @@
 ---
-status: building
+status: complete
 size: medium
 created: 2026-02-22
 updated: 2026-02-22T21:20:04.480Z

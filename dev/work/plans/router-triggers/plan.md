@@ -1,7 +1,7 @@
 ---
 title: Router Triggers
 slug: router-triggers
-status: building
+status: complete
 size: unknown
 tags: []
 created: 2026-02-24T04:57:53.761Z

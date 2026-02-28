@@ -9,7 +9,7 @@ import {
   configureNotionIntegration,
   resolveNotionToken,
 } from '../../src/commands/integration.js';
-import { createTmpDir, cleanupTmpDir, runCli } from '../helpers.js';
+import { createTmpDir, cleanupTmpDir, runCli, runCliRaw } from '../helpers.js';
 
 describe('integration command', () => {
   let workspaceDir: string;
@@ -160,25 +160,27 @@ describe('integration command', () => {
     // Pre-flight check should prevent OAuth flow when no real credentials are set
     runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
 
-    // Ensure env vars are NOT set (placeholders will be used)
-    const env = { ...process.env };
-    delete env.GOOGLE_CLIENT_ID;
-    delete env.GOOGLE_CLIENT_SECRET;
-
-    try {
-      runCli(['integration', 'configure', 'google-calendar'], {
+    // Explicitly unset Google credentials so placeholders are used
+    // Setting to empty string overrides any real env vars from parent process
+    const { stdout, stderr, code } = runCliRaw(
+      ['integration', 'configure', 'google-calendar'],
+      {
         cwd: workspaceDir,
-        env,
-      });
-      assert.fail('Should have exited with error');
-    } catch (err: unknown) {
-      const message = (err as Error).message ?? String(err);
-      // execSync throws on non-zero exit — verify it exited (beta gate)
-      assert.ok(
-        message.includes('beta') || message.includes('Command failed') || message.includes('status 1'),
-        `Expected beta gate exit, got: ${message}`,
-      );
-    }
+        env: {
+          ...process.env,
+          GOOGLE_CLIENT_ID: '',
+          GOOGLE_CLIENT_SECRET: '',
+        },
+      }
+    );
+
+    // Should exit with error (beta gate blocks when no real credentials)
+    assert.notEqual(code, 0, 'Should exit with non-zero code');
+    const output = stderr || stdout;
+    assert.ok(
+      output.includes('beta') || output.includes('Beta') || code === 1,
+      `Expected beta gate exit, got code=${code}: ${output}`,
+    );
   });
 
   it('shows google-calendar as active when integrations.calendar uses provider google', () => {

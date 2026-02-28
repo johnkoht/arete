@@ -1,7 +1,7 @@
 ---
 title: Notion Integration
 slug: notion-integration
-status: building
+status: complete
 size: large
 tags: [integration, notion, pull, mcp]
 created: 2026-02-22T21:15:50.725Z

@@ -1,7 +1,7 @@
 ---
 title: Publish Areté to GitHub
 slug: publish-arete
-status: building
+status: complete
 size: small
 tags: [distribution, github, npm]
 created: 2026-02-25T22:45:00.000Z

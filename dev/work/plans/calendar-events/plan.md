@@ -1,7 +1,7 @@
 ---
 title: Calendar Events
 slug: calendar-events
-status: building
+status: complete
 size: medium
 tags: [calendar, scheduling, skill]
 created: 2026-02-25T16:13:12.472Z

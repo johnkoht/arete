@@ -1,7 +1,7 @@
 ---
 title: Google Calendar Provider
 slug: google-calendar-provider
-status: building
+status: complete
 size: large
 tags: [feature, integration, oauth]
 created: 2026-02-20T03:47:16Z

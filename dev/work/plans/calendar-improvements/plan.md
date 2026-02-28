@@ -1,6 +1,6 @@
 ---
 title: Calendar FreeBusy Integration
-status: building
+status: complete
 size: medium
 created: 2026-02-24
 tags: []
