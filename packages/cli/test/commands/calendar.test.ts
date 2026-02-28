@@ -37,9 +37,13 @@ describe('calendar command', () => {
     it('parses "today" keyword', () => {
       const now = new Date();
       const result = parseNaturalDate('today');
-      assert.equal(result.getDate(), now.getDate());
-      assert.equal(result.getMonth(), now.getMonth());
-      assert.equal(result.getFullYear(), now.getFullYear());
+      // If hour is 23, adding 1 hour rolls to next day - account for this
+      const expectedDate = new Date(now);
+      expectedDate.setMinutes(0, 0, 0);
+      expectedDate.setHours(expectedDate.getHours() + 1);
+      assert.equal(result.getDate(), expectedDate.getDate());
+      assert.equal(result.getMonth(), expectedDate.getMonth());
+      assert.equal(result.getFullYear(), expectedDate.getFullYear());
       // Should be at next hour with 0 minutes
       assert.equal(result.getMinutes(), 0);
     });
