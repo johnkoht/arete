@@ -11,7 +11,9 @@
   "files": [
     "bin/",
     "packages/cli/dist/",
+    "packages/cli/package.json",
     "packages/core/dist/",
+    "packages/core/package.json",
     "packages/runtime/",
     "AGENTS.md",
     "dist/"
