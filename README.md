@@ -37,11 +37,8 @@ Product builders face three persistent problems:
 ### Installation
 
 ```bash
-# Clone and install
-git clone https://github.com/johnkoht/arete.git
-cd arete
-npm install
-npm link
+# Install globally from GitHub
+npm install -g github:johnkoht/arete
 
 # Create new workspace
 arete install ~/my-pm-workspace
@@ -55,7 +52,16 @@ cd ~/my-pm-workspace
 # Ask: "Give me a tour"
 ```
 
-> **Note:** npm publish coming soon. For now, clone + link is the installation method.
+<details>
+<summary>Alternative: Clone + Link (for development)</summary>
+
+```bash
+git clone https://github.com/johnkoht/arete.git
+cd arete
+npm install
+npm link
+```
+</details>
 
 ### First 15 Minutes
 
@@ -80,12 +86,9 @@ Here's what I need help with:
 
 1. **Check prerequisites** — Verify I have Node.js 18+ and git installed. If not, tell me how to install them for my operating system.
 
-2. **Install the Areté CLI** — Clone and link the repo:
+2. **Install the Areté CLI** — Install globally from GitHub:
    ```
-   git clone https://github.com/johnkoht/arete.git
-   cd arete
-   npm install
-   npm link
+   npm install -g github:johnkoht/arete
    ```
 
 3. **Create my workspace** — Ask me:
