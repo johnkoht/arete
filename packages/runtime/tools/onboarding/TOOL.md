@@ -411,148 +411,94 @@ You've read the positive guidance—here's what doesn't work. These are common m
 
 ## Project Structure
 
-When activated, create this structure in `projects/active/onboarding/`:
+When activated, create this lean structure in `projects/active/onboarding/`:
 
 ```
 projects/active/onboarding/
-├── README.md                    # Status, current phase, progress tracker
-├── plan/
-│   ├── 30-60-90.md              # High-level phase plan
-│   ├── 30-day-detailed.md       # Detailed first 30 days
-│   └── weekly/                  # Week-by-week plans
-│       ├── week-01.md
-│       ├── week-02.md
-│       └── ...
-├── inputs/
-│   ├── 1-1s/                    # 1:1 meeting notes
-│   │   └── [person]-[date].md
-│   ├── research/                # Articles, docs, readings
-│   └── observations/            # Things you notice
-├── working/
-│   ├── context-drafts/          # WIP context files
-│   │   ├── business-overview.md
-│   │   ├── products-services.md
-│   │   └── ...
-│   ├── questions.md             # Open questions to answer
-│   ├── stakeholders.md          # People/org map
-│   └── working-tracker.md       # Learning backlog, burning problems, quick wins
-└── outputs/
-    ├── context/                 # Finalized context files (to promote)
-    ├── wins.md                  # Documented wins and contributions
-    ├── day-30-learnings.md      # Phase 1 exit: situational playback + learnings
-    ├── day-60-assessment.md     # Phase 2 exit: contributions + trust battery
-    ├── day-90-retro.md          # Phase 3 exit: retrospective + graduation
-    └── leverage-docs/           # Documentation created during onboarding
+├── playbook.md      # Philosophy, principles, how to think about each phase (read early, reference as needed)
+├── plan.md          # Tactical checkboxes by phase/week (work in daily)
+├── notes.md         # Your space: questions, wins, learning backlog, burning problems (write frequently)
+└── inputs/          # Dump files here for parsing and context building
 ```
 
-### Enhanced Files
+**That's it.** Three files and one folder. No empty folders, no overwhelming structure.
 
-The onboarding tool includes enhanced working files and checkpoint deliverables:
+### On-Demand Expansions
 
-**Working Files:**
-- `working-tracker.md` — Consolidated tracker with three sections: Learning Backlog (4-category matrix for Phase 1), Burning Problems (investigation tracker for Phase 1), and Quick Wins (opportunity tracker for Phase 2). See `templates/working-tracker.md`.
+When the user needs more, generate these on request:
 
-**Checkpoint Deliverables:**
-- `day-30-learnings.md` — Phase 1 exit artifact combining situational playback and learnings reflection. Prep for the manager conversation where you play back what you've learned.
-- `day-60-assessment.md` — Phase 2 exit artifact covering contributions, trust battery, quick wins, and Phase 3 ownership target.
-- `day-90-retro.md` — Phase 3 exit / graduation artifact with full retrospective, relationship summary, and 6-month vision.
+| User Says | What to Create |
+|-----------|----------------|
+| "Create a detailed plan for week 1" | Generate a weekly plan in `working/week-01.md` (create `working/` folder if needed) |
+| "Help me track a burning problem" | Add structured tracker to `working/burning-problems.md` |
+| "Create a learning backlog tracker" | Add structured tracker to `working/learning-backlog.md` |
+| "Give me a structured notes template" | Replace notes.md with a more structured version |
+| "I'm at day 30, help me reflect" | Create `outputs/day-30-learnings.md` using template |
+| "I'm at day 60, help me assess" | Create `outputs/day-60-assessment.md` using template |
+| "I'm graduating, help me do my retro" | Create `outputs/day-90-retro.md` using template |
+| "Help me map stakeholders" | Create `working/stakeholders.md` using stakeholder-map template |
 
-**Output Directories:**
-- `leverage-docs/` — Documentation you create during onboarding (data dictionaries, process maps, guides) that provides leverage for the team
+Templates for these are in `templates/` — read them when generating the on-demand files.
 
-See "Working File Templates" section for detailed descriptions of each section's content.
+### Core Files
+
+**playbook.md** — The coaching guide. Contains the universal principles, phase-by-phase guidance (positioning, mindset, traps to avoid), landmines to avoid, and prompts for asking for more. Users read this early and reference as needed.
+
+**plan.md** — Pure tactical checklist. Phase structure with checkboxes, exit criteria, key relationships table, milestones. No philosophy or explanations — that's in the playbook.
+
+**notes.md** — The user's working document. Semi-structured with headers for Questions, Wins, Learning Backlog, Burning Problems, General Notes. Includes a "permission slip" at the top encouraging users to make it their own or ask for more structure.
 
 ## Activation Workflow
 
 When user activates this tool:
 
-1. **Confirm scope**: "Would you like comprehensive (full 90-day) or streamlined (focused 30-day) onboarding?"
-
-2. **Gather context**:
+1. **Gather context**:
    - What's the company/role?
    - What's your start date?
-   - What do you already know about the business?
+   - Who's your manager?
    - Any specific goals or concerns?
 
-3. **Create project**: Set up the project structure in `projects/active/onboarding/`
+2. **Create project structure** in `projects/active/onboarding/`:
+   - Copy `templates/playbook.md` → `playbook.md`
+   - Copy `templates/plan.md` → `plan.md` (fill in role, company, start date, manager)
+   - Copy `templates/notes.md` → `notes.md`
+   - Create `inputs/` directory
 
-4. **Initialize plans** using the templates in `templates/`:
-   - Copy `templates/30-60-90-plan.md` → `plan/30-60-90.md`, fill in role/company/start date/scope
-   - Copy `templates/weekly-plan.md` → `plan/weekly/week-01.md`, fill in week 1 dates
-   - Copy `templates/stakeholder-map.md` → `working/stakeholders.md` as the org/people map
-   - Copy `templates/1-1-note.md` to `inputs/1-1s/` as a blank starter for each 1:1 (rename to `[person]-[date].md` at use time)
+3. **Orient the user**:
+   - "Start by reading playbook.md — it's your guide to thriving in this role"
+   - "Use plan.md to track your progress through each phase"
+   - "Capture questions, wins, and learnings in notes.md"
+   - "Dump any files you want me to process into inputs/"
 
-4.5. **Copy enhanced working files and checkpoint templates**:
-
-   Copy from `templates/` to project:
-   
-   - `templates/working-tracker.md` → `working/working-tracker.md` — Learning backlog, burning problems, and quick wins tracker. Fill in learning backlog and burning problems during Phase 1; add quick wins in Phase 2.
-   - `templates/day-30-learnings.md` → `outputs/day-30-learnings.md` — Fill in when you reach Phase 1 exit.
-   - `templates/day-60-assessment.md` → `outputs/day-60-assessment.md` — Fill in when you reach Phase 2 exit.
-   - `templates/day-90-retro.md` → `outputs/day-90-retro.md` — Fill in when you reach Phase 3 exit / graduation.
-   
-   Create directory:
-   
-   - `outputs/leverage-docs/` — Directory for documentation created during onboarding
-
-5. **Populate starter questions**: Add common onboarding questions to `working/questions.md`
-
-6. **Guide first actions**: 
+4. **Guide first actions**:
    - Schedule **walking 1:1s** (not sitting ones) with manager, key peers, HR in week 1-2
    - Use **"What can I do to make your life easier?"** in every 1:1
    - Ask manager, eng lead, design lead: **"Is there a burning problem I can investigate and diagnose?"** (aim for 2-3)
-   - Start **documenting what you learn as you learn it** (data dictionaries, process maps) — save in `outputs/leverage-docs/`
    - Focus on **breadth over depth** — resist rabbit holes, use fresh eyes window
-   - Share curated reading resources: see `resources/reading-list.md` in this tool's directory — recommend 2-3 links based on the user's situation (new domain, familiar domain, or leadership role)
-   - Run `arete index` so all project files created above are immediately searchable by `arete brief`, `meeting-prep`, and other skills
+   - Share curated reading resources: see `resources/reading-list.md` in this tool's directory
+
+5. **Run `arete index`** so project files are immediately searchable
 
 ## Progress Tracking
 
-Track progress in the project README.md:
+Progress is tracked directly in **plan.md** via checkboxes. The Milestones table at the bottom tracks phase completion dates.
 
-```markdown
-## Current Status
-
-**Phase**: 1 - Learn
-**Week**: 2 of 12
-**Started**: 2024-02-15
-**Target Graduation**: 2024-05-15
-**Scope**: Comprehensive
-
-## Progress Summary
-
-### Phase 1: Learn (Days 1-30)
-- [x] Manager 1:1 scheduled
-- [x] Read company wiki
-- [ ] Product deep dive
-- [ ] Customer call shadowing
-- [ ] Draft business-overview.md
-
-### Phase 2: Contribute (Days 31-60)
-- [ ] Not started
-
-### Phase 3: Lead (Days 61-90)
-- [ ] Not started
-
-## Key Metrics
-- 1:1s completed: 3/15
-- Context files drafted: 1/6
-- Wins documented: 0
-- Open questions: 12
-```
+When the user asks "how am I doing?" or "what's my progress?":
+1. Read plan.md to see checked vs unchecked items
+2. Identify current phase based on day count from start date
+3. Summarize progress: tasks completed, upcoming tasks, any blockers from notes.md
 
 ## Weekly Rhythm
 
 ### Start of Week
-- Review previous week's learnings
-- Set 3-5 focus areas for the week
-- Schedule any needed 1:1s or meetings
-- Update weekly plan
+- Review playbook.md section for current phase
+- Check plan.md for this week's tasks
+- Review notes.md for open questions or blockers
 
 ### During Week
-- Capture observations and learnings in inputs/
-- Update questions.md as you find answers (and new questions)
-- Add to context drafts as understanding deepens
+- Check off tasks in plan.md as completed
+- Capture questions, wins, and observations in notes.md
+- Drop files into inputs/ for processing
 
 ### End of Week
 - Weekly check-in (see template below)
@@ -646,15 +592,15 @@ When graduation criteria are met:
 - What's working that others might take for granted?
 ```
 
-## Working File Templates
+## On-Demand File Templates
 
-> **Note:** These descriptions document the sections within `working/working-tracker.md` and `outputs/day-30-learnings.md`. See those templates in the `templates/` directory for the files you'll actually use.
+> **Note:** These files are NOT created by default. Generate them when the user asks for more structure. Read the corresponding template from `templates/` and adapt it to the user's context.
 
-These working file sections align with the tactical guidance in each phase and help you track key activities systematically.
+These templates provide structured tracking for users who want more than the default notes.md.
 
 ### Learning Backlog
 
-Track what you need to learn and how you'll learn it. This is a section in `working/working-tracker.md`:
+Track what you need to learn and how you'll learn it. Create `working/learning-backlog.md` when the user asks for this:
 
 ```markdown
 ## PM Craft
@@ -686,7 +632,7 @@ Use this to prioritize learning and identify mentors early. Update weekly as new
 
 ### Burning Problems Tracker
 
-Track problems you're investigating in Phase 1. This is a section in `working/working-tracker.md`:
+Track problems you're investigating in Phase 1. Create `working/burning-problems.md` when the user asks for this:
 
 ```markdown
 | Problem | Flagged By | Investigation Notes | Diagnosis | Recommendation Timing |
@@ -698,7 +644,7 @@ Use this when stakeholders flag **burning problems** (see Phase 1). Track your i
 
 ### Quick Win Tracker
 
-Identify and track quick win opportunities in Phase 2. This is a section in `working/working-tracker.md`:
+Identify and track quick win opportunities in Phase 2. Create `working/quick-wins.md` when the user asks for this:
 
 ```markdown
 | Opportunity | Effort (days) | Visibility | Risk | Owner Status | Criteria Met? |
@@ -708,9 +654,9 @@ Identify and track quick win opportunities in Phase 2. This is a section in `wor
 
 This helps you apply the **Quick Win Finder** criteria from Phase 2: Fast (2-3 weeks), Visible (impact is seen), Low-risk (won't break things), Unowned (nobody else is working on it). Track opportunities and evaluate them systematically.
 
-### Situational Playback
+### Day 30 Reflection (Situational Playback)
 
-Prepare for your situational conversation with your manager (Phase 1 graduation). This is now part of `outputs/day-30-learnings.md`:
+Prepare for your situational conversation with your manager (Phase 1 graduation). Create `outputs/day-30-learnings.md` when the user says "I'm at day 30, help me reflect":
 
 ```markdown
 ## What I Learned
