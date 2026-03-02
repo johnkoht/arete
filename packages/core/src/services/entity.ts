@@ -491,6 +491,7 @@ import type {
   PersonStance,
   PersonActionItem,
 } from './person-signals.js';
+import { computeRelationshipHealth } from './person-health.js';
 
 // ---------------------------------------------------------------------------
 // EntityService
@@ -993,10 +994,12 @@ export class EntityService {
     const personSignals = new Map<string, PersonMemorySignal[]>();
     const personStances = new Map<string, PersonStance[]>();
     const personActionItems = new Map<string, PersonActionItem[]>();
+    const personMeetingDates = new Map<string, string[]>();
     for (const person of refreshablePeople) {
       personSignals.set(person.slug, []);
       personStances.set(person.slug, []);
       personActionItems.set(person.slug, []);
+      personMeetingDates.set(person.slug, []);
     }
 
     // LLM stance cache — prevents duplicate LLM calls for the same meeting+person
@@ -1081,6 +1084,12 @@ export class EntityService {
         const inAttendeeNames = attendeeNames.some((n) => n.includes(nameLower));
         const mentionedInBody = content.toLowerCase().includes(nameLower);
         if (!inAttendeeIds && !inAttendeeNames && !mentionedInBody) continue;
+
+        // Track meeting dates for relationship health computation
+        const meetingDates = personMeetingDates.get(person.slug);
+        if (meetingDates) {
+          meetingDates.push(date);
+        }
 
         signals.push(...collectSignalsForPerson(content, person.name, date, source));
 
@@ -1191,7 +1200,15 @@ export class EntityService {
 
       const signals = personSignals.get(person.slug) ?? [];
       const aggregated = aggregateSignals(signals, internalOptions.minMentions);
-      const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns);
+      const stances = personStances.get(person.slug) ?? [];
+      const actionItems = personActionItems.get(person.slug) ?? [];
+      const meetingDates = personMeetingDates.get(person.slug) ?? [];
+      const health = computeRelationshipHealth(meetingDates, actionItems.length);
+      const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns, {
+        stances,
+        actionItems,
+        health,
+      });
       const nextContent = upsertPersonMemorySection(content, section);
       if (nextContent !== content) {
         await this.storage.write(personPath, nextContent);

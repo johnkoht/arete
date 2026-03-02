@@ -5,6 +5,9 @@
  * resolution while person-memory concerns live in their own module.
  */
 
+import type { PersonStance, PersonActionItem } from './person-signals.js';
+import type { RelationshipHealth } from './person-health.js';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -160,6 +163,11 @@ export function aggregateSignals(signals: PersonMemorySignal[], minMentions: num
 export function renderPersonMemorySection(
   asks: AggregatedPersonSignal[],
   concerns: AggregatedPersonSignal[],
+  options?: {
+    stances?: PersonStance[];
+    actionItems?: PersonActionItem[];
+    health?: RelationshipHealth;
+  },
 ): string {
   const today = new Date().toISOString().slice(0, 10);
   const lines: string[] = [
@@ -192,6 +200,63 @@ export function renderPersonMemorySection(
         `- **${item.topic}** — mentioned ${item.count} times (last: ${item.lastMentioned}; sources: ${item.sources.slice(0, 3).join(', ')})`,
       );
     }
+  }
+
+  // Stances
+  const stances = options?.stances ?? [];
+  lines.push('', '### Stances');
+  if (stances.length === 0) {
+    lines.push('- None detected yet.');
+  } else {
+    for (const stance of stances) {
+      lines.push(
+        `- **${stance.topic}** — ${stance.direction}: ${stance.summary} (from: ${stance.source}, ${stance.date})`,
+      );
+    }
+  }
+
+  // Open Items (I owe them)
+  const actionItems = options?.actionItems ?? [];
+  const iOweThem = actionItems.filter((i) => i.direction === 'i_owe_them');
+  const theyOweMe = actionItems.filter((i) => i.direction === 'they_owe_me');
+
+  lines.push('', '### Open Items (I owe them)');
+  if (iOweThem.length === 0) {
+    lines.push('- None detected yet.');
+  } else {
+    for (const item of iOweThem) {
+      lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+    }
+  }
+
+  lines.push('', '### Open Items (They owe me)');
+  if (theyOweMe.length === 0) {
+    lines.push('- None detected yet.');
+  } else {
+    for (const item of theyOweMe) {
+      lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+    }
+  }
+
+  // Relationship Health
+  const health = options?.health;
+  lines.push('', '### Relationship Health');
+  if (!health) {
+    lines.push('- None detected yet.');
+  } else {
+    const lastMetStr = health.lastMet
+      ? `${health.lastMet} (${health.daysSinceLastMet} days ago)`
+      : 'Never';
+    const statusMap: Record<string, string> = {
+      active: 'Active',
+      regular: 'Regular',
+      cooling: 'Cooling',
+      dormant: 'Dormant',
+    };
+    lines.push(`- Last met: ${lastMetStr}`);
+    lines.push(`- Meetings: ${health.meetingsLast30Days} in last 30d, ${health.meetingsLast90Days} in last 90d`);
+    lines.push(`- Open loops: ${health.openLoopCount}`);
+    lines.push(`- Status: ${statusMap[health.indicator] ?? health.indicator}`);
   }
 
   lines.push('', AUTO_PERSON_MEMORY_END, '');
