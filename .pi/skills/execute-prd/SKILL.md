@@ -223,6 +223,14 @@ For each pending task (in dependency order):
 
 10. **Craft Subagent Prompt** (Orchestrator)
    
+   **Expertise profile selection**: Before writing the prompt, determine which expertise profile(s) the task needs based on the files it touches:
+   - Task touches `packages/core/` → include `.pi/expertise/core/PROFILE.md`
+   - Task touches `packages/cli/` → include `.pi/expertise/cli/PROFILE.md`
+   - Task touches both → include both profiles
+   - Task touches only docs/config/`.pi/` → no profile needed
+   
+   See `orchestrator.md` § Expertise Profiles for the full heuristic.
+   
    Use this template (scale reflection based on task complexity):
    
    ```markdown
@@ -241,8 +249,9 @@ For each pending task (in dependency order):
    **Execution State Path**: dev/executions/{plan-slug}/
    
    **Context - Read These Files First**:
-   1. [file] — [why it's relevant]
+   1. `.pi/expertise/{area}/PROFILE.md` — domain map for {area} (architecture, services, invariants)
    2. [file] — [why it's relevant]
+   3. [file] — [why it's relevant]
    ...
    
    **Important Patterns**:
@@ -285,6 +294,7 @@ For each pending task (in dependency order):
    ```
    
    **Key principles**:
+   - ✅ Include expertise profile(s) in "Read These Files First" (core for core tasks, cli for CLI tasks, both for cross-cutting)
    - ✅ Show examples, don't just describe ("Follow testDeps pattern from qmd.ts")
    - ✅ List files to read first (prevents assumptions)
    - ✅ Reference pre-mortem mitigations explicitly
@@ -567,10 +577,11 @@ You are implementing Task B1 from the intelligence-and-calendar PRD for Areté.
 **Execution State Path**: dev/executions/intelligence-and-calendar/
 
 **Context - Read These Files First**:
-1. src/core/search.ts — SearchProvider interface, getSearchProvider() factory, tokenize()
-2. src/core/search-providers/qmd.ts — Example of testDeps pattern for mocking
-3. src/core/search-providers/fallback.ts — Fallback provider implementation
-4. src/types.ts — Type definitions (you'll add 'score' to MemoryResult)
+1. `.pi/expertise/core/PROFILE.md` — domain map for packages/core/ (architecture, services, invariants)
+2. src/core/search.ts — SearchProvider interface, getSearchProvider() factory, tokenize()
+3. src/core/search-providers/qmd.ts — Example of testDeps pattern for mocking
+4. src/core/search-providers/fallback.ts — Fallback provider implementation
+5. src/types.ts — Type definitions (you'll add 'score' to MemoryResult)
 
 **Important Patterns**:
 - Follow the testDeps injection pattern from qmd.ts for mocking SearchProvider in tests

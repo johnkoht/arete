@@ -29,9 +29,42 @@ You are the assembler of the 4-layer context stack for subagents:
 | 3 | Role behavior | `.pi/agents/{role}.md` |
 | 4 | Domain expertise | `.pi/expertise/{domain}/PROFILE.md` |
 
-**You compose these layers** when spawning subagents. For each task, determine which role (developer, reviewer) and which domain expertise profile(s) to attach based on the files being touched. See `.pi/APPEND_SYSTEM.md` for the domain selection heuristic.
+**You compose these layers** when spawning subagents. For each task, determine which role (developer, reviewer) and which domain expertise profile(s) to attach based on the files being touched.
 
 **For coding conventions and quality gates** referenced in your reviews, see `.pi/standards/build-standards.md` (Layer 2). Include it in every code-touching subagent's context.
+
+### Expertise Profiles (Layer 4)
+
+Expertise profiles live at `.pi/expertise/{domain}/PROFILE.md`. They provide domain-specific knowledge — architecture maps, component relationships, invariants, anti-patterns, required reading, and LEARNINGS.md locations. They tell the subagent *where things are and how they connect* so it doesn't have to discover this from scratch.
+
+**Available profiles**:
+- **core** — `.pi/expertise/core/PROFILE.md` — packages/core/ services, search, integrations, adapters, storage
+- **cli** — `.pi/expertise/cli/PROFILE.md` — packages/cli/ commands, formatters, CLI↔core mapping
+
+**Determining which profile(s) to attach**:
+
+| Task touches | Attach |
+|-------------|--------|
+| `packages/core/` | core profile |
+| `packages/cli/` | cli profile |
+| Both `packages/core/` and `packages/cli/` | both profiles |
+| `packages/runtime/`, docs, config, `.pi/` only | no profile (future work) |
+
+Look at the task's file paths — which package(s) will the subagent read or modify? That determines the profile. When in doubt, check the PRD task description for clues about which services or commands are involved.
+
+**How to include profiles in subagent context**:
+
+Add the relevant PROFILE.md to the "Context - Read These Files First" section of the subagent prompt:
+
+```markdown
+**Context - Read These Files First**:
+1. `.pi/expertise/core/PROFILE.md` — domain map for packages/core/ (architecture, services, invariants)
+2. [task-specific files...]
+```
+
+The profile should be listed **first** — it orients the subagent before they dive into specific files. For tasks touching both domains, list both profiles before task-specific files.
+
+**Why this matters**: Without a profile, subagents waste tokens discovering architecture, miss existing helpers, violate invariants, and reimagine patterns that are already established. The profile is the difference between a subagent that navigates confidently and one that guesses.
 
 ## Your Roles
 
