@@ -42,6 +42,10 @@ export const AUTO_PERSON_MEMORY_END = '<!-- AUTO_PERSON_MEMORY:END -->';
 // Functions
 // ---------------------------------------------------------------------------
 
+/**
+ * Normalize a signal topic string for deduplication and aggregation.
+ * Lowercases, strips punctuation, collapses whitespace, and truncates to 120 chars.
+ */
 export function normalizeSignalTopic(topic: string): string {
   return topic
     .toLowerCase()
@@ -52,6 +56,16 @@ export function normalizeSignalTopic(topic: string): string {
     .slice(0, 120);
 }
 
+/**
+ * Extract ask/concern signals for a person from meeting content.
+ * Uses regex patterns to detect phrases like "asked about", "concerned about",
+ * and speaker-attributed dialogue.
+ *
+ * @param content - Meeting transcript or notes text
+ * @param personName - Name of the person to extract signals for
+ * @param date - Meeting date (YYYY-MM-DD)
+ * @param source - Meeting filename for provenance tracking
+ */
 export function collectSignalsForPerson(
   content: string,
   personName: string,
@@ -117,6 +131,13 @@ export function collectSignalsForPerson(
   return signals;
 }
 
+/**
+ * Aggregate raw signals by topic, counting occurrences and tracking sources.
+ * Filters out topics below the minimum mention threshold.
+ *
+ * @param signals - Raw signals from collectSignalsForPerson
+ * @param minMentions - Minimum mention count to include a topic
+ */
 export function aggregateSignals(signals: PersonMemorySignal[], minMentions: number): {
   asks: AggregatedPersonSignal[];
   concerns: AggregatedPersonSignal[];
@@ -160,6 +181,11 @@ export function aggregateSignals(signals: PersonMemorySignal[], minMentions: num
   };
 }
 
+/**
+ * Render the auto-generated person memory section as markdown.
+ * Includes repeated asks, concerns, stances, action items, and relationship health.
+ * Output is wrapped in AUTO_PERSON_MEMORY sentinel comments for upsert.
+ */
 export function renderPersonMemorySection(
   asks: AggregatedPersonSignal[],
   concerns: AggregatedPersonSignal[],
@@ -263,6 +289,10 @@ export function renderPersonMemorySection(
   return lines.join('\n');
 }
 
+/**
+ * Extract the auto-generated memory section from a person file's content.
+ * Returns null if no section is found or if it's empty.
+ */
 export function extractPersonMemorySection(content: string): string | null {
   const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
   const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
@@ -273,6 +303,10 @@ export function extractPersonMemorySection(content: string): string | null {
   return section.length > 0 ? section : null;
 }
 
+/**
+ * Parse the "Last refreshed" date from an existing person memory section.
+ * Returns the YYYY-MM-DD string or null if not found.
+ */
 export function getPersonMemoryLastRefreshed(content: string): string | null {
   const section = extractPersonMemorySection(content);
   if (!section) return null;
@@ -281,6 +315,11 @@ export function getPersonMemoryLastRefreshed(content: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * Check if a person's memory section is stale and needs refreshing.
+ * Returns true if lastRefreshed is null, invalid, or older than ifStaleDays.
+ * Always returns true when ifStaleDays is undefined or <= 0 (i.e., always refresh).
+ */
 export function isMemoryStale(lastRefreshed: string | null, ifStaleDays: number | undefined): boolean {
   if (!ifStaleDays || ifStaleDays <= 0) return true;
   if (!lastRefreshed) return true;
@@ -294,6 +333,11 @@ export function isMemoryStale(lastRefreshed: string | null, ifStaleDays: number 
   return diffDays >= ifStaleDays;
 }
 
+/**
+ * Insert or replace the auto-generated memory section in a person file.
+ * If sentinel comments exist, replaces the content between them.
+ * Otherwise, appends the section at the end of the file.
+ */
 export function upsertPersonMemorySection(content: string, section: string): string {
   const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
   const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
