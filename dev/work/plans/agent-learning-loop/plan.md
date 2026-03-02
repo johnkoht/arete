@@ -1,8 +1,11 @@
 ---
 title: "Agent Learning Loop — Planner Identity, Patterns Guide, Maintenance Protocol"
 slug: agent-learning-loop
-status: draft
+status: building
 size: small
+tags: []
+updated: 2026-03-02T04:59:23.938Z
+has_review: true
 ---
 
 # Agent Learning Loop
