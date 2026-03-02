@@ -4,7 +4,7 @@
 import { createServices } from '@arete/core';
 import chalk from 'chalk';
 import { toolsToCandidates } from '../lib/tool-candidates.js';
-const NO_MATCH_SUGGESTION = 'No skill match. Check CLI commands in AGENTS.md, or read .cursor/rules/pm-workspace.mdc for guidance.';
+const NO_MATCH_SUGGESTION = 'No skill match. Check CLI commands in AGENTS.md for available commands and guidance.';
 export function registerRouteCommand(program) {
     program
         .command('route <query>')
