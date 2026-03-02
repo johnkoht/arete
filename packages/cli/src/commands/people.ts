@@ -368,7 +368,11 @@ export function registerPeopleCommands(program: Command): void {
 
   memoryCmd
     .command('refresh')
-    .description('Refresh auto-generated person memory highlights from meetings')
+    .description(
+      'Refresh auto-generated person memory highlights from meetings. ' +
+      'Extracts asks, concerns, and action items via regex. ' +
+      'Stance extraction requires an LLM (--llm flag or ARETE_LLM env); if unavailable, stances are skipped silently.'
+    )
     .option('--person <slug>', 'Refresh only one person by slug')
     .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
     .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')

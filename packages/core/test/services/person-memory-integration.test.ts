@@ -193,6 +193,50 @@ Jane Doe mentioned Kubernetes again.
     assert.equal(result.stancesExtracted, 1, 'Duplicate stances should be deduped');
   });
 
+  it('deduplicates stances case-insensitively — "React" and "react" are the same topic', async () => {
+    writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
+    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+title: "Sync 1"
+date: "2026-02-10"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe loves React.
+`);
+    writeMeeting(tmpDir, '2026-02-11-sync.md', `---
+title: "Sync 2"
+date: "2026-02-11"
+attendee_ids:
+  - jane-doe
+---
+
+Jane Doe really likes react for front-end.
+`);
+
+    // First meeting returns "React" (uppercase), second returns "react" (lowercase)
+    let callCount = 0;
+    const mockLLM: LLMCallFn = async (_prompt: string) => {
+      callCount++;
+      const topic = callCount === 1 ? 'React' : 'react';
+      return JSON.stringify({
+        stances: [
+          {
+            topic,
+            direction: 'supports',
+            summary: `Supports ${topic}`,
+            evidence_quote: 'some quote',
+          },
+        ],
+      });
+    };
+
+    const result = await service.refreshPersonMemory(paths, { callLLM: mockLLM });
+
+    // "React" and "react" should normalize to the same dedup key → only 1 stance
+    assert.equal(result.stancesExtracted, 1, 'Case-insensitive topic dedup: "React" and "react" should be one stance');
+  });
+
   it('extracts action items with direction classification', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
