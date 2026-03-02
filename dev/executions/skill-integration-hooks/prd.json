@@ -1,7 +1,7 @@
 {
   "name": "skill-integration-hooks",
   "branchName": "skill-integration-hooks",
-  "goal": "Any installed skill automatically benefits from Areté's intelligence layer. Outputs are indexed, surfaced in relevant workflows, and organized in the workspace — without the skill author needing to know about Areté.",
+  "goal": "Any installed skill automatically benefits from Aret\u00e9's intelligence layer. Outputs are indexed, surfaced in relevant workflows, and organized in the workspace \u2014 without the skill author needing to know about Aret\u00e9.",
   "userStories": [
     {
       "id": "task-0-validate-schema",
@@ -12,7 +12,7 @@
         "All 9 native skills have integration profiles written using the proposed schema",
         "Each profile includes the current prose instructions it replaces (exact text + line location)",
         "Any schema gaps are flagged with notes on what can't be expressed",
-        "No schema expansion — only the proposed SkillIntegration type is used"
+        "No schema expansion \u2014 only the proposed SkillIntegration type is used"
       ],
       "status": "complete",
       "passes": true,
@@ -21,7 +21,7 @@
     {
       "id": "task-1-schema",
       "title": "Define the Skill Integration Profile schema",
-      "description": "Add integration types to packages/core/src/models/skills.ts. Create SkillIntegrationOutput type with fields: type ('project' | 'resource' | 'context' | 'none'), path? (string, pattern with {name} placeholder), template? (string, variant name), index? (boolean). Create SkillIntegration type with fields: outputs? (SkillIntegrationOutput[]), contextUpdates? (string[]). Add integration?: SkillIntegration to SkillDefinition (optional for backward compat). Add integration?: SkillIntegration to SkillMetadata (so frontmatter parsing captures it). SkillCandidate does NOT need integration — routing uses triggers/description, not output config. Update getInfo() in packages/core/src/services/skills.ts to read integration from: (1) SKILL.md frontmatter, (2) .arete-meta.yaml sidecar (merged with frontmatter). Before starting, read: packages/core/src/models/skills.ts (existing types), packages/core/src/services/skills.ts (getInfo, readSkillFrontmatter, readAreteMeta), packages/core/src/services/LEARNINGS.md, packages/core/test/services/skills.test.ts (test patterns). Mitigates R4 (backward compat).",
+      "description": "Add integration types to packages/core/src/models/skills.ts. Create SkillIntegrationOutput type with fields: type ('project' | 'resource' | 'context' | 'none'), path? (string, pattern with {name} placeholder), template? (string, variant name), index? (boolean). Create SkillIntegration type with fields: outputs? (SkillIntegrationOutput[]), contextUpdates? (string[]). Add integration?: SkillIntegration to SkillDefinition (optional for backward compat). Add integration?: SkillIntegration to SkillMetadata (so frontmatter parsing captures it). SkillCandidate does NOT need integration \u2014 routing uses triggers/description, not output config. Update getInfo() in packages/core/src/services/skills.ts to read integration from: (1) SKILL.md frontmatter, (2) .arete-meta.yaml sidecar (merged with frontmatter). Before starting, read: packages/core/src/models/skills.ts (existing types), packages/core/src/services/skills.ts (getInfo, readSkillFrontmatter, readAreteMeta), packages/core/src/services/LEARNINGS.md, packages/core/test/services/skills.test.ts (test patterns). Mitigates R4 (backward compat).",
       "acceptanceCriteria": [
         "SkillIntegrationOutput and SkillIntegration types added to packages/core/src/models/skills.ts and exported from index",
         "SkillDefinition has optional integration field",
@@ -31,7 +31,7 @@
         "getInfo() reads integration from .arete-meta.yaml sidecar (community skills)",
         "When both frontmatter and sidecar have integration, sidecar values merge/override",
         "Existing .arete-meta.yaml files without integration field parse correctly (integration is undefined)",
-        "Tests: old YAML → integration undefined; new YAML → populated; partial → populated with present fields",
+        "Tests: old YAML \u2192 integration undefined; new YAML \u2192 populated; partial \u2192 populated with present fields",
         "npm run typecheck passes",
         "npm test passes"
       ],
@@ -43,7 +43,7 @@
     {
       "id": "task-2a-pure-functions",
       "title": "Build integration section generation (pure functions)",
-      "description": "Create packages/core/src/utils/integration.ts with standalone functions (NOT on SkillService). (1) generateIntegrationSection(skillId: string, integration: SkillIntegration): string | null — returns null when all outputs are type:none or outputs is empty/undefined; generates markdown section with output location, indexing, and template instructions; uses workspace-relative paths or CLI commands (never skill-relative paths per LEARNINGS.md); for templates uses 'arete template resolve --skill {id} --variant {name}'. (2) injectIntegrationSection(skillMdContent: string, section: string | null): string — uses sentinel markers <!-- ARETE_INTEGRATION_START --> and <!-- ARETE_INTEGRATION_END -->; idempotent (replaces existing if markers found, appends if not); when section is null, removes existing section if markers found, no-ops otherwise. (3) deriveIntegrationFromLegacy(def: SkillDefinition): SkillIntegration | undefined — maps createsProject + projectTemplate → integration profile for native skills without explicit integration fields. Export from packages/core/src/utils/index.ts. Before starting, read: packages/core/src/utils/templates.ts (template resolution pattern), packages/core/src/utils/index.ts (barrel exports), packages/runtime/skills/LEARNINGS.md (path conventions). Mitigates R1 (sentinel markers), R7 (workspace-relative paths).",
+      "description": "Create packages/core/src/utils/integration.ts with standalone functions (NOT on SkillService). (1) generateIntegrationSection(skillId: string, integration: SkillIntegration): string | null \u2014 returns null when all outputs are type:none or outputs is empty/undefined; generates markdown section with output location, indexing, and template instructions; uses workspace-relative paths or CLI commands (never skill-relative paths per LEARNINGS.md); for templates uses 'arete template resolve --skill {id} --variant {name}'. (2) injectIntegrationSection(skillMdContent: string, section: string | null): string \u2014 uses sentinel markers <!-- ARETE_INTEGRATION_START --> and <!-- ARETE_INTEGRATION_END -->; idempotent (replaces existing if markers found, appends if not); when section is null, removes existing section if markers found, no-ops otherwise. (3) deriveIntegrationFromLegacy(def: SkillDefinition): SkillIntegration | undefined \u2014 maps createsProject + projectTemplate \u2192 integration profile for native skills without explicit integration fields. Export from packages/core/src/utils/index.ts. Before starting, read: packages/core/src/utils/templates.ts (template resolution pattern), packages/core/src/utils/index.ts (barrel exports), packages/runtime/skills/LEARNINGS.md (path conventions). Mitigates R1 (sentinel markers), R7 (workspace-relative paths).",
       "acceptanceCriteria": [
         "packages/core/src/utils/integration.ts created with three exported functions",
         "generateIntegrationSection returns correct markdown for project, resource, context output types",
@@ -51,9 +51,9 @@
         "Generated section uses workspace-relative paths and CLI commands (not skill-relative)",
         "Template instructions use 'arete template resolve --skill {id} --variant {name}'",
         "injectIntegrationSection uses <!-- ARETE_INTEGRATION_START --> and <!-- ARETE_INTEGRATION_END --> markers",
-        "injectIntegrationSection is idempotent (inject twice → same result)",
+        "injectIntegrationSection is idempotent (inject twice \u2192 same result)",
         "injectIntegrationSection with null section removes existing markers/section",
-        "deriveIntegrationFromLegacy maps createsProject:true + projectTemplate:'analysis' → correct SkillIntegration",
+        "deriveIntegrationFromLegacy maps createsProject:true + projectTemplate:'analysis' \u2192 correct SkillIntegration",
         "deriveIntegrationFromLegacy returns undefined when no legacy fields present",
         "All functions exported from packages/core/src/utils/index.ts",
         "Full test coverage in packages/core/test/utils/integration.test.ts",
@@ -68,14 +68,14 @@
     {
       "id": "task-2b-wiring",
       "title": "Wire injection into install and update paths + fix root-level file deployment",
-      "description": "Three changes in this task: (A) In SkillService.install() (packages/core/src/services/skills.ts): after writing .arete-meta.yaml, read integration profile via getInfo(), call generateIntegrationSection() + injectIntegrationSection(), write updated SKILL.md. (B) In WorkspaceService.update() (packages/core/src/services/workspace.ts): after syncCoreSkills(), iterate all skills in .agents/skills/ — for each skill call getInfo() → deriveIntegrationFromLegacy() or read explicit integration → generateIntegrationSection() → injectIntegrationSection() → write. Note: .agents/skills/ is IDE-agnostic, no adapter handling needed. (C) Fix root-level file deployment: update create() and syncCoreSkills() to also copy .md files at the skills directory root (not just subdirectories) — this fixes PATTERNS.md deployment (pre-existing bug) and enables the integration guide later. Before starting, read: packages/core/src/services/skills.ts (install method), packages/core/src/services/workspace.ts (update, syncCoreSkills, create — especially listSubdirectories usage), packages/core/src/services/LEARNINGS.md (service patterns), packages/core/src/utils/integration.ts (functions from task-2a). Mitigates R6 (update path wired from day one).",
+      "description": "Three changes in this task: (A) In SkillService.install() (packages/core/src/services/skills.ts): after writing .arete-meta.yaml, read integration profile via getInfo(), call generateIntegrationSection() + injectIntegrationSection(), write updated SKILL.md. (B) In WorkspaceService.update() (packages/core/src/services/workspace.ts): after syncCoreSkills(), iterate all skills in .agents/skills/ \u2014 for each skill call getInfo() \u2192 deriveIntegrationFromLegacy() or read explicit integration \u2192 generateIntegrationSection() \u2192 injectIntegrationSection() \u2192 write. Note: .agents/skills/ is IDE-agnostic, no adapter handling needed. (C) Fix root-level file deployment: update create() and syncCoreSkills() to also copy .md files at the skills directory root (not just subdirectories) \u2014 this fixes PATTERNS.md deployment (pre-existing bug) and enables the integration guide later. Before starting, read: packages/core/src/services/skills.ts (install method), packages/core/src/services/workspace.ts (update, syncCoreSkills, create \u2014 especially listSubdirectories usage), packages/core/src/services/LEARNINGS.md (service patterns), packages/core/src/utils/integration.ts (functions from task-2a). Mitigates R6 (update path wired from day one).",
       "acceptanceCriteria": [
-        "After arete skill install, SKILL.md has ## Areté Integration section with sentinel markers",
+        "After arete skill install, SKILL.md has ## Aret\u00e9 Integration section with sentinel markers",
         "After arete update, all skills with integration profiles have sections (regenerated from frontmatter or sidecar)",
         "Re-running inject on same file is idempotent (no section duplication)",
         "Root-level .md files (PATTERNS.md, README.md) in skills source dir are copied to .agents/skills/ during create() and syncCoreSkills()",
         "Community skills are preserved during update (existing isCommunitySkill check still works)",
-        "Skill install → verify markers → simulate SKILL.md overwrite → update → verify section restored",
+        "Skill install \u2192 verify markers \u2192 simulate SKILL.md overwrite \u2192 update \u2192 verify section restored",
         "Tests for install injection path in skills.test.ts",
         "Tests for update injection path and root-level file copy in workspace tests",
         "npm run typecheck passes",
@@ -89,7 +89,7 @@
     {
       "id": "task-3-template-resolution",
       "title": "Template resolution for community skills",
-      "description": "Confirm resolveTemplatePath() in packages/core/src/utils/templates.ts works by filesystem probe without needing TEMPLATE_REGISTRY entry. The function already checks workspace override → skill-local → legacy paths via filesystem access(). If it works without registry: add a test confirming this. If it doesn't: make resolution fall back to filesystem scan when skill ID not in registry. Add info message when workspace override supersedes skill template in 'arete template resolve' output (packages/cli/src/commands/template.ts). TEMPLATE_REGISTRY is NOT modified for community skills. Before starting, read: packages/core/src/utils/templates.ts (resolveTemplatePath, TEMPLATE_REGISTRY), packages/cli/src/commands/template.ts (resolve command), packages/core/test/utils/templates.test.ts (existing tests). Mitigates R3.",
+      "description": "Confirm resolveTemplatePath() in packages/core/src/utils/templates.ts works by filesystem probe without needing TEMPLATE_REGISTRY entry. The function already checks workspace override \u2192 skill-local \u2192 legacy paths via filesystem access(). If it works without registry: add a test confirming this. If it doesn't: make resolution fall back to filesystem scan when skill ID not in registry. Add info message when workspace override supersedes skill template in 'arete template resolve' output (packages/cli/src/commands/template.ts). TEMPLATE_REGISTRY is NOT modified for community skills. Before starting, read: packages/core/src/utils/templates.ts (resolveTemplatePath, TEMPLATE_REGISTRY), packages/cli/src/commands/template.ts (resolve command), packages/core/test/utils/templates.test.ts (existing tests). Mitigates R3.",
       "acceptanceCriteria": [
         "resolveTemplatePath works for skill IDs not in TEMPLATE_REGISTRY (confirmed via test)",
         "Test: community skill with templates/report.md resolves correctly",
@@ -107,7 +107,7 @@
     {
       "id": "task-4-install-guidance",
       "title": "Install-time guidance and validation gate",
-      "description": "Update the CLI install flow in packages/cli/src/commands/skill.ts. After successful install, print: summary of what integration was configured (output type, path, indexing if available), and guidance message 'Edit .agents/skills/<name>/.arete-meta.yaml to customize, or ask an agent to help'. buildAreteMeta() stays simple — no commented YAML. The validation gate is a manual step: before proceeding to Phase 3, test with a real community skill to verify agent compliance with the appended ## Areté Integration section. Before starting, read: packages/cli/src/commands/skill.ts (installSkillAction, existing post-install messages), packages/cli/test/commands/skill.test.ts (test patterns). Mitigates R9.",
+      "description": "Update the CLI install flow in packages/cli/src/commands/skill.ts. After successful install, print: summary of what integration was configured (output type, path, indexing if available), and guidance message 'Edit .agents/skills/<name>/.arete-meta.yaml to customize, or ask an agent to help'. buildAreteMeta() stays simple \u2014 no commented YAML. The validation gate is a manual step: before proceeding to Phase 3, test with a real community skill to verify agent compliance with the appended ## Aret\u00e9 Integration section. Before starting, read: packages/cli/src/commands/skill.ts (installSkillAction, existing post-install messages), packages/cli/test/commands/skill.test.ts (test patterns). Mitigates R9.",
       "acceptanceCriteria": [
         "After successful install, CLI prints integration summary (output type, path if configured)",
         "After successful install, CLI prints guidance about editing .arete-meta.yaml or asking an agent",
@@ -125,7 +125,7 @@
     {
       "id": "task-5-readme-deployment",
       "title": "Verify existing skill README deployment",
-      "description": "The existing packages/runtime/skills/README.md was not deployed to user workspaces because create() and syncCoreSkills() only copy subdirectories. After the root-level file copy fix in task-2b, verify README.md reaches .agents/skills/README.md after install and update. This is primarily a verification task — the fix is in task-2b. Add a test if not already covered. Before starting, read: packages/runtime/skills/README.md, test results from task-2b.",
+      "description": "The existing packages/runtime/skills/README.md was not deployed to user workspaces because create() and syncCoreSkills() only copy subdirectories. After the root-level file copy fix in task-2b, verify README.md reaches .agents/skills/README.md after install and update. This is primarily a verification task \u2014 the fix is in task-2b. Add a test if not already covered. Before starting, read: packages/runtime/skills/README.md, test results from task-2b.",
       "acceptanceCriteria": [
         "README.md exists in .agents/skills/ after arete install (create path)",
         "README.md exists in .agents/skills/ after arete update (sync path)",
@@ -139,7 +139,7 @@
     {
       "id": "task-6-integration-guide",
       "title": "Create agent integration setup guide",
-      "description": "Create packages/runtime/skills/_integration-guide.md. This will be deployed to .agents/skills/_integration-guide.md in user workspaces via the root-level file copy from task-2b. Content should cover: what integration hooks are (behavioral context injection via ## Areté Integration section), the four output types (project, resource, context, none) with examples, how to edit .arete-meta.yaml integration section, example profiles for different skill types, how template resolution works with community skills, when and why to run arete index. The guide should be clear enough that an agent reading it can produce a valid integration profile for any community skill.",
+      "description": "Create packages/runtime/skills/_integration-guide.md. This will be deployed to .agents/skills/_integration-guide.md in user workspaces via the root-level file copy from task-2b. Content should cover: what integration hooks are (behavioral context injection via ## Aret\u00e9 Integration section), the four output types (project, resource, context, none) with examples, how to edit .arete-meta.yaml integration section, example profiles for different skill types, how template resolution works with community skills, when and why to run arete index. The guide should be clear enough that an agent reading it can produce a valid integration profile for any community skill.",
       "acceptanceCriteria": [
         "packages/runtime/skills/_integration-guide.md created",
         "Guide covers: output types with examples, .arete-meta.yaml editing, template resolution, indexing",
@@ -159,20 +159,20 @@
       "acceptanceCriteria": [
         "All 9 native skills have integration fields in SKILL.md frontmatter",
         "No prose integration instructions remain in any of the 9 SKILL.md files",
-        "Generated ## Areté Integration section for each skill matches the catalog from task-0",
+        "Generated ## Aret\u00e9 Integration section for each skill matches the catalog from task-0",
         "Each migration verified one at a time with npm test passing",
         "Frontmatter integration fields use the SkillIntegration schema (outputs array + contextUpdates)",
         "npm run typecheck passes",
         "npm test passes after all migrations complete"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-8-patterns-docs",
       "title": "Update PATTERNS.md and documentation",
-      "description": "Add 'Skill Integration' pattern to packages/runtime/skills/PATTERNS.md covering: how integration profiles work (schema reference), how the generated ## Areté Integration section is produced (sentinel markers, generate + inject), how to customize via .arete-meta.yaml, the four output types. Update existing patterns that reference post-completion steps (e.g., research_intake mentions 'arete index'). Check if AGENTS.md sources need updating and rebuild if so (npm run build:agents:dev). Before starting, read: packages/runtime/skills/PATTERNS.md (existing patterns), packages/runtime/skills/LEARNINGS.md (path conventions).",
+      "description": "Add 'Skill Integration' pattern to packages/runtime/skills/PATTERNS.md covering: how integration profiles work (schema reference), how the generated ## Aret\u00e9 Integration section is produced (sentinel markers, generate + inject), how to customize via .arete-meta.yaml, the four output types. Update existing patterns that reference post-completion steps (e.g., research_intake mentions 'arete index'). Check if AGENTS.md sources need updating and rebuild if so (npm run build:agents:dev). Before starting, read: packages/runtime/skills/PATTERNS.md (existing patterns), packages/runtime/skills/LEARNINGS.md (path conventions).",
       "acceptanceCriteria": [
         "PATTERNS.md has new 'Skill Integration' pattern section",
         "Pattern documents: integration profile schema, generation mechanism, customization via .arete-meta.yaml",
@@ -189,22 +189,22 @@
     {
       "id": "task-9-indexing-verification",
       "title": "Verify end-to-end indexing flow and document behavior",
-      "description": "When index: true in output profile, verify the generated ## Areté Integration section includes 'Run arete index to make output searchable'. Document which output types should set index: true (project ✓, resource ✓, context ✓, none ✗) in the integration guide (_integration-guide.md). Update the guide if not already covered. This is primarily a verification and documentation task.",
+      "description": "When index: true in output profile, verify the generated ## Aret\u00e9 Integration section includes 'Run arete index to make output searchable'. Document which output types should set index: true (project \u2713, resource \u2713, context \u2713, none \u2717) in the integration guide (_integration-guide.md). Update the guide if not already covered. This is primarily a verification and documentation task.",
       "acceptanceCriteria": [
         "Skills with index: true in their integration profile have indexing instruction in generated section",
         "Skills with type: none do NOT have indexing instruction",
         "Integration guide documents indexing behavior per output type",
         "Verified by reading generated sections for native skills with different output types"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     }
   ],
   "metadata": {
     "createdAt": "2026-03-02T05:10:00Z",
     "totalTasks": 11,
-    "completedTasks": 8,
+    "completedTasks": 11,
     "failedTasks": 0
   }
 }

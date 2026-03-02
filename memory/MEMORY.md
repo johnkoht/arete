@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-02: [skill-integration-hooks-learnings](entries/2026-03-02_skill-integration-hooks-learnings.md) — Skill integration hooks: behavioral context injection for community + native skills. 11/11 tasks, 1 iteration, +67 tests, 0/8 pre-mortem risks materialized. Pure function utils pattern, sentinel markers, root-level file deployment bug fix.
 - 2026-02-25: [calendar-events-learnings](entries/2026-02-25_calendar-events-learnings.md) — Calendar event creation: `arete calendar create` command + schedule-meeting skill. 5/5 tasks, 0 iterations, +57 tests, 0/9 pre-mortem risks materialized. DI patterns, testing integrated with implementation, skill format via existing examples.
 - 2026-02-25: [calendar-freebusy-learnings](entries/2026-02-25_calendar-freebusy-learnings.md) — Calendar FreeBusy integration: `arete availability find --with <person>` command for mutual availability. 6/6 tasks, 1 iteration, +59 tests, 0/7 pre-mortem risks materialized. DI patterns, pure algorithm separation, type exports lesson.
 - 2026-02-25: [project-updates-learnings](entries/2026-02-25_project-updates-learnings.md) — Added general-project skill, research_intake pattern, and index checkpoint guidance. 6/6 tasks, 0 iterations, +9 routing tests. All 7 pre-mortem risks mitigated.
