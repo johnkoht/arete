@@ -1,0 +1,842 @@
+$ ls -la /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/ 2>/dev/null
+
+ ... (4 earlier lines, ctrl+o to expand)
+ -rw-r--r--@ 1 johnkoht  staff   7437 Mar  1 13:59 developer.md
+ -rw-r--r--@ 1 johnkoht  staff   7602 Mar  1 13:59 engineering-lead.md
+ -rw-r--r--@ 1 johnkoht  staff  11911 Mar  1 13:59 orchestrator.md
+ -rw-r--r--@ 1 johnkoht  staff   6005 Mar  1 13:59 product-manager.md
+ -rw-r--r--@ 1 johnkoht  staff   8316 Mar  1 13:59 reviewer.md
+
+
+
+ $ ls -la /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/skills/ 2>/dev/null
+
+ ... (5 earlier lines, ctrl+o to expand)
+ drwxr-xr-x@ 3 johnkoht  staff   96 Mar  1 13:59 prd-post-mortem
+ drwxr-xr-x@ 3 johnkoht  staff   96 Mar  1 13:59 prd-to-json
+ drwxr-xr-x@ 3 johnkoht  staff   96 Mar  1 13:59 review-plan
+ drwxr-xr-x@ 3 johnkoht  staff   96 Mar  1 13:59 run-pre-mortem
+ drwxr-xr-x@ 3 johnkoht  staff   96 Mar  1 13:59 synthesize-collaboration-profile
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/dev/work/plans/agent-experts/notes.md
+
+ # Agent Experts — Exploration Notes
+
+ ## Problem Statement
+
+ The current BUILD mode system prompt tries to make one agent know everything — BUILD vs GUIDE, product vision, CLI commands, code
+ conventions, memory practices, plan lifecycle, skill routing, AND the codebase. This leads to:
+ - Context confusion (e.g., not knowing `arete route` is GUIDE-only)
+ - Agents lacking deep knowledge of specific areas, causing bugs and regressions
+ - Context flooding — too much loaded, not enough of it relevant to the task at hand
+
+ ## Core Concept: Two-Dimensional Agent Composition
+ ... (356 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/dev/work/plans/agent-experts/plan.md
+
+ ---
+ title: Agent Experts
+ slug: agent-experts
+ status: idea
+ size: unknown
+ tags: []
+ created: 2026-03-01T05:01:42.408Z
+ updated: 2026-03-01T20:00:12.734Z
+ completed: null
+ execution: null
+ ... (36 more lines, ctrl+o to expand)
+
+
+
+ $ ls -la /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/skills/ 2>/dev/null
+
+ ... (7 earlier lines, ctrl+o to expand)
+ lrwxr-xr-x@  1 johnkoht  staff   32 Mar  1 13:59 prd-to-json -> ../../.agents/skills/prd-to-json
+ lrwxr-xr-x@  1 johnkoht  staff   32 Mar  1 13:59 review-plan -> ../../.agents/skills/review-plan
+ lrwxr-xr-x@  1 johnkoht  staff   35 Mar  1 13:59 run-pre-mortem -> ../../.agents/skills/run-pre-mortem
+ lrwxr-xr-x@  1 johnkoht  staff   53 Mar  1 13:59 synthesize-collaboration-profile ->
+ ../../.agents/skills/synthesize-collaboration-profile
+
+
+
+ $ ls /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/ 2>/dev/null
+
+ conventions.md
+ memory.md
+ personas.md
+ rules-index.md
+ skills-index.md
+
+
+
+ $ ls /Users/johnkoht/code/worktrees/arete--agent-refactor/.cursor/rules/ 2>/dev/null
+
+ dev.mdc
+ plan-pre-mortem.mdc
+ testing.mdc
+
+
+
+ $ wc -l /Users/johnkoht/code/worktrees/arete--agent-refactor/.cursor/rules/*.mdc
+
+ 239 /Users/johnkoht/code/worktrees/arete--agent-refactor/.cursor/rules/dev.mdc
+       91 /Users/johnkoht/code/worktrees/arete--agent-refactor/.cursor/rules/plan-pre-mortem.mdc
+      107 /Users/johnkoht/code/worktrees/arete--agent-refactor/.cursor/rules/testing.mdc
+      437 total
+
+
+
+ $ wc -l /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/*.md
+
+ ... (1 earlier lines, ctrl+o to expand)
+      244 /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/memory.md
+        8 /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/personas.md
+       32 /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/rules-index.md
+       29 /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/builder/skills-index.md
+      608 total
+
+
+
+ $ wc -l /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/*.md
+
+ ... (1 earlier lines, ctrl+o to expand)
+      191 /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/engineering-lead.md
+      171 /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/orchestrator.md
+      127 /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/product-manager.md
+      181 /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/agents/reviewer.md
+      872 total
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.pi/agents/developer.md
+
+ ---
+ name: developer
+ description: Developer for implementing individual tasks with full tool access
+ tools: read,bash,edit,write
+ ---
+
+ You are a **Developer** — a skilled engineer implementing one task from a PRD.
+
+ ## How You Think
+
+ ... (193 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.pi/agents/orchestrator.md:1-50
+
+ ---
+ name: orchestrator
+ description: Senior engineering manager owning PRD execution end-to-end and plan-mode lifecycle gates
+ tools: read,bash,grep,find,ls
+ ---
+
+ You are the **Orchestrator** — a senior engineering manager who owns outcomes, not just task completion.
+
+ ## How You Think
+
+ ... (42 more lines, ctrl+o to expand)
+
+
+ I've now read through the full plan notes. This is a well-thought-out refactor. Let me formulate my questions and concerns.
+
+ Good — I've read through the full notes and explored the current state. This is a well-thought-out plan with clear rationale. Here
+ are my questions and concerns:
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ ### Questions
+
+ 1. What's the actual pain you're solving today?
+
+ The notes describe three problems: context confusion, lack of deep knowledge, context flooding. Which of these is hurting you most
+ right now? Because the phasing matters — if context flooding is the biggest pain, Phase 2 (lighter AGENTS.md) delivers more value
+ than Phase 1 (expertise profiles). If it's deep knowledge causing regressions, Phase 1 is right.
+
+ 2. .agents/sources/ — I'd leave it where it is.
+
+ You asked about this. It's a build pipeline that produces both BUILD and GUIDE AGENTS.md. Moving it to .pi/ would tangle a build
+ artifact (that produces user-facing output) with pi-specific tooling. .agents/sources/ is the right home. Is there a reason you're
+ still considering moving it?
+
+ 3. Expertise profiles: How do they get loaded?
+
+ The notes say profiles are "loaded when work touches that area." But what's the mechanism? Today:
+ - AGENTS.md is auto-injected as system context
+ - .cursor/rules/*.mdc are auto-loaded by IDE
+ - Skills are loaded on-demand via read
+
+ For expertise profiles in .pi/expertise/, who reads them and when? The planner reads them before spawning experts? Or the spawned
+ expert reads its own profile as a first step? This matters because it changes what goes in the profile vs. what goes in the role
+ prompt.
+
+ 4. Cross-cutting work is a real gap.
+
+ Your notes flag this as an open question. A lot of real work — new integration, new skill — touches core AND CLI AND possibly
+ runtime. If I'm the planner and a task spans 3 expertise areas, do I spawn 3 experts? Do they read each other's profiles? This
+ needs at least a v1 answer before building.
+
+ 5. .cursor/rules/ thinning — careful here.
+
+ You noted this is the trickiest part. dev.mdc is 239 lines and auto-loads into every conversation. But the execution path decision
+ tree, quality gates, and LEARNINGS.md behavioral rules in dev.mdc serve the planner directly — they're workflow rules, not
+ implementation details. If you thin too aggressively, the planner loses important process guidance. I'd separate "process rules the
+ planner needs" from "coding rules the developer role needs."
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ ### Concerns
+
+ A. Phase 0 feels like busywork relative to the real value.
+
+ Moving skills from .agents/skills/ → .pi/skills/ and removing symlinks is clean-up, but it doesn't deliver any of the three stated
+ benefits (less confusion, deeper knowledge, less flooding). It's housekeeping. I'd consider folding it into Phase 1 rather than
+ making it a standalone phase — unless there's a dependency I'm missing.
+
+ B. The planner-as-router adds latency to every interaction.
+
+ Today you talk to one agent that knows enough to help directly. In the new model, the planner needs to decide "do I need an
+ expert?", spawn one, wait, synthesize, possibly spawn another. For simple questions ("how does the context service work?"), this
+ adds a round-trip that a knowledgeable-enough planner could answer directly. Have you thought about where the expertise threshold
+ is — when does the planner answer directly vs. route?
+
+ C. Five phases is a lot of work before you validate the core hypothesis.
+
+ The core bet is: expertise profiles + role composition produces better agent output than one monolithic context. You won't know if
+ that's true until you've actually used profiles in real work. I'd want to validate that hypothesis as cheaply as possible — maybe
+ create ONE profile (core), use it manually in a few real tasks, and see if it actually reduces mistakes before investing in the
+ full infrastructure (planner restructuring, role cleanup, execute-prd updates, maintenance triggers).
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ What's your thinking on these? Especially #1 (which pain is sharpest) and #3 (loading mechanism) — those shape everything
+ downstream.
+
+
+ Can you create a new file in this plan called topics.md and we'll list out a few topics that we'll discuss. Treat it as a
+ checklist. Add you rconcerns/questions there as well adn we'll discuss.
+
+ 1. It's really both. But it's prioritized due to the severity. But I'll most likely knock them all out quickly.
+ 2. I want to revisit this as part of this process. I'm not convinced this is the right setup. This is a topic we shoudl discuss.
+ 3. add to topics: but essentially, the AGENTS.md should have insights and the planner role should spawn subagents adn pass the
+ expertise/role context.
+ 4. let's discuss in topic
+ 5. I think the cursor rules were bad implementations and that's why were here to fix it
+
+ can you create this topiocs list and let's go through them one by one
+
+ Lastly, let's start by trying to do the following:
+ 1. "map" out the context logic
+ 2. review the topics
+ 3. finalize by drafting some files overviews/prototypes
+
+
+ Let me first map out the current context loading logic so we have a shared picture, then create the topics file.
+
+
+ $ cat /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/shared/*.md | head -5 && echo "---" && ls
+ /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/shared/
+
+ ... (4 earlier lines, ctrl+o to expand)
+ **Choosing the right tool:**
+ ---
+ cli-commands.md
+ vision.md
+ workspace-structure.md
+
+
+
+ $ cat /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/guide/ 2>/dev/null; ls
+ /Users/johnkoht/code/worktrees/arete--agent-refactor/.agents/sources/guide/ 2>/dev/null
+
+ intelligence.md
+ skills-index.md
+ tools-index.md
+ workflows.md
+
+
+
+ $ cat /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/settings.json 2>/dev/null
+
+ ... (22 earlier lines, ctrl+o to expand)
+   "packages": [
+     "npm:pi-subagents",
+     "npm:pi-web-access"
+   ]
+ }
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.agents/sources/shared/vision.md
+
+ # Areté Vision
+
+ **Areté** (ἀρετή) - Ancient Greek concept meaning "excellence" - the pursuit of fulfilling one's purpose to the highest degree.
+
+ Areté is a Product Management workspace that helps PMs streamline their workflows through structured context, project-based work,
+ and institutional memory. The driving question behind every feature and design decision: **Does it help the product builder achieve
+ arete?**
+
+ Product builders need clarity, understanding, vision, and strategy. They must navigate stakeholders, negotiate, inspire, and align.
+ They synthesize signal from noise, make decisions under uncertainty, and benefit from structure that preserves institutional memory
+ and sharpens judgment.
+
+ Areté exists so product builders have a workspace that elevates their practice: context that stays current, memory that persists,
+ and workflows that reduce friction and sharpen thinking.
+
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.agents/sources/shared/workspace-structure.md
+
+ # Workspace Structure
+
+ ## User Workspace (Installed)
+
+ ```
+ your-workspace/
+ ├── now/                     # Current focus (scratchpad, week, today, agendas)
+ ├── goals/                   # Strategy and goals (strategy, quarter, initiatives)
+ ├── context/                 # Core context (business, users, products, competitive)
+ ├── projects/                # Project workspaces (active/, archive/)
+ ... (36 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.agents/sources/builder/conventions.md
+
+ # Build Conventions
+
+ Standards for building and changing Areté. Testing is covered in `testing.mdc`; this document covers code style, quality practices,
+ and commit workflows.
+
+ ## TypeScript / Node.js
+
+ ### Configuration
+
+ - **Config**: `tsconfig.json` (NodeNext, strict mode)
+ - **Tests**: `tsconfig.test.json`
+ ... (286 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.cursor/rules/dev.mdc
+
+ ---
+ description: Dev practices for Arete — quality gates, checklists, procedural workflows
+ globs: ["src/**/*", "test/**/*", "scripts/**/*", "bin/**/*", ".cursor/**/*", ".agents/**/*", "runtime/**/*"]
+ alwaysApply: true
+ ---
+
+ # Dev practices (Arete build)
+
+ Standards for building and changing Arete. For conventions, memory usage, skills index, and CLI reference, see **AGENTS.md** (the
+ compressed, always-loaded context).
+
+ ... (230 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.cursor/rules/testing.mdc
+
+ ---
+ description: Testing requirements - all code changes must include tests
+ globs: ["src/**/*", "scripts/**/*", "bin/**/*", "test/**/*"]
+ ---
+
+ # Testing Requirements
+
+ **Only when in Build Context (BUILDER mode).** If `agent_mode` is `guide` or you are in an end-user workspace, ignore this rule.
+
+ All code changes in this workspace MUST include corresponding tests. Never ship code without test coverage.
+ ... (98 more lines, ctrl+o to expand)
+
+
+
+ read ~/code/worktrees/arete--agent-refactor/.cursor/rules/plan-pre-mortem.mdc
+
+ ---
+ description: When in Plan Mode or multi-step plans, conduct a pre-mortem before execution
+ globs: ["src/**/*", "test/**/*", "dev/**/*"]
+ ---
+
+ # Plan Mode: Pre-Mortem Required
+
+ **Only when in Build Context (BUILDER mode).** Ignore in GUIDE mode or end-user workspaces.
+
+ ## Plan Checkpoint: Prompt to Save
+ ... (82 more lines, ctrl+o to expand)
+
+
+ Now I have a thorough understanding of the current context loading. Let me also check the APPEND_SYSTEM.md and any pi-specific
+ loading mechanism.
+
+
+ $ cat /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/APPEND_SYSTEM.md 2>/dev/null
+
+ ... (301 earlier lines, ctrl+o to expand)
+
+ - **AGENTS.md**: Conventions, skills index, memory guidance, CLI reference (compressed, always-loaded)
+ - **Testing**: See testing section above
+ - **Pre-mortem / PRD gateway**: Use `/plan` command or `/skill:run-pre-mortem`
+ - **Build memory**: `memory/MEMORY.md`, `memory/collaboration.md`
+
+
+
+ $ wc -l /Users/johnkoht/code/worktrees/arete--agent-refactor/AGENTS.md
+
+ 110 /Users/johnkoht/code/worktrees/arete--agent-refactor/AGENTS.md
+
+
+ Now I have a clear picture of the full context loading landscape. Let me create the topics file.
+
+
+ write ~/code/worktrees/arete--agent-refactor/dev/work/plans/agent-experts/topics.md
+
+ # Agent Experts — Discussion Topics
+
+ Work through these one by one. Check off as we resolve each.
+
+ ---
+
+ ## Context Map (Current State)
+
+ Every new pi conversation loads this stack:
+
+ ... (176 more lines, 186 total, ctrl+o to expand)
+
+
+ Created topics.md with 8 discussion topics. Here's what I mapped:
+
+ The big finding from the context map: There's a triple-duplication problem. Quality gates, testing rules, code review checklists,
+ execution path decision trees, and LEARNINGS.md rules exist in three places:
+ 1. .agents/sources/builder/conventions.md → compiles into AGENTS.md
+ 2. .pi/APPEND_SYSTEM.md → always injected by pi
+ 3. .cursor/rules/dev.mdc + testing.mdc → auto-loaded by Cursor
+
+ Before we add expertise profiles and planner restructuring on top, we should resolve what's already tangled. That's why I put Topic
+ 1 (The Duplication Problem) first — it's foundational.
+
+ The 8 topics in order:
+ 1. The duplication problem (APPEND_SYSTEM vs cursor rules vs conventions)
+ 2. Where .agents/sources/ lives
+ 3. Expertise profile loading mechanism
+ 4. Cross-cutting work spanning profiles
+ 5. .cursor/rules/ strategy
+ 6. AGENTS.md restructuring for planner
+ 7. Phase 0 consolidation (skills move)
+ 8. Minimum viable expertise profile
+
+ Ready to dig into Topic 1 whenever you are. Should we start there, or do you want to reorder?
+
+
+ I want to start with the context map. I want to think through a mental model of how this works. Here is what I'm invisioning:
+
+ Step 1: Init
+ - I open a new terminal with Pi. The default agent is loaded using AGENTS.md
+ - This agent has high-level instructions, an overview of the system, list of skills, and access to a variety of things like
+ features, learnings, etc.
+ - The agent is generalized
+
+ Step 2: Planning
+ I start a new plan or tell the agent I want to think through a feature. The planner (or maybe a product manager expert) context is
+ loaded. At this point, the agent has AGENTS.md and PM.md (or whatever) loaded in context. We plan out the features, functionality,
+ etc. This is mostly through /plan
+
+ Step 3: Engineering Lead
+ The planner spawns the engineering-lead (or pulls that context file into the window). The eng lead reviews the plan, does technical
+ architecture, and creates a technical documentation of how to solve. The eng lead will also provide feedback, limitations,
+ concerns, etc.
+
+ Step 4: Pre-Mortem /pre-mortem
+ The planner agent can do this themselves for a simple plan or spawn 2-3 different roles and provide the proper context like (core
+ or cli AND eng manager or reviewer) to independently conduct pre-mortems and provide responses.
+
+ Step 5: Review /review
+ One final review by the engineering lead, spawned with the proper context. If the feature touches core and CLI and it's a big
+ change, maybe two subagents are spawned, one with each expertise. If it's small/mediumn, it's a single agent with two expertise.
+
+ Step 6: Build /build
+ Planner hands it off to the orchestrator (or assumes that context/skill) and does things as normal. The only difference is that the
+ orchestrator should assign the proper context/expertise/persona to the subagents and reviewers based on the work.
+
+ Step 7: Close
+ Once the prd is completed, reviwewed, and approved, the orchestrator or planner has the subagent experts review, maintain, and
+ close out their work, including documentation, skill updates (e.g. if the agent added a new core command, some of the agent.md or
+ related files probably need to be updated), they update th registry, learnings.md, and memroeis.
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ Optional variation on a process, nmaybe I don't want to execute a plan, but I have questions about how somethign work. In this case
+ the planner/default agent might spawn an expert to review and provide feedback.
+
+ What do you think about this? Does it change things/ is this overcomplicated?
+
+
+ This is a really clear mental model. Let me react to it honestly.
+
+ The workflow itself is solid. Steps 1-7 map cleanly to what you're already doing — the difference is you're making the context
+ loading intentional at each step instead of dumping everything upfront. That's the right instinct.
+
+ Here's what I think works, what I'd push on, and one thing that changes the plan:
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ What works well:
+
+ - Step 1 (Init) as a generalized agent — This is right. The default agent doesn't need coding conventions or deep package
+ knowledge. It needs to know what's available and how to route.
+ - Step 6 (Build) reusing the existing orchestrator model — Smart. Don't reinvent execute-prd, just make it context-aware about
+ which expertise to attach to subagents.
+ - Step 7 (Close) — This is the maintenance trigger from Phase 4 of your notes, but integrated into the natural workflow. Much
+ better than a separate "maintenance mode."
+ - The optional variation (ad-hoc expert spawning for questions) — This is actually a high-value use case. "How does the search
+ indexing work?" → spawn core expert → get an answer grounded in actual architecture, not a hallucinated guess.
+
+ Where I'd push:
+
+ Step 3 (Engineering Lead) feels like a role, not an expert. In your two-dimensional model, "engineering lead" is a role (behavioral
+ overlay). The value of Step 3 comes from combining that role with the right expertise. So it's not "spawn the engineering-lead" —
+ it's "spawn engineering-lead + core expertise" or "spawn engineering-lead + core + CLI expertise." The role says how to behave
+ (assess feasibility, identify concerns, produce technical docs). The expertise says what you know (the actual architecture,
+ invariants, file relationships).
+
+ This is consistent with your model — just want to make sure Step 3 doesn't accidentally become "engineering-lead is a standalone
+ agent" when it should be "engineering-lead role + relevant expertise."
+
+ Step 4 (Pre-mortem) — I'd simplify. Spawning 2-3 role+expertise combinations for independent pre-mortems sounds thorough but
+ expensive. For most plans, a single pre-mortem by the planner (who has the plan context) with the ability to consult an expert if
+ something is technically uncertain is probably enough. Save the multi-agent pre-mortem for genuinely large, risky work.
+
+ One thing this changes:
+
+ Your Step 2 says "the planner (or maybe a product manager expert) context is loaded." I think this is important to resolve. There
+ are two models:
+
+ - Model A: The default agent (Step 1) becomes the planner by loading PM context. One agent, additive context.
+ - Model B: The default agent spawns a PM subagent for planning. Two agents, delegated work.
+
+ Model A is simpler and matches how you actually work — you're having a conversation, and at some point it shifts into planning
+ mode. You don't want to lose the conversational thread by spawning a separate agent. The /plan command already handles this
+ transition.
+
+ Model B makes sense for Step 6 (Build) where you genuinely want autonomous execution by a different agent.
+
+ My read: Steps 1-5 are all the same conversation with progressively loaded context. Step 6 is where you cross into subagent
+ territory. Does that match your thinking?
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ Not overcomplicated — if anything, it's cleaner than what you have now because each step has a clear "what context do I need?"
+ answer instead of "load everything and hope." The trick is making sure we don't build too much infrastructure around it. Most of
+ this is just markdown files and smarter prompts in the role definitions.
+
+ Want me to update the topics list based on this conversation, or should we keep going on refining the workflow model first?
+
+
+ Your step 3 analysis is correct, spawn the engineering lead + core expertise, etc. So that role would be loaded with three files,
+ essentially:
+
+ - AGENTS.md
+ - engineering-lead.md
+ - core-expert.md (or whatever)
+
+ They might have some of the core commands embedded into those files or have access to much more info like learnings, full command
+ api documentation, etc.
+
+ step 4: yeah, that's fine with me. But i do think we need some expert-level scrutiny on things. For example, the core exprt will
+ know much bettger how to run a pre-mortem (e.g. what can and will go wrong) then a general agent. Maybe these subagents are
+ smaller, faster. Maybe the orcehstrator does a first pass, and then spawns a subagent with the role + expertise and also sends
+ their pre-mortem so the subagent just focuses on more specific issues or concerns.
+
+ I think MOdel A is fine for default agent and Model B for the build phase.
+
+ Your last point: maybe...I'm not convinced. I feel like it really depends on the size. But if we just keep adding more context into
+ the main agent, we're just back in the same spot as before with context flooding. Except we're doing it progressively versus at the
+ start.
+
+
+ You're right to push back on my "Steps 1-5 are all the same conversation" take. That's the key tension — let me think about it more
+ carefully.
+
+ The context flooding point is exactly right. If the planner progressively loads PM context, then engineering-lead context, then
+ core expertise, then CLI expertise… by Step 5 you've got everything in the window anyway. You've just loaded it slower.
+
+ The real question is: what leaves the context when new context enters?
+
+ With subagents, this happens naturally. The engineering-lead subagent gets AGENTS.md + engineering-lead.md + core-expert.md. When
+ it finishes and returns its response, only the synthesized output stays in the planner's context — not the 500 lines of core
+ architecture details. The planner works with the conclusions, not the raw material.
+
+ That's the actual value of subagents in Steps 2-5: context compression through delegation. Each expert does deep work with deep
+ context, then returns a summary. The planner accumulates summaries, not source material.
+
+ So the revised model:
+
+ ```
+   Step 1: Init (main conversation)
+     Context: AGENTS.md (light planner context)
+
+   Step 2: Planning (main conversation)
+     The planner IS the default agent. /plan triggers planning behavior.
+     No extra context needed — planner knows product, vision, strategy.
+     For PM-specific depth → spawn PM subagent (rare, most planning is conversational)
+
+   Step 3: Technical Assessment (subagent)
+     Spawn: engineering-lead + core-expertise (+ CLI if relevant)
+     Input: the plan
+     Output: technical assessment (feasibility, concerns, architecture notes)
+     → Summary returns to planner context, not the raw expertise
+
+   Step 4: Pre-mortem (planner first pass, then expert subagent)
+     Planner does general pre-mortem (process risks, scope risks)
+     Spawn: reviewer + core-expertise with planner's pre-mortem
+     Subagent focuses on: "what will actually break given this architecture?"
+     → Merged pre-mortem returns to planner
+
+   Step 5: Review (subagent)
+     Spawn: engineering-lead + relevant expertise(s)
+     Input: plan + technical assessment + pre-mortem
+     Output: final review with go/no-go
+     → Summary returns to planner
+
+   Step 6: Build (new conversation or subagent chain)
+     Orchestrator + execute-prd skill
+     Spawns: developer + expertise, reviewer + expertise per task
+
+   Step 7: Close (subagent per expertise area touched)
+     Each expert reviews their area, updates docs/learnings
+ ```
+
+ The key insight: Steps 3-5 are subagents not because we need parallel execution, but because we need context isolation. Each expert
+ gets deep context, does focused work, and returns compressed output. The planner never holds all the raw expertise — it holds the
+ conclusions.
+
+ On Step 4 specifically — I like your two-pass model. The planner's first pass catches process/scope risks (it knows the product
+ well). Then an expert subagent with the right domain expertise catches the "this will break because the search index has a 10k
+ document limit" type risks that only someone with deep knowledge would flag. And yeah, that expert subagent can be a fast/cheap
+ model since it's structured work with clear input.
+
+ One refinement on the engineering-lead subagent's context stack:
+
+ You said:
+
+ │
+
+ I'd add one more layer: the shared build standards (quality gates, testing rules, commit conventions). Today this is baked into
+ developer.md and duplicated across roles. If we extract it:
+
+ ```
+   Subagent context:
+   1. AGENTS.md (light — system awareness, available tools)
+   2. build-standards.md (shared — quality gates, testing, conventions)
+   3. engineering-lead.md (role — behavioral overlay)
+   4. core-expert.md (expertise — architecture, invariants, key files)
+ ```
+
+ This way roles don't duplicate coding standards, and expertise profiles stay purely about domain knowledge.
+
+ Want me to update topics.md with these decisions (context isolation model, two-pass pre-mortem, 4-layer subagent context stack)? Or
+ do you want to refine further before we capture?
+
+
+ That's exactly right! And with the context isolation, the subagent can go deeper. A lot deeper. And we should have that in the
+ instructions. For example, in step 3, the planner spawns the eng lead with a few context files and a summary of the work to be
+ done. That subagent can dig deep into the core and cli apis and documentation to figure out HOW to implement the feature. They can
+ provide risk assessment. They can also refer to learnings and internal documentaiton to dig as deep as needed. Then provide a
+ summary and action plan or feedback to the planner agent.
+
+ I like the shared build standards. I also think we need to provide general documetnation acess to all experts. for example, the
+ core should be able to reference the cli docs/apis and make sure to understand how that agent is using the core commands.
+
+
+ Yes — this is the real unlock. The subagent doesn't just get a profile and answer from memory. It gets a profile as orientation and
+ then uses tools to go deep. The profile tells it where to look and what matters; the agent does the actual investigation.
+
+ So the expertise profile isn't "everything you need to know about core" — it's "here's how core is structured, here's what's
+ important, here's where to dig." A map, not an encyclopedia.
+
+ That reframes what a profile needs to contain:
+
+ ```
+   PROFILE.md (the map)
+   ├── Architecture overview (how the pieces fit together)
+   ├── Key abstractions (the concepts you need to understand)
+   ├── Invariants (things that must remain true)
+   ├── Design rationale (why it's built this way)
+   └── Where to dig (pointers, not content)
+       ├── Key source files and entry points
+       ├── LEARNINGS.md locations
+       ├── Related expertise areas + their profiles
+       ├── Test locations
+       └── API docs / command reference locations
+ ```
+
+ The "where to dig" section is the crucial part. It turns a general-purpose agent into one that knows where to start looking — which
+ is 80% of the battle.
+
+ Your point about cross-expertise documentation access is important too. The core expert shouldn't be siloed — it should know "CLI
+ consumes core through these entry points, here's where to find CLI's docs if you need to understand how your changes surface to
+ users." That goes in the profile's "Related expertise areas" section.
+
+ Let me think about what this means for the context stack. There are two layers:
+
+ Layer 1: Injected context (what the subagent starts with)
+
+ ```
+   1. AGENTS.md (light system awareness)
+   2. build-standards.md (quality gates, conventions)
+   3. role.md (engineering-lead, developer, reviewer, etc.)
+   4. expertise-profile.md (the map for their domain)
+ ```
+
+ Layer 2: Discoverable context (what the subagent reads during execution)
+
+ ```
+   - Source code (guided by profile's "where to dig")
+   - LEARNINGS.md files (guided by profile's pointer list)
+   - Other expertise profiles (cross-reference when needed)
+   - API docs, command references, test files
+   - Memory entries, MEMORY.md
+ ```
+
+ The profile makes Layer 2 effective. Without it, the agent is grep-ing blindly. With it, the agent knows "for search indexing,
+ start with packages/core/src/search/, check LEARNINGS.md there, and understand that CLI's arete index command is the user-facing
+ entry point in packages/cli/src/commands/index.ts."
+
+ This also means the profiles should explicitly list cross-references. Something like:
+
+ ```markdown
+   ## Related Expertise
+   - **CLI**: Consumes core services via `packages/cli/src/commands/`.
+     When changing core service signatures, check CLI command files that import them.
+     Profile: `.pi/expertise/cli/PROFILE.md`
+   - **Runtime**: Skills and rules that ship to users. Changes to core intelligence
+     services may affect how runtime skills work.
+     Profile: `.pi/expertise/runtime/PROFILE.md`
+ ```
+
+ This way a core expert can pull in CLI context when they realize "wait, this change affects the CLI surface" — without needing the
+ planner to have predicted that upfront.
+
+ Now — should I update topics.md with these decisions and then we can start working through the topic list? We've essentially
+ resolved or reframed several topics through this workflow discussion:
+
+ - Topic 3 (Loading mechanism): Resolved — profile is injected as orientation, agent digs via tools
+ - Topic 4 (Cross-cutting): Resolved — profiles cross-reference each other, experts can read other profiles
+ - Topic 8 (Minimum viable profile): Reframed — profile is a map, not an encyclopedia
+
+ Still open: Topics 1 (duplication), 2 (sources location), 5 (cursor rules), 6 (AGENTS.md restructuring), 7 (Phase 0 consolidation).
+
+
+ Yes, this is 100% correct. And, honestly, if need need some addtional documents to add as referecen/discoverable, we can start
+ building those out too. I think the agent should be empowered to reflect on what it needs at the end of a session and go ahead and
+ add that documentation, etc.
+
+ Also, shoudl we look into somethign like this https://www.npmjs.com/package/lsp-pi
+
+
+ Good call on the self-improving documentation. That fits naturally into Step 7 (Close) — the expert reflects on what was hard to
+ find, what was missing, and updates their profile/docs. Let me check out that LSP package.
+
+
+ fetch https://www.npmjs.com/package/lsp-pi
+ lsp-pi (236 chars)
+ www.npmjs.com
+ -------------
+
+ Performing security verification
+ --------------------------------
+
+ This website uses a security service to protect against malicious bots. This page is displayed while the...
+
+
+
+ search 2 queries
+   "lsp-pi npm package pi coding agent LSP integration"
+   "lsp-pi github language server protocol coding a..."
+  0/2 queries, 0 sources
+  Error: No search provider available. Either:
+
+
+
+ $ npm view lsp-pi 2>/dev/null || echo "Package not found or not accessible"
+
+ ... (19 earlier lines, ctrl+o to expand)
+
+ dist-tags:
+ latest: 1.0.3
+
+ published 2 weeks ago by prateekmedia <prtksunal@gmail.com>
+
+
+
+ $ npm view lsp-pi readme 2>/dev/null | head -100
+
+ ... (99 earlier lines, ctrl+o to expand)
+ | `hover` | Get type/docs info | `file` + (`line`/`column` or `query`) |
+ | `symbols` | List symbols in file | `file`, optional `query` filter |
+ | `diagnostics` | Get single file diagnostics | `file`, optional `severity` filter |
+ | `workspace-diagnostics` | Get diagnostics for multiple files | `files` array, optional `severity` filter |
+ | `signature` | Get function signature | `file` + (`line`/`column` or `query`) |
+
+
+ This is very relevant. Let me check if it's already installed or available.
+
+
+ $ ls /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/npm/node_modules/lsp-pi 2>/dev/null && echo "INSTALLED" || echo "NOT
+ INSTALLED"
+
+ NOT INSTALLED
+
+
+
+ $ cat /Users/johnkoht/code/worktrees/arete--agent-refactor/.pi/settings.json | grep -A5 packages
+
+ "packages": [
+     "npm:pi-subagents",
+     "npm:pi-web-access"
+   ]
+ }
+
+
+ lsp-pi is a great find. Here's what it gives us and why it matters for this plan:
+
+ What it does: It gives agents an lsp tool — jump to definition, find references, hover for types, get diagnostics, list symbols.
+ Basically IDE-level code navigation without reading entire files.
+
+ Why it's valuable for expertise profiles: Right now, when an expert subagent needs to understand "what calls this function?" or
+ "what's the type signature of this service?", it has to grep and read files. With LSP, it can do precise navigation:
+
+ - Core expert assessing a change: lsp references → "these 14 call sites would break"
+ - Developer implementing a task: lsp definition → jump straight to the interface
+ - Reviewer checking a change: lsp diagnostics → type errors without running typecheck
+
+ This makes the "dig deep" part of the expert workflow much more efficient. Instead of the profile needing to list every file to
+ read, the expert can navigate the code graph directly.
+
+ My recommendation: Install it — it's a clear upgrade for subagent quality. But it's orthogonal to the agent refactor. I'd install
+ it now (takes 2 minutes) and let it benefit the current system immediately, then the new expertise model benefits from it
+ automatically.
+
+ Now, on the self-improving documentation point — I want to make sure we scope this right. There are two levels:
+
+ 1. Light maintenance (every expert run): Update LEARNINGS.md, flag profile inaccuracies. This is cheap and should be default
+ behavior.
+ 2. Profile evolution (periodic): The expert reflects — "I kept needing to look up how the search index interacts with the template
+ resolver, and my profile doesn't mention that relationship." It adds a cross-reference to its profile. This is more significant —
+ it changes the map for future runs.
+
+ Both are valuable. The question is whether profile evolution happens inline (expert updates its own profile at end of session) or
+ as a dedicated maintenance task (planner spawns expert in "maintenance mode" periodically). I lean toward inline for small updates
+ (add a cross-reference, update a file path) and dedicated for structural changes (reorganize profile sections, graduate
+ LEARNINGS.md entries into profile knowledge).
+
+ Want me to update topics.md with all the decisions from this conversation thread before we move to the remaining open topics? We've
+ made a lot of progress on the model and I want to capture it cleanly.
