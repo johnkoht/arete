@@ -3,7 +3,8 @@
     "read",
     "bash",
     "edit",
-    "write"
+    "write",
+    "lsp"
   ],
   "agents": {
     "product-manager": {
