@@ -479,6 +479,18 @@ import type {
   PersonMemorySignal,
   RefreshPersonMemoryInternalOptions,
 } from './person-memory.js';
+import {
+  extractStancesForPerson,
+  extractActionItemsForPerson,
+  isActionItemStale,
+  deduplicateActionItems,
+  capActionItems,
+} from './person-signals.js';
+import type {
+  LLMCallFn,
+  PersonStance,
+  PersonActionItem,
+} from './person-signals.js';
 
 // ---------------------------------------------------------------------------
 // EntityService
@@ -492,6 +504,7 @@ export interface RefreshPersonMemoryOptions {
   personSlug?: string;
   minMentions?: number;
   ifStaleDays?: number;
+  callLLM?: LLMCallFn;
 }
 
 export interface RefreshPersonMemoryResult {
@@ -501,6 +514,12 @@ export interface RefreshPersonMemoryResult {
   skippedFresh: number;
   /** Number of conversation files scanned. Optional for backward compatibility. */
   scannedConversations?: number;
+  /** Number of stances extracted across all people. */
+  stancesExtracted: number;
+  /** Number of action items extracted across all people (after lifecycle). */
+  actionItemsExtracted: number;
+  /** Number of action items aged out (stale). */
+  itemsAgedOut: number;
 }
 
 export interface PeopleIntelligenceOptions {
@@ -922,7 +941,7 @@ export class EntityService {
     options: RefreshPersonMemoryOptions = {},
   ): Promise<RefreshPersonMemoryResult> {
     if (!workspacePaths?.people) {
-      return { updated: 0, scannedPeople: 0, scannedMeetings: 0, skippedFresh: 0 };
+      return { updated: 0, scannedPeople: 0, scannedMeetings: 0, skippedFresh: 0, stancesExtracted: 0, actionItemsExtracted: 0, itemsAgedOut: 0 };
     }
 
     const internalOptions: RefreshPersonMemoryInternalOptions = {
@@ -960,10 +979,29 @@ export class EntityService {
           .filter((p) => (p.split(/[/\\]/).pop() ?? '') !== 'index.md')
       : [];
 
+    // Read workspace owner name from profile.md once for action item direction classification.
+    let ownerName: string | undefined;
+    const profilePath = join(workspacePaths.context, 'profile.md');
+    const profileContent = await this.storage.read(profilePath);
+    if (profileContent) {
+      const parsedProfile = parseFrontmatter(profileContent);
+      if (parsedProfile && typeof parsedProfile.frontmatter.name === 'string') {
+        ownerName = parsedProfile.frontmatter.name;
+      }
+    }
+
     const personSignals = new Map<string, PersonMemorySignal[]>();
+    const personStances = new Map<string, PersonStance[]>();
+    const personActionItems = new Map<string, PersonActionItem[]>();
     for (const person of refreshablePeople) {
       personSignals.set(person.slug, []);
+      personStances.set(person.slug, []);
+      personActionItems.set(person.slug, []);
     }
+
+    // LLM stance cache — prevents duplicate LLM calls for the same meeting+person
+    // within a single refresh. Keyed by normalized absolute path + ':' + person slug.
+    const stanceCache = new Map<string, PersonStance[]>();
 
     // Meeting content cache — keyed by normalized absolute path so that the
     // same physical file is read at most once, regardless of whether the path
@@ -1045,6 +1083,34 @@ export class EntityService {
         if (!inAttendeeIds && !inAttendeeNames && !mentionedInBody) continue;
 
         signals.push(...collectSignalsForPerson(content, person.name, date, source));
+
+        // Stance extraction (LLM-based, optional)
+        if (options.callLLM) {
+          const stanceCacheKey = resolve(workspacePaths.root, meetingPath) + ':' + person.slug;
+          let stances: PersonStance[];
+          if (stanceCache.has(stanceCacheKey)) {
+            stances = stanceCache.get(stanceCacheKey)!;
+          } else {
+            stances = await extractStancesForPerson(content, person.name, options.callLLM);
+            // Fill in source and date for each stance
+            for (const stance of stances) {
+              stance.source = source;
+              stance.date = date;
+            }
+            stanceCache.set(stanceCacheKey, stances);
+          }
+          const personStanceList = personStances.get(person.slug);
+          if (personStanceList) {
+            personStanceList.push(...stances);
+          }
+        }
+
+        // Action item extraction (regex-based, always runs)
+        const actionItems = extractActionItemsForPerson(content, person.name, source, date, ownerName);
+        const personActionItemList = personActionItems.get(person.slug);
+        if (personActionItemList) {
+          personActionItemList.push(...actionItems);
+        }
       }
     }
 
@@ -1081,6 +1147,41 @@ export class EntityService {
       }
     }
 
+    // Post-loop lifecycle: dedup stances by topic+direction, apply action item lifecycle.
+    let totalStances = 0;
+    let totalActionItems = 0;
+    let totalItemsAgedOut = 0;
+
+    for (const person of refreshablePeople) {
+      // Stance dedup: keep first occurrence per topic+direction
+      const rawStances = personStances.get(person.slug) ?? [];
+      const seenStanceKeys = new Set<string>();
+      const dedupedStances: PersonStance[] = [];
+      for (const stance of rawStances) {
+        const key = `${stance.topic.toLowerCase()}:${stance.direction}`;
+        if (!seenStanceKeys.has(key)) {
+          seenStanceKeys.add(key);
+          dedupedStances.push(stance);
+        }
+      }
+      personStances.set(person.slug, dedupedStances);
+      totalStances += dedupedStances.length;
+
+      // Action item lifecycle: mark stale, dedup, cap
+      const rawItems = personActionItems.get(person.slug) ?? [];
+      let agedOut = 0;
+      for (const item of rawItems) {
+        item.stale = isActionItemStale(item);
+        if (item.stale) agedOut += 1;
+      }
+      totalItemsAgedOut += agedOut;
+      const freshItems = rawItems.filter((i) => !i.stale);
+      const dedupedItems = deduplicateActionItems([], freshItems);
+      const cappedItems = capActionItems(dedupedItems);
+      personActionItems.set(person.slug, cappedItems);
+      totalActionItems += cappedItems.length;
+    }
+
     let updated = 0;
     for (const person of refreshablePeople) {
       const category = person.category;
@@ -1104,6 +1205,9 @@ export class EntityService {
       scannedMeetings: meetingFiles.length,
       scannedConversations: conversationFiles.length,
       skippedFresh,
+      stancesExtracted: totalStances,
+      actionItemsExtracted: totalActionItems,
+      itemsAgedOut: totalItemsAgedOut,
     };
   }
 
