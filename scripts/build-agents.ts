@@ -3,12 +3,13 @@
  * Build AGENTS.md from modular source files in .agents/sources/
  * 
  * Usage:
- *   npx tsx scripts/build-agents.ts dev   # Generate AGENTS.md for BUILD
  *   npx tsx scripts/build-agents.ts prod  # Generate dist/AGENTS.md for GUIDE
  * 
  * Targets:
- *   dev  - BUILD version (shared + builder) → AGENTS.md
  *   prod - GUIDE version (shared + guide) → dist/AGENTS.md
+ * 
+ * Note: The dev target was removed. AGENTS.md is now hand-written.
+ * Running with 'dev' will print an error and exit.
  */
 
 import { readFile, writeFile, mkdir } from 'fs/promises';
@@ -39,14 +40,6 @@ function getConfig(target: Target): BuildConfig {
     'shared/cli-commands.md',
   ];
 
-  const builderFiles = [
-    'builder/skills-index.md',
-    'builder/rules-index.md',
-    'builder/conventions.md',
-    'builder/memory.md',
-    'builder/personas.md',
-  ];
-
   const guideFiles = [
     'guide/skills-index.md',
     'guide/tools-index.md',
@@ -54,19 +47,11 @@ function getConfig(target: Target): BuildConfig {
     'guide/workflows.md',
   ];
 
-  if (target === 'dev') {
-    return {
-      target,
-      sourceFiles: [...sharedFiles, ...builderFiles],
-      outputPath: join(root, 'AGENTS.md'),
-    };
-  } else {
-    return {
-      target,
-      sourceFiles: [...sharedFiles, ...guideFiles],
-      outputPath: join(root, 'dist', 'AGENTS.md'),
-    };
-  }
+  return {
+    target,
+    sourceFiles: [...sharedFiles, ...guideFiles],
+    outputPath: join(root, 'dist', 'AGENTS.md'),
+  };
 }
 
 /**
@@ -488,13 +473,20 @@ async function buildAgents(target: Target): Promise<void> {
  */
 async function main(): Promise<void> {
   const targetArg = process.argv[2] as Target | undefined;
-  const target: Target = targetArg === 'prod' ? 'prod' : 'dev';
 
-  if (targetArg && targetArg !== 'dev' && targetArg !== 'prod') {
-    console.error(`Invalid target: ${targetArg}`);
-    console.error('Usage: npx ts-node scripts/build-agents.ts [dev|prod]');
+  if (targetArg === 'dev') {
+    console.error('Error: Dev target removed — AGENTS.md is now hand-written.');
+    console.error('Edit AGENTS.md directly. See .pi/APPEND_SYSTEM.md for process rules.');
     process.exit(1);
   }
+
+  if (targetArg && targetArg !== 'prod') {
+    console.error(`Invalid target: ${targetArg}`);
+    console.error('Usage: npx tsx scripts/build-agents.ts prod');
+    process.exit(1);
+  }
+
+  const target: Target = 'prod';
 
   try {
     await buildAgents(target);

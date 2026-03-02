@@ -21,9 +21,8 @@
   "scripts": {
     "dev": "tsx packages/cli/src/index.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
-    "build": "npm run build:agents:dev && npm run build:agents:prod && npm run build:packages",
+    "build": "npm run build:agents:prod && npm run build:packages",
     "build:packages": "./node_modules/.bin/tsc -b packages/core packages/cli",
-    "build:agents:dev": "./node_modules/.bin/tsx scripts/build-agents.ts dev",
     "build:agents:prod": "./node_modules/.bin/tsx scripts/build-agents.ts prod",
     "typecheck": "./node_modules/.bin/tsc -b packages/core packages/cli",
     "prepare": "[ -f packages/core/dist/index.js ] && echo 'Build artifacts exist, skipping prepare' || npm run build",

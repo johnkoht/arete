@@ -127,16 +127,11 @@ Areté is organized as a **monorepo** with npm workspaces:
   - `npm test` - Run test suite across all packages
   - `npm run typecheck` - Type check all packages
 
-### AGENTS.md Compilation
+### AGENTS.md
 
-**AGENTS.md is a generated file** — do not edit it directly. It's compiled from modular source files in `.agents/sources/`.
+**BUILD AGENTS.md** (root `AGENTS.md`) is hand-written. Edit it directly when adding skills, updating memory references, or changing system awareness.
 
-**Why?** Following [Vercel's research](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals), compressed documentation in the agent's context (AGENTS.md) achieves better results (100% pass rate) than active skill retrieval (79% pass rate).
-
-**How it works:**
-1. **Source files** in `.agents/sources/` are human-readable markdown
-2. **Build script** (`scripts/build-agents.ts`) compiles sources into compressed output
-3. **Two outputs**: BUILD (`AGENTS.md` at root) and GUIDE (`dist/AGENTS.md` for users)
+**GUIDE AGENTS.md** (`dist/AGENTS.md`) is generated from `.agents/sources/` (shared + guide sections) and shipped to users.
 
 **Directory structure:**
 ```
@@ -145,11 +140,6 @@ Areté is organized as a **monorepo** with npm workspaces:
 │   ├── vision.md
 │   ├── workspace-structure.md
 │   └── cli-commands.md
-├── builder/      # BUILD-specific (this repo)
-│   ├── skills-index.md
-│   ├── rules-index.md
-│   ├── conventions.md
-│   └── memory.md
 └── guide/        # GUIDE-specific (shipped to users)
     ├── skills-index.md
     ├── tools-index.md
@@ -157,25 +147,17 @@ Areté is organized as a **monorepo** with npm workspaces:
     └── workflows.md
 ```
 
-**When to rebuild:**
-- After adding/removing skills or tools
-- After changing skill triggers or descriptions
-- After modifying any source file in `.agents/sources/`
-- Before committing changes to skills, rules, or workspace structure
+**When to rebuild GUIDE AGENTS.md:**
+- After adding/removing product skills or tools
+- After changing skill triggers or descriptions in `.agents/sources/guide/`
+- Before publishing the npm package
 
-**Commands:**
+**Command:**
 ```bash
-# Rebuild BUILD AGENTS.md (for this repo)
-npm run build:agents:dev
-
-# Rebuild GUIDE AGENTS.md (for npm package)
-npm run build
-
-# Both
-npm run build:agents:dev && npm run build
+npm run build   # Builds GUIDE AGENTS.md + TypeScript packages
 ```
 
-**See also:** `.agents/sources/README.md` for detailed editing workflow.
+**See also:** `.agents/sources/README.md` for GUIDE editing workflow.
 
 ---
 
