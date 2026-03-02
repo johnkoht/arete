@@ -22,7 +22,7 @@ You will receive from the parent a prompt that includes:
 - **dev/autonomous/progress.txt**: Learnings from previous tasks in this PRD run.
 - **dev/MEMORY.md**: Recent build decisions and gotchas.
 - **dev/autonomous/progress.txt.template**: Format for progress entries (use the same structure when appending).
-- **.cursor/rules/dev.mdc** and **.cursor/rules/testing.mdc**: Coding standards, test layout, and what to run before committing.
+- **.pi/standards/build-standards.md**: Coding standards, test layout, and what to run before committing.
 
 Key codebase facts: TypeScript, NodeNext (use .js extensions in imports), `npm test` (node:test + node:assert/strict), `npm run typecheck`. Build system is `dev/` (internal); rest is product. Tests live in `test/` mirroring `src/`; naming `*.test.ts`. If the task touches Python under `scripts/integrations/`, also run `npm run test:py`. Run all npm commands from the **repository root**.
 
@@ -44,7 +44,7 @@ Key codebase facts: TypeScript, NodeNext (use .js extensions in imports), `npm t
      Reason: [superseded by X / consolidated into Y / no longer needed because Z]
      Replacement: [path/to/new-file.ext OR "none - functionality removed"]
      ```
-   - **Special cases (RARELY delete without explicit plan instruction):** Build-only rules (`.cursor/rules/dev.mdc`, `.cursor/rules/testing.mdc`, etc.), documentation (`*.md` in root, dev/, docs/), core infrastructure (`src/core/*`, `src/cli.ts`). If unsure whether to delete a file, don't — ask the orchestrator or leave it in place.
+   - **Special cases (RARELY delete without explicit plan instruction):** Build-only standards (`.pi/standards/*.md`, `.pi/agents/*.md`), documentation (`*.md` in root, dev/, docs/), core infrastructure (`src/core/*`, `src/cli.ts`). If unsure whether to delete a file, don't — ask the orchestrator or leave it in place.
    - **Anti-pattern:** Deleting files as "cleanup" without understanding their purpose or providing justification.
 
 2. **Run quality checks** — From the repo root: `npm run typecheck` and `npm test`. If the task involves Python (`scripts/integrations/`), also run `npm run test:py`. Fix until all relevant checks pass.

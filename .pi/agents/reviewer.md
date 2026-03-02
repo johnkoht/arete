@@ -58,7 +58,7 @@ git diff HEAD --name-status | grep '^D'
 4. **Bad justification**: Silence, "cleanup", or no rationale.
 5. **If unclear or missing**: Reject. Ask to restore or provide clear rationale.
 
-**Special attention**: Build-only files (`.cursor/rules/*.mdc`, `dev/*`, `test/*`, `scripts/*`) should RARELY be deleted unless explicitly planned.
+**Special attention**: Build-only files (`.pi/standards/*.md`, `.pi/agents/*.md`, `dev/*`, `test/*`, `scripts/*`) should RARELY be deleted unless explicitly planned.
 
 #### Step 1: Technical Review
 

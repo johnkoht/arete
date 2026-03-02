@@ -160,5 +160,5 @@ This saves to the plan's directory (e.g., `dev/work/plans/{slug}/review.md`) for
 ## References
 
 - **Risk categories**: See `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` for the 8 pre-mortem risk categories
-- **Code quality checklist**: See `.cursor/rules/dev.mdc` for the 6-point code review checklist
+- **Code quality checklist**: See `.pi/standards/build-standards.md` for the 6-point code review checklist
 - **Related skills**: `.pi/skills/run-pre-mortem/SKILL.md` (risk identification before execution)

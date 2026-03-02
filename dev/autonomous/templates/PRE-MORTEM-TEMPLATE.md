@@ -113,4 +113,4 @@ After completion, analyze effectiveness:
 
 - **Example Session**: `.cursor/build/entries/2026-02-09_builder-orchestration-learnings.md`
 - **Skill**: `.cursor/build/skills/execute-prd/SKILL.md` (includes mandatory pre-mortem)
-- **Rule**: `.cursor/rules/dev.mdc` (pre-mortem guidance for complex work)
+- **Rule**: `.pi/standards/build-standards.md` (pre-mortem guidance for complex work)

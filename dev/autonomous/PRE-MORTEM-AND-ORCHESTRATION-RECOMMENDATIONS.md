@@ -79,7 +79,7 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 - Example risks from this session
 - Post-mortem table format
 
-⚠️ **Recommended**: Add pre-mortem section to `.cursor/rules/dev.mdc`
+⚠️ **Recommended**: Add pre-mortem section to `.pi/standards/build-standards.md`
 - Currently couldn't update due to file formatting
 - Should be added manually between "Build memory" and "TypeScript / Node.js" sections
 - See PRE-MORTEM-TEMPLATE.md for content

@@ -19,7 +19,7 @@ This approach follows [Vercel's research](https://vercel.com/blog/agents-md-outp
 │   └── cli-commands.md    # Essential CLI commands
 ├── builder/               # BUILD-specific (this repo)
 │   ├── skills-index.md    # Build skills (.pi/skills/)
-│   ├── rules-index.md     # Build rules (.cursor/rules/)
+│   ├── rules-index.md     # Build rules (.pi/standards/)
 │   ├── conventions.md     # TypeScript, testing, commits
 │   └── memory.md          # memory/MEMORY.md usage
 └── guide/                 # GUIDE-specific (shipped to users)
@@ -133,7 +133,7 @@ rg "\.cursor.*or.*\.claude|\.claude.*or.*\.cursor" .agents/sources/ runtime/
 
 ### Reference
 
-See `.cursor/rules/dev.mdc` § 8 for the full multi-IDE consistency checklist and `src/core/adapters/claude-adapter.ts` for transformation logic.
+See `.pi/standards/build-standards.md` for the full multi-IDE consistency checklist and `src/core/adapters/claude-adapter.ts` for transformation logic.
 
 ## When to Rebuild
 
@@ -183,4 +183,4 @@ The compilation script is at `scripts/build-agents.ts`. It:
 - **PRD (archived):** `dev/work/archive/agents-md-compilation/prd.md`
 - **Build script:** `scripts/build-agents.ts`
 - **Vercel research:** https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals
-- **Dev conventions:** `.cursor/rules/dev.mdc`
+- **Dev conventions:** `.pi/standards/build-standards.md`
