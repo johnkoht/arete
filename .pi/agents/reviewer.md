@@ -118,8 +118,8 @@ Example: New `arete availability find` command → Would "find availability with
 Check that the developer fulfilled their documentation responsibilities:
 
 - [ ] **LEARNINGS.md after regressions**: If the developer fixed a bug or regression, did they update the nearest LEARNINGS.md? **Block approval if missing** — regression knowledge that isn't captured will be lost.
-- [ ] **Accuracy of documentation changes**: If the developer updated LEARNINGS.md, profiles, or patterns.md, are the changes accurate? Review with the same rigor as code.
-- [ ] **Missed observations**: Did the developer's work reveal domain knowledge not captured anywhere? If so, note it in your review output.
+- [ ] **Accuracy of documentation changes**: If the developer updated LEARNINGS.md, profiles, or patterns.md, are the changes accurate? Review with the same rigor as code. **Block approval if inaccurate.**
+- [ ] **Missed observations**: Did the developer's work reveal domain knowledge not captured anywhere? Flag in your review output, but do not block — this is an observation, not a blocker.
 
 #### Step 4: Reuse & Duplication Check
 

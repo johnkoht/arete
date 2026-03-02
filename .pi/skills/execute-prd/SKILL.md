@@ -402,7 +402,9 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     **Detailed mode applies when**: `prd.json` task count ≥ 3, OR the holistic review identified documentation gaps. See `.pi/standards/maintenance.md` for the full protocol.
 
     - **Review subagent reflections** for documentation improvements — did any developer flag profile inaccuracies, new patterns, or missing LEARNINGS.md?
-    - **If gaps found**: Assign a developer to update profiles, patterns.md, and LEARNINGS.md. This is a real task with review, not an afterthought.
+    - **If gaps found**, scope determines approach:
+      - **Minor updates** (LEARNINGS.md bullets, path corrections, single-line profile fixes) → orchestrator applies directly, no subagent needed
+      - **Substantial changes** (profile restructuring, new deep-dive docs, patterns.md additions) → assign a developer with reviewer, treat as a real task
     - **Apply start/stop/continue** to system files (standards, role definitions, skill instructions) — don't just write them in the memory entry.
     - **Skip if light mode**: For PRDs with < 3 tasks and no documentation gaps identified, skip this step.
 

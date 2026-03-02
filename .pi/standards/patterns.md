@@ -179,9 +179,19 @@ Configuration resolves with a clear priority cascade:
 workspace arete.yaml > global ~/.arete/config.yaml > defaults
 ```
 
-Implemented in `packages/core/src/config.ts` using `deepMerge()`. Workspace config overrides global, which overrides built-in defaults. Individual keys merge (objects deep-merged, scalars overwritten).
+Implemented in `packages/core/src/config.ts` using `deepMerge()`. Workspace config overrides global, which overrides built-in defaults. Individual keys deep-merge (objects merged recursively, scalars overwritten by higher-priority source).
 
-**Anti-pattern**: Hardcoding configuration values. Reading config directly from the filesystem instead of using `resolveConfig()`.
+```typescript
+// resolveConfig() in packages/core/src/config.ts
+const defaults = DEFAULT_CONFIG;
+const global = await readGlobalConfig(storage);   // ~/.arete/config.yaml
+const workspace = await readWorkspaceConfig(storage, workspaceRoot); // arete.yaml
+return deepMerge(deepMerge(defaults, global), workspace);
+```
+
+_Example_: `packages/core/src/config.ts` — `resolveConfig(storage, workspaceRoot)` is the entry point. All services that need config receive it via the factory.
+
+**Anti-pattern**: Reading `arete.yaml` directly with `storage.readFile()` instead of calling `resolveConfig()`. Hardcoding default values inline instead of adding them to `DEFAULT_CONFIG`.
 
 ---
 
@@ -191,3 +201,5 @@ When you discover a recurring pattern not documented here:
 1. Verify it appears in 2+ places in the codebase
 2. Add it to this file with: name, description, example file path, and anti-pattern
 3. Note it in your completion report so the reviewer can verify accuracy
+
+If you discover a documented file path no longer exists (files move as the codebase evolves), update the path and note it in your completion report.

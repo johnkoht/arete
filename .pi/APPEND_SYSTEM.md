@@ -57,7 +57,9 @@ User approves plan
 
 ## Direct Execution Protocol (non-PRD)
 
-1. Implement → 2. Test → 3. Verify (`npm run typecheck && npm test`) → 4. Review (spawn engineering-lead) → 5. Fix feedback → 6. Commit → 7. Report
+1. Implement → 2. Test → 3. Verify (`npm run typecheck && npm test`) → 4. Review (spawn engineering-lead) → 5. Fix feedback → 6. Commit → 7. Report → 8. Maintenance
+
+**Step 8 — Maintenance** (light mode applies for direct execution): Update nearest LEARNINGS.md if you found a gotcha. Flag profile inaccuracies if noticed. See `.pi/standards/maintenance.md` § Light Mode.
 
 **Scope escalation**: If change touches >5 files or reveals hidden complexity → stop, tell user, suggest proper planning.
 
