@@ -41,45 +41,7 @@ Write code that:
 
 **Every change needs tests.** This is not optional.
 
-#### Test Requirements
-
-| Change Type | Required Tests |
-|-------------|----------------|
-| New function | Happy path + edge cases + error handling |
-| Bug fix | Regression test that fails before your fix, passes after |
-| Refactor | Existing tests pass; new tests for any new behavior |
-| New file | Corresponding test file following project structure |
-
-#### Test Structure
-```typescript
-import { describe, it, beforeEach } from 'node:test';
-import assert from 'node:assert/strict';
-import { myFunction } from '../src/myModule.js';  // .js extension
-
-describe('myFunction', () => {
-  it('handles the happy path', () => {
-    // Arrange
-    const input = 'valid';
-    // Act
-    const result = myFunction(input);
-    // Assert
-    assert.equal(result, 'expected');
-  });
-
-  it('handles edge case: empty input', () => {
-    assert.equal(myFunction(''), null);
-  });
-
-  it('throws on invalid input', () => {
-    assert.throws(() => myFunction(null), /expected error/);
-  });
-});
-```
-
-#### Test Locations
-- `packages/core/src/utils/foo.ts` → `packages/core/test/utils/foo.test.ts`
-- `packages/cli/src/commands/bar.ts` → `packages/cli/test/commands/bar.test.ts`
-- `scripts/integrations/baz.py` → `scripts/integrations/test_baz.py`
+For testing structure, conventions, test file mapping, and runner details, see `.pi/standards/build-standards.md`.
 
 ### 4. Verify
 
