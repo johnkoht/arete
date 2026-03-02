@@ -56,6 +56,9 @@ export type {
 
 // Skills domain
 export type {
+  SkillIntegrationOutputType,
+  SkillIntegrationOutput,
+  SkillIntegration,
   SkillDefinition,
   SkillMetadata,
   SkillCandidate,
