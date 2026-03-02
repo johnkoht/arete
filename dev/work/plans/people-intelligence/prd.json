@@ -1,0 +1,162 @@
+{
+  "name": "people-intelligence",
+  "branchName": "feature/people-intelligence",
+  "goal": "Enrich people profiles with stances (LLM-extracted), bidirectional action items (regex-extracted with lifecycle), and relationship health metrics. Transform meeting prep from file matching to genuine people intelligence with source citations.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Extract person-memory module from entity.ts",
+      "description": "Move signal collection, aggregation, rendering, and upsert functions into packages/core/src/services/person-memory.ts. Zero behavior change, pure refactor. Functions to extract: collectSignalsForPerson(), aggregateSignals(), renderPersonMemorySection(), upsertPersonMemorySection(), extractPersonMemorySection(), getPersonMemoryLastRefreshed(), isMemoryStale(), normalizeSignalTopic(), types PersonMemorySignal, AggregatedPersonSignal, RefreshPersonMemoryInternalOptions, constants AUTO_PERSON_MEMORY_START/END. Read packages/core/src/services/entity.ts, packages/core/src/services/LEARNINGS.md, and packages/core/test/services/person-memory.test.ts before starting.",
+      "acceptanceCriteria": [
+        "entity.ts drops to approximately 1200 lines",
+        "person-memory.ts exists with all extracted functions exported",
+        "Direct unit tests for collectSignalsForPerson(), aggregateSignals(), upsertPersonMemorySection() added to packages/core/test/services/person-memory-unit.test.ts",
+        "All existing person-memory.test.ts integration tests pass unchanged",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Build LLM stance extraction module",
+      "description": "Create packages/core/src/services/person-signals.ts. Export buildStancePrompt(content, personName), parseStanceResponse(response), extractStancesForPerson(content, personName, callLLM) following extractInsights() pattern from packages/core/src/integrations/conversations/extract.ts. Define PersonStance type: { topic, direction (supports|opposes|concerned|neutral), summary, evidenceQuote, source, date }. LLM prompt must: specify JSON output schema with stances array, require topic + direction + summary + evidence_quote, include explicit 'if uncertain, omit' instruction, extract only for named person. Read packages/core/src/integrations/conversations/extract.ts and packages/core/test/integrations/conversations/extract.test.ts before starting.",
+      "acceptanceCriteria": [
+        "buildStancePrompt() tested independently — prompt includes person name, JSON schema, omission instruction",
+        "parseStanceResponse() tested independently — handles valid JSON, malformed JSON, missing fields, empty stances array, code-fenced responses",
+        "Integration test with mock LLMCallFn returning known stances — structured output matches PersonStance type",
+        "Mock LLM returning empty or uncertain produces graceful empty result (not error)",
+        "PersonStance and StanceDirection types exported from person-signals.ts",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Build action item extraction with lifecycle",
+      "description": "Add extractActionItemsForPerson(content, personName, ownerName?) and lifecycle functions to packages/core/src/services/person-signals.ts. Regex-based extraction matching patterns: '[Person] will [verb]', 'I'll send [person]', 'action item: [text]', 'TODO: [text]', '- [ ] [text]' near person name. Direction classification: owner name (from context/profile.md name field) in actor position = 'i_owe_them'; person name in actor position = 'they_owe_me'. Fallback: first-person language heuristics. Content-normalized hash for dedup: hash(lowercase(trimWhitespace(text)) + personSlug + direction). Lifecycle: auto-stale after 30 days, cap at 10 per direction (most recent kept), stale items excluded from meeting prep. Read packages/core/src/services/person-memory.ts for regex pattern examples and packages/core/src/services/entity.ts lines 1530-1555 for profile.md reading pattern.",
+      "acceptanceCriteria": [
+        "Extracts action items tied to specific people with correct direction",
+        "Direction classification correct with profile.md owner name",
+        "Falls back to first-person heuristics when no owner name provided",
+        "isActionItemStale() returns true for items older than 30 days",
+        "capActionItems() keeps at most 10 per direction (most recent)",
+        "deduplicateActionItems() prevents re-adding items with same hash",
+        "Re-extraction of same meeting content does not duplicate or resurrect stale items",
+        "Tests cover: happy path, aging, capping, dedup, no-owner-fallback, ambiguous actor edge case",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Integrate extraction into refreshPersonMemory()",
+      "description": "Update EntityService.refreshPersonMemory() to call stance and action item extraction from person-signals.ts. Add callLLM?: LLMCallFn to RefreshPersonMemoryOptions. Integration flow: (1) existing regex signals, (2) if callLLM provided call extractStancesForPerson with in-memory Map cache keyed by meetingPath:personName, (3) call extractActionItemsForPerson always, (4) read owner name from context/profile.md once per refresh, (5) aggregate stances with dedup, apply action item lifecycle, (6) pass all data to render. Without callLLM, only regex signals and action items run — stances skipped. Read packages/core/src/services/entity.ts refreshPersonMemory() method, packages/core/src/services/LEARNINGS.md for function-scoped Map cache pattern and SearchProvider invariants.",
+      "acceptanceCriteria": [
+        "refreshPersonMemory() with callLLM in options produces stances alongside existing asks/concerns",
+        "Without callLLM, existing behavior identical — all current person-memory.test.ts tests pass unchanged",
+        "RefreshPersonMemoryOptions type has callLLM?: LLMCallFn field",
+        "RefreshPersonMemoryResult updated with stancesExtracted, actionItemsExtracted, itemsAgedOut counts",
+        "In-memory Map cache prevents duplicate LLM calls for same meeting+person within single refresh",
+        "Owner name read from profile.md once per refresh call, not per meeting",
+        "No new external dependencies added",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Render enriched auto-memory sections",
+      "description": "Extend renderPersonMemorySection() in person-memory.ts to include ### Stances, ### Open Items (I owe them), ### Open Items (They owe me), ### Relationship Health subsections inside the existing AUTO_PERSON_MEMORY:START/END block. Every stance and action item must have source citation (from: [Meeting Title], [Date]). Empty sections render as '- None detected yet.' consistent with existing pattern. Do NOT add new marker pairs — all content within the single existing AUTO_PERSON_MEMORY block. Read packages/core/src/services/person-memory.ts for current renderPersonMemorySection() implementation.",
+      "acceptanceCriteria": [
+        "Single auto-memory block contains all subsections (asks, concerns, stances, open items, health)",
+        "Source citations (from: Meeting Title, Date) on every stance and action item",
+        "Existing asks/concerns rendering unchanged (exact same format)",
+        "Empty sections render as '- None detected yet.'",
+        "Round-trip test: render then upsert then extract content and verify preserved",
+        "renderPersonMemorySection() signature updated to accept stances, action items, and health data",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Compute relationship health metrics",
+      "description": "Create packages/core/src/services/person-health.ts. Export computeRelationshipHealth(meetingDates: string[], openItemCount: number) returning RelationshipHealth type with lastMet, daysSinceLastMet, meetingsLast30Days, meetingsLast90Days, openLoopCount, and indicator (active/regular/cooling/dormant). Indicator thresholds: active = last meeting within 14 days, regular = within 30 days, cooling = within 60 days, dormant = 60+ days or never met. Pure computation, no I/O.",
+      "acceptanceCriteria": [
+        "computeRelationshipHealth() returns correct RelationshipHealth for given meeting dates and open item count",
+        "Edge cases tested: empty array (never met = dormant), single meeting, daily meetings, boundary dates (exactly 14, 30, 60 days)",
+        "daysSinceLastMet computed correctly relative to current date",
+        "openLoopCount matches provided count",
+        "HealthIndicator and RelationshipHealth types exported",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Update arete people show CLI + --dry-run",
+      "description": "Update packages/cli/src/commands/people.ts: (1) arete people show <slug> --memory displays stances, open items, relationship health from auto-memory section, (2) add --dry-run flag to arete people memory refresh that shows extraction preview without writing, (3) update refresh summary to include extraction counts, (4) --json output adds new fields alongside existing (non-breaking). Read packages/cli/src/commands/people.ts and packages/cli/test/commands/people.test.ts before starting.",
+      "acceptanceCriteria": [
+        "arete people show sarah --memory displays all enriched sections (stances, items, health)",
+        "--dry-run flag on refresh shows what would be extracted and writes nothing to disk",
+        "--json output includes stancesExtracted, actionItemsExtracted, itemsAgedOut alongside existing fields",
+        "Existing --json fields unchanged (backward compatible)",
+        "CLI tests added for dry-run flag and enriched display",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Update meeting-prep, process-meetings skills + PATTERNS.md",
+      "description": "Edit packages/runtime/skills/meeting-prep/SKILL.md to include stances, open items, relationship health in brief format template with talking points generation. Edit packages/runtime/skills/PATTERNS.md get_meeting_context to add step for reading enriched auto-memory sections. Edit packages/runtime/skills/process-meetings/SKILL.md to add person memory refresh step after attendee processing with ordering: (1) create person files, (2) write attendee_ids, (3) refresh person memory. No TypeScript code changes in this task — markdown only.",
+      "acceptanceCriteria": [
+        "meeting-prep SKILL.md brief template includes stances, open items, health sections with clear format",
+        "PATTERNS.md get_meeting_context references enriched auto-memory sections",
+        "process-meetings SKILL.md includes memory refresh step with explicit ordering documented",
+        "Post-processing summary format documented: 'Sarah: 2 stances, 1 action item'",
+        "Multi-IDE check passes: rg command for .cursor or .claude cross-references returns nothing in affected skill files",
+        "No TypeScript code changes in this task"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9",
+      "title": "Quality gates + documentation",
+      "description": "Run full test suite. Update packages/core/src/services/LEARNINGS.md with new patterns: LLM extraction via RefreshPersonMemoryOptions.callLLM, in-memory caching strategy, action item lifecycle design, person-memory module extraction seam. Verify dev/catalog/capabilities.json entries for people service and meeting-prep skill. Update AGENTS.md sources if CLI surface changed (new --dry-run flag). Ensure no leftover console.log, commented-out code, or temp files.",
+      "acceptanceCriteria": [
+        "npm run typecheck && npm test pass with zero failures",
+        "packages/core/src/services/LEARNINGS.md updated with LLM extraction pattern, caching strategy, action item lifecycle, and module extraction seam",
+        "dev/catalog/capabilities.json entries verified current for people service and meeting-prep skill",
+        "AGENTS.md sources updated if CLI surface changed",
+        "No leftover console.log, commented-out code, or temp files",
+        "All new modules have proper JSDoc on exported functions"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-02T02:58:00Z",
+    "totalTasks": 9,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
