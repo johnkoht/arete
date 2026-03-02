@@ -14,6 +14,12 @@ intelligence:
   - context_injection
   - memory_retrieval
 requires_briefing: false
+integration:
+  outputs:
+    - type: project
+      path: "projects/active/{name}-prd/"
+      template: definition
+      index: true
 ---
 
 # Create PRD Skill
@@ -159,8 +165,6 @@ After creating the PRD:
    - **Prototype prompt:** "Want me to generate a Lovable prototype prompt from this PRD? It will create a Knowledge file and implementation prompt you can paste into Lovable to build a prototype."
 
 5. **Note open questions**: Highlight areas needing more info
-
-6. **Re-index**: Run `arete index` so the PRD is immediately findable by brief, context, and other skills.
 
 ### 9. Special Modes
 
