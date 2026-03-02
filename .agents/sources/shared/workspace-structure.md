@@ -11,8 +11,8 @@ your-workspace/
 ├── resources/               # Raw inputs (meetings/, notes/)
 ├── .arete/                  # System-managed (memory/, activity/)
 ├── people/                  # People tracking (internal/, customers/, users/)
-├── templates/               # Template override space (see templates/README.md; defaults live in .agents/skills/)
-├── .agents/skills/          # PM workflows (discovery, PRD, meeting prep, etc.)
+├── templates/               # Template override space (see templates/README.md; defaults live in .pi/skills/)
+├── .pi/skills/          # PM workflows (discovery, PRD, meeting prep, etc.)
 └── .cursor/                 # IDE configuration (rules/, tools/)
 ```
 
@@ -40,6 +40,6 @@ arete/                 # Build workspace root
 
 **Key differences:**
 - Build workspace has `memory/` at root; user workspace has `.arete/memory/`
-- Build workspace has `.agents/skills/` for build skills; user workspace has product skills
+- Build workspace has `.pi/skills/` for build skills; user workspace has product skills
 - Build workspace has `dev/` directory for plans, archive, and autonomous tooling
 - Plan system of record: `dev/work/plans/` (status field determines lifecycle); archive: `dev/work/archive/`

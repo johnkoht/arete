@@ -97,7 +97,7 @@ After creating an entry, add a line to `memory/MEMORY.md` (top of Index section)
 
 ### When to Synthesize
 
-Run `.agents/skills/synthesize-collaboration-profile/SKILL.md` when:
+Run `.pi/skills/synthesize-collaboration-profile/SKILL.md` when:
 
 1. **Builder asks** — "Synthesize collaboration profile", "Update collaboration from entries"
 2. **After PRD post-mortem** — prd-post-mortem skill suggests synthesis
@@ -240,5 +240,5 @@ They are complementary: memory entries say "we added the SearchProvider pattern 
 
 - **Memory index:** `memory/MEMORY.md`
 - **Collaboration profile:** `memory/collaboration.md`
-- **Synthesize skill:** `.agents/skills/synthesize-collaboration-profile/SKILL.md`
+- **Synthesize skill:** `.pi/skills/synthesize-collaboration-profile/SKILL.md`
 - **Full LEARNINGS.md spec:** `.cursor/rules/dev.mdc` § LEARNINGS.md Convention

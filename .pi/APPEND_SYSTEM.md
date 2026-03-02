@@ -110,7 +110,7 @@ User approves plan
  |
  └─ Medium/Large (3+ steps OR complex: new system, integration, refactor)
     → Strongly recommend: "PRD path or direct execution?"
-    → If PRD: Load .agents/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
+    → If PRD: Load .pi/skills/plan-to-prd/SKILL.md (full execute-prd workflow)
     → If direct: Apply pre-mortem + quality gates + memory capture
 ```
 

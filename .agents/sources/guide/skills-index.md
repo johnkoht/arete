@@ -67,7 +67,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 
 Protect your customized skills from being overwritten during updates:
 
-1. Edit files in `.agents/skills/<name>/`
+1. Edit files in `.pi/skills/<name>/`
 2. Add to `arete.yaml`:
    ```yaml
    skills:
@@ -85,7 +85,7 @@ Protect your customized skills from being overwritten during updates:
 ### Reset to Default
 
 1. Remove from `skills.overrides` in `arete.yaml`
-2. Delete folder: `rm -rf .agents/skills/<name>`
+2. Delete folder: `rm -rf .pi/skills/<name>`
 3. Run `arete update` to restore default
 
 ### Install Third-Party Skills
@@ -119,7 +119,7 @@ arete skill unset-default create-prd
 
 ## Creating Your Own Skills
 
-1. Create folder: `.agents/skills/my-skill/`
+1. Create folder: `.pi/skills/my-skill/`
 2. Add `SKILL.md` with standard skill format (see [Agent Skills](https://agentskills.io))
 3. Optionally add `.arete-meta.yaml` with category, work_type, primitives
 

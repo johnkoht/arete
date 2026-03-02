@@ -1162,7 +1162,7 @@ export async function handleReview(
 	ctx.ui.notify("🔍 Starting cross-model review...", "info");
 
 	pi.sendUserMessage(
-		`Review this plan using the review-plan skill. Load .agents/skills/review-plan/SKILL.md and follow its workflow.\n\n` +
+		`Review this plan using the review-plan skill. Load .pi/skills/review-plan/SKILL.md and follow its workflow.\n\n` +
 			`Plan: ${plan.frontmatter.title}\nSize: ${plan.frontmatter.size}\nSteps: ${plan.frontmatter.steps}\n\n` +
 			plan.content,
 	);
@@ -1195,7 +1195,7 @@ export async function handlePreMortem(
 	ctx.ui.notify("🛡 Starting pre-mortem analysis...", "info");
 
 	pi.sendUserMessage(
-		`Run a pre-mortem risk analysis on this plan. Load .agents/skills/run-pre-mortem/SKILL.md and follow its workflow.\n\n` +
+		`Run a pre-mortem risk analysis on this plan. Load .pi/skills/run-pre-mortem/SKILL.md and follow its workflow.\n\n` +
 			`Plan: ${plan.frontmatter.title}\nSize: ${plan.frontmatter.size}\nSteps: ${plan.frontmatter.steps}\n\n` +
 			plan.content,
 	);
@@ -1230,7 +1230,7 @@ export async function handlePrd(
 	ctx.ui.notify(`📄 Converting plan to PRD as '${featureSlug}'...`, "info");
 
 	pi.sendUserMessage(
-		`Convert this plan to a PRD. Load .agents/skills/plan-to-prd/SKILL.md and follow its workflow.\n\n` +
+		`Convert this plan to a PRD. Load .pi/skills/plan-to-prd/SKILL.md and follow its workflow.\n\n` +
 			`Use this exact feature name: ${featureSlug}.\n` +
 			`Create artifacts under dev/work/plans/${featureSlug}/ (do not derive a different slug).\n\n` +
 			`Plan: ${plan.frontmatter.title}\nSize: ${plan.frontmatter.size}\nSteps: ${plan.frontmatter.steps}\n\n` +

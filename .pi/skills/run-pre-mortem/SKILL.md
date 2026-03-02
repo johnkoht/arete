@@ -143,4 +143,4 @@ See `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` for full examples from the
 
 - **Template**: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` (8 risk categories, examples)
 - **Example session**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
-- **Used by**: `.agents/skills/execute-prd/SKILL.md` (Phase 1: mandatory pre-mortem)
+- **Used by**: `.pi/skills/execute-prd/SKILL.md` (Phase 1: mandatory pre-mortem)

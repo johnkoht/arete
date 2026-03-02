@@ -18,7 +18,7 @@ This approach follows [Vercel's research](https://vercel.com/blog/agents-md-outp
 │   ├── workspace-structure.md # Directory layout
 │   └── cli-commands.md    # Essential CLI commands
 ├── builder/               # BUILD-specific (this repo)
-│   ├── skills-index.md    # Build skills (.agents/skills/)
+│   ├── skills-index.md    # Build skills (.pi/skills/)
 │   ├── rules-index.md     # Build rules (.cursor/rules/)
 │   ├── conventions.md     # TypeScript, testing, commits
 │   └── memory.md          # memory/MEMORY.md usage

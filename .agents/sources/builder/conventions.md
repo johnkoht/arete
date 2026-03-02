@@ -87,7 +87,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 **When:** Before starting work that has risk (new systems, integrations, refactors, 3+ dependent tasks)
 
 **How:**
-- Use standalone skill: `.agents/skills/run-pre-mortem/SKILL.md`
+- Use standalone skill: `.pi/skills/run-pre-mortem/SKILL.md`
 - Or use template: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
 - Work through 8 risk categories (context gaps, test patterns, integration, scope creep, code quality, dependencies, platform issues, state tracking)
 - Create concrete mitigations for each risk
@@ -102,7 +102,7 @@ These practices apply to **all development work**, not just PRD execution. Scale
 - Audience (builder vs user) isn't obvious
 
 **How:**
-- Use skill: `.agents/skills/review-plan/SKILL.md`
+- Use skill: `.pi/skills/review-plan/SKILL.md`
 - Reviewer applies checklist and provides devil's advocate perspective
 
 **Skip when:** Trivial changes, well-understood work, time-sensitive fixes
@@ -217,7 +217,7 @@ User approves plan
      |
      └─ Medium/Large (3+ steps OR complex: new system, integration, refactor)
         → Strongly recommend: "PRD path or direct execution?"
-        → If PRD: Load .agents/skills/plan-to-prd/SKILL.md
+        → If PRD: Load .pi/skills/plan-to-prd/SKILL.md
         → If direct: Apply pre-mortem + quality gates + memory capture
 ```
 

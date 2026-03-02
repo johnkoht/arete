@@ -186,13 +186,13 @@ npm run build:agents:dev && npm run build
 1. **BUILDER mode** - Building Areté itself (this repo)
    - Memory in `memory/entries/` indexed by `memory/MEMORY.md`
    - PRDs in `dev/work/plans/{feature}/prd.md`
-   - Build skills in `.agents/skills/`
+   - Build skills in `.pi/skills/`
    - Use `AGENT_MODE=BUILDER` to force this mode
 
 2. **GUIDE mode** - End-user PM workspace
    - Memory in `.arete/memory/items/`
    - PRDs in `projects/active/`
-   - Product skills in `.agents/skills/`
+   - Product skills in `.pi/skills/`
    - Use `AGENT_MODE=GUIDE` to force this mode
 
 The system auto-detects: if `packages/core/` and `memory/MEMORY.md` exist → BUILDER; otherwise → GUIDE.
@@ -311,7 +311,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 1. User says "Help me prep for my meeting"
 2. Agent runs `arete skill route "help me prep for my meeting"`
 3. Router returns: `meeting-prep`
-4. Agent reads `.agents/skills/meeting-prep/SKILL.md`
+4. Agent reads `.pi/skills/meeting-prep/SKILL.md`
 5. Agent executes skill's workflow
 
 **Key patterns**:
@@ -532,9 +532,9 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Execute PRD tasks sequentially with fresh context per task.
 
 **Key files**:
-- `.agents/skills/execute-prd/SKILL.md` - PRD execution orchestrator
-- `.agents/skills/prd-to-json/SKILL.md` - Convert PRD to task list
-- `.agents/skills/review-plan/SKILL.md` - Review execution plan
+- `.pi/skills/execute-prd/SKILL.md` - PRD execution orchestrator
+- `.pi/skills/prd-to-json/SKILL.md` - Convert PRD to task list
+- `.pi/skills/review-plan/SKILL.md` - Review execution plan
 - `dev/autonomous/README.md` - Full documentation
 
 **How it works**:
@@ -562,7 +562,7 @@ Before starting substantial features:
 3. Design mitigations for each
 4. Include in PRD or execution plan
 
-Use `.agents/skills/run-pre-mortem/SKILL.md` for standalone pre-mortems.
+Use `.pi/skills/run-pre-mortem/SKILL.md` for standalone pre-mortems.
 
 #### 2. Testing Requirements
 
@@ -948,8 +948,8 @@ From `.cursor/rules/testing.mdc`:
 ### Autonomous Development
 
 - **dev/autonomous/README.md** - PRD execution system documentation
-- **.agents/skills/execute-prd/** - PRD execution orchestrator
-- **.agents/skills/prd-to-json/** - PRD to task list converter
+- **.pi/skills/execute-prd/** - PRD execution orchestrator
+- **.pi/skills/prd-to-json/** - PRD to task list converter
 
 ---
 

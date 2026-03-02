@@ -120,7 +120,7 @@ When a user asks for help with a PM task:
 2. Read the skill file at the path shown
 3. Follow the skill's workflow
 
-Example: User says "help me prep for my meeting" → find meeting-prep in [Skills] → read .agents/skills/meeting-prep/SKILL.md
+Example: User says "help me prep for my meeting" → find meeting-prep in [Skills] → read .pi/skills/meeting-prep/SKILL.md
 
 ---
 `;
@@ -296,9 +296,9 @@ function compressVision(content: string): string {
  */
 function compressWorkspaceStructure(content: string): string {
   return `[Workspace]|two contexts: USER (installed) vs BUILD (this repo)
-|user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .agents/skills/
+|user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .pi/skills/
 |build:packages/ memory/ .agents/ dev/(plans, archive/prds, autonomous)/ .cursor/ .pi/ scripts/
-|key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .agents/skills/ = build skills (BUILD) vs product skills (USER)`;
+|key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .pi/skills/ = build skills (BUILD) vs product skills (USER)`;
 }
 
 /**
@@ -307,7 +307,7 @@ function compressWorkspaceStructure(content: string): string {
 function compressContent(content: string, filename: string): string {
   // Skills index - compress heavily
   if (filename.includes('skills-index.md')) {
-    const rootPath = filename.includes('builder') ? '.agents/skills' : 'runtime/skills';
+    const rootPath = filename.includes('builder') ? '.pi/skills' : 'runtime/skills';
     return compressSkillsTable(content, rootPath);
   }
   
