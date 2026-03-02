@@ -229,7 +229,7 @@ Wait for user confirmation before proceeding.
 
 4. **Update project README** — Add key findings to the project README under a "Key Findings" or "Research Summary" section.
 
-5. **Index for searchability** — Run `arete index` to make all new content immediately searchable.
+5. **Index for searchability** — Follow the [skill_integration](#skill_integration) pattern. If `index: true` is set in the skill's integration profile, Areté handles this automatically after saving. For skills without an integration profile, indexing is not required by this pattern.
 
 6. **Cleanup (optional)** — After synthesis is complete and you're confident in the output, consider archiving or deleting individual analysis files. The synthesis is the primary deliverable; individual analyses are scaffolding.
 
@@ -243,3 +243,43 @@ Wait for user confirmation before proceeding.
 - Individual analyses: 5-7 bullet points max in Key Points; Summary is 2-3 sentences, not paragraphs
 - Synthesis: Max 10 paragraphs; focus on actionable themes, not exhaustive coverage
 - Overall: The synthesis is the primary deliverable. User's time > completeness.
+
+---
+
+## skill_integration
+
+**Purpose**: Declare how a skill's outputs integrate with the Areté workspace — where to save, whether to index, what context to update.
+
+**Used by**: All skills that produce persistent output (projects, resources, context files).
+
+### How It Works
+
+Skills declare an `integration` block in SKILL.md frontmatter (native skills) or `.arete-meta.yaml` (community skills). At install and update time, Areté reads this profile and generates a `## Areté Integration` section in the SKILL.md using sentinel markers (`<!-- ARETE_INTEGRATION_START/END -->`).
+
+The generated section tells the agent:
+- Where to save output (workspace-relative path pattern)
+- Whether to run `arete index` after saving
+- What context files to update
+- How to resolve templates (`arete template resolve --skill {id} --variant {name}`)
+
+### Schema
+
+```yaml
+integration:
+  outputs:
+    - type: project | resource | context | none
+      path: "projects/active/{name}/"    # {name} filled by agent
+      template: variant-name             # for arete template resolve
+      index: true                        # trigger arete index
+  context_updates:
+    - context/competitive-landscape.md
+```
+
+### For community skills
+
+Community skills use `.arete-meta.yaml` for integration configuration. See [_integration-guide.md](./_integration-guide.md) for full setup instructions and examples.
+
+### Customization
+
+Users can edit `.arete-meta.yaml` to change output location, template, or indexing behavior. Changes take effect on next `arete update` (which regenerates the integration section).
+
