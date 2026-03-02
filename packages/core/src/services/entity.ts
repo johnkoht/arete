@@ -506,6 +506,8 @@ export interface RefreshPersonMemoryOptions {
   minMentions?: number;
   ifStaleDays?: number;
   callLLM?: LLMCallFn;
+  /** When true, compute everything but skip writing files to disk. */
+  dryRun?: boolean;
 }
 
 export interface RefreshPersonMemoryResult {
@@ -1211,7 +1213,9 @@ export class EntityService {
       });
       const nextContent = upsertPersonMemorySection(content, section);
       if (nextContent !== content) {
-        await this.storage.write(personPath, nextContent);
+        if (!options.dryRun) {
+          await this.storage.write(personPath, nextContent);
+        }
         updated += 1;
       }
     }

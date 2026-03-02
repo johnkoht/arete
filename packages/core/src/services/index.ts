@@ -10,3 +10,4 @@ export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
+export { extractPersonMemorySection } from './person-memory.js';
