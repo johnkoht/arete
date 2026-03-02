@@ -234,7 +234,6 @@ arete/
 ├── dev/                    # Developer-only files (not shipped)
 │   ├── prds/               # Feature PRDs
 │   └── backlog/            # Feature and improvement backlog
-├── .cursor/                # Cursor IDE configuration (rules/)
 └── scripts/                # Build and integration scripts
 ```
 
@@ -534,7 +533,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 
 ### Quality Practices
 
-When building Areté features, follow these practices (see `.cursor/rules/dev.mdc` for details):
+When building Areté features, follow these practices (see `.pi/standards/build-standards.md` for details):
 
 #### 1. Pre-Mortem (for complex work)
 
@@ -548,7 +547,7 @@ Use `.pi/skills/run-pre-mortem/SKILL.md` for standalone pre-mortems.
 
 #### 2. Testing Requirements
 
-**Test coverage requirements** (see `.cursor/rules/testing.mdc`):
+**Test coverage requirements** (see `.pi/standards/build-standards.md`):
 - **Core systems**: 80%+ coverage
 - **CLI commands**: Test happy path + error cases
 - **Integrations**: Mock external APIs
@@ -721,7 +720,7 @@ For complex features, use the PRD execution system:
 
 ### TypeScript & Node.js
 
-From `.cursor/rules/dev.mdc`:
+From `.pi/standards/build-standards.md`:
 
 - **Imports**: Group by stdlib, third-party, local
 - **Naming**: camelCase for functions/variables, PascalCase for types
@@ -892,7 +891,7 @@ const service = new MemoryService(mockStorage, searchProvider);
 
 ### Coverage Requirements
 
-From `.cursor/rules/testing.mdc`:
+From `.pi/standards/build-standards.md`:
 
 - **Core systems**: 80%+ coverage (workspace, meetings, people, memory)
 - **CLI commands**: Test happy path + error cases
@@ -912,8 +911,7 @@ From `.cursor/rules/testing.mdc`:
 
 ### Build Rules
 
-- **.cursor/rules/dev.mdc** - Development quality practices
-- **.cursor/rules/testing.mdc** - Test requirements and patterns
+- **.pi/standards/build-standards.md** - Development quality practices, test requirements, and patterns
 
 ### Build Memory
 

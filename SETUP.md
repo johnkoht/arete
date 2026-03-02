@@ -224,7 +224,7 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 
 ### Rules Not Loading
 
-**Cursor**: Check that `.cursor/rules/` exists and contains `.mdc` files. Run `arete update` to regenerate. Try reloading the Cursor window.
+**Cursor**: Check that your workspace rules directory exists and contains `.mdc` files. Run `arete update` to regenerate. Try reloading the Cursor window.
 
 **Claude Code**: Check that `.claude/rules/` exists and contains `.md` files, and `CLAUDE.md` exists at root. Run `arete update` to regenerate.
 
