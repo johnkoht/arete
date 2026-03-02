@@ -18,6 +18,11 @@ import type {
   WorkType,
 } from '../models/index.js';
 import type { WorkspacePaths } from '../models/index.js';
+import {
+  generateIntegrationSection,
+  injectIntegrationSection,
+  deriveIntegrationFromLegacy,
+} from '../utils/integration.js';
 
 const ARETE_META_FILENAME = '.arete-meta.yaml';
 
@@ -251,6 +256,9 @@ export class SkillService {
               const meta = await this.buildAreteMeta(p);
               await this.storage.write(metaFile, stringifyYaml(meta));
             }
+            if (hasSkill) {
+              await this.injectIntegrationIntoSkill(p);
+            }
             installedPath = p;
             installedName = name;
             break;
@@ -353,11 +361,34 @@ export class SkillService {
     await this.storage.write(metaFile, stringifyYaml(meta));
 
     const info = await this.getInfo(destDir);
+    const integration = info.integration ?? deriveIntegrationFromLegacy(info);
+    if (integration) {
+      const section = generateIntegrationSection(info.id, integration);
+      const skillMdPath = join(destDir, 'SKILL.md');
+      const content = await this.storage.read(skillMdPath);
+      if (content !== null) {
+        const injected = injectIntegrationSection(content, section);
+        await this.storage.write(skillMdPath, injected);
+      }
+    }
+
     return {
       installed: true,
       path: destDir,
       name: info.name ?? skillName,
     };
+  }
+
+  private async injectIntegrationIntoSkill(skillPath: string): Promise<void> {
+    const info = await this.getInfo(skillPath);
+    const integration = info.integration ?? deriveIntegrationFromLegacy(info);
+    if (!integration) return;
+    const section = generateIntegrationSection(info.id, integration);
+    const skillMdPath = join(skillPath, 'SKILL.md');
+    const content = await this.storage.read(skillMdPath);
+    if (content === null) return;
+    const injected = injectIntegrationSection(content, section);
+    await this.storage.write(skillMdPath, injected);
   }
 
   private async buildAreteMeta(skillPath: string): Promise<Record<string, unknown>> {

@@ -610,4 +610,268 @@ describe('WorkspaceService', () => {
       assert.ok(status.errors.length > 0);
     });
   });
+
+  describe('update — integration section injection', () => {
+    function setupMinimalWorkspace(dir: string): void {
+      writeFileSync(
+        join(dir, 'arete.yaml'),
+        'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n',
+        'utf8',
+      );
+    }
+
+    it('injects integration section into skills with creates_project during update', async () => {
+      setupMinimalWorkspace(tmpDir);
+
+      // Plant a skill with creates_project: true
+      const skillDir = join(tmpDir, '.agents', 'skills', 'my-prd-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: My PRD Skill',
+          'description: Creates PRDs',
+          'creates_project: true',
+          'project_template: default',
+          '---',
+          '',
+          '# My PRD Skill',
+          '',
+          'Does the thing.',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await service.update(tmpDir, {});
+
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+      assert.ok(content.includes('<!-- ARETE_INTEGRATION_START -->'), 'should inject start sentinel');
+      assert.ok(content.includes('<!-- ARETE_INTEGRATION_END -->'), 'should inject end sentinel');
+      assert.ok(content.includes('## Areté Integration'), 'should have integration section heading');
+    });
+
+    it('injects integration section into skills with explicit integration field during update', async () => {
+      setupMinimalWorkspace(tmpDir);
+
+      const skillDir = join(tmpDir, '.agents', 'skills', 'research-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: Research Skill',
+          'description: Does research',
+          'integration:',
+          '  outputs:',
+          '    - type: resource',
+          '      path: resources/research/',
+          '      index: true',
+          '  contextUpdates:',
+          '    - context/research-notes.md',
+          '---',
+          '',
+          '# Research Skill',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await service.update(tmpDir, {});
+
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+      assert.ok(content.includes('## Areté Integration'), 'should have integration section');
+      assert.ok(content.includes('resources/research/'), 'should mention resource path');
+      assert.ok(content.includes('context/research-notes.md'), 'should mention context update');
+    });
+
+    it('does not inject section into skills with no integration profile during update', async () => {
+      setupMinimalWorkspace(tmpDir);
+
+      const skillDir = join(tmpDir, '.agents', 'skills', 'simple-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: Simple Skill',
+          'description: Just a skill, no outputs',
+          '---',
+          '',
+          '# Simple Skill',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await service.update(tmpDir, {});
+
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+      assert.ok(!content.includes('ARETE_INTEGRATION_START'), 'should NOT inject sentinel for skill with no profile');
+    });
+
+    it('injection is idempotent — running update twice does not duplicate section', async () => {
+      setupMinimalWorkspace(tmpDir);
+
+      const skillDir = join(tmpDir, '.agents', 'skills', 'prd-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: PRD Skill',
+          'creates_project: true',
+          '---',
+          '# PRD Skill',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await service.update(tmpDir, {});
+      await service.update(tmpDir, {});
+
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+      const occurrences = (content.match(/ARETE_INTEGRATION_START/g) ?? []).length;
+      assert.equal(occurrences, 1, 'sentinel should appear exactly once after two updates');
+    });
+
+    it('injection loop runs even when options.sourcePaths is not provided', async () => {
+      setupMinimalWorkspace(tmpDir);
+
+      const skillDir = join(tmpDir, '.agents', 'skills', 'standalone-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        [
+          '---',
+          'name: Standalone Skill',
+          'creates_project: true',
+          '---',
+          '# Standalone Skill',
+        ].join('\n'),
+        'utf8',
+      );
+
+      // No sourcePaths — update() called with empty options
+      await service.update(tmpDir, {});
+
+      const content = readFileSync(join(skillDir, 'SKILL.md'), 'utf8');
+      assert.ok(content.includes('ARETE_INTEGRATION_START'), 'injection should run even without sourcePaths');
+    });
+  });
+
+  describe('create and syncCoreSkills — root-level .md file deployment', () => {
+    function makeSourceRuntime(dir: string): { sourceRoot: string; sourceSkills: string } {
+      const sourceRoot = join(dir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
+      writeFileSync(join(sourceSkills, 'meeting-prep', 'SKILL.md'), '# Meeting Prep\n', 'utf8');
+      return { sourceRoot, sourceSkills };
+    }
+
+    it('create() copies root-level .md files to .agents/skills/', async () => {
+      const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
+      writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Skill Patterns\n', 'utf8');
+      writeFileSync(join(sourceSkills, 'README.md'), '# Skills README\n', 'utf8');
+
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
+        true,
+        'PATTERNS.md should be copied to .agents/skills/',
+      );
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
+        true,
+        'README.md should be copied to .agents/skills/',
+      );
+    });
+
+    it('create() skips root-level .md files that already exist (skip-if-exists)', async () => {
+      const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
+      writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Source PATTERNS\n', 'utf8');
+
+      // Pre-create the workspace and pre-plant a PATTERNS.md
+      mkdirSync(join(tmpDir, '.agents', 'skills'), { recursive: true });
+      writeFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), '# Existing PATTERNS\n', 'utf8');
+
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+
+      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), 'utf8');
+      assert.ok(content.includes('Existing PATTERNS'), 'existing PATTERNS.md should not be overwritten by create()');
+    });
+
+    it('syncCoreSkills via update() copies root-level .md files, always overwriting', async () => {
+      const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
+      writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Updated PATTERNS\n', 'utf8');
+
+      // Pre-plant an old PATTERNS.md in the workspace
+      mkdirSync(join(tmpDir, '.agents', 'skills'), { recursive: true });
+      writeFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), '# Old PATTERNS\n', 'utf8');
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
+
+      await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+        },
+      });
+
+      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), 'utf8');
+      assert.ok(content.includes('Updated PATTERNS'), 'PATTERNS.md should be overwritten by syncCoreSkills on update');
+    });
+
+    it('syncCoreSkills does not copy nested .md files from skill subdirectories as root-level files', async () => {
+      const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
+      // The meeting-prep subdirectory has its own SKILL.md — it should not be copied as a root-level file
+      // (it gets copied as part of the subdirectory, not as a root-level .md)
+
+      writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
+
+      await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+        },
+      });
+
+      // SKILL.md from meeting-prep subdir should NOT appear at .agents/skills/SKILL.md
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'SKILL.md')),
+        false,
+        'nested SKILL.md should not be copied to skills root',
+      );
+    });
+  });
 });

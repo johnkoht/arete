@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 
@@ -281,5 +281,144 @@ describe('SkillService.getInfo() — integration field', () => {
 
     assert.ok(def.integration, 'integration should be defined');
     assert.equal(def.integration?.outputs?.[0].type, 'future-unknown-type' as never);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration injection via install() — local path
+// ---------------------------------------------------------------------------
+
+describe('SkillService.install() integration injection (local path)', () => {
+  let workspaceDir: string;
+  let skillSourceDir: string;
+
+  beforeEach(() => {
+    workspaceDir = mkdtempSync(join(tmpdir(), 'arete-skill-inject-'));
+    mkdirSync(join(workspaceDir, '.agents', 'skills'), { recursive: true });
+    skillSourceDir = join(workspaceDir, 'my-skill-source');
+    mkdirSync(skillSourceDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(workspaceDir, { recursive: true, force: true });
+  });
+
+  it('injects integration section into SKILL.md after local install when creates_project is true', async () => {
+    writeFileSync(
+      join(skillSourceDir, 'SKILL.md'),
+      [
+        '---',
+        'name: My Skill',
+        'description: A skill that creates a project',
+        'creates_project: true',
+        'project_template: default',
+        '---',
+        '',
+        '# My Skill',
+        '',
+        'Do the thing.',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new SkillService(new FileStorageAdapter());
+    const result = await service.install(skillSourceDir, { workspaceRoot: workspaceDir });
+
+    assert.equal(result.installed, true, 'skill should be installed');
+
+    const installedSkillMd = join(workspaceDir, '.agents', 'skills', 'my-skill-source', 'SKILL.md');
+    const content = readFileSync(installedSkillMd, 'utf8');
+
+    assert.ok(content.includes('<!-- ARETE_INTEGRATION_START -->'), 'should have integration start sentinel');
+    assert.ok(content.includes('<!-- ARETE_INTEGRATION_END -->'), 'should have integration end sentinel');
+    assert.ok(content.includes('## Areté Integration'), 'should have integration section heading');
+    assert.ok(content.includes('projects/active/{name}/'), 'should reference project path');
+  });
+
+  it('does not inject section when skill has no integration profile', async () => {
+    writeFileSync(
+      join(skillSourceDir, 'SKILL.md'),
+      [
+        '---',
+        'name: Simple Skill',
+        'description: Just does a thing, no project',
+        '---',
+        '',
+        '# Simple Skill',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new SkillService(new FileStorageAdapter());
+    const result = await service.install(skillSourceDir, { workspaceRoot: workspaceDir });
+
+    assert.equal(result.installed, true, 'skill should be installed');
+
+    const installedSkillMd = join(workspaceDir, '.agents', 'skills', 'my-skill-source', 'SKILL.md');
+    const content = readFileSync(installedSkillMd, 'utf8');
+
+    assert.ok(!content.includes('ARETE_INTEGRATION_START'), 'should NOT have integration sentinels for skill with no profile');
+  });
+
+  it('injects integration section when explicit integration field is present in SKILL.md', async () => {
+    writeFileSync(
+      join(skillSourceDir, 'SKILL.md'),
+      [
+        '---',
+        'name: Research Skill',
+        'description: Saves research output',
+        'integration:',
+        '  outputs:',
+        '    - type: resource',
+        '      path: resources/research/',
+        '      index: true',
+        '---',
+        '',
+        '# Research Skill',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new SkillService(new FileStorageAdapter());
+    const result = await service.install(skillSourceDir, { workspaceRoot: workspaceDir });
+
+    assert.equal(result.installed, true, 'skill should be installed');
+
+    const installedSkillMd = join(workspaceDir, '.agents', 'skills', 'my-skill-source', 'SKILL.md');
+    const content = readFileSync(installedSkillMd, 'utf8');
+
+    assert.ok(content.includes('## Areté Integration'), 'should have integration section');
+    assert.ok(content.includes('resources/research/'), 'should reference resource path');
+  });
+
+  it('is idempotent — re-installing does not duplicate the section (already-installed guard kicks in)', async () => {
+    // The install() method refuses to reinstall if skill already exists.
+    // This tests that a "freshly inject" install followed by a second attempt returns an error, not duplication.
+    writeFileSync(
+      join(skillSourceDir, 'SKILL.md'),
+      [
+        '---',
+        'name: My Skill',
+        'description: Creates project',
+        'creates_project: true',
+        '---',
+        '# My Skill',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new SkillService(new FileStorageAdapter());
+    await service.install(skillSourceDir, { workspaceRoot: workspaceDir });
+
+    // Second install should fail with "already installed"
+    const second = await service.install(skillSourceDir, { workspaceRoot: workspaceDir });
+    assert.equal(second.installed, false);
+    assert.match(second.error ?? '', /already installed/i);
+
+    // The SKILL.md should have exactly ONE start sentinel (not duplicated)
+    const installedSkillMd = join(workspaceDir, '.agents', 'skills', 'my-skill-source', 'SKILL.md');
+    const content = readFileSync(installedSkillMd, 'utf8');
+    const occurrences = (content.match(/ARETE_INTEGRATION_START/g) ?? []).length;
+    assert.equal(occurrences, 1, 'integration sentinel should appear exactly once');
   });
 });
