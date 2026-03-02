@@ -2,6 +2,8 @@
 
 Single source of truth for coding conventions, testing requirements, and quality gates. All BUILD mode agents reference this file instead of duplicating standards.
 
+> For architectural patterns and design conventions, see `.pi/standards/patterns.md`.
+
 ---
 
 ## Quality Gates (mandatory for ALL commits)

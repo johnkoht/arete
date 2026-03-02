@@ -1,7 +1,7 @@
 # How to Work (Areté BUILD Mode)
 
 > Process rules for the planner agent. For what's available, see `AGENTS.md`.
-> For coding standards, see `.pi/standards/build-standards.md`.
+> For coding standards, see `.pi/standards/build-standards.md`. For the learning and maintenance protocol, see `.pi/standards/maintenance.md`.
 
 ---
 

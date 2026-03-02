@@ -1,6 +1,7 @@
 # Core Package Expertise Profile
 
 > Domain map for `packages/core/`. Orients agents WHERE to look — not an encyclopedia.
+> For codebase-wide architectural patterns, see `.pi/standards/patterns.md`.
 
 ---
 

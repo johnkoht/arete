@@ -371,6 +371,8 @@ Before diving into the detailed steps below, verify you'll cover all of these:
 - [ ] **Problem fit**: Does the implementation solve the PRD's problem statement? (Holistic Review)
 - [ ] **Completeness**: Any gaps the task-level AC didn't cover but the PRD implies? (Holistic Review)
 - [ ] **LEARNINGS.md**: Were LEARNINGS.md files created/updated where regressions were fixed? (Holistic Review)
+- [ ] **Documentation improvements**: If detailed mode applies (≥3 tasks or gaps found), were profiles, patterns, LEARNINGS.md updated? (Documentation Improvement)
+- [ ] **System files updated**: Were start/stop/continue recommendations applied to system files, not just memory entries? (Documentation Improvement)
 - [ ] **Refactor items**: Were refactor items from reviewer feedback filed as plan ideas? (Holistic Review)
 - [ ] **Pre-mortem retrospective**: Which risks materialized? Were mitigations effective? (Pre-Mortem Analysis)
 - [ ] **Memory entry**: Created `memory/entries/YYYY-MM-DD_*-learnings.md` (Update Builder Memory)
@@ -395,7 +397,16 @@ Before diving into the detailed steps below, verify you'll cover all of these:
    - **Learnings and insights**: What can we extract for the builder and for future PRDs?
    - **If changes are needed**: Go back through the loop — either to specific subagent(s) with new acceptance criteria or to new tasks. Use the same Reviewer (pre-work sanity check, then dispatch, then code review) and Accept or Iterate flow. Once the holistic review passes (or you document known gaps for the builder to triage), proceed to steps 17–21.
 
-17. **Analyze Pre-Mortem Effectiveness**
+17. **Documentation Improvement** (if detailed mode applies)
+
+    **Detailed mode applies when**: `prd.json` task count ≥ 3, OR the holistic review identified documentation gaps. See `.pi/standards/maintenance.md` for the full protocol.
+
+    - **Review subagent reflections** for documentation improvements — did any developer flag profile inaccuracies, new patterns, or missing LEARNINGS.md?
+    - **If gaps found**: Assign a developer to update profiles, patterns.md, and LEARNINGS.md. This is a real task with review, not an afterthought.
+    - **Apply start/stop/continue** to system files (standards, role definitions, skill instructions) — don't just write them in the memory entry.
+    - **Skip if light mode**: For PRDs with < 3 tasks and no documentation gaps identified, skip this step.
+
+18. **Analyze Pre-Mortem Effectiveness**
     
     For each risk identified in pre-mortem:
     - Did it materialize? (Yes/No)
@@ -409,13 +420,13 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     | Fresh context | No | Yes (file lists) | Yes |
     | Test patterns | No | Yes (testDeps ref) | Yes |
     
-18. **Identify Surprises**
+19. **Identify Surprises**
     
     What happened that wasn't in the pre-mortem?
     - **Positive surprises**: What went better than expected?
     - **Negative surprises**: What issues arose that weren't anticipated?
 
-19. **Extract Learnings**
+20. **Extract Learnings**
     
     Synthesize:
     - **What worked well**: Patterns to repeat
@@ -423,9 +434,9 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     - **Collaboration patterns**: How did builder respond? What did they prefer?
     - **System improvements**: What would make next PRD execution smoother?
 
-20. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
+21. **Update Builder Memory** (Orchestrator — MANDATORY TASK)
     
-    **This is a required orchestrator task.** Do not deliver the final report (step 21) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
+    **This is a required orchestrator task.** Do not deliver the final report (step 22) until this is done. Build memory is how future agents and the builder avoid repeating mistakes.
     
     1. **Create entry**: `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md`
        
@@ -442,13 +453,13 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     
     2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
     
-    **Verification before step 21**: Entry file exists; MEMORY.md contains a new line pointing to it.
+    **Verification before step 22**: Entry file exists; MEMORY.md contains a new line pointing to it.
 
-21. **Deliver Final Report to Builder** (Orchestrator)
+22. **Deliver Final Report to Builder** (Orchestrator)
 
    Present to the builder (ONE comprehensive report, not repetitive sections):
     
-    **Prerequisite**: Step 19 (Update Builder Memory) must be complete. Do not deliver the report until the entry exists and MEMORY.md is updated.
+    **Prerequisite**: Step 21 (Update Builder Memory) must be complete. Do not deliver the report until the entry exists and MEMORY.md is updated.
     
     **Format**:
     ```markdown
@@ -473,6 +484,12 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     ## Pre-Mortem Review
     [Brief table: Risk | Materialized | Effective]
     
+    ## System Improvements Applied
+    - [File updated] — [What changed and why]
+    - [e.g. `.pi/standards/patterns.md` — Added new testDeps pattern discovered in Task 3]
+    - [e.g. `packages/core/src/services/LEARNINGS.md` — Added invariant about SearchProvider null handling]
+    _(If detailed mode was skipped, note: "Light mode — no documentation improvements required")_
+    
     ## Refactor Items (if any)
     - `dev/work/plans/refactor-[name]/plan.md` — [One-line summary]
     
@@ -491,7 +508,7 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     3. Address refactor items (if any)
     ```
     
-    (Build memory is already updated in step 20; do not list "create memory entry" as a next step.)
+    (Build memory is already updated in step 21; do not list "create memory entry" as a next step.)
     
     **Keep it concise** — 1-2 pages max, no repetition. The memory entry has full details.
 
@@ -525,6 +542,10 @@ Before diving into the detailed steps below, verify you'll cover all of these:
 
 ## Pre-Mortem Analysis
 [Table of risks vs outcomes]
+
+## System Improvements Applied
+- [File] — [What changed]
+...
 
 ## Refactor Items (if any)
 - `dev/work/plans/refactor-[name]/plan.md` — [one-line summary]
@@ -667,6 +688,7 @@ After fixing, run npm run typecheck and npm test again. Update prd.json and prog
 
 ## References
 
+- **Maintenance Protocol**: `.pi/standards/maintenance.md` (learning loop, detailed vs light mode)
 - **Learnings**: `memory/entries/2026-02-09_builder-orchestration-learnings.md`
 - **PRD Template**: `dev/work/archive/intelligence-and-calendar/prd.md`
 - **Execution State**: `dev/executions/README.md`

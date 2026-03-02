@@ -1,6 +1,7 @@
 # CLI Package Expertise Profile
 
 > Domain map for `packages/cli/`. Orients agents WHERE to look — not an encyclopedia.
+> For codebase-wide architectural patterns, see `.pi/standards/patterns.md`.
 
 ---
 
