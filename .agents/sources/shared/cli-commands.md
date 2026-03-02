@@ -30,8 +30,25 @@
 
 - `arete people list` - List people (optional `--category internal|customers|users`)
 - `arete people show <slug|email>` - Show person details
+  - `--memory` - Include auto-generated memory highlights section
+  - `--json` - Output as JSON
 - `arete people memory refresh [--person <slug>] [--if-stale-days N]` - Refresh person memory highlights from meetings (stale-aware)
+  - `--dry-run` - Preview what would be extracted without writing files
+  - `--skip-qmd` - Skip automatic qmd index update
+  - `--json` - Output as JSON
 - `arete availability find --with <name|email>` - Find mutual availability with a person (uses Google Calendar FreeBusy)
+
+## Meetings
+
+- `arete meeting add` - Add a meeting from JSON file or stdin
+  - `--file <path>` - Path to meeting JSON
+  - `--skip-qmd` - Skip automatic qmd index update
+- `arete meeting process` - Process a meeting file with People Intelligence classification
+  - `--file <path>` - Path to meeting markdown file
+  - `--latest` - Process latest meeting in resources/meetings
+  - `--threshold <n>` - Confidence threshold override (default from policy or 0.65)
+  - `--dry-run` - Analyze only; do not write people files or attendee_ids
+  - `--json` - Output as JSON
 
 ## Integrations
 

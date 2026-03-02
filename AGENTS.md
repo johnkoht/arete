@@ -64,6 +64,8 @@
 |arete people show <slug|email>:Show person details
 |arete people memory refresh [--person <slug>] [--if-stale-days N]:Refresh person memory highlights from meetings (stale-aware)
 |arete availability find --with <name|email>:Find mutual availability with a person (uses Google Calendar FreeBusy)
+|arete meeting add:Add a meeting from JSON file or stdin
+|arete meeting process:Process a meeting file with People Intelligence classification
 |arete integration configure calendar:Configure macOS Calendar (ical-buddy)
 |arete integration configure google-calendar:Configure Google Calendar OAuth
 |arete pull:Sync from integrations (meetings, calendar)

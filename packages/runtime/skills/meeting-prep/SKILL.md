@@ -86,8 +86,31 @@ Output markdown:
 - [ ] Item from meeting with [attendee]
 - [ ] ...
 
+### Stances
+For each attendee with person intelligence (via `arete people show <slug> --memory`):
+
+- **[Name]**: [stance direction] on [topic] — _Source: [meeting date/title]_
+- Example: "**Sarah**: Skeptical of timeline estimates — _Source: 2026-02-15 Sprint Review_"
+
+### Open Items
+Split by ownership:
+
+**I owe them:**
+- [ ] [Item description] — _Source: [meeting date/title]_
+
+**They owe me:**
+- [ ] [Item description] — _Source: [meeting date/title]_
+
+### Relationship Health
+For each key attendee:
+
+- **[Name]**: [health indicator: strong/neutral/at-risk] | Last met: YYYY-MM-DD | Frequency: [weekly/biweekly/monthly/sporadic] | Open loops: N
+
 ### Suggested Talking Points
-- Follow up on [X] from last meeting
+Generate from person intelligence and meeting history:
+
+- Follow up on [open item from "I owe them" or "They owe me"]
+- Be aware: [person] [stance] (e.g. "Be aware: Sarah is skeptical of timeline estimates")
 - Share update on [Y]
 - Ask about [Z]
 ```

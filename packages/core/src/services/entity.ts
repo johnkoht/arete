@@ -466,232 +466,32 @@ function escapeTableCell(s: string | null | undefined): string {
   return String(s).replace(/\|/g, ' ').replace(/\r?\n/g, ' ').trim();
 }
 
-interface PersonMemorySignal {
-  kind: 'ask' | 'concern';
-  topic: string;
-  date: string;
-  source: string;
-}
-
-interface AggregatedPersonSignal {
-  topic: string;
-  count: number;
-  lastMentioned: string;
-  sources: string[];
-}
-
-interface RefreshPersonMemoryInternalOptions {
-  personSlug?: string;
-  minMentions: number;
-}
-
-const AUTO_PERSON_MEMORY_START = '<!-- AUTO_PERSON_MEMORY:START -->';
-const AUTO_PERSON_MEMORY_END = '<!-- AUTO_PERSON_MEMORY:END -->';
-
-function normalizeSignalTopic(topic: string): string {
-  return topic
-    .toLowerCase()
-    .replace(/^[\s:;,.!?-]+/, '')
-    .replace(/\s+/g, ' ')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .slice(0, 120);
-}
-
-function collectSignalsForPerson(
-  content: string,
-  personName: string,
-  date: string,
-  source: string,
-): PersonMemorySignal[] {
-  const signals: PersonMemorySignal[] = [];
-  const lines = content.split('\n');
-  const personLower = personName.toLowerCase();
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const lower = trimmed.toLowerCase();
-
-    const mentionsPerson = lower.includes(personLower);
-    if (!mentionsPerson) continue;
-
-    const askMatch = trimmed.match(/\basked\s+(?:about|for|if)\s+(.+?)(?:[.?!]|$)/i);
-    if (askMatch) {
-      const topic = normalizeSignalTopic(askMatch[1]);
-      if (topic.length > 2) {
-        signals.push({ kind: 'ask', topic, date, source });
-      }
-    }
-
-    const concernMatch = trimmed.match(/\b(?:concerned about|worried about|skeptical about|pushed back on)\s+(.+?)(?:[.?!]|$)/i);
-    if (concernMatch) {
-      const topic = normalizeSignalTopic(concernMatch[1]);
-      if (topic.length > 2) {
-        signals.push({ kind: 'concern', topic, date, source });
-      }
-    }
-
-    const speakerMatch = trimmed.match(/^([^:]{2,80}):\s+(.+)$/);
-    if (speakerMatch) {
-      const speaker = speakerMatch[1].trim().toLowerCase();
-      const speech = speakerMatch[2].trim();
-      const speechLower = speech.toLowerCase();
-      if (!speaker.includes(personLower)) continue;
-
-      const speakerAskMatch = speech.match(/\b(?:can we|could we|what about|how about)\s+(.+?)(?:[.?!]|$)/i);
-      if (speakerAskMatch) {
-        const topic = normalizeSignalTopic(speakerAskMatch[1]);
-        if (topic.length > 2) {
-          signals.push({ kind: 'ask', topic, date, source });
-        }
-      }
-
-      if (speechLower.includes('concerned about') || speechLower.includes('worried about')) {
-        const topic = normalizeSignalTopic(
-          speech
-            .replace(/.*\b(?:concerned about|worried about)\b/i, '')
-            .replace(/[.?!].*$/, ''),
-        );
-        if (topic.length > 2) {
-          signals.push({ kind: 'concern', topic, date, source });
-        }
-      }
-    }
-  }
-
-  return signals;
-}
-
-function aggregateSignals(signals: PersonMemorySignal[], minMentions: number): {
-  asks: AggregatedPersonSignal[];
-  concerns: AggregatedPersonSignal[];
-} {
-  const asksByTopic = new Map<string, AggregatedPersonSignal>();
-  const concernsByTopic = new Map<string, AggregatedPersonSignal>();
-
-  for (const signal of signals) {
-    const targetMap = signal.kind === 'ask' ? asksByTopic : concernsByTopic;
-    const existing = targetMap.get(signal.topic);
-    if (!existing) {
-      targetMap.set(signal.topic, {
-        topic: signal.topic,
-        count: 1,
-        lastMentioned: signal.date,
-        sources: [signal.source],
-      });
-      continue;
-    }
-
-    existing.count += 1;
-    if (signal.date > existing.lastMentioned) {
-      existing.lastMentioned = signal.date;
-    }
-    if (!existing.sources.includes(signal.source)) {
-      existing.sources.push(signal.source);
-    }
-  }
-
-  const toSorted = (m: Map<string, AggregatedPersonSignal>): AggregatedPersonSignal[] =>
-    [...m.values()]
-      .filter((item) => item.count >= minMentions)
-      .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return b.lastMentioned.localeCompare(a.lastMentioned);
-      });
-
-  return {
-    asks: toSorted(asksByTopic),
-    concerns: toSorted(concernsByTopic),
-  };
-}
-
-function renderPersonMemorySection(
-  asks: AggregatedPersonSignal[],
-  concerns: AggregatedPersonSignal[],
-): string {
-  const today = new Date().toISOString().slice(0, 10);
-  const lines: string[] = [
-    AUTO_PERSON_MEMORY_START,
-    '## Memory Highlights (Auto)',
-    '',
-    '> Auto-generated from meeting notes/transcripts. Do not edit manually.',
-    '',
-    `Last refreshed: ${today}`,
-    '',
-    '### Repeated asks',
-  ];
-
-  if (asks.length === 0) {
-    lines.push('- None detected yet.');
-  } else {
-    for (const item of asks.slice(0, 8)) {
-      lines.push(
-        `- **${item.topic}** — mentioned ${item.count} times (last: ${item.lastMentioned}; sources: ${item.sources.slice(0, 3).join(', ')})`,
-      );
-    }
-  }
-
-  lines.push('', '### Repeated concerns');
-  if (concerns.length === 0) {
-    lines.push('- None detected yet.');
-  } else {
-    for (const item of concerns.slice(0, 8)) {
-      lines.push(
-        `- **${item.topic}** — mentioned ${item.count} times (last: ${item.lastMentioned}; sources: ${item.sources.slice(0, 3).join(', ')})`,
-      );
-    }
-  }
-
-  lines.push('', AUTO_PERSON_MEMORY_END, '');
-  return lines.join('\n');
-}
-
-function extractPersonMemorySection(content: string): string | null {
-  const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
-  const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
-  if (startIndex < 0 || endIndex <= startIndex) return null;
-
-  const start = startIndex + AUTO_PERSON_MEMORY_START.length;
-  const section = content.slice(start, endIndex).trim();
-  return section.length > 0 ? section : null;
-}
-
-function getPersonMemoryLastRefreshed(content: string): string | null {
-  const section = extractPersonMemorySection(content);
-  if (!section) return null;
-
-  const match = section.match(/Last refreshed:\s*(\d{4}-\d{2}-\d{2})/i);
-  return match ? match[1] : null;
-}
-
-function isMemoryStale(lastRefreshed: string | null, ifStaleDays: number | undefined): boolean {
-  if (!ifStaleDays || ifStaleDays <= 0) return true;
-  if (!lastRefreshed) return true;
-
-  const refreshedAt = new Date(lastRefreshed);
-  if (Number.isNaN(refreshedAt.getTime())) return true;
-
-  const now = new Date();
-  const diffMs = now.getTime() - refreshedAt.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return diffDays >= ifStaleDays;
-}
-
-function upsertPersonMemorySection(content: string, section: string): string {
-  const startIndex = content.indexOf(AUTO_PERSON_MEMORY_START);
-  const endIndex = content.indexOf(AUTO_PERSON_MEMORY_END);
-
-  if (startIndex >= 0 && endIndex > startIndex) {
-    const before = content.slice(0, startIndex).trimEnd();
-    const after = content.slice(endIndex + AUTO_PERSON_MEMORY_END.length).trimStart();
-    const joined = `${before}\n\n${section.trim()}\n\n${after}`.trimEnd();
-    return joined + '\n';
-  }
-
-  const trimmed = content.trimEnd();
-  return `${trimmed}\n\n${section.trim()}\n`;
-}
+// Person memory signal collection, aggregation, rendering, and upsert — extracted to person-memory.ts
+import {
+  collectSignalsForPerson,
+  aggregateSignals,
+  renderPersonMemorySection,
+  getPersonMemoryLastRefreshed,
+  isMemoryStale,
+  upsertPersonMemorySection,
+} from './person-memory.js';
+import type {
+  PersonMemorySignal,
+  RefreshPersonMemoryInternalOptions,
+} from './person-memory.js';
+import {
+  extractStancesForPerson,
+  extractActionItemsForPerson,
+  isActionItemStale,
+  deduplicateActionItems,
+  capActionItems,
+} from './person-signals.js';
+import type {
+  LLMCallFn,
+  PersonStance,
+  PersonActionItem,
+} from './person-signals.js';
+import { computeRelationshipHealth } from './person-health.js';
 
 // ---------------------------------------------------------------------------
 // EntityService
@@ -705,6 +505,9 @@ export interface RefreshPersonMemoryOptions {
   personSlug?: string;
   minMentions?: number;
   ifStaleDays?: number;
+  callLLM?: LLMCallFn;
+  /** When true, compute everything but skip writing files to disk. */
+  dryRun?: boolean;
 }
 
 export interface RefreshPersonMemoryResult {
@@ -714,6 +517,12 @@ export interface RefreshPersonMemoryResult {
   skippedFresh: number;
   /** Number of conversation files scanned. Optional for backward compatibility. */
   scannedConversations?: number;
+  /** Number of stances extracted across all people. */
+  stancesExtracted: number;
+  /** Number of action items extracted across all people (after lifecycle). */
+  actionItemsExtracted: number;
+  /** Number of action items aged out (stale). */
+  itemsAgedOut: number;
 }
 
 export interface PeopleIntelligenceOptions {
@@ -1135,7 +944,7 @@ export class EntityService {
     options: RefreshPersonMemoryOptions = {},
   ): Promise<RefreshPersonMemoryResult> {
     if (!workspacePaths?.people) {
-      return { updated: 0, scannedPeople: 0, scannedMeetings: 0, skippedFresh: 0 };
+      return { updated: 0, scannedPeople: 0, scannedMeetings: 0, skippedFresh: 0, stancesExtracted: 0, actionItemsExtracted: 0, itemsAgedOut: 0 };
     }
 
     const internalOptions: RefreshPersonMemoryInternalOptions = {
@@ -1173,10 +982,31 @@ export class EntityService {
           .filter((p) => (p.split(/[/\\]/).pop() ?? '') !== 'index.md')
       : [];
 
+    // Read workspace owner name from profile.md once for action item direction classification.
+    let ownerName: string | undefined;
+    const profilePath = join(workspacePaths.context, 'profile.md');
+    const profileContent = await this.storage.read(profilePath);
+    if (profileContent) {
+      const parsedProfile = parseFrontmatter(profileContent);
+      if (parsedProfile && typeof parsedProfile.frontmatter.name === 'string') {
+        ownerName = parsedProfile.frontmatter.name;
+      }
+    }
+
     const personSignals = new Map<string, PersonMemorySignal[]>();
+    const personStances = new Map<string, PersonStance[]>();
+    const personActionItems = new Map<string, PersonActionItem[]>();
+    const personMeetingDates = new Map<string, string[]>();
     for (const person of refreshablePeople) {
       personSignals.set(person.slug, []);
+      personStances.set(person.slug, []);
+      personActionItems.set(person.slug, []);
+      personMeetingDates.set(person.slug, []);
     }
+
+    // LLM stance cache — prevents duplicate LLM calls for the same meeting+person
+    // within a single refresh. Keyed by normalized absolute path + ':' + person slug.
+    const stanceCache = new Map<string, PersonStance[]>();
 
     // Meeting content cache — keyed by normalized absolute path so that the
     // same physical file is read at most once, regardless of whether the path
@@ -1257,7 +1087,41 @@ export class EntityService {
         const mentionedInBody = content.toLowerCase().includes(nameLower);
         if (!inAttendeeIds && !inAttendeeNames && !mentionedInBody) continue;
 
+        // Track meeting dates for relationship health computation
+        const meetingDates = personMeetingDates.get(person.slug);
+        if (meetingDates) {
+          meetingDates.push(date);
+        }
+
         signals.push(...collectSignalsForPerson(content, person.name, date, source));
+
+        // Stance extraction (LLM-based, optional)
+        if (options.callLLM) {
+          const stanceCacheKey = resolve(workspacePaths.root, meetingPath) + ':' + person.slug;
+          let stances: PersonStance[];
+          if (stanceCache.has(stanceCacheKey)) {
+            stances = stanceCache.get(stanceCacheKey)!;
+          } else {
+            stances = await extractStancesForPerson(content, person.name, options.callLLM);
+            // Fill in source and date for each stance
+            for (const stance of stances) {
+              stance.source = source;
+              stance.date = date;
+            }
+            stanceCache.set(stanceCacheKey, stances);
+          }
+          const personStanceList = personStances.get(person.slug);
+          if (personStanceList) {
+            personStanceList.push(...stances);
+          }
+        }
+
+        // Action item extraction (regex-based, always runs)
+        const actionItems = extractActionItemsForPerson(content, person.name, source, date, ownerName);
+        const personActionItemList = personActionItems.get(person.slug);
+        if (personActionItemList) {
+          personActionItemList.push(...actionItems);
+        }
       }
     }
 
@@ -1294,6 +1158,41 @@ export class EntityService {
       }
     }
 
+    // Post-loop lifecycle: dedup stances by topic+direction, apply action item lifecycle.
+    let totalStances = 0;
+    let totalActionItems = 0;
+    let totalItemsAgedOut = 0;
+
+    for (const person of refreshablePeople) {
+      // Stance dedup: keep first occurrence per topic+direction
+      const rawStances = personStances.get(person.slug) ?? [];
+      const seenStanceKeys = new Set<string>();
+      const dedupedStances: PersonStance[] = [];
+      for (const stance of rawStances) {
+        const key = `${stance.topic.toLowerCase()}:${stance.direction}`;
+        if (!seenStanceKeys.has(key)) {
+          seenStanceKeys.add(key);
+          dedupedStances.push(stance);
+        }
+      }
+      personStances.set(person.slug, dedupedStances);
+      totalStances += dedupedStances.length;
+
+      // Action item lifecycle: mark stale, dedup, cap
+      const rawItems = personActionItems.get(person.slug) ?? [];
+      let agedOut = 0;
+      for (const item of rawItems) {
+        item.stale = isActionItemStale(item);
+        if (item.stale) agedOut += 1;
+      }
+      totalItemsAgedOut += agedOut;
+      const freshItems = rawItems.filter((i) => !i.stale);
+      const dedupedItems = deduplicateActionItems([], freshItems);
+      const cappedItems = capActionItems(dedupedItems);
+      personActionItems.set(person.slug, cappedItems);
+      totalActionItems += cappedItems.length;
+    }
+
     let updated = 0;
     for (const person of refreshablePeople) {
       const category = person.category;
@@ -1303,10 +1202,20 @@ export class EntityService {
 
       const signals = personSignals.get(person.slug) ?? [];
       const aggregated = aggregateSignals(signals, internalOptions.minMentions);
-      const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns);
+      const stances = personStances.get(person.slug) ?? [];
+      const actionItems = personActionItems.get(person.slug) ?? [];
+      const meetingDates = personMeetingDates.get(person.slug) ?? [];
+      const health = computeRelationshipHealth(meetingDates, actionItems.length);
+      const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns, {
+        stances,
+        actionItems,
+        health,
+      });
       const nextContent = upsertPersonMemorySection(content, section);
       if (nextContent !== content) {
-        await this.storage.write(personPath, nextContent);
+        if (!options.dryRun) {
+          await this.storage.write(personPath, nextContent);
+        }
         updated += 1;
       }
     }
@@ -1317,6 +1226,9 @@ export class EntityService {
       scannedMeetings: meetingFiles.length,
       scannedConversations: conversationFiles.length,
       skippedFresh,
+      stancesExtracted: totalStances,
+      actionItemsExtracted: totalActionItems,
+      itemsAgedOut: totalItemsAgedOut,
     };
   }
 

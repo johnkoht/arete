@@ -59,6 +59,14 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **`KrispMcpClient.configure()` requires `(storage, workspaceRoot)` — not zero args** (2026-02-21): The task description described calling `client.configure()` with no arguments, but the actual method signature is `configure(storage: StorageAdapter, workspaceRoot: string): Promise<KrispCredentials>`. Always read the actual TypeScript signature before wiring in a CLI command.
 
+- **LLM extraction via `RefreshPersonMemoryOptions.callLLM` pattern** (2026-03-01): `refreshPersonMemory()` accepts an optional `callLLM: LLMCallFn` in its options. When provided, stance extraction runs via `extractStancesForPerson()` from `person-signals.ts`. Without it, only regex-based signals run. This keeps EntityService LLM-free at construction time — the caller decides whether to provide LLM capability. Follow this pattern for any future LLM-dependent features in services: accept the LLM function in the method options, never in the constructor.
+
+- **In-memory caching strategy for LLM calls within refresh** (2026-03-01): Function-scoped `Map<string, PersonStance[]>` keyed by `resolve(root, meetingPath) + ':' + person.slug` prevents duplicate LLM calls when multiple people appear in the same meeting. Same pattern as the existing `meetingContentCache` but for LLM results. When adding new expensive per-meeting operations, follow this cache pattern.
+
+- **Action item lifecycle design** (2026-03-01): 30-day auto-stale via `isActionItemStale()`, 10-item cap per direction via `capActionItems()`, content-hash dedup via `computeActionItemHash()` (sha256 of normalized text + slug + direction). Applied in order: stale filter → dedup → cap. Functions in `person-signals.ts`. When adding new signal types with lifecycle, follow this three-phase pattern.
+
+- **Person-memory module extraction as a clean refactor seam** (2026-03-01): Signal collection, aggregation, rendering, and upsert extracted to `person-memory.ts` from entity.ts. Clean module boundary — entity.ts imports what it needs. This pattern should be followed when entity.ts grows again: extract domain-specific logic to a sibling module (e.g., `person-*.ts`) rather than letting entity.ts become a monolith.
+
 - **`KrispCredentials.expires_at` is a Unix timestamp `number`, not an ISO string** (2026-02-21): The task description mentioned computing `new Date(...).toISOString()` for `expires_at`, but the type definition is `number` (seconds since epoch) and `loadKrispCredentials` validates `typeof expires_at !== 'number'`. The client's `configure()` already computes it correctly as `Math.floor(Date.now() / 1000) + tokens.expires_in`. Pass the returned credentials directly to `saveKrispCredentials`.
 
 ## Pre-Edit Checklist

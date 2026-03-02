@@ -1,7 +1,7 @@
 /**
  * People commands — list, show, index
  */
-import { createServices, loadConfig, refreshQmdIndex, PEOPLE_CATEGORIES, } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, extractPersonMemorySection, PEOPLE_CATEGORIES, } from '@arete/core';
 import { join } from 'node:path';
 import chalk from 'chalk';
 import { header, section, listItem, error, info, formatPath, } from '../formatters.js';
@@ -108,7 +108,7 @@ export function registerPeopleCommands(program) {
         if (opts.memory) {
             const personPath = join(paths.people, person.category, `${person.slug}.md`);
             const personContent = await services.storage.read(personPath);
-            memoryHighlights = extractAutoPersonMemorySection(personContent);
+            memoryHighlights = personContent ? extractPersonMemorySection(personContent) : null;
         }
         if (opts.json) {
             console.log(JSON.stringify({ success: true, person, memoryHighlights }, null, 2));
@@ -304,6 +304,7 @@ export function registerPeopleCommands(program) {
         .option('--person <slug>', 'Refresh only one person by slug')
         .option('--min-mentions <n>', 'Minimum repeated mentions to include (default: 2)')
         .option('--if-stale-days <n>', 'Only refresh when Last refreshed is older than N days')
+        .option('--dry-run', 'Preview what would be extracted without writing files')
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
@@ -331,41 +332,38 @@ export function registerPeopleCommands(program) {
             personSlug: opts.person,
             minMentions,
             ifStaleDays,
+            dryRun: opts.dryRun,
         });
-        // Auto-refresh qmd index after writes (skip if nothing updated)
+        // Auto-refresh qmd index after writes (skip if nothing updated or dry-run)
         let qmdResult;
-        if (result.updated > 0 && !opts.skipQmd) {
+        if (result.updated > 0 && !opts.skipQmd && !opts.dryRun) {
             const config = await loadConfig(services.storage, root);
             qmdResult = await refreshQmdIndex(root, config.qmd_collection);
         }
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
+                dryRun: Boolean(opts.dryRun),
                 ...result,
                 qmd: qmdResult ?? { indexed: false, skipped: true },
             }, null, 2));
             return;
         }
-        info(`Refreshed person memory highlights for ${result.updated} person file(s).`);
+        if (opts.dryRun) {
+            info(`[dry-run] Would update ${result.updated} people.`);
+        }
+        else {
+            info(`Refreshed person memory highlights for ${result.updated} person file(s).`);
+        }
         listItem('People scanned', String(result.scannedPeople));
         listItem('Meetings scanned', String(result.scannedMeetings));
         listItem('Skipped (fresh)', String(result.skippedFresh));
+        listItem('Stances extracted', String(result.stancesExtracted));
+        listItem('Action items extracted', String(result.actionItemsExtracted));
+        listItem('Items aged out', String(result.itemsAgedOut));
         displayQmdResult(qmdResult);
         console.log('');
     });
-}
-function extractAutoPersonMemorySection(content) {
-    if (!content)
-        return null;
-    const startMarker = '<!-- AUTO_PERSON_MEMORY:START -->';
-    const endMarker = '<!-- AUTO_PERSON_MEMORY:END -->';
-    const start = content.indexOf(startMarker);
-    const end = content.indexOf(endMarker);
-    if (start < 0 || end <= start)
-        return null;
-    const sectionStart = start + startMarker.length;
-    const section = content.slice(sectionStart, end).trim();
-    return section.length > 0 ? section : null;
 }
 function parseCategory(cat) {
     if (!cat)
