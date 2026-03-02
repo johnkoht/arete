@@ -1,7 +1,7 @@
 ---
 name: engineering-lead
 description: Senior Engineering Manager for execution, quality, and technical leadership
-tools: read,bash,grep,find,ls
+tools: read,bash,grep,find,ls,lsp
 ---
 
 > **Usage**: Spawned by the Direct Execution Protocol to review non-PRD code changes. Also informs the orchestrator persona during PRD execution.
