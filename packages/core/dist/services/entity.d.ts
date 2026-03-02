@@ -12,6 +12,7 @@ declare const PEOPLE_CATEGORIES: PersonCategory[];
  * Generate a URL-safe slug from a name (e.g. "Jane Doe" -> "jane-doe").
  */
 export declare function slugifyPersonName(name: string): string;
+import type { LLMCallFn } from './person-signals.js';
 export interface ListPeopleOptions {
     category?: PersonCategory;
 }
@@ -19,6 +20,9 @@ export interface RefreshPersonMemoryOptions {
     personSlug?: string;
     minMentions?: number;
     ifStaleDays?: number;
+    callLLM?: LLMCallFn;
+    /** When true, compute everything but skip writing files to disk. */
+    dryRun?: boolean;
 }
 export interface RefreshPersonMemoryResult {
     updated: number;
@@ -27,6 +31,12 @@ export interface RefreshPersonMemoryResult {
     skippedFresh: number;
     /** Number of conversation files scanned. Optional for backward compatibility. */
     scannedConversations?: number;
+    /** Number of stances extracted across all people. */
+    stancesExtracted: number;
+    /** Number of action items extracted across all people (after lifecycle). */
+    actionItemsExtracted: number;
+    /** Number of action items aged out (stale). */
+    itemsAgedOut: number;
 }
 export interface PeopleIntelligenceOptions {
     confidenceThreshold?: number;
