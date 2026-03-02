@@ -282,7 +282,7 @@ function compressVision(content: string): string {
 function compressWorkspaceStructure(content: string): string {
   return `[Workspace]|two contexts: USER (installed) vs BUILD (this repo)
 |user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .pi/skills/
-|build:packages/ memory/ .agents/ dev/(plans, archive/prds, autonomous)/ .cursor/ .pi/ scripts/
+|build:packages/ memory/ .agents/ dev/(plans, archive/prds, autonomous)/ .pi/ scripts/
 |key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .pi/skills/ = build skills (BUILD) vs product skills (USER)`;
 }
 
@@ -294,11 +294,6 @@ function compressContent(content: string, filename: string): string {
   if (filename.includes('skills-index.md')) {
     const rootPath = filename.includes('builder') ? '.pi/skills' : 'runtime/skills';
     return compressSkillsTable(content, rootPath);
-  }
-  
-  // Rules index - compress
-  if (filename.includes('rules-index.md')) {
-    return compressRulesList(content, '.cursor/rules/', 'Rules');
   }
   
   // Tools index - compress
@@ -326,11 +321,6 @@ function compressContent(content: string, filename: string): string {
     return compressWorkspaceStructure(content);
   }
   
-  // Conventions - compress heavily
-  if (filename.includes('conventions.md')) {
-    return compressConventions(content);
-  }
-  
   // Intelligence - compress heavily
   if (filename.includes('intelligence.md')) {
     return compressIntelligence(content);
@@ -343,24 +333,6 @@ function compressContent(content: string, filename: string): string {
   
   // Default: minimal compression
   return content.trim();
-}
-
-/**
- * Compress conventions section
- */
-function compressConventions(content: string): string {
-  return `[Conventions]|TypeScript/Node.js build standards
-|config:tsconfig.json (NodeNext, strict) + tsconfig.test.json
-|imports:use .js extensions; import type for type-only
-|types:prefer type over interface; no any/unknown; avoid as/!
-|functions:function for top-level; arrow for callbacks
-|naming:PascalCase (types), camelCase (vars/fns), UPPERCASE (constants), kebab-case (files)
-|async:prefer async/await over Promises
-|tests:node:test + node:assert/strict
-|quality:npm run typecheck && npm test before commit
-|execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended
-|catalog:dev/catalog/capabilities.json — check before changing tooling/extensions/services; update after changes
-|regressions:after regression fixes, update nearest LEARNINGS.md (see Memory § LEARNINGS.md for convention)`;
 }
 
 /**

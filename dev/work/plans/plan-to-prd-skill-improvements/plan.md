@@ -25,7 +25,7 @@ steps: 0
 Five issues found while following the plan-to-prd skill workflow:
 
 ### 1. Stale path in EXECUTE.md template
-The handoff template references `dev/skills/execute-prd/SKILL.md` — a path that no longer exists after the dev-cleanup reorganization. Should be `.agents/skills/execute-prd/SKILL.md`.
+The handoff template references `dev/skills/execute-prd/SKILL.md` — a path that no longer exists after the dev-cleanup reorganization. Should be `.pi/skills/execute-prd/SKILL.md`.
 
 ### 2. No build memory check before PRD creation
 prd-to-json (Step 1) says "Read `memory/MEMORY.md`" but plan-to-prd doesn't include this step. The PRD itself could miss context (recent architectural decisions, established patterns) that memory would surface. Memory check should happen before creating the PRD, not only during JSON conversion.
@@ -37,7 +37,7 @@ The skill says to include Goal, User Stories/Tasks, and Acceptance Criteria. But
 When invoked from plan mode (where write is disabled), the skill's "Create PRD File" step will fail. The skill should note either: (a) exit plan mode first, or (b) the calling extension should handle the mode transition.
 
 ### 5. Inline prd-to-json invocation ambiguity
-Step 3 says "Load `.agents/skills/prd-to-json/SKILL.md` and follow its workflow." In Cursor this works (agent reads the file). In Pi, the natural invocation is `/skill:prd-to-json`. The skill should note both paths for multi-IDE compatibility.
+Step 3 says "Load `.pi/skills/prd-to-json/SKILL.md` and follow its workflow." In Cursor this works (agent reads the file). In Pi, the natural invocation is `/skill:prd-to-json`. The skill should note both paths for multi-IDE compatibility.
 
 ## Why
 

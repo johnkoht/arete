@@ -47,7 +47,7 @@ This creates a PRD in `projects/active/{name}/outputs/prd-{name}.md`.
 ### 2. Convert PRD to JSON
 
 ```
-Load the prd-to-json skill from .agents/skills/prd-to-json/ and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
+Load the prd-to-json skill from .pi/skills/prd-to-json/ and convert projects/active/{name}/outputs/prd-{name}.md to prd.json
 ```
 
 This creates `dev/autonomous/prd.json` with structured tasks.
@@ -55,7 +55,7 @@ This creates `dev/autonomous/prd.json` with structured tasks.
 ### 3. Execute Autonomously
 
 ```
-Load the execute-prd skill from .agents/skills/execute-prd/ and execute the PRD
+Load the execute-prd skill from .pi/skills/execute-prd/ and execute the PRD
 ```
 
 The orchestrator will:
@@ -172,7 +172,7 @@ dev/autonomous/
 └── README.md                    # This file
 ```
 
-Build skills (prd-to-json, execute-prd) live in **.agents/skills/**.
+Build skills (prd-to-json, execute-prd) live in **.pi/skills/**.
 
 ## File Descriptions
 

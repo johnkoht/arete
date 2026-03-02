@@ -119,7 +119,7 @@ steps: 0
 ## 5. References
 
 - BUILD memory: `dev/MEMORY.md`, `dev/collaboration.md`, `dev/entries/`
-- BUILD PRD flow: `.agents/skills/execute-prd/SKILL.md`, `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/entries/2026-02-09_builder-orchestration-learnings.md`
-- GUIDE memory: `.cursor/rules/agent-memory.mdc` (mode-aware), `src/core/workspace-structure.ts` (default files)
+- BUILD PRD flow: `.pi/skills/execute-prd/SKILL.md`, `dev/PRE-MORTEM-AND-ORCHESTRATION-RECOMMENDATIONS.md`, `dev/entries/2026-02-09_builder-orchestration-learnings.md`
+- GUIDE memory: `.pi/standards/build-standards.md` (mode-aware), `src/core/workspace-structure.ts` (default files)
 - GUIDE create-prd: `runtime/skills/create-prd/SKILL.md`, `runtime/skills/PATTERNS.md` (light_pre_mortem)
 - dev.mdc § Quality Practices (Leverage build memory)

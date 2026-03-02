@@ -26,15 +26,18 @@ arete/                 # Build workspace root
 │   └── runtime/       # Skills, rules, tools, templates
 ├── memory/            # Build memory (MEMORY.md, collaboration.md, entries/)
 ├── .agents/           # Build-specific agent resources
-│   ├── skills/        # Build skills (execute-prd, plan-to-prd, etc.)
-│   └── sources/       # AGENTS.md source files
+│   └── sources/       # AGENTS.md source files (guide only)
 ├── dev/               # Development tooling
 │   ├── catalog/       # Machine-friendly capability inventory (tools/extensions/services/packages)
 │   ├── plans/         # All plans and ideas (status determines lifecycle)
 │   ├── archive/prds/  # Archived legacy PRD documents
 │   └── autonomous/    # Autonomous execution templates
-├── .cursor/           # Cursor IDE configuration (rules/, tools/)
-├── .pi/               # Pi coding agent configuration (extensions/, skills/, agents/)
+├── .pi/               # Pi coding agent configuration
+│   ├── skills/        # Build skills (execute-prd, plan-to-prd, etc.)
+│   ├── agents/        # Role definitions (orchestrator, reviewer, developer, etc.)
+│   ├── expertise/     # Domain profiles (core/, cli/)
+│   ├── standards/     # Build standards, patterns, maintenance
+│   └── extensions/    # Plan-mode extension
 └── scripts/           # Build and integration scripts
 ```
 

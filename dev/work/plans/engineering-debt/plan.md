@@ -85,7 +85,7 @@ For directories, `moveItem` uses `cpSync` + `rmSync` (copy then delete). If the 
 
 **Grep to confirm all refs cleared**:
 ```bash
-grep -rn "dev/autonomous" .agents/skills/ .pi/ .cursor/rules/ .agents/sources/ --include="*.md" --include="*.mdc" --include="*.ts"
+grep -rn "dev/autonomous" .pi/skills/ .pi/ .agents/sources/ --include="*.md" --include="*.mdc" --include="*.ts"
 ```
 
 ---
@@ -102,7 +102,7 @@ The capabilities registry exists (`dev/catalog/capabilities.json`) but is seed-o
 1. **Coverage expansion** — Inventory all build-time tooling (Pi extensions, rules systems, agent configs, key integrations, external packages). Mark provenance (`built | customized | external`) and usage (`active | occasional | dormant`).
 2. **Schema hardening** — Add `lastVerified`, `owner`, and `readBeforeChange` fields. Define deprecation lifecycle.
 3. **Workflow integration** — Add checklist step in plan execution/review flow: consult registry before changing tools/services/extensions. Add periodic audit cadence.
-4. **Drift prevention** — Add checks for known drift pairs (e.g., `.cursor/rules/*` vs `.pi/APPEND_SYSTEM.md`).
+4. **Drift prevention** — Add checks for known drift pairs (e.g., `.pi/standards/*` vs `.pi/APPEND_SYSTEM.md`).
 
 > **Note**: Convert to a small PRD before executing — this needs design decisions on schema and workflow hooks before building.
 

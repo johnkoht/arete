@@ -80,6 +80,16 @@ factory.ts (createServices) ─── wires everything
 
 **Critical invariant**: `refreshPersonMemory()` uses SearchProvider to pre-filter meetings, but empty results → full scan (never skip). `SEARCH_PROVIDER_CANDIDATE_LIMIT = 100` also triggers full scan.
 
+#### Person Intelligence Modules (siblings to entity.ts)
+
+These modules implement the People Intelligence feature and are called by `EntityService.refreshPersonMemory()`:
+
+- **`person-memory.ts`** — Signal collection, aggregation, rendering, and upsert. Uses sentinel-comment pattern (`AUTO_PERSON_MEMORY:START/END`) for non-destructive updates to person files. Key exports: `collectSignalsForPerson()`, `aggregateSignals()`, `renderPersonMemorySection()`, `upsertPersonMemory()`, `isMemoryStale()`.
+- **`person-health.ts`** — Pure computation of `RelationshipHealth` from meeting dates. No I/O. Uses `referenceDate` injection for testability. Key exports: `computeRelationshipHealth()`, `renderHealthSection()`.
+- **`person-signals.ts`** — LLM stance extraction (DI via `callLLM` option) + regex-based action item extraction with lifecycle (open/completed/stale). Key exports: `extractStancesForPerson()`, `extractActionItemsForPerson()`, `buildStancePrompt()`, `parseStanceResponse()`.
+
+**Important**: These are implementation details — not exported from `packages/core/src/index.ts`. All access is through `EntityService.refreshPersonMemory()`. The `callLLM` option for stance extraction is programmatic-only (not wired in CLI).
+
 ### WorkspaceService
 `services/workspace.ts`
 

@@ -68,7 +68,7 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 
 ### Implementation
 
-✅ **Created**: `.agents/skills/execute-prd/SKILL.md`
+✅ **Created**: `.pi/skills/execute-prd/SKILL.md`
 - Includes mandatory pre-mortem as Phase 1
 - Structured risk identification (8 categories)
 - Actionable mitigation format
@@ -92,7 +92,7 @@ Pre-mortem didn't just identify risks—it created **actionable mitigations that
 
 #### **1. Create `execute-prd` Skill** ✅ DONE
 
-**File**: `.agents/skills/execute-prd/SKILL.md`
+**File**: `.pi/skills/execute-prd/SKILL.md`
 
 **What it does**:
 - Phase 0: Understand PRD and dependencies
@@ -252,6 +252,6 @@ For next PRD execution with execute-prd skill:
 ---
 
 **File References**:
-- Execute PRD Skill: `.agents/skills/execute-prd/SKILL.md`
+- Execute PRD Skill: `.pi/skills/execute-prd/SKILL.md`
 - Pre-Mortem Template: `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md`
 - Orchestration Learnings: `memory/entries/2026-02-09_builder-orchestration-learnings.md`

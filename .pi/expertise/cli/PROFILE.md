@@ -73,10 +73,10 @@ Four commands registered from one file. The intelligence hub.
 
 ### people.ts — People Management
 - **`people list`** → `services.entity.listPeople(paths, { category })`
-- **`people show <slug|email>`** → `services.entity.getPersonByEmail()` / `getPersonBySlug()`
+- **`people show <slug|email>`** → `services.entity.getPersonByEmail()` / `getPersonBySlug()` — `--memory` flag extracts and displays auto-generated memory highlights section
 - **`people index`** → `services.entity.buildPeopleIndex(paths)` → `refreshQmdIndex()`
 - **`people intelligence digest`** → `services.entity.suggestPeopleIntelligence(candidates, paths, opts)`
-- **`people memory refresh`** → `services.entity.refreshPersonMemory(paths, opts)` → `refreshQmdIndex()`
+- **`people memory refresh`** → `services.entity.refreshPersonMemory(paths, opts)` → `refreshQmdIndex()` — `--dry-run` previews extraction without writing files; `--person <slug>` refreshes a single person
 
 ### meeting.ts — Meeting Import & Processing
 - **`meeting add`** → normalizes JSON input → `saveMeetingFile()` → `refreshQmdIndex()`

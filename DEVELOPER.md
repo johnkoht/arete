@@ -229,8 +229,13 @@ arete/
 │       └── GUIDE.md        # Comprehensive user guide (shipped)
 ├── memory/                 # Build memory (MEMORY.md, collaboration.md, entries/)
 ├── .agents/                # Build-specific agent resources
+│   └── sources/            # AGENTS.md source files (guide only)
+├── .pi/                    # Pi agent configuration
 │   ├── skills/             # Build skills (execute-prd, plan-to-prd, etc.)
-│   └── sources/            # AGENTS.md source files
+│   ├── agents/             # Role definitions (orchestrator, reviewer, developer, etc.)
+│   ├── expertise/          # Domain profiles (core/, cli/)
+│   ├── standards/          # Build standards, patterns, maintenance
+│   └── extensions/         # Plan-mode extension
 ├── dev/                    # Developer-only files (not shipped)
 │   ├── prds/               # Feature PRDs
 │   └── backlog/            # Feature and improvement backlog
@@ -292,7 +297,7 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 1. User says "Help me prep for my meeting"
 2. Agent runs `arete skill route "help me prep for my meeting"`
 3. Router returns: `meeting-prep`
-4. Agent reads `.pi/skills/meeting-prep/SKILL.md`
+4. Agent reads `.agents/skills/meeting-prep/SKILL.md`
 5. Agent executes skill's workflow
 
 **Key patterns**:
