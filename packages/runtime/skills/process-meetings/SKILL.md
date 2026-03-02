@@ -88,9 +88,31 @@ Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md).
 
 After saving, run `arete index` to make the content immediately searchable by other skills (brief, meeting-prep, context).
 
+### 5.5. Refresh Person Intelligence Memory
+
+**Ordering dependency** — this step MUST run after steps 2–3 complete:
+1. Create/update person files (step 2)
+2. Write `attendee_ids` to meeting frontmatter (step 3)
+3. **Then** refresh person intelligence memory
+
+For each attendee processed, refresh their auto-memory (stances, open items, relationship health):
+
+```bash
+arete people memory refresh --person <slug>
+```
+
+This updates the enriched intelligence sections that meeting-prep and other skills consume via `arete people show <slug> --memory`.
+
 ### 6. Summary
 
 Report: meetings processed, people created/updated, decisions and learnings added, person memory highlights refreshed.
+
+Include per-attendee intelligence summary:
+
+```
+Sarah: 2 stances, 1 action item
+Mike: 1 stance, 0 action items
+```
 
 ## Arguments (Documented)
 
