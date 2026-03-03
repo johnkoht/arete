@@ -810,19 +810,37 @@ krisp:
     assert.equal(result[1].meeting_id, 'bbb');
   });
 
-  it('(16) getDocument passes documentId (not id)', async () => {
+  it('(16) getMultipleDocuments passes ids array', async () => {
     const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    queueFetch({ jsonrpc: '2.0', id: 1, result: mcpToolEnvelope({ id: docId }) });
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: mcpToolEnvelope({ results: [{ id: docId, document: '# Transcript' }] }),
+    });
 
-    await client.getDocument(docId);
+    const results = await client.getMultipleDocuments([docId]);
 
     assert.equal(fetchCaptures.length, 1, 'fetch must be called once');
     const body = JSON.parse(fetchCaptures[0].init.body as string) as Record<string, unknown>;
     const params = body['params'] as Record<string, unknown>;
-    assert.equal(params['name'], 'get_document', 'tool name must be get_document');
+    assert.equal(params['name'], 'get_multiple_documents', 'tool name must be get_multiple_documents');
     const args = params['arguments'] as Record<string, unknown>;
-    assert.equal(args['documentId'], docId, 'must pass documentId, not id');
-    assert.ok(!('id' in args), 'must NOT pass an "id" field');
+    assert.deepEqual(args['ids'], [docId], 'must pass ids array');
+    assert.equal(results.length, 1);
+    assert.equal(results[0].id, docId);
+    assert.equal(results[0].document, '# Transcript');
+  });
+
+  it('getDocument (deprecated) wraps getMultipleDocuments', async () => {
+    const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: mcpToolEnvelope({ results: [{ id: docId, document: '# Transcript' }] }),
+    });
+
+    const result = await client.getDocument(docId);
+
+    assert.equal(result.documentId, docId);
+    assert.equal(result.document, '# Transcript');
   });
 });
 
