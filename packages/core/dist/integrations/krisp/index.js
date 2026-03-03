@@ -50,20 +50,26 @@ export async function pullKrisp(storage, workspaceRoot, paths, days) {
     const meetings = await client.listMeetings({ after, before });
     let saved = 0;
     const errors = [];
+    // Batch-fetch full documents (transcript + notes) for all meetings
+    const docMap = new Map();
+    const idsToFetch = meetings
+        .filter(m => m.meeting_id)
+        .map(m => m.meeting_id);
+    if (idsToFetch.length > 0) {
+        try {
+            const docs = await client.getMultipleDocuments(idsToFetch);
+            for (const doc of docs) {
+                if (doc.document)
+                    docMap.set(doc.id, doc.document);
+            }
+        }
+        catch {
+            // Document fetch failed — proceed with search_meetings data only
+        }
+    }
     for (const m of meetings) {
         try {
-            // Fetch transcript via getDocument if Krisp returned a reference
-            let transcriptText = '';
-            if (m.transcript && !Array.isArray(m.transcript) && typeof m.transcript === 'object' && 'status' in m.transcript) {
-                // Krisp returns transcript as a reference — fetch via getDocument using meeting_id
-                try {
-                    const doc = await client.getDocument(m.meeting_id);
-                    transcriptText = doc.document ?? '';
-                }
-                catch {
-                    // Transcript fetch failed — proceed without it
-                }
-            }
+            const transcriptText = docMap.get(m.meeting_id) ?? '';
             const meeting = meetingFromKrisp(m, transcriptText);
             const fullPath = await saveMeetingFile(storage, meeting, outputDir, DEFAULT_TEMPLATE, { integration: 'Krisp', force: false });
             if (fullPath)

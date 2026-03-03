@@ -8,7 +8,7 @@
  */
 import type { StorageAdapter } from '../../storage/adapter.js';
 import { type KrispCredentials } from './config.js';
-import type { KrispMeeting, KrispDocument } from './types.js';
+import type { KrispMeeting, KrispDocument, KrispDocumentResult } from './types.js';
 /**
  * Krisp MCP client.
  *
@@ -80,7 +80,12 @@ export declare class KrispMcpClient {
         offset?: number;
     }): Promise<KrispMeeting[]>;
     /**
-     * Fetch a document by its 32-character hex ID.
+     * Fetch one or more documents by their 32-character hex IDs.
+     * Returns full transcript, notes, action items, and decisions.
+     */
+    getMultipleDocuments(ids: string[]): Promise<KrispDocumentResult[]>;
+    /**
+     * @deprecated Use getMultipleDocuments instead — get_document was removed from Krisp MCP.
      */
     getDocument(documentId: string): Promise<KrispDocument>;
 }
