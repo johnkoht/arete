@@ -1,6 +1,6 @@
 /**
  * Krisp MCP integration types.
- * Verified against live API responses 2026-02-21
+ * Updated against live API responses 2026-03-02
  */
 export {};
 //# sourceMappingURL=types.js.map

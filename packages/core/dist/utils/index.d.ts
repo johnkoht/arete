@@ -9,4 +9,5 @@ export { buildContextDumpArtifacts, buildContextDumpQualityReport, } from './con
 export type { ContextDumpInput, ContextDumpInputType, ContextDumpArtifact, ContextDumpQualityReport, } from './context-dump-quality.js';
 export { findAvailableSlots } from './availability.js';
 export type { AvailableSlot, FindAvailableSlotsOptions, } from './availability.js';
+export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
 //# sourceMappingURL=index.d.ts.map

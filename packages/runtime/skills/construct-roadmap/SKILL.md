@@ -12,6 +12,12 @@ project_template: roadmap
 intelligence:
   - context_injection
 requires_briefing: false
+integration:
+  outputs:
+    - type: project
+      path: "projects/active/{name}-roadmap/"
+      template: roadmap
+      index: true
 ---
 
 # Construct Roadmap Skill
@@ -295,8 +301,7 @@ After finalizing:
 
 1. Consider updating `goals/strategy.md` if roadmap reflects strategic shifts
 2. Log major prioritization decisions to `.arete/memory/items/decisions.md`
-3. Run `arete index` to make the roadmap immediately searchable
-4. Set calendar for roadmap review
+3. Set calendar for roadmap review
 
 ## Roadmap Best Practices
 

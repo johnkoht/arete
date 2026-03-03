@@ -27,3 +27,8 @@ export type {
   AvailableSlot,
   FindAvailableSlotsOptions,
 } from './availability.js';
+export {
+  generateIntegrationSection,
+  injectIntegrationSection,
+  deriveIntegrationFromLegacy,
+} from './integration.js';

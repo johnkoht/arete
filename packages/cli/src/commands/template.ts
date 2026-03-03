@@ -3,6 +3,7 @@
  */
 
 import { createServices, TEMPLATE_REGISTRY, resolveTemplatePath, resolveTemplateContent } from '@arete/core';
+import { access } from 'node:fs/promises';
 import type { Command } from 'commander';
 import { join, relative } from 'path';
 import { header, section, listItem, error, info } from '../formatters.js';
@@ -34,20 +35,9 @@ export function registerTemplateCommands(program: Command): void {
       const skillId = opts.skill;
       const variant = opts.variant;
 
-      // Validate against registry
+      // Validate against registry only for known skills; community skills bypass registry validation
       const knownVariants = TEMPLATE_REGISTRY[skillId];
-      if (!knownVariants) {
-        const known = Object.keys(TEMPLATE_REGISTRY).join(', ');
-        if (opts.json) {
-          console.log(JSON.stringify({ success: false, error: `Unknown skill: ${skillId}. Known skills: ${known}` }));
-        } else {
-          error(`Unknown skill: ${skillId}`);
-          info(`Known skills: ${known}`);
-        }
-        process.exit(1);
-      }
-
-      if (!knownVariants.includes(variant)) {
+      if (knownVariants && !knownVariants.includes(variant)) {
         if (opts.json) {
           console.log(JSON.stringify({ success: false, error: `Unknown variant '${variant}' for skill '${skillId}'. Known: ${knownVariants.join(', ')}` }));
         } else {
@@ -86,6 +76,22 @@ export function registerTemplateCommands(program: Command): void {
           info('Install or update the workspace to restore skill defaults: arete update');
         }
         process.exit(1);
+      }
+
+      // Check if resolved path is a workspace override and skill-local template also exists
+      const workspaceOverridePath = join(root, 'templates', 'outputs', skillId, `${variant}.md`);
+      const skillLocalPath = join(root, '.agents', 'skills', skillId, 'templates', `${variant}.md`);
+      const isWorkspaceOverride = result.path === workspaceOverridePath;
+      if (isWorkspaceOverride) {
+        try {
+          await access(skillLocalPath);
+          // Skill-local also exists — notify about override
+          if (!opts.json) {
+            info(`Note: Workspace override is active. Skill template also exists at: ${skillLocalPath}`);
+          }
+        } catch {
+          // Skill-local does not exist; no notification needed
+        }
       }
 
       const relPath = relative(root, result.path);

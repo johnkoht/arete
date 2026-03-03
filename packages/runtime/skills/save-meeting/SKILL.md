@@ -3,6 +3,11 @@ name: save-meeting
 description: Save pasted meeting content (summary, transcript, URL) to resources/meetings. Use when the user pastes meeting content and wants to save it, or says "save this meeting".
 work_type: operations
 category: essential
+integration:
+  outputs:
+    - type: resource
+      path: "resources/meetings/{name}.md"
+      index: true
 ---
 
 # Save Meeting Skill
@@ -89,7 +94,7 @@ Report the result:
 - **Skipped**: "Meeting file already exists (same date and title)."
 - **Error**: Share the error message and suggest fixes.
 
-After saving, run `arete index` to make the content immediately searchable by other skills (brief, meeting-prep, context).
+
 
 ## Example
 

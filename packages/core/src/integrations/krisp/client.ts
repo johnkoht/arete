@@ -16,7 +16,7 @@ import {
   saveKrispCredentials,
   type KrispCredentials,
 } from './config.js';
-import type { KrispMeeting, KrispDocument } from './types.js';
+import type { KrispMeeting, KrispDocument, KrispDocumentResult } from './types.js';
 
 const AUTH_BASE = 'https://api.krisp.ai/platform/v1/oauth2';
 const REGISTRATION_URL = 'https://mcp.krisp.ai/.well-known/oauth-registration';
@@ -515,10 +515,22 @@ export class KrispMcpClient {
   }
 
   /**
-   * Fetch a document by its 32-character hex ID.
+   * Fetch one or more documents by their 32-character hex IDs.
+   * Returns full transcript, notes, action items, and decisions.
+   */
+  async getMultipleDocuments(ids: string[]): Promise<KrispDocumentResult[]> {
+    if (ids.length === 0) return [];
+    const result = await this.callTool('get_multiple_documents', { ids });
+    const wrapped = result as { results?: KrispDocumentResult[] };
+    return wrapped.results ?? [];
+  }
+
+  /**
+   * @deprecated Use getMultipleDocuments instead — get_document was removed from Krisp MCP.
    */
   async getDocument(documentId: string): Promise<KrispDocument> {
-    const result = await this.callTool('get_document', { documentId });
-    return result as KrispDocument;
+    const results = await this.getMultipleDocuments([documentId]);
+    const match = results.find(r => r.id === documentId);
+    return { documentId, document: match?.document ?? undefined };
   }
 }

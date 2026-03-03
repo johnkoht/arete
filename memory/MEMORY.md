@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-02: [skill-integration-hooks-learnings](entries/2026-03-02_skill-integration-hooks-learnings.md) — Skill integration hooks: behavioral context injection for community + native skills. 11/11 tasks, 1 iteration, +67 tests, 0/8 pre-mortem risks materialized. Pure function utils pattern, sentinel markers, root-level file deployment bug fix.
 - 2026-03-02: [agent-experts-learnings](entries/2026-03-02_agent-experts-learnings.md) — Agent experts BUILD mode context refactor: monolithic context (409 lines, triple duplication) → composition model (186 lines planner + expertise profiles + roles). 9/9 tasks, 1 iteration, 10 commits, 0/8 pre-mortem risks materialized.
 - 2026-03-01: [people-intelligence-learnings](entries/2026-03-01_people-intelligence-learnings.md) — People intelligence: stances (LLM), action items (regex + lifecycle), relationship health, enriched meeting prep. 9/9 tasks, 0 iterations, +120 tests, 0/10 pre-mortem risks. `callLLM` DI pattern, mandatory refactor-first for God Objects, parallel task execution.
 - 2026-02-25: [calendar-events-learnings](entries/2026-02-25_calendar-events-learnings.md) — Calendar event creation: `arete calendar create` command + schedule-meeting skill. 5/5 tasks, 0 iterations, +57 tests, 0/9 pre-mortem risks materialized. DI patterns, testing integrated with implementation, skill format via existing examples.

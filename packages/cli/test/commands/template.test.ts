@@ -72,12 +72,15 @@ describe('template resolve command', () => {
     assert.ok(result.resolvedPath.includes('templates/outputs/create-prd/prd-regular.md'), '--path should point to the workspace override, not skill-local');
   });
 
-  it('exits with error for unknown skill', () => {
+  it('exits with error for unknown skill (template not found)', () => {
+    // Community/unknown skills bypass registry validation and go through filesystem probe.
+    // Since no template file exists for a nonexistent skill, the command fails with
+    // "No template found" rather than "Unknown skill".
     const output = runCliRaw(['template', 'resolve', '--skill', 'nonexistent-skill', '--variant', 'prd-regular', '--json'], { cwd: workspaceDir });
     const result = JSON.parse(output.stdout) as { success: boolean; error: string };
 
     assert.equal(result.success, false);
-    assert.ok(result.error.includes('Unknown skill'));
+    assert.ok(result.error.includes('No template found'), `expected "No template found" but got: ${result.error}`);
   });
 
   it('exits with error for unknown variant', () => {

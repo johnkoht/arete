@@ -12,6 +12,12 @@ intelligence:
   - context_injection
   - memory_retrieval
 requires_briefing: false
+integration:
+  outputs:
+    - type: project
+      path: "projects/active/{name}-discovery/"
+      template: discovery
+      index: true
 ---
 
 # Discovery Skill
@@ -144,7 +150,7 @@ arete template resolve --skill discovery --variant user-feedback
 
 If the user has dropped multiple files into `inputs/`, use the **research_intake** pattern from PATTERNS.md.
 
-**Quick summary**: Scan inputs → analyze each → synthesize themes → update README → run `arete index` → cleanup intermediate files.
+**Quick summary**: Scan inputs → analyze each → synthesize themes → update README → cleanup intermediate files.
 
 See [PATTERNS.md](../PATTERNS.md) § research_intake for the full workflow.
 
@@ -232,8 +238,7 @@ When discovery is complete:
 1. Review findings with user
 2. Identify context updates (users, competitive landscape, etc.)
 3. Log key learnings to `.arete/memory/items/learnings.md`
-4. Run `arete index` to make all saved research and findings immediately searchable
-5. Use `finalize-project` skill to archive
+4. Use `finalize-project` skill to archive
 
 ## Anti-patterns
 

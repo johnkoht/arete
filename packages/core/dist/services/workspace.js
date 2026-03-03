@@ -8,6 +8,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
 import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST, } from '../workspace-structure.js';
 import { loadConfig, getDefaultConfig } from '../config.js';
+import { SkillService } from './skills.js';
+import { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from '../utils/integration.js';
 export class WorkspaceService {
     storage;
     constructor(storage) {
@@ -133,6 +135,32 @@ export class WorkspaceService {
                             result.errors.push({
                                 type: 'skill',
                                 path: name,
+                                error: err.message,
+                            });
+                        }
+                    }
+                }
+                // Copy root-level .md files (skip if exists — consistent with create() skip-if-exists behavior)
+                const rootMdFiles = await this.storage.list(sourcePaths.skills, { extensions: ['.md'] });
+                for (const src of rootMdFiles) {
+                    const filename = src.split(/[/\\]/).pop() ?? '';
+                    if (!filename)
+                        continue;
+                    const dest = join(paths.agentSkills, filename);
+                    const destExists = await this.storage.exists(dest);
+                    if (!destExists) {
+                        try {
+                            await this.storage.mkdir(paths.agentSkills);
+                            const content = await this.storage.read(src);
+                            if (content !== null) {
+                                await this.storage.write(dest, content);
+                                result.files.push(join('.agents', 'skills', filename));
+                            }
+                        }
+                        catch (err) {
+                            result.errors.push({
+                                type: 'file',
+                                path: filename,
                                 error: err.message,
                             });
                         }
@@ -295,6 +323,33 @@ export class WorkspaceService {
             result.updated.push(...syncResult.updated);
             result.preserved.push(...syncResult.preserved);
         }
+        // Regenerate integration sections in all installed skills (unconditional).
+        // Runs independently of options.sourcePaths so community/external skills benefit too.
+        {
+            const agentSkillsExists = await this.storage.exists(paths.agentSkills);
+            if (agentSkillsExists) {
+                const skillDirs = await this.storage.listSubdirectories(paths.agentSkills);
+                const skillService = new SkillService(this.storage);
+                for (const skillDir of skillDirs) {
+                    try {
+                        const info = await skillService.getInfo(skillDir);
+                        const integration = info.integration ?? deriveIntegrationFromLegacy(info);
+                        if (!integration)
+                            continue;
+                        const section = generateIntegrationSection(info.id, integration);
+                        const skillMdPath = join(skillDir, 'SKILL.md');
+                        const content = await this.storage.read(skillMdPath);
+                        if (content === null)
+                            continue;
+                        const injected = injectIntegrationSection(content, section);
+                        await this.storage.write(skillMdPath, injected);
+                    }
+                    catch {
+                        // Non-fatal: skip skill on error
+                    }
+                }
+            }
+        }
         // Backfill missing tools and missing files within existing tools.
         // Uses file-level backfill (mirrors template backfill pattern below) so that partial
         // tool directories (e.g. onboarding/ exists but templates/ subdir is absent) get
@@ -451,6 +506,27 @@ export class WorkspaceService {
             }
             else {
                 added.push(skillName);
+            }
+        }
+        // Copy root-level .md files to target (always overwrite — consistent with copyDirectory behavior for core content)
+        const rootMdFiles = await this.storage.list(sourceSkillsDir, { extensions: ['.md'] });
+        for (const src of rootMdFiles) {
+            // Safety: only files directly in the root (no extra path separator after sourceSkillsDir)
+            const rel = src.slice(sourceSkillsDir.length).replace(/^[/\\]/, '');
+            if (rel.includes('/') || rel.includes('\\'))
+                continue;
+            const filename = rel;
+            if (!filename)
+                continue;
+            const dest = join(targetSkillsDir, filename);
+            try {
+                const content = await this.storage.read(src);
+                if (content !== null) {
+                    await this.storage.write(dest, content);
+                }
+            }
+            catch {
+                // Non-fatal: skip individual file on error
             }
         }
         return { added, updated, preserved };

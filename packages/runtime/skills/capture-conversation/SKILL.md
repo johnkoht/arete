@@ -13,6 +13,11 @@ triggers:
   - save slack thread
   - save slack
   - capture slack
+integration:
+  outputs:
+    - type: resource
+      path: "resources/conversations/{name}.md"
+      index: true
 ---
 
 # Capture Conversation Skill
@@ -191,7 +196,7 @@ Report the result:
 - **Already exists**: Check if the file already exists before writing. If so, ask: "A conversation with this title and date already exists. Save with a different title, or overwrite?"
 - **Error**: Share the error and suggest fixes.
 
-After saving, run `arete index` to make the conversation immediately searchable by other skills (brief, meeting-prep, context).
+
 
 ### 8. People Processing (if mode is `ask` or `on`)
 

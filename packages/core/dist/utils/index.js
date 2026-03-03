@@ -7,4 +7,5 @@ export { renderTemplate, renderTemplateString, resolveTemplatePath, resolveTempl
 export { checkDuplicate } from './dedup.js';
 export { buildContextDumpArtifacts, buildContextDumpQualityReport, } from './context-dump-quality.js';
 export { findAvailableSlots } from './availability.js';
+export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
 //# sourceMappingURL=index.js.map

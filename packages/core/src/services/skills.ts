@@ -10,14 +10,50 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type {
   SkillDefinition,
+  SkillIntegration,
+  SkillIntegrationOutput,
   InstallSkillOptions,
   InstallSkillResult,
   SkillCategory,
   WorkType,
 } from '../models/index.js';
 import type { WorkspacePaths } from '../models/index.js';
+import {
+  generateIntegrationSection,
+  injectIntegrationSection,
+  deriveIntegrationFromLegacy,
+} from '../utils/integration.js';
 
 const ARETE_META_FILENAME = '.arete-meta.yaml';
+
+/**
+ * Defensively parse an integration value from YAML.
+ * Returns undefined if the value is missing, not an object, or has a malformed
+ * outputs array (i.e. outputs is present but not an array).
+ */
+function parseIntegration(value: unknown): SkillIntegration | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+
+  let outputs: SkillIntegrationOutput[] | undefined;
+  if (raw.outputs !== undefined) {
+    if (!Array.isArray(raw.outputs)) return undefined;
+    outputs = raw.outputs as SkillIntegrationOutput[];
+  }
+
+  let contextUpdates: string[] | undefined;
+  if (Array.isArray(raw.contextUpdates)) {
+    contextUpdates = raw.contextUpdates as string[];
+  } else if (Array.isArray(raw.context_updates)) {
+    contextUpdates = raw.context_updates as string[];
+  }
+
+  const result: SkillIntegration = {};
+  if (outputs !== undefined) result.outputs = outputs;
+  if (contextUpdates !== undefined) result.contextUpdates = contextUpdates;
+  return result;
+}
 
 function readSkillFrontmatter(content: string): Record<string, unknown> {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -111,6 +147,10 @@ export class SkillService {
 
     const merged = { ...fm, ...sidecar } as Record<string, unknown>;
 
+    // Integration: sidecar replaces frontmatter entirely (same merge pattern)
+    const integration =
+      parseIntegration(merged.integration);
+
     return {
       id,
       name,
@@ -124,6 +164,7 @@ export class SkillService {
       requiresBriefing: (merged.requires_briefing as boolean) ?? requiresBriefing,
       createsProject: (merged.creates_project as boolean) ?? createsProject,
       projectTemplate: (merged.project_template as string) ?? projectTemplate,
+      integration,
     };
   }
 
@@ -214,6 +255,9 @@ export class SkillService {
             if (hasSkill && !hasMeta) {
               const meta = await this.buildAreteMeta(p);
               await this.storage.write(metaFile, stringifyYaml(meta));
+            }
+            if (hasSkill) {
+              await this.injectIntegrationIntoSkill(p);
             }
             installedPath = p;
             installedName = name;
@@ -317,11 +361,34 @@ export class SkillService {
     await this.storage.write(metaFile, stringifyYaml(meta));
 
     const info = await this.getInfo(destDir);
+    const integration = info.integration ?? deriveIntegrationFromLegacy(info);
+    if (integration) {
+      const section = generateIntegrationSection(info.id, integration);
+      const skillMdPath = join(destDir, 'SKILL.md');
+      const content = await this.storage.read(skillMdPath);
+      if (content !== null) {
+        const injected = injectIntegrationSection(content, section);
+        await this.storage.write(skillMdPath, injected);
+      }
+    }
+
     return {
       installed: true,
       path: destDir,
       name: info.name ?? skillName,
     };
+  }
+
+  private async injectIntegrationIntoSkill(skillPath: string): Promise<void> {
+    const info = await this.getInfo(skillPath);
+    const integration = info.integration ?? deriveIntegrationFromLegacy(info);
+    if (!integration) return;
+    const section = generateIntegrationSection(info.id, integration);
+    const skillMdPath = join(skillPath, 'SKILL.md');
+    const content = await this.storage.read(skillMdPath);
+    if (content === null) return;
+    const injected = injectIntegrationSection(content, section);
+    await this.storage.write(skillMdPath, injected);
   }
 
   private async buildAreteMeta(skillPath: string): Promise<Record<string, unknown>> {

@@ -425,11 +425,23 @@ export class KrispMcpClient {
         return wrapped.meetings ?? wrapped.results ?? [];
     }
     /**
-     * Fetch a document by its 32-character hex ID.
+     * Fetch one or more documents by their 32-character hex IDs.
+     * Returns full transcript, notes, action items, and decisions.
+     */
+    async getMultipleDocuments(ids) {
+        if (ids.length === 0)
+            return [];
+        const result = await this.callTool('get_multiple_documents', { ids });
+        const wrapped = result;
+        return wrapped.results ?? [];
+    }
+    /**
+     * @deprecated Use getMultipleDocuments instead — get_document was removed from Krisp MCP.
      */
     async getDocument(documentId) {
-        const result = await this.callTool('get_document', { documentId });
-        return result;
+        const results = await this.getMultipleDocuments([documentId]);
+        const match = results.find(r => r.id === documentId);
+        return { documentId, document: match?.document ?? undefined };
     }
 }
 //# sourceMappingURL=client.js.map

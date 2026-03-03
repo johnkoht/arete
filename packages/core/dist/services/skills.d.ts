@@ -12,6 +12,7 @@ export declare class SkillService {
     get(name: string, workspaceRoot: string): Promise<SkillDefinition | null>;
     getInfo(skillPath: string): Promise<SkillDefinition>;
     install(source: string, options: InstallSkillOptions): Promise<InstallSkillResult>;
+    private injectIntegrationIntoSkill;
     private buildAreteMeta;
 }
 //# sourceMappingURL=skills.d.ts.map

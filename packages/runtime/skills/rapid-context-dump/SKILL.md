@@ -4,6 +4,11 @@ description: Quickly bootstrap workspace context from docs, website, or pasted c
 category: core
 work_type: activation
 requires_briefing: false
+integration:
+  outputs:
+    - type: resource
+      path: "context/{name}.md"
+      index: true
 triggers:
   - "dump my context"
   - "import my docs"
@@ -307,7 +312,7 @@ To promote: "promote [filename]" or edit the file and remove the [DRAFT] header.
 Files remain drafts until you explicitly promote them.
 ```
 
-After all files are saved (draft or promoted), run `arete index` to make the context immediately searchable by brief, meeting-prep, and other skills.
+
 
 ---
 
