@@ -188,6 +188,61 @@ describe('resolveTemplatePath', () => {
   });
 });
 
+describe('resolveTemplatePath — community skills (not in TEMPLATE_REGISTRY)', () => {
+  it('resolves skill-local template for community skill when no workspace override exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-community-'));
+    try {
+      const skillId = 'my-community-skill';
+      assert.equal(TEMPLATE_REGISTRY[skillId], undefined, 'Precondition: skill must not be in registry');
+
+      const skillLocalPath = join(root, '.agents', 'skills', skillId, 'templates', 'report.md');
+      await mkdir(join(root, '.agents', 'skills', skillId, 'templates'), { recursive: true });
+      await writeFile(skillLocalPath, '# Community Report\n', 'utf-8');
+
+      const result = await resolveTemplatePath(root, skillId, 'report');
+      assert.equal(result, skillLocalPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('workspace override wins over skill-local for community skill', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-community-'));
+    try {
+      const skillId = 'my-community-skill';
+      assert.equal(TEMPLATE_REGISTRY[skillId], undefined, 'Precondition: skill must not be in registry');
+
+      // Create skill-local template
+      const skillLocalPath = join(root, '.agents', 'skills', skillId, 'templates', 'report.md');
+      await mkdir(join(root, '.agents', 'skills', skillId, 'templates'), { recursive: true });
+      await writeFile(skillLocalPath, '# Skill Report\n', 'utf-8');
+
+      // Create workspace override
+      const overridePath = join(root, 'templates', 'outputs', skillId, 'report.md');
+      await mkdir(join(root, 'templates', 'outputs', skillId), { recursive: true });
+      await writeFile(overridePath, '# My Custom Report\n', 'utf-8');
+
+      const result = await resolveTemplatePath(root, skillId, 'report');
+      assert.equal(result, overridePath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null for community skill when no template exists at any level', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'arete-community-'));
+    try {
+      const skillId = 'my-community-skill';
+      assert.equal(TEMPLATE_REGISTRY[skillId], undefined, 'Precondition: skill must not be in registry');
+
+      const result = await resolveTemplatePath(root, skillId, 'report');
+      assert.equal(result, null);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('TEMPLATE_REGISTRY', () => {
   it('contains all expected skills', () => {
     const skills = Object.keys(TEMPLATE_REGISTRY);

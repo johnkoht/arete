@@ -52,7 +52,21 @@ PRD execution for skill integration hooks — behavioral context injection syste
 2. **Batch task sizing**: Tasks touching 5+ files should either provide more concise prompts or be split into batches
 3. **Keep pure-function-first pattern**: Extracting logic as standalone utils before wiring into services worked extremely well for testability and service boundary management
 
+## Validation Gate (R9): PASSED
+
+Manually tested with two skills in a fresh workspace (`/tmp/arete-integration-test`):
+
+| Signal | Breadboarding (community) | Competitive Analysis (native) |
+|--------|--------------------------|-------------------------------|
+| Correct save location | ✅ `resources/breadboards/user-onboarding-flow.md` | ✅ `projects/active/meeting-intelligence-competitive-analysis/` |
+| Used template | N/A (resource) | ✅ analysis template with `working/competitor-profiles/` |
+| Attempted `arete index` | ✅ (sandbox blocked) | ✅ (export cut off but project created) |
+| Integration section followed | ✅ | ✅ |
+
+**Observation**: Skill router failed on both prompts (returned `onboarding` and `daily-plan`) — agents self-corrected. Router is a separate issue, not related to integration hooks.
+
 ## Learnings
 
 - **Root-level skill file deployment was a pre-existing bug**: Both `create()` and `syncCoreSkills()` used `listSubdirectories()` which only copied skill folders, not root-level `.md` files like PATTERNS.md and README.md. Fixed as part of this PRD. If you discover infrastructure bugs during feature work, fix them in the same PR when they're small and related.
 - **Schema validation before coding is high-ROI**: 1 hour of pre-work (writing YAML profiles for all 9 skills) prevented potential days of schema redesign mid-implementation.
+- **Skill router needs attention**: Both test prompts were misrouted. The integration hooks work regardless because agents read SKILL.md directly, but router quality affects first-touch experience.
