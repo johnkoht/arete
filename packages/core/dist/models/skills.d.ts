@@ -4,6 +4,20 @@
  * Imports from common.ts ONLY.
  */
 import type { ProductPrimitive, SkillCategory, WorkType } from './common.js';
+/** Output type for a skill integration profile */
+export type SkillIntegrationOutputType = 'project' | 'resource' | 'context' | 'none';
+/** Describes a single output produced by a skill */
+export type SkillIntegrationOutput = {
+    type: SkillIntegrationOutputType;
+    path?: string;
+    template?: string;
+    index?: boolean;
+};
+/** Integration profile for a skill — how it interacts with Areté's intelligence layer */
+export type SkillIntegration = {
+    outputs?: SkillIntegrationOutput[];
+    contextUpdates?: string[];
+};
 /** Full skill definition with all metadata */
 export type SkillDefinition = {
     id: string;
@@ -18,6 +32,7 @@ export type SkillDefinition = {
     requiresBriefing?: boolean;
     createsProject?: boolean;
     projectTemplate?: string;
+    integration?: SkillIntegration;
 };
 /** Skill metadata extracted from frontmatter */
 export type SkillMetadata = {
@@ -31,6 +46,7 @@ export type SkillMetadata = {
     requiresBriefing?: boolean;
     createsProject?: boolean;
     projectTemplate?: string;
+    integration?: SkillIntegration;
 };
 /** Skill candidate for routing (maps to ExtendedSkillCandidate) */
 export type SkillCandidate = {

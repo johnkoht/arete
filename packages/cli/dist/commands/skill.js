@@ -100,21 +100,50 @@ export function registerSkillCommands(program) {
             }
             process.exit(1);
         }
+        // Fetch skill info once — used for JSON output, integration guidance, and overlap detection.
+        const installedSkill = await services.skills.get(result.name, root);
+        const integration = installedSkill?.integration;
         if (opts.json) {
+            const integrationSummary = integration?.outputs?.length
+                ? {
+                    outputs: integration.outputs.map((o) => ({
+                        type: o.type,
+                        ...(o.path !== undefined ? { path: o.path } : {}),
+                        ...(o.index !== undefined ? { index: o.index } : {}),
+                    })),
+                }
+                : undefined;
             console.log(JSON.stringify({
                 success: true,
                 skill: result.name,
                 path: result.path,
+                ...(integrationSummary ? { integration: integrationSummary } : {}),
             }, null, 2));
             return;
         }
         success(`Installed skill: ${result.name}`);
         listItem('Location', formatPath(result.path));
+        // Print integration summary when the skill has an integration profile.
+        if (integration?.outputs?.length) {
+            const firstOutput = integration.outputs[0];
+            console.log('');
+            listItem('Output type', firstOutput.type);
+            if (firstOutput.path) {
+                listItem('Output path', firstOutput.path);
+            }
+            if (integration.outputs.some((o) => o.index)) {
+                info('Run `arete index` after using this skill to keep search up to date.');
+            }
+        }
+        console.log('');
+        // Guidance is always printed — even with --yes (it's informational, not interactive).
+        const skillDirName = basename(result.path);
+        info(`Edit .agents/skills/${skillDirName}/.arete-meta.yaml to customize integration, or ask an agent to help set it up.`);
         console.log('');
         if (opts.yes) {
             return;
         }
-        const installedSkill = await services.skills.get(result.name, root);
+        // installedSkill may be null if the skill dir vanished; guard before overlap detection.
         if (!installedSkill) {
             return;
         }
