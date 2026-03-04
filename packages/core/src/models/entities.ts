@@ -159,3 +159,44 @@ export type EntityRelationship = {
   type: RelationshipType;
   evidence?: string;
 };
+
+// ---------------------------------------------------------------------------
+// Commitments domain
+// ---------------------------------------------------------------------------
+
+/** Lifecycle status of a commitment */
+export type CommitmentStatus = 'open' | 'resolved' | 'dropped';
+
+/**
+ * Direction of a commitment relative to the user.
+ *
+ * Defined here in models (parallel to ActionItemDirection in services) to
+ * avoid circular imports between models and services.
+ */
+export type CommitmentDirection = 'i_owe_them' | 'they_owe_me';
+
+/**
+ * A tracked commitment between the user and another person.
+ *
+ * `date` — meeting/source date (when the commitment was made).
+ * `resolvedAt` — ISO date string set when the commitment is resolved or dropped.
+ *   Null means the commitment is still open and must NOT be pruned.
+ *   A commitment from months ago resolved yesterday will have a recent `resolvedAt`
+ *   and must be retained; pruning logic must use `resolvedAt`, never `date`.
+ */
+export type Commitment = {
+  id: string;
+  text: string;
+  direction: CommitmentDirection;
+  personSlug: string;
+  personName: string;
+  source: string;
+  date: string;
+  status: CommitmentStatus;
+  resolvedAt: string | null;
+};
+
+/** Persisted commitments file structure */
+export type CommitmentsFile = {
+  commitments: Commitment[];
+};

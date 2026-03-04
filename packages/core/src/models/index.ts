@@ -90,6 +90,10 @@ export type {
   EntityMention,
   RelationshipType,
   EntityRelationship,
+  CommitmentStatus,
+  CommitmentDirection,
+  Commitment,
+  CommitmentsFile,
 } from './entities.js';
 
 // Intelligence domain
