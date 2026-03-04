@@ -63,6 +63,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **`confirm()` from `@inquirer/prompts` uses dynamic import** (2026-03-03): `confirm` was not previously used in the CLI codebase (only `checkbox` and `input`). First established in `commitments.ts` for the destructive `resolve` confirmation. Use a dynamic import: `const { confirm } = await import('@inquirer/prompts')`. This avoids top-level import issues and is consistent with how `checkbox` is used elsewhere. Pattern: always pair with a `--yes` flag to bypass for scripting/JSON mode. Check `opts.yes || opts.json` before calling — JSON mode callers must not block on stdin. See `packages/cli/src/commands/commitments.ts` `resolveCmd` action.
 
+- **`arete people memory refresh` must pass `commitments: services.commitments` to `refreshPersonMemory()`** (2026-03-04): The `commitments` option in `RefreshPersonMemoryOptions` is the gate for the entire 7-step CommitmentsService sync inside `entity.ts`. Without it, action items are rendered as plain text in person files but `CommitmentsService.sync()` is never called — so `.arete/commitments.json` stays empty and `arete commitments list` returns nothing. The CLI command had this option missing on launch. Symptom: items visible in person memory (`### Open Items (I owe them)`), invisible to `arete commitments list`. Fix: add `commitments: services.commitments` to the `refreshPersonMemory()` call in `people.ts`.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

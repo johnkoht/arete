@@ -335,6 +335,7 @@ export function registerPeopleCommands(program) {
             minMentions,
             ifStaleDays,
             dryRun: opts.dryRun,
+            commitments: services.commitments,
         });
         // Auto-refresh qmd index after writes (skip if nothing updated or dry-run)
         let qmdResult;
