@@ -12,6 +12,13 @@ triggers:
   - fetch fathom
   - fathom recording
   - pull fathom
+  - pull from krisp
+  - krisp integration
+  - fetch krisp
+  - krisp recording
+  - pull krisp
+  - fetch my latest recording
+  - fetch my latest krisp recording
 ---
 
 # Sync Skill
@@ -66,13 +73,14 @@ Write data from Areté to external system.
 
 First, check which integrations are configured:
 
-1. Read `.cursor/integrations/registry.md` for available integrations
-2. Confirm the requested integration is **Active** status
-3. Read the integration config at `.cursor/integrations/configs/[name].yaml`
+1. Run `arete integration list --json` to get live status for all integrations
+2. Confirm the requested integration is **active** status in the output
+3. If you need configuration details (field mapping, naming, auth type), read `.cursor/integrations/configs/[name].yaml`
 
 If integration is not active:
-- Guide user to configure it first
-- Check for authentication requirements
+- Tell the user which integration they need to configure
+- Provide the setup command (e.g. `arete integration configure krisp`)
+- Do not attempt to pull — authentication will fail
 
 ### 2. Determine Sync Parameters
 
@@ -216,6 +224,44 @@ Use a **numeric** recording ID (e.g. `12345`), not the literal `<recording_id>`.
 2. For each file, read frontmatter for `recording_id` or a Fathom URL (e.g. `fathom.video`, `share_url`); extract recording ID from URL if needed.
 3. For each meeting with a Fathom ID, run `arete fathom get <recording_id>`. The integration fetches summary and transcript and saves (overwrites/updates the file); the meetings service updates `resources/meetings/index.md` automatically.
 4. After all fetches, run post-sync actions (registry, extract decisions/learnings if applicable).
+
+### Krisp (Meeting Recorder)
+
+**Pull capabilities**:
+- Meeting summaries with AI-generated notes
+- Full transcripts with speaker attribution
+- Action items and key points
+- Attendee information
+
+**Useful commands**:
+- "Pull my Krisp meetings from this week"
+- "Fetch my latest Krisp recording"
+- "Import yesterday's Krisp call"
+
+**Data mapping**:
+- Destination: `resources/meetings/`
+- Naming: `{date}-{title_slug}.md`
+- Template: `templates/inputs/integration-meeting.md`
+
+**API Script** (for agent execution):
+```bash
+# Pull last N days (default 7)
+arete pull krisp --days 7
+
+# Pull only today's recordings
+arete pull krisp --days 1
+```
+
+**If not configured** (`arete integration list --json` shows status ≠ `active`):
+```
+Krisp isn't connected yet. Run:
+  arete integration configure krisp
+
+This opens a browser to authorize Areté with your Krisp account.
+Note: Requires a Krisp Core plan or higher.
+```
+
+**After pulling**: Run the `process-meetings` skill (or suggest it) to extract people, decisions, learnings, and refresh person memory from the newly saved files.
 
 ### Notion (Documentation)
 
