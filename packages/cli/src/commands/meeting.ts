@@ -10,14 +10,23 @@ import {
   slugifyPersonName,
   PEOPLE_CATEGORIES,
   refreshQmdIndex,
+  buildMeetingExtractionPrompt,
+  parseMeetingExtractionResponse,
 } from '@arete/core';
-import type { MeetingForSave, PersonCategory, QmdRefreshResult } from '@arete/core';
+import type {
+  MeetingForSave,
+  PersonCategory,
+  QmdRefreshResult,
+  MeetingIntelligence,
+  ValidationWarning,
+} from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { success, error, info, warn } from '../formatters.js';
+import { success, error, info, warn, header, listItem, section } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
+import { createLLMClient } from '../lib/llm.js';
 
 type AttendeeCandidate = {
   name?: string;
@@ -335,6 +344,171 @@ export function registerMeetingCommands(program: Command): void {
       }
       displayQmdResult(qmdResult);
     });
+
+  // --- Extract command ---
+  meetingCmd
+    .command('extract <file>')
+    .description('Extract meeting intelligence (summary, action items, decisions) from a meeting file')
+    .option('--json', 'Output as JSON')
+    .action(async (file: string, opts: { json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      // Resolve file path
+      const meetingPath = file.startsWith('/') ? file : join(root, file);
+      const content = await services.storage.read(meetingPath);
+      if (!content) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, file: meetingPath, error: 'Meeting file not found' }));
+        } else {
+          error(`Meeting file not found: ${meetingPath}`);
+        }
+        process.exit(1);
+      }
+
+      // Extract transcript and attendees from meeting content
+      const { frontmatter, body } = extractFrontmatter(content);
+      const transcript = extractTranscriptSection(body);
+      if (!transcript) {
+        if (opts.json) {
+          console.log(JSON.stringify({ 
+            success: false, 
+            file: meetingPath, 
+            error: 'No transcript found in meeting file' 
+          }));
+        } else {
+          error('No transcript found in meeting file');
+          info('Meeting files must have a ## Transcript section for extraction');
+        }
+        process.exit(1);
+      }
+
+      // Get attendees from frontmatter or body
+      const attendeeNames = extractAttendeeNames(frontmatter, body);
+
+      // Get owner slug from profile if available
+      const paths = services.workspace.getPaths(root);
+      const ownerSlug = await getOwnerSlug(services, paths.context);
+
+      // Create LLM client
+      let callLLM;
+      try {
+        callLLM = createLLMClient();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, file: meetingPath, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      // Build prompt and call LLM
+      const prompt = buildMeetingExtractionPrompt(transcript, attendeeNames, ownerSlug);
+      
+      let response: string;
+      try {
+        response = await callLLM(prompt);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, file: meetingPath, error: `LLM call failed: ${msg}` }));
+        } else {
+          error(`LLM call failed: ${msg}`);
+        }
+        process.exit(1);
+      }
+
+      // Parse response with validation
+      const { intelligence, validationWarnings } = parseMeetingExtractionResponse(response);
+
+      // Output results
+      if (opts.json) {
+        const output: {
+          success: boolean;
+          file: string;
+          intelligence: MeetingIntelligence;
+          validationWarnings?: ValidationWarning[];
+        } = {
+          success: true,
+          file: meetingPath,
+          intelligence,
+        };
+        if (validationWarnings.length > 0) {
+          output.validationWarnings = validationWarnings;
+        }
+        console.log(JSON.stringify(output, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      header('Meeting Intelligence');
+
+      // Summary
+      if (intelligence.summary) {
+        section('Summary');
+        console.log(`  ${intelligence.summary}`);
+        console.log('');
+      }
+
+      // Action Items
+      if (intelligence.actionItems.length > 0) {
+        section('Action Items');
+        for (const item of intelligence.actionItems) {
+          const direction = item.direction === 'i_owe_them' ? '→' : '←';
+          const due = item.due ? ` (due: ${item.due})` : '';
+          console.log(`  ${direction} ${item.owner}: ${item.description}${due}`);
+        }
+        console.log('');
+      }
+
+      // Next Steps
+      if (intelligence.nextSteps.length > 0) {
+        section('Next Steps');
+        for (const step of intelligence.nextSteps) {
+          listItem(step);
+        }
+        console.log('');
+      }
+
+      // Decisions
+      if (intelligence.decisions.length > 0) {
+        section('Decisions');
+        for (const decision of intelligence.decisions) {
+          listItem(decision);
+        }
+        console.log('');
+      }
+
+      // Learnings
+      if (intelligence.learnings.length > 0) {
+        section('Learnings');
+        for (const learning of intelligence.learnings) {
+          listItem(learning);
+        }
+        console.log('');
+      }
+
+      // Validation warnings
+      if (validationWarnings.length > 0) {
+        warn(`${validationWarnings.length} items rejected during validation:`);
+        for (const w of validationWarnings) {
+          console.log(`  - "${w.item}" — ${w.reason}`);
+        }
+        console.log('');
+      }
+
+      success('Extraction complete');
+    });
 }
 
 async function resolveMeetingPath(
@@ -510,4 +684,83 @@ function normalizeMeetingInput(raw: Record<string, unknown>): MeetingForSave {
     attendees,
     url: (raw.url as string)?.trim() ?? '',
   };
+}
+
+/**
+ * Extract the transcript section from meeting body content.
+ * Returns null if no transcript section found.
+ */
+function extractTranscriptSection(body: string): string | null {
+  // Try to find ## Transcript section
+  const transcriptMatch = body.match(/##\s*Transcript\s*\n([\s\S]*?)(?=\n##\s|\n---|\z|$)/i);
+  if (transcriptMatch && transcriptMatch[1].trim()) {
+    return transcriptMatch[1].trim();
+  }
+  
+  // Fall back to the entire body if it looks like a transcript (has speaker patterns)
+  if (/\*\*[^*]+\*\*:/.test(body) || /^\[[^\]]+\]:?\s/m.test(body)) {
+    return body;
+  }
+  
+  return null;
+}
+
+/**
+ * Extract attendee names from frontmatter and body.
+ */
+function extractAttendeeNames(frontmatter: Record<string, unknown>, body: string): string[] {
+  const names: string[] = [];
+  
+  // From frontmatter attendees field
+  const attendees = frontmatter.attendees;
+  if (Array.isArray(attendees)) {
+    for (const a of attendees) {
+      if (typeof a === 'string') {
+        const parsed = parseAttendeeToken(a);
+        if (parsed.name) names.push(parsed.name);
+      }
+    }
+  } else if (typeof attendees === 'string') {
+    for (const token of attendees.split(',')) {
+      const parsed = parseAttendeeToken(token);
+      if (parsed.name) names.push(parsed.name);
+    }
+  }
+  
+  // From body Attendees line
+  const attendeesLine = body.match(/\*\*Attendees\*\*:\s*(.+)$/im) || body.match(/^Attendees:\s*(.+)$/im);
+  if (attendeesLine && attendeesLine[1]) {
+    for (const token of attendeesLine[1].split(',')) {
+      const parsed = parseAttendeeToken(token);
+      if (parsed.name && !names.includes(parsed.name)) {
+        names.push(parsed.name);
+      }
+    }
+  }
+  
+  return names;
+}
+
+/**
+ * Get workspace owner slug from profile.md if available.
+ */
+async function getOwnerSlug(
+  services: Awaited<ReturnType<typeof createServices>>,
+  contextPath: string,
+): Promise<string | undefined> {
+  const profilePath = join(contextPath, 'profile.md');
+  const content = await services.storage.read(profilePath);
+  if (!content) return undefined;
+  
+  // Try to extract name from frontmatter
+  const { frontmatter } = extractFrontmatter(content);
+  const name = frontmatter.name as string | undefined;
+  if (name) {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+  
+  return undefined;
 }
