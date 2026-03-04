@@ -85,13 +85,30 @@ After resolving people, add or update meeting frontmatter with `attendee_ids: [s
 
 ### 4. Extract Meeting Intelligence
 
-Run extraction on the meeting file:
+Read the meeting file and extract intelligence **directly** (you have LLM access):
 
-```bash
-arete meeting extract resources/meetings/YYYY-MM-DD-title.md --json
-```
+**Extract these sections from the transcript:**
 
-This returns structured intelligence: summary, action items, next steps, decisions, learnings.
+1. **Summary** — 2-3 paragraph summary of the meeting
+2. **Action Items** — Commitments with clear owner and deliverable
+3. **Next Steps** — Non-commitment follow-ups (e.g., "reconvene Thursday")
+4. **Decisions** — Key decisions made, with timestamps if available
+5. **Learnings** — Insights worth remembering
+
+**Action item extraction rules:**
+- Must have a clear owner and specific deliverable
+- Reject vague statements ("look into that thing")
+- Reject descriptions of systems/architecture
+- Keep under 150 characters
+- Include timestamp reference if available (e.g., `{{12:34}}`)
+
+**Example good action items:**
+- "John to send API docs to Sarah by Friday"
+- "Sarah to review the pricing proposal and provide feedback"
+
+**Example bad (reject):**
+- "Me: Yeah, I'll look into that thing we talked about..."
+- "So the way the system works is you first click on..."
 
 ### 5. User Review (Extraction)
 
@@ -109,26 +126,41 @@ Append approved sections to the meeting file with proper formatting:
 
 ```markdown
 ## Summary
+
 {approved summary}
 
 ## Action Items
 
 - [ ] John to send API docs to Sarah by Friday (@john-smith → @sarah-chen)
-- [ ] Sarah to review the proposal (@sarah-chen → @mike-jones)
+- [ ] Sarah to review the proposal (@sarah-chen → @john-smith)
 
 ## Next Steps
-{approved next steps}
+
+- Reconvene Thursday to finalize roadmap
+- Sarah to loop in her tech lead async
 
 ## Decisions
-{approved decisions}
+
+- Approved Q2 roadmap scope focusing on API-first {{12:34}}
+- Decided to prioritize Auto LOB for MVP {{06:06}}
 
 ## Learnings
-{approved learnings}
+
+- Policy integrations are a key differentiator for reducing adjuster errors
+- Quick UX wins need to be weighed against upcoming AI changes
 ```
 
-**Action item format**: `- [ ] {Owner} to {action} (@{owner-slug} → @{counterparty-slug})`
+**Action item format (REQUIRED for parsing)**:
+```
+- [ ] {Description} (@{owner-slug} → @{counterparty-slug})
+```
 
-**Direction encoding**: `@owner-slug → @counterparty-slug` — the owner is the person who owes the counterparty. Example: `@john → @sarah` means John owes Sarah.
+- Use markdown checkbox `- [ ]`
+- Include owner slug after `@`
+- Use `→` (or `->`) to indicate direction
+- Counterparty is optional: `- [ ] Check out Linear (@john-koht)` is valid
+
+**Direction encoding**: `@owner → @counterparty` — the arrow points FROM the person who owes TO the person they owe. Example: `@john → @sarah` means John owes Sarah something.
 
 ### 7. Extract Decisions and Learnings (to Memory)
 
