@@ -1,12 +1,12 @@
 ---
 title: Agent Experts
 slug: agent-experts
-status: building
+status: complete
 size: large
 tags: [infrastructure, agents, context]
 created: 2026-03-01T05:01:42.408Z
 updated: 2026-03-02T03:25:47.135Z
-completed: null
+completed: 2026-03-02T00:00:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: true

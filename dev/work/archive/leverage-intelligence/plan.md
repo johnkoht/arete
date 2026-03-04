@@ -1,12 +1,12 @@
 ---
 title: Leverage Intelligence
 slug: leverage-intelligence
-status: building
+status: complete
 size: large
 tags: [intelligence, commitments, extraction, planning-skills]
 created: 2026-03-03T04:10:58.396Z
 updated: 2026-03-03T23:10:27.412Z
-completed: null
+completed: 2026-03-03T00:00:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: true

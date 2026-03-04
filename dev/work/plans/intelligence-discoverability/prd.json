@@ -1,0 +1,94 @@
+{
+  "name": "intelligence-discoverability",
+  "branchName": "feature/intelligence-discoverability",
+  "goal": "Make Areté's intelligence layer discoverable for custom skill authors and proactively used by agents, through an authoring guide with copy-paste recipes, AGENTS.md guidance updates, strengthened requires_briefing instructions, and updated skills README.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Create Skill Authoring Guide",
+      "description": "Create packages/runtime/skills/_authoring-guide.md — a comprehensive guide for skill authors to tap into Areté's intelligence services. Includes overview table, 6 copy-paste recipe blocks (context, briefing, people resolution, memory search, commitments, entity relationships), frontmatter reference, a complete example skill, and cross-reference to _integration-guide.md. Each recipe should include the CLI command, what it returns, how to use the output in a skill workflow, and a paste-ready markdown block that authors can drop into their SKILL.md.",
+      "acceptanceCriteria": [
+        "File exists at packages/runtime/skills/_authoring-guide.md",
+        "Overview table maps: service → command → what it searches → when to use",
+        "6 recipe blocks present: context, briefing, people, memory, commitments, entity relationships",
+        "Each recipe includes: CLI command with flags, what it returns, usage guidance, and a paste-ready SKILL.md block",
+        "Frontmatter reference documents intelligence:, requires_briefing:, primitives:, work_type:, category:",
+        "Complete example skill demonstrates at least 3 intelligence services in a realistic workflow",
+        "Cross-references _integration-guide.md for output hooks"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Update AGENTS.md Intelligence Guidance",
+      "description": "Update .agents/sources/guide/intelligence.md to add proactive agent guidance. Add a 'High-Value Patterns' section near the top with 6+ patterns telling agents when to reach for each service based on user intent. Add 'When to proactively use this' annotations to each existing service section. CRITICAL: The compressIntelligence() function in scripts/build-agents.ts is HARDCODED — it ignores the intelligence.md content entirely. You MUST update both intelligence.md (full source) AND compressIntelligence() in build-agents.ts (compressed output) to include high-value guidance lines.",
+      "acceptanceCriteria": [
+        "High-Value Patterns section exists near top of intelligence.md with at least 6 patterns",
+        "Each pattern is actionable: user says X → agent does Y",
+        "Each existing service section has a 'When to proactively use this' annotation at the top",
+        "compressIntelligence() in scripts/build-agents.ts updated to include high-value guidance line(s)",
+        "npm run build succeeds and regenerates dist/AGENTS.md",
+        "Compressed [Intelligence] section in dist/AGENTS.md includes the new guidance",
+        "Guidance is prescriptive (do this) not descriptive (this exists)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Update Shared CLI Commands",
+      "description": "Update .agents/sources/shared/cli-commands.md to strengthen the intelligence decision tree. Promote the decision tree to a prominent 'Intelligence Quick Reference' callout before the detailed command list. Add arete people show <slug> --memory to the intelligence section (currently only in People section). Add brief scope descriptions for what each command searches (context searches everything vs memory searches 3 files). CRITICAL: compressCLICommands() in scripts/build-agents.ts uses hardcoded lines for tool_selection, context_scope, memory_scope. Update those hardcoded lines to include scope info and people show --memory guidance.",
+      "acceptanceCriteria": [
+        "Intelligence Quick Reference callout is prominent (before detailed command list)",
+        "arete people show --memory appears in intelligence guidance section with description of what it returns",
+        "Scope descriptions present for context, memory search, memory timeline, brief, and resolve",
+        "Existing tool_selection line preserved or enhanced",
+        "Hardcoded lines in compressCLICommands() updated to include scope info and people show --memory",
+        "npm run build succeeds"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Strengthen requires_briefing in pm-workspace Rule",
+      "description": "Update packages/runtime/rules/cursor/pm-workspace.mdc to make the briefing instruction for requires_briefing: true unambiguous. Use MUST language. Integrate the briefing check into the mandatory workflow sequence (between routing and execution). Add guidance for community skills that don't set the flag. Mirror changes identically to packages/runtime/rules/claude-code/pm-workspace.mdc.",
+      "acceptanceCriteria": [
+        "Rule uses MUST language for requires_briefing: true skills",
+        "Briefing step is integrated into the mandatory workflow sequence (not a separate section)",
+        "Both cursor/ and claude-code/ versions are updated identically",
+        "Guidance for community skills without the flag is present",
+        "Existing mandatory routing workflow preserved (no regressions to skill-first behavior)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Update Skills README",
+      "description": "Update packages/runtime/skills/README.md 'Creating Your Own Skills' section. Expand from 4 lines to a proper section with: intelligence services paragraph (link to _authoring-guide.md), output integration paragraph (link to _integration-guide.md), quick frontmatter reference, and 'See Also' links. Preserve existing content (folder creation, SKILL.md, .arete-meta.yaml). Use relative paths that work from installed workspace (.agents/skills/README.md → .agents/skills/_authoring-guide.md). Depends on task-1 (authoring guide must exist to link to).",
+      "acceptanceCriteria": [
+        "Creating Your Own Skills section expanded with intelligence + integration guidance",
+        "Links to both _authoring-guide.md and _integration-guide.md using relative paths",
+        "Relative paths work from installed workspace (.agents/skills/ context)",
+        "Frontmatter quick reference present showing key fields",
+        "Existing content preserved (folder creation, SKILL.md, .arete-meta.yaml)",
+        "See Also links at bottom of section"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-03T02:50:00Z",
+    "totalTasks": 5,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

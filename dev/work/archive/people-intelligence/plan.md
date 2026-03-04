@@ -1,12 +1,12 @@
 ---
 title: People Intelligence
 slug: people-intelligence
-status: building
+status: complete
 size: medium
 tags: [feature]
 created: 2026-02-20T03:47:16Z
 updated: 2026-03-02T03:44:49.711Z
-completed: null
+completed: 2026-03-01T00:00:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: true

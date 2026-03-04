@@ -1,12 +1,12 @@
 ---
 title: Skill Integration Hooks
 slug: skill-integration-hooks
-status: building
+status: complete
 size: large
 tags: [platform, skills, intelligence-layer]
 created: 2026-03-02T03:29:00Z
 updated: 2026-03-02T05:42:43.745Z
-completed: null
+completed: 2026-03-02T00:00:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: true
