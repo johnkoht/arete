@@ -1268,7 +1268,8 @@ export class EntityService {
 
         // Step 5: Sync fresh action items extracted from meetings into CommitmentsService
         const freshItems = new Map([[person.slug, actionItems]]);
-        await options.commitments.sync(freshItems);
+        const nameMap = new Map(refreshablePeople.map((p) => [p.slug, p.name]));
+        await options.commitments.sync(freshItems, nameMap);
 
         // Step 6: Re-render from updated CommitmentsService state
         personCommitments = await options.commitments.listForPerson(person.slug);

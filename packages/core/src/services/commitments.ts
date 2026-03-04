@@ -209,13 +209,17 @@ export class CommitmentsService {
    * Merge extraction results from person-signals into commitments.json.
    *
    * Input: Map<personSlug, PersonActionItem[]>
+   * nameMap: optional Map<personSlug, personName> — used to store real names instead of slugs
    *
    * Rules:
    * - New items (hash not seen before) → add as 'open'
    * - Existing open items → preserve as-is
    * - Existing resolved/dropped items → NEVER reopen
    */
-  async sync(freshItems: Map<string, PersonActionItem[]>): Promise<void> {
+  async sync(
+    freshItems: Map<string, PersonActionItem[]>,
+    nameMap?: Map<string, string>,
+  ): Promise<void> {
     const all = await this.load();
     const existingById = new Map<string, Commitment>(all.map((c) => [c.id, c]));
 
@@ -234,9 +238,7 @@ export class CommitmentsService {
           text: item.text,
           direction: item.direction,
           personSlug,
-          // PersonActionItem doesn't have personName — use slug as placeholder;
-          // callers should pass pre-resolved names if available via direct Commitment construction
-          personName: personSlug,
+          personName: nameMap?.get(personSlug) ?? personSlug,
           source: item.source,
           date: item.date,
           status: 'open',

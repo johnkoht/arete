@@ -365,6 +365,72 @@ describe('CommitmentsService.sync()', () => {
     assert.equal(parsed.commitments[0].resolvedAt, null);
   });
 
+  it('uses slug as personName fallback when no nameMap provided', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const item: PersonActionItem = {
+      text: 'Send report',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash: computeHash('Send report', 'alice', 'i_owe_them'),
+      stale: false,
+    };
+
+    await svc.sync(new Map([['alice', [item]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].personName, 'alice', 'personName should fall back to slug');
+  });
+
+  it('uses nameMap to store real personName', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const item: PersonActionItem = {
+      text: 'Send report',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash: computeHash('Send report', 'alice', 'i_owe_them'),
+      stale: false,
+    };
+
+    const nameMap = new Map([['alice', 'Alice Smith']]);
+    await svc.sync(new Map([['alice', [item]]]), nameMap);
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].personName, 'Alice Smith', 'personName should use nameMap value');
+  });
+
+  it('falls back to slug when nameMap does not contain the slug', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const item: PersonActionItem = {
+      text: 'Send report',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash: computeHash('Send report', 'alice', 'i_owe_them'),
+      stale: false,
+    };
+
+    // nameMap has bob but not alice
+    const nameMap = new Map([['bob', 'Bob Jones']]);
+    await svc.sync(new Map([['alice', [item]]]), nameMap);
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].personName, 'alice', 'personName should fall back to slug when not in nameMap');
+  });
+
   it('preserves existing open items (no duplicate)', async () => {
     const hash = computeHash('Send report', 'alice', 'i_owe_them');
     const existing = makeCommitment({ id: hash, text: 'Send report', personSlug: 'alice' });
