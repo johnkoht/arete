@@ -1,0 +1,162 @@
+{
+  "name": "commitments-service",
+  "branchName": "feature/commitments-service",
+  "goal": "Replace regex-based action item extraction with LLM-based commitment extraction, introduce CommitmentsService as the single source of truth, render commitments as interactive checkboxes in person memory files, expose them via CLI, and wire them into planning skills (meeting-prep, daily-plan, week-plan, week-review, process-meetings).",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "LLM-based commitment extraction",
+      "description": "Replace regex extractActionItemsForPerson() in packages/core/src/services/person-signals.ts with LLM-based extraction following the extractStancesForPerson() DI pattern. Create buildActionItemPrompt(content, personName) and parseActionItemResponse(response). The prompt must distinguish genuine commitments (promises, action items, deliverables) from descriptions, explanations, and general discussion. Classify direction: i_owe_them vs they_owe_me. Return clean, normalized descriptions. When callLLM is not provided, fall back to the existing regex implementation — no silent zero-result regression.",
+      "acceptanceCriteria": [
+        "Given the Dave walkthrough transcript, extracts ≤3 genuine items (share slides, Jira walkthrough, organize offsite) and rejects all transcript excerpts describing architecture",
+        "Each item has a concise deliverable description (not raw transcript text)",
+        "Function signature: extractActionItemsForPerson(content, personName, source, date, callLLM?, ownerName?) — callLLM is optional",
+        "When callLLM is not provided: falls back to existing regex implementation — no silent zero-result regression",
+        "Existing types (PersonActionItem, ActionItemDirection) unchanged",
+        "Lifecycle functions (hash, stale, cap, dedup) unchanged",
+        "buildActionItemPrompt and parseActionItemResponse are exported for testing"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "ce119e6"
+    },
+    {
+      "id": "task-2",
+      "title": "Wire LLM extraction into refresh pipeline",
+      "description": "Update refreshPersonMemory() in packages/core/src/services/entity.ts to use LLM-based extraction when callLLM is provided, following the stance cache pattern. Cache action item LLM results per meeting+person using function-scoped Map keyed by resolve(root, meetingPath) + ':' + person.slug. When callLLM is not provided, fall back to regex extraction (no behavioral regression).",
+      "acceptanceCriteria": [
+        "arete people memory refresh uses LLM extraction for action items when callLLM is provided in options",
+        "When callLLM is not provided, action item extraction falls back to regex — no behavioral regression from current behavior",
+        "Action item extraction cached per meeting+person using function-scoped Map<string, PersonActionItem[]> keyed by resolve(root, meetingPath) + ':' + person.slug (same pattern as stance cache)",
+        "Existing lifecycle (30-day staleness, dedup, cap at 10 per direction) works as before",
+        "extractActionItemsForPerson call is async (awaited) when callLLM provided; sync path falls back cleanly"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "43c1692"
+    },
+    {
+      "id": "task-3",
+      "title": "Update tests for async LLM extraction",
+      "description": "Update tests in packages/core/test/services/person-signals.test.ts and packages/core/test/services/person-memory*.test.ts for the async LLM-based extraction path. All tests use mock callLLM — no real LLM calls. Include a regression guard test for the fallback behavior.",
+      "acceptanceCriteria": [
+        "All existing tests pass or are updated for the new async signature",
+        "New tests cover: buildActionItemPrompt output structure, parseActionItemResponse for valid JSON, malformed JSON (returns []), missing fields (skips item), direction classification (i_owe_them vs they_owe_me), empty content (returns [])",
+        "Mock callLLM used throughout — no real LLM calls in tests",
+        "Regression guard test: when callLLM is not provided to extractActionItemsForPerson, regex runs and returns results",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "cb6d156"
+    },
+    {
+      "id": "task-4",
+      "title": "Commitments data model and storage types",
+      "description": "Define the Commitment type and supporting types in packages/core/src/models/. No service logic — types and schema only. Key: resolvedAt is distinct from date (meeting date). CommitmentStatus includes 'dropped' as a valid terminal state.",
+      "acceptanceCriteria": [
+        "Types defined in packages/core/src/models/: Commitment (id, text, direction, personSlug, personName, source, date, status, resolvedAt), CommitmentStatus ('open' | 'resolved' | 'dropped'), CommitmentsFile ({ commitments: Commitment[] })",
+        "resolvedAt: string | null — ISO date string, distinct from date (meeting date). A commitment from 6 months ago resolved yesterday must NOT be immediately pruned.",
+        "Types exported from packages/core/src/models/index.ts",
+        "No service logic in this task — types only"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "3facf0f"
+    },
+    {
+      "id": "task-5",
+      "title": "CommitmentsService",
+      "description": "Create packages/core/src/services/commitments.ts and wire it into factory.ts. Constructor: CommitmentsService(storage: StorageAdapter, workspaceRoot: string) — resolves .arete/commitments.json path from workspaceRoot internally. No direct fs calls. Methods: listOpen(opts?), listForPerson(slug), resolve(id, status?), bulkResolve(ids[], status?), sync(freshItems), reconcile(completedItems). Pruning: on every write, remove resolved/dropped items where resolvedAt is older than 30 days.",
+      "acceptanceCriteria": [
+        "CommitmentsService created in packages/core/src/services/commitments.ts",
+        "Wired into packages/core/src/factory.ts: const commitments = new CommitmentsService(storage, workspaceRoot); added to AreteServices type as commitments: CommitmentsService",
+        "Exported from packages/core/src/services/index.ts",
+        "listOpen() accepts optional personSlugs: string[] for multi-person filtering",
+        "sync() preserves resolved/dropped state — re-extracting a resolved commitment does not reopen it",
+        "reconcile() uses Jaccard word-overlap similarity; no fuse.js, leven, or other new dependencies; threshold 0.6; returns confidence scores; never auto-resolves",
+        "Dedup: same hash as computeActionItemHash(text, personSlug, direction) from person-signals.ts",
+        "Pruning uses resolvedAt not date; 30-day window",
+        "No direct fs calls — all I/O via StorageAdapter",
+        "Unit tests in packages/core/test/services/commitments.test.ts: mock StorageAdapter, test all methods, test sync() idempotency (resolved items stay resolved), test reconcile() confidence scoring"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Bidirectional sync via person memory checkboxes",
+      "description": "Update renderPersonMemorySection() in packages/core/src/services/person-memory.ts to render commitments as interactive checkboxes with embedded hash HTML comments. Update refreshPersonMemory() in entity.ts to detect and sync user edits (checked boxes, deleted lines) before re-rendering. CommitmentsService passed via RefreshPersonMemoryOptions.commitments? — gated, no regression without it. Refresh flow: (1) read file, (2) parse auto-section with <!-- h:XXXXXXXX --> comments, (3) detect checked/deleted, (4) bulkResolve, (5) sync fresh items, (6) re-render, (7) upsert.",
+      "acceptanceCriteria": [
+        "Person file shows '- [ ] text (date) <!-- h:XXXXXXXX -->' format — HTML comment is invisible in rendered markdown",
+        "Checking a box ('- [x]') resolves the commitment on next arete people memory refresh — detected via <!-- h:XXXXXXXX --> comment",
+        "Deleting a line resolves the commitment on next refresh — detected by hash absence",
+        "New commitments appear as unchecked items with hash comment",
+        "renderPersonMemorySection() emits <!-- h:XXXXXXXX --> comments on all commitment lines",
+        "Parser reads <!-- h:XXXXXXXX --> to recover hash — does not attempt text matching",
+        "RefreshPersonMemoryOptions updated with commitments?: CommitmentsService",
+        "Without options.commitments, rendering falls back to plain-text action items (no regression)",
+        "Refresh follows the 7-step sequence: read → parse → detect → bulkResolve → sync → render → upsert",
+        "Tests: mock CommitmentsService; test checkbox detection, deletion detection, new-item appearance, hash comment rendering, fallback behavior"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "CLI — arete commitments commands",
+      "description": "Create packages/cli/src/commands/commitments.ts with registerCommitmentsCommand(program). Register in packages/cli/src/index.ts. Commands: 'arete commitments list [--direction] [--person <slug...>]' and 'arete commitments resolve <id> [--status] [--yes] [--skip-qmd]'. Prerequisite: services.commitments must exist in AreteServices (wired in Task 5).",
+      "acceptanceCriteria": [
+        "list: groups by direction ('I owe them' / 'They owe me') with person names",
+        "list: shows 8-char short ID prefix (e.g. 3f9a1b2c) in output for use with resolve",
+        "list: --person is variadic (--person <slug...>) — accepts one or more slugs",
+        "list: --json output: { success: true, commitments: [{ id, idShort, direction, personSlug, personName, text, date, resolvedAt }], count: N }",
+        "resolve: accepts 8-char prefix or full 64-char hash — matches by id.startsWith(prefix); errors if zero matches ('No commitment found') or multiple matches ('Ambiguous id — N matches. Use more characters.')",
+        "resolve: --status resolved|dropped (default: resolved)",
+        "resolve: --yes skips confirmation (for skill/automation use)",
+        "resolve: without --yes uses confirm() from @inquirer/prompts with default: false, shows commitment text + person + direction",
+        "resolve: write command — loadConfig() after findRoot(), refreshQmdIndex() before return, displayQmdResult() from lib/qmd-output.ts",
+        "resolve: --skip-qmd option for testability",
+        "resolve: --json output: { success: true, resolved: { id, text, personName, direction, resolvedAt, status }, qmd: { indexed, skipped, warning? } }",
+        "Both commands: findRoot() guard with JSON-aware error path",
+        "Both commands: output via formatters.ts helpers only (no raw chalk)",
+        "registerCommitmentsCommand imported and called in packages/cli/src/index.ts",
+        "Tool definition created with triggers: 'commitments', 'what I owe', 'what they owe', 'track commitment', 'resolve commitment', 'open commitments'"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Update planning skills",
+      "description": "Update skill SKILL.md files to reference CommitmentsService via CLI. Add process-meetings as the documented producer path. Update PATTERNS.md get_meeting_context step 6 with fallback. Canonical source rule: use arete people show --memory for meeting-prep; use arete commitments list for week-review/week-plan. Files: daily-plan/SKILL.md, meeting-prep/SKILL.md, week-plan/SKILL.md, week-review/SKILL.md, process-meetings/SKILL.md, PATTERNS.md.",
+      "acceptanceCriteria": [
+        "meeting-prep uses arete people show --memory for commitments (already in workflow via Task 6 rendering) — no separate arete commitments list call",
+        "daily-plan calls arete commitments list (unfiltered) once, filters by attendee names in agent context — not per-attendee calls",
+        "week-plan surfaces commitments in existing 'Commitments due this week' section — no separate pick-promote interaction added",
+        "week-review has new Commitment Review step: explicitly skippable ('Type skip to skip'), presents done/carried/dropped choice, resolution is agent-mediated (agent runs resolve --yes on user's behalf), 'dropped' means explicitly de-scoped",
+        "process-meetings documents producer path: 'Run arete people memory refresh --person <slug> after processing to sync extracted commitments to CommitmentsService'",
+        "PATTERNS.md get_meeting_context step 6 updated with fallback for empty CommitmentsService results",
+        "PATTERNS.md documents canonical source distinction: people show --memory for meeting-prep; commitments list for week-review/week-plan",
+        "prepare-meeting-agenda impact evaluated — PATTERNS.md change inherits gracefully (empty fallback covers it); note confirmed in update",
+        "Skills remain non-opinionated: arete commitments resolve only called in week-review context, not in daily-plan or week-plan"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-03T22:00:00.000Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
