@@ -27,3 +27,7 @@ export type {
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
 } from './meeting-extraction.js';
+
+// Meeting file parsing
+export { parseActionItemsFromMeeting } from './meeting-parser.js';
+export type { ParsedActionItem } from './meeting-parser.js';
