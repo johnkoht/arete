@@ -18,6 +18,7 @@ import { WorkspaceService } from './services/workspace.js';
 import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
 import { ToolService } from './services/tools.js';
+import { CommitmentsService } from './services/commitments.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -33,6 +34,7 @@ export type AreteServices = {
   skills: SkillService;
   tools: ToolService;
   integrations: IntegrationService;
+  commitments: CommitmentsService;
 };
 
 /**
@@ -76,6 +78,7 @@ export async function createServices(
   const skills = new SkillService(storage);
   const tools = new ToolService(storage);
   const integrations = new IntegrationService(storage, config);
+  const commitments = new CommitmentsService(storage, workspaceRoot);
 
   return {
     storage,
@@ -88,5 +91,6 @@ export async function createServices(
     skills,
     tools,
     integrations,
+    commitments,
   };
 }

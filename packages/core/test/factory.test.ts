@@ -17,6 +17,7 @@ import { WorkspaceService } from '../src/services/workspace.js';
 import { SkillService } from '../src/services/skills.js';
 import { IntegrationService } from '../src/services/integrations.js';
 import { ToolService } from '../src/services/tools.js';
+import { CommitmentsService } from '../src/services/commitments.js';
 import { FileStorageAdapter } from '../src/storage/file.js';
 import { getDefaultConfig } from '../src/config.js';
 
@@ -35,6 +36,7 @@ describe('createServices', () => {
     const services = await createServices(tmpDir);
     const keys = Object.keys(services).sort();
     assert.deepStrictEqual(keys, [
+      'commitments',
       'context',
       'entity',
       'integrations',
@@ -59,6 +61,7 @@ describe('createServices', () => {
     assert.ok(services.skills instanceof SkillService, 'skills is SkillService');
     assert.ok(services.tools instanceof ToolService, 'tools is ToolService');
     assert.ok(services.integrations instanceof IntegrationService, 'integrations is IntegrationService');
+    assert.ok(services.commitments instanceof CommitmentsService, 'commitments is CommitmentsService');
   });
 
   it('search provider has the expected interface', async () => {
