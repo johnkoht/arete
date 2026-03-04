@@ -85,9 +85,10 @@ templates/outputs/{skill-id}/default.md
 3. **Read person auto-memory** — For each resolved attendee, read enriched intelligence (stances, open items, relationship health) via `arete people show <slug> --memory`. Use these sections to populate stances, open items, and health in the prep brief.
 4. **Search meetings** — Prefer scanning `resources/meetings/index.md` (table: Date | Title | Attendees | Recording | Topics). Match by Topics column or attendee names, then open the linked file(s). Alternatively list `resources/meetings/*.md` and filter by frontmatter `attendee_ids` or body/attendees; sort by date descending; take 1–3 most recent.
 5. **Read projects** — Scan `projects/active/*/README.md` for `stakeholders` or body mentions of attendee names/slugs.
-6. **Open Commitments**: Run `arete commitments list --person <slug>` for each attendee.
-   - If results are non-empty: include the open commitments list in context.
-   - If results are empty (first-time user or no CommitmentsService data yet): fall back to checking the meeting markdown for `## Action Items` sections and collecting unchecked `- [ ]` items.
+6. **Open Commitments**:
+   - **Primary path**: Parse `## Action Items` section directly from recent meeting files for each attendee. Look for unchecked `- [ ]` items that mention the person (as owner or counterparty via `@owner-slug → @counterparty-slug` notation).
+   - **Fallback**: Run `arete commitments list --person <slug>` when meetings lack structured sections (older meetings processed before the extraction workflow existed).
+   - If both paths return empty, the person has no outstanding commitments.
 7. **QMD (optional)** — `qmd query "decisions or learnings involving [attendee] or [company]"`, `qmd query "meetings or notes about [topic]"`. Incorporate into brief.
 
 **Outputs**: Attendee details, recent meetings (1–3 with summary), related projects, outstanding action items, prep suggestions.
