@@ -151,15 +151,16 @@
         "prepare-meeting-agenda impact evaluated — PATTERNS.md change inherits gracefully (empty fallback covers it); note confirmed in update",
         "Skills remain non-opinionated: arete commitments resolve only called in week-review context, not in daily-plan or week-plan"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "435b1d5"
     }
   ],
   "metadata": {
     "createdAt": "2026-03-03T22:00:00.000Z",
     "totalTasks": 8,
-    "completedTasks": 0,
+    "completedTasks": 8,
     "failedTasks": 0
   }
 }

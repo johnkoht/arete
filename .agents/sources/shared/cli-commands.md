@@ -38,6 +38,18 @@
   - `--json` - Output as JSON
 - `arete availability find --with <name|email>` - Find mutual availability with a person (uses Google Calendar FreeBusy)
 
+## Commitments
+
+- `arete commitments list` - List open commitments (what you owe people and what they owe you)
+  - `--direction i_owe_them|they_owe_me` - Filter by direction
+  - `--person <slug...>` - Filter by one or more person slugs (variadic)
+  - `--json` - Output as JSON
+- `arete commitments resolve <id>` - Resolve or drop a commitment (8-char prefix or full hash)
+  - `--status resolved|dropped` - Mark as resolved (default) or dropped/de-scoped
+  - `--yes` - Skip confirmation prompt (for skill/automation use)
+  - `--skip-qmd` - Skip qmd index refresh
+  - `--json` - Output as JSON
+
 ## Meetings
 
 - `arete meeting add` - Add a meeting from JSON file or stdin

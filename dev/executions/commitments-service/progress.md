@@ -218,3 +218,37 @@ Implemented bidirectional commitment sync across two files:
 
 ### Reflection
 The sentinel comment pattern (`AUTO_PERSON_MEMORY:START/END`) applied here as the structural model — `HASH_COMMENT_RE` is the commitment-level equivalent: machine-parseable HTML comment invisible in rendered markdown, embedded per-line rather than wrapping a section. The most important surprise was the first-render false-deletion problem: without the `fileHashes.size > 0` guard, all open commitments would be immediately resolved on the first refresh because none of their hashes appear in a fresh file. The spec says "hash not found in file content" but implicitly assumes prior rendering. The guard (skip deletion when no hash comments exist) is the correct precondition. For Task 7 (CLI), the `CommitmentsService` API is clean — `listOpen({ direction, personSlugs })` and `resolve(idPrefix)` are the core call sites. The 8-char hash prefix (from `id.slice(0, 8)`) shown in list output will be the natural argument for `arete commitments resolve <id>`. Estimated ~18k tokens.
+
+---
+
+## task-8 — Update planning skills
+**Completed**: 2026-03-03
+**Commit**: 435b1d5
+
+### What was done
+Docs-only updates to wire CommitmentsService into planning skills via CLI references:
+
+- **PATTERNS.md**: Updated `get_meeting_context` step 6 from "Extract action items" (regex-only) to "Open Commitments" (`arete commitments list --person <slug>` with empty-CommitmentsService fallback to `## Action Items` sections). Added **Canonical source distinction** note after the pattern's Outputs line — people show --memory for meeting-prep, commitments list for task-management views; do not call both.
+- **daily-plan/SKILL.md**: Added `arete commitments list` (unfiltered) to Gather Context step with explicit N×M avoidance guidance. Added "Open Commitments" section to the daily plan output template.
+- **meeting-prep/SKILL.md**: Added a "Commitments" note in the Gather Context section clarifying commitments appear inline via `arete people show <slug> --memory` — no separate CLI call needed.
+- **week-plan/SKILL.md**: Added `arete commitments list` to Gather Context step, surfacing results in the "Commitments due this week" section organically (no pick-and-promote interaction).
+- **week-review/SKILL.md**: Added "Commitment Review" step (2.5) after the priority review section — skippable, agent-mediated, with done/carried/dropped choices and `arete commitments resolve` for done/dropped only.
+- **process-meetings/SKILL.md**: Added CommitmentsService producer path note after step 5.5 — documents that `arete people memory refresh --person <slug>` is the canonical path for populating CommitmentsService from meeting notes.
+
+### prepare-meeting-agenda audit
+`grep -rn "get_meeting_context\|step 6"` found two references in `prepare-meeting-agenda/SKILL.md` — both are generic pattern references (line 74 and 133), not explicit "step 6" references. The skill invokes `get_meeting_context` holistically without depending on any specific step number, so the PATTERNS.md step 6 update (which now includes a graceful fallback for empty CommitmentsService) is fully backward-compatible with this skill.
+
+### Files changed
+- `packages/runtime/skills/PATTERNS.md` — step 6 updated; canonical source note added
+- `packages/runtime/skills/daily-plan/SKILL.md` — open commitments in Gather Context + output template
+- `packages/runtime/skills/meeting-prep/SKILL.md` — commitments note in Gather Context
+- `packages/runtime/skills/week-plan/SKILL.md` — commitments list in Gather Context
+- `packages/runtime/skills/week-review/SKILL.md` — Commitment Review step added
+- `packages/runtime/skills/process-meetings/SKILL.md` — producer path documented
+
+### Quality checks
+- typecheck: ✓ (0 errors)
+- tests: ✓ (1235 passed, 0 failed)
+
+### Reflection
+No skill required restructuring — all changes were additive. The `prepare-meeting-agenda` audit confirmed it references `get_meeting_context` holistically (no step-number coupling), so the PATTERNS.md change is cleanly backward-safe. The week-review Commitment Review section was the only non-trivial insertion — it needed a specific location (after priority review, before quarter goal progress), which became step 2.5 to avoid renumbering the existing steps. Estimated ~4k tokens.
