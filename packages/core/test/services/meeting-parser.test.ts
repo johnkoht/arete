@@ -344,7 +344,7 @@ date: "2026-03-04"
       assert.equal(items[0].direction, 'i_owe_them');
     });
 
-    it('infers they_owe_me when person is actor (their name at start)', () => {
+    it('infers i_owe_them when person is actor (their name at start)', () => {
       const content = `---
 date: "2026-03-04"
 ---
@@ -354,11 +354,12 @@ date: "2026-03-04"
 - [ ] Sarah to review the proposal and send feedback`;
 
       // Filter for sarah, owner is john-smith
-      // Sarah is at start → she's the actor → she owes john
+      // Sarah is at start → she's the actor → she owes john (owner)
+      // From Sarah's perspective: "I owe them" = i_owe_them
       const items = parseActionItemsFromMeeting(content, 'sarah', 'john-smith', 'meeting.md');
 
       assert.equal(items.length, 1);
-      assert.equal(items[0].direction, 'they_owe_me');
+      assert.equal(items[0].direction, 'i_owe_them');
     });
 
     it('returns empty when person not involved in item without notation', () => {

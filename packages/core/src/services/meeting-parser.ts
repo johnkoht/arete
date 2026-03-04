@@ -233,13 +233,16 @@ function inferDirectionFromText(
     return { direction: 'they_owe_me', relevant: true };
   }
 
-  // Case 3: Person is NOT owner, but person is the actor → they_owe_me (person owes owner)
-  if (ownerSlug !== personSlug && personIsActor) {
+  // Case 3: Person is NOT owner, owner is actor, person is mentioned → they_owe_me (owner owes person)
+  // Direction is from personSlug's perspective: owner owes person = "they owe me"
+  // Check this BEFORE personIsActor — "I'll" is a stronger signal than person name appearing
+  if (ownerSlug !== personSlug && ownerIsActor && personInText) {
     return { direction: 'they_owe_me', relevant: true };
   }
 
-  // Case 4: Person is NOT owner, owner is actor, person is mentioned → i_owe_them (owner owes person)
-  if (ownerSlug !== personSlug && ownerIsActor && personInText) {
+  // Case 4: Person is NOT owner, but person is the actor → i_owe_them (person owes owner)
+  // Direction is from personSlug's perspective: person owes owner = "I owe them"
+  if (ownerSlug !== personSlug && personIsActor) {
     return { direction: 'i_owe_them', relevant: true };
   }
 
