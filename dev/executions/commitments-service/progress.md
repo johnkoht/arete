@@ -105,3 +105,37 @@ Committed with no code changes — verification-only commit.
 
 ### Reflection
 Task 1 was thorough — it front-loaded the full test coverage including all AC items for Task 3. This task was pure audit and commit with no gaps to fill. Estimated ~3k tokens.
+
+---
+
+## task-5 — CommitmentsService
+**Completed**: 2026-03-03
+**Commit**: eb1c580
+
+### What was done
+`CommitmentsService` and its 36-test suite were already scaffolded on this branch. The service implementation was complete and correct:
+- `computeCommitmentHash()` (local sha256, mirrors `computeActionItemHash`)
+- `shouldPrune()` using `resolvedAt` (never `date`), null guard for open items
+- Jaccard similarity helpers (`normalize()`, `jaccard()`) with threshold 0.6
+- All 6 public methods: `listOpen()`, `listForPerson()`, `resolve()`, `bulkResolve()`, `sync()`, `reconcile()`
+- `factory.ts` and `services/index.ts` were already wired
+
+Two bugs were found and fixed:
+
+**Bug 1 — `createMockStorage` Map copy**: The mock helper used `new Map(initial)`, creating a copy of the passed Map. Tests that passed an outer `store` reference then read from it after writes (which went to the internal copy) got stale data. Fix: changed `const store: MockStore = new Map(initial)` to `const store: MockStore = initial` to use the same reference. Fixed `persists the resolved status`, all sync write tests, and all pruning tests.
+
+**Bug 2 — Jaccard test data below threshold**: "returns match above threshold (0.6)" used "send slides to team" vs "send the slides" (jaccard=0.4, below 0.6). This caused `assert.ok(result.length >= 1)` to fail, which triggered a node:test v23 hang when the suite ran concurrently. Fix: changed to "send report to alice" vs "send the report to alice" (jaccard=4/5=0.8). Also updated `factory.test.ts` to include `'commitments'` in the expected service keys list and added `CommitmentsService` instance type assertion.
+
+### Files changed
+- `packages/core/src/services/commitments.ts` — new file (service implementation, already correct)
+- `packages/core/test/services/commitments.test.ts` — new file; fixed `createMockStorage` Map copy bug; fixed "above threshold" test data to yield jaccard≥0.6
+- `packages/core/src/factory.ts` — already wired (no changes needed)
+- `packages/core/src/services/index.ts` — already exported (no changes needed)
+- `packages/core/test/factory.test.ts` — added `'commitments'` to expected keys; added `CommitmentsService` instance assertion
+
+### Quality checks
+- typecheck: ✓ (0 errors)
+- tests: ✓ (594 core + 174 CLI passed, 2 skipped, 0 failed)
+
+### Reflection
+The StorageAdapter pattern was completely straightforward — `read()` returns `string | null`, parse with try/catch, default to `{ commitments: [] }`, write with `JSON.stringify(data, null, 2)`. No surprises there. The Jaccard implementation was clean (no external deps, pure Set math). The main discoveries were: (1) `createMockStorage` copying the passed Map — a subtle test isolation bug that caused wrong reads after writes; (2) node:test v23 hangs indefinitely when an assertion fails in a suite and other tests in the same suite are running, which masked the root cause as a "timeout" rather than a "failure". For Task 6 (bidirectional sync), CommitmentsService should be passed via `RefreshPersonMemoryOptions.commitments?: CommitmentsService` — gated so existing callers without it get plain-text rendering (no regression). The `bulkResolve()` method is the natural call point after parsing checked/deleted hash comments from the auto-section. Estimated ~15k tokens.

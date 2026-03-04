@@ -84,9 +84,10 @@
         "No direct fs calls — all I/O via StorageAdapter",
         "Unit tests in packages/core/test/services/commitments.test.ts: mock StorageAdapter, test all methods, test sync() idempotency (resolved items stay resolved), test reconcile() confidence scoring"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "eb1c580"
     },
     {
       "id": "task-6",
