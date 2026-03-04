@@ -83,15 +83,62 @@ Parse frontmatter and body (title, date, attendees, company, summary).
 
 After resolving people, add or update meeting frontmatter with `attendee_ids: [slug1, slug2]`. For legacy files, prepend YAML frontmatter and preserve body.
 
-### 4. Extract Decisions and Learnings
+### 4. Extract Meeting Intelligence
 
-Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). Scan "## Decisions Made" and "## Summary" / "## Key Points" for candidates; present for inline review (approve / edit / skip); write approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` per the formats in PATTERNS.md.
+Run extraction on the meeting file:
 
-### 5. Refresh Person Memory Highlights
+```bash
+arete meeting extract resources/meetings/YYYY-MM-DD-title.md --json
+```
+
+This returns structured intelligence: summary, action items, next steps, decisions, learnings.
+
+### 5. User Review (Extraction)
+
+Present each extracted section for review using the Approve / Edit / Skip pattern (see [PATTERNS.md](../PATTERNS.md) § extract_decisions_learnings for UX reference):
+
+1. **Summary** — Present → Approve / Edit / Skip
+2. **Action Items** — Present list → Approve all / Edit / Skip
+3. **Next Steps** — Present list → Approve all / Edit / Skip
+4. **Decisions** — Present list → Approve all / Edit / Skip
+5. **Learnings** — Present list → Approve all / Edit / Skip
+
+### 6. Save to Meeting File
+
+Append approved sections to the meeting file with proper formatting:
+
+```markdown
+## Summary
+{approved summary}
+
+## Action Items
+
+- [ ] John to send API docs to Sarah by Friday (@john-smith → @sarah-chen)
+- [ ] Sarah to review the proposal (@sarah-chen → @mike-jones)
+
+## Next Steps
+{approved next steps}
+
+## Decisions
+{approved decisions}
+
+## Learnings
+{approved learnings}
+```
+
+**Action item format**: `- [ ] {Owner} to {action} (@{owner-slug} → @{counterparty-slug})`
+
+**Direction encoding**: `@owner-slug → @counterparty-slug` — the owner is the person who owes the counterparty. Example: `@john → @sarah` means John owes Sarah.
+
+### 7. Extract Decisions and Learnings (to Memory)
+
+Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). This step extracts decisions and learnings to **workspace memory** (`.arete/memory/items/`), complementing step 6 which saves to the **meeting file**. Scan "## Decisions Made" and "## Summary" / "## Key Points" for candidates; present for inline review (approve / edit / skip); write approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` per the formats in PATTERNS.md.
+
+### 8. Refresh Person Memory Highlights
 
 Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md). Refresh recurring asks/concerns for attendees so person files include quick-access memory highlights.
 
-### 5.5. Refresh Person Intelligence Memory
+### 8.5. Refresh Person Intelligence Memory
 
 **Ordering dependency** — this step MUST run after steps 2–3 complete:
 1. Create/update person files (step 2)
@@ -108,7 +155,7 @@ This updates the enriched intelligence sections that meeting-prep and other skil
 
 **CommitmentsService producer path**: `arete people memory refresh` is also the path that syncs extracted commitments (action items) to CommitmentsService. Running this command after processing meetings ensures that any commitments found in meeting notes are available via `arete commitments list`. This is the canonical producer path — CommitmentsService is populated through `process-meetings` → `arete people memory refresh --person <slug>`.
 
-### 6. Summary
+### 9. Summary
 
 Report: meetings processed, people created/updated, decisions and learnings added, person memory highlights refreshed.
 
