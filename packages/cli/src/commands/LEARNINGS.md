@@ -61,6 +61,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 - **Non-interactive flags for testability**: Every interactive prompt should have a CLI flag equivalent (`--name`, `--fathom-key`, `--calendar`, `--skip-integrations`). Tests use flags via `execSync`; interactive paths are manually verified. See `onboard.ts`. Added 2026-02-22.
 - **Integration phase pattern**: Use `services.integrations.list(root)` to get current status, check `entry.active` (boolean) for display, use `confirm()` with `default: false` for optional integrations. See `onboard.ts` `runIntegrationPhase()`. Added 2026-02-22.
 
+- **`confirm()` from `@inquirer/prompts` uses dynamic import** (2026-03-03): `confirm` was not previously used in the CLI codebase (only `checkbox` and `input`). First established in `commitments.ts` for the destructive `resolve` confirmation. Use a dynamic import: `const { confirm } = await import('@inquirer/prompts')`. This avoids top-level import issues and is consistent with how `checkbox` is used elsewhere. Pattern: always pair with a `--yes` flag to bypass for scripting/JSON mode. Check `opts.yes || opts.json` before calling — JSON mode callers must not block on stdin. See `packages/cli/src/commands/commitments.ts` `resolveCmd` action.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command
