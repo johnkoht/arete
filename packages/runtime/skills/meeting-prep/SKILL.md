@@ -41,6 +41,8 @@ Build a prep brief for a meeting: attendee details, recent meetings, related pro
 
 Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Inputs: meeting title (optional), attendee names or slugs. Outputs: attendee details, recent meetings, related projects, outstanding action items, and person memory highlights (if present). Include QMD queries (step 6) for decisions/learnings involving the attendee or topic.
 
+**Commitments**: Commitments appear inline in the person's memory section — no separate CLI call needed. The existing `arete people show <slug> --memory` call already surfaces them.
+
 ## Workflow
 
 ### 1. Identify Meeting

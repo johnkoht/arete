@@ -36,6 +36,7 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Try Calendar (if configured)**: Run `arete pull calendar --today --json`. If the command succeeds and returns events (check `success: true` and non-empty `events` array), use those as today's meeting list and note the calendar names. If the command fails, returns no events, or is not configured, fall back to asking the user.
 - **Ask** user for today's meetings (fallback if calendar unavailable): "List today's meetings (title + attendees) or say 'none'."
+- **Open Commitments**: Run `arete commitments list` (unfiltered, all open). Surface the list in the daily plan. Filter by today's attendees in your context. Do NOT call `--person` per attendee (avoids N×M calls). Non-opinionated: surface the list, user decides what to act on.
 
 ### 2. For Each Meeting
 
@@ -59,6 +60,9 @@ Output markdown:
 
 - **[Meeting title]** — Attendees: X, Y  
   Context: [1–2 line summary]; Prep: [suggestion]
+
+### Open Commitments
+- [From `arete commitments list` — filtered to today's attendees where relevant]
 
 ### Commitments Due
 - From week file "Commitments due" or scratchpad

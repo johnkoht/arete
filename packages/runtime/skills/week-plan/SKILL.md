@@ -37,6 +37,7 @@ Guide the PM to define the top 3–5 outcomes for the week, linked to quarter go
 - **Read** last week file: `now/week.md` for carry-over and continuity.
 - **Read** `projects/active/` (README or key files) for commitments tied to projects.
 - **Read** `now/scratchpad.md` for ad-hoc commitments or "due this week" items.
+- **Open Commitments**: Run `arete commitments list`. Surface results in the "Commitments due this week" section of the week file. User elevates commitments to outcomes organically — no pick-and-promote interaction required.
 - **Try Calendar (if configured)**: Run `arete pull calendar --days 7 --json`. If the command succeeds and returns events (`success: true` and non-empty `events`), use them to list the week’s meetings (by day). If the command fails, returns no events, or is not configured, skip calendar and rely on the user for meeting context.
 
 ### 2. Week’s Meetings and Prep

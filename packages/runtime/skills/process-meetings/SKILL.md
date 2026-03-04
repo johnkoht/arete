@@ -106,6 +106,8 @@ arete people memory refresh --person <slug>
 
 This updates the enriched intelligence sections that meeting-prep and other skills consume via `arete people show <slug> --memory`.
 
+**CommitmentsService producer path**: `arete people memory refresh` is also the path that syncs extracted commitments (action items) to CommitmentsService. Running this command after processing meetings ensures that any commitments found in meeting notes are available via `arete commitments list`. This is the canonical producer path — CommitmentsService is populated through `process-meetings` → `arete people memory refresh --person <slug>`.
+
 ### 6. Summary
 
 Report: meetings processed, people created/updated, decisions and learnings added, person memory highlights refreshed.

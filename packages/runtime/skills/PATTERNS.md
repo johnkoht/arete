@@ -85,10 +85,17 @@ templates/outputs/{skill-id}/default.md
 3. **Read person auto-memory** — For each resolved attendee, read enriched intelligence (stances, open items, relationship health) via `arete people show <slug> --memory`. Use these sections to populate stances, open items, and health in the prep brief.
 4. **Search meetings** — Prefer scanning `resources/meetings/index.md` (table: Date | Title | Attendees | Recording | Topics). Match by Topics column or attendee names, then open the linked file(s). Alternatively list `resources/meetings/*.md` and filter by frontmatter `attendee_ids` or body/attendees; sort by date descending; take 1–3 most recent.
 5. **Read projects** — Scan `projects/active/*/README.md` for `stakeholders` or body mentions of attendee names/slugs.
-6. **Extract action items** — From recent meetings: "## Action Items" or similar; collect unchecked `- [ ] ...`. Prefer items referencing the attendee or "For me" / "Follow up".
+6. **Open Commitments**: Run `arete commitments list --person <slug>` for each attendee.
+   - If results are non-empty: include the open commitments list in context.
+   - If results are empty (first-time user or no CommitmentsService data yet): fall back to checking the meeting markdown for `## Action Items` sections and collecting unchecked `- [ ]` items.
 7. **QMD (optional)** — `qmd query "decisions or learnings involving [attendee] or [company]"`, `qmd query "meetings or notes about [topic]"`. Incorporate into brief.
 
 **Outputs**: Attendee details, recent meetings (1–3 with summary), related projects, outstanding action items, prep suggestions.
+
+**Canonical source distinction**:
+- For meeting-prep context (relationship brief): use `arete people show <slug> --memory` — includes commitments inline with full relationship context.
+- For task-management view (week-review/week-plan): use `arete commitments list` — returns structured commitment data for review/resolution.
+- Do NOT call both in the same step — they overlap on commitment data.
 
 ---
 

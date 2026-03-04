@@ -35,6 +35,20 @@ For each outcome in the week file:
 
 Update the week file with these statuses (e.g. checkboxes, "[Done]", or a short note).
 
+### 2.5. Commitment Review
+
+Run `arete commitments list`. If non-empty, present the list.
+
+> Type 'skip' to skip this section.
+
+For each open commitment, ask:
+- Done → `arete commitments resolve <id> --yes`
+- Carried to next week → leave open (no action)
+- Dropped (de-scoped, no longer relevant) → `arete commitments resolve <id> --yes --status dropped`
+
+Resolution is agent-mediated: confirm per item with the user, then run the resolve command on their behalf.
+Commitments marked "carried" remain open and will surface again next week.
+
 ### 3. Quarter Goal Progress
 
 Give a **brief quarter goal progress** summary:
