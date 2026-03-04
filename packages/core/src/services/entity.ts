@@ -474,11 +474,15 @@ import {
   getPersonMemoryLastRefreshed,
   isMemoryStale,
   upsertPersonMemorySection,
+  extractHashesFromContent,
+  extractCheckedHashes,
 } from './person-memory.js';
 import type {
   PersonMemorySignal,
   RefreshPersonMemoryInternalOptions,
 } from './person-memory.js';
+import { CommitmentsService } from './commitments.js';
+import type { Commitment } from '../models/index.js';
 import {
   extractStancesForPerson,
   extractActionItemsForPerson,
@@ -508,6 +512,13 @@ export interface RefreshPersonMemoryOptions {
   callLLM?: LLMCallFn;
   /** When true, compute everything but skip writing files to disk. */
   dryRun?: boolean;
+  /**
+   * When provided, enables bidirectional commitment sync via person memory checkboxes.
+   * Commitments are rendered as `- [ ] text (date) <!-- h:XXXXXXXX -->` lines.
+   * On refresh, checked boxes and deleted lines are auto-resolved.
+   * Without this option, plain-text action items are rendered (no regression).
+   */
+  commitments?: CommitmentsService;
 }
 
 export interface RefreshPersonMemoryResult {
@@ -1212,6 +1223,8 @@ export class EntityService {
     for (const person of refreshablePeople) {
       const category = person.category;
       const personPath = join(workspacePaths.people, category, `${person.slug}.md`);
+
+      // Step 1: Read current person file content
       const content = await this.storage.read(personPath);
       if (!content) continue;
 
@@ -1221,11 +1234,54 @@ export class EntityService {
       const actionItems = personActionItems.get(person.slug) ?? [];
       const meetingDates = personMeetingDates.get(person.slug) ?? [];
       const health = computeRelationshipHealth(meetingDates, actionItems.length);
+
+      // CommitmentsService 7-step bidirectional sync (only when options.commitments provided)
+      let personCommitments: Commitment[] | undefined;
+      if (options.commitments) {
+        // Step 2: Parse existing hash comments from current file
+        const fileHashes = extractHashesFromContent(content);
+        const checkedHashes = extractCheckedHashes(content);
+
+        // Step 3: Detect deleted lines — hash in CommitmentsService but NOT in file.
+        // IMPORTANT: Only run deletion detection when the file already has hash comments
+        // (i.e., was previously rendered with commitments). If fileHashes is empty, this
+        // is the first render; absent hashes are NOT user-deleted lines.
+        const deletedHashes: string[] = [];
+        if (fileHashes.size > 0) {
+          const openInService = await options.commitments.listForPerson(person.slug);
+          const serviceHashes = openInService.map((c) => c.id.slice(0, 8));
+          for (const h of serviceHashes) {
+            if (!fileHashes.has(h)) deletedHashes.push(h);
+          }
+        }
+
+        // Combine checked + deleted (deduplicated)
+        const detectedHashesSet = new Set<string>([...checkedHashes, ...deletedHashes]);
+        const detectedHashes = [...detectedHashesSet];
+
+        // Step 4: Resolve checked/deleted BEFORE sync (order matters — see pre-mortem Risk 4)
+        // If sync ran first, a re-extracted resolved item would be re-added as open before
+        // it gets resolved here. This order ensures: resolve first → add new → stay resolved.
+        if (detectedHashes.length > 0) {
+          await options.commitments.bulkResolve(detectedHashes);
+        }
+
+        // Step 5: Sync fresh action items extracted from meetings into CommitmentsService
+        const freshItems = new Map([[person.slug, actionItems]]);
+        await options.commitments.sync(freshItems);
+
+        // Step 6: Re-render from updated CommitmentsService state
+        personCommitments = await options.commitments.listForPerson(person.slug);
+      }
+
       const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns, {
         stances,
         actionItems,
         health,
+        ...(personCommitments !== undefined ? { commitments: personCommitments } : {}),
       });
+
+      // Step 7: Upsert
       const nextContent = upsertPersonMemorySection(content, section);
       if (nextContent !== content) {
         if (!options.dryRun) {

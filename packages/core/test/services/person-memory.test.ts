@@ -600,3 +600,321 @@ Bob Smith asked about deployment timing.
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// refreshPersonMemory — CommitmentsService bidirectional sync
+// ---------------------------------------------------------------------------
+
+import type { Commitment, CommitmentDirection } from '../../src/models/index.js';
+import type { PersonActionItem } from '../../src/services/person-signals.js';
+
+/**
+ * Minimal mock CommitmentsService for integration tests.
+ * Tracks call order of bulkResolve/sync to test ordering invariant.
+ */
+function makeMockCommitmentsService(initialOpen: Commitment[] = []): {
+  service: {
+    listOpen: (opts?: { direction?: CommitmentDirection; personSlugs?: string[] }) => Promise<Commitment[]>;
+    listForPerson: (personSlug: string) => Promise<Commitment[]>;
+    bulkResolve: (ids: string[], status?: 'resolved' | 'dropped') => Promise<Commitment[]>;
+    sync: (freshItems: Map<string, PersonActionItem[]>) => Promise<void>;
+    callLog: string[];
+    open: Commitment[];
+  };
+} {
+  const open: Commitment[] = [...initialOpen];
+  const callLog: string[] = [];
+
+  const service = {
+    open,
+    callLog,
+    async listOpen(opts?: { direction?: CommitmentDirection; personSlugs?: string[] }): Promise<Commitment[]> {
+      return open.filter((c) => {
+        if (c.status !== 'open') return false;
+        if (opts?.direction && c.direction !== opts.direction) return false;
+        if (opts?.personSlugs && opts.personSlugs.length > 0) {
+          if (!opts.personSlugs.includes(c.personSlug)) return false;
+        }
+        return true;
+      });
+    },
+    async listForPerson(personSlug: string): Promise<Commitment[]> {
+      return open.filter((c) => c.status === 'open' && c.personSlug === personSlug);
+    },
+    async bulkResolve(ids: string[], _status = 'resolved' as const): Promise<Commitment[]> {
+      callLog.push(`bulkResolve:${ids.join(',')}`);
+      const resolved: Commitment[] = [];
+      for (const id of ids) {
+        const idx = open.findIndex((c) => c.id === id || c.id.startsWith(id));
+        if (idx >= 0) {
+          const updated = { ...open[idx], status: 'resolved' as const, resolvedAt: new Date().toISOString() };
+          open[idx] = updated;
+          resolved.push(updated);
+        }
+      }
+      return resolved;
+    },
+    async sync(freshItems: Map<string, PersonActionItem[]>): Promise<void> {
+      callLog.push(`sync`);
+      // Simplified: just record the call (real service would add new items)
+    },
+  };
+
+  return { service: service as typeof service };
+}
+
+function makeCommitment(id: string, direction: CommitmentDirection, text: string, personSlug = 'dave'): Commitment {
+  return {
+    id,
+    text,
+    direction,
+    personSlug,
+    personName: personSlug,
+    source: 'meeting.md',
+    date: '2026-02-26',
+    status: 'open',
+    resolvedAt: null,
+  };
+}
+
+describe('EntityService.refreshPersonMemory — CommitmentsService bidirectional sync', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-commitments-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('renders open commitments as unchecked checkboxes with hash comment', async () => {
+    // Arrange: person file with no existing auto-section
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'dave.md'),
+      '---\nname: "Dave"\ncategory: "internal"\n---\n\n# Dave\n',
+      'utf8',
+    );
+
+    const commitmentId = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+    const { service: mockCommitments } = makeMockCommitmentsService([
+      makeCommitment(commitmentId, 'i_owe_them', 'Send architecture doc'),
+    ]);
+
+    await service.refreshPersonMemory(paths, { commitments: mockCommitments as never });
+
+    const personContent = readFileSync(join(personDir, 'dave.md'), 'utf8');
+
+    assert.ok(personContent.includes('### Open Commitments (I owe them)'));
+    assert.ok(personContent.includes('- [ ] Send architecture doc (2026-02-26) <!-- h:abcdef12 -->'));
+    assert.ok(!personContent.includes('- [x]'), 'Should render unchecked boxes for open commitments');
+  });
+
+  it('detects checked box and calls bulkResolve with the hash', async () => {
+    // Arrange: person file has a checked commitment box
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+
+    const commitmentId = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+    const existingContent = [
+      '---',
+      'name: "Dave"',
+      'category: "internal"',
+      '---',
+      '',
+      '# Dave',
+      '',
+      '<!-- AUTO_PERSON_MEMORY:START -->',
+      '## Memory Highlights (Auto)',
+      '',
+      '> Auto-generated from meeting notes/transcripts. Do not edit manually.',
+      '',
+      'Last refreshed: 2020-01-01',
+      '',
+      '### Open Commitments (I owe them)',
+      `- [x] Send architecture doc (2026-02-26) <!-- h:abcdef12 -->`,
+      '',
+      '<!-- AUTO_PERSON_MEMORY:END -->',
+    ].join('\n');
+    writeFileSync(join(personDir, 'dave.md'), existingContent, 'utf8');
+
+    const { service: mockCommitments } = makeMockCommitmentsService([
+      makeCommitment(commitmentId, 'i_owe_them', 'Send architecture doc'),
+    ]);
+
+    await service.refreshPersonMemory(paths, { commitments: mockCommitments as never });
+
+    // bulkResolve should have been called with 'abcdef12'
+    const resolvedCall = mockCommitments.callLog.find((c) => c.startsWith('bulkResolve:'));
+    assert.ok(resolvedCall !== undefined, 'bulkResolve should be called when a checked box is found');
+    assert.ok(resolvedCall.includes('abcdef12'), 'bulkResolve should be called with the hash of the checked commitment');
+  });
+
+  it('detects deleted commitment line and calls bulkResolve with the hash', async () => {
+    // Arrange: commitment exists in service but is NOT in the person file.
+    // The file must have at least one other hash comment so that "no hash = first render"
+    // heuristic does not skip deletion detection.
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+
+    // Person file has an auto-section with a DIFFERENT commitment hash visible (anchor)
+    // but the target commitment line ('dead1234') has been deleted.
+    const anchorId = 'a1b2c3d400000000000000000000000000000000000000000000000000000000';
+    const existingContent = [
+      '---',
+      'name: "Dave"',
+      'category: "internal"',
+      '---',
+      '',
+      '# Dave',
+      '',
+      '<!-- AUTO_PERSON_MEMORY:START -->',
+      '## Memory Highlights (Auto)',
+      '',
+      '> Auto-generated from meeting notes/transcripts. Do not edit manually.',
+      '',
+      'Last refreshed: 2020-01-01',
+      '',
+      '### Open Commitments (I owe them)',
+      // Anchor commitment still present — its hash is in the file
+      `- [ ] Some other task (2026-02-20) <!-- h:${anchorId.slice(0, 8)} -->`,
+      // The 'dead1234' commitment has been deleted (no line for it)
+      '',
+      '<!-- AUTO_PERSON_MEMORY:END -->',
+    ].join('\n');
+    writeFileSync(join(personDir, 'dave.md'), existingContent, 'utf8');
+
+    const deletedId = 'dead1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
+    const { service: mockCommitments } = makeMockCommitmentsService([
+      makeCommitment(anchorId, 'i_owe_them', 'Some other task'),
+      makeCommitment(deletedId, 'i_owe_them', 'Review the spec'),
+    ]);
+
+    await service.refreshPersonMemory(paths, { commitments: mockCommitments as never });
+
+    // 'dead1234' is open in service but NOT in file → should be resolved
+    const resolvedCall = mockCommitments.callLog.find((c) => c.startsWith('bulkResolve:'));
+    assert.ok(resolvedCall !== undefined, 'bulkResolve should be called when a commitment line is absent from the file');
+    assert.ok(resolvedCall.includes('dead1234'), 'bulkResolve should include the hash of the deleted commitment');
+    // The anchor hash IS in the file → should NOT be resolved
+    assert.ok(!resolvedCall.includes('a1b2c3d4'), 'bulkResolve should not include the hash that is still present in the file');
+  });
+
+  it('ordering invariant: bulkResolve (step 4) is called BEFORE sync (step 5)', async () => {
+    // Arrange: person file with a checked box
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+
+    const commitmentId = '3f9a1b2c567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
+    const existingContent = [
+      '---',
+      'name: "Dave"',
+      'category: "internal"',
+      '---',
+      '',
+      '# Dave',
+      '',
+      '<!-- AUTO_PERSON_MEMORY:START -->',
+      '## Memory Highlights (Auto)',
+      '',
+      '> Auto-generated from meeting notes/transcripts. Do not edit manually.',
+      '',
+      'Last refreshed: 2020-01-01',
+      '',
+      '### Open Commitments (I owe them)',
+      `- [x] Send doc (2026-02-26) <!-- h:3f9a1b2c -->`,
+      '',
+      '<!-- AUTO_PERSON_MEMORY:END -->',
+    ].join('\n');
+    writeFileSync(join(personDir, 'dave.md'), existingContent, 'utf8');
+
+    const { service: mockCommitments } = makeMockCommitmentsService([
+      makeCommitment(commitmentId, 'i_owe_them', 'Send doc'),
+    ]);
+
+    await service.refreshPersonMemory(paths, { commitments: mockCommitments as never });
+
+    // Verify ordering: bulkResolve must appear before sync in the call log
+    const resolveIdx = mockCommitments.callLog.findIndex((c) => c.startsWith('bulkResolve:'));
+    const syncIdx = mockCommitments.callLog.findIndex((c) => c === 'sync');
+
+    assert.ok(resolveIdx >= 0, 'bulkResolve should be called');
+    assert.ok(syncIdx >= 0, 'sync should be called');
+    assert.ok(
+      resolveIdx < syncIdx,
+      `bulkResolve (step 4) must be called BEFORE sync (step 5). Call log: ${mockCommitments.callLog.join(', ')}`,
+    );
+  });
+
+  it('no commitments option → falls back to plain-text action items rendering (no regression)', async () => {
+    // Arrange: person + meeting with action item signals
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'dave.md'),
+      '---\nname: "Dave"\ncategory: "internal"\n---\n\n# Dave\n',
+      'utf8',
+    );
+
+    // Write a meeting that will produce action items via LLM (but we don't have LLM here,
+    // so just verify the plain-text "Open Items" headers appear, not "Open Commitments")
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-02-10-sync.md'),
+      `---
+title: "Sync"
+date: "2026-02-10"
+attendee_ids:
+  - dave
+---
+
+Dave asked about timeline concerns.
+Dave asked about timeline concerns.
+`,
+      'utf8',
+    );
+
+    // No commitments option → falls back to existing behavior
+    await service.refreshPersonMemory(paths);
+
+    const personContent = readFileSync(join(personDir, 'dave.md'), 'utf8');
+
+    // Plain-text action items format (not commitment checkboxes)
+    assert.ok(personContent.includes('### Open Items (I owe them)'));
+    assert.ok(personContent.includes('### Open Items (They owe me)'));
+    assert.ok(!personContent.includes('### Open Commitments'), 'Should not render commitment sections without CommitmentsService');
+    assert.ok(!personContent.includes('<!-- h:'), 'Should not render hash comments without CommitmentsService');
+  });
+
+  it('skips bulkResolve when no checked or deleted hashes detected', async () => {
+    // Arrange: fresh person file, no prior auto-section, commitment is open in service
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'dave.md'),
+      '---\nname: "Dave"\ncategory: "internal"\n---\n\n# Dave\n',
+      'utf8',
+    );
+
+    const commitmentId = 'cafebabe567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
+    const { service: mockCommitments } = makeMockCommitmentsService([
+      makeCommitment(commitmentId, 'they_owe_me', 'Share meeting slides'),
+    ]);
+
+    await service.refreshPersonMemory(paths, { commitments: mockCommitments as never });
+
+    // No checked boxes or deleted lines → bulkResolve should NOT be called
+    const resolvedCall = mockCommitments.callLog.find((c) => c.startsWith('bulkResolve:'));
+    assert.equal(resolvedCall, undefined, 'bulkResolve should not be called when no hashes need resolution');
+
+    // sync should still be called (step 5)
+    assert.ok(mockCommitments.callLog.includes('sync'), 'sync should always be called when CommitmentsService is provided');
+  });
+});

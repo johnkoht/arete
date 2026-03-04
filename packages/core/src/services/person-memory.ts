@@ -7,6 +7,7 @@
 
 import type { PersonStance, PersonActionItem } from './person-signals.js';
 import type { RelationshipHealth } from './person-health.js';
+import type { Commitment } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +38,12 @@ export interface RefreshPersonMemoryInternalOptions {
 
 export const AUTO_PERSON_MEMORY_START = '<!-- AUTO_PERSON_MEMORY:START -->';
 export const AUTO_PERSON_MEMORY_END = '<!-- AUTO_PERSON_MEMORY:END -->';
+
+/**
+ * Regex to extract the 8-char hash prefix from a commitment line's HTML comment.
+ * Matches `<!-- h:3f9a1b2c -->` and captures `3f9a1b2c`.
+ */
+export const HASH_COMMENT_RE = /<!--\s*h:([0-9a-f]{8})\s*-->/;
 
 // ---------------------------------------------------------------------------
 // Functions
@@ -182,6 +189,36 @@ export function aggregateSignals(signals: PersonMemorySignal[], minMentions: num
 }
 
 /**
+ * Extract all 8-char hash prefixes from `<!-- h:XXXXXXXX -->` comments in text.
+ * Scans the entire file content (not just the auto-section) so that deleted
+ * lines are correctly detected as absent.
+ */
+export function extractHashesFromContent(content: string): Set<string> {
+  const hashes = new Set<string>();
+  for (const line of content.split('\n')) {
+    const match = HASH_COMMENT_RE.exec(line);
+    if (match) hashes.add(match[1]);
+  }
+  return hashes;
+}
+
+/**
+ * Extract hash prefixes from checked (`- [x]`) commitment lines.
+ * A line must match `- [x]` AND contain a `<!-- h:XXXXXXXX -->` comment to be
+ * treated as a checked commitment (the hash uniquely identifies it as machine-generated).
+ */
+export function extractCheckedHashes(content: string): string[] {
+  const checked: string[] = [];
+  for (const line of content.split('\n')) {
+    if (/^- \[x\]/i.test(line.trim())) {
+      const match = HASH_COMMENT_RE.exec(line);
+      if (match) checked.push(match[1]);
+    }
+  }
+  return checked;
+}
+
+/**
  * Render the auto-generated person memory section as markdown.
  * Includes repeated asks, concerns, stances, action items, and relationship health.
  * Output is wrapped in AUTO_PERSON_MEMORY sentinel comments for upsert.
@@ -193,6 +230,13 @@ export function renderPersonMemorySection(
     stances?: PersonStance[];
     actionItems?: PersonActionItem[];
     health?: RelationshipHealth;
+    /**
+     * When provided, render commitment checkboxes (`- [ ] text (date) <!-- h:XXXXXXXX -->`)
+     * instead of plain-text action items. Pass the open Commitment[] for this person.
+     * Pass an empty array to render the section with no items (no "None detected yet.").
+     * When undefined, falls back to plain-text action items rendering (no regression).
+     */
+    commitments?: Commitment[];
   },
 ): string {
   const today = new Date().toISOString().slice(0, 10);
@@ -241,26 +285,47 @@ export function renderPersonMemorySection(
     }
   }
 
-  // Open Items (I owe them)
-  const actionItems = options?.actionItems ?? [];
-  const iOweThem = actionItems.filter((i) => i.direction === 'i_owe_them');
-  const theyOweMe = actionItems.filter((i) => i.direction === 'they_owe_me');
+  if (options?.commitments !== undefined) {
+    // CommitmentsService mode: render interactive checkboxes with embedded hash comments.
+    // Only show sections that have items; omit both sections when list is empty.
+    const iOweThem = options.commitments.filter((c) => c.direction === 'i_owe_them');
+    const theyOweMe = options.commitments.filter((c) => c.direction === 'they_owe_me');
 
-  lines.push('', '### Open Items (I owe them)');
-  if (iOweThem.length === 0) {
-    lines.push('- None detected yet.');
-  } else {
-    for (const item of iOweThem) {
-      lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+    if (iOweThem.length > 0) {
+      lines.push('', '### Open Commitments (I owe them)');
+      for (const c of iOweThem) {
+        lines.push(`- [ ] ${c.text} (${c.date}) <!-- h:${c.id.slice(0, 8)} -->`);
+      }
     }
-  }
 
-  lines.push('', '### Open Items (They owe me)');
-  if (theyOweMe.length === 0) {
-    lines.push('- None detected yet.');
+    if (theyOweMe.length > 0) {
+      lines.push('', '### Open Commitments (They owe me)');
+      for (const c of theyOweMe) {
+        lines.push(`- [ ] ${c.text} (${c.date}) <!-- h:${c.id.slice(0, 8)} -->`);
+      }
+    }
   } else {
-    for (const item of theyOweMe) {
-      lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+    // Plain-text action items (existing behavior — no regression when commitments not provided).
+    const actionItems = options?.actionItems ?? [];
+    const iOweThem = actionItems.filter((i) => i.direction === 'i_owe_them');
+    const theyOweMe = actionItems.filter((i) => i.direction === 'they_owe_me');
+
+    lines.push('', '### Open Items (I owe them)');
+    if (iOweThem.length === 0) {
+      lines.push('- None detected yet.');
+    } else {
+      for (const item of iOweThem) {
+        lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+      }
+    }
+
+    lines.push('', '### Open Items (They owe me)');
+    if (theyOweMe.length === 0) {
+      lines.push('- None detected yet.');
+    } else {
+      for (const item of theyOweMe) {
+        lines.push(`- ${item.text} (from: ${item.source}, ${item.date})`);
+      }
     }
   }
 

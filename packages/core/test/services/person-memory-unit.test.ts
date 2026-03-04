@@ -9,12 +9,16 @@ import {
   extractPersonMemorySection,
   getPersonMemoryLastRefreshed,
   isMemoryStale,
+  extractHashesFromContent,
+  extractCheckedHashes,
+  HASH_COMMENT_RE,
   AUTO_PERSON_MEMORY_START,
   AUTO_PERSON_MEMORY_END,
 } from '../../src/services/person-memory.js';
 import type { PersonMemorySignal, AggregatedPersonSignal } from '../../src/services/person-memory.js';
 import type { PersonStance, PersonActionItem } from '../../src/services/person-signals.js';
 import type { RelationshipHealth } from '../../src/services/person-health.js';
+import type { Commitment } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
 // normalizeSignalTopic
@@ -558,5 +562,258 @@ describe('renderPersonMemorySection', () => {
       result.indexOf('### Relationship Health'),
     );
     assert.ok(theyOweSection.includes('- Review PR (from: x.md, 2026-01-01)'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HASH_COMMENT_RE
+// ---------------------------------------------------------------------------
+
+describe('HASH_COMMENT_RE', () => {
+  it('matches a valid hash comment', () => {
+    const line = '- [ ] Send the doc (2026-02-26) <!-- h:3f9a1b2c -->';
+    const match = HASH_COMMENT_RE.exec(line);
+    assert.ok(match !== null);
+    assert.equal(match[1], '3f9a1b2c');
+  });
+
+  it('matches with extra whitespace in comment', () => {
+    const line = '- [ ] Task (2026-02-26) <!--  h:abc12345  -->';
+    const match = HASH_COMMENT_RE.exec(line);
+    assert.ok(match !== null);
+    assert.equal(match[1], 'abc12345');
+  });
+
+  it('does not match non-commitment hash comments', () => {
+    const line = '- [ ] Task (2026-02-26) <!-- some comment -->';
+    const match = HASH_COMMENT_RE.exec(line);
+    assert.equal(match, null);
+  });
+
+  it('does not match partial hashes (< 8 hex chars)', () => {
+    const line = '- [ ] Task (2026-02-26) <!-- h:abc123 -->';
+    const match = HASH_COMMENT_RE.exec(line);
+    assert.equal(match, null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractHashesFromContent
+// ---------------------------------------------------------------------------
+
+describe('extractHashesFromContent', () => {
+  it('extracts all hash prefixes from a file with multiple commitment lines', () => {
+    const content = [
+      '# Alice',
+      '',
+      '<!-- AUTO_PERSON_MEMORY:START -->',
+      '## Memory Highlights (Auto)',
+      '',
+      '### Open Commitments (I owe them)',
+      '- [ ] Send architecture doc (2026-02-26) <!-- h:3f9a1b2c -->',
+      '',
+      '### Open Commitments (They owe me)',
+      '- [ ] Share slides (2026-02-26) <!-- h:abc12345 -->',
+      '<!-- AUTO_PERSON_MEMORY:END -->',
+    ].join('\n');
+
+    const hashes = extractHashesFromContent(content);
+    assert.equal(hashes.size, 2);
+    assert.ok(hashes.has('3f9a1b2c'));
+    assert.ok(hashes.has('abc12345'));
+  });
+
+  it('returns empty set when no hash comments are present', () => {
+    const content = '# Alice\n\n- [ ] Some task\n- [ ] Another task\n';
+    const hashes = extractHashesFromContent(content);
+    assert.equal(hashes.size, 0);
+  });
+
+  it('deduplicates hashes (same hash on multiple lines)', () => {
+    const content = [
+      '- [ ] Task A (2026-02-26) <!-- h:3f9a1b2c -->',
+      '- [ ] Task B (2026-02-26) <!-- h:3f9a1b2c -->',
+    ].join('\n');
+    const hashes = extractHashesFromContent(content);
+    assert.equal(hashes.size, 1);
+  });
+
+  it('scans outside the auto-section too', () => {
+    const content = [
+      '# Alice',
+      '- [ ] Task (2026-02-26) <!-- h:deadbeef -->',
+      '<!-- AUTO_PERSON_MEMORY:START -->',
+      '- [ ] Auto task (2026-02-26) <!-- h:cafebabe -->',
+      '<!-- AUTO_PERSON_MEMORY:END -->',
+    ].join('\n');
+    const hashes = extractHashesFromContent(content);
+    assert.ok(hashes.has('deadbeef'));
+    assert.ok(hashes.has('cafebabe'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractCheckedHashes
+// ---------------------------------------------------------------------------
+
+describe('extractCheckedHashes', () => {
+  it('extracts hash from a checked box line', () => {
+    const content = '- [x] Send architecture doc (2026-02-26) <!-- h:3f9a1b2c -->';
+    const hashes = extractCheckedHashes(content);
+    assert.deepEqual(hashes, ['3f9a1b2c']);
+  });
+
+  it('is case-insensitive on the [x] marker', () => {
+    const content = '- [X] Send doc (2026-02-26) <!-- h:abc12345 -->';
+    const hashes = extractCheckedHashes(content);
+    assert.deepEqual(hashes, ['abc12345']);
+  });
+
+  it('ignores unchecked boxes', () => {
+    const content = [
+      '- [ ] Unchecked task (2026-02-26) <!-- h:3f9a1b2c -->',
+      '- [x] Checked task (2026-02-26) <!-- h:abc12345 -->',
+    ].join('\n');
+    const hashes = extractCheckedHashes(content);
+    assert.deepEqual(hashes, ['abc12345']);
+  });
+
+  it('ignores checked boxes without hash comments (user content)', () => {
+    const content = '- [x] User-written task without hash comment';
+    const hashes = extractCheckedHashes(content);
+    assert.deepEqual(hashes, []);
+  });
+
+  it('returns empty array when no checked commitment lines', () => {
+    const content = '- [ ] Unchecked (2026-02-26) <!-- h:3f9a1b2c -->';
+    const hashes = extractCheckedHashes(content);
+    assert.deepEqual(hashes, []);
+  });
+
+  it('returns multiple hashes when multiple lines are checked', () => {
+    const content = [
+      '- [x] Task A (2026-02-26) <!-- h:3f9a1b2c -->',
+      '- [x] Task B (2026-02-26) <!-- h:abc12345 -->',
+    ].join('\n');
+    const hashes = extractCheckedHashes(content);
+    assert.equal(hashes.length, 2);
+    assert.ok(hashes.includes('3f9a1b2c'));
+    assert.ok(hashes.includes('abc12345'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderPersonMemorySection — commitments mode
+// ---------------------------------------------------------------------------
+
+describe('renderPersonMemorySection — commitments mode', () => {
+  function makeCommitment(overrides: Partial<Commitment> & { id: string; direction: Commitment['direction'] }): Commitment {
+    return {
+      text: 'Send the architecture doc',
+      personSlug: 'dave',
+      personName: 'Dave',
+      source: 'meeting.md',
+      date: '2026-02-26',
+      status: 'open',
+      resolvedAt: null,
+      ...overrides,
+    };
+  }
+
+  it('renders commitment lines with hash comment format', () => {
+    const commitments: Commitment[] = [
+      makeCommitment({ id: '3f9a1b2cabcdef0123456789abcdef0123456789abcdef0123456789abcdef01', direction: 'i_owe_them', text: 'Send architecture doc', date: '2026-02-26' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(result.includes('### Open Commitments (I owe them)'));
+    assert.ok(result.includes('- [ ] Send architecture doc (2026-02-26) <!-- h:3f9a1b2c -->'));
+  });
+
+  it('renders both directions when both have items', () => {
+    const commitments: Commitment[] = [
+      makeCommitment({ id: '3f9a1b2c00000000000000000000000000000000000000000000000000000000', direction: 'i_owe_them', text: 'Send doc', date: '2026-02-26' }),
+      makeCommitment({ id: 'abc1234500000000000000000000000000000000000000000000000000000000', direction: 'they_owe_me', text: 'Share slides', date: '2026-02-27' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(result.includes('### Open Commitments (I owe them)'));
+    assert.ok(result.includes('- [ ] Send doc (2026-02-26) <!-- h:3f9a1b2c -->'));
+    assert.ok(result.includes('### Open Commitments (They owe me)'));
+    assert.ok(result.includes('- [ ] Share slides (2026-02-27) <!-- h:abc12345 -->'));
+  });
+
+  it('omits "I owe them" section when empty', () => {
+    const commitments: Commitment[] = [
+      makeCommitment({ id: 'abc1234500000000000000000000000000000000000000000000000000000000', direction: 'they_owe_me', text: 'Share slides', date: '2026-02-26' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(!result.includes('### Open Commitments (I owe them)'), 'Should not render I owe them section when empty');
+    assert.ok(result.includes('### Open Commitments (They owe me)'));
+  });
+
+  it('omits "They owe me" section when empty', () => {
+    const commitments: Commitment[] = [
+      makeCommitment({ id: '3f9a1b2c00000000000000000000000000000000000000000000000000000000', direction: 'i_owe_them', text: 'Send doc', date: '2026-02-26' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(result.includes('### Open Commitments (I owe them)'));
+    assert.ok(!result.includes('### Open Commitments (They owe me)'), 'Should not render They owe me section when empty');
+  });
+
+  it('omits both commitment sections when commitments array is empty', () => {
+    const result = renderPersonMemorySection([], [], { commitments: [] });
+
+    assert.ok(!result.includes('### Open Commitments'), 'Should not render commitment sections when no open commitments');
+    // Should not show "Open Items" sections either
+    assert.ok(!result.includes('### Open Items'));
+  });
+
+  it('does NOT render "None detected yet." for empty commitment sections (unlike plain action items)', () => {
+    const result = renderPersonMemorySection([], [], { commitments: [] });
+    // Commitment mode: empty = omit section entirely (no "None detected yet.")
+    assert.ok(!result.includes('### Open Commitments'));
+  });
+
+  it('renders plain-text action items when commitments option is undefined (no regression)', () => {
+    const actionItems: PersonActionItem[] = [
+      { text: 'Review the proposal', direction: 'i_owe_them', source: 'meeting.md', date: '2026-02-20', hash: 'h1', stale: false },
+    ];
+
+    const result = renderPersonMemorySection([], [], { actionItems });
+
+    assert.ok(result.includes('### Open Items (I owe them)'));
+    assert.ok(result.includes('- Review the proposal (from: meeting.md, 2026-02-20)'));
+    assert.ok(!result.includes('### Open Commitments'));
+    assert.ok(!result.includes('<!-- h:'));
+  });
+
+  it('renders unchecked boxes (- [ ]) not checked boxes', () => {
+    const commitments: Commitment[] = [
+      makeCommitment({ id: '3f9a1b2c00000000000000000000000000000000000000000000000000000000', direction: 'i_owe_them', text: 'Send doc', date: '2026-02-26' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(result.includes('- [ ] Send doc'));
+    assert.ok(!result.includes('- [x]'));
+  });
+
+  it('uses only the first 8 chars of the commitment id for the hash comment', () => {
+    const longId = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+    const commitments: Commitment[] = [
+      makeCommitment({ id: longId, direction: 'i_owe_them', text: 'Task', date: '2026-02-26' }),
+    ];
+
+    const result = renderPersonMemorySection([], [], { commitments });
+
+    assert.ok(result.includes('<!-- h:abcdef12 -->'));
+    assert.ok(!result.includes(longId)); // full hash should not appear
   });
 });
