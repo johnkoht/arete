@@ -68,13 +68,35 @@ export declare function capActionItems(items: PersonActionItem[], maxPerDirectio
  */
 export declare function deduplicateActionItems(existing: PersonActionItem[], newItems: PersonActionItem[]): PersonActionItem[];
 /**
+ * Build the LLM prompt for extracting action items / commitments from content
+ * for a specific person.
+ */
+export declare function buildActionItemPrompt(content: string, personName: string): string;
+/**
+ * Parse the LLM response into an array of raw action item objects.
+ * Handles code fences, extra text, malformed JSON — never throws.
+ * Returns objects with text + direction only; caller adds source/date/hash/stale.
+ */
+export declare function parseActionItemResponse(response: string): Array<{
+    text: string;
+    direction: ActionItemDirection;
+}>;
+/**
  * Extract action items for a specific person from meeting content.
+ *
+ * When `callLLM` is provided, uses LLM-based extraction via `buildActionItemPrompt` →
+ * `callLLM` → `parseActionItemResponse` to distinguish genuine commitments from
+ * descriptions, explanations, and general discussion.
+ *
+ * When `callLLM` is NOT provided, falls back to the existing regex implementation —
+ * no silent zero-result regression.
  *
  * @param content - Meeting notes/transcript text
  * @param personName - Name of the person to extract items for
  * @param source - Meeting filename
  * @param date - Meeting date (YYYY-MM-DD)
- * @param ownerName - Workspace owner name (from profile.md); enables owner detection
+ * @param callLLM - Optional LLM function; when omitted, regex fallback runs
+ * @param ownerName - Workspace owner name (from profile.md); enables owner detection (regex path only)
  */
-export declare function extractActionItemsForPerson(content: string, personName: string, source: string, date: string, ownerName?: string): PersonActionItem[];
+export declare function extractActionItemsForPerson(content: string, personName: string, source: string, date: string, callLLM?: LLMCallFn, ownerName?: string): Promise<PersonActionItem[]>;
 //# sourceMappingURL=person-signals.d.ts.map

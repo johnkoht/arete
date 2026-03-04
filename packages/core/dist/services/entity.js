@@ -804,6 +804,9 @@ export class EntityService {
         // LLM stance cache — prevents duplicate LLM calls for the same meeting+person
         // within a single refresh. Keyed by normalized absolute path + ':' + person slug.
         const stanceCache = new Map();
+        // LLM action item cache — same pattern as stanceCache. Only populated when
+        // callLLM is provided; regex fallback is fast and does not warrant caching.
+        const actionItemCache = new Map();
         // Meeting content cache — keyed by normalized absolute path so that the
         // same physical file is read at most once, regardless of whether the path
         // came from storage.list() (absolute) or SearchProvider (possibly relative).
@@ -904,8 +907,21 @@ export class EntityService {
                         personStanceList.push(...stances);
                     }
                 }
-                // Action item extraction (regex-based, always runs)
-                const actionItems = extractActionItemsForPerson(content, person.name, source, date, ownerName);
+                // Action item extraction (LLM when callLLM provided, regex fallback otherwise)
+                const actionItemCacheKey = resolve(workspacePaths.root, meetingPath) + ':' + person.slug;
+                let actionItems;
+                if (options.callLLM) {
+                    if (actionItemCache.has(actionItemCacheKey)) {
+                        actionItems = actionItemCache.get(actionItemCacheKey);
+                    }
+                    else {
+                        actionItems = await extractActionItemsForPerson(content, person.name, source, date, options.callLLM, ownerName);
+                        actionItemCache.set(actionItemCacheKey, actionItems);
+                    }
+                }
+                else {
+                    actionItems = await extractActionItemsForPerson(content, person.name, source, date, undefined, ownerName);
+                }
                 const personActionItemList = personActionItems.get(person.slug);
                 if (personActionItemList) {
                     personActionItemList.push(...actionItems);
