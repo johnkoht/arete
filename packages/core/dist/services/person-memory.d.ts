@@ -6,6 +6,7 @@
  */
 import type { PersonStance, PersonActionItem } from './person-signals.js';
 import type { RelationshipHealth } from './person-health.js';
+import type { Commitment } from '../models/index.js';
 export interface PersonMemorySignal {
     kind: 'ask' | 'concern';
     topic: string;
@@ -24,6 +25,11 @@ export interface RefreshPersonMemoryInternalOptions {
 }
 export declare const AUTO_PERSON_MEMORY_START = "<!-- AUTO_PERSON_MEMORY:START -->";
 export declare const AUTO_PERSON_MEMORY_END = "<!-- AUTO_PERSON_MEMORY:END -->";
+/**
+ * Regex to extract the 8-char hash prefix from a commitment line's HTML comment.
+ * Matches `<!-- h:3f9a1b2c -->` and captures `3f9a1b2c`.
+ */
+export declare const HASH_COMMENT_RE: RegExp;
 /**
  * Normalize a signal topic string for deduplication and aggregation.
  * Lowercases, strips punctuation, collapses whitespace, and truncates to 120 chars.
@@ -52,6 +58,18 @@ export declare function aggregateSignals(signals: PersonMemorySignal[], minMenti
     concerns: AggregatedPersonSignal[];
 };
 /**
+ * Extract all 8-char hash prefixes from `<!-- h:XXXXXXXX -->` comments in text.
+ * Scans the entire file content (not just the auto-section) so that deleted
+ * lines are correctly detected as absent.
+ */
+export declare function extractHashesFromContent(content: string): Set<string>;
+/**
+ * Extract hash prefixes from checked (`- [x]`) commitment lines.
+ * A line must match `- [x]` AND contain a `<!-- h:XXXXXXXX -->` comment to be
+ * treated as a checked commitment (the hash uniquely identifies it as machine-generated).
+ */
+export declare function extractCheckedHashes(content: string): string[];
+/**
  * Render the auto-generated person memory section as markdown.
  * Includes repeated asks, concerns, stances, action items, and relationship health.
  * Output is wrapped in AUTO_PERSON_MEMORY sentinel comments for upsert.
@@ -60,6 +78,13 @@ export declare function renderPersonMemorySection(asks: AggregatedPersonSignal[]
     stances?: PersonStance[];
     actionItems?: PersonActionItem[];
     health?: RelationshipHealth;
+    /**
+     * When provided, render commitment checkboxes (`- [ ] text (date) <!-- h:XXXXXXXX -->`)
+     * instead of plain-text action items. Pass the open Commitment[] for this person.
+     * Pass an empty array to render the section with no items (no "None detected yet.").
+     * When undefined, falls back to plain-text action items rendering (no regression).
+     */
+    commitments?: Commitment[];
 }): string;
 /**
  * Extract the auto-generated memory section from a person file's content.

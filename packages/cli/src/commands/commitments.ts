@@ -10,7 +10,7 @@ import {
 } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { header, listItem, error, info, success } from '../formatters.js';
+import { listItem, error, info, success } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
 export function registerCommitmentsCommand(program: Command): void {

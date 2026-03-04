@@ -36,6 +36,46 @@ Branch: feature/commitments-service
 
 ---
 
+## task-7 — CLI — arete commitments commands
+**Completed**: 2026-03-03
+**Commit**: 18cdc2f
+
+### What was done
+
+**Part A — personName fix in sync()**:
+- Updated `CommitmentsService.sync()` signature to accept optional `nameMap?: Map<string, string>` (personSlug → personName)
+- Replaced `personName: personSlug` placeholder with `personName: nameMap?.get(personSlug) ?? personSlug`
+- Updated `entity.ts` to build `nameMap` from `refreshablePeople` and pass it to `sync(freshItems, nameMap)`
+- Added 3 new tests for nameMap behavior: slug fallback (no nameMap), real name from nameMap, slug fallback when slug not in nameMap
+
+**Part B — CLI commands**:
+- Created `packages/cli/src/commands/commitments.ts` with `registerCommitmentsCommand(program)`
+- `arete commitments list`: groups by direction ("I owe them" / "They owe me"), shows 8-char short ID, person name, text, date; `--direction`, `--person` (variadic), `--json` options
+- `arete commitments resolve <id>`: accepts 8-char prefix or full hash, `--status resolved|dropped`, `--yes` to skip confirmation, `--skip-qmd`, `--json`; uses `confirm()` from `@inquirer/prompts` with `default: false` when interactive; calls `refreshQmdIndex()` after resolve
+- Registered in `packages/cli/src/index.ts` with import + call + help text section
+- Created `packages/runtime/tools/commitments/TOOL.md` with triggers matching the task spec
+
+**Tests added (16 tests)**:
+- `packages/cli/test/commands/commitments.test.ts`: 8 list tests (empty state, human grouped output, JSON output, direction filter, person filter, invalid direction error, workspace guard, resolved items excluded) + 8 resolve tests (full ID, 8-char prefix, dropped status, not found error, invalid status error, workspace guard, ambiguous prefix)
+
+### Files changed
+- `packages/core/src/services/commitments.ts` — updated `sync()` signature + `personName` assignment
+- `packages/core/src/services/entity.ts` — added `nameMap` build + pass to `sync()`
+- `packages/core/test/services/commitments.test.ts` — 3 new nameMap tests
+- `packages/cli/src/commands/commitments.ts` — new file (full command implementation)
+- `packages/cli/src/index.ts` — added import, registration call, and help text section
+- `packages/cli/test/commands/commitments.test.ts` — new file (16 tests)
+- `packages/runtime/tools/commitments/TOOL.md` — new file (tool definition)
+
+### Quality checks
+- typecheck: ✓ (0 errors)
+- tests: ✓ (1237 total, 1235 passed, 2 skipped, 0 failed)
+
+### Reflection
+The CLI pattern was very clear from existing commands — the `people.ts` reference was particularly useful for the list grouping structure and JSON output shape. The personName fix was simple but important: `nameMap?.get(personSlug) ?? personSlug` required no structural changes to sync(). The `@inquirer/prompts` confirm pattern was the one area where no prior art existed in the codebase — no command uses `confirm()` yet (only `checkbox` in integration.ts), so the import pattern `const { confirm } = await import('@inquirer/prompts')` is newly established here. The `--yes` and `--skip-qmd` flags follow LEARNINGS.md guidance perfectly. One design note: `arete commitments resolve` calls `refreshQmdIndex()` unconditionally after every resolve (not gated on "files written > 0"), which is consistent with how other write commands work — the QMD layer handles skipping gracefully. Estimated ~12k tokens.
+
+---
+
 ## task-2 — Wire LLM extraction into refresh pipeline
 **Completed**: 2026-03-03
 **Commit**: 43c1692
@@ -139,3 +179,42 @@ Two bugs were found and fixed:
 
 ### Reflection
 The StorageAdapter pattern was completely straightforward — `read()` returns `string | null`, parse with try/catch, default to `{ commitments: [] }`, write with `JSON.stringify(data, null, 2)`. No surprises there. The Jaccard implementation was clean (no external deps, pure Set math). The main discoveries were: (1) `createMockStorage` copying the passed Map — a subtle test isolation bug that caused wrong reads after writes; (2) node:test v23 hangs indefinitely when an assertion fails in a suite and other tests in the same suite are running, which masked the root cause as a "timeout" rather than a "failure". For Task 6 (bidirectional sync), CommitmentsService should be passed via `RefreshPersonMemoryOptions.commitments?: CommitmentsService` — gated so existing callers without it get plain-text rendering (no regression). The `bulkResolve()` method is the natural call point after parsing checked/deleted hash comments from the auto-section. Estimated ~15k tokens.
+
+---
+
+## task-6 — Bidirectional sync via person memory checkboxes
+**Completed**: 2026-03-04
+**Commit**: 5014504
+
+### What was done
+Implemented bidirectional commitment sync across two files:
+
+**`packages/core/src/services/person-memory.ts`**:
+- Imported `Commitment` type from models
+- Added `HASH_COMMENT_RE` constant (exported) — `/<!--\s*h:([0-9a-f]{8})\s*-->/`
+- Added `extractHashesFromContent(content)` (exported) — scans entire file for `<!-- h:XXXXXXXX -->` comments, returns `Set<string>` of 8-char prefixes
+- Added `extractCheckedHashes(content)` (exported) — finds `- [x]` lines with hash comments, returns checked hashes
+- Updated `renderPersonMemorySection()` options type to accept `commitments?: Commitment[]`. When provided: renders `- [ ] text (date) <!-- h:XXXXXXXX -->` format split into "Open Commitments (I owe them)" and "Open Commitments (They owe me)" sections; omits sections with no items (no "None detected yet."). When undefined: falls back to plain-text action items (no regression).
+
+**`packages/core/src/services/entity.ts`**:
+- Imported `CommitmentsService`, `Commitment`, and new helpers from person-memory.ts
+- Added `commitments?: CommitmentsService` to `RefreshPersonMemoryOptions`
+- Implemented the 7-step bidirectional sync in the write loop: read → parse hashes → detect checked/deleted → `bulkResolve` → `sync` → `listForPerson` → render → upsert
+- Added critical first-render guard: deletion detection is skipped when `fileHashes.size === 0` (fresh file with no existing hash comments). Without this, all open commitments would be false-positively "deleted" on first render.
+
+**Tests added**:
+- 38 new unit tests in `person-memory-unit.test.ts`: `HASH_COMMENT_RE`, `extractHashesFromContent`, `extractCheckedHashes`, `renderPersonMemorySection` commitment mode (hash format, both directions, omit empty sections, fallback regression)
+- 6 integration tests in `person-memory.test.ts`: unchecked checkbox rendering, checked box detection, deleted line detection, ordering invariant (step 4 before step 5), fallback regression, skip-bulkResolve when nothing to resolve
+
+### Files changed
+- `packages/core/src/services/person-memory.ts` — added `HASH_COMMENT_RE`, `extractHashesFromContent`, `extractCheckedHashes`; updated `renderPersonMemorySection()` with `commitments` option
+- `packages/core/src/services/entity.ts` — imported helpers; added `commitments?: CommitmentsService` to options; implemented 7-step sync in write loop
+- `packages/core/test/services/person-memory-unit.test.ts` — 38 new tests for new helpers and rendering modes
+- `packages/core/test/services/person-memory.test.ts` — 6 integration tests for 7-step sync flow
+
+### Quality checks
+- typecheck: ✓ (0 errors)
+- tests: ✓ (1219 passed, 0 failed)
+
+### Reflection
+The sentinel comment pattern (`AUTO_PERSON_MEMORY:START/END`) applied here as the structural model — `HASH_COMMENT_RE` is the commitment-level equivalent: machine-parseable HTML comment invisible in rendered markdown, embedded per-line rather than wrapping a section. The most important surprise was the first-render false-deletion problem: without the `fileHashes.size > 0` guard, all open commitments would be immediately resolved on the first refresh because none of their hashes appear in a fresh file. The spec says "hash not found in file content" but implicitly assumes prior rendering. The guard (skip deletion when no hash comments exist) is the correct precondition. For Task 7 (CLI), the `CommitmentsService` API is clean — `listOpen({ direction, personSlugs })` and `resolve(idPrefix)` are the core call sites. The 8-char hash prefix (from `id.slice(0, 8)`) shown in list output will be the natural argument for `arete commitments resolve <id>`. Estimated ~18k tokens.

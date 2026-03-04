@@ -25,6 +25,7 @@ import { registerOnboardCommand } from './commands/onboard.js';
 import { registerIndexSearchCommand } from './commands/index-search.js';
 import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
+import { registerCommitmentsCommand } from './commands/commitments.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -70,6 +71,10 @@ ${chalk.bold('Integrations')}
   pull fathom [--days N]           Pull Fathom recordings
   seed [source]                    Import historical data
 
+${chalk.bold('Commitments')}
+  commitments list [--direction]   List open commitments
+  commitments resolve <id>         Resolve or drop a commitment
+
 ${chalk.bold('Availability & Calendar')}
   availability find --with <name>  Find mutual availability with a colleague
   calendar create --title <title>  Create a calendar event
@@ -100,5 +105,6 @@ registerTemplateCommands(program);
 registerSeedCommand(program);
 registerAvailabilityCommands(program);
 registerCalendarCommands(program);
+registerCommitmentsCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

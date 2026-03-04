@@ -380,7 +380,7 @@ function escapeTableCell(s) {
     return String(s).replace(/\|/g, ' ').replace(/\r?\n/g, ' ').trim();
 }
 // Person memory signal collection, aggregation, rendering, and upsert — extracted to person-memory.ts
-import { collectSignalsForPerson, aggregateSignals, renderPersonMemorySection, getPersonMemoryLastRefreshed, isMemoryStale, upsertPersonMemorySection, } from './person-memory.js';
+import { collectSignalsForPerson, aggregateSignals, renderPersonMemorySection, getPersonMemoryLastRefreshed, isMemoryStale, upsertPersonMemorySection, extractHashesFromContent, extractCheckedHashes, } from './person-memory.js';
 import { extractStancesForPerson, extractActionItemsForPerson, isActionItemStale, deduplicateActionItems, capActionItems, } from './person-signals.js';
 import { computeRelationshipHealth } from './person-health.js';
 const DEFAULT_FEATURE_TOGGLES = {
@@ -994,6 +994,7 @@ export class EntityService {
         for (const person of refreshablePeople) {
             const category = person.category;
             const personPath = join(workspacePaths.people, category, `${person.slug}.md`);
+            // Step 1: Read current person file content
             const content = await this.storage.read(personPath);
             if (!content)
                 continue;
@@ -1003,11 +1004,48 @@ export class EntityService {
             const actionItems = personActionItems.get(person.slug) ?? [];
             const meetingDates = personMeetingDates.get(person.slug) ?? [];
             const health = computeRelationshipHealth(meetingDates, actionItems.length);
+            // CommitmentsService 7-step bidirectional sync (only when options.commitments provided)
+            let personCommitments;
+            if (options.commitments) {
+                // Step 2: Parse existing hash comments from current file
+                const fileHashes = extractHashesFromContent(content);
+                const checkedHashes = extractCheckedHashes(content);
+                // Step 3: Detect deleted lines — hash in CommitmentsService but NOT in file.
+                // IMPORTANT: Only run deletion detection when the file already has hash comments
+                // (i.e., was previously rendered with commitments). If fileHashes is empty, this
+                // is the first render; absent hashes are NOT user-deleted lines.
+                const deletedHashes = [];
+                if (fileHashes.size > 0) {
+                    const openInService = await options.commitments.listForPerson(person.slug);
+                    const serviceHashes = openInService.map((c) => c.id.slice(0, 8));
+                    for (const h of serviceHashes) {
+                        if (!fileHashes.has(h))
+                            deletedHashes.push(h);
+                    }
+                }
+                // Combine checked + deleted (deduplicated)
+                const detectedHashesSet = new Set([...checkedHashes, ...deletedHashes]);
+                const detectedHashes = [...detectedHashesSet];
+                // Step 4: Resolve checked/deleted BEFORE sync (order matters — see pre-mortem Risk 4)
+                // If sync ran first, a re-extracted resolved item would be re-added as open before
+                // it gets resolved here. This order ensures: resolve first → add new → stay resolved.
+                if (detectedHashes.length > 0) {
+                    await options.commitments.bulkResolve(detectedHashes);
+                }
+                // Step 5: Sync fresh action items extracted from meetings into CommitmentsService
+                const freshItems = new Map([[person.slug, actionItems]]);
+                const nameMap = new Map(refreshablePeople.map((p) => [p.slug, p.name]));
+                await options.commitments.sync(freshItems, nameMap);
+                // Step 6: Re-render from updated CommitmentsService state
+                personCommitments = await options.commitments.listForPerson(person.slug);
+            }
             const section = renderPersonMemorySection(aggregated.asks, aggregated.concerns, {
                 stances,
                 actionItems,
                 health,
+                ...(personCommitments !== undefined ? { commitments: personCommitments } : {}),
             });
+            // Step 7: Upsert
             const nextContent = upsertPersonMemorySection(content, section);
             if (nextContent !== content) {
                 if (!options.dryRun) {

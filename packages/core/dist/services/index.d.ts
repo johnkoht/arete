@@ -10,4 +10,5 @@ export { SkillService } from './skills.js';
 export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
+export { CommitmentsService } from './commitments.js';
 //# sourceMappingURL=index.d.ts.map

@@ -15,6 +15,7 @@ import { WorkspaceService } from './services/workspace.js';
 import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
 import { ToolService } from './services/tools.js';
+import { CommitmentsService } from './services/commitments.js';
 /**
  * Create all Areté services wired with correct dependencies.
  *
@@ -41,6 +42,7 @@ export async function createServices(workspaceRoot, options) {
     const skills = new SkillService(storage);
     const tools = new ToolService(storage);
     const integrations = new IntegrationService(storage, config);
+    const commitments = new CommitmentsService(storage, workspaceRoot);
     return {
         storage,
         search,
@@ -52,6 +54,7 @@ export async function createServices(workspaceRoot, options) {
         skills,
         tools,
         integrations,
+        commitments,
     };
 }
 //# sourceMappingURL=factory.js.map

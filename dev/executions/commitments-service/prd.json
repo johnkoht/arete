@@ -105,9 +105,10 @@
         "Refresh follows the 7-step sequence: read → parse → detect → bulkResolve → sync → render → upsert",
         "Tests: mock CommitmentsService; test checkbox detection, deletion detection, new-item appearance, hash comment rendering, fallback behavior"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "5014504"
     },
     {
       "id": "task-7",
@@ -130,9 +131,10 @@
         "registerCommitmentsCommand imported and called in packages/cli/src/index.ts",
         "Tool definition created with triggers: 'commitments', 'what I owe', 'what they owe', 'track commitment', 'resolve commitment', 'open commitments'"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "18cdc2f"
     },
     {
       "id": "task-8",

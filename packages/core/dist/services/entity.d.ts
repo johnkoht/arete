@@ -12,6 +12,7 @@ declare const PEOPLE_CATEGORIES: PersonCategory[];
  * Generate a URL-safe slug from a name (e.g. "Jane Doe" -> "jane-doe").
  */
 export declare function slugifyPersonName(name: string): string;
+import { CommitmentsService } from './commitments.js';
 import type { LLMCallFn } from './person-signals.js';
 export interface ListPeopleOptions {
     category?: PersonCategory;
@@ -23,6 +24,13 @@ export interface RefreshPersonMemoryOptions {
     callLLM?: LLMCallFn;
     /** When true, compute everything but skip writing files to disk. */
     dryRun?: boolean;
+    /**
+     * When provided, enables bidirectional commitment sync via person memory checkboxes.
+     * Commitments are rendered as `- [ ] text (date) <!-- h:XXXXXXXX -->` lines.
+     * On refresh, checked boxes and deleted lines are auto-resolved.
+     * Without this option, plain-text action items are rendered (no regression).
+     */
+    commitments?: CommitmentsService;
 }
 export interface RefreshPersonMemoryResult {
     updated: number;
