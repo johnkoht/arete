@@ -65,6 +65,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **`arete people memory refresh` must pass `commitments: services.commitments` to `refreshPersonMemory()`** (2026-03-04): The `commitments` option in `RefreshPersonMemoryOptions` is the gate for the entire 7-step CommitmentsService sync inside `entity.ts`. Without it, action items are rendered as plain text in person files but `CommitmentsService.sync()` is never called — so `.arete/commitments.json` stays empty and `arete commitments list` returns nothing. The CLI command had this option missing on launch. Symptom: items visible in person memory (`### Open Items (I owe them)`), invisible to `arete commitments list`. Fix: add `commitments: services.commitments` to the `refreshPersonMemory()` call in `people.ts`.
 
+- **CLI LLM client helper pattern** (2026-03-04): For commands that need LLM access directly in CLI (not via core services), use `packages/cli/src/lib/llm.ts`. The `createLLMClient()` function returns an `LLMCallFn` using the Anthropic SDK with `ANTHROPIC_API_KEY` env var. It throws immediately if the key is missing — catch and report in JSON mode before `process.exit(1)`. First established in `arete meeting extract`. The pattern separates prompt building (in core) from LLM client creation (in CLI) for testability — core functions accept `LLMCallFn` as parameter.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

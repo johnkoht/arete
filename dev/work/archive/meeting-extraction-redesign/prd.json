@@ -1,0 +1,113 @@
+{
+  "name": "meeting-extraction-redesign",
+  "branchName": "feature/meeting-extraction-redesign",
+  "goal": "Redesign meeting action item extraction to produce clean, structured commitments instead of garbage. Move extraction from per-person LLM calls on raw transcripts to single extraction during meeting processing with user review, saving structured output to meeting files.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Create Meeting Extraction Service & CLI",
+      "description": "Create the core service for extracting meeting intelligence (summary, action items, next steps, decisions, learnings) and expose it via CLI command `arete meeting extract <file> [--json]`. Includes LLM prompt with few-shot examples and aggressive validation to reject garbage.",
+      "acceptanceCriteria": [
+        "Prompt includes JSON schema and few-shot examples (good: 'John to send API docs to Sarah by Friday'; bad: 'Me: Yeah, I'll look into that...', 'So the way the system works is...')",
+        "Parser rejects action items > 150 chars",
+        "Parser rejects items starting with 'Me:', 'Them:', 'Yeah', 'I'm not sure'",
+        "Parser rejects items with multiple sentences (more than one period)",
+        "Parser handles malformed JSON gracefully (returns empty arrays, not throws)",
+        "CLI outputs JSON with --json flag, human-readable otherwise",
+        "Tests cover: prompt building, valid/malformed/empty responses, validation rejections"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Create Action Item Parser for Meeting Files",
+      "description": "Create parser to extract action items from structured `## Action Items` sections in meeting markdown. Parses arrow notation for direction, handles variations, falls back to owner-name heuristics when notation missing.",
+      "acceptanceCriteria": [
+        "Parses @owner-slug → @counterparty-slug notation for direction",
+        "Handles notation variations: →, ->, -->, =>",
+        "Handles missing @ prefix: john-koht → sarah-chen works",
+        "Fallback: items without arrow notation use owner-name heuristics for direction",
+        "Handles checked [x] and unchecked [ ] items (returns both, marks completed)",
+        "Returns only items relevant to given personSlug (as owner OR counterparty)",
+        "Returns empty array if no ## Action Items section found (not error)",
+        "Tests cover: all notation variations, direction determination, fallback, filtering"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Update process-meetings Skill",
+      "description": "Rewrite the skill workflow to use the new extraction → review → save flow. Insert new steps 4-6 after existing step 3: extract via CLI, user review, save to meeting file.",
+      "acceptanceCriteria": [
+        "Workflow clearly documents the new steps 4-6",
+        "User review UX follows existing skill-driven pattern (present, ask approve/edit/skip)",
+        "Documents the action item format: - [ ] {Owner} to {action} (@{owner-slug} → @{counterparty-slug})",
+        "Documents direction encoding: @john → @sarah = John owes Sarah",
+        "Preserves existing steps 1-3 (gather context, people resolution, attendee_ids)",
+        "Updates step ordering for existing steps 7+ (memory, person refresh)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-1"]
+    },
+    {
+      "id": "task-4",
+      "title": "Update Person Memory Refresh",
+      "description": "Change action item extraction from LLM-based to parsing-based using Task 2's parser. Find meetings where person is attendee, parse ## Action Items sections, sync to CommitmentsService.",
+      "acceptanceCriteria": [
+        "No LLM calls for action item extraction from meetings",
+        "Uses parseActionItemsFromMeeting() from meeting-parser.ts",
+        "Only processes meetings with ## Action Items section (skip others gracefully)",
+        "Existing commitments preserved when meeting has no structured section",
+        "Direction correctly determined from arrow notation",
+        "Integration test: meeting with ## Action Items → refresh → items appear in commitments",
+        "Integration test: old meeting without section → refresh → existing commitments UNCHANGED"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-2"]
+    },
+    {
+      "id": "task-5",
+      "title": "Update PATTERNS.md",
+      "description": "Update the get_meeting_context pattern to reflect new primary path (parse structured sections) with fallback (commitments list for older meetings).",
+      "acceptanceCriteria": [
+        "Primary path: Parse structured ## Action Items section from meeting files",
+        "Fallback: arete commitments list --person <slug> for older meetings without structured sections",
+        "Any referencing skills continue to work"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-1", "task-2", "task-3", "task-4"]
+    },
+    {
+      "id": "task-6",
+      "title": "Deprecate LLM Extraction in person-signals.ts",
+      "description": "Mark the LLM-based action item extraction as deprecated with JSDoc comments explaining the new flow.",
+      "acceptanceCriteria": [
+        "extractActionItemsForPerson LLM path marked @deprecated with JSDoc explaining new flow",
+        "buildActionItemPrompt marked @deprecated",
+        "Regex fallback preserved for potential non-meeting sources",
+        "No breaking changes to existing callers (function signatures unchanged)",
+        "Comments explain: 'For meetings, use meeting-parser.ts. This path is deprecated.'"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-4"]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-04T17:15:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
