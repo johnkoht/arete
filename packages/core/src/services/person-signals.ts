@@ -340,6 +340,115 @@ function isPersonActor(text: string, personName: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Action Item Prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the LLM prompt for extracting action items / commitments from content
+ * for a specific person.
+ */
+export function buildActionItemPrompt(content: string, personName: string): string {
+  return `You are analyzing a meeting transcript to extract genuine commitments and action items involving a specific person.
+
+Extract action items ONLY involving: ${personName}
+
+A commitment is a promise, action item, or deliverable. NOT a description of how something works, an explanation of architecture, or general discussion.
+
+Rules:
+- INCLUDE: explicit promises ("I'll send you...", "Alice will handle...", "I agreed to..."), action items with a clear owner, deliverables with a clear assignee
+- EXCLUDE: descriptions of how systems work, architecture walkthroughs, explanations of past decisions, general discussion, questions without commitments
+- Return ONLY valid JSON with no markdown formatting, no code fences, no explanation
+- Extract items involving ${personName} only — either they made a commitment, or someone made one to them
+- For each item, classify direction: "i_owe_them" (the workspace owner owes something to ${personName}) or "they_owe_me" (${personName} owes something to the workspace owner)
+- text should be a concise, normalized description of the deliverable — NOT a raw transcript excerpt
+- If no genuine commitments are found, return {"action_items": []}
+
+JSON schema:
+{
+  "action_items": [
+    {
+      "text": "string — concise description of the deliverable",
+      "direction": "i_owe_them | they_owe_me"
+    }
+  ]
+}
+
+Transcript:
+${content}`;
+}
+
+// ---------------------------------------------------------------------------
+// Action Item Response Parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Raw JSON shape returned by the LLM (snake_case to match prompt).
+ */
+type RawActionItemResult = {
+  action_items?: Array<{
+    text?: string;
+    direction?: string;
+  }>;
+};
+
+const VALID_ACTION_ITEM_DIRECTIONS = new Set<string>(['i_owe_them', 'they_owe_me']);
+
+/**
+ * Parse the LLM response into an array of raw action item objects.
+ * Handles code fences, extra text, malformed JSON — never throws.
+ * Returns objects with text + direction only; caller adds source/date/hash/stale.
+ */
+export function parseActionItemResponse(
+  response: string,
+): Array<{ text: string; direction: ActionItemDirection }> {
+  const trimmed = response.trim();
+  if (!trimmed) return [];
+
+  let jsonStr = trimmed;
+
+  // Strip markdown code fences if present
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (fenceMatch) {
+    jsonStr = fenceMatch[1].trim();
+  }
+
+  // Try to find a JSON object in the string
+  const braceStart = jsonStr.indexOf('{');
+  const braceEnd = jsonStr.lastIndexOf('}');
+  if (braceStart >= 0 && braceEnd > braceStart) {
+    jsonStr = jsonStr.slice(braceStart, braceEnd + 1);
+  }
+
+  let raw: RawActionItemResult;
+  try {
+    raw = JSON.parse(jsonStr) as RawActionItemResult;
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(raw.action_items)) return [];
+
+  const results: Array<{ text: string; direction: ActionItemDirection }> = [];
+
+  for (const item of raw.action_items) {
+    if (!item || typeof item !== 'object') continue;
+
+    const text = typeof item.text === 'string' ? item.text.trim() : '';
+    const direction =
+      typeof item.direction === 'string' ? item.direction.trim().toLowerCase() : '';
+
+    // Skip items missing required fields
+    if (!text || !direction) continue;
+    // Skip items with invalid direction
+    if (!VALID_ACTION_ITEM_DIRECTIONS.has(direction)) continue;
+
+    results.push({ text, direction: direction as ActionItemDirection });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
 // Main extraction
 // ---------------------------------------------------------------------------
 
@@ -371,15 +480,10 @@ const EXPLICIT_MARKER = /^(?:action item:|todo:|-\s*\[\s*\])\s*(.+)/i;
 const I_SEND_PATTERN = /^I need to (?:send|email|message|share|forward)\s+/i;
 
 /**
- * Extract action items for a specific person from meeting content.
- *
- * @param content - Meeting notes/transcript text
- * @param personName - Name of the person to extract items for
- * @param source - Meeting filename
- * @param date - Meeting date (YYYY-MM-DD)
- * @param ownerName - Workspace owner name (from profile.md); enables owner detection
+ * Regex-based action item extraction (private fallback).
+ * Contains the original extraction logic.
  */
-export function extractActionItemsForPerson(
+function extractActionItemsRegex(
   content: string,
   personName: string,
   source: string,
@@ -484,4 +588,59 @@ export function extractActionItemsForPerson(
   }
 
   return items;
+}
+
+/**
+ * Extract action items for a specific person from meeting content.
+ *
+ * When `callLLM` is provided, uses LLM-based extraction via `buildActionItemPrompt` →
+ * `callLLM` → `parseActionItemResponse` to distinguish genuine commitments from
+ * descriptions, explanations, and general discussion.
+ *
+ * When `callLLM` is NOT provided, falls back to the existing regex implementation —
+ * no silent zero-result regression.
+ *
+ * @param content - Meeting notes/transcript text
+ * @param personName - Name of the person to extract items for
+ * @param source - Meeting filename
+ * @param date - Meeting date (YYYY-MM-DD)
+ * @param callLLM - Optional LLM function; when omitted, regex fallback runs
+ * @param ownerName - Workspace owner name (from profile.md); enables owner detection (regex path only)
+ */
+export async function extractActionItemsForPerson(
+  content: string,
+  personName: string,
+  source: string,
+  date: string,
+  callLLM?: LLMCallFn,
+  ownerName?: string,
+): Promise<PersonActionItem[]> {
+  if (!callLLM) {
+    return extractActionItemsRegex(content, personName, source, date, ownerName);
+  }
+
+  if (!content || content.trim() === '' || !personName || personName.trim() === '') {
+    return [];
+  }
+
+  const personSlug = slugify(personName);
+  const prompt = buildActionItemPrompt(content, personName);
+
+  let rawItems: Array<{ text: string; direction: ActionItemDirection }>;
+  try {
+    const response = await callLLM(prompt);
+    rawItems = parseActionItemResponse(response);
+  } catch {
+    // LLM call failed — return empty rather than propagating
+    return [];
+  }
+
+  return rawItems.map(({ text, direction }) => ({
+    text,
+    direction,
+    source,
+    date,
+    hash: computeActionItemHash(text, personSlug, direction),
+    stale: false,
+  }));
 }

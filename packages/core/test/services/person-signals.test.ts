@@ -4,6 +4,8 @@ import {
   buildStancePrompt,
   parseStanceResponse,
   extractStancesForPerson,
+  buildActionItemPrompt,
+  parseActionItemResponse,
   computeActionItemHash,
   isActionItemStale,
   capActionItems,
@@ -520,105 +522,105 @@ describe('deduplicateActionItems', () => {
 });
 
 // ---------------------------------------------------------------------------
-// extractActionItemsForPerson — happy path
+// extractActionItemsForPerson — regex fallback (no callLLM)
 // ---------------------------------------------------------------------------
 
 describe('extractActionItemsForPerson', () => {
-  it('extracts "Person will" pattern as they_owe_me', () => {
+  it('extracts "Person will" pattern as they_owe_me', async () => {
     const content = 'Alice will send the updated report by Friday.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
     assert.equal(items[0].source, 'meeting.md');
     assert.equal(items[0].date, '2026-02-01');
   });
 
-  it('extracts "Person agreed to" pattern as they_owe_me', () => {
+  it('extracts "Person agreed to" pattern as they_owe_me', async () => {
     const content = 'Alice agreed to review the design doc.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
-  it('extracts "Person is going to" as they_owe_me', () => {
+  it('extracts "Person is going to" as they_owe_me', async () => {
     const content = 'Alice is going to set up the staging environment.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
-  it('extracts "I\'ll" near person as i_owe_them', () => {
+  it('extracts "I\'ll" near person as i_owe_them', async () => {
     const content = "I'll send Alice the final proposal tomorrow.";
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'i_owe_them');
   });
 
-  it('extracts "I need to send person" as i_owe_them', () => {
+  it('extracts "I need to send person" as i_owe_them', async () => {
     const content = 'I need to send Alice the budget spreadsheet.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'i_owe_them');
   });
 
-  it('extracts "I agreed to" near person as i_owe_them', () => {
+  it('extracts "I agreed to" near person as i_owe_them', async () => {
     const content = 'I agreed to follow up with Alice on the timeline.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'i_owe_them');
   });
 
-  it('extracts explicit "Action item:" near person', () => {
+  it('extracts explicit "Action item:" near person', async () => {
     const content = 'Action item: Alice to review the PRD draft.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
-  it('extracts "TODO:" near person', () => {
+  it('extracts "TODO:" near person', async () => {
     const content = 'TODO: Get feedback from Alice on the mockups.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
   });
 
-  it('extracts "- [ ]" checkbox near person', () => {
+  it('extracts "- [ ]" checkbox near person', async () => {
     const content = '- [ ] Alice to prepare the presentation slides.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
-  // -- owner name classification --
+  // -- owner name classification (ownerName is now 6th arg) --
 
-  it('classifies owner in actor position as i_owe_them', () => {
+  it('classifies owner in actor position as i_owe_them', async () => {
     const content = 'John will schedule a follow-up with Alice next week.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01', 'John');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01', undefined, 'John');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'i_owe_them');
   });
 
-  it('classifies person in actor position as they_owe_me even when owner provided', () => {
+  it('classifies person in actor position as they_owe_me even when owner provided', async () => {
     const content = 'Alice will send the report to the team.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01', 'John');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01', undefined, 'John');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
   // -- no owner fallback --
 
-  it('falls back to first-person heuristics when no owner name', () => {
+  it('falls back to first-person heuristics when no owner name', async () => {
     const content = "I'll follow up with Alice about the contract.";
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'i_owe_them');
   });
 
   // -- ambiguous actor --
 
-  it('handles ambiguous actor in explicit marker (defaults to they_owe_me when person mentioned)', () => {
+  it('handles ambiguous actor in explicit marker (defaults to they_owe_me when person mentioned)', async () => {
     // No clear actor, but person is mentioned
     const content = 'Action item: schedule review meeting with Alice.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     // Ambiguous but person mentioned → they_owe_me
     assert.equal(items[0].direction, 'they_owe_me');
@@ -626,13 +628,13 @@ describe('extractActionItemsForPerson', () => {
 
   // -- multiple items --
 
-  it('extracts multiple action items from one meeting', () => {
+  it('extracts multiple action items from one meeting', async () => {
     const content = [
       'Alice will send the updated report by Friday.',
       "I'll review Alice's draft by Monday.",
       'Alice agreed to set up the demo environment.',
     ].join('\n');
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.ok(items.length >= 2, `Expected at least 2 items, got ${items.length}`);
     const directions = new Set(items.map((i) => i.direction));
     assert.ok(directions.has('they_owe_me'));
@@ -641,38 +643,369 @@ describe('extractActionItemsForPerson', () => {
 
   // -- no matches --
 
-  it('returns empty array when person not mentioned', () => {
+  it('returns empty array when person not mentioned', async () => {
     const content = 'Bob will send the report.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 0);
   });
 
   // -- dedup within same extraction --
 
-  it('does not duplicate same text within one extraction', () => {
+  it('does not duplicate same text within one extraction', async () => {
     const content = [
       'Alice will send the report.',
       'Alice will send the report.',
     ].join('\n');
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
   });
 
   // -- first name matching --
 
-  it('matches by first name for multi-word person names', () => {
+  it('matches by first name for multi-word person names', async () => {
     const content = 'Alice will prepare the quarterly summary.';
-    const items = extractActionItemsForPerson(content, 'Alice Johnson', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice Johnson', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
     assert.equal(items[0].direction, 'they_owe_me');
   });
 
   // -- hash is populated --
 
-  it('populates hash field on extracted items', () => {
+  it('populates hash field on extracted items', async () => {
     const content = 'Alice will send the report.';
-    const items = extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
     assert.equal(items.length, 1);
+    assert.match(items[0].hash, /^[a-f0-9]{64}$/);
+  });
+
+  // -- regression guard: regex fallback when callLLM not provided --
+
+  it('regression guard: when callLLM not provided, regex runs and returns results', async () => {
+    const content = 'Alice will send the quarterly report.';
+    // No callLLM arg — must use regex fallback and return results (not empty array)
+    const items = await extractActionItemsForPerson(content, 'Alice', 'meeting.md', '2026-02-01');
+    assert.ok(items.length > 0, 'Expected regex fallback to return items, got empty array');
+    assert.equal(items[0].direction, 'they_owe_me');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildActionItemPrompt
+// ---------------------------------------------------------------------------
+
+describe('buildActionItemPrompt', () => {
+  it('includes the person name', () => {
+    const prompt = buildActionItemPrompt('Some transcript', 'Sarah Chen');
+    assert.ok(prompt.includes('Sarah Chen'));
+  });
+
+  it('includes the transcript content', () => {
+    const prompt = buildActionItemPrompt('Alice: I will send the slides.', 'Alice');
+    assert.ok(prompt.includes('Alice: I will send the slides.'));
+  });
+
+  it('includes JSON schema with action_items array', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.includes('"action_items"'));
+    assert.ok(prompt.includes('"text"'));
+    assert.ok(prompt.includes('"direction"'));
+  });
+
+  it('includes direction enum values', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.includes('i_owe_them'));
+    assert.ok(prompt.includes('they_owe_me'));
+  });
+
+  it('includes NOT-a-description guard rule', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.includes('NOT a description'));
+  });
+
+  it('includes commitment definition rule', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.toLowerCase().includes('commitment is a promise'));
+  });
+
+  it('instructs to exclude architecture walkthroughs', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.includes('architecture'));
+  });
+
+  it('requests concise normalized description (not raw transcript)', () => {
+    const prompt = buildActionItemPrompt('content', 'Bob');
+    assert.ok(prompt.includes('concise'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseActionItemResponse
+// ---------------------------------------------------------------------------
+
+describe('parseActionItemResponse', () => {
+  it('parses valid JSON with complete action items', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { text: 'Send the quarterly slides', direction: 'i_owe_them' },
+        { text: 'Schedule the offsite', direction: 'they_owe_me' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].text, 'Send the quarterly slides');
+    assert.equal(result[0].direction, 'i_owe_them');
+    assert.equal(result[1].text, 'Schedule the offsite');
+    assert.equal(result[1].direction, 'they_owe_me');
+  });
+
+  it('handles empty action_items array', () => {
+    const result = parseActionItemResponse(JSON.stringify({ action_items: [] }));
+    assert.deepEqual(result, []);
+  });
+
+  it('handles malformed JSON', () => {
+    const result = parseActionItemResponse('This is not JSON at all.');
+    assert.deepEqual(result, []);
+  });
+
+  it('handles empty string', () => {
+    const result = parseActionItemResponse('');
+    assert.deepEqual(result, []);
+  });
+
+  it('handles JSON without action_items key', () => {
+    const result = parseActionItemResponse(JSON.stringify({ summary: 'No items here.' }));
+    assert.deepEqual(result, []);
+  });
+
+  it('strips markdown code fences (json label)', () => {
+    const response = '```json\n{"action_items": [{"text": "Review the PRD", "direction": "they_owe_me"}]}\n```';
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Review the PRD');
+    assert.equal(result[0].direction, 'they_owe_me');
+  });
+
+  it('strips code fences without json label', () => {
+    const response = '```\n{"action_items": [{"text": "Set up CI", "direction": "they_owe_me"}]}\n```';
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Set up CI');
+  });
+
+  it('extracts JSON from surrounding text', () => {
+    const response = 'Here are the commitments:\n{"action_items": [{"text": "Send proposal", "direction": "i_owe_them"}]}\nDone.';
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].direction, 'i_owe_them');
+  });
+
+  it('skips items with missing text field', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { direction: 'i_owe_them' },
+        { text: 'Valid item', direction: 'they_owe_me' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Valid item');
+  });
+
+  it('skips items with missing direction field', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { text: 'No direction here' },
+        { text: 'Has direction', direction: 'i_owe_them' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Has direction');
+  });
+
+  it('skips items with invalid direction', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { text: 'Some item', direction: 'supports' },
+        { text: 'Valid item', direction: 'i_owe_them' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].direction, 'i_owe_them');
+  });
+
+  it('skips non-object items in the array', () => {
+    const response = JSON.stringify({
+      action_items: [
+        null,
+        'not an object',
+        42,
+        { text: 'Real item', direction: 'they_owe_me' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Real item');
+  });
+
+  it('trims whitespace from text and direction', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { text: '  Send slides  ', direction: '  i_owe_them  ' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Send slides');
+    assert.equal(result[0].direction, 'i_owe_them');
+  });
+
+  it('normalizes direction to lowercase', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { text: 'Do something', direction: 'I_OWE_THEM' },
+      ],
+    });
+    const result = parseActionItemResponse(response);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].direction, 'i_owe_them');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractActionItemsForPerson — LLM path (with callLLM)
+// ---------------------------------------------------------------------------
+
+describe('extractActionItemsForPerson (LLM path)', () => {
+  it('calls LLM and returns typed PersonActionItems', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        action_items: [
+          { text: 'Send the quarterly slides to Alice', direction: 'i_owe_them' },
+          { text: 'Jira walkthrough with Alice', direction: 'they_owe_me' },
+        ],
+      });
+
+    const items = await extractActionItemsForPerson(
+      'Meeting content about Alice.',
+      'Alice',
+      'q1-meeting.md',
+      '2026-03-01',
+      mockLLM,
+    );
+
+    assert.equal(items.length, 2);
+    assert.equal(items[0].text, 'Send the quarterly slides to Alice');
+    assert.equal(items[0].direction, 'i_owe_them');
+    assert.equal(items[0].source, 'q1-meeting.md');
+    assert.equal(items[0].date, '2026-03-01');
+    assert.equal(items[0].stale, false);
+    assert.match(items[0].hash, /^[a-f0-9]{64}$/);
+    assert.equal(items[1].direction, 'they_owe_me');
+  });
+
+  it('passes person name and content to the prompt', async () => {
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return JSON.stringify({ action_items: [] });
+    };
+
+    await extractActionItemsForPerson(
+      'Alice: I will send the slides.',
+      'Alice Johnson',
+      'meeting.md',
+      '2026-03-01',
+      mockLLM,
+    );
+    assert.ok(capturedPrompt.includes('Alice Johnson'));
+    assert.ok(capturedPrompt.includes('Alice: I will send the slides.'));
+  });
+
+  it('returns empty array for empty content (LLM not called)', async () => {
+    let called = false;
+    const mockLLM: LLMCallFn = async () => {
+      called = true;
+      throw new Error('Should not be called');
+    };
+    const items = await extractActionItemsForPerson('', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.equal(called, false);
+    assert.deepEqual(items, []);
+  });
+
+  it('returns empty array for empty person name (LLM not called)', async () => {
+    let called = false;
+    const mockLLM: LLMCallFn = async () => {
+      called = true;
+      throw new Error('Should not be called');
+    };
+    const items = await extractActionItemsForPerson('Content here.', '', 'meeting.md', '2026-03-01', mockLLM);
+    assert.equal(called, false);
+    assert.deepEqual(items, []);
+  });
+
+  it('returns empty array when LLM returns empty action_items', async () => {
+    const mockLLM: LLMCallFn = async () => JSON.stringify({ action_items: [] });
+    const items = await extractActionItemsForPerson('Content.', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.deepEqual(items, []);
+  });
+
+  it('returns empty array when LLM returns invalid JSON', async () => {
+    const mockLLM: LLMCallFn = async () => 'I cannot process this transcript.';
+    const items = await extractActionItemsForPerson('Content.', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.deepEqual(items, []);
+  });
+
+  it('returns empty array when LLM call throws', async () => {
+    const mockLLM: LLMCallFn = async () => { throw new Error('Network error'); };
+    const items = await extractActionItemsForPerson('Content.', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.deepEqual(items, []);
+  });
+
+  it('handles LLM returning code-fenced JSON', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      '```json\n{"action_items": [{"text": "Organize offsite", "direction": "they_owe_me"}]}\n```';
+
+    const items = await extractActionItemsForPerson('Content.', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].text, 'Organize offsite');
+    assert.equal(items[0].direction, 'they_owe_me');
+  });
+
+  it('skips LLM items with invalid direction', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        action_items: [
+          { text: 'Bad direction item', direction: 'supports' },
+          { text: 'Valid item', direction: 'i_owe_them' },
+        ],
+      });
+
+    const items = await extractActionItemsForPerson('Content.', 'Alice', 'meeting.md', '2026-03-01', mockLLM);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].text, 'Valid item');
+  });
+
+  it('populates source, date, hash, and stale fields on LLM items', async () => {
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        action_items: [{ text: 'Share design doc', direction: 'i_owe_them' }],
+      });
+
+    const items = await extractActionItemsForPerson(
+      'Content.',
+      'Alice',
+      'sprint-retro.md',
+      '2026-03-15',
+      mockLLM,
+    );
+
+    assert.equal(items.length, 1);
+    assert.equal(items[0].source, 'sprint-retro.md');
+    assert.equal(items[0].date, '2026-03-15');
+    assert.equal(items[0].stale, false);
     assert.match(items[0].hash, /^[a-f0-9]{64}$/);
   });
 });

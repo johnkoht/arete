@@ -1117,7 +1117,7 @@ export class EntityService {
         }
 
         // Action item extraction (regex-based, always runs)
-        const actionItems = extractActionItemsForPerson(content, person.name, source, date, ownerName);
+        const actionItems = await extractActionItemsForPerson(content, person.name, source, date, undefined, ownerName);
         const personActionItemList = personActionItems.get(person.slug);
         if (personActionItemList) {
           personActionItemList.push(...actionItems);
