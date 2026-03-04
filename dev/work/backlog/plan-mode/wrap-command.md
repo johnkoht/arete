@@ -34,10 +34,12 @@ A `/wrap` plan-mode command that acts as a structured post-execution close-out. 
    - [ ] `patterns.md` updated (if new patterns discovered)
    - [ ] AGENTS.md rebuilt if CLI commands or Skills changed (`npm run build:agents:prod`)
    - [ ] `dev/catalog/capabilities.json` updated if new services/tools added
+   - [ ] `UPDATES.md` entry added (user-facing release note, 1-3 sentences for GUIDE users)
    - [ ] Plan status set to `complete` with `completed:` timestamp
-3. **Reports what's done, what's missing, what needs attention**
-4. **Optionally executes the remaining items** (spawn a subagent to fill the gaps)
-5. **Archives the plan** or prompts to archive
+3. **Prompts for an `UPDATES.md` entry** — user-facing release note for what shipped (1-3 sentences, written for GUIDE mode users, not BUILD)
+4. **Reports what's done, what's missing, what needs attention**
+5. **Optionally executes the remaining items** (spawn a subagent to fill the gaps)
+6. **Archives the plan** or prompts to archive
 
 ---
 
@@ -70,12 +72,14 @@ This doesn't replace Phase 3 — it's a safety net for when Phase 3 is rushed or
 2. Checklist shows actual status (green/red per item) based on filesystem inspection where possible
 3. Missing items are actionable (clear instruction or offer to execute)
 4. On completion: plan status set to `complete`, plan archived (or prompted)
-5. Works for both PRD-executed plans and direct-execution plans
+5. `UPDATES.md` entry written in user-friendly language (not technical — "now you can do X")
+6. Works for both PRD-executed plans and direct-execution plans
 
 ---
 
 ## Related
 
+- `packages/runtime/UPDATES.md` — the file this command writes entries to
 - `review-artifact-consumption` plan — related gap (pre-execution artifacts not consumed during build handoff)
 - `execute-prd` SKILL.md Phase 3 — what the orchestrator is *supposed* to do; `/wrap` is the enforcement layer
 - `maintenance.md` — the protocol being checked; `/wrap` makes it automatic
