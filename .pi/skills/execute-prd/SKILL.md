@@ -346,9 +346,24 @@ For each pending task (in dependency order):
     - **APPROVED**: Proceed to step 14.
     - **ITERATE**: Dispatch the developer again with the reviewer's structured feedback. Include: what was wrong, what to do, files to check, and instruction to re-verify. After the developer returns, dispatch the reviewer again for re-review. Repeat until APPROVED.
 
+13.5. **Documentation Synthesis** (Orchestrator — before marking task complete)
+
+    After the reviewer returns APPROVED, scan the developer's completion report for documentation gaps before closing the task:
+
+    - Read the **Documentation Updated** section. If it says `None`, verify that's plausible given the scope of the change.
+    - Read the **Reflection** section. Did the developer mention a new pattern, API, or design decision in freeform text that doesn't appear in Documentation Updated?
+    - Check the **Files Changed** list. Is there a first-use of something (new import, new function, new approach) that warrants a LEARNINGS.md entry?
+
+    **If a gap is found**: Send the developer back with a targeted note before marking the task complete:
+    > "Your reflection mentioned [X] / you were the first to use [Y] in this codebase. Add it to [nearest LEARNINGS.md path] before I mark this complete."
+
+    This takes one round-trip but prevents end-of-PRD documentation debt. Do not defer all documentation catch-up to Phase 3 — context is freshest now.
+
+    **If no gap is found**: Proceed to step 14.
+
 14. **Update Tracking** (Orchestrator)
     
-    Once the reviewer returns APPROVED:
+    Once documentation synthesis is clear and the reviewer has returned APPROVED:
     - Mark task complete in `dev/executions/{plan-slug}/prd.json` (`status: "complete"`)
     - Update `dev/executions/{plan-slug}/status.json` (`currentTaskId`, `completedTasks`, `updatedAt`)
     - Verify commitSha is recorded

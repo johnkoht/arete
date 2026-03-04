@@ -74,9 +74,15 @@ npm run test:py     # Must pass
 
 ### 5. Update LEARNINGS.md & Documentation
 
-If you fixed a bug or regression: update the nearest LEARNINGS.md with what broke, why, and how to avoid it. Add to the appropriate section (Gotchas for traps, Invariants for rules that must hold, Pre-Edit Checklist for verification steps). If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one following the 7-section template in dev.mdc.
+Update the nearest LEARNINGS.md for **any of these three cases** — not just regressions:
 
-If you learned something about the domain that isn't in the expertise profile or LEARNINGS.md, document it. You're closest to the code — your insights are the most valuable.
+1. **Regression or bug fix** — what broke, why, and how to avoid it. Add to Gotchas, Invariants, or Pre-Edit Checklist as appropriate.
+2. **First use of an API, function, or pattern in this codebase** — e.g. first use of `confirm()`, first use of a new DI approach, first time a module is imported dynamically. Document what it is, where it's used, and any non-obvious setup.
+3. **Non-obvious design decision** — something a future developer would reasonably do differently and shouldn't. "We chose X over Y because Z" belongs here.
+
+If no LEARNINGS.md exists nearby and the gotcha is non-obvious, create one following the 7-section template in dev.mdc.
+
+If none of these three cases apply, write `None — [reason]` in your completion report's Documentation Updated section. Do not silently skip.
 
 ### 6. Commit
 
@@ -111,6 +117,10 @@ Return a completion report using this exact format:
 - path/to/file.ts — what changed (added/modified)
 - path/to/file.test.ts — added
 
+## Documentation Updated
+- [LEARNINGS.md path] — [what was added: gotcha / new pattern / invariant]
+- None — [reason: no new patterns, gotchas, or invariants discovered]
+
 ## Quality Checks
 - typecheck: ✓/✗
 - tests: ✓/✗ (N passed)
@@ -121,6 +131,8 @@ abc1234
 ## Reflection
 [What helped? What was harder than expected? Token estimate.]
 ```
+
+The **Documentation Updated** section is mandatory. If nothing was documented, write `None — [reason]`. Do not leave it blank or skip it. This forces a conscious decision about whether your work produced knowledge worth capturing, rather than skipping documentation under time pressure.
 
 ## Decision-Making Heuristics
 

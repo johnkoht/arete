@@ -115,11 +115,13 @@ Example: New `arete availability find` command → Would "find availability with
 
 #### Step 3.7: Documentation Review
 
-Check that the developer fulfilled their documentation responsibilities:
+Check the developer's **Documentation Updated** section in their completion report. It is mandatory — if it's missing entirely, that itself is a required change.
 
-- [ ] **LEARNINGS.md after regressions**: If the developer fixed a bug or regression, did they update the nearest LEARNINGS.md? **Block approval if missing** — regression knowledge that isn't captured will be lost.
+- [ ] **LEARNINGS.md after regressions**: If the developer fixed a bug or regression, did they update the nearest LEARNINGS.md? **Block approval if missing.**
+- [ ] **LEARNINGS.md for first-use patterns**: If the developer was the first to use an API, function, or pattern in this codebase (e.g. first use of `confirm()`, a new DI approach, a dynamic import), did they document it? **Block approval if missing** — first-use patterns are just as likely to be rediscovered incorrectly as regressions.
+- [ ] **LEARNINGS.md for non-obvious design decisions**: If the developer made a design choice a future developer would reasonably do differently, did they capture the reasoning? **Block approval if missing.**
 - [ ] **Accuracy of documentation changes**: If the developer updated LEARNINGS.md, profiles, or patterns.md, are the changes accurate? Review with the same rigor as code. **Block approval if inaccurate.**
-- [ ] **Missed observations**: Did the developer's work reveal domain knowledge not captured anywhere? Flag in your review output, but do not block — this is an observation, not a blocker.
+- [ ] **`None — [reason]` check**: If the Documentation Updated section says `None`, verify that's accurate given the scope of the change. If you see an undocumented first-use pattern or design decision, flag it as a required change even if the developer judged it unnecessary.
 
 #### Step 4: Reuse & Duplication Check
 
