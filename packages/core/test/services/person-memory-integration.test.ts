@@ -141,16 +141,18 @@ Jane Doe discussed the roadmap.
     let llmCallCount = 0;
     const mockLLM: LLMCallFn = async (_prompt: string) => {
       llmCallCount += 1;
-      return JSON.stringify({ stances: [] });
+      return JSON.stringify({ stances: [], action_items: [] });
     };
 
-    // Calling refreshPersonMemory once — the cache is within a single call
+    // Calling refreshPersonMemory once — each unique meeting+person triggers 2 LLM calls
+    // (one for stances via stanceCache, one for action items via actionItemCache).
+    // Both caches are function-scoped, so the same pair is never extracted twice within a refresh.
     await service.refreshPersonMemory(paths, { callLLM: mockLLM });
-    assert.equal(llmCallCount, 1, 'LLM should be called once per unique meeting+person');
+    assert.equal(llmCallCount, 2, 'LLM should be called twice per unique meeting+person (stances + action items)');
 
-    // The cache is function-scoped, so a second call should trigger a new LLM call
+    // The caches are function-scoped, so a second refresh triggers fresh LLM calls
     await service.refreshPersonMemory(paths, { callLLM: mockLLM });
-    assert.equal(llmCallCount, 2, 'New refresh should call LLM again (function-scoped cache)');
+    assert.equal(llmCallCount, 4, 'New refresh should call LLM again (function-scoped caches)');
   });
 
   it('deduplicates stances by topic+direction across meetings', async () => {
@@ -389,7 +391,9 @@ Bob Smith opposes the migration plan.
 
     const callArgs: string[] = [];
     const mockLLM: LLMCallFn = async (prompt: string) => {
-      // Track which person we're extracting for — check the instruction line
+      // Track which person we're extracting STANCES for — check the instruction line.
+      // Action item prompts use "Extract action items ONLY involving: <name>" and are
+      // handled by the final branch which returns an empty action_items list.
       if (prompt.includes('Extract stances ONLY for: Jane Doe')) {
         callArgs.push('jane');
         return JSON.stringify({
@@ -401,20 +405,24 @@ Bob Smith opposes the migration plan.
           }],
         });
       }
-      callArgs.push('bob');
-      return JSON.stringify({
-        stances: [{
-          topic: 'migration',
-          direction: 'opposes',
-          summary: 'Bob opposes migration',
-          evidence_quote: 'Bob opposes it',
-        }],
-      });
+      if (prompt.includes('Extract stances ONLY for: Bob Smith')) {
+        callArgs.push('bob');
+        return JSON.stringify({
+          stances: [{
+            topic: 'migration',
+            direction: 'opposes',
+            summary: 'Bob opposes migration',
+            evidence_quote: 'Bob opposes it',
+          }],
+        });
+      }
+      // Action item prompts for either person — return empty
+      return JSON.stringify({ action_items: [] });
     };
 
     const result = await service.refreshPersonMemory(paths, { callLLM: mockLLM });
 
-    assert.equal(callArgs.length, 2, 'LLM called once per person for same meeting');
+    assert.equal(callArgs.length, 2, 'LLM called once per person for same meeting (stances)');
     assert.ok(callArgs.includes('jane'));
     assert.ok(callArgs.includes('bob'));
     assert.equal(result.stancesExtracted, 2, 'One stance per person');
