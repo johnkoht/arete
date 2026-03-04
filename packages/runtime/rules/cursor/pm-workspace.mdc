@@ -18,6 +18,7 @@ You are an AI assistant operating in Areté, a Product Management workspace. Thi
 2. **CHECK TYPE**: Router returns `type: 'skill'` or `type: 'tool'`
 3. **For skills** (`type: 'skill'`, `action: 'load'`):
    - **LOAD**: Read the matched skill's SKILL.md file
+   - **BRIEF**: If the skill's frontmatter has `requires_briefing: true`, run `arete brief --for "<task>" --skill <name> --json` and present results before starting
    - **EXECUTE**: Follow the skill's complete workflow
 4. **For tools** (`type: 'tool'`, `action: 'activate'`):
    - **READ**: Load the tool's TOOL.md file
@@ -243,17 +244,19 @@ See the integrations README in your IDE config directory for framework details.
 
 Areté provides intelligence services that assemble context, search memory, and resolve entities. Use these before and during skill execution to make any workflow more effective.
 
-### Primitive Briefing (Before Skills)
+### ⚠️ MANDATORY: Briefing Before Skills with `requires_briefing: true`
 
-Before running any community/third-party skill (or any skill with `requires_briefing: true`), assemble a **primitive briefing** using:
+**After routing and BEFORE executing any skill**, check the skill's SKILL.md frontmatter for `requires_briefing: true`. If set, you **MUST** run:
 
 ```bash
 arete brief --for "task description" --skill skill-name --json
 ```
 
-This combines context injection, memory retrieval, and entity resolution into a structured briefing organized by product primitive (Problem, User, Solution, Market, Risk). Present the briefing to the user: "Here's what I've gathered. Here's what might be missing."
+This is **not optional** — it combines context injection, memory retrieval, and entity resolution into a structured briefing organized by product primitive (Problem, User, Solution, Market, Risk). Present the briefing to the user: "Here's what I've gathered. Here's what might be missing." Then proceed with the skill workflow using the briefing as context.
 
-For essential/default skills that have their own context-gathering steps, the briefing is optional but recommended for complex tasks.
+**Community/third-party skills** (installed via `arete skill install`) often don't have built-in context-gathering steps. Even if they don't set `requires_briefing: true`, run `arete brief` before them for complex tasks — these skills lack workspace awareness without it.
+
+**Default skills** (meeting-prep, create-prd, etc.) have their own context-gathering steps and set `requires_briefing: false`. Briefing is optional for these but recommended for complex tasks.
 
 ### Context Injection
 
@@ -287,14 +290,15 @@ arete resolve "search project" --type project --all --json
 
 ### When to Use Intelligence Services
 
-| Situation | Service |
-|-----------|---------|
-| Before any skill with `requires_briefing: true` | `arete brief` |
-| Before community/third-party skills | `arete brief` |
-| When starting substantial work | `arete context` |
-| When a topic might have history | `arete memory search` |
-| When a name/reference is ambiguous | `arete resolve` |
-| When the user says "what do we know about X" | `arete context` + `arete memory search` |
+| Situation | Service | Why |
+|-----------|---------|-----|
+| **MUST**: Skill has `requires_briefing: true` | `arete brief --for --skill` | Mandatory — skill depends on workspace context |
+| **SHOULD**: Community/third-party skill (complex tasks) | `arete brief` | Community skills lack built-in context gathering |
+| User asks about a topic/project/person | `arete brief --for` | Searches everything — most comprehensive |
+| User asks what was decided | `arete memory search` | High-signal, searches 3 memory files only |
+| User mentions a person by name | `arete resolve` + `arete people show --memory` | Full person profile with relationship health |
+| User asks about topic history | `arete memory timeline --days 30` | Temporal view across memory + meetings |
+| After creating/editing workspace files | `arete index` | Keeps search current |
 
 ## Intelligence Patterns (Inlined for Reference)
 

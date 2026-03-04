@@ -99,10 +99,13 @@ Update `.agents/sources/shared/cli-commands.md` to strengthen the intelligence d
 2. **Add `arete people show <slug> --memory`** to the intelligence section (currently only in People section) — this is a high-value command that returns relationship health, stances, open items, and commitments inline
 3. **Add brief descriptions of what each command actually searches** (the scope distinction we just discovered) so agents understand context searches everything vs memory searches 3 files
 
+**CRITICAL**: `compressCLICommands()` in `scripts/build-agents.ts` uses hardcoded `tool_selection`, `context_scope`, `memory_scope` lines. Update those hardcoded lines too.
+
 **Acceptance Criteria**:
 - Decision tree / quick reference is prominent (not buried after command list)
 - `arete people show --memory` appears in intelligence guidance section
 - Scope descriptions are present (what each command searches)
+- Hardcoded lines in `compressCLICommands()` updated to include scope info and `--memory`
 - Compressed pipe-delimited output preserves the guidance
 
 ### T4: Strengthen `requires_briefing` in pm-workspace Rule

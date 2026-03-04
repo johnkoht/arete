@@ -1,12 +1,27 @@
 # Intelligence Services
 
-Intelligence services provide context, search, and resolution capabilities that make skills and workflows dramatically more effective. These services run automatically during skill execution or can be invoked manually via CLI.
+Intelligence services provide context, search, and resolution capabilities that make skills and workflows dramatically more effective. These services can be invoked via CLI before or during skill execution.
 
-## Overview
+## High-Value Patterns: When to Proactively Use Intelligence
 
-Intelligence services are the foundation of Areté's context-aware capabilities. They assemble relevant workspace information, search institutional memory, resolve ambiguous references, and combine everything into comprehensive briefings.
+**Use these heuristics to decide which service to reach for.** Don't wait for the user to ask — proactively gather context when the situation matches.
+
+| User Intent | What to Run | Why |
+|-------------|-------------|-----|
+| Asks about a topic, project, or person | `arete brief --for "<topic>"` | Searches everything — context, memory, meetings, people, projects — and combines results into one briefing |
+| Wants to prep for a meeting or task | `arete brief --for "<task>" --skill <name>` | Full briefing with skill-aware primitive mapping |
+| Asks what was decided about something | `arete memory search "<topic>"` | Searches explicit institutional memory only (decisions, learnings, observations) — 3 files, high signal |
+| Mentions a person by name | `arete resolve "<name>"` then `arete people show <slug> --memory` | Resolves the name, then gets full profile with relationship health, recurring topics, stances, and open items |
+| Starting a community/installed skill | Check frontmatter for `requires_briefing: true` → run `arete brief` | Community skills don't have built-in context gathering — briefing gives them workspace awareness |
+| After creating or editing workspace files | `arete index` | Keeps search current so context/brief/memory find the new content |
+| Wants to understand topic history | `arete memory timeline "<topic>" --days 30` | Shows how a topic evolved across memory and meetings over time |
+| Needs to find open action items with someone | `arete commitments list --person <slug>` | Returns what you owe them and what they owe you |
+
+**Key scope distinction**: `memory search` is narrow and high-signal (3 memory files only). `context` is broad (all workspace files). `brief` is comprehensive (context + memory + entities combined). Choose based on what the user needs.
 
 ## Context Injection
+
+> **Proactively use when**: The user asks a general knowledge question ("what do we know about X"), or you need broad workspace files for a task. This is the broadest search — it covers context/, goals/, projects/, people/, meetings, and conversations.
 
 **Command**: `arete context --for "query"`
 
@@ -38,6 +53,8 @@ arete context --for "user onboarding improvements"
 - **Risk** - Dependencies, constraints, blockers
 
 ## Memory Retrieval
+
+> **Proactively use when**: The user asks about past decisions ("what did we decide about X"), learnings, or institutional knowledge. This is a narrow, high-signal search — only 3 files (decisions.md, learnings.md, agent-observations.md). For broader search, use context or brief.
 
 **Command**: `arete memory search "query"`
 
@@ -74,6 +91,8 @@ arete memory search "pricing model"
 
 ## Entity Resolution
 
+> **Proactively use when**: The user mentions a person, meeting, or project by name — especially partial names ("Jane", "last week's sync"). Follow up with `arete people show <slug> --memory` to get full person context including relationship health and recurring topics.
+
 **Command**: `arete resolve "reference"`
 
 **Purpose**: Fuzzy resolve names to people, meetings, or projects.
@@ -102,6 +121,8 @@ arete resolve "Jane"
 4. Context-based ranking (recent interactions, project involvement)
 
 ## Briefing Assembly
+
+> **Proactively use when**: The user asks about any substantial topic, wants to prep for a task, or you're starting a community/installed skill. This is the most comprehensive service — it searches everything and combines results. Use this as your default when in doubt.
 
 **Command**: `arete brief --for "query"`
 
@@ -142,6 +163,8 @@ arete brief --for "redesign checkout flow"
 ```
 
 ## Routing
+
+> **Always use**: This is mandatory for every PM action. Route first, then load and follow the matched skill. Never improvise PM workflows without routing.
 
 **Command**: `arete route "query" [--json]`
 

@@ -241,9 +241,9 @@ function compressCLICommands(content: string): string {
   // Add tool selection guidance before command list
   const compressed: string[] = [
     '[CLI]',
-    '|tool_selection:"What do you know about X?"→context --for; "What decisions about X?"→memory search; "Who is X?"→resolve; "History of X?"→memory timeline; "Prep for X"→brief --for',
-    '|context_scope:context/, goals/, projects/, people/, meetings, conversations (broad search)',
-    '|memory_scope:.arete/memory/items/ only: decisions.md, learnings.md, observations.md (explicit institutional memory)',
+    '|tool_selection:"What do you know about X?"→brief --for (searches everything); "What decisions about X?"→memory search (3 files, high signal); "Who is X?"→resolve then people show --memory; "History of X?"→memory timeline; "Prep for X"→brief --for --skill',
+    '|scope:memory search=3 files (decisions,learnings,observations); context=all workspace files; brief=context+memory+entities combined; people show --memory=full person profile with relationship health, stances, open items',
+    '|proactive:person mentioned→resolve+people show --memory; community skill→check requires_briefing, brief if true; after file edits→arete index; substantial topic→brief --for',
   ];
   
   let currentSection = '';
@@ -340,11 +340,13 @@ function compressContent(content: string, filename: string): string {
  */
 function compressIntelligence(content: string): string {
   return `[Intelligence]|context+memory+resolution+briefing+routing
-||context:arete context --for "query" → map primitives (Problem/User/Solution/Market/Risk) to workspace files
-||memory:arete memory search "query" → search .arete/memory/ items (decisions, learnings); token or semantic (QMD)
-||resolution:arete resolve "reference" → fuzzy match people, meetings, projects
-||briefing:arete brief --for "query" → combine context+memory+entities
-||routing:arete route "query" → match skill/tool, suggest tier (fast/balanced/powerful)
+|high_value:topic/project/person question→brief --for (searches everything); past decisions→memory search (3 files, high signal); person mentioned→resolve then people show --memory; community skill→check requires_briefing, run brief if true; after file edits→arete index
+|scope:memory search=3 files (decisions,learnings,observations); context=all workspace files; brief=context+memory+entities combined; timeline=memory+meetings temporal
+||context:arete context --for "query" → map primitives (Problem/User/Solution/Market/Risk) to workspace files; USE WHEN: general knowledge questions, "what do we know about X"
+||memory:arete memory search "query" → search .arete/memory/ items (decisions, learnings); USE WHEN: past decisions, institutional knowledge
+||resolution:arete resolve "reference" → fuzzy match people, meetings, projects; FOLLOW WITH: arete people show <slug> --memory for full person context
+||briefing:arete brief --for "query" → combine context+memory+entities; USE WHEN: substantial topics, task prep, community skills — most comprehensive service
+||routing:arete route "query" → match skill/tool, suggest tier (fast/balanced/powerful); ALWAYS USE for PM actions
 ||synthesis:extract patterns/contradictions from project inputs
 ||inline_review:extract decisions during skill execution, immediate user approval before memory write
 ||qmd:optional semantic search via QMD (qmd search, vsearch, query)`;

@@ -2,20 +2,23 @@
 
 ## Intelligence Services
 
-**Choosing the right tool:**
-- "What do you know about X?" / "Find info about X" → `context --for` (searches everything)
-- "What decisions were made about X?" → `memory search` (explicit institutional memory only)
-- "Who is X?" / "Which meeting?" → `resolve` (entity disambiguation)
-- "What's the history of X?" → `memory timeline` (temporal view)
-- "Prep me for task X" → `brief --for` (full briefing with context + memory + entities)
+### ⚡ Intelligence Quick Reference
 
-| Command | Searches | Use when |
-|---------|----------|----------|
-| `context --for` | context/, goals/, projects/, people/, meetings, conversations | General knowledge queries, "what do we know about X" |
-| `memory search` | .arete/memory/items/ only (decisions.md, learnings.md, observations.md) | Looking for explicit recorded decisions or learnings |
-| `memory timeline` | memory items + meetings | Understanding how a topic evolved over time |
-| `resolve` | people/, meetings/, projects/ | Disambiguating "John" or "last week's sync" |
-| `brief --for` | All of the above combined | Preparing for a specific task or skill |
+**When the user asks or you need context, reach for these proactively:**
+
+| User Says / You Need | Run This | What It Searches |
+|----------------------|----------|-----------------|
+| "What do we know about X?" | `arete brief --for "X"` | **Everything** — context, memory, meetings, people, projects |
+| "What was decided about X?" | `arete memory search "X"` | **3 files only** — decisions.md, learnings.md, observations.md (high signal) |
+| "Who is X?" / person mentioned | `arete resolve "X"` then `arete people show <slug> --memory` | Person file + memory highlights (recurring topics, stances, open items) |
+| "What's the history of X?" | `arete memory timeline "X" --days 30` | Memory items + meetings (temporal view) |
+| Prepping for a task or skill | `arete brief --for "task" --skill <name>` | Context + memory + entities + relationships combined |
+| Starting a community skill | Check `requires_briefing` → `arete brief` if true | Full context for skills without built-in gathering |
+| After editing workspace files | `arete index` | Rebuilds search so new content is findable |
+
+**Key scope distinction**: `memory search` = narrow, 3 files, fast. `context` = broad, all workspace files. `brief` = comprehensive, combines everything. `people show --memory` = full person profile with relationship health, stances, and commitments.
+
+### Commands
 
 - `arete route "<query>"` - Route user message to best skill and suggest model tier
 - `arete skill route "<query>"` - Route to skill only (for agents before loading skill)
@@ -25,6 +28,7 @@
 - `arete memory search "query"` - Search explicit decisions, learnings, and observations only
 - `arete memory timeline "query" [--days N] [--json]` - Temporal view of a topic with recurring themes
 - `arete resolve "reference"` - Resolve ambiguous names (people, meetings, projects)
+- `arete people show <slug|email> --memory` - Full person profile with auto-generated memory highlights (recurring topics, stances, open items, relationship health)
 
 ## People & Entities
 

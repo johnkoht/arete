@@ -83,11 +83,51 @@ Shows which roles have a custom skill and which use the Areté default.
 
 ## Creating your own skill
 
+### Basic setup
+
 1. Create a folder (e.g. `.agents/skills/my-skill/`).
 2. Add `SKILL.md` with a standard skill format: name, description, and steps (see [Agent Skills](https://agentskills.io) and [skills.sh docs](https://skills.sh/docs)).
 3. Optionally add `.arete-meta.yaml` with `category: community`, `requires_briefing: true`, and `work_type` / `primitives` so routing and briefing work well.
 
 Run `arete skill list` to confirm it appears.
+
+### Tap into Areté Intelligence
+
+Your skill can use Areté's intelligence services to gather workspace context, search institutional memory, resolve people and entities, and check commitments — all via CLI commands in your workflow steps. Set `requires_briefing: true` in your frontmatter to have the agent automatically gather comprehensive context before starting your skill.
+
+**→ See [Intelligence Authoring Guide](./_authoring-guide.md)** for copy-paste recipe blocks and a complete example skill.
+
+### Configure output integration
+
+If your skill produces output (project folders, resource files, context updates), you can configure Areté to automatically tell the agent where to save it, whether to index it, and which template to use.
+
+**→ See [Output Integration Guide](./_integration-guide.md)** for configuration and examples.
+
+### Key frontmatter fields
+
+```yaml
+---
+name: my-skill
+description: What this skill does
+triggers:
+  - "trigger phrase"
+primitives: [Problem, User, Solution]   # Product primitives this skill works with
+work_type: planning                      # planning | discovery | definition | execution | review
+category: community                     # essential | default | community
+intelligence:                            # Services your skill uses
+  - context_injection
+  - memory_retrieval
+  - entity_resolution
+requires_briefing: true                  # Agent MUST run arete brief before starting
+---
+```
+
+### See also
+
+- **[Intelligence Authoring Guide](./_authoring-guide.md)** — How to use context, memory, people, and briefing services
+- **[Output Integration Guide](./_integration-guide.md)** — Where to save output, indexing, templates
+- **[Agent Skills](https://agentskills.io)** — Standard skill format and best practices
+- **[skills.sh](https://skills.sh/docs)** — Community skill ecosystem and publishing
 
 ## Adding new capabilities
 
