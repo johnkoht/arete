@@ -40,7 +40,7 @@ Made Areté's intelligence layer (context, briefing, memory search, entity resol
 ## Learnings
 
 - **build-agents.ts compression functions are hardcoded**: 4 of 8 compression functions ignore their source file entirely and return static strings. This was caught during review — the PRD originally assumed updating intelligence.md would flow through `npm run build`. Added `scripts/LEARNINGS.md` to document this.
-- **Process correction**: Jumped from plan discussion straight to writing a PRD, skipping the formal plan step, plan approval, and the plan-to-prd skill. Builder caught this. The process exists for checkpoints — even when scope feels clear.
+- **Do not skip planning**: Jumped from plan discussion straight to writing a PRD by hand — skipping the formal plan step, plan approval, pre-mortem gate, and the plan-to-prd skill. This is wrong even when scope feels clear. The correct flow is: plan → approval → pre-mortem (if 3+ steps) → offer PRD path → use plan-to-prd skill. Never write a PRD directly. The builder let it proceed this time but the process exists to give the builder checkpoints to shape work before it's locked in.
 
 ## Metrics
 
