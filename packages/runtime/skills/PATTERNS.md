@@ -106,7 +106,7 @@ templates/outputs/{skill-id}/default.md
 
 **Purpose**: Scan content for candidate decisions and learnings, present for inline review, write approved items to memory.
 
-**Used by**: process-meetings, sync, finalize-project
+**Used by**: process-meetings, fathom, krisp, finalize-project
 
 **Steps**:
 

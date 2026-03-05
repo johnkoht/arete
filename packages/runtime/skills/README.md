@@ -14,10 +14,22 @@ Areté ships with default skills for core PM workflows. They live in `.agents/sk
 |------|----------|
 | Planning | quarter-plan, week-plan, week-review, daily-plan, goals-alignment |
 | Discovery & definition | discovery, create-prd, competitive-analysis, construct-roadmap |
-| Execution | meeting-prep, save-meeting, process-meetings, schedule-meeting, sync, synthesize |
-| Operations | finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
+| Execution | meeting-prep, save-meeting, process-meetings, schedule-meeting, synthesize |
+| Operations | fathom, krisp, notion, calendar, finalize-project, periodic-review, workspace-tour, generate-prototype-prompt |
 
 Run `arete skill list` to see all available skills.
+
+## Integration skill routing
+
+The former `sync` skill has been split into focused integration skills. If you used sync triggers before, here's how they now route:
+
+| Old trigger | Routes to | Notes |
+|-------------|-----------|-------|
+| "sync my meetings" | `fathom` or `krisp` | Agent chooses based on configured integration |
+| "pull from fathom" / "fathom recording" | `fathom` | All Fathom pull operations |
+| "sync from krisp" / "krisp recording" | `krisp` | All Krisp pull operations |
+| "import notion page" / "sync notion" | `notion` | Page import by URL |
+| "what's on my calendar" / "pull my calendar" | `calendar` | Calendar view and event creation |
 
 ## Customizing a skill
 
