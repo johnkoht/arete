@@ -109,12 +109,8 @@ async function runProcessingSessionTestable(
     switch (ev.type) {
       case 'message_update': {
         const ame = ev.assistantMessageEvent as Record<string, unknown> | undefined;
-        if (
-          ame?.type === 'content_block_delta' &&
-          (ame.delta as Record<string, unknown> | undefined)?.type === 'text_delta'
-        ) {
-          const delta = ame.delta as Record<string, unknown>;
-          jobs.appendEvent(jobId, delta.text as string);
+        if (ame?.type === 'text_delta') {
+          jobs.appendEvent(jobId, ame.delta as string);
         }
         break;
       }
@@ -202,8 +198,10 @@ describe('runProcessingSession', () => {
       capturedSession.emit({
         type: 'message_update',
         assistantMessageEvent: {
-          type: 'content_block_delta',
-          delta: { type: 'text_delta', text: 'Hello world' },
+          type: 'text_delta',
+          delta: 'Hello world',
+          contentIndex: 0,
+          partial: {},
         },
       });
 
