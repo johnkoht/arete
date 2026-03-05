@@ -175,6 +175,104 @@ arete people memory refresh --person jane-doe
 
 ---
 
+## enrich_meeting_attendees
+
+**Purpose**: Cross-reference calendar event data to fill in missing or incomplete attendee information in meeting files — e.g., email-only identifiers, first-name-only entries, or attendees with no displayable name.
+
+**Used by**: fathom (process-meetings via fathom pull), krisp (process-meetings via krisp pull), process-meetings
+
+**Integration point**: Apply during **process-meetings step 2** (entity resolution) — before slug generation and person-file creation, so enriched names and emails feed into the slug and category logic.
+
+### When to Enrich
+
+Trigger this pattern for any attendee record that has:
+- Email only (no display name): `alice@acme.com`
+- First name only: `Alice` (no surname)
+- Unknown/machine name: `user_8472`, `guest`, or a UUID
+- Missing email (name only, no way to classify internal vs. external)
+
+Skip enrichment if the attendee already has a full name **and** an email — entity resolution has enough signal to proceed.
+
+### Steps
+
+1. **Identify enrichment candidates** — While building the attendee candidate list (from meeting frontmatter or body), flag any record matching the "When to Enrich" conditions above. Collect: `name`, `email`, `source` (meeting file path), `meeting_time` (ISO timestamp from frontmatter).
+
+2. **Pull calendar window** — Fetch calendar events covering a ±15-minute window around the meeting time:
+
+   ```bash
+   # Pull events as JSON for a specific date
+   arete pull calendar --json --date YYYY-MM-DD
+
+   # Or narrow to a time window
+   arete pull calendar --json --start "YYYY-MM-DDTHH:MM" --end "YYYY-MM-DDTHH:MM"
+   ```
+
+   The `--json` flag returns structured event objects with `title`, `start`, `end`, `attendees[]` (each with `name` and `email`).
+
+3. **Match calendar event to meeting** — For each enrichment candidate's meeting, find the best-matching calendar event using this priority order:
+
+   | Signal | Match condition |
+   |--------|----------------|
+   | **Time overlap** | Event start/end overlaps the meeting time by ≥ 1 min (within ±15 min) |
+   | **Title similarity** | Normalized event title matches normalized meeting title (≥ 80% token overlap) |
+   | **Email domain** | At least one calendar attendee shares the same email domain as a known meeting attendee |
+
+   If no event matches, skip enrichment for this meeting and note it in the summary.
+
+4. **Enrich attendee records** — For each flagged attendee, find the matching calendar attendee:
+
+   - **Email-only → full name**: Look up the email in the calendar event's attendee list; use the calendar `name` field.
+   - **First-name-only → full name**: Fuzzy-match the first name against calendar attendee names; use the calendar record if confidence is high (only one candidate with that first name).
+   - **Name-only → email**: Match the name to a calendar attendee; use the calendar `email` to classify internal vs. external.
+
+   ```
+   Before: { name: "Alice", email: null }
+   Calendar: { name: "Alice Nguyen", email: "alice@acme.com" }
+   After:  { name: "Alice Nguyen", email: "alice@acme.com", enriched_from: "calendar" }
+   ```
+
+5. **Merge enriched data** — Replace the original incomplete record with the enriched version. Preserve the original source reference (`enriched_from: "calendar"`) so downstream steps can distinguish enriched from raw data. Do **not** overwrite records that already have full information.
+
+6. **Continue entity resolution** — Pass the enriched attendee list into the normal slug-generation and People Intelligence digest flow (process-meetings step 2). Enriched records behave identically to native records from this point forward.
+
+### Example Workflow (skill author reference)
+
+```
+Meeting file: resources/meetings/2026-03-05-product-review.md
+Frontmatter attendees: ["alice@acme.com", "Bob", "Charlie Smith"]
+
+Step 1 — Candidates:
+  - "alice@acme.com" → email-only (flag)
+  - "Bob" → first-name-only (flag)
+  - "Charlie Smith" → full name, no email (flag for email enrichment)
+
+Step 2 — Pull calendar:
+  arete pull calendar --json --date 2026-03-05
+  → Event: "Product Review" 10:00–11:00
+    Attendees: [
+      { name: "Alice Nguyen", email: "alice@acme.com" },
+      { name: "Bob Tanaka",   email: "bob@acme.com" },
+      { name: "Charlie Smith",email: "charlie@partner.io" }
+    ]
+
+Step 3 — Match: time overlap + title similarity → high confidence
+
+Step 4/5 — Enrich:
+  - "alice@acme.com" → { name: "Alice Nguyen", email: "alice@acme.com" }
+  - "Bob" → { name: "Bob Tanaka", email: "bob@acme.com" }
+  - "Charlie Smith" → { name: "Charlie Smith", email: "charlie@partner.io" }
+
+Step 6 — Entity resolution proceeds with full records
+```
+
+### Outputs
+
+- Attendee candidate list with incomplete records replaced by enriched versions
+- Each enriched record carries `enriched_from: "calendar"` for auditability
+- Unmatched candidates are passed through unchanged; a note is included in the step 2 summary (e.g., "1 attendee could not be enriched — no matching calendar event")
+
+---
+
 ## light_pre_mortem
 
 **Purpose**: Quick risk identification before committing to a decision (PRD, quarter plan, roadmap). Takes 5 minutes; surfaces 2-3 risks with mitigations.
