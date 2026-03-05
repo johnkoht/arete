@@ -86,7 +86,7 @@ templates/
 # (do not ignore memory/, or MEMORY.md can reference entries that never get committed)
 .arete/
 arete.yaml
-scratchpad.md
+# scratchpad.md  # removed from ignore — file is intentionally tracked
 GUIDE.md
 # Exception: committed test fixtures
 !test-data/
