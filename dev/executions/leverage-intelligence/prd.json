@@ -1,0 +1,85 @@
+{
+  "name": "leverage-intelligence",
+  "description": "Expert Agent Layer Phase 1 — separate workflow from intelligence in skills via instruction-based expert agent patterns",
+  "tasks": [
+    {
+      "id": "t1-expert-patterns",
+      "title": "Define Expert Agent Patterns in PATTERNS.md",
+      "description": "Create three new patterns: context_bundle_assembly (how to assemble context bundles with token budget limits, sparse fallback, reuse rules), significance_analyst (what actually matters — with worked before/after example and grounding directives), relationship_intelligence (what changed in relationships — with worked example). Each pattern needs Purpose, Used by, Inputs, Steps, Outputs, and worked examples.",
+      "status": "pending",
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Three patterns documented in PATTERNS.md following existing pattern format",
+        "Each has Purpose, Used by, Inputs, Steps, Outputs",
+        "context_bundle_assembly includes concrete CLI commands, word limits per section (strategy 3 files/300w, memory 5 results/200w, person stances+items+health only), priority trim order, sparse-context fallback, topic derivation method, reuse rules for get_meeting_context",
+        "Each expert agent pattern includes worked example with abbreviated bundle, bad output (keyword-matched), good output (context-reasoned with bundle citations)",
+        "Significance Analyst includes grounding directive: cite specific goal/decision/stance for each candidate"
+      ],
+      "filesTouched": ["packages/runtime/skills/PATTERNS.md"]
+    },
+    {
+      "id": "t2-process-meetings",
+      "title": "Update process-meetings Step 7 with Significance Analyst",
+      "description": "Redesign Step 7 (extract_decisions_learnings pattern call to workspace memory) to use Significance Analyst with context bundle. Step 4 (extraction to meeting file) is NOT changed. Add context bundle assembly between Steps 6 and 7. Make two-destination split explicit.",
+      "status": "complete",
+      "commitSha": "8c58ccf",
+      "dependsOn": ["t1-expert-patterns"],
+      "acceptanceCriteria": [
+        "process-meetings SKILL.md Step 7 updated with context bundle assembly and Significance Analyst",
+        "Step 4 extraction to meeting file is unchanged",
+        "Context bundle assembly instructions reference context_bundle_assembly pattern",
+        "Extraction instructions distinguish commitments from descriptions",
+        "Candidates include reasoning citing specific context",
+        "Two-destination split explicit: Step 4 to file, Step 7 to memory via Significance Analyst"
+      ],
+      "filesTouched": ["packages/runtime/skills/process-meetings/SKILL.md"]
+    },
+    {
+      "id": "t3-meeting-prep",
+      "title": "Update meeting-prep with Relationship Intelligence",
+      "description": "Add Relationship Intelligence phase after get_meeting_context gathering. Adds Intelligence Insights section. Reuses context from get_meeting_context — does NOT re-run arete people show.",
+      "status": "complete",
+      "commitSha": "c362b5d",
+      "dependsOn": ["t1-expert-patterns"],
+      "acceptanceCriteria": [
+        "meeting-prep SKILL.md updated with Relationship Intelligence phase after context gathering",
+        "Adds Intelligence Insights section: relationship changes, topics needing attention, recommended approach",
+        "References context_bundle_assembly and relationship_intelligence patterns",
+        "Existing prep brief structure preserved; intelligence is additive",
+        "Reuses people context from get_meeting_context — no duplicate arete people show calls"
+      ],
+      "filesTouched": ["packages/runtime/skills/meeting-prep/SKILL.md"]
+    },
+    {
+      "id": "t4-week-review",
+      "title": "Update week-review with Significance Analyst",
+      "description": "Add Significance Analyst phase for weekly significance assessment. Context bundle LIMITED to goals + memory only. Do NOT add arete people show calls.",
+      "status": "pending",
+      "dependsOn": ["t1-expert-patterns"],
+      "acceptanceCriteria": [
+        "week-review SKILL.md updated with Significance Analyst phase",
+        "Adds Weekly Intelligence section: significant events, patterns, strategic connections",
+        "Context bundle limited to goals context and memory search ONLY",
+        "NO arete people show calls added",
+        "Existing review structure preserved; intelligence is additive"
+      ],
+      "filesTouched": ["packages/runtime/skills/week-review/SKILL.md"]
+    },
+    {
+      "id": "t5-update-pattern-and-guide",
+      "title": "Update extract_decisions_learnings pattern and authoring guide",
+      "description": "Update extract_decisions_learnings to reference significance_analyst with conditional fallback for bundle-less callers. Update _authoring-guide.md with one new section on expert agent patterns. Must read finalize-project/SKILL.md first to verify backward compatibility.",
+      "status": "pending",
+      "dependsOn": ["t2-process-meetings"],
+      "acceptanceCriteria": [
+        "extract_decisions_learnings pattern updated to reference significance_analyst with conditional: use analyst when bundle available, else keyword scan",
+        "finalize-project SKILL.md read and impact assessed before updating",
+        "Pattern includes conditional language for bundle-less callers",
+        "_authoring-guide.md updated with one new section on expert agent patterns (bounded update)",
+        "Cross-references between patterns are bidirectional",
+        "finalize-project confirmed to produce coherent output after change"
+      ],
+      "filesTouched": ["packages/runtime/skills/PATTERNS.md", "packages/runtime/skills/_authoring-guide.md", "packages/runtime/skills/finalize-project/SKILL.md"]
+    }
+  ]
+}
