@@ -37,6 +37,7 @@ Where `{category}` matches the template group:
 | `construct-roadmap` | Roadmap output | `templates/outputs/construct-roadmap/` | `roadmap` |
 | `week-plan` | Week file | `templates/plans/` | `week-priorities` |
 | `quarter-plan` | Quarter file | `templates/plans/` | `quarter-goals` |
+| `krisp` | Meeting output | `templates/outputs/krisp/` | `meeting` |
 
 ### How to customize a template
 
