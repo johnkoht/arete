@@ -65,7 +65,7 @@
       "status": "complete",
       "passes": true,
       "attemptCount": 0,
-      "commitSha": "d941e6e"
+      "commitSha": "b2f8e75"
     },
     {
       "id": "task-4",
@@ -81,9 +81,10 @@
         "Job transitions to done when agent_end event fires; job transitions to error on agent exception",
         "Tests mock createAgentSession to emit predetermined events and verify job lifecycle transitions"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "1b1de0f"
     },
     {
       "id": "task-5",
@@ -107,9 +108,10 @@
         "No mock data from src/data/meetings.ts used in production components",
         "packages/apps/web/src/test/ has hook tests with mocked fetch"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "3941ea5"
     },
     {
       "id": "task-6",
