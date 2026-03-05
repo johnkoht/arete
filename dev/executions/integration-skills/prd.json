@@ -71,7 +71,8 @@
       "id": "t5-delete-sync-update-refs",
       "title": "Delete sync skill and update references",
       "description": "Delete packages/runtime/skills/sync/ directory. Update packages/runtime/skills/README.md with new skills (fathom, krisp, notion, calendar). Search for and update any cross-references to sync skill. Verify old sync triggers would route appropriately.",
-      "status": "pending",
+      "status": "complete",
+      "commitSha": "59e193b",
       "dependsOn": ["t2-fathom-skill", "t3-krisp-skill", "t4-notion-calendar-skills"],
       "acceptanceCriteria": [
         "sync/ directory deleted",

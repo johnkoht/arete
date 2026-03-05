@@ -86,3 +86,25 @@ Created the Krisp skill with SKILL.md and a meeting template documenting the fin
 
 ### Reflection
 Sync/SKILL.md's Krisp section provided a solid starting point. The two-stage flow framing (pull → process-meetings) mirrors the Fathom task spec and creates a consistent mental model across both recorder integrations.
+
+## t5-delete-sync-update-refs — Complete (2026-03-05)
+
+**Commit**: 59e193b
+
+### What Was Done
+Deleted the `sync/` directory and updated all references to point to the new focused integration skills.
+
+**Files changed**:
+- `packages/runtime/skills/sync/SKILL.md` — deleted (386 lines removed)
+- `packages/runtime/skills/README.md` — replaced sync with fathom/krisp/notion/calendar in skills table; added trigger routing table documenting old sync triggers and their new homes
+- `packages/runtime/skills/PATTERNS.md` — updated `extract_decisions_learnings` "Used by" to replace `sync` with `fathom, krisp`
+
+**Grep verified**: No broken references to `skills/sync` or `sync skill` remain. Remaining "sync" mentions are: trigger phrases in the new skills' frontmatter (correct), and the routing table in README.md (intentional documentation).
+
+### Quality Checks
+- Documentation-only task; typecheck/tests not applicable
+- `grep -rn "skills/sync\|sync skill"` confirms no broken references ✓
+- README.md skills table reorganized — Operations row now includes all four new integration skills ✓
+
+### Reflection
+The main judgment call was deduplicating the Operations row (the original had finalize-project etc.; merging with the four new skills kept the table clean). The trigger routing table in README.md directly satisfies the AC requirement to document old sync triggers routing to new skills.
