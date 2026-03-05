@@ -3,6 +3,7 @@
  */
 
 import { join } from 'path';
+import { stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { WorkspacePaths } from '../models/index.js';
 
@@ -20,6 +21,8 @@ export interface MeetingForSave {
   attendees?: Array<{ name?: string | null; email?: string | null } | string>;
   url: string;
   share_url?: string;
+  /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
+  status?: 'synced' | 'processed' | 'approved';
 }
 
 function slugify(s: string): string {
@@ -37,6 +40,25 @@ export function meetingFilename(meeting: MeetingForSave): string {
   if (!dateStr) dateStr = new Date().toISOString().slice(0, 10);
   const titleSlug = slugify(meeting.title || 'untitled');
   return `${dateStr}-${titleSlug}.md`;
+}
+
+/**
+ * Build the attendees YAML block.
+ * Each attendee becomes `{ name: string, email: string }`.
+ * Null/undefined values become empty string.
+ */
+function buildAttendeesYaml(
+  attendees: Array<{ name?: string | null; email?: string | null } | string>
+): Array<{ name: string; email: string }> {
+  return attendees.map((a) => {
+    if (typeof a === 'string') {
+      return { name: a, email: '' };
+    }
+    return {
+      name: a.name ?? '',
+      email: a.email ?? '',
+    };
+  });
 }
 
 export async function saveMeetingFile(
@@ -82,15 +104,22 @@ export async function saveMeetingFile(
     content = content.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
   }
 
-  const frontmatter = [
-    '---',
-    `title: "${meeting.title.replace(/"/g, '\\"')}"`,
-    `date: "${meeting.date}"`,
-    `source: "${integration}"`,
-    '---',
-  ].join('\n');
+  // Build frontmatter data object
+  const frontmatterData: Record<string, unknown> = {
+    title: meeting.title,
+    date: meeting.date,
+    source: integration,
+    status: meeting.status ?? 'synced',
+  };
 
-  const fullContent = frontmatter + '\n\n' + content;
+  // Write structured attendees array
+  const rawAttendees = meeting.attendees ?? [];
+  frontmatterData['attendees'] = buildAttendeesYaml(rawAttendees);
+
+  // Serialize using yaml.stringify for round-trip safety
+  const frontmatterStr = stringifyYaml(frontmatterData).trimEnd();
+  const fullContent = `---\n${frontmatterStr}\n---\n\n${content}`;
+
   await storage.mkdir(outputDir);
   await storage.write(fullPath, fullContent);
   return fullPath;

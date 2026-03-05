@@ -1,0 +1,394 @@
+/**
+ * Tests for staged-items utilities.
+ *
+ * Coverage:
+ * 1.  parseStagedSections — valid three-section body
+ * 2.  parseStagedSections — missing sections returns empty arrays
+ * 3.  parseStagedSections — case-insensitive headers
+ * 4.  parseStagedSections — malformed lines are skipped
+ * 5.  parseStagedSections — extra whitespace in item text is trimmed
+ * 6.  parseStagedItemStatus — missing frontmatter returns {}
+ * 7.  parseStagedItemStatus — partial frontmatter (no staged_item_status field)
+ * 8.  parseStagedItemStatus — reads status map correctly
+ * 9.  writeItemStatusToFile — round-trip: write then re-read
+ * 10. writeItemStatusToFile — preserves existing frontmatter fields
+ * 11. writeItemStatusToFile — stores editedText in staged_item_edits
+ * 12. writeItemStatusToFile — throws when file not found
+ * 13. commitApprovedItems — approved decisions written to decisions.md
+ * 14. commitApprovedItems — approved learnings written to learnings.md
+ * 15. commitApprovedItems — action items NOT written to any memory file
+ * 16. commitApprovedItems — staged sections removed from body
+ * 17. commitApprovedItems — frontmatter cleaned and status set to approved
+ * 18. commitApprovedItems — uses edited text when staged_item_edits present
+ * 19. generateItemId — produces correct IDs for each type
+ */
+
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { parse as parseYaml } from 'yaml';
+import {
+  generateItemId,
+  parseStagedSections,
+  parseStagedItemStatus,
+  writeItemStatusToFile,
+  commitApprovedItems,
+} from '../../src/integrations/staged-items.js';
+import type { StorageAdapter } from '../../src/storage/adapter.js';
+
+// ---------------------------------------------------------------------------
+// Mock storage
+// ---------------------------------------------------------------------------
+
+function createMockStorage(): StorageAdapter & { files: Map<string, string> } {
+  const files = new Map<string, string>();
+  return {
+    files,
+    async read(path: string) { return files.get(path) ?? null; },
+    async write(path: string, content: string) { files.set(path, content); },
+    async exists(path: string) { return files.has(path); },
+    async delete(path: string) { files.delete(path); },
+    async list() { return []; },
+    async listSubdirectories() { return []; },
+    async mkdir() { /* no-op */ },
+    async getModified() { return null; },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const VALID_BODY = `
+## Staged Action Items
+- ai_001: Follow up on pricing model
+- ai_002: Share Q1 roadmap deck
+
+## Staged Decisions
+- de_001: Prioritize enterprise tier
+
+## Staged Learnings
+- le_001: Enterprise customers care about audit logs
+`.trimStart();
+
+const FRONTMATTER_WITH_STATUS = `---
+title: "Test Meeting"
+date: "2026-03-01"
+status: synced
+staged_item_status:
+  ai_001: pending
+  de_001: approved
+  le_001: skipped
+---
+
+${VALID_BODY}`;
+
+const FULL_MEETING = `---
+title: "Strategy Review"
+date: "2026-03-01"
+source: Krisp
+status: processed
+staged_item_status:
+  ai_001: approved
+  de_001: approved
+  le_001: approved
+---
+
+## Intro
+
+Some intro text.
+
+## Staged Action Items
+- ai_001: Follow up on pricing model
+
+## Staged Decisions
+- de_001: Prioritize enterprise tier
+
+## Staged Learnings
+- le_001: Enterprise customers care about audit logs
+
+## Transcript
+Full transcript here.
+`;
+
+const MEMORY_DIR = '/workspace/.arete/memory/items';
+const MEETING_FILE = '/workspace/meetings/test.md';
+
+// ---------------------------------------------------------------------------
+// 1–5: parseStagedSections
+// ---------------------------------------------------------------------------
+
+describe('parseStagedSections', () => {
+  it('(1) parses all three sections from a valid body', () => {
+    const result = parseStagedSections(VALID_BODY);
+
+    assert.equal(result.actionItems.length, 2, 'should have 2 action items');
+    assert.equal(result.decisions.length, 1, 'should have 1 decision');
+    assert.equal(result.learnings.length, 1, 'should have 1 learning');
+
+    assert.deepEqual(result.actionItems[0], { id: 'ai_001', text: 'Follow up on pricing model', type: 'ai' });
+    assert.deepEqual(result.actionItems[1], { id: 'ai_002', text: 'Share Q1 roadmap deck', type: 'ai' });
+    assert.deepEqual(result.decisions[0], { id: 'de_001', text: 'Prioritize enterprise tier', type: 'de' });
+    assert.deepEqual(result.learnings[0], { id: 'le_001', text: 'Enterprise customers care about audit logs', type: 'le' });
+  });
+
+  it('(2) returns empty arrays when sections are absent', () => {
+    const result = parseStagedSections('## Summary\nNo staged sections here.\n');
+
+    assert.deepEqual(result, { actionItems: [], decisions: [], learnings: [] });
+  });
+
+  it('(3) matches headers case-insensitively', () => {
+    const body = `## staged action items\n- ai_001: Task one\n## staged decisions\n- de_001: Decision one\n## staged learnings\n- le_001: Learning one\n`;
+    const result = parseStagedSections(body);
+
+    assert.equal(result.actionItems.length, 1);
+    assert.equal(result.decisions.length, 1);
+    assert.equal(result.learnings.length, 1);
+  });
+
+  it('(4) skips malformed lines without throwing', () => {
+    const body = `## Staged Action Items\n- not-a-valid-id: text\n- ai_001: Valid item\n- malformed line with no colon\n`;
+    const result = parseStagedSections(body);
+
+    assert.equal(result.actionItems.length, 1, 'only the valid item is captured');
+    assert.equal(result.actionItems[0].id, 'ai_001');
+  });
+
+  it('(5) trims whitespace from item text', () => {
+    const body = `## Staged Decisions\n- de_001:   Lots of whitespace   \n`;
+    const result = parseStagedSections(body);
+
+    assert.equal(result.decisions[0].text, 'Lots of whitespace');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6–8: parseStagedItemStatus
+// ---------------------------------------------------------------------------
+
+describe('parseStagedItemStatus', () => {
+  it('(6) returns {} when content has no frontmatter', () => {
+    const result = parseStagedItemStatus('# Just a heading\nNo frontmatter here.');
+    assert.deepEqual(result, {});
+  });
+
+  it('(7) returns {} when frontmatter has no staged_item_status field', () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody text.`;
+    const result = parseStagedItemStatus(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('(8) reads staged_item_status map correctly', () => {
+    const result = parseStagedItemStatus(FRONTMATTER_WITH_STATUS);
+    assert.deepEqual(result, {
+      ai_001: 'pending',
+      de_001: 'approved',
+      le_001: 'skipped',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9–12: writeItemStatusToFile
+// ---------------------------------------------------------------------------
+
+describe('writeItemStatusToFile', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('(9) round-trip: written status is readable via parseStagedItemStatus', async () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody.`;
+    storage.files.set(MEETING_FILE, content);
+
+    await writeItemStatusToFile(storage, MEETING_FILE, 'ai_001', { status: 'approved' });
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const statusMap = parseStagedItemStatus(updated);
+    assert.equal(statusMap['ai_001'], 'approved');
+  });
+
+  it('(10) preserves existing frontmatter fields after write', async () => {
+    const content = `---\ntitle: "Important Meeting"\ndate: "2026-03-01"\nstatus: synced\n---\n\nBody.`;
+    storage.files.set(MEETING_FILE, content);
+
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', { status: 'skipped' });
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const { data } = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as { data: unknown };
+    const frontmatter = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    assert.equal(frontmatter['title'], 'Important Meeting');
+    assert.equal(frontmatter['date'], '2026-03-01');
+    assert.equal(frontmatter['status'], 'synced');
+  });
+
+  it('(11) stores editedText in staged_item_edits when provided', async () => {
+    const content = `---\ntitle: "Meeting"\n---\n\nBody.`;
+    storage.files.set(MEETING_FILE, content);
+
+    await writeItemStatusToFile(storage, MEETING_FILE, 'de_001', {
+      status: 'approved',
+      editedText: 'Updated decision text',
+    });
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatter = parseYaml(updated.match(/^---\n([\s\S]*?)\n---/)![1]) as Record<string, unknown>;
+    const edits = frontmatter['staged_item_edits'] as Record<string, string>;
+    assert.equal(edits['de_001'], 'Updated decision text');
+  });
+
+  it('(12) throws when file not found', async () => {
+    await assert.rejects(
+      () => writeItemStatusToFile(storage, '/nonexistent/file.md', 'ai_001', { status: 'approved' }),
+      (err: Error) => {
+        assert.ok(err.message.includes('not found'), `Expected "not found" in: "${err.message}"`);
+        return true;
+      }
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13–18: commitApprovedItems
+// ---------------------------------------------------------------------------
+
+describe('commitApprovedItems', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    storage.files.set(MEETING_FILE, FULL_MEETING);
+  });
+
+  it('(13) writes approved decisions to decisions.md', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions, 'decisions.md should be created');
+    assert.ok(decisions.includes('Prioritize enterprise tier'), 'approved decision should be present');
+  });
+
+  it('(14) writes approved learnings to learnings.md', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`);
+    assert.ok(learnings, 'learnings.md should be created');
+    assert.ok(learnings.includes('Enterprise customers care about audit logs'), 'approved learning should be present');
+  });
+
+  it('(15) does NOT write action items to any memory file', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`) ?? '';
+
+    assert.ok(
+      !decisions.includes('Follow up on pricing model'),
+      'action item text must NOT appear in decisions.md'
+    );
+    assert.ok(
+      !learnings.includes('Follow up on pricing model'),
+      'action item text must NOT appear in learnings.md'
+    );
+  });
+
+  it('(16) removes all staged sections from the meeting body', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.ok(!updated.includes('## Staged Action Items'), 'Staged Action Items header should be removed');
+    assert.ok(!updated.includes('## Staged Decisions'), 'Staged Decisions header should be removed');
+    assert.ok(!updated.includes('## Staged Learnings'), 'Staged Learnings header should be removed');
+    assert.ok(!updated.includes('ai_001:'), 'action item line should be removed');
+    assert.ok(!updated.includes('de_001:'), 'decision item line should be removed');
+    assert.ok(!updated.includes('le_001:'), 'learning item line should be removed');
+  });
+
+  it('(17) sets status: approved, approved_at, and clears staged_item_status/edits', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(frontmatterMatch, 'file must still have frontmatter');
+
+    const frontmatter = parseYaml(frontmatterMatch[1]) as Record<string, unknown>;
+    assert.equal(frontmatter['status'], 'approved', 'status must be set to approved');
+    assert.ok(frontmatter['approved_at'], 'approved_at must be set');
+    assert.ok(!('staged_item_status' in frontmatter), 'staged_item_status must be removed');
+    assert.ok(!('staged_item_edits' in frontmatter), 'staged_item_edits must be removed');
+  });
+
+  it('(18) uses edited text from staged_item_edits when available', async () => {
+    const meetingWithEdits = FULL_MEETING.replace(
+      'staged_item_status:',
+      'staged_item_edits:\n  de_001: "Custom edited decision"\nstaged_item_status:'
+    );
+    storage.files.set(MEETING_FILE, meetingWithEdits);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    assert.ok(
+      decisions.includes('Custom edited decision'),
+      'should use the edited text, not the original staged text'
+    );
+    assert.ok(
+      !decisions.includes('Prioritize enterprise tier'),
+      'original staged text should not appear when edit is present'
+    );
+  });
+
+  it('skips items that are not approved (pending/skipped)', async () => {
+    const meetingWithMixed = `---
+title: "Mixed"
+date: "2026-03-01"
+status: processed
+staged_item_status:
+  de_001: approved
+  de_002: skipped
+  le_001: pending
+---
+
+## Staged Decisions
+- de_001: Approved decision
+- de_002: Skipped decision
+
+## Staged Learnings
+- le_001: Pending learning
+`;
+    storage.files.set(MEETING_FILE, meetingWithMixed);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    assert.ok(decisions.includes('Approved decision'), 'approved item should appear');
+    assert.ok(!decisions.includes('Skipped decision'), 'skipped item should not appear');
+
+    // learnings.md should not exist (no approved learnings)
+    assert.ok(!storage.files.has(`${MEMORY_DIR}/learnings.md`), 'learnings.md should not be created when no approved learnings');
+  });
+
+  it('appends to existing memory files (does not overwrite)', async () => {
+    storage.files.set(`${MEMORY_DIR}/decisions.md`, '- Existing decision\n');
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    assert.ok(decisions.includes('Existing decision'), 'existing content must be preserved');
+    assert.ok(decisions.includes('Prioritize enterprise tier'), 'new decision must be appended');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19: generateItemId
+// ---------------------------------------------------------------------------
+
+describe('generateItemId', () => {
+  it('(19) produces correct IDs for each type', () => {
+    assert.equal(generateItemId('ai', 1), 'ai_001');
+    assert.equal(generateItemId('de', 42), 'de_042');
+    assert.equal(generateItemId('le', 100), 'le_100');
+  });
+});

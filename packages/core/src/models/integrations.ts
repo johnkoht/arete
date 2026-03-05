@@ -4,6 +4,30 @@
  * Imports from common.ts ONLY.
  */
 
+// ---------------------------------------------------------------------------
+// Staged item types (meeting triage)
+// ---------------------------------------------------------------------------
+
+/** Status of an individual staged item — pending until the user acts on it */
+export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'>;
+
+/** Map of itemId → edited text (only present when the user edits the default text) */
+export type StagedItemEdits = Record<string, string>;
+
+/** A single staged item extracted from a meeting file */
+export type StagedItem = {
+  id: string;   // e.g. "ai_001"
+  text: string;
+  type: 'ai' | 'de' | 'le';
+};
+
+/** All three staged sections for a meeting */
+export type StagedSections = {
+  actionItems: StagedItem[];
+  decisions: StagedItem[];
+  learnings: StagedItem[];
+};
+
 /** Fathom transcript from integration */
 export type FathomTranscript = {
   id: string;
