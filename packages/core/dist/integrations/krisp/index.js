@@ -5,22 +5,36 @@ import { join } from 'path';
 import { KrispMcpClient } from './client.js';
 import { loadKrispCredentials } from './config.js';
 import { meetingFromKrisp } from './save.js';
-import { saveMeetingFile, meetingFilename } from '../meetings.js';
+import { saveMeetingFile, meetingFilename, findMatchingAgenda } from '../meetings.js';
 const DEFAULT_TEMPLATE = `# {title}
+
 **Date**: {date}
 **Duration**: {duration}
 **Source**: Krisp
 
 ## Summary
+
 {summary}
 
-## Key Points
-{key_points}
-
 ## Action Items
+
 {action_items}
 
+<details>
+<summary>Recorder Notes</summary>
+
+### Original Summary
+
+{summary}
+
+### Key Points
+
+{key_points}
+
+</details>
+
 ## Transcript
+
 {transcript}
 `;
 function dateRange(days) {
@@ -71,6 +85,11 @@ export async function pullKrisp(storage, workspaceRoot, paths, days) {
         try {
             const transcriptText = docMap.get(m.meeting_id) ?? '';
             const meeting = meetingFromKrisp(m, transcriptText);
+            // Link agenda if available
+            const agenda = await findMatchingAgenda(storage, workspaceRoot, meeting.date, meeting.title);
+            if (agenda) {
+                meeting.agenda = agenda;
+            }
             const fullPath = await saveMeetingFile(storage, meeting, outputDir, DEFAULT_TEMPLATE, { integration: 'Krisp', force: false });
             if (fullPath)
                 saved += 1;

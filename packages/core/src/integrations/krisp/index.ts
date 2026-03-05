@@ -8,23 +8,37 @@ import type { WorkspacePaths } from '../../models/index.js';
 import { KrispMcpClient } from './client.js';
 import { loadKrispCredentials } from './config.js';
 import { meetingFromKrisp } from './save.js';
-import { saveMeetingFile, meetingFilename, type MeetingForSave } from '../meetings.js';
+import { saveMeetingFile, meetingFilename, findMatchingAgenda, type MeetingForSave } from '../meetings.js';
 
 const DEFAULT_TEMPLATE = `# {title}
+
 **Date**: {date}
 **Duration**: {duration}
 **Source**: Krisp
 
 ## Summary
+
 {summary}
 
-## Key Points
-{key_points}
-
 ## Action Items
+
 {action_items}
 
+<details>
+<summary>Recorder Notes</summary>
+
+### Original Summary
+
+{summary}
+
+### Key Points
+
+{key_points}
+
+</details>
+
 ## Transcript
+
 {transcript}
 `;
 
@@ -86,6 +100,18 @@ export async function pullKrisp(
     try {
       const transcriptText = docMap.get(m.meeting_id) ?? '';
       const meeting = meetingFromKrisp(m, transcriptText);
+      
+      // Link agenda if available
+      const agenda = await findMatchingAgenda(
+        storage,
+        workspaceRoot,
+        meeting.date,
+        meeting.title
+      );
+      if (agenda) {
+        meeting.agenda = agenda;
+      }
+      
       const fullPath = await saveMeetingFile(
         storage,
         meeting,

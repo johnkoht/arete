@@ -87,6 +87,11 @@ After resolving people, add or update meeting frontmatter with `attendee_ids: [s
 
 Read the meeting file and extract intelligence **directly** (you have LLM access):
 
+**If meeting has linked agenda** (check frontmatter for `agenda: <path>`):
+1. Read the agenda file
+2. Extract unchecked items using the agenda utility
+3. These will be merged into Action Items with `*(from agenda)*` suffix
+
 **Extract these sections from the transcript:**
 
 1. **Summary** — 2-3 paragraph summary of the meeting
@@ -102,9 +107,15 @@ Read the meeting file and extract intelligence **directly** (you have LLM access
 - Keep under 150 characters
 - Include timestamp reference if available (e.g., `{{12:34}}`)
 
+**Agenda item merge rules:**
+- Add unchecked agenda items to Action Items section
+- Mark with `*(from agenda)*` suffix
+- If no clear owner in agenda text, use generic format without @ mentions
+
 **Example good action items:**
 - "John to send API docs to Sarah by Friday"
 - "Sarah to review the pricing proposal and provide feedback"
+- "Review Q2 roadmap *(from agenda)*"
 
 **Example bad (reject):**
 - "Me: Yeah, I'll look into that thing we talked about..."
@@ -122,17 +133,18 @@ Present each extracted section for review using the Approve / Edit / Skip patter
 
 ### 6. Save to Meeting File
 
-Append approved sections to the meeting file with proper formatting:
+Update the meeting file with approved sections. Preserve the collapsed recorder notes structure:
 
 ```markdown
 ## Summary
 
-{approved summary}
+{Areté-generated summary replaces the placeholder}
 
 ## Action Items
 
 - [ ] John to send API docs to Sarah by Friday (@john-smith → @sarah-chen)
 - [ ] Sarah to review the proposal (@sarah-chen → @john-smith)
+- [ ] Review Q2 roadmap *(from agenda)*
 
 ## Next Steps
 
@@ -148,7 +160,30 @@ Append approved sections to the meeting file with proper formatting:
 
 - Policy integrations are a key differentiator for reducing adjuster errors
 - Quick UX wins need to be weighed against upcoming AI changes
+
+<details>
+<summary>Recorder Notes</summary>
+
+### Original Summary
+
+{recorder summary preserved}
+
+### Key Points
+
+{key points from recorder}
+
+</details>
+
+## Transcript
+
+{full transcript}
 ```
+
+**Structure requirements:**
+- Areté-generated Summary replaces the initial Summary placeholder
+- Action Items include both extracted items AND merged agenda items
+- Recorder notes remain collapsed in `<details>` block
+- Areté intelligence (Summary, Action Items, Decisions, Learnings) is primary
 
 **Action item format (REQUIRED for parsing)**:
 ```
