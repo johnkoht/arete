@@ -1,9 +1,21 @@
+---
+title: "/wrap — Post-Execution Close-Out Command"
+slug: wrap-command
+status: idea
+size: small
+tags: [plan-mode, dx]
+created: 2026-03-02T00:00:00.000Z
+updated: 2026-03-02T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 0
+---
+
 # `/wrap` — Post-Execution Close-Out Command
 
-**Status**: Backlog
-**Added**: 2026-03-02
-**Priority**: High
-**Size**: Small
 **Source**: Builder frustration — orchestrator agents do documentation close-out partially or only when explicitly asked
 
 ---
