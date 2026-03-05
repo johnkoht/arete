@@ -73,6 +73,7 @@
 - `arete pull` - Sync from integrations (meetings, calendar)
 - `arete pull calendar [--today|--days N]` - Pull calendar events
 - `arete pull fathom [--days N]` - Pull Fathom recordings
+- `arete view [--port <port>]` - Open the Areté meeting triage web app in the browser (sync, process, review, approve meetings)
 
 ## Calendar
 

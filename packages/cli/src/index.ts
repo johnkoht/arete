@@ -95,6 +95,7 @@ ${chalk.bold('Availability & Calendar')}
   calendar create --title <title>  Create a calendar event
 
 ${chalk.bold('Meetings & Templates')}
+  view [--port <port>]             Open meeting triage UI in browser (arete view)
   meeting add --file <path>        Add meeting from JSON
   template list meeting-agendas    List templates
   template view meeting-agenda --type <name>  View template
