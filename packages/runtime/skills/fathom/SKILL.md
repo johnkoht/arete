@@ -14,7 +14,7 @@ triggers:
   - fetch fathom
   - fathom recording
   - pull fathom
-  - fetch my latest recording
+  - fetch my latest fathom recording
 ---
 
 # Fathom Skill
@@ -23,10 +23,12 @@ Pull meeting recordings from Fathom and save structured meeting files to `resour
 
 ## Two-Stage Flow
 
-1. **Pull** — This skill fetches Fathom recordings and writes initial meeting files (raw Fathom summary + transcript preserved, empty Areté sections as placeholders)
-2. **Process** — Run `process-meetings` to fill in Summary, Action Items, Decisions, Learnings, and update people
+```
+Stage 1 — Pull (this skill):  arete pull fathom → saves raw meeting files
+Stage 2 — Enrich:             process-meetings  → adds Areté Summary, Action Items, Decisions, Learnings
+```
 
-Always suggest process-meetings after a successful pull.
+Always suggest running `process-meetings` after a successful pull.
 
 ## When to Use
 
@@ -77,15 +79,13 @@ Use a **numeric** recording ID (e.g. `12345`), not the placeholder literal. Get 
 
 ### 4. Name Enrichment
 
-Fathom may provide email-only or first-name-only attendees. Before saving:
-
-Use the **enrich_meeting_attendees** pattern — see [PATTERNS.md](../PATTERNS.md). Apply during entity resolution (process-meetings step 2) to cross-reference calendar events and fill in missing names or emails.
+Fathom may return email-only or first-name-only attendees. These are enriched during the process-meetings step — specifically, during entity resolution (step 2), which uses the **enrich_meeting_attendees** pattern — see [PATTERNS.md](../PATTERNS.md) § enrich_meeting_attendees. No enrichment action is needed during pull.
 
 ### 5. Save Meeting Files
 
 For each recording, save to `resources/meetings/{date}-{title-slug}.md` using the meeting template. The file is structured for process-meetings:
 
-- **Empty** `## Summary` and `## Action Items` sections (Areté will fill these)
+- **Empty** `## Summary`, `## Action Items`, `## Next Steps`, `## Decisions`, and `## Learnings` sections (Areté will fill these)
 - Fathom's AI summary preserved in a collapsed `<details>` block under `## Fathom Notes`
 - Transcript in a collapsed `<details>` block under `## Transcript`
 
@@ -134,5 +134,5 @@ Then prompt: "Would you like me to run process-meetings on these now?"
 ## Related
 
 - **process-meetings** — Run after pull to extract intelligence and update people
-- **enrich_meeting_attendees** pattern — Fill in missing attendee names/emails before entity resolution
+- **enrich_meeting_attendees** pattern — Fill in missing attendee names/emails before entity resolution — see [PATTERNS.md](../PATTERNS.md) § enrich_meeting_attendees
 - [PATTERNS.md](../PATTERNS.md) — Full pattern documentation

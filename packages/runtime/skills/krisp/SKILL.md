@@ -111,10 +111,10 @@ Run process-meetings to generate Areté Summary, Action Items, Decisions, and Le
 
 - **Krisp Core plan required** — The Krisp API integration requires a Core plan or higher. Basic plan users should export notes manually.
 - Meeting files are saved to `resources/meetings/` using the naming convention `YYYY-MM-DD-{title_slug}.md`.
-- The saved template documents the **final format** expected after `process-meetings` runs — see `templates/meeting.md`.
+- The saved template documents the **initial format saved during pull**, with empty placeholder sections that `process-meetings` will populate — see `templates/meeting.md`.
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — enrich_meeting_attendees, extract_decisions_learnings
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) § enrich_meeting_attendees
 - **Next step**: `process-meetings` skill
 - **Output**: `resources/meetings/`

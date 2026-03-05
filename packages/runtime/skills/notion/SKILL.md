@@ -62,14 +62,12 @@ Default naming: `{title_slug}.md`
 
 ### 4. Handle Errors
 
-**⚠️ 404 = Not Shared**: Notion returns 404 (not 403) when a page exists but isn't shared with your integration. If you see a 404 error:
-
-```
-Page not accessible (404). The page likely exists but isn't shared with your Notion integration.
-
-Fix: Open the page in Notion → "..." menu → "Connect to" → select your integration.
-Then retry.
-```
+| Error | Cause | Resolution |
+|-------|-------|-----------|
+| `404 Not Found` | Page exists but isn't shared with your integration — Notion returns 404 (not 403) for unshared pages | Open the page in Notion → "..." menu → "Connect to" → select your integration, then retry |
+| `401 Unauthorized` | API token expired or invalid | Run `arete integration configure notion` to re-enter your Notion API token |
+| `429 Rate Limited` | Too many requests in a short window | Wait 30–60 seconds and retry; when pulling many pages at once, pull in smaller batches |
+| Invalid URL format | URL doesn't match Notion's page URL pattern (`notion.so/...`) | Verify the URL from your browser; ensure it's a direct page link, not a workspace root |
 
 ### 5. Confirm Result
 

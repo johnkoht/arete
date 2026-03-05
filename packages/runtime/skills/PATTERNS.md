@@ -40,6 +40,8 @@ Where `{category}` matches the template group:
 | `fathom` | Meeting output | `templates/outputs/fathom/` | `meeting` |
 | `krisp` | Meeting output | `templates/outputs/krisp/` | `meeting` |
 
+> **Template path convention**: Integration skills (fathom, krisp, calendar, notion) use `templates/outputs/{skill-id}/` for workspace override paths. Older skills use descriptive paths (e.g. `templates/meeting-agendas/`, `templates/projects/`). Both conventions are supported. **New skills should use `templates/outputs/{skill-id}/`**.
+
 ### How to customize a template
 
 Drop a file at the workspace override path — no config, no reinstall:
@@ -106,7 +108,7 @@ templates/outputs/{skill-id}/default.md
 
 **Purpose**: Scan content for candidate decisions and learnings, present for inline review, write approved items to memory.
 
-**Used by**: process-meetings, fathom, krisp, finalize-project
+**Used by**: process-meetings, finalize-project
 
 **Steps**:
 

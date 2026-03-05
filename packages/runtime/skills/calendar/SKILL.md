@@ -74,3 +74,12 @@ If no events are found, say so clearly: "No events found for this period."
 
 - Suggest **meeting-prep** for a specific event: "Want me to prep context for the Customer Call?"
 - Offer to pull more days if the range seems short.
+
+## Error Handling
+
+| Error | Resolution |
+|-------|-----------|
+| No calendar integration configured | Run `arete integration configure calendar` (macOS Calendar) or `arete integration configure google-calendar` (Google OAuth) |
+| `ical-buddy not found` | Install ical-buddy: `brew install ical-buddy`; then re-run `arete integration configure calendar` |
+| `auth_expired` (Google) | Re-authorize via `arete integration configure google-calendar`; the OAuth token needs to be refreshed |
+| No events returned | The selected time range may have no events; try a wider range (`--days 7`) or verify the calendar integration is pointing to the correct account |

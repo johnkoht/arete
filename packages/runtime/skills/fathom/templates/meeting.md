@@ -1,62 +1,63 @@
 ---
-title: "{title}"
-date: "{YYYY-MM-DD}"
+title: "{{title}}"
+date: {{date}}
 attendees: []
 attendee_ids: []
-duration_minutes: 0
-recording_id: "{fathom_recording_id}"
-share_url: "{fathom_share_url}"
+duration_minutes: {{duration}}
+recording_id: {{fathom_recording_id}}
+share_url: {{fathom_share_url}}
 source: fathom
 ---
 
-# {title}
+# {{title}}
 
-**Date**: {YYYY-MM-DD}
-**Duration**: {N} min
-**Attendees**: {Attendee Name, Attendee Name}
+**Date**: {{date}}
+**Duration**: {{duration}} min
+**Attendees**: {{attendees}}
 
 ---
 
 ## Summary
 
-{Areté-generated summary — populated by process-meetings}
+<!-- Areté-generated summary goes here (process-meetings step 4) -->
 
 ## Action Items
 
-{Areté-generated action items — populated by process-meetings}
+<!-- Areté-generated action items go here (process-meetings step 4) -->
+<!-- Format: - [ ] {Description} (@owner-slug → @counterparty-slug) -->
 
 ## Next Steps
 
-{Areté-generated next steps — populated by process-meetings}
+<!-- Areté-generated next steps go here (process-meetings step 4) -->
 
 ## Decisions
 
-{Areté-generated decisions — populated by process-meetings}
+<!-- Areté-generated decisions go here (process-meetings step 4) -->
 
 ## Learnings
 
-{Areté-generated learnings — populated by process-meetings}
+<!-- Areté-generated learnings go here (process-meetings step 4) -->
 
 <details>
 <summary>Fathom Notes</summary>
 
 ### Original Summary
 
-{Fathom AI-generated summary — preserved from recording}
+{{fathom_summary}}
 
 ### Key Points
 
-{Key points from Fathom — preserved from recording}
+{{fathom_key_points}}
 
 ### Action Items (Fathom)
 
-{Action items captured by Fathom — preserved for reference}
+{{fathom_action_items}}
 
 </details>
 
 <details>
 <summary>Transcript</summary>
 
-{Full meeting transcript from Fathom}
+{{transcript}}
 
 </details>
