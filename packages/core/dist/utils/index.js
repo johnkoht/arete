@@ -8,4 +8,5 @@ export { checkDuplicate } from './dedup.js';
 export { buildContextDumpArtifacts, buildContextDumpQualityReport, } from './context-dump-quality.js';
 export { findAvailableSlots } from './availability.js';
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
+export { parseAgendaItems, getUncheckedAgendaItems } from './agenda.js';
 //# sourceMappingURL=index.js.map

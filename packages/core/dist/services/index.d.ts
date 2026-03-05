@@ -11,4 +11,6 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
+export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, } from './meeting-extraction.js';
+export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, } from './meeting-extraction.js';
 //# sourceMappingURL=index.d.ts.map

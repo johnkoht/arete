@@ -4,22 +4,36 @@
 import { join } from 'path';
 import { FathomClient, loadFathomApiKey } from './client.js';
 import { meetingFromListItem } from './save.js';
-import { saveMeetingFile, meetingFilename, } from '../meetings.js';
+import { saveMeetingFile, meetingFilename, findMatchingAgenda, } from '../meetings.js';
 const DEFAULT_TEMPLATE = `# {title}
+
 **Date**: {date}
 **Duration**: {duration}
 **Source**: {integration}
 
 ## Summary
+
 {summary}
 
-## Key Points
-{key_points}
-
 ## Action Items
+
 {action_items}
 
+<details>
+<summary>Recorder Notes</summary>
+
+### Original Summary
+
+{summary}
+
+### Key Points
+
+{key_points}
+
+</details>
+
 ## Transcript
+
 {transcript}
 `;
 function dateRange(days) {
@@ -51,6 +65,11 @@ export async function pullFathom(storage, workspaceRoot, paths, days) {
     for (const m of meetings) {
         try {
             const meeting = meetingFromListItem(m);
+            // Link agenda if available
+            const agenda = await findMatchingAgenda(storage, workspaceRoot, meeting.date, meeting.title);
+            if (agenda) {
+                meeting.agenda = agenda;
+            }
             const fullPath = await saveMeetingFile(storage, meeting, outputDir, DEFAULT_TEMPLATE, { integration: 'Fathom', force: false });
             if (fullPath)
                 saved += 1;

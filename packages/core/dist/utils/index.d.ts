@@ -10,4 +10,6 @@ export type { ContextDumpInput, ContextDumpInputType, ContextDumpArtifact, Conte
 export { findAvailableSlots } from './availability.js';
 export type { AvailableSlot, FindAvailableSlotsOptions, } from './availability.js';
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
+export { parseAgendaItems, getUncheckedAgendaItems } from './agenda.js';
+export type { AgendaItem } from './agenda.js';
 //# sourceMappingURL=index.d.ts.map
