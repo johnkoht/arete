@@ -1,4 +1,4 @@
-import { Attendee } from "@/data/meetings";
+import type { Attendee } from "@/api/types.js";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface AvatarStackProps {

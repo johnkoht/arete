@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronDown, Pencil, Info, Copy, CheckCircle2, ArrowRight } from "lucide-react";
-import { getMeetingBySlug, ReviewItem, MEETINGS } from "@/data/meetings";
+import {
+  ArrowLeft,
+  ChevronDown,
+  Pencil,
+  Info,
+  CheckCircle2,
+  ArrowRight,
+  Sparkles,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 import { MetadataPanel } from "@/components/MetadataPanel";
 import { ReviewItemsSection, ApprovedItemsSection } from "@/components/ReviewItems";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,56 +25,256 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useMeeting,
+  useMeetings,
+  useApproveItem,
+  useSaveApprove,
+  useProcessMeeting,
+} from "@/hooks/meetings.js";
+import type { ReviewItem } from "@/api/types.js";
+import { BASE_URL } from "@/api/client.js";
 
 export default function MeetingDetail() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const meeting = getMeetingBySlug(slug || "");
 
-  const [reviewItems, setReviewItems] = useState<ReviewItem[]>(meeting?.reviewItems || []);
-  const [summary, setSummary] = useState(meeting?.summary || "");
+  const safeSlug = slug ?? "";
+
+  const { data: meeting, isLoading, error } = useMeeting(safeSlug);
+  const { data: allMeetings = [] } = useMeetings();
+
+  const approveItemMutation = useApproveItem(safeSlug);
+  const saveApproveMutation = useSaveApprove(safeSlug);
+  const processMutation = useProcessMeeting(safeSlug);
+
+  // Local review items state — kept in sync with query data, plus optimistic updates
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const prevReviewItemsRef = useRef<ReviewItem[]>([]);
+
+  // Sync local state when query data changes (e.g. after approval)
+  useEffect(() => {
+    if (meeting?.reviewItems) {
+      setReviewItems(meeting.reviewItems);
+      prevReviewItemsRef.current = meeting.reviewItems;
+    }
+  }, [meeting?.reviewItems]);
+
+  const [summary, setSummary] = useState("");
   const [editingSummary, setEditingSummary] = useState(false);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(true);
-  const [processDialogOpen, setProcessDialogOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [approved, setApproved] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
-  if (!meeting) {
+  // Sync summary when query data loads
+  useEffect(() => {
+    if (meeting?.summary !== undefined) setSummary(meeting.summary);
+  }, [meeting?.summary]);
+
+  // Process stream state
+  const [processModalOpen, setProcessModalOpen] = useState(false);
+  const [streamOutput, setStreamOutput] = useState("");
+  const [streamDone, setStreamDone] = useState(false);
+  const [streamError, setStreamError] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+
+  // Nav confirmation dialog
+  const [navConfirmOpen, setNavConfirmOpen] = useState(false);
+  const [pendingNavSlug, setPendingNavSlug] = useState<string | null>(null);
+
+  // Cleanup SSE on unmount
+  useEffect(() => {
+    return () => {
+      esRef.current?.close();
+    };
+  }, []);
+
+  if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Meeting not found.</p>
+      <div className="flex flex-col h-full">
+        <div className="border-b px-6 py-3">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Meetings
+            </Link>
+            <span className="text-muted-foreground/40">|</span>
+            <Skeleton className="h-6 w-48" />
+          </div>
+        </div>
+        <div className="flex-1 p-6 space-y-4">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !meeting) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="border-b px-6 py-3">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Meetings
+          </Link>
+        </div>
+        <div className="flex h-full items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+            <p className="text-sm font-medium text-destructive">
+              {error instanceof Error ? error.message : "Meeting not found."}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   const isProcessed = meeting.status === "Processed";
   const isSynced = meeting.status === "Synced";
-  const isApprovedStatus = meeting.status === "Approved";
-  const isApproved = isApprovedStatus || approved;
+  const isApproved = meeting.status === "Approved";
 
-  const triageMeetings = MEETINGS.filter(
-    (m) => (m.status === "Synced" || m.status === "Processed") && m.slug !== slug
+  // Next triage meeting (from the meetings list, excluding current)
+  const triageMeetings = allMeetings.filter(
+    (m) => (m.status === "Synced" || m.status === "Processed") && m.slug !== safeSlug
   );
   const nextTriageMeeting = triageMeetings[0];
   const triageRemaining = triageMeetings.length;
 
-  const filePath = `resources/meetings/${meeting.slug}.md`;
-
-  const handleCopyPath = () => {
-    navigator.clipboard.writeText(filePath);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSaveApprove = () => {
-    setApproved(true);
-  };
+  // "Unsaved" = some items reviewed but meeting not yet approved
+  const hasReviewedItems = reviewItems.some((i) => i.status !== "pending");
+  const hasPendingReview = isProcessed && hasReviewedItems;
 
   const reviewed = reviewItems.filter((i) => i.status !== "pending").length;
 
+  // Per-item PATCH on status/text change (called by ReviewItemsSection via onItemsChange)
+  const handleItemsChange = (newItems: ReviewItem[]) => {
+    const prev = prevReviewItemsRef.current;
+    for (const newItem of newItems) {
+      const oldItem = prev.find((i) => i.id === newItem.id);
+      if (!oldItem) continue;
+      const statusChanged = oldItem.status !== newItem.status;
+      const textChanged = oldItem.text !== newItem.text;
+      if (statusChanged || textChanged) {
+        approveItemMutation.mutate(
+          {
+            id: newItem.id,
+            status: newItem.status,
+            editedText: textChanged ? newItem.text : undefined,
+          },
+          {
+            onError: (err) => {
+              toast.error(
+                `Failed to update item: ${err instanceof Error ? err.message : "Unknown error"}`
+              );
+            },
+          }
+        );
+        break; // Only one item changes at a time in ReviewItemsSection
+      }
+    }
+    prevReviewItemsRef.current = newItems;
+    setReviewItems(newItems);
+  };
+
+  const handleSaveApprove = () => {
+    saveApproveMutation.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Meeting approved and saved to memory");
+      },
+      onError: (err) => {
+        toast.error(
+          `Failed to approve: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+      },
+    });
+  };
+
+  // Navigate to next triage item (with confirmation if there's pending review)
+  const handleNext = (targetSlug: string) => {
+    if (hasPendingReview) {
+      setPendingNavSlug(targetSlug);
+      setNavConfirmOpen(true);
+    } else {
+      navigate(`/meetings/${targetSlug}`);
+    }
+  };
+
+  // Process Meeting — start job, open SSE stream modal
+  const handleProcessClick = () => {
+    processMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        setStreamOutput("");
+        setStreamDone(false);
+        setStreamError(false);
+        setProcessModalOpen(true);
+
+        // Open SSE stream
+        const es = new EventSource(
+          `${BASE_URL}/api/meetings/${safeSlug}/process-stream?jobId=${data.jobId}`
+        );
+        esRef.current = es;
+
+        es.onmessage = (e: MessageEvent<string>) => {
+          const payload = JSON.parse(e.data) as {
+            text?: string;
+            done?: boolean;
+            status?: string;
+          };
+          if (payload.text) {
+            setStreamOutput((prev) => prev + payload.text);
+          }
+          if (payload.done) {
+            es.close();
+            esRef.current = null;
+            setStreamDone(true);
+            if (payload.status === "error") {
+              setStreamError(true);
+              toast.error("Processing failed");
+            } else {
+              toast.success("Processing complete");
+            }
+          }
+        };
+
+        es.onerror = () => {
+          es.close();
+          esRef.current = null;
+          setStreamDone(true);
+          setStreamError(true);
+          toast.error("Processing stream disconnected");
+        };
+      },
+      onError: (err) => {
+        toast.error(
+          `Failed to start processing: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
+      },
+    });
+  };
+
+  const handleProcessModalClose = (open: boolean) => {
+    if (!open) {
+      // Close SSE if still open
+      esRef.current?.close();
+      esRef.current = null;
+      setProcessModalOpen(false);
+      if (streamDone && !streamError) {
+        // Navigated away or modal dismissed after success — stay on same page (meeting will refetch)
+      }
+    }
+  };
+
   // Header badge
-  const headerBadge = approved ? (
+  const headerBadge = isApproved ? (
     <StatusBadge status="Approved" size="sm" />
   ) : isProcessed ? (
     <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-status-processed/10 text-status-processed">
@@ -95,13 +305,22 @@ export default function MeetingDetail() {
             <h1 className="text-lg font-semibold">{meeting.title}</h1>
             {headerBadge}
           </div>
-          {isProcessed && !approved && (
+          {isProcessed && !isApproved && (
             <Button
               size="sm"
               onClick={handleSaveApprove}
-              disabled={reviewed === 0}
+              disabled={reviewed === 0 || saveApproveMutation.isPending}
             >
-              Save & Approve <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              {saveApproveMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Save & Approve <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -113,7 +332,7 @@ export default function MeetingDetail() {
           {/* Left column */}
           <div className="flex-1 min-w-0 space-y-6" style={{ maxWidth: "65%" }}>
             {/* Synced state banner */}
-            {isSynced && !approved && (
+            {isSynced && (
               <div className="flex items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-4">
                 <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                 <div className="text-sm">
@@ -127,28 +346,46 @@ export default function MeetingDetail() {
             )}
 
             {/* Approved success state */}
-            {approved && (
+            {isApproved && (
               <div className="rounded-md border border-status-approved/30 bg-status-approved/10 p-4">
                 <div className="flex items-center gap-2 text-status-approved font-medium text-sm">
                   <CheckCircle2 className="h-5 w-5" />
                   Meeting approved
                 </div>
                 {nextTriageMeeting && (
-                  <Link
-                    to={`/meetings/${nextTriageMeeting.slug}`}
+                  <button
+                    onClick={() => handleNext(nextTriageMeeting.slug)}
                     className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                   >
                     <ArrowRight className="h-4 w-4" />
                     Next in Triage ({triageRemaining} remaining)
-                  </Link>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Save & Approve success shown inline after mutation */}
+            {saveApproveMutation.isSuccess && (
+              <div className="rounded-md border border-status-approved/30 bg-status-approved/10 p-4">
+                <div className="flex items-center gap-2 text-status-approved font-medium text-sm">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Meeting approved and saved to memory
+                </div>
+                {nextTriageMeeting && (
+                  <button
+                    onClick={() => handleNext(nextTriageMeeting.slug)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Next in Triage ({triageRemaining} remaining)
+                  </button>
                 )}
               </div>
             )}
 
             {/* Processed: Summary first, then Review Items */}
-            {isProcessed && !approved && (
+            {isProcessed && !saveApproveMutation.isSuccess && (
               <>
-                {/* Summary */}
                 <SummarySection
                   summary={summary}
                   setSummary={setSummary}
@@ -158,32 +395,16 @@ export default function MeetingDetail() {
                   setSummaryOpen={setSummaryOpen}
                   readOnly={false}
                 />
-
-                {/* Review Items */}
                 <ReviewItemsSection
                   items={reviewItems}
-                  onItemsChange={setReviewItems}
+                  onItemsChange={handleItemsChange}
                   onSaveApprove={handleSaveApprove}
                 />
               </>
             )}
 
-            {/* Approved: Summary first, then items */}
-            {(isApproved || approved) && !isProcessed && (
-              <>
-                <SummarySection
-                  summary={summary}
-                  setSummary={setSummary}
-                  editingSummary={editingSummary}
-                  setEditingSummary={setEditingSummary}
-                  summaryOpen={summaryOpen}
-                  setSummaryOpen={setSummaryOpen}
-                  readOnly={true}
-                />
-                {meeting.reviewItems && <ApprovedItemsSection items={meeting.reviewItems} />}
-              </>
-            )}
-            {approved && isProcessed && (
+            {/* Approved: show summary + approved items */}
+            {isApproved && (
               <>
                 <SummarySection
                   summary={summary}
@@ -198,34 +419,8 @@ export default function MeetingDetail() {
               </>
             )}
 
-            {/* Synced raw content */}
-            {isSynced && meeting.keyPoints && (
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Key Points</h3>
-                <ul className="space-y-1 text-sm list-disc list-inside text-muted-foreground">
-                  {meeting.keyPoints.map((kp, i) => (
-                    <li key={i}>{kp}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {isSynced && meeting.rawActionItems && (
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Action Items</h3>
-                <div className="space-y-1.5">
-                  {meeting.rawActionItems.map((ai, i) => (
-                    <label key={i} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded border-border" />
-                      {ai}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Summary for synced state only (approved handled above) */}
-            {isSynced && !approved && (
+            {/* Synced: raw content */}
+            {isSynced && summary && (
               <SummarySection
                 summary={summary}
                 setSummary={setSummary}
@@ -238,7 +433,7 @@ export default function MeetingDetail() {
             )}
 
             {/* Transcript */}
-            {meeting.transcript && (
+            {meeting.body && (
               <div>
                 <button
                   onClick={() => setTranscriptOpen(!transcriptOpen)}
@@ -253,12 +448,14 @@ export default function MeetingDetail() {
                 </button>
                 {transcriptOpen && (
                   <div className="rounded-md border bg-muted/30 p-4 text-sm leading-7 font-mono whitespace-pre-wrap">
-                    {meeting.transcript.split("\n").map((line, i) => {
+                    {meeting.body.split("\n").map((line, i) => {
                       const boldMatch = line.match(/^\*\*(.+?)\*\*(.*)$/);
                       if (boldMatch) {
                         return (
                           <div key={i}>
-                            <span className="font-semibold not-italic font-sans">{boldMatch[1]}</span>
+                            <span className="font-semibold not-italic font-sans">
+                              {boldMatch[1]}
+                            </span>
                             <span className="text-muted-foreground">{boldMatch[2]}</span>
                           </div>
                         );
@@ -276,8 +473,8 @@ export default function MeetingDetail() {
             <MetadataPanel
               meeting={meeting}
               isSynced={isSynced}
-              approved={approved}
-              onProcessClick={() => setProcessDialogOpen(true)}
+              approved={isApproved || saveApproveMutation.isSuccess}
+              onProcessClick={handleProcessClick}
               nextTriageMeeting={nextTriageMeeting}
               triageRemaining={triageRemaining}
             />
@@ -285,35 +482,90 @@ export default function MeetingDetail() {
         </div>
       </div>
 
-      {/* Process Meeting Dialog */}
-      <Dialog open={processDialogOpen} onOpenChange={setProcessDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+      {/* Process Stream Modal */}
+      <Dialog open={processModalOpen} onOpenChange={handleProcessModalClose}>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Process this meeting</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              Processing meeting…
+            </DialogTitle>
             <DialogDescription>
-              Open your AI assistant and ask it to process this meeting. The meeting file is ready at:
+              Your AI assistant is extracting action items, decisions, and learnings.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md bg-muted p-3 font-mono text-sm">
-            {filePath}
+
+          <div className="relative rounded-md border bg-muted/30 p-4 font-mono text-xs h-64 overflow-auto">
+            {!streamOutput && !streamDone && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Starting…
+              </div>
+            )}
+            <pre className="whitespace-pre-wrap break-words">{streamOutput}</pre>
+            {streamDone && !streamError && (
+              <div className="mt-2 flex items-center gap-1.5 text-status-approved text-xs font-sans">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Done
+              </div>
+            )}
+            {streamError && (
+              <div className="mt-2 flex items-center gap-1.5 text-destructive text-xs font-sans">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Processing failed
+              </div>
+            )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={handleCopyPath}>
-              {copied ? (
-                <>
-                  <CheckCircle2 className="mr-1.5 h-4 w-4 text-status-approved" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-1.5 h-4 w-4" />
-                  Copy file path
-                </>
-              )}
+
+          <DialogFooter>
+            {streamDone ? (
+              <DialogClose asChild>
+                <Button size="sm">Close</Button>
+              </DialogClose>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  esRef.current?.close();
+                  esRef.current = null;
+                  setProcessModalOpen(false);
+                }}
+              >
+                Run in background
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Navigation confirmation dialog */}
+      <Dialog open={navConfirmOpen} onOpenChange={setNavConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Leave without saving?</DialogTitle>
+            <DialogDescription>
+              You've reviewed some items but haven't saved yet. Your per-item actions are
+              already recorded — clicking Save & Approve commits them to memory.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setNavConfirmOpen(false)}
+            >
+              Stay here
             </Button>
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm">Got it</Button>
-            </DialogClose>
+            <Button
+              size="sm"
+              onClick={() => {
+                setNavConfirmOpen(false);
+                if (pendingNavSlug) navigate(`/meetings/${pendingNavSlug}`);
+              }}
+            >
+              Continue anyway
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -321,7 +573,8 @@ export default function MeetingDetail() {
   );
 }
 
-// Extracted summary section component
+// ── Sub-components ──────────────────────────────────────────────────────────
+
 function SummarySection({
   summary,
   setSummary,

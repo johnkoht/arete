@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ReviewItem, ItemStatus, ItemType } from "@/data/meetings";
+import type { ReviewItem, ItemStatus, ItemType } from "@/api/types.js";
 import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 

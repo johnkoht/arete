@@ -1,4 +1,4 @@
-import { MeetingStatus } from "@/data/meetings";
+import type { MeetingStatus } from "@/api/types.js";
 
 interface StatusBadgeProps {
   status: MeetingStatus;

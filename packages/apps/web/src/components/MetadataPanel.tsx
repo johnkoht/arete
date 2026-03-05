@@ -1,4 +1,4 @@
-import { Meeting } from "@/data/meetings";
+import type { Meeting } from "@/api/types.js";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ExternalLink, Trash2, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
