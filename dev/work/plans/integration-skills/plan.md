@@ -1,7 +1,7 @@
 ---
 title: Integration Skills
 slug: integration-skills
-status: building
+status: complete
 size: unknown
 tags: []
 created: 2026-03-04T22:53:28.724Z

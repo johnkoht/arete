@@ -21,8 +21,7 @@
       "id": "t2-process-meetings",
       "title": "Update process-meetings Step 7 with Significance Analyst",
       "description": "Redesign Step 7 (extract_decisions_learnings pattern call to workspace memory) to use Significance Analyst with context bundle. Step 4 (extraction to meeting file) is NOT changed. Add context bundle assembly between Steps 6 and 7. Make two-destination split explicit.",
-      "status": "complete",
-      "commitSha": "8c58ccf",
+      "status": "pending",
       "dependsOn": ["t1-expert-patterns"],
       "acceptanceCriteria": [
         "process-meetings SKILL.md Step 7 updated with context bundle assembly and Significance Analyst",
@@ -38,8 +37,7 @@
       "id": "t3-meeting-prep",
       "title": "Update meeting-prep with Relationship Intelligence",
       "description": "Add Relationship Intelligence phase after get_meeting_context gathering. Adds Intelligence Insights section. Reuses context from get_meeting_context — does NOT re-run arete people show.",
-      "status": "complete",
-      "commitSha": "c362b5d",
+      "status": "pending",
       "dependsOn": ["t1-expert-patterns"],
       "acceptanceCriteria": [
         "meeting-prep SKILL.md updated with Relationship Intelligence phase after context gathering",
@@ -54,8 +52,7 @@
       "id": "t4-week-review",
       "title": "Update week-review with Significance Analyst",
       "description": "Add Significance Analyst phase for weekly significance assessment. Context bundle LIMITED to goals + memory only. Do NOT add arete people show calls.",
-      "status": "complete",
-      "commitSha": "67a4fe0",
+      "status": "pending",
       "dependsOn": ["t1-expert-patterns"],
       "acceptanceCriteria": [
         "week-review SKILL.md updated with Significance Analyst phase",
@@ -70,8 +67,7 @@
       "id": "t5-update-pattern-and-guide",
       "title": "Update extract_decisions_learnings pattern and authoring guide",
       "description": "Update extract_decisions_learnings to reference significance_analyst with conditional fallback for bundle-less callers. Update _authoring-guide.md with one new section on expert agent patterns. Must read finalize-project/SKILL.md first to verify backward compatibility.",
-      "status": "complete",
-      "commitSha": "6cdce5e",
+      "status": "pending",
       "dependsOn": ["t2-process-meetings"],
       "acceptanceCriteria": [
         "extract_decisions_learnings pattern updated to reference significance_analyst with conditional: use analyst when bundle available, else keyword scan",

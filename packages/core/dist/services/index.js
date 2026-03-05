@@ -13,4 +13,6 @@ export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
 // Meeting extraction
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, } from './meeting-extraction.js';
+// Meeting file parsing
+export { parseActionItemsFromMeeting } from './meeting-parser.js';
 //# sourceMappingURL=index.js.map

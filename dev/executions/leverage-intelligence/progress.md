@@ -41,6 +41,25 @@ Started: 2026-03-05T03:35:00.000Z
 
 ---
 
+## t5-update-pattern-and-guide — Complete
+**Date**: 2026-03-05
+**Commit**: 6cdce5e
+
+**What was done**: Updated `extract_decisions_learnings` in PATTERNS.md with conditional significance analyst reference, and added "Expert Agent Patterns" section to `_authoring-guide.md`.
+
+**Impact assessment — finalize-project**: Read `finalize-project/SKILL.md` before editing. It references `extract_decisions_learnings` but assembles no context bundle upstream (no `context_bundle_assembly` step, no `arete context` call, no `arete memory search` before the extraction step). The conditional preamble explicitly names this case: "When no context bundle is available (e.g., `finalize-project` which does not assemble a bundle), fall back to keyword scanning." finalize-project continues to work unchanged — it uses the keyword-scanning fallback path automatically.
+
+**Changes**:
+- **PATTERNS.md — `extract_decisions_learnings`**: Added conditional preamble before the steps explaining when to use `significance_analyst` (bundle available) vs keyword scanning (no bundle). Renamed existing steps heading to "Steps (keyword-scanning fallback)". Added `See also: significance_analyst, context_bundle_assembly` cross-reference.
+- **PATTERNS.md — `significance_analyst`**: Added bidirectional `See also` pointing back to `extract_decisions_learnings` and `context_bundle_assembly`.
+- **`_authoring-guide.md`**: Added "## Expert Agent Patterns" section covering what they are (instruction-based intelligence phases), the three available patterns with a reference table, when to use them (intelligence-heavy skills needing context-aware reasoning), a how-to example of referencing from a skill, and the same-conversation Phase 1 note.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md and PATTERNS.md files (markdown instruction documents).
+
+**Reflection**: Clean surgical task. The finalize-project backward-compat design was the main thing to get right — naming it explicitly in the preamble so future skill authors understand the pattern is callable from non-bundle-assembling skills too. Bidirectional cross-reference between `extract_decisions_learnings` and `significance_analyst` required adding a `See also` to the analyst section (it had none). ~1,000 tokens.
+
+---
+
 ## t4-week-review — Complete
 **Date**: 2026-03-05
 **Commit**: 67a4fe0

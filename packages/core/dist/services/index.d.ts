@@ -13,4 +13,6 @@ export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, } from './meeting-extraction.js';
 export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, } from './meeting-extraction.js';
+export { parseActionItemsFromMeeting } from './meeting-parser.js';
+export type { ParsedActionItem } from './meeting-parser.js';
 //# sourceMappingURL=index.d.ts.map

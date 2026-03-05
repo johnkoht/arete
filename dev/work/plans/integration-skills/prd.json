@@ -1,0 +1,81 @@
+{
+  "name": "integration-skills",
+  "description": "Split monolithic sync skill into focused integration skills",
+  "tasks": [
+    {
+      "id": "t1-enrich-pattern",
+      "title": "Create enrich_meeting_attendees pattern in PATTERNS.md",
+      "description": "Add a new pattern for cross-referencing calendar to fill in missing attendee names. Pattern covers: when to enrich (incomplete names, email-only, first-name-only), how to match (time overlap ±15 min, email domain, title similarity), CLI command (arete pull calendar --json), how to merge info, integration point (process-meetings step 2). Include example workflow steps for skill authors.",
+      "status": "pending",
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Pattern documented in packages/runtime/skills/PATTERNS.md",
+        "Includes example workflow steps for skill authors",
+        "Specifies integration point: Apply during process-meetings step 2 (entity resolution)"
+      ],
+      "filesTouched": ["packages/runtime/skills/PATTERNS.md"]
+    },
+    {
+      "id": "t2-fathom-skill",
+      "title": "Create Fathom skill with template",
+      "description": "Create packages/runtime/skills/fathom/SKILL.md with proper frontmatter (name: fathom, description, work_type: operations, category: essential, intelligence: [synthesis], triggers for fathom). Document two-stage flow (pull then process-meetings). Reference enrich_meeting_attendees pattern. Create template at packages/runtime/skills/fathom/templates/meeting.md documenting final format after process-meetings.",
+      "status": "pending",
+      "dependsOn": ["t1-enrich-pattern"],
+      "acceptanceCriteria": [
+        "Skill file created with proper frontmatter (name, description, work_type, category, intelligence, triggers)",
+        "Skill documents two-stage flow: Run process-meetings after pull",
+        "Template created matching process-meetings expectations",
+        "Template has empty Summary/Action Items sections for Areté generation",
+        "Template preserves Fathom raw summary in Fathom Notes section",
+        "Skill references enrich_meeting_attendees pattern",
+        "Entry added to PATTERNS.md template resolution table"
+      ],
+      "filesTouched": ["packages/runtime/skills/fathom/SKILL.md", "packages/runtime/skills/fathom/templates/meeting.md", "packages/runtime/skills/PATTERNS.md"]
+    },
+    {
+      "id": "t3-krisp-skill",
+      "title": "Create Krisp skill with template",
+      "description": "Create packages/runtime/skills/krisp/SKILL.md with proper frontmatter (name: krisp, description, work_type: operations, category: essential, intelligence: [synthesis], triggers for krisp). Document two-stage flow. Reference enrich_meeting_attendees pattern. Create template at packages/runtime/skills/krisp/templates/meeting.md with Krisp-specific sections (detailed_summary, key_points, action_items).",
+      "status": "pending",
+      "dependsOn": ["t1-enrich-pattern"],
+      "acceptanceCriteria": [
+        "Skill file created with proper frontmatter (name, description, work_type, category, intelligence, triggers)",
+        "Skill documents two-stage flow: Run process-meetings after pull",
+        "Template includes Krisp-specific sections (key_points, action_items)",
+        "Template has empty Summary/Action Items for Areté generation",
+        "Skill references enrich_meeting_attendees pattern",
+        "Entry added to PATTERNS.md template resolution table"
+      ],
+      "filesTouched": ["packages/runtime/skills/krisp/SKILL.md", "packages/runtime/skills/krisp/templates/meeting.md", "packages/runtime/skills/PATTERNS.md"]
+    },
+    {
+      "id": "t4-notion-calendar-skills",
+      "title": "Create Notion and Calendar skills",
+      "description": "Create packages/runtime/skills/notion/SKILL.md (check integration status, ask for page URLs, run pull, destination handling, 404/sharing gotcha, no template). Create packages/runtime/skills/calendar/SKILL.md (check provider, run pull/display, no template, triggers scoped to calendar ops not overlapping meeting-prep).",
+      "status": "pending",
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Notion skill created with proper frontmatter",
+        "Notion skill documents 404/sharing gotcha",
+        "Calendar skill created with proper frontmatter",
+        "Calendar skill triggers dont overlap with meeting-prep",
+        "Both skills are focused (under 80 lines each)"
+      ],
+      "filesTouched": ["packages/runtime/skills/notion/SKILL.md", "packages/runtime/skills/calendar/SKILL.md"]
+    },
+    {
+      "id": "t5-delete-sync-update-refs",
+      "title": "Delete sync skill and update references",
+      "description": "Delete packages/runtime/skills/sync/ directory. Update packages/runtime/skills/README.md with new skills (fathom, krisp, notion, calendar). Search for and update any cross-references to sync skill. Verify old sync triggers would route appropriately.",
+      "status": "pending",
+      "dependsOn": ["t2-fathom-skill", "t3-krisp-skill", "t4-notion-calendar-skills"],
+      "acceptanceCriteria": [
+        "sync/ directory deleted",
+        "No broken references to sync skill (grep verified)",
+        "README.md updated with new skills",
+        "Old sync triggers documented as routing to appropriate new skills"
+      ],
+      "filesTouched": ["packages/runtime/skills/sync/", "packages/runtime/skills/README.md"]
+    }
+  ]
+}
