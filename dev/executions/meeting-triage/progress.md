@@ -144,3 +144,48 @@ Fixed both:
 **Quality checks**: typecheck ✓ | web tests ✓ (13/13) | root tests ✓ (1256/1258) | vite build ✓
 
 **Reflection**: The biggest complexity was MeetingDetail — coordinating optimistic local state with TanStack Query invalidations, SSE cleanup, and navigation confirmation. The type-shape-mismatch-in-API-layer pattern was very effective: components stayed clean and the mapping is all in one place. The `staged_item_edits` frontmatter field wasn't documented in FullMeeting's TypeScript type but was accessible via `frontmatter: Record<string, unknown>` — worth documenting. Token estimate: ~18k tokens.
+
+## Task 6 — Update process-meetings skill for staged output (2026-03-05)
+
+**Status**: Complete | **Commit**: bff78ab
+
+**What was done**:
+- Updated `packages/runtime/skills/process-meetings/SKILL.md` to add staged output as the default behavior
+- Added top-level summary distinguishing default (staged) vs `--commit` (legacy) modes
+- Added `> Note for arete view users` callout near the top
+- Updated Arguments section to document `--file`, `--commit`, and `--json` flags
+- Replaced Step 4 with a bifurcated section covering both Staged Output Mode and Commit Mode, including: extraction guidance for ai_NNN/de_NNN/le_NNN IDs, exact section header format, frontmatter updates (status/processed_at), and the restriction against writing to `.arete/memory/items/` in staged mode
+- Preserved people/entity resolution steps (Steps 2, 3, 5, 5.5) unchanged
+- Updated summary step to report staged item counts in staged mode
+
+**Files changed**:
+- `packages/runtime/skills/process-meetings/SKILL.md` — updated (SKILL.md only, no TypeScript changes)
+
+**Quality checks**: typecheck ✓ | tests ✓ (1256 passed, 2 skipped)
+
+**Reflection**: Reading the existing SKILL.md first was essential — it showed the exact structure to preserve (numbered steps, pattern refs, PATTERNS.md links). The task prompt's exact format requirements (section headers, ID format, frontmatter keys) mapped directly to the SKILL.md additions. ~3K tokens.
+
+## Task 7 — arete view CLI command (2026-03-05)
+
+**Status**: Complete | **Commit**: 7d84b0a
+
+**What was done**:
+- Created `packages/cli/src/commands/view.ts` with `runView()` (injectable deps for testing) + `registerViewCommand()` (Commander registration)
+- `ViewCommandDeps` exports: `spawnFn`, `openBrowserFn`, `fetchFn`, `isPortAvailableFn` — all injectable for tests
+- Port resolution: explicit `--port`/`PORT` env first; auto-select 3847→3848→3849 otherwise; clear error if all busy
+- Spawns backend via `getPackageRoot()` + dev/prod fallback (`existsSync(backendDist)` → tsx or node)
+- Polls GET /health 10×500ms (5s max); kills child and exits on timeout
+- Platform-appropriate browser open (darwin/win32/linux) via `exec`
+- SIGINT handler kills child with SIGTERM before exit
+- `--json` flag on all error paths
+- Registered `registerViewCommand` in `packages/cli/src/index.ts`
+- Created `packages/cli/test/commands/view.test.ts` — 6 tests: workspace-not-found (text + JSON), all-ports-busy (text + JSON), server-start-success (spawn + browser + ready message), SIGINT cleanup
+
+**Files changed**:
+- `packages/cli/src/commands/view.ts` — new
+- `packages/cli/src/index.ts` — added import + registration
+- `packages/cli/test/commands/view.test.ts` — new (6 tests)
+
+**Quality checks**: typecheck ✓ | tests ✓ (1262 passed, 2 skipped)
+
+**Reflection**: LEARNINGS.md patterns guided the DI design directly — the "HTTP server tests cause test runner hangs" gotcha made the injectable `isPortAvailableFn` essential to avoid real port binding in tests. The most non-obvious invariant: `afterEach` must call `process.removeAllListeners('SIGINT')` or SIGINT listeners from the success test bleed into the cleanup test (first listener throws before second executes). ~5K tokens.
