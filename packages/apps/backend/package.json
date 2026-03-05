@@ -14,8 +14,7 @@
     "@mariozechner/pi-coding-agent": "*",
     "@hono/node-server": "^1.13.0",
     "gray-matter": "^4.0.3",
-    "hono": "^4.6.0",
-    "yaml": "^2.4.0"
+    "hono": "^4.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

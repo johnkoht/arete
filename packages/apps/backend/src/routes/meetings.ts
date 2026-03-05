@@ -93,7 +93,9 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
   app.delete('/:slug', async (c) => {
     const slug = c.req.param('slug');
     try {
-      await workspaceService.deleteMeeting(workspaceRoot, slug);
+      await withSlugLock(slug, () =>
+        workspaceService.deleteMeeting(workspaceRoot, slug)
+      );
       return c.json({ ok: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

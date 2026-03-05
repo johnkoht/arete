@@ -46,7 +46,7 @@ all use this shared instance.
 
 - ARETE_WORKSPACE must be set at startup; server exits 1 with a clear message if absent.
 - Meeting slugs are filenames without `.md`: `YYYY-MM-DD-slugified-title`.
-- All write operations (PATCH, PUT, approve) must go through `withSlugLock`.
+- All write operations (DELETE, PUT, PATCH, approve) must go through `withSlugLock`.
 - `POST /api/meetings/sync` and `POST /api/meetings/:slug/process` both return 202 + jobId immediately.
 - `GET /api/meetings/:slug/process-stream` is an SSE stub until Task 4.
 

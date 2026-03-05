@@ -5,7 +5,7 @@
  * Mocks workspace service and jobs service — no real file I/O.
  */
 
-import { describe, it, mock, beforeEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 // ──────────────────────────────────────────────────────────────────────────────
