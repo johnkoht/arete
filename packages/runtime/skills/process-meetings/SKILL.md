@@ -197,9 +197,53 @@ Update the meeting file with approved sections. Preserve the collapsed recorder 
 
 **Direction encoding**: `@owner → @counterparty` — the arrow points FROM the person who owes TO the person they owe. Example: `@john → @sarah` means John owes Sarah something.
 
+### 6.5. Assemble Context Bundle
+
+Use the **context_bundle_assembly** pattern — see [PATTERNS.md](../PATTERNS.md) — to assemble the structured context bundle that the Significance Analyst (Step 7) consumes.
+
+**Topic derivation**: Combine the meeting title with the first 100 characters of the approved Summary from Step 5. Example: `"Product Review — Discussed API-first priorities and JWT auth decision for Q2..."`.
+
+**Gather these context sections**:
+1. **Strategy & goals** — `arete context --for "<topic>"` (top 3 results, max 300 words each)
+2. **Existing memory** — `arete memory search "<topic>"` (top 5 results, max 200 words each)
+3. **People context** — For each attendee: stances, open items, and relationship health only (from `arete people show <slug> --memory`)
+
+**Reuse rule**: If person context was already gathered in Steps 2–3 (via `get_meeting_context`), reuse it here — do **not** re-run `arete people show`. The context bundle people section is populated from that earlier output.
+
+If 2 or more context sections return empty results, prepend a sparse-context warning to the bundle header:
+> ⚠️ Sparse context — weight raw meeting content more heavily. Available context: [list non-empty sections].
+
 ### 7. Extract Decisions and Learnings (to Memory)
 
-Use the **extract_decisions_learnings** pattern — see [PATTERNS.md](../PATTERNS.md). This step extracts decisions and learnings to **workspace memory** (`.arete/memory/items/`), complementing step 6 which saves to the **meeting file**. Scan "## Decisions Made" and "## Summary" / "## Key Points" for candidates; present for inline review (approve / edit / skip); write approved items to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md` per the formats in PATTERNS.md.
+> **Two-destination split**: Step 4 extracts intelligence to the **meeting file** (for reference and retrieval). Step 7 uses the Significance Analyst to identify what is significant enough for **workspace memory** (`.arete/memory/items/`). These are complementary, not redundant. Step 4 captures everything worth keeping in the meeting record; Step 7 filters for what belongs in persistent, cross-meeting memory.
+
+Use the **significance_analyst** pattern — see [PATTERNS.md](../PATTERNS.md) — with the context bundle assembled in Step 6.5 as input. This replaces keyword scanning with context-aware judgment.
+
+**Judgment mandate for this step**: Identify decisions and learnings from the meeting content that are significant enough to persist in workspace memory — decisions that affect strategy or architecture, learnings that would change how the builder approaches future work.
+
+**Steps**:
+
+1. **Internalize the context bundle** — Read the strategy/goals, existing decisions, and person stances assembled in Step 6.5. Understand what the builder is working toward and what is already captured in memory.
+
+2. **Read the approved meeting content with context in mind** — Use the Decisions and Learnings sections from Step 5 (and the Summary) as candidates. Do not just scan for keywords like "we decided" or "going with". Consider whether each candidate is genuinely significant given the builder's current goals and existing memory.
+
+3. **Apply the Significance Analyst judgment** — For each candidate:
+   - Is this a new decision (not already in memory) that affects strategy, architecture, or priorities?
+   - Is this a learning that would change future behavior or challenge a prior assumption?
+   - Does it contradict or reinforce an existing decision in the context bundle?
+   - Would the builder want this in 3 months when reviewing memory?
+
+4. **Grounding directive** — For each kept candidate, cite the specific goal, prior decision, or person stance from the context bundle that makes it significant. If you cannot cite specific bundle content, lower the candidate's confidence to `low`.
+
+5. **Present ranked candidates for review** — Show each candidate with:
+   - The decision or learning
+   - **Why it matters** (citing specific strategy, goal, or prior decision from the bundle)
+   - Confidence level (high / medium / low)
+   - User chooses: **Approve** / **Edit** / **Skip**
+
+6. **Write approved items** — Append to `.arete/memory/items/decisions.md` or `.arete/memory/items/learnings.md` using the standard formats from PATTERNS.md (`extract_decisions_learnings` format block). Never write to memory without user approval.
+
+**Sparse-context behavior**: When the Step 6.5 bundle carries a ⚠️ sparse-context warning, weight the raw meeting content more heavily. Note in the candidate list: "Limited context available — significance assessment based primarily on meeting content."
 
 ### 8. Refresh Person Memory Highlights
 
@@ -244,6 +288,6 @@ Mike: 1 stance, 0 action items
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `company`, `pillar`)
