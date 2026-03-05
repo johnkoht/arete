@@ -208,7 +208,7 @@ Use the **context_bundle_assembly** pattern — see [PATTERNS.md](../PATTERNS.md
 2. **Existing memory** — `arete memory search "<topic>"` (top 5 results, max 200 words each)
 3. **People context** — For each attendee: stances, open items, and relationship health only (from `arete people show <slug> --memory`)
 
-**Reuse rule**: If person context was already gathered in Steps 2–3 (via `get_meeting_context`), reuse it here — do **not** re-run `arete people show`. The context bundle people section is populated from that earlier output.
+**Reuse rule**: If `arete people show <slug> --memory` was already run for attendees earlier in this skill run, reuse that output — do **not** re-run `arete people show`. Steps 2–3 do not run `arete people show`; this step is typically the first time person memory context is fetched in process-meetings.
 
 If 2 or more context sections return empty results, prepend a sparse-context warning to the bundle header:
 > ⚠️ Sparse context — weight raw meeting content more heavily. Available context: [list non-empty sections].

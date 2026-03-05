@@ -304,7 +304,7 @@ for context-aware extraction rather than keyword scanning.
 
 The agent reads PATTERNS.md, follows the referenced pattern's steps, and returns to the skill workflow with the results.
 
-> **Note**: Phase 1 uses same-conversation expert mode. Skills shift into expert reasoning after mechanical work — the agent does not spawn a new agent or call a subagent. The pattern steps run in the current context, with the context bundle already in scope.
+> **Note**: Expert agent patterns run in the same conversation — the agent does not spawn a new agent or call a subagent. The pattern steps execute in the current context, with the context bundle already in scope.
 
 ---
 

@@ -112,7 +112,10 @@ templates/outputs/{skill-id}/default.md
 
 **When a context bundle is available** (assembled upstream by the calling skill via `context_bundle_assembly`), use the `significance_analyst` pattern for context-aware extraction. The analyst distinguishes genuine decisions from discussion, and genuine insights from passing comments, by reasoning about the builder's strategy, goals, and existing memory. **When no context bundle is available** (e.g., `finalize-project` which does not assemble a bundle), fall back to keyword scanning as described below.
 
-**Steps** (keyword-scanning fallback):
+**Steps (context bundle available)**:
+Follow the `significance_analyst` pattern — see § significance_analyst below. The calling skill assembles the context bundle and passes it to the analyst. Do not follow the keyword-scanning steps below.
+
+**Steps (keyword-scanning fallback — no context bundle)**:
 
 1. **Scan for decisions** — Look for: "we decided", "going with", "the plan is", "consensus was".
 2. **Scan for learnings** — Look for: user insights, process observations, market/competitive insights, surprises.
@@ -416,7 +419,7 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 3. **Gather existing memory** — Run `arete memory search "<topic>"`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`.
 
-4. **Gather people context** (when person slugs are available) — For each person: `arete people show <slug> --memory`. Extract ONLY: stances, open items, and relationship health sections. Skip full profile body. Max ~200 words per person. **If you've already run `get_meeting_context` upstream, reuse its people context — do not re-run `arete people show`.**
+4. **Gather people context** (when person slugs are available) — For each person: `arete people show <slug> --memory`. Extract ONLY: stances, open items, and relationship health sections. Skip full profile body. Max ~200 words per person. **If you've already run `get_meeting_context` upstream, reuse its people context — do not re-run `arete people show`.** For attendees still in `unknown_queue` (unresolved from process-meetings Step 2), skip person context and add to the bundle header: "Unresolved attendees (no person context): [names]".
 
 5. **Completeness check** — Count sections with 0 results. If 2+ sections are empty, prepend bundle header with: `⚠️ Sparse context — weight raw content more heavily. Available context: [list non-empty sections].`
 
@@ -599,4 +602,6 @@ Prep Recommendations:
 3. LEVERAGE: Webhook excitement — use as bridge to rebuild engagement
 4. ASK: "What other areas is your team working around?" (uncover hidden friction)
 ```
+
+**See also**: `context_bundle_assembly` — assembles the bundle this pattern consumes. `get_meeting_context` — when meeting-prep runs both, `context_bundle_assembly` reuses `get_meeting_context` outputs. `meeting-prep` — primary skill consumer.
 
