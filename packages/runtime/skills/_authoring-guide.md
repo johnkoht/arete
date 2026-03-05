@@ -268,6 +268,46 @@ Tailor language and detail level to each stakeholder's preferences (from person 
 
 ---
 
+## Expert Agent Patterns
+
+Expert agent patterns are instruction-based intelligence phases within skills — they shift the agent into a specialized reasoning mode after mechanical workflow steps are complete. Unlike CLI recipes (which call tools and use their output), expert agent patterns are invoked by referencing them from `PATTERNS.md`; the agent then follows those steps inline as its current reasoning mode.
+
+### Available Patterns
+
+| Pattern | Purpose | When to Use |
+|---------|---------|------------|
+| `context_bundle_assembly` | Assemble strategy, memory, and people context into a structured bundle | Before any expert reasoning phase; feeds the analyst patterns |
+| `significance_analyst` | Context-aware extraction of decisions and learnings — distinguishes genuine signal from discussion | When a skill needs to extract memory items and has context assembled upstream |
+| `relationship_intelligence` | Context-aware relationship assessment — tracks stance changes, health signals, and generates prep recommendations | When a skill processes meeting content involving tracked people |
+
+### When to Use Expert Agent Patterns
+
+Expert patterns are appropriate for intelligence-heavy skills that need context-aware reasoning, not just keyword matching or data retrieval. Signals that an expert pattern is warranted:
+
+- The skill extracts decisions or learnings from unstructured content (use `significance_analyst`)
+- The skill assesses or prepares for a relationship (use `relationship_intelligence`)
+- Either of the above requires assembled context first (always pair with `context_bundle_assembly`)
+
+Skills that do straightforward data retrieval or template-driven output don't need expert patterns — use the CLI recipes in the Intelligence Recipes section instead.
+
+### How to Reference from a Skill
+
+After mechanical workflow steps (entity resolution, data gathering, template loading), add a step that references the pattern by name:
+
+```markdown
+### Step N: Extract Decisions and Learnings
+
+Use the `extract_decisions_learnings` pattern from PATTERNS.md.
+Context bundle was assembled in Step N-1 — pass it to `significance_analyst`
+for context-aware extraction rather than keyword scanning.
+```
+
+The agent reads PATTERNS.md, follows the referenced pattern's steps, and returns to the skill workflow with the results.
+
+> **Note**: Phase 1 uses same-conversation expert mode. Skills shift into expert reasoning after mechanical work — the agent does not spawn a new agent or call a subagent. The pattern steps run in the current context, with the context bundle already in scope.
+
+---
+
 ## See Also
 
 - **[Output Integration Guide](./_integration-guide.md)** — Configure where your skill saves output (projects, resources, context files) and how to enable automatic indexing

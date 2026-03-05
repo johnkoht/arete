@@ -110,13 +110,17 @@ templates/outputs/{skill-id}/default.md
 
 **Used by**: process-meetings, finalize-project
 
-**Steps**:
+**When a context bundle is available** (assembled upstream by the calling skill via `context_bundle_assembly`), use the `significance_analyst` pattern for context-aware extraction. The analyst distinguishes genuine decisions from discussion, and genuine insights from passing comments, by reasoning about the builder's strategy, goals, and existing memory. **When no context bundle is available** (e.g., `finalize-project` which does not assemble a bundle), fall back to keyword scanning as described below.
+
+**Steps** (keyword-scanning fallback):
 
 1. **Scan for decisions** — Look for: "we decided", "going with", "the plan is", "consensus was".
 2. **Scan for learnings** — Look for: user insights, process observations, market/competitive insights, surprises.
 3. **Format candidates** — For each: title, source reference, context quote, suggested memory format.
 4. **Present for review** — Show each candidate; user chooses Approve / Edit / Skip.
 5. **Write approved items** — Append to `.arete/memory/items/decisions.md` or `.arete/memory/items/learnings.md` using the standard formats below.
+
+**See also**: `significance_analyst`, `context_bundle_assembly`
 
 **Decision format** (append to decisions.md):
 
@@ -475,6 +479,8 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 **Outputs**: Ranked candidates with reasoning and bundle citations.
 
 **Sparse-context behavior**: When the context bundle is sparse (⚠️ signal present), weight the raw content more heavily. Extraction still works but reasoning will be less context-aware. Note in output: "Limited context available — significance assessment based primarily on content analysis."
+
+**See also**: `extract_decisions_learnings` — when a skill uses that pattern with a context bundle available, it delegates here instead of keyword scanning. `context_bundle_assembly` — assembles the bundle this pattern consumes.
 
 ### Worked Example
 
