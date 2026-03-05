@@ -4,6 +4,18 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Wednesday, March 4, 2026
+
+A lot of meeting intelligence improvements landed today.
+
+**Meeting action items are now extracted from your meeting files directly — no separate command needed.** When you run the `process-meetings` skill, your agent reads the transcript and extracts action items inline. Previously this required a separate `arete meeting extract` command that needed an API key configured separately. It's simpler now and works the same way in every environment.
+
+**Agendas are now linked to meetings automatically.** When you pull recordings from Fathom or Krisp, Areté now fuzzy-matches the recording to any agenda you prepared beforehand and links them together. When you process the meeting, your prepared agenda items are merged in alongside the extracted action items — so nothing from your prep gets lost. Recorder notes are also collapsed by default in the meeting file so the structured content is easier to read.
+
+**`process-meetings` skill got smarter about action items.** The skill now parses action items from your meeting files in a consistent format, correctly identifying direction (what you owe them vs. what they owe you) with better heuristics. This feeds the commitments tracker more accurately.
+
+---
+
 ## Week of March 3, 2026
 
 Big week for relationship intelligence. A lot of the plumbing we've been building now surfaces in ways you can actually use day-to-day.
