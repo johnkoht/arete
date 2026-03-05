@@ -38,3 +38,22 @@ Started: 2026-03-05T03:35:00.000Z
 **Quality checks**: No typecheck/test suite applies to skill SKILL.md files (markdown instruction documents).
 
 **Reflection**: Clean additive edit. The key design constraint — reuse `get_meeting_context` people context rather than re-running `arete people show` — was already called out explicitly in PATTERNS.md's `context_bundle_assembly` step 4, so the instruction was easy to mirror. The Intelligence Insights section stays inside the brief's markdown fence so it's part of the single output document, not a separate artifact.
+
+---
+
+## t4-week-review — Complete
+**Date**: 2026-03-05
+**Commit**: 67a4fe0
+
+**What was done**: Updated `packages/runtime/skills/week-review/SKILL.md` to introduce the Significance Analyst expert pattern for weekly significance assessment.
+
+**Changes**:
+- Added **Step 3.5: Weekly Significance Analysis** between Quarter Goal Progress and Optional Capture. Instructs the agent to assemble a context bundle (goals + memory ONLY — explicitly no `arete people show` calls) using `context_bundle_assembly`, then apply `significance_analyst` to the week's raw content.
+- Step 3.5 includes: topic derivation from the week's focus areas, two-section bundle (strategy/goals and memory — people section explicitly excluded), the four significance_analyst judgment questions, grounding directive (cite specific bundle content per significant item), and sparse-context fallback behavior.
+- Added **Weekly Intelligence output section** as a markdown template within Step 3.5: Most Significant Events (with reasoning), Patterns Identified (themes, blocked areas, momentum shifts), Strategic Connections (how week advances/hinders quarter goals).
+- Updated **References** to include `context_bundle_assembly` and `significance_analyst` patterns with a note that the bundle is limited to goals + memory only.
+- All existing steps (1, 2, 2.5, 3, 4, 5) preserved without modification.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md files (markdown instruction documents).
+
+**Reflection**: Straightforward additive edit. The key constraint was the explicit exclusion of `arete people show` calls — week-review is a solo workflow with no attendees to resolve, so people context is not applicable. Inserted Step 3.5 after quarter progress (Step 3) so the significance analysis has the full mechanical review as input before applying judgment. 1–2 tokens of implementation work.

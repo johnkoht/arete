@@ -54,7 +54,8 @@
       "id": "t4-week-review",
       "title": "Update week-review with Significance Analyst",
       "description": "Add Significance Analyst phase for weekly significance assessment. Context bundle LIMITED to goals + memory only. Do NOT add arete people show calls.",
-      "status": "pending",
+      "status": "complete",
+      "commitSha": "67a4fe0",
       "dependsOn": ["t1-expert-patterns"],
       "acceptanceCriteria": [
         "week-review SKILL.md updated with Significance Analyst phase",
