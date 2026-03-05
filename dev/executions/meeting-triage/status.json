@@ -1,0 +1,13 @@
+{
+  "planSlug": "meeting-triage",
+  "status": "running",
+  "startedAt": "2026-03-04T17:49:00Z",
+  "updatedAt": "2026-03-04T17:49:00Z",
+  "currentTaskId": "task-3",
+  "completedTasks": 2,
+  "totalTasks": 7,
+  "worktree": {
+    "path": "/Users/johnkoht/code/worktrees/arete--app",
+    "branch": "app"
+  }
+}
