@@ -4,8 +4,10 @@
 
 import { Hono } from 'hono';
 import { spawn } from 'node:child_process';
+import { getEnvApiKey } from '@mariozechner/pi-ai';
 import * as workspaceService from '../services/workspace.js';
 import * as jobsService from '../services/jobs.js';
+import { runProcessingSession } from '../services/agent.js';
 
 // Per-slug write queue — prevents concurrent write races
 const writeQueue = new Map<string, Promise<void>>();
@@ -221,19 +223,77 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
     });
   });
 
-  // POST /api/meetings/:slug/process — stub (Task 4 implements real logic)
+  // POST /api/meetings/:slug/process — kick off Pi SDK agent session (returns 202 + jobId)
   app.post('/:slug/process', async (c) => {
+    const apiKey = getEnvApiKey('anthropic');
+    if (!apiKey) {
+      return c.json(
+        {
+          error: 'AI not configured',
+          hint: 'Set ANTHROPIC_API_KEY environment variable and restart the server',
+        },
+        503
+      );
+    }
+
+    const slug = c.req.param('slug');
     const jobId = jobsService.createJob('process');
-    // TODO: Task 4 — createProcessingSession and streamProcessingEvents
+
+    // Fire and forget — return 202 immediately
+    runProcessingSession(workspaceRoot, slug, jobId, jobsService).catch((err) => {
+      console.error('[process] Agent error:', err);
+      jobsService.setJobStatus(jobId, 'error');
+    });
+
     return c.json({ jobId }, 202);
   });
 
-  // GET /api/meetings/:slug/process-stream — SSE stub (Task 4 implements real streaming)
+  // GET /api/meetings/:slug/process-stream — SSE endpoint that tails job events
   app.get('/:slug/process-stream', (c) => {
-    return new Response('data: {}\n\n', {
+    const jobId = c.req.query('jobId');
+    if (!jobId) {
+      return c.json({ error: 'jobId required' }, 400);
+    }
+
+    let lastSent = 0;
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      start(controller) {
+        const interval = setInterval(() => {
+          const job = jobsService.getJob(jobId);
+          if (!job) {
+            clearInterval(interval);
+            controller.close();
+            return;
+          }
+
+          const newEvents = job.events.slice(lastSent);
+          for (const ev of newEvents) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ text: ev })}\n\n`)
+            );
+            lastSent++;
+          }
+
+          if (job.status === 'done' || job.status === 'error') {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ done: true, status: job.status })}\n\n`
+              )
+            );
+            clearInterval(interval);
+            controller.close();
+          }
+        }, 500);
+      },
+    });
+
+    return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
       },
     });
   });

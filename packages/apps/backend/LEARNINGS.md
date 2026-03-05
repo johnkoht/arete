@@ -64,6 +64,83 @@ Before editing `services/workspace.ts`:
 
 ---
 
+## Pi SDK Integration (2026-03-04)
+
+### createAgentSession / SessionManager.inMemory()
+
+First use of the Pi SDK for background agent work in the backend.
+
+**Imports** (verified against local node_modules):
+```typescript
+import { createAgentSession, SessionManager, createCodingTools } from '@mariozechner/pi-coding-agent';
+import { getEnvApiKey } from '@mariozechner/pi-ai';  // NOT from pi-coding-agent
+```
+
+`createAgentSession` returns `{ session, extensionsResult, modelFallbackMessage }` — not the session directly.
+
+**Session lifecycle**:
+1. Call `createAgentSession({ cwd, sessionManager, tools })` → `{ session }`
+2. Call `session.subscribe(listener)` → returns `unsubscribe` fn
+3. Await `session.prompt(text)` to run the agent
+4. Call `unsubscribe()` in finally to clean up
+
+### AssistantMessageEvent — text_delta shape
+
+The Pi SDK normalizes Anthropic's nested `content_block_delta` into a flat structure. The correct check is:
+```typescript
+if (ev?.type === 'text_delta') {
+  jobs.appendEvent(jobId, ev.delta);  // ev.delta is a string, not an object
+}
+```
+NOT `ev.type === 'content_block_delta' && ev.delta.type === 'text_delta'` (that's the raw Anthropic API shape, not the SDK shape).
+
+### getEnvApiKey — canonical API key check
+
+Use `getEnvApiKey('anthropic')` from `@mariozechner/pi-ai` to check if the key is configured. Returns `undefined` if not set. Always check before creating a session to give a clear 503 rather than a cryptic SDK error.
+
+### Fire-and-forget 202 pattern
+
+```typescript
+app.post('/:slug/process', async (c) => {
+  const apiKey = getEnvApiKey('anthropic');
+  if (!apiKey) return c.json({ error: '...', hint: '...' }, 503);
+
+  const jobId = jobsService.createJob('process');
+  runProcessingSession(workspaceRoot, slug, jobId, jobsService).catch(err => {
+    console.error('[process] Agent error:', err);
+    jobsService.setJobStatus(jobId, 'error');
+  });
+  return c.json({ jobId }, 202);
+});
+```
+Do the API key check in the route (synchronous, returns 503 immediately). Don't await the agent; return 202 with jobId. The catch on the floating promise is the only error handler — the service itself also sets error status before re-throwing.
+
+### SSE polling pattern (ReadableStream + setInterval)
+
+```typescript
+const stream = new ReadableStream({
+  start(controller) {
+    const interval = setInterval(() => {
+      const job = jobsService.getJob(jobId);
+      if (!job) { clearInterval(interval); controller.close(); return; }
+      const newEvents = job.events.slice(lastSent);
+      for (const ev of newEvents) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: ev })}\n\n`));
+        lastSent++;
+      }
+      if (job.status === 'done' || job.status === 'error') {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, status: job.status })}\n\n`));
+        clearInterval(interval); controller.close();
+      }
+    }, 500);
+  }
+});
+return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', ... } });
+```
+Slice-based polling is simpler than cursors because the events array only grows. The `lastSent` counter tracks the slice offset. Use `new Response(stream, ...)` directly (not `c.body`) to get correct SSE headers.
+
+---
+
 ## First-Use Patterns
 
 ### Hono Route Factory Pattern (2026-03-04)
