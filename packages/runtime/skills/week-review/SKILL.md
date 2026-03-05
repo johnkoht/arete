@@ -58,6 +58,47 @@ Give a **brief quarter goal progress** summary:
 
 No need to rewrite the quarter file unless the user wants to adjust goals.
 
+### 3.5. Weekly Significance Analysis
+
+Apply the `significance_analyst` expert pattern to assess what actually mattered this week.
+
+**Assemble a context bundle** using the `context_bundle_assembly` pattern — **limited to two sections only**:
+
+1. **Strategy & goals** — Run `arete context --for "<topic>"` where topic is derived from the week's focus areas (key themes from the week file's outcomes and notes, e.g. "API launch progress, customer onboarding, Q2 planning"). Take top 3 results, max 300 words each.
+2. **Existing memory** — Run `arete memory search "<topic>"`. Take top 5 results, max 200 words each.
+
+> **Do NOT** add `arete people show` calls. Week-review does not resolve attendees.
+
+If both sections return empty results, note: `⚠️ Sparse context — significance assessment based primarily on week content.`
+
+**Apply `significance_analyst`** to the assembled bundle and the week's raw content (accomplishments, outcomes, notes from the week file):
+
+- Ask: *"Given everything that happened this week and current goals/strategy, what was actually significant?"*
+- Separate signal from noise — not everything that happened matters equally.
+- Identify patterns: recurring themes, blocked areas, momentum shifts, surprising outcomes.
+- Connect to strategy: how does this week advance or hinder quarter goals?
+- For each significant item, **cite the specific goal or prior decision from the context bundle** that makes it significant. If you cannot cite bundle content, downgrade the item's ranking.
+
+**Output — Weekly Intelligence section** (include in the review):
+
+```markdown
+## Weekly Intelligence
+
+### Most Significant Events
+- [Event] — [WHY it matters, citing specific goal or decision from context]
+- ...
+
+### Patterns Identified
+- [Recurring theme / blocked area / momentum shift]
+- ...
+
+### Strategic Connections
+- [How this week advances or hinders quarter goals]
+- ...
+```
+
+> **Sparse-context behavior**: If the context bundle is sparse, weight the week's raw content more heavily and note: "Limited context — significance based primarily on week content analysis."
+
 ### 4. Optional Capture
 
 - **Option A**: Add one short paragraph to `.arete/memory/summaries/sessions.md` (e.g. "Week of YYYY-MM-DD: …").
@@ -74,6 +115,7 @@ No need to rewrite the quarter file unless the user wants to adjust goals.
 - **Week file**: `now/week.md`
 - **Quarter file**: `goals/quarter.md`
 - **Optional**: `.arete/memory/summaries/sessions.md`
+- **Patterns**: `context_bundle_assembly` (context bundle limited to goals + memory only), `significance_analyst` (weekly significance assessment)
 
 ## Error Handling
 
