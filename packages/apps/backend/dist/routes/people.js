@@ -266,10 +266,12 @@ export function createPeopleRouter(workspaceRoot) {
             const fm = data;
             const autoMemory = parseAutoMemoryBlock(raw);
             const recentMeetings = parseRecentMeetings(content);
-            // Strip auto-managed sections from content for rawContent
+            // Strip auto-managed sections from content for rawContent.
+            // Use greedy [\s\S]* (no ?) so the heading + ALL content after it is consumed.
+            // ## Recent Meetings is always the last user-visible section, so greedy is safe.
             const rawContent = content
                 .replace(/<!-- AUTO_PERSON_MEMORY:START -->[\s\S]*?<!-- AUTO_PERSON_MEMORY:END -->/i, '')
-                .replace(/^##\s+Recent Meetings[\s\S]*?(?=\n##\s|$)/im, '')
+                .replace(/\n?^##\s+Recent Meetings[\s\S]*/im, '')
                 .trim();
             const openCommitmentItems = commitments.filter((c) => c.personSlug === slug && c.status === 'open');
             const openCommitmentsCount = openCommitmentItems.length;
