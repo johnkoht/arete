@@ -33,6 +33,7 @@ type RawMeetingSummary = {
   attendees: RawAttendee[];
   duration: string;
   source: string;
+  recordingUrl: string;
 };
 
 type RawStagedItem = {
@@ -47,12 +48,20 @@ type RawStagedSections = {
   learnings: RawStagedItem[];
 };
 
+type RawApprovedItems = {
+  actionItems: string[];
+  decisions: string[];
+  learnings: string[];
+};
+
 type RawFullMeeting = RawMeetingSummary & {
   summary: string;
   body: string;
   frontmatter: Record<string, unknown>;
   stagedSections: RawStagedSections;
   stagedItemStatus: Record<string, 'approved' | 'skipped' | 'pending'>;
+  stagedItemEdits: Record<string, string>;
+  approvedItems: RawApprovedItems;
 };
 
 // ── Mapping helpers ─────────────────────────────────────────────────────────
@@ -81,7 +90,6 @@ function normalizeStatus(s: string): MeetingStatus {
 const TYPE_MAP = { ai: 'action', de: 'decision', le: 'learning' } as const;
 
 function flattenStagedItems(raw: RawFullMeeting): ReviewItem[] {
-  const edits = (raw.frontmatter['staged_item_edits'] ?? {}) as Record<string, string>;
   const allItems: RawStagedItem[] = [
     ...raw.stagedSections.actionItems,
     ...raw.stagedSections.decisions,
@@ -90,7 +98,7 @@ function flattenStagedItems(raw: RawFullMeeting): ReviewItem[] {
   return allItems.map((item) => ({
     id: item.id,
     type: TYPE_MAP[item.type],
-    text: edits[item.id] ?? item.text,
+    text: raw.stagedItemEdits[item.id] ?? item.text,
     status: raw.stagedItemStatus[item.id] ?? 'pending',
   }));
 }
@@ -104,6 +112,7 @@ function mapSummary(raw: RawMeetingSummary): Meeting {
     status: normalizeStatus(raw.status),
     duration: parseDuration(raw.duration),
     source: raw.source,
+    recordingUrl: raw.recordingUrl,
   };
 }
 
@@ -113,6 +122,7 @@ function mapFullMeeting(raw: RawFullMeeting): Meeting {
     summary: raw.summary,
     body: raw.body,
     reviewItems: flattenStagedItems(raw),
+    approvedItems: raw.approvedItems,
   };
 }
 

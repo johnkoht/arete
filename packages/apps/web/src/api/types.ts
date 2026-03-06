@@ -23,6 +23,12 @@ export type ReviewItem = {
   status: ItemStatus;
 };
 
+export type ApprovedItems = {
+  actionItems: string[];
+  decisions: string[];
+  learnings: string[];
+};
+
 export type Meeting = {
   slug: string;
   title: string;
@@ -32,9 +38,11 @@ export type Meeting = {
   /** Parsed integer minutes (0 if backend returned unparseable string) */
   duration: number;
   source: string;
+  recordingUrl?: string;
   summary?: string;
   body?: string;
   reviewItems?: ReviewItem[];
+  approvedItems?: ApprovedItems;
 };
 
 export type JobStatus = 'running' | 'done' | 'error';

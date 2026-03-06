@@ -28,6 +28,11 @@ export declare function parseStagedSections(body: string): StagedSections;
  * Returns an empty object if the file has no frontmatter or the field is absent.
  */
 export declare function parseStagedItemStatus(content: string): StagedItemStatus;
+/**
+ * Parse the `staged_item_edits` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to edited text strings.
+ */
+export declare function parseStagedItemEdits(content: string): StagedItemEdits;
 export type WriteItemStatusOptions = {
     /** New status to set on the item */
     status: 'approved' | 'skipped' | 'pending';

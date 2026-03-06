@@ -114,6 +114,17 @@ export function parseStagedItemStatus(content) {
     return raw;
 }
 /**
+ * Parse the `staged_item_edits` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to edited text strings.
+ */
+export function parseStagedItemEdits(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_edits'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    return raw;
+}
+/**
  * Update `staged_item_status` (and optionally `staged_item_edits`) for a
  * single item in a meeting file's frontmatter.
  *
@@ -171,6 +182,7 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
         ...sections.decisions,
         ...sections.learnings,
     ];
+    const approvedActionItems = [];
     const approvedDecisions = [];
     const approvedLearnings = [];
     for (const item of allItems) {
@@ -178,17 +190,38 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
             continue;
         const text = editsMap[item.id] ?? item.text;
         const resolvedItem = { ...item, text };
-        if (item.type === 'de')
+        if (item.type === 'ai')
+            approvedActionItems.push(resolvedItem);
+        else if (item.type === 'de')
             approvedDecisions.push(resolvedItem);
         else if (item.type === 'le')
             approvedLearnings.push(resolvedItem);
-        // 'ai' (action items) → intentionally NOT written to memory
     }
     // ── 3. Append to memory files ────────────────────────────────────────────
+    // Action items stay in the meeting file (not in memory)
     await appendToMemoryFile(storage, memoryDir, 'decisions.md', approvedDecisions);
     await appendToMemoryFile(storage, memoryDir, 'learnings.md', approvedLearnings);
     // ── 4. Strip staged sections from body ──────────────────────────────────
-    const cleanedBody = removeStagedSections(body);
+    let cleanedBody = removeStagedSections(body);
+    // ── 4.5 Write approved action items to ## Approved Action Items section ──
+    if (approvedActionItems.length > 0) {
+        const actionItemsSection = '\n## Approved Action Items\n' +
+            approvedActionItems.map(item => `- [ ] ${item.text}`).join('\n') + '\n';
+        // Insert before ## Transcript if it exists, otherwise append
+        const transcriptIndex = cleanedBody.indexOf('\n## Transcript');
+        if (transcriptIndex !== -1) {
+            cleanedBody = cleanedBody.slice(0, transcriptIndex) + actionItemsSection + cleanedBody.slice(transcriptIndex);
+        }
+        else {
+            cleanedBody = cleanedBody + actionItemsSection;
+        }
+    }
+    // ── 4.6 Store approved items in frontmatter for UI display ───────────────
+    data['approved_items'] = {
+        actionItems: approvedActionItems.map(i => i.text),
+        decisions: approvedDecisions.map(i => i.text),
+        learnings: approvedLearnings.map(i => i.text),
+    };
     // ── 5-6. Update frontmatter ───────────────────────────────────────────────
     delete data['staged_item_status'];
     delete data['staged_item_edits'];

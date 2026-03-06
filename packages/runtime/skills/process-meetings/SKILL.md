@@ -101,7 +101,26 @@ Parse frontmatter and body (title, date, attendees, company, summary).
 
 After resolving people, add or update meeting frontmatter with `attendee_ids: [slug1, slug2]`. For legacy files, prepend YAML frontmatter and preserve body.
 
-### 4. Extract Action Items, Decisions, and Learnings
+### 4. Generate Summary
+
+Generate a concise 2-4 sentence summary of the meeting based on the transcript and any existing key points or highlights.
+
+**Summary guidelines**:
+- Focus on the main topics discussed and outcomes
+- Mention key decisions made (if any)
+- Note important action items or next steps
+- Keep it scannable — someone should understand the meeting's value in 10 seconds
+
+**Output**: Replace the `## Summary` section content in the meeting body. If the section contains placeholder text like "No summary available." or is empty, replace it entirely.
+
+Example:
+```markdown
+## Summary
+
+Discussed Q1 roadmap priorities with the product team. Agreed to prioritize enterprise tier features before SMB expansion. Key blocker identified: audit logging needs to ship first. Sarah will share updated timeline by Friday.
+```
+
+### 5. Extract Action Items, Decisions, and Learnings
 
 Behavior depends on whether `--commit` is passed.
 
@@ -157,11 +176,11 @@ Do **not** write staged sections to the meeting file in this mode.
 
 ---
 
-### 5. Refresh Person Memory Highlights
+### 6. Refresh Person Memory Highlights
 
 Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md). Refresh recurring asks/concerns for attendees so person files include quick-access memory highlights.
 
-### 5.5. Refresh Person Intelligence Memory
+### 6.5. Refresh Person Intelligence Memory
 
 **Ordering dependency** — this step MUST run after steps 2–3 complete:
 1. Create/update person files (step 2)
@@ -178,7 +197,7 @@ This updates the enriched intelligence sections that meeting-prep and other skil
 
 **CommitmentsService producer path**: `arete people memory refresh` is also the path that syncs extracted commitments (action items) to CommitmentsService. Running this command after processing meetings ensures that any commitments found in meeting notes are available via `arete commitments list`. This is the canonical producer path — CommitmentsService is populated through `process-meetings` → `arete people memory refresh --person <slug>`.
 
-### 6. Summary
+### 7. Report
 
 Report: meetings processed, people created/updated, staged sections written (or decisions/learnings committed to memory in `--commit` mode), person memory highlights refreshed.
 

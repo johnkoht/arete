@@ -174,6 +174,38 @@ Launched via: `arete view` command (starts server, opens browser to localhost)
 
 ---
 
+## Bugs Found (2026-03-05)
+
+### Setup/DX Issues (NOT YET FIXED)
+- **Clunky startup**: Need to improve `arete view` to handle API key configuration better; currently requires manual env var export before starting backend
+- **API key integration**: Backend uses `getEnvApiKey()` which only checks env vars; should consider reading from Pi's stored credentials
+
+### UI Bugs — FIXED (2026-03-05)
+
+1. ✅ **Process modal doesn't refresh page** — Fixed: Added query invalidation when modal closes after successful processing.
+
+2. ⚠️ **Invalid Date** — Partially addressed: Date parsing should work for ISO strings. If still seeing issues, it's likely missing date data from Krisp.
+
+3. ✅ **Duration shows "0 minutes"** — Fixed: Backend now parses `**Duration**: X minutes` format from Krisp meeting body.
+
+4. ✅ **Approved meeting view is empty**:
+   - 4.1 ✅ Removed "Next in Triage" link from approved view
+   - 4.2 ✅ Fixed: `commitApprovedItems` now stores approved items in frontmatter (`approved_items` field), and `ApprovedItemsSection` displays them. Also writes approved action items to `## Approved Action Items` section in meeting file.
+
+5. ✅ **"View recording" does nothing** — Fixed: Now shows "No recording available" if no URL, otherwise opens the recording URL in new tab.
+
+6. ✅ **"New meeting" does nothing** — Fixed: Button is now disabled with "Coming soon" tooltip.
+
+### New Features Added (2026-03-05)
+
+- ✅ **Reverse chronological order** — Backend already sorts by date descending
+- ✅ **Column sorting** — Added clickable column headers with sort indicators for Title, Date, Status, Duration, Source
+
+### Skill/Data Issues (NOT YET FIXED)
+- **22 items extracted from one meeting** — Likely over-extraction by the process-meetings skill; needs tuning (follow-up separately)
+
+---
+
 ## Open Questions (Resolved)
 
 1. ✅ **Item identity**: ID-based (`si_<type>_<6-char-random>`)

@@ -10,16 +10,13 @@ import {
   FileStorageAdapter,
   parseStagedSections,
   parseStagedItemStatus,
+  parseStagedItemEdits,
   writeItemStatusToFile,
   commitApprovedItems,
   loadConfig,
   refreshQmdIndex,
 } from '@arete/core';
-// WriteItemStatusOptions is not re-exported from @arete/core index
-type WriteItemStatusOptions = {
-  status: 'approved' | 'skipped' | 'pending';
-  editedText?: string;
-};
+import type { WriteItemStatusOptions } from '@arete/core';
 import type { MeetingSummary, FullMeeting } from '../types.js';
 
 const storage = new FileStorageAdapter();
@@ -50,12 +47,36 @@ function parseAttendees(
 }
 
 function extractDuration(fm: Record<string, unknown>, body: string): string {
+  // Check frontmatter first
   if (fm['duration'] && typeof fm['duration'] === 'string') {
     return fm['duration'];
   }
-  // Try to extract from ## Duration section in body
-  const match = body.match(/^##\s+Duration\s*\n([^\n#]+)/im);
-  if (match) return match[1].trim();
+  if (fm['duration'] && typeof fm['duration'] === 'number') {
+    return `${fm['duration']} minutes`;
+  }
+  // Try ## Duration section in body
+  const sectionMatch = body.match(/^##\s+Duration\s*\n([^\n#]+)/im);
+  if (sectionMatch) return sectionMatch[1].trim();
+  // Try **Duration**: X format (Krisp style)
+  const boldMatch = body.match(/\*\*Duration\*\*:\s*(\d+\s*(?:minutes?|mins?|hours?|hrs?))/i);
+  if (boldMatch) return boldMatch[1].trim();
+  return '';
+}
+
+function extractSummary(fm: Record<string, unknown>, body: string): string {
+  // Check frontmatter first
+  if (fm['summary'] && typeof fm['summary'] === 'string') {
+    return fm['summary'];
+  }
+  // Try ## Summary section in body
+  const match = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+  if (match) {
+    const summaryText = match[1].trim();
+    // Skip placeholder text
+    if (summaryText && summaryText.toLowerCase() !== 'no summary available.' && summaryText !== '') {
+      return summaryText;
+    }
+  }
   return '';
 }
 
@@ -86,6 +107,7 @@ export async function listMeetings(workspaceRoot: string): Promise<MeetingSummar
         attendees: parseAttendees(fm['attendees']),
         duration: extractDuration(fm, content),
         source: typeof fm['source'] === 'string' ? fm['source'] : '',
+        recordingUrl: typeof fm['recording_link'] === 'string' ? fm['recording_link'] : '',
       });
     } catch {
       // skip unreadable files
@@ -113,6 +135,21 @@ export async function getMeeting(
   const fm = data as Record<string, unknown>;
   const stagedSections = parseStagedSections(content);
   const stagedItemStatus = parseStagedItemStatus(raw);
+  const stagedItemEdits = parseStagedItemEdits(raw);
+
+  // Parse approved_items from frontmatter if present
+  const rawApproved = fm['approved_items'];
+  const approvedItems = {
+    actionItems: [] as string[],
+    decisions: [] as string[],
+    learnings: [] as string[],
+  };
+  if (rawApproved && typeof rawApproved === 'object' && !Array.isArray(rawApproved)) {
+    const ra = rawApproved as Record<string, unknown>;
+    if (Array.isArray(ra['actionItems'])) approvedItems.actionItems = ra['actionItems'].filter((x): x is string => typeof x === 'string');
+    if (Array.isArray(ra['decisions'])) approvedItems.decisions = ra['decisions'].filter((x): x is string => typeof x === 'string');
+    if (Array.isArray(ra['learnings'])) approvedItems.learnings = ra['learnings'].filter((x): x is string => typeof x === 'string');
+  }
 
   return {
     slug,
@@ -122,11 +159,14 @@ export async function getMeeting(
     attendees: parseAttendees(fm['attendees']),
     duration: extractDuration(fm, content),
     source: typeof fm['source'] === 'string' ? fm['source'] : '',
-    summary: typeof fm['summary'] === 'string' ? fm['summary'] : '',
+    recordingUrl: typeof fm['recording_link'] === 'string' ? fm['recording_link'] : '',
+    summary: extractSummary(fm, content),
     body: content,
     frontmatter: fm,
     stagedSections,
     stagedItemStatus,
+    stagedItemEdits,
+    approvedItems,
   };
 }
 

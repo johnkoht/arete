@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { MetadataPanel } from "@/components/MetadataPanel";
 import { ReviewItemsSection, ApprovedItemsSection } from "@/components/ReviewItems";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -33,12 +34,13 @@ import {
   useSaveApprove,
   useProcessMeeting,
 } from "@/hooks/meetings.js";
-import type { ReviewItem } from "@/api/types.js";
+import type { ReviewItem, ApprovedItems } from "@/api/types.js";
 import { BASE_URL } from "@/api/client.js";
 
 export default function MeetingDetail() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const safeSlug = slug ?? "";
 
@@ -268,7 +270,9 @@ export default function MeetingDetail() {
       esRef.current = null;
       setProcessModalOpen(false);
       if (streamDone && !streamError) {
-        // Navigated away or modal dismissed after success — stay on same page (meeting will refetch)
+        // Invalidate queries to refetch meeting data after successful processing
+        void queryClient.invalidateQueries({ queryKey: ["meeting", safeSlug] });
+        void queryClient.invalidateQueries({ queryKey: ["meetings"] });
       }
     }
   };
@@ -345,43 +349,7 @@ export default function MeetingDetail() {
               </div>
             )}
 
-            {/* Approved success state */}
-            {isApproved && (
-              <div className="rounded-md border border-status-approved/30 bg-status-approved/10 p-4">
-                <div className="flex items-center gap-2 text-status-approved font-medium text-sm">
-                  <CheckCircle2 className="h-5 w-5" />
-                  Meeting approved
-                </div>
-                {nextTriageMeeting && (
-                  <button
-                    onClick={() => handleNext(nextTriageMeeting.slug)}
-                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    Next in Triage ({triageRemaining} remaining)
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Save & Approve success shown inline after mutation */}
-            {saveApproveMutation.isSuccess && (
-              <div className="rounded-md border border-status-approved/30 bg-status-approved/10 p-4">
-                <div className="flex items-center gap-2 text-status-approved font-medium text-sm">
-                  <CheckCircle2 className="h-5 w-5" />
-                  Meeting approved and saved to memory
-                </div>
-                {nextTriageMeeting && (
-                  <button
-                    onClick={() => handleNext(nextTriageMeeting.slug)}
-                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    Next in Triage ({triageRemaining} remaining)
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Save & Approve success toast — no banner needed, status badge is enough */}
 
             {/* Processed: Summary first, then Review Items */}
             {isProcessed && !saveApproveMutation.isSuccess && (
@@ -415,7 +383,7 @@ export default function MeetingDetail() {
                   setSummaryOpen={setSummaryOpen}
                   readOnly={true}
                 />
-                <ApprovedItemsSection items={reviewItems} />
+                <ApprovedItemsSection approvedItems={meeting.approvedItems} />
               </>
             )}
 
@@ -475,8 +443,7 @@ export default function MeetingDetail() {
               isSynced={isSynced}
               approved={isApproved || saveApproveMutation.isSuccess}
               onProcessClick={handleProcessClick}
-              nextTriageMeeting={nextTriageMeeting}
-              triageRemaining={triageRemaining}
+              onReprocessClick={handleProcessClick}
             />
           </div>
         </div>

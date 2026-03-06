@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReviewItem, ItemStatus, ItemType } from "@/api/types.js";
+import type { ReviewItem, ItemStatus, ItemType, ApprovedItems } from "@/api/types.js";
 import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -207,19 +207,29 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove }: Revi
 }
 
 interface ApprovedItemsProps {
-  items: ReviewItem[];
+  approvedItems?: ApprovedItems;
 }
 
-export function ApprovedItemsSection({ items }: ApprovedItemsProps) {
-  const actions = items.filter((i) => i.type === "action");
-  const decisions = items.filter((i) => i.type === "decision");
-  const learnings = items.filter((i) => i.type === "learning");
+export function ApprovedItemsSection({ approvedItems }: ApprovedItemsProps) {
+  const actions = approvedItems?.actionItems ?? [];
+  const decisions = approvedItems?.decisions ?? [];
+  const learnings = approvedItems?.learnings ?? [];
 
   const groups = [
     { label: "Action Items", icon: ListTodo, items: actions },
     { label: "Decisions", icon: Bookmark, items: decisions },
     { label: "Learnings", icon: Lightbulb, items: learnings },
   ];
+
+  const hasItems = actions.length > 0 || decisions.length > 0 || learnings.length > 0;
+
+  if (!hasItems) {
+    return (
+      <div className="text-sm text-muted-foreground italic">
+        No items were approved for this meeting.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -231,13 +241,13 @@ export function ApprovedItemsSection({ items }: ApprovedItemsProps) {
               {group.label}
             </h3>
             <div className="space-y-2">
-              {group.items.map((item) => (
+              {group.items.map((text, index) => (
                 <div
-                  key={item.id}
+                  key={index}
                   className="flex items-start gap-3 rounded-md border bg-card p-3 shadow-sm"
                 >
                   <CheckCircle2 className="h-5 w-5 text-status-approved flex-shrink-0" />
-                  <p className="text-sm">{item.text}</p>
+                  <p className="text-sm">{text}</p>
                 </div>
               ))}
             </div>

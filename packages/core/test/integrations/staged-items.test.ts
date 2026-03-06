@@ -10,6 +10,9 @@
  * 6.  parseStagedItemStatus — missing frontmatter returns {}
  * 7.  parseStagedItemStatus — partial frontmatter (no staged_item_status field)
  * 8.  parseStagedItemStatus — reads status map correctly
+ * 8a. parseStagedItemEdits — missing frontmatter returns {}
+ * 8b. parseStagedItemEdits — partial frontmatter (no staged_item_edits field)
+ * 8c. parseStagedItemEdits — reads edits map correctly
  * 9.  writeItemStatusToFile — round-trip: write then re-read
  * 10. writeItemStatusToFile — preserves existing frontmatter fields
  * 11. writeItemStatusToFile — stores editedText in staged_item_edits
@@ -30,6 +33,7 @@ import {
   generateItemId,
   parseStagedSections,
   parseStagedItemStatus,
+  parseStagedItemEdits,
   writeItemStatusToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
@@ -184,6 +188,42 @@ describe('parseStagedItemStatus', () => {
       ai_001: 'pending',
       de_001: 'approved',
       le_001: 'skipped',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8a–8c: parseStagedItemEdits
+// ---------------------------------------------------------------------------
+
+const FRONTMATTER_WITH_EDITS = `---
+title: Meeting
+status: processed
+staged_item_edits:
+  ai_001: "Edited action item text"
+  de_001: "Edited decision text"
+---
+
+Body content.
+`;
+
+describe('parseStagedItemEdits', () => {
+  it('(8a) returns {} when content has no frontmatter', () => {
+    const result = parseStagedItemEdits('# Just a heading\nNo frontmatter here.');
+    assert.deepEqual(result, {});
+  });
+
+  it('(8b) returns {} when frontmatter has no staged_item_edits field', () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody text.`;
+    const result = parseStagedItemEdits(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('(8c) reads staged_item_edits map correctly', () => {
+    const result = parseStagedItemEdits(FRONTMATTER_WITH_EDITS);
+    assert.deepEqual(result, {
+      ai_001: 'Edited action item text',
+      de_001: 'Edited decision text',
     });
   });
 });

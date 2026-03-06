@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Cloud, Loader2, Search, ArrowRight, Plus } from "lucide-react";
+import { Cloud, Loader2, Search, ArrowRight, Plus, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import type { Meeting } from "@/api/types.js";
 import { formatDistanceToNow, format } from "date-fns";
 
 type FilterTab = "All" | "Triage" | "Approved";
+type SortColumn = "title" | "date" | "status" | "duration" | "source";
+type SortDirection = "asc" | "desc";
 
 export default function MeetingsIndex() {
   const navigate = useNavigate();
@@ -22,6 +24,8 @@ export default function MeetingsIndex() {
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [search, setSearch] = useState("");
   const [syncJobId, setSyncJobId] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const { data: meetings = [], isLoading, error } = useMeetings();
   const syncMutation = useSyncKrisp();
@@ -76,6 +80,48 @@ export default function MeetingsIndex() {
         m.attendees.some((a) => a.name.toLowerCase().includes(q))
     );
   }, [tabFiltered, search]);
+
+  const sorted = useMemo(() => {
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortColumn) {
+        case "title":
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case "date":
+          cmp = a.date.localeCompare(b.date);
+          break;
+        case "status":
+          cmp = a.status.localeCompare(b.status);
+          break;
+        case "duration":
+          cmp = a.duration - b.duration;
+          break;
+        case "source":
+          cmp = a.source.localeCompare(b.source);
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [filtered, sortColumn, sortDirection]);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-30" />;
+    return sortDirection === "asc"
+      ? <ArrowUp className="ml-1 h-3 w-3" />
+      : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
 
   const tabs: { label: FilterTab; count?: number }[] = [
     { label: "All" },
@@ -148,7 +194,7 @@ export default function MeetingsIndex() {
               </>
             )}
           </Button>
-          <Button size="sm">
+          <Button size="sm" disabled title="Coming soon">
             <Plus className="mr-1.5 h-4 w-4" />
             New Meeting
           </Button>
@@ -242,24 +288,44 @@ export default function MeetingsIndex() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                <th className="px-6 py-3">Title</th>
-                <th className="px-4 py-3">Date</th>
+                <th className="px-6 py-3">
+                  <button onClick={() => handleSort("title")} className="inline-flex items-center hover:text-foreground">
+                    Title <SortIcon column="title" />
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button onClick={() => handleSort("date")} className="inline-flex items-center hover:text-foreground">
+                    Date <SortIcon column="date" />
+                  </button>
+                </th>
                 <th className="px-4 py-3">Attendees</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Duration</th>
-                <th className="px-4 py-3">Source</th>
+                <th className="px-4 py-3">
+                  <button onClick={() => handleSort("status")} className="inline-flex items-center hover:text-foreground">
+                    Status <SortIcon column="status" />
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button onClick={() => handleSort("duration")} className="inline-flex items-center hover:text-foreground">
+                    Duration <SortIcon column="duration" />
+                  </button>
+                </th>
+                <th className="px-4 py-3">
+                  <button onClick={() => handleSort("source")} className="inline-flex items-center hover:text-foreground">
+                    Source <SortIcon column="source" />
+                  </button>
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 && (
+              {sorted.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
                     {search ? "No meetings match your search." : "No meetings yet. Sync Krisp to import."}
                   </td>
                 </tr>
               )}
-              {filtered.map((m) => (
+              {sorted.map((m) => (
                 <tr
                   key={m.slug}
                   onClick={() => navigate(`/meetings/${m.slug}`)}
