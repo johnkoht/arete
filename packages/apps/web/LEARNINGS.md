@@ -94,6 +94,23 @@ const filterParam = searchParams.get("filter"); // "overdue" | "thisweek" | null
 ```
 When a filter is applied from navigation (e.g. Dashboard → `/people?filter=overdue`), use `useEffect` on the param to set initial sort state.
 
+### Multi-Param URL Coexistence (first use: V2-2)
+When a page has multiple independent URL params (e.g. `?filter=` and `?category=`), use
+the functional-setter form to avoid clobbering params you don't own:
+```tsx
+setSearchParams((prev) => {
+  const next = new URLSearchParams(prev);
+  next.delete("filter");   // or next.set("category", val)
+  return next;
+});
+```
+Do NOT use `setSearchParams({ filter: val })` — that form discards all other existing params.
+The destructive form is fine only when a page controls all its own params in one call.
+
+> Note: `CommitmentsPage.tsx` and `SearchPage.tsx` use the destructive form intentionally —
+> each controls only a single param, so it's safe there. `PeopleIndex` has two independent
+> params (`filter` + `category`), making the functional form required.
+
 ### `GoalsView` Strategy Preview (fixed: iteration 2)
 The StrategySection was collapsed by default with no preview. Fixed: collapsed state now shows a plain-text preview (first 200 chars, markdown stripped). The `stripMarkdown` function removes `## headings`, `**bold**`, `*italic*`, `- bullets`, and collapses whitespace. Full content uses `whitespace-pre-wrap`. Expand/collapse toggle still works.
 
