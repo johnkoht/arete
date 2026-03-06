@@ -423,6 +423,17 @@ describe('GET /api/people/:slug — rawContent field', () => {
     const body = json as { rawContent: string };
     assert.ok(!body.rawContent.includes('## Recent Meetings'), 'rawContent must not include ## Recent Meetings');
   });
+
+  it('rawContent does NOT contain meeting list items from Recent Meetings', async () => {
+    // This would catch the lazy-regex bug where heading is stripped but list items remain
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { rawContent: string };
+    // Meeting titles from the fixture Recent Meetings section should not appear
+    assert.ok(!body.rawContent.includes('Design Review'), 'rawContent must not include meeting titles');
+    assert.ok(!body.rawContent.includes('Sprint Planning'), 'rawContent must not include meeting titles');
+  });
 });
 
 describe('GET /api/people/:slug — allMeetings field', () => {
