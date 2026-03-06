@@ -93,9 +93,16 @@ export function AppSidebar() {
       {/* Settings */}
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>
-          <button className="flex h-10 w-10 items-center justify-center rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+          <Link
+            to="/settings"
+            className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
+              location.pathname === '/settings'
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+            }`}
+          >
             <Settings className="h-[18px] w-[18px]" />
-          </button>
+          </Link>
         </TooltipTrigger>
         <TooltipContent side="right" className="text-xs">
           Settings

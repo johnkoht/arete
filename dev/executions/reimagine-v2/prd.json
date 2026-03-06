@@ -26,8 +26,8 @@
       "title": "Goals \u2014 Interactive Priorities",
       "description": "Make weekly priority checkboxes interactive. PATCH /api/goals/week/priority backend route. Optimistic update with rollback on error.",
       "dependsOn": [],
-      "status": "pending",
-      "commitSha": null
+      "status": "complete",
+      "commitSha": "f2e34b1"
     },
     {
       "id": "V2-1",

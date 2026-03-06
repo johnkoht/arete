@@ -14,6 +14,7 @@ import MemoryFeed from "@/pages/MemoryFeed";
 import IntelligencePage from "@/pages/IntelligencePage";
 import CommitmentsPage from "@/pages/CommitmentsPage";
 import SearchPage from "@/pages/SearchPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import { useProcessingEvents } from "@/hooks/useProcessingEvents.js";
 
@@ -40,6 +41,7 @@ function AppRoutes() {
         <Route path="/memory" element={<MemoryFeed />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
