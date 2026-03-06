@@ -25,7 +25,10 @@ type JobsService = {
  */
 function processingPrompt(meetingSlug: string): string {
   return `Process the meeting at resources/meetings/${meetingSlug}.md. Use the process-meetings skill.
-Write extracted action items, decisions, and learnings as staged sections in the meeting file with these EXACT headers and ID format:
+
+1. Generate a 2-4 sentence summary of the meeting based on the transcript and key points. Replace the ## Summary section content (if it says "No summary available." or is empty).
+
+2. Extract action items, decisions, and learnings. Write them as staged sections with these EXACT headers and ID format:
 
 ## Staged Action Items
 - ai_001: [action item text]
@@ -36,7 +39,9 @@ Write extracted action items, decisions, and learnings as staged sections in the
 ## Staged Learnings
 - le_001: [learning text]
 
-IDs must be zero-padded 3 digits (ai_001, de_001, le_001, etc.). Do NOT commit items to .arete/memory/ — write staged sections only. Set the meeting's status frontmatter field to 'processed' and add processed_at with an ISO timestamp.`;
+IDs must be zero-padded 3 digits (ai_001, de_001, le_001, etc.). Do NOT commit items to .arete/memory/ — write staged sections only.
+
+3. Set the meeting's status frontmatter field to 'processed' and add processed_at with an ISO timestamp.`;
 }
 
 /**
