@@ -2,8 +2,9 @@
  * TanStack Query hooks for the Goals Alignment page.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { fetchStrategy, fetchQuarterGoals, fetchWeekGoals } from '@/api/goals.js';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchStrategy, fetchQuarterGoals, fetchWeekGoals, patchWeekPriority } from '@/api/goals.js';
+import { toast } from 'sonner';
 
 export function useStrategy() {
   return useQuery({
@@ -26,5 +27,19 @@ export function useWeekGoals() {
     queryKey: ['goals', 'week'],
     queryFn: fetchWeekGoals,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useToggleWeekPriority() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ index, done }: { index: number; done: boolean }) =>
+      patchWeekPriority(index, done),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['goals', 'week'] });
+    },
+    onError: () => {
+      toast.error("Couldn't save — check if file is writable");
+    },
   });
 }

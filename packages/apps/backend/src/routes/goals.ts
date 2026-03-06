@@ -192,5 +192,62 @@ export function createGoalsRouter(workspaceRoot: string): Hono {
     }
   });
 
+  // PATCH /api/goals/week/priority — toggle a priority's done state
+  app.patch('/week/priority', async (c) => {
+    try {
+      const body = await c.req.json() as { index: number; done: boolean };
+      const { index, done } = body;
+      if (typeof index !== 'number' || typeof done !== 'boolean') {
+        return c.json({ error: 'index (number) and done (boolean) required' }, 400);
+      }
+
+      const filePath = join(workspaceRoot, 'now', 'week.md');
+      const content = await fs.readFile(filePath, 'utf8');
+
+      // Find the Nth priority section (### N. Title or ### N Title)
+      const sectionPattern = new RegExp(`^(###\\s+${index}[.\\s].+)$`, 'm');
+      const match = sectionPattern.exec(content);
+      if (!match || match.index === undefined) {
+        return c.json({ error: `Priority ${index} not found` }, 404);
+      }
+
+      const sectionStart = match.index;
+      const headerEnd = sectionStart + match[0].length;
+      // Find the end of this section (next ### or ## or end of file)
+      const rest = content.slice(headerEnd);
+      const nextHeaderMatch = /^##/m.exec(rest);
+      const sectionEnd = nextHeaderMatch
+        ? headerEnd + nextHeaderMatch.index
+        : content.length;
+
+      const before = content.slice(0, headerEnd);
+      let sectionBody = content.slice(headerEnd, sectionEnd);
+      const after = content.slice(sectionEnd);
+
+      if (done) {
+        // Add [x] if not already present
+        if (!/\[x\]/i.test(sectionBody)) {
+          sectionBody = sectionBody.trimEnd() + '\n[x]\n';
+        }
+      } else {
+        // Remove [x] lines
+        sectionBody = sectionBody
+          .split('\n')
+          .filter(line => !/^\[x\]$/i.test(line.trim()))
+          .join('\n');
+        // Ensure section ends with newline
+        if (!sectionBody.endsWith('\n')) sectionBody += '\n';
+      }
+
+      const updated = before + sectionBody + after;
+      await fs.writeFile(filePath, updated, 'utf8');
+
+      return c.json({ success: true, updatedContent: updated });
+    } catch (err) {
+      console.error('[goals] priority patch error:', err);
+      return c.json({ error: 'Failed to update priority' }, 500);
+    }
+  });
+
   return app;
 }

@@ -19,3 +19,12 @@ export async function fetchQuarterGoals(): Promise<QuarterResponse> {
 export async function fetchWeekGoals(): Promise<WeekResponse> {
   return apiFetch<WeekResponse>('/api/goals/week');
 }
+
+/** PATCH /api/goals/week/priority — toggle a priority's done state */
+export async function patchWeekPriority(index: number, done: boolean): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>('/api/goals/week/priority', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ index, done }),
+  });
+}

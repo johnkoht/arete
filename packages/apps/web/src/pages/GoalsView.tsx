@@ -9,13 +9,14 @@ import {
   Circle,
   BookOpen,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
-import { useStrategy, useQuarterGoals, useWeekGoals } from "@/hooks/goals.js";
+import { useStrategy, useQuarterGoals, useWeekGoals, useToggleWeekPriority } from "@/hooks/goals.js";
 import { useCommitmentsSummary } from "@/hooks/dashboard.js";
 import type { QuarterOutcome, WeekPriority } from "@/api/types.js";
 
@@ -189,15 +190,24 @@ function QuarterGoalsSection() {
 
 // ── Weekly priorities ─────────────────────────────────────────────────────────
 
-function PriorityItem({ priority }: { priority: WeekPriority }) {
+function PriorityItem({
+  priority,
+  onToggle,
+  isPending,
+}: {
+  priority: WeekPriority;
+  onToggle: (priority: WeekPriority, done: boolean) => void;
+  isPending: boolean;
+}) {
   return (
     <div className="flex items-start gap-3 py-2">
       <div className="flex-shrink-0 mt-0.5">
-        {priority.done ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-        ) : (
-          <Circle className="h-4 w-4 text-muted-foreground" />
-        )}
+        <Checkbox
+          checked={priority.done}
+          disabled={isPending}
+          onCheckedChange={(checked) => onToggle(priority, !!checked)}
+          aria-label={`Mark "${priority.title}" as ${priority.done ? "not done" : "done"}`}
+        />
       </div>
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${priority.done ? "line-through text-muted-foreground" : ""}`}>
@@ -221,6 +231,11 @@ function PriorityItem({ priority }: { priority: WeekPriority }) {
 
 function WeekPrioritiesSection() {
   const { data, isLoading } = useWeekGoals();
+  const { mutate: togglePriority, isPending } = useToggleWeekPriority();
+
+  function handleToggle(priority: WeekPriority, newDone: boolean) {
+    togglePriority({ index: priority.index, done: newDone });
+  }
 
   if (isLoading) {
     return (
@@ -259,7 +274,7 @@ function WeekPrioritiesSection() {
       ) : (
         <div className="divide-y">
           {data.priorities.map((p) => (
-            <PriorityItem key={p.index} priority={p} />
+            <PriorityItem key={p.index} priority={p} onToggle={handleToggle} isPending={isPending} />
           ))}
         </div>
       )}

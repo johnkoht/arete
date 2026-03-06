@@ -28,6 +28,21 @@ async function req(
   return { status: res.status, json };
 }
 
+async function reqWithBody(
+  app: AnyHono,
+  method: string,
+  path: string,
+  body: unknown,
+): Promise<{ status: number; json: unknown }> {
+  const res = await app.request(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json() as unknown;
+  return { status: res.status, json };
+}
+
 // ── GET /strategy ─────────────────────────────────────────────────────────────
 
 describe('GET /strategy — file not found', () => {
@@ -307,5 +322,115 @@ describe('GET /week — file with priorities', () => {
     // Second: [x] done
     assert.equal(body.commitments[1]?.done, true);
     assert.equal(body.commitments[1]?.text, "Review Bob's architecture doc");
+  });
+});
+
+// ── PATCH /week/priority ──────────────────────────────────────────────────────
+
+describe('PATCH /week/priority — toggle done on/off', () => {
+  let tmpDir: string;
+
+  const WEEK_MD = `# This Week
+
+**Week of**: 2026-03-03
+
+## Priorities
+
+### 1. Ship onboarding prototype
+
+**Success criteria**: Working prototype reviewed by 3 stakeholders
+**Advances quarter goal**: Q1-1
+**Effort**: large
+
+### 2. Finalize pricing model
+
+**Success criteria**: Approved by finance
+**Advances quarter goal**: Q1-3
+**Effort**: medium
+
+## Commitments due this week
+
+- [ ] Send API roadmap to Jane
+`;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-patch-priority-'));
+    await mkdir(join(tmpDir, 'now'), { recursive: true });
+    await writeFile(join(tmpDir, 'now', 'week.md'), WEEK_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('marks priority 1 as done — file contains [x]', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: true });
+    assert.equal(status, 200);
+    const body = json as { success: boolean; updatedContent: string };
+    assert.equal(body.success, true);
+    assert.ok(body.updatedContent.includes('[x]'), 'updated content should contain [x]');
+  });
+
+  it('GET /week now shows priority 1 as done', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/week');
+    assert.equal(status, 200);
+    const body = json as { priorities: Array<{ index: number; done: boolean }> };
+    const p1 = body.priorities.find(p => p.index === 1);
+    assert.ok(p1, 'priority 1 should exist');
+    assert.equal(p1?.done, true);
+  });
+
+  it('marks priority 1 as not done — [x] is removed', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: false });
+    assert.equal(status, 200);
+    const body = json as { success: boolean; updatedContent: string };
+    assert.equal(body.success, true);
+    assert.ok(!body.updatedContent.includes('[x]'), 'updated content should not contain [x]');
+  });
+
+  it('GET /week now shows priority 1 as not done after toggling off', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/week');
+    assert.equal(status, 200);
+    const body = json as { priorities: Array<{ index: number; done: boolean }> };
+    const p1 = body.priorities.find(p => p.index === 1);
+    assert.equal(p1?.done, false);
+  });
+
+  it('returns 404 for non-existent priority index', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 99, done: true });
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('99'));
+  });
+
+  it('returns 400 for missing done field', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1 });
+    assert.equal(status, 400);
+  });
+
+  it('returns 400 for missing index field', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status } = await reqWithBody(router, 'PATCH', '/week/priority', { done: true });
+    assert.equal(status, 400);
+  });
+
+  it('toggling done=true twice does not duplicate [x]', async () => {
+    const router = createGoalsRouter(tmpDir);
+    // First toggle on
+    await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
+    // Second toggle on
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
+    assert.equal(status, 200);
+    const body = json as { updatedContent: string };
+    // Count occurrences of [x]
+    const matches = body.updatedContent.match(/\[x\]/gi) ?? [];
+    // Should have exactly 1 [x] in priority 2's section
+    assert.equal(matches.length, 1);
   });
 });
