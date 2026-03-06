@@ -147,7 +147,8 @@ async function scanPeopleDir(workspaceRoot) {
     const categories = ['internal', 'customer', 'user'];
     const results = [];
     for (const category of categories) {
-        const dir = join(workspaceRoot, 'people', category === 'user' ? 'users' : `${category}s`);
+        const dirName = category === 'user' ? 'users' : category === 'internal' ? 'internal' : `${category}s`;
+        const dir = join(workspaceRoot, 'people', dirName);
         let entries;
         try {
             entries = await fs.readdir(dir);
