@@ -49,6 +49,28 @@ Components using `EventSource` import `BASE_URL` from `@/api/client.js`. Don't h
 
 ---
 
+### Multi-Page Architecture (first use: Plan B)
+All new pages follow the same pattern:
+1. `src/api/<domain>.ts` — typed API functions using `apiFetch`
+2. `src/hooks/<domain>.ts` — TanStack Query hooks wrapping the API functions
+3. `src/pages/<Page>.tsx` — component using hooks, imports `PageHeader` + `EmptyState`
+
+Types live in `src/api/types.ts` — single source of truth for all frontend types.
+
+### Dashboard Layout Pattern
+Use the `PageHeader` component (title + optional description + optional action) at the top of every page. The `EmptyState` component handles the icon+title+description+CTA pattern for empty lists/tables. Both are in `src/components/`.
+
+### Sheet (Drawer) for Detail Panels
+People Intelligence uses `Sheet` from `@/components/ui/sheet` for the person detail drawer. Conditionally enable the query with `enabled: !!slug` to avoid fetching before a row is clicked. Pass `open ? slug : ""` to the hook to prevent stale data.
+
+### Sidebar Active State
+The sidebar uses prefix-based matching (`location.pathname.startsWith(path)`) for all routes except `/` which uses exact match. This correctly highlights `/meetings` when visiting `/meetings/some-slug`.
+
+### Backend node_modules NOT at root
+The backend package (`packages/apps/backend`) has its own `node_modules` that must be installed separately (`npm install` in that directory). The root `node_modules` does NOT contain `hono`, `gray-matter`, etc. Run backend tests from `packages/apps/backend`, not the root.
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
