@@ -33,6 +33,7 @@ function AppRoutes() {
         <Route path="/meetings/:slug" element={<MeetingDetail />} />
         {/* New pages */}
         <Route path="/people" element={<PeopleIndex />} />
+        <Route path="/people/:slug" element={<PeopleIndex />} />
         <Route path="/commitments" element={<CommitmentsPage />} />
         <Route path="/goals" element={<GoalsView />} />
         <Route path="/memory" element={<MemoryFeed />} />

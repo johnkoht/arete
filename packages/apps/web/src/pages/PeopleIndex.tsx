@@ -10,7 +10,7 @@ import {
   Minus,
   X,
 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -247,12 +247,13 @@ const FILTER_LABELS: Record<NonNullable<CommitmentFilter>, string> = {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PeopleIndex() {
+  const { slug: slugParam } = useParams<{ slug?: string }>();
   const { data, isLoading, error } = usePeople();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(slugParam ?? null);
 
   // Read commitment filter from URL ?filter=overdue|thisweek
   const filterParam = searchParams.get("filter");

@@ -106,7 +106,13 @@ function parseWeekPriorities(content: string): WeekPriority[] {
  * Parse week commitments section.
  */
 function parseWeekCommitments(content: string): WeekCommitment[] {
-  const sectionMatch = /^##\s+Commitments due this week\s*\n([\s\S]*?)(?=\n##\s|\z)/im.exec(content);
+  // Use index-based parsing to avoid \z (PCRE-only, not valid in JS regex)
+  const headerIdx = content.search(/^##\s+Commitments due this week/im);
+  if (headerIdx === -1) return [];
+  const afterHeader = content.slice(content.indexOf('\n', headerIdx) + 1);
+  const nextHeader = afterHeader.search(/^##\s/m);
+  const sectionBody = nextHeader === -1 ? afterHeader : afterHeader.slice(0, nextHeader);
+  const sectionMatch: [string, string] | null = sectionBody ? [sectionBody, sectionBody] : null;
   if (!sectionMatch) return [];
 
   const commitments: WeekCommitment[] = [];
