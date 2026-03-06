@@ -9,7 +9,7 @@ import { cors } from 'hono/cors';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createMeetingsRouter } from './routes/meetings.js';
 import jobsRouter from './routes/jobs.js';
-import { createIntelligenceRouter } from './routes/intelligence.js';
+import { createIntelligenceRouter, createCommitmentsRouter } from './routes/intelligence.js';
 import { createCalendarRouter } from './routes/calendar.js';
 import { createProjectsRouter } from './routes/projects.js';
 import { createMemoryRouter } from './routes/memory.js';
@@ -101,6 +101,7 @@ export function createApp(workspaceRoot: string): Hono {
   app.route('/api/meetings', createMeetingsRouter(workspaceRoot));
   app.route('/api/jobs', jobsRouter);
   app.route('/api/intelligence', createIntelligenceRouter(workspaceRoot));
+  app.route('/api/commitments', createCommitmentsRouter(workspaceRoot));
   app.route('/api/calendar', createCalendarRouter(workspaceRoot));
   app.route('/api/projects', createProjectsRouter(workspaceRoot));
   app.route('/api/memory', createMemoryRouter(workspaceRoot));

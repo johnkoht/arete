@@ -143,6 +143,35 @@ export type WeekResponse = {
   found: boolean;
 };
 
+// ── Intelligence types ────────────────────────────────────────────────────────
+
+export type SignalPattern = {
+  topic: string;
+  mentions: number;
+  people: string[];
+  meetings: string[];
+  lastSeen: string;
+};
+
+export type PatternsResponse = {
+  success: boolean;
+  patterns: SignalPattern[];
+  count: number;
+};
+
+export type CommitmentItem = {
+  id: string;
+  text: string;
+  personSlug: string;
+  direction: string;
+  date: string;
+  daysOpen: number;
+};
+
+export type CommitmentsListResponse = {
+  commitments: CommitmentItem[];
+};
+
 // ── Meeting types (existing) ──────────────────────────────────────────────────
 
 export type MeetingStatus = 'Synced' | 'Processed' | 'Approved';

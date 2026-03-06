@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Users,
@@ -8,11 +8,13 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  ExternalLink,
+  X,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +22,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { usePeople, usePerson } from "@/hooks/people.js";
 import type { PersonSummary, PersonCategory } from "@/api/types.js";
+
+type CommitmentFilter = "overdue" | "thisweek" | null;
 
 // ── Health indicator ──────────────────────────────────────────────────────────
 
@@ -233,27 +237,62 @@ function SortIcon({
   );
 }
 
+// ── Filter badge ──────────────────────────────────────────────────────────────
+
+const FILTER_LABELS: Record<NonNullable<CommitmentFilter>, string> = {
+  overdue: "People with overdue commitments",
+  thisweek: "People with commitments due this week",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PeopleIndex() {
   const { data, isLoading, error } = usePeople();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
+  // Read commitment filter from URL ?filter=overdue|thisweek
+  const filterParam = searchParams.get("filter");
+  const commitmentFilter: CommitmentFilter =
+    filterParam === "overdue" || filterParam === "thisweek" ? filterParam : null;
+
+  // When filter is "overdue" or "thisweek", default sort to openCommitments desc
+  useEffect(() => {
+    if (commitmentFilter) {
+      setSortColumn("openCommitments");
+      setSortDirection("desc");
+    }
+  }, [commitmentFilter]);
+
+  const clearFilter = () => {
+    setSearchParams({});
+    setSortColumn("name");
+    setSortDirection("asc");
+  };
+
   const people = data?.people ?? [];
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return people;
+    let result = people;
+
+    // Apply commitment filter
+    if (commitmentFilter === "overdue" || commitmentFilter === "thisweek") {
+      result = result.filter((p) => p.openCommitments > 0);
+    }
+
+    // Apply search
+    if (!search.trim()) return result;
     const q = search.toLowerCase();
-    return people.filter(
+    return result.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.company.toLowerCase().includes(q) ||
         p.role.toLowerCase().includes(q)
     );
-  }, [people, search]);
+  }, [people, search, commitmentFilter]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -307,6 +346,26 @@ export default function PeopleIndex() {
           </div>
         }
       />
+
+      {/* Filter badge */}
+      {commitmentFilter && (
+        <div className="px-6 py-2 border-b bg-muted/30">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Showing: {FILTER_LABELS[commitmentFilter]}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-xs"
+              onClick={clearFilter}
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto">
         {error && (

@@ -1,5 +1,6 @@
 /**
  * Intelligence routes — /api/intelligence endpoints.
+ * Also exports createCommitmentsRouter for /api/commitments.
  */
 
 import { join } from 'node:path';
@@ -87,6 +88,78 @@ export function createIntelligenceRouter(workspaceRoot: string): Hono {
     } catch (err) {
       console.error('[intelligence] commitments/summary error:', err);
       return c.json({ error: 'Failed to load commitments summary' }, 500);
+    }
+  });
+
+  return app;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/commitments — open commitments list
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CommitmentListItem = {
+  id: string;
+  text: string;
+  personSlug: string;
+  direction: string;
+  date: string;
+  daysOpen: number;
+};
+
+/**
+ * Create the /api/commitments router.
+ *
+ * Supports ?filter=overdue (daysOpen > 14) and ?filter=thisweek (daysOpen <= 7
+ * and commitment date is within last 7 days).
+ */
+export function createCommitmentsRouter(workspaceRoot: string): Hono {
+  const app = new Hono();
+
+  app.get('/', async (c) => {
+    try {
+      const filePath = join(workspaceRoot, '.arete', 'commitments.json');
+      let allCommitments: CommitmentEntry[] = [];
+
+      try {
+        const raw = await fs.readFile(filePath, 'utf8');
+        const parsed = JSON.parse(raw) as CommitmentsFile;
+        allCommitments = parsed.commitments ?? [];
+      } catch {
+        // File doesn't exist or invalid JSON — return empty
+      }
+
+      const now = new Date();
+      const open = allCommitments.filter((c) => c.status === 'open');
+
+      const items: CommitmentListItem[] = open.map((c) => {
+        const itemDate = new Date(c.date);
+        const daysOpen = Number.isNaN(itemDate.getTime())
+          ? 0
+          : Math.floor((now.getTime() - itemDate.getTime()) / 86400000);
+        return {
+          id: c.id,
+          text: c.text,
+          personSlug: c.personSlug,
+          direction: c.direction,
+          date: c.date,
+          daysOpen,
+        };
+      });
+
+      const filterParam = c.req.query('filter');
+      let filtered = items;
+
+      if (filterParam === 'overdue') {
+        filtered = items.filter((i) => i.daysOpen > 14);
+      } else if (filterParam === 'thisweek') {
+        filtered = items.filter((i) => i.daysOpen <= 7);
+      }
+
+      return c.json({ commitments: filtered });
+    } catch (err) {
+      console.error('[commitments] error:', err);
+      return c.json({ error: 'Failed to load commitments' }, 500);
     }
   });
 

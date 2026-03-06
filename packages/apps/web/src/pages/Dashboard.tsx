@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   Clock,
@@ -9,6 +9,7 @@ import {
   TrendingUp,
   ArrowRight,
   Calendar,
+  Zap,
 } from "lucide-react";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,7 @@ import {
   useRecentMemory,
 } from "@/hooks/dashboard.js";
 import { useMeetings } from "@/hooks/meetings.js";
+import { useSignalPatterns } from "@/hooks/intelligence.js";
 import type { MemoryItem } from "@/api/types.js";
 
 // ── Today's Meetings ─────────────────────────────────────────────────────────
@@ -174,9 +176,10 @@ type PulseCardProps = {
   color: "green" | "yellow" | "red";
   icon: React.ComponentType<{ className?: string }>;
   loading: boolean;
+  onClick?: () => void;
 };
 
-function PulseCard({ label, count, color, icon: Icon, loading }: PulseCardProps) {
+function PulseCard({ label, count, color, icon: Icon, loading, onClick }: PulseCardProps) {
   const colorMap = {
     green: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
     yellow: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
@@ -184,7 +187,10 @@ function PulseCard({ label, count, color, icon: Icon, loading }: PulseCardProps)
   };
 
   return (
-    <Card className="flex-1">
+    <Card
+      className={`flex-1 ${onClick ? "cursor-pointer hover:border-primary/40 transition-colors" : ""}`}
+      onClick={onClick}
+    >
       <CardContent className="flex items-center gap-4 p-4">
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${colorMap[color]}`}>
           <Icon className="h-5 w-5" />
@@ -204,6 +210,7 @@ function PulseCard({ label, count, color, icon: Icon, loading }: PulseCardProps)
 
 function CommitmentPulse() {
   const { data, isLoading } = useCommitmentsSummary();
+  const navigate = useNavigate();
 
   return (
     <div className="flex gap-3">
@@ -220,6 +227,7 @@ function CommitmentPulse() {
         color="yellow"
         icon={Clock}
         loading={isLoading}
+        onClick={() => navigate("/people?filter=thisweek")}
       />
       <PulseCard
         label="Overdue"
@@ -227,6 +235,7 @@ function CommitmentPulse() {
         color="red"
         icon={AlertCircle}
         loading={isLoading}
+        onClick={() => navigate("/people?filter=overdue")}
       />
     </div>
   );
@@ -349,6 +358,61 @@ function RecentMemory() {
   );
 }
 
+// ── Signal Patterns ───────────────────────────────────────────────────────────
+
+function SignalPatternsPreview() {
+  const { data: patterns, isLoading } = useSignalPatterns(30);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  const top3 = patterns.slice(0, 3);
+
+  if (top3.length === 0) {
+    return (
+      <EmptyState
+        icon={Zap}
+        title="No signal patterns detected yet"
+        description="Patterns emerge as meetings are processed."
+        className="py-6"
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col divide-y">
+      {top3.map((pattern) => (
+        <div key={pattern.topic} className="flex items-center justify-between py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium truncate">{pattern.topic}</p>
+            <p className="text-xs text-muted-foreground">
+              {pattern.mentions} mentions across {pattern.people.length} people
+            </p>
+          </div>
+          <span className="ml-4 flex-shrink-0 text-xs text-muted-foreground">
+            {pattern.lastSeen
+              ? formatDistanceToNow(new Date(pattern.lastSeen), { addSuffix: true })
+              : "—"}
+          </span>
+        </div>
+      ))}
+      <Link
+        to="/intelligence"
+        className="flex items-center gap-1 pt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        View all patterns <ArrowRight className="h-3 w-3" />
+      </Link>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -423,6 +487,19 @@ export default function Dashboard() {
               </Card>
             </section>
           </div>
+
+          {/* Signal Patterns — full width */}
+          <section>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <Zap className="h-3.5 w-3.5" />
+              Signal Patterns
+            </h2>
+            <Card>
+              <CardContent className="p-4">
+                <SignalPatternsPreview />
+              </CardContent>
+            </Card>
+          </section>
         </div>
       </div>
     </div>

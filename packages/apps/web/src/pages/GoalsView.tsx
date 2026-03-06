@@ -21,8 +21,24 @@ import type { QuarterOutcome, WeekPriority } from "@/api/types.js";
 
 // ── Strategy section ──────────────────────────────────────────────────────────
 
+/**
+ * Strip markdown syntax for a plain-text preview.
+ * Removes ## headings, **bold**, *italic*, - list bullets, extra whitespace.
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")   // headings
+    .replace(/\*\*(.+?)\*\*/g, "$1") // bold
+    .replace(/\*(.+?)\*/g, "$1")    // italic
+    .replace(/^[-*]\s+/gm, "")      // list bullets
+    .replace(/\n{2,}/g, " ")        // collapse blank lines
+    .replace(/\s+/g, " ")           // collapse whitespace
+    .trim();
+}
+
 function StrategySection() {
   const { data, isLoading } = useStrategy();
+  // Collapsed by default — shows preview; true = expanded (full content)
   const [expanded, setExpanded] = useState(false);
 
   if (isLoading) {
@@ -54,9 +70,13 @@ function StrategySection() {
     );
   }
 
-  // Show first 300 chars as preview, then expand
-  const preview = data.content.slice(0, 400).trim();
-  const hasMore = data.content.length > 400;
+  const PREVIEW_CHARS = 200;
+  const plainText = stripMarkdown(data.content);
+  const previewText =
+    plainText.length > PREVIEW_CHARS
+      ? plainText.slice(0, PREVIEW_CHARS) + "…"
+      : plainText;
+  const hasMore = plainText.length > PREVIEW_CHARS;
 
   return (
     <Card>
@@ -73,16 +93,25 @@ function StrategySection() {
           />
         </button>
       </CardHeader>
-      {expanded && (
-        <CardContent className="pb-4 px-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans leading-relaxed">
-              {preview}
-              {hasMore && !expanded ? "…" : ""}
-            </pre>
-          </div>
-        </CardContent>
-      )}
+      <CardContent className="pb-4 px-4">
+        {expanded ? (
+          <pre className="whitespace-pre-wrap text-sm text-muted-foreground font-sans leading-relaxed">
+            {data.content}
+          </pre>
+        ) : (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {previewText}
+            {hasMore && (
+              <button
+                onClick={() => setExpanded(true)}
+                className="ml-1 text-xs text-primary hover:underline"
+              >
+                Show more
+              </button>
+            )}
+          </p>
+        )}
+      </CardContent>
     </Card>
   );
 }

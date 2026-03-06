@@ -10,9 +10,35 @@ import MeetingDetail from "@/pages/MeetingDetail";
 import PeopleIndex from "@/pages/PeopleIndex";
 import GoalsView from "@/pages/GoalsView";
 import MemoryFeed from "@/pages/MemoryFeed";
+import IntelligencePage from "@/pages/IntelligencePage";
 import NotFound from "./pages/NotFound";
+import { useProcessingEvents } from "@/hooks/useProcessingEvents.js";
 
 const queryClient = new QueryClient();
+
+/** Inner component so hooks can access QueryClientProvider. */
+function AppRoutes() {
+  // Subscribe to SSE processing events — invalidates query cache on meeting:processed
+  useProcessingEvents();
+
+  return (
+    <Routes>
+      <Route element={<AppLayout />}>
+        {/* Dashboard is the root */}
+        <Route path="/" element={<Dashboard />} />
+        {/* Meetings moved to /meetings */}
+        <Route path="/meetings" element={<MeetingsIndex />} />
+        <Route path="/meetings/:slug" element={<MeetingDetail />} />
+        {/* New pages */}
+        <Route path="/people" element={<PeopleIndex />} />
+        <Route path="/goals" element={<GoalsView />} />
+        <Route path="/memory" element={<MemoryFeed />} />
+        <Route path="/intelligence" element={<IntelligencePage />} />
+      </Route>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -20,20 +46,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            {/* Dashboard is the root */}
-            <Route path="/" element={<Dashboard />} />
-            {/* Meetings moved to /meetings */}
-            <Route path="/meetings" element={<MeetingsIndex />} />
-            <Route path="/meetings/:slug" element={<MeetingDetail />} />
-            {/* New pages */}
-            <Route path="/people" element={<PeopleIndex />} />
-            <Route path="/goals" element={<GoalsView />} />
-            <Route path="/memory" element={<MemoryFeed />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AppRoutes />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

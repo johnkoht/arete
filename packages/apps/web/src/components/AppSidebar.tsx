@@ -4,6 +4,7 @@ import {
   Users,
   Target,
   Brain,
+  Zap,
   Settings,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -14,6 +15,7 @@ const navItems = [
   { icon: Calendar, label: "Meetings", path: "/meetings", enabled: true },
   { icon: Users, label: "People", path: "/people", enabled: true },
   { icon: Target, label: "Goals", path: "/goals", enabled: true },
+  { icon: Zap, label: "Intelligence", path: "/intelligence", enabled: true },
   { icon: Brain, label: "Memory", path: "/memory", enabled: true },
 ];
 

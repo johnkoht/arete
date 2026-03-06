@@ -12,4 +12,5 @@ export type { AvailableSlot, FindAvailableSlotsOptions, } from './availability.j
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
 export { parseAgendaItems, getUncheckedAgendaItems } from './agenda.js';
 export type { AgendaItem } from './agenda.js';
+export { extractAttendeeSlugs } from './attendees.js';
 //# sourceMappingURL=index.d.ts.map

@@ -9,6 +9,7 @@ import { join, basename } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { Commitment } from '../models/index.js';
+import { extractAttendeeSlugs } from '../utils/attendees.js';
 
 // ---------------------------------------------------------------------------
 // Commitment Momentum
@@ -24,7 +25,7 @@ export type CommitmentMomentumItem = {
 
 export type CommitmentMomentum = {
   hot: CommitmentMomentumItem[];      // active last 7 days
-  stale: CommitmentMomentumItem[];    // 14–30 days open
+  stale: CommitmentMomentumItem[];    // 7–30 days open
   critical: CommitmentMomentumItem[]; // 30+ days open
 };
 
@@ -107,40 +108,6 @@ function parseFrontmatter(content: string): { data: Record<string, unknown> } {
   } catch {
     return { data: {} };
   }
-}
-
-function slugifyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-function extractAttendeeSlugs(data: Record<string, unknown>): string[] {
-  const slugs: string[] = [];
-
-  const attendeeIds = data['attendee_ids'];
-  if (Array.isArray(attendeeIds)) {
-    for (const id of attendeeIds) {
-      if (typeof id === 'string' && id.trim()) slugs.push(id.trim());
-    }
-    if (slugs.length > 0) return slugs;
-  }
-
-  const attendees = data['attendees'];
-  if (Array.isArray(attendees)) {
-    for (const a of attendees) {
-      if (typeof a === 'string' && a.trim()) {
-        slugs.push(slugifyName(a.trim()));
-      } else if (a && typeof a === 'object') {
-        const obj = a as Record<string, unknown>;
-        const name = typeof obj['name'] === 'string' ? obj['name'] : '';
-        if (name.trim()) slugs.push(slugifyName(name.trim()));
-      }
-    }
-  }
-
-  return slugs;
 }
 
 /**

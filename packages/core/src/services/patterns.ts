@@ -6,9 +6,10 @@
  * across 2+ distinct attendees.
  */
 
-import { join, basename } from 'node:path';
+import { basename } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
+import { extractAttendeeSlugs } from '../utils/attendees.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,56 +38,6 @@ function parseFrontmatter(content: string): { data: Record<string, unknown>; bod
   } catch {
     return { data: {}, body: content };
   }
-}
-
-/**
- * Slugify a person name: "Sarah Chen" → "sarah-chen"
- */
-function slugifyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-/**
- * Extract attendee slugs from meeting frontmatter.
- *
- * Supports both:
- *   attendee_ids: [slug1, slug2]           (explicit slug list)
- *   attendees: [{name: "...", email: "..."}] (name-based → slugify)
- */
-function extractAttendeeSlugs(data: Record<string, unknown>): string[] {
-  const slugs: string[] = [];
-
-  // Try attendee_ids first (explicit slug list)
-  const attendeeIds = data['attendee_ids'];
-  if (Array.isArray(attendeeIds)) {
-    for (const id of attendeeIds) {
-      if (typeof id === 'string' && id.trim()) {
-        slugs.push(id.trim());
-      }
-    }
-    if (slugs.length > 0) return slugs;
-  }
-
-  // Fall back to attendees array with name slugification
-  const attendees = data['attendees'];
-  if (Array.isArray(attendees)) {
-    for (const a of attendees) {
-      if (typeof a === 'string' && a.trim()) {
-        slugs.push(slugifyName(a.trim()));
-      } else if (a && typeof a === 'object') {
-        const obj = a as Record<string, unknown>;
-        const name = typeof obj['name'] === 'string' ? obj['name'] : '';
-        if (name.trim()) {
-          slugs.push(slugifyName(name.trim()));
-        }
-      }
-    }
-  }
-
-  return slugs;
 }
 
 /**

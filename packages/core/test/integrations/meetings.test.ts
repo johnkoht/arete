@@ -250,8 +250,8 @@ describe('saveMeetingFile', () => {
     const content = storage.files.get(result);
     assert.ok(content, 'file should exist');
     assert.ok(content.includes('---'), 'should have frontmatter');
-    assert.ok(content.includes('title: "Weekly Sync"'));
-    assert.ok(content.includes('source: "Manual"'));
+    assert.ok(content.includes('title: Weekly Sync'));
+    assert.ok(content.includes('source: Manual'));
   });
 
   it('includes agenda in frontmatter when present', async () => {
@@ -264,7 +264,7 @@ describe('saveMeetingFile', () => {
     const content = storage.files.get(result);
     assert.ok(content);
     assert.ok(
-      content.includes('agenda: "now/agendas/2026-03-04-weekly-sync.md"'),
+      content.includes('agenda: now/agendas/2026-03-04-weekly-sync.md'),
       'should include agenda in frontmatter'
     );
   });
@@ -317,6 +317,6 @@ describe('saveMeetingFile', () => {
     assert.ok(result);
     const content = storage.files.get(result);
     assert.ok(content);
-    assert.ok(content.includes('source: "Krisp"'));
+    assert.ok(content.includes('source: Krisp'));
   });
 });

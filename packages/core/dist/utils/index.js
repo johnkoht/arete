@@ -9,4 +9,5 @@ export { buildContextDumpArtifacts, buildContextDumpQualityReport, } from './con
 export { findAvailableSlots } from './availability.js';
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
 export { parseAgendaItems, getUncheckedAgendaItems } from './agenda.js';
+export { extractAttendeeSlugs } from './attendees.js';
 //# sourceMappingURL=index.js.map
