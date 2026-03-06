@@ -266,3 +266,113 @@ describe('GET /commitments/summary — via intelligence router', () => {
     assert.equal(body.overdue, 0);
   });
 });
+
+// ── PATCH /api/commitments/:id ────────────────────────────────────────────────
+
+describe('PATCH /api/commitments/:id — mark done or drop', () => {
+  let tmpDir: string;
+
+  const hotDate = new Date().toISOString().slice(0, 10);
+
+  const sampleCommitments = {
+    commitments: [
+      {
+        id: 'c-patch-1',
+        text: 'Send proposal',
+        direction: 'i_owe_them',
+        personSlug: 'jane-doe',
+        personName: 'Jane Doe',
+        source: 'meeting-2026-01-01',
+        date: hotDate,
+        status: 'open',
+        resolvedAt: null,
+      },
+      {
+        id: 'c-patch-2',
+        text: 'Share roadmap',
+        direction: 'they_owe_me',
+        personSlug: 'bob-smith',
+        personName: 'Bob Smith',
+        source: 'meeting-2026-01-02',
+        date: hotDate,
+        status: 'open',
+        resolvedAt: null,
+      },
+    ],
+  };
+
+  async function reqPatch(
+    app: ReturnType<typeof createCommitmentsRouter>,
+    id: string,
+    body: unknown,
+  ): Promise<{ status: number; json: unknown }> {
+    const res = await app.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json() as unknown;
+    return { status: res.status, json };
+  }
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-patch-test-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify(sampleCommitments),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('marks a commitment as resolved', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await reqPatch(router, 'c-patch-1', { status: 'resolved' });
+    assert.equal(status, 200);
+    const body = json as { commitment: { id: string; status: string; resolvedAt: string | null } };
+    assert.equal(body.commitment.id, 'c-patch-1');
+    assert.equal(body.commitment.status, 'resolved');
+    assert.ok(body.commitment.resolvedAt !== null, 'resolvedAt should be set');
+    assert.ok(
+      typeof body.commitment.resolvedAt === 'string' && body.commitment.resolvedAt.length > 0,
+      'resolvedAt should be an ISO timestamp string',
+    );
+  });
+
+  it('marks a commitment as dropped', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await reqPatch(router, 'c-patch-2', { status: 'dropped' });
+    assert.equal(status, 200);
+    const body = json as { commitment: { id: string; status: string } };
+    assert.equal(body.commitment.status, 'dropped');
+  });
+
+  it('returns 404 for unknown commitment id', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status } = await reqPatch(router, 'nonexistent-id', { status: 'resolved' });
+    assert.equal(status, 404);
+  });
+
+  it('returns 400 for invalid status value', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status } = await reqPatch(router, 'c-patch-1', { status: 'invalid' });
+    assert.equal(status, 400);
+  });
+
+  it('persists the update to commitments.json', async () => {
+    // Read the file and verify c-patch-1 was updated
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(join(tmpDir, '.arete', 'commitments.json'), 'utf8');
+    const data = JSON.parse(raw) as {
+      commitments: Array<{ id: string; status: string; resolvedAt: string | null }>;
+    };
+    const c1 = data.commitments.find((c) => c.id === 'c-patch-1');
+    assert.ok(c1, 'c-patch-1 should exist in file');
+    assert.equal(c1.status, 'resolved');
+    assert.ok(c1.resolvedAt !== null);
+  });
+});

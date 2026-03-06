@@ -7,6 +7,7 @@ import { createApp, broadcastSseEvent } from './server.js';
 import { startMeetingWatcher } from './services/watcher.js';
 import * as jobsService from './services/jobs.js';
 import { runProcessingSession } from './services/agent.js';
+import { writeActivityEvent } from './services/activity.js';
 
 const workspaceRoot = process.env['ARETE_WORKSPACE'];
 if (!workspaceRoot) {
@@ -33,11 +34,18 @@ const server = serve({ fetch: app.fetch, port }, () => {
       await runProcessingSession(workspaceRoot, slug, jobId);
       console.log(`[watcher] Auto-processed meeting ${slug}`);
 
+      const processedAt = new Date().toISOString();
+
       // Emit SSE event to connected clients
-      broadcastSseEvent('meeting:processed', {
-        slug,
-        jobId,
-        processedAt: new Date().toISOString(),
+      broadcastSseEvent('meeting:processed', { slug, jobId, processedAt });
+
+      // Persist activity event for the feed
+      await writeActivityEvent(workspaceRoot, {
+        id: crypto.randomUUID(),
+        type: 'meeting:processed',
+        title: `Meeting processed: ${slug}`,
+        detail: slug,
+        timestamp: processedAt,
       });
     } catch (err) {
       console.error(`[watcher] Failed to process meeting ${slug}:`, err);

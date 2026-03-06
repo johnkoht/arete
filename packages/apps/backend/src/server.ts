@@ -15,6 +15,8 @@ import { createProjectsRouter } from './routes/projects.js';
 import { createMemoryRouter } from './routes/memory.js';
 import { createPeopleRouter } from './routes/people.js';
 import { createGoalsRouter } from './routes/goals.js';
+import { createSearchRouter } from './routes/search.js';
+import { readActivityEvents } from './services/activity.js';
 
 // Absolute path to packages/apps/web/dist/ — resolved from this file's location
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -107,6 +109,21 @@ export function createApp(workspaceRoot: string): Hono {
   app.route('/api/memory', createMemoryRouter(workspaceRoot));
   app.route('/api/people', createPeopleRouter(workspaceRoot));
   app.route('/api/goals', createGoalsRouter(workspaceRoot));
+  app.route('/api/search', createSearchRouter(workspaceRoot));
+
+  // GET /api/activity?limit=10 — recent activity events
+  app.get('/api/activity', async (c) => {
+    try {
+      const limitParam = c.req.query('limit');
+      const limit = limitParam ? Math.max(1, parseInt(limitParam, 10)) : 10;
+      const safeLimit = Number.isNaN(limit) ? 10 : limit;
+      const events = await readActivityEvents(workspaceRoot, safeLimit);
+      return c.json({ events });
+    } catch (err) {
+      console.error('[activity] error:', err);
+      return c.json({ error: 'Failed to load activity' }, 500);
+    }
+  });
 
   // Serve static web app from packages/apps/web/dist/
   // Assets (JS/CSS with content-hashed filenames)

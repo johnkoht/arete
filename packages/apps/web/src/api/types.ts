@@ -166,10 +166,42 @@ export type CommitmentItem = {
   direction: string;
   date: string;
   daysOpen: number;
+  status: string;
 };
 
 export type CommitmentsListResponse = {
   commitments: CommitmentItem[];
+};
+
+// ── Search types ──────────────────────────────────────────────────────────────
+
+export type SearchResultType = 'meeting' | 'person' | 'decision' | 'learning' | 'project';
+
+export type SearchResult = {
+  type: SearchResultType;
+  title: string;
+  slug: string;
+  excerpt: string;
+  date?: string;
+  url: string;
+};
+
+export type SearchResponse = {
+  results: SearchResult[];
+};
+
+// ── Activity types ────────────────────────────────────────────────────────────
+
+export type ActivityItem = {
+  id: string;
+  type: string;
+  title: string;
+  detail?: string;
+  timestamp: string;
+};
+
+export type ActivityResponse = {
+  events: ActivityItem[];
 };
 
 // ── Meeting types (existing) ──────────────────────────────────────────────────

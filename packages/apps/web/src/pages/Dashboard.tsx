@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Calendar,
   Zap,
+  Activity,
 } from "lucide-react";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,8 +26,8 @@ import {
   useRecentMemory,
 } from "@/hooks/dashboard.js";
 import { useMeetings } from "@/hooks/meetings.js";
-import { useSignalPatterns } from "@/hooks/intelligence.js";
-import type { MemoryItem } from "@/api/types.js";
+import { useSignalPatterns, useActivity } from "@/hooks/intelligence.js";
+import type { MemoryItem, ActivityItem } from "@/api/types.js";
 
 // ── Today's Meetings ─────────────────────────────────────────────────────────
 
@@ -227,7 +228,7 @@ function CommitmentPulse() {
         color="yellow"
         icon={Clock}
         loading={isLoading}
-        onClick={() => navigate("/people?filter=thisweek")}
+        onClick={() => navigate("/commitments?filter=thisweek")}
       />
       <PulseCard
         label="Overdue"
@@ -235,7 +236,7 @@ function CommitmentPulse() {
         color="red"
         icon={AlertCircle}
         loading={isLoading}
-        onClick={() => navigate("/people?filter=overdue")}
+        onClick={() => navigate("/commitments?filter=overdue")}
       />
     </div>
   );
@@ -413,6 +414,67 @@ function SignalPatternsPreview() {
   );
 }
 
+// ── Recent Activity ───────────────────────────────────────────────────────────
+
+function ActivityIcon({ type }: { type: string }) {
+  if (type === 'meeting:processed') {
+    return (
+      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/30 flex-shrink-0">
+        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted flex-shrink-0">
+      <Activity className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+function RecentActivity() {
+  const { data: events, isLoading } = useActivity(5);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No recent activity"
+        description="Activity appears here as meetings are processed."
+        className="py-6"
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col divide-y">
+      {events.map((event: ActivityItem) => (
+        <div key={event.id} className="flex items-center gap-3 py-2.5">
+          <ActivityIcon type={event.type} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm leading-snug truncate">{event.title}</p>
+            {event.detail && event.detail !== event.title && (
+              <p className="text-xs text-muted-foreground truncate">{event.detail}</p>
+            )}
+          </div>
+          <span className="flex-shrink-0 text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -497,6 +559,19 @@ export default function Dashboard() {
             <Card>
               <CardContent className="p-4">
                 <SignalPatternsPreview />
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Recent Activity — full width */}
+          <section>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <Activity className="h-3.5 w-3.5" />
+              Recent Activity
+            </h2>
+            <Card>
+              <CardContent className="p-4">
+                <RecentActivity />
               </CardContent>
             </Card>
           </section>

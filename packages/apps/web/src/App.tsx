@@ -11,6 +11,8 @@ import PeopleIndex from "@/pages/PeopleIndex";
 import GoalsView from "@/pages/GoalsView";
 import MemoryFeed from "@/pages/MemoryFeed";
 import IntelligencePage from "@/pages/IntelligencePage";
+import CommitmentsPage from "@/pages/CommitmentsPage";
+import SearchPage from "@/pages/SearchPage";
 import NotFound from "./pages/NotFound";
 import { useProcessingEvents } from "@/hooks/useProcessingEvents.js";
 
@@ -31,9 +33,11 @@ function AppRoutes() {
         <Route path="/meetings/:slug" element={<MeetingDetail />} />
         {/* New pages */}
         <Route path="/people" element={<PeopleIndex />} />
+        <Route path="/commitments" element={<CommitmentsPage />} />
         <Route path="/goals" element={<GoalsView />} />
         <Route path="/memory" element={<MemoryFeed />} />
         <Route path="/intelligence" element={<IntelligencePage />} />
+        <Route path="/search" element={<SearchPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

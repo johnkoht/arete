@@ -105,6 +105,7 @@ export type CommitmentListItem = {
   direction: string;
   date: string;
   daysOpen: number;
+  status: string;
 };
 
 /**
@@ -130,9 +131,17 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
       }
 
       const now = new Date();
-      const open = allCommitments.filter((c) => c.status === 'open');
 
-      const items: CommitmentListItem[] = open.map((c) => {
+      const filterParam = c.req.query('filter');
+      let sourceCommitments: CommitmentEntry[];
+
+      if (filterParam === 'all') {
+        sourceCommitments = allCommitments;
+      } else {
+        sourceCommitments = allCommitments.filter((c) => c.status === 'open');
+      }
+
+      const items: CommitmentListItem[] = sourceCommitments.map((c) => {
         const itemDate = new Date(c.date);
         const daysOpen = Number.isNaN(itemDate.getTime())
           ? 0
@@ -144,22 +153,68 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
           direction: c.direction,
           date: c.date,
           daysOpen,
+          status: c.status,
         };
       });
 
-      const filterParam = c.req.query('filter');
       let filtered = items;
 
       if (filterParam === 'overdue') {
         filtered = items.filter((i) => i.daysOpen > 14);
       } else if (filterParam === 'thisweek') {
         filtered = items.filter((i) => i.daysOpen <= 7);
+      } else if (filterParam === 'open') {
+        filtered = items.filter((i) => i.status === 'open');
       }
 
       return c.json({ commitments: filtered });
     } catch (err) {
       console.error('[commitments] error:', err);
       return c.json({ error: 'Failed to load commitments' }, 500);
+    }
+  });
+
+  // PATCH /api/commitments/:id — mark done or drop
+  app.patch('/:id', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const filePath = join(workspaceRoot, '.arete', 'commitments.json');
+
+      let fileData: CommitmentsFile = { commitments: [] };
+      try {
+        const raw = await fs.readFile(filePath, 'utf8');
+        fileData = JSON.parse(raw) as CommitmentsFile;
+        if (!Array.isArray(fileData.commitments)) fileData.commitments = [];
+      } catch {
+        // File doesn't exist — nothing to update
+        return c.json({ error: 'Commitment not found' }, 404);
+      }
+
+      const idx = fileData.commitments.findIndex((c) => c.id === id);
+      if (idx === -1) {
+        return c.json({ error: 'Commitment not found' }, 404);
+      }
+
+      const body = (await c.req.json()) as { status?: string };
+      const newStatus = body.status;
+
+      if (newStatus !== 'resolved' && newStatus !== 'dropped') {
+        return c.json({ error: 'status must be "resolved" or "dropped"' }, 400);
+      }
+
+      const updated: CommitmentEntry = {
+        ...fileData.commitments[idx]!,
+        status: newStatus,
+        resolvedAt: new Date().toISOString(),
+      };
+
+      fileData.commitments[idx] = updated;
+      await fs.writeFile(filePath, JSON.stringify(fileData, null, 2), 'utf8');
+
+      return c.json({ commitment: updated });
+    } catch (err) {
+      console.error('[commitments] PATCH error:', err);
+      return c.json({ error: 'Failed to update commitment' }, 500);
     }
   });
 
