@@ -107,6 +107,10 @@ export type {
 
 // Integrations domain
 export type {
+  StagedItemStatus,
+  StagedItemEdits,
+  StagedItem,
+  StagedSections,
   FathomTranscript,
   IntegrationConfig,
   IntegrationAuth,

@@ -66,6 +66,15 @@ export {
 } from './integrations/meetings.js';
 export type { MeetingForSave } from './integrations/meetings.js';
 export {
+  generateItemId,
+  parseStagedSections,
+  parseStagedItemStatus,
+  parseStagedItemEdits,
+  writeItemStatusToFile,
+  commitApprovedItems,
+} from './integrations/staged-items.js';
+export type { WriteItemStatusOptions } from './integrations/staged-items.js';
+export {
   saveConversationFile,
   conversationFilename,
   updateConversationFrontmatter,

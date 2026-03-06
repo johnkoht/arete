@@ -2,6 +2,7 @@
  * Meeting save logic — uses StorageAdapter, no direct fs.
  */
 import { join, basename } from 'path';
+import { stringify as stringifyYaml } from 'yaml';
 function slugify(s) {
     return s
         .toLowerCase()
@@ -88,6 +89,22 @@ export function meetingFilename(meeting) {
     const titleSlug = slugify(meeting.title || 'untitled');
     return `${dateStr}-${titleSlug}.md`;
 }
+/**
+ * Build the attendees YAML block.
+ * Each attendee becomes `{ name: string, email: string }`.
+ * Null/undefined values become empty string.
+ */
+function buildAttendeesYaml(attendees) {
+    return attendees.map((a) => {
+        if (typeof a === 'string') {
+            return { name: a, email: '' };
+        }
+        return {
+            name: a.name ?? '',
+            email: a.email ?? '',
+        };
+    });
+}
 export async function saveMeetingFile(storage, meeting, outputDir, templateContent, options = {}) {
     const { integration = 'Manual', force = false } = options;
     const filename = meetingFilename(meeting);
@@ -120,18 +137,22 @@ export async function saveMeetingFile(storage, meeting, outputDir, templateConte
     for (const [k, v] of Object.entries(vars)) {
         content = content.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
     }
-    const frontmatterLines = [
-        '---',
-        `title: "${meeting.title.replace(/"/g, '\\"')}"`,
-        `date: "${meeting.date}"`,
-        `source: "${integration}"`,
-    ];
+    // Build frontmatter data object
+    const frontmatterData = {
+        title: meeting.title,
+        date: meeting.date,
+        source: integration,
+        status: meeting.status ?? 'synced',
+    };
     if (meeting.agenda) {
-        frontmatterLines.push(`agenda: "${meeting.agenda}"`);
+        frontmatterData['agenda'] = meeting.agenda;
     }
-    frontmatterLines.push('---');
-    const frontmatter = frontmatterLines.join('\n');
-    const fullContent = frontmatter + '\n\n' + content;
+    // Write structured attendees array
+    const rawAttendees = meeting.attendees ?? [];
+    frontmatterData['attendees'] = buildAttendeesYaml(rawAttendees);
+    // Serialize using yaml.stringify for round-trip safety
+    const frontmatterStr = stringifyYaml(frontmatterData).trimEnd();
+    const fullContent = `---\n${frontmatterStr}\n---\n\n${content}`;
     await storage.mkdir(outputDir);
     await storage.write(fullPath, fullContent);
     return fullPath;

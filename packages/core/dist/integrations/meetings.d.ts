@@ -20,6 +20,8 @@ export interface MeetingForSave {
     url: string;
     share_url?: string;
     agenda?: string;
+    /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
+    status?: 'synced' | 'processed' | 'approved';
 }
 /**
  * Find a matching agenda file for a meeting by date and title.

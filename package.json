@@ -32,7 +32,10 @@
     "test:integration:smoke": "tsx --test 'packages/cli/test/integration/install-update.integration.test.ts' 'packages/cli/test/integration/context-brief.integration.test.ts'",
     "test:integration": "tsx --test $(find packages/cli/test/integration -name \"*.integration.test.ts\")",
     "test:integration:full": "npm run test:integration",
-    "test:all": "npm run typecheck && npm test"
+    "test:all": "npm run typecheck && npm test",
+    "dev:web": "npm run dev --prefix packages/apps/web",
+    "dev:backend": "tsx packages/apps/backend/src/index.ts",
+    "build:apps": "tsc -b packages/apps/backend"
   },
   "keywords": [
     "product-management",

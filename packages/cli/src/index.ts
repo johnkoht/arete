@@ -34,6 +34,7 @@ import { registerIndexSearchCommand } from './commands/index-search.js';
 import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
 import { registerCommitmentsCommand } from './commands/commitments.js';
+import { registerViewCommand } from './commands/view.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -94,6 +95,7 @@ ${chalk.bold('Availability & Calendar')}
   calendar create --title <title>  Create a calendar event
 
 ${chalk.bold('Meetings & Templates')}
+  view [--port <port>]             Open meeting triage UI in browser (arete view)
   meeting add --file <path>        Add meeting from JSON
   template list meeting-agendas    List templates
   template view meeting-agenda --type <name>  View template
@@ -122,5 +124,6 @@ registerSeedCommand(program);
 registerAvailabilityCommands(program);
 registerCalendarCommands(program);
 registerCommitmentsCommand(program);
+registerViewCommand(program);
 
 program.parse();
