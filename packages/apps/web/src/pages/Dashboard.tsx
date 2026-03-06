@@ -49,7 +49,7 @@ function TodaysMeetings() {
       <EmptyState
         icon={Calendar}
         title="Calendar not connected"
-        description="Connect your calendar to see today's meetings here."
+        description="Connect your calendar with `arete pull calendar` to see today's meetings here."
         className="py-8"
       />
     );
@@ -449,7 +449,7 @@ function RecentActivity() {
       <EmptyState
         icon={Activity}
         title="No recent activity"
-        description="Activity appears here as meetings are processed."
+        description="Activity appears as meetings are processed with `arete view` running."
         className="py-6"
       />
     );

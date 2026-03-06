@@ -334,7 +334,7 @@ export default function PeopleIndex() {
                       title={search ? "No people match your search" : "No people found"}
                       description={
                         search
-                          ? "Try a different search term."
+                          ? `No people match "${search}". Try a different name or clear the filter.`
                           : "Add people files to people/internal/, people/customers/, or people/users/."
                       }
                     />

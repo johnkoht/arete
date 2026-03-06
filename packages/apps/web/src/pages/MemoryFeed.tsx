@@ -160,14 +160,14 @@ export default function MemoryFeed() {
               search
                 ? "No items match your search"
                 : data?.total === 0
-                ? "No memory items yet"
+                ? "No decisions or learnings captured yet"
                 : "No items in this category"
             }
             description={
               search
                 ? "Try different search terms."
                 : data?.total === 0
-                ? "Process your meetings to start building institutional memory."
+                ? "Process your meetings with `arete view` to start building memory."
                 : undefined
             }
             className="mt-8"
