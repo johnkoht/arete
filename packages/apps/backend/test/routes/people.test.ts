@@ -509,3 +509,72 @@ describe('GET /api/people/:slug — allMeetings field', () => {
     }
   });
 });
+
+// ── PATCH /api/people/:slug/notes ─────────────────────────────────────────────
+
+async function patchReq(
+  app: AnyHono,
+  path: string,
+  body: unknown,
+): Promise<{ status: number; json: unknown }> {
+  const res = await app.request(path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json() as unknown;
+  return { status: res.status, json };
+}
+
+describe('PATCH /api/people/:slug/notes', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-notes-patch-'));
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
+    await writeFile(join(tmpDir, 'people', 'internal', 'carol-jones.md'), PERSON_WITH_NOTES_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns 200 and success: true when content is valid', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/carol-jones/notes', { content: '## Updated Notes\n\nNew content here.' });
+    assert.equal(status, 200);
+    assert.deepEqual(json, { success: true });
+  });
+
+  it('updates the file body and preserves frontmatter', async () => {
+    const router = createPeopleRouter(tmpDir);
+    await patchReq(router, '/carol-jones/notes', { content: 'Hello world notes.' });
+
+    // Read file back and verify
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(join(tmpDir, 'people', 'internal', 'carol-jones.md'), 'utf8');
+
+    // Frontmatter should be preserved
+    assert.ok(raw.includes('name: Carol Jones'), 'name frontmatter should be preserved');
+    assert.ok(raw.includes('email: carol@creative.co'), 'email frontmatter should be preserved');
+
+    // Body should contain new content
+    assert.ok(raw.includes('Hello world notes.'), 'updated content should be present');
+  });
+
+  it('returns 400 when content field is missing', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/carol-jones/notes', { other: 'value' });
+    assert.equal(status, 400);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('content'), 'error should mention content field');
+  });
+
+  it('returns 404 for non-existent slug', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/nonexistent-person/notes', { content: 'some content' });
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('not found') || body.error.includes('Person'), 'error should indicate not found');
+  });
+});

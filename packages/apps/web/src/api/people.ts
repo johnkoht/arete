@@ -14,3 +14,12 @@ export async function fetchPeople(): Promise<PeopleResponse> {
 export async function fetchPerson(slug: string): Promise<PersonDetail> {
   return apiFetch<PersonDetail>(`/api/people/${slug}`);
 }
+
+/** PATCH /api/people/:slug/notes — update person notes */
+export async function patchPersonNotes(slug: string, content: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/people/${slug}/notes`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+}

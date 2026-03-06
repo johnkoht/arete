@@ -7,11 +7,14 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Mail, Building2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { HealthDot, CategoryBadge } from "@/components/people/PersonBadges.js";
-import { usePerson } from "@/hooks/people.js";
+import { MarkdownEditor } from "@/components/MarkdownEditor.js";
+import { usePerson, useUpdatePersonNotes } from "@/hooks/people.js";
 import { useMeeting } from "@/hooks/meetings.js";
 
 // ── Meeting Sheet ─────────────────────────────────────────────────────────────
@@ -104,6 +107,9 @@ export default function PersonDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: person, isLoading, error } = usePerson(slug ?? "");
   const [meetingSlug, setMeetingSlug] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const { mutate: saveNotes, isPending: isSaving } = useUpdatePersonNotes(slug ?? '');
 
   if (isLoading) {
     return (
@@ -303,13 +309,64 @@ export default function PersonDetailPage() {
 
             {/* Notes */}
             <div>
-              <SectionHeading>Notes</SectionHeading>
-              {person.rawContent ? (
-                <div className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {person.rawContent}
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</h3>
+                {!isEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditContent(person.rawContent ?? '');
+                      setIsEditing(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                )}
+              </div>
+
+              {isEditing ? (
+                <>
+                  <MarkdownEditor
+                    initialValue={editContent}
+                    onChange={setEditContent}
+                    placeholder="Add notes about this person..."
+                    className="min-h-[200px] border rounded-md p-3"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      disabled={isSaving}
+                      onClick={() => {
+                        saveNotes(editContent, {
+                          onSuccess: () => {
+                            toast.success('Notes saved');
+                            setIsEditing(false);
+                          },
+                          onError: () => {
+                            toast.error("Couldn't save notes");
+                          },
+                        });
+                      }}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditing(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
               ) : (
-                <p className="text-sm text-muted-foreground">No notes yet.</p>
+                <MarkdownEditor
+                  initialValue={person.rawContent ?? ''}
+                  onChange={() => {}}
+                  readOnly
+                  className="text-sm text-muted-foreground"
+                />
               )}
             </div>
           </div>

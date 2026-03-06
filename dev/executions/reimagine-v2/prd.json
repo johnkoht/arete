@@ -34,8 +34,8 @@
       "title": "API Key Management UI",
       "description": "Settings page at /settings with API key section (show/save/remove). New backend routes GET/POST/DELETE /api/settings/apikey. Settings gear icon in sidebar links to /settings.",
       "dependsOn": [],
-      "status": "pending",
-      "commitSha": null
+      "status": "complete",
+      "commitSha": "536fce4"
     },
     {
       "id": "V2-5",
