@@ -71,6 +71,37 @@ The backend package (`packages/apps/backend`) has its own `node_modules` that mu
 
 ---
 
+### SSE Auto-Refresh Pattern — `useProcessingEvents` (first use: iteration 2)
+For app-level SSE subscriptions (not per-component), mount the hook in an inner `AppRoutes` component that lives _inside_ `QueryClientProvider`. This gives the hook access to `useQueryClient()`:
+```tsx
+function AppRoutes() {
+  useProcessingEvents(); // mount once — all pages benefit
+  return <Routes>...</Routes>;
+}
+// In <App>: wrap with <QueryClientProvider><BrowserRouter><AppRoutes /></BrowserRouter></QueryClientProvider>
+```
+The hook uses exponential backoff (2s→4s→8s→16s→30s) and invalidates `['meetings']` and `['memory', 'recent']` query caches on `meeting:processed` events.
+
+### Testing EventSource in Vitest (first use: iteration 2)
+`EventSource` isn't available in jsdom without a polyfill — mock it with `vi.stubGlobal('EventSource', MockClass)`. The mock class must expose `addEventListener`, `close`, and the ability to trigger event handlers for test control. Store `this` in a module-level variable during construction to get the last-created instance. Important: mock instances that track `listeners` by type make it easy to emit test events.
+
+### URL Filter Params in React Router (first use: iteration 2)
+Use `useSearchParams()` to read URL query params. Reading `?filter=overdue` example:
+```tsx
+const [searchParams, setSearchParams] = useSearchParams();
+const filterParam = searchParams.get("filter"); // "overdue" | "thisweek" | null
+// Clear: setSearchParams({});
+```
+When a filter is applied from navigation (e.g. Dashboard → `/people?filter=overdue`), use `useEffect` on the param to set initial sort state.
+
+### `GoalsView` Strategy Preview (fixed: iteration 2)
+The StrategySection was collapsed by default with no preview. Fixed: collapsed state now shows a plain-text preview (first 200 chars, markdown stripped). The `stripMarkdown` function removes `## headings`, `**bold**`, `*italic*`, `- bullets`, and collapses whitespace. Full content uses `whitespace-pre-wrap`. Expand/collapse toggle still works.
+
+### `extractAttendeeSlugs` is now shared (iteration 2)
+Previously duplicated in both `momentum.ts` and `patterns.ts`. Now lives in `packages/core/src/utils/attendees.ts` and exported from `packages/core/src/utils/index.ts`. Both services import from the shared utility. Test at `packages/core/test/utils/attendees.test.ts`.
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
