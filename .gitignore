@@ -62,6 +62,7 @@ dist/
 # Exception: package dist files are committed for GitHub install support
 !packages/core/dist/
 !packages/cli/dist/
+!packages/apps/backend/dist/
 
 # CLI-managed / workspace directories (consumer workspaces only)
 # Populated by `arete install`; do not commit in the Areté dev repo. For local testing, run `arete install .` or create as needed.
