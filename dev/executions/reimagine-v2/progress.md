@@ -171,3 +171,11 @@ Working dir: /Users/johnkoht/code/worktrees/arete--reimagine
 1. **TipTap install**: Installed cleanly. One gotcha: `BubbleMenu` is not exported from `@tiptap/react` in this version — it's exported from `@tiptap/extension-bubble-menu`. The task prompt assumed it came from `@tiptap/react` which caused the initial build failure. Fixed by importing from the correct package.
 2. **Pattern for future editor integrations**: Import `BubbleMenu` from `@tiptap/extension-bubble-menu`, not `@tiptap/react`. Use `editor.storage.markdown.getMarkdown()` for serializing content. Feed `rawContent` directly to `content` prop — it's already clean.
 3. **Token estimate**: ~6k tokens.
+
+## V2-5 Fix — 2026-03-06
+**What**: Two post-review fixes for V2-5 (People Notes Editor).
+**Fix 1**: Compiled backend dist and committed `packages/apps/backend/dist/routes/people.js` (PATCH /:slug/notes route was missing from dist).
+**Fix 2**: Added `key={person.rawContent}` to the read-only `MarkdownEditor` in `PersonDetailPage.tsx` — TipTap's `useEditor` only initializes content once at mount; forcing a remount via `key` ensures the editor reflects refetched content after save.
+**Files changed**: `packages/apps/backend/dist/routes/people.js`, `packages/apps/web/src/pages/PersonDetailPage.tsx`, `packages/apps/web/LEARNINGS.md`
+**Quality checks**: `tsc` ✓, `vite build` ✓
+**Commit**: 98615f7
