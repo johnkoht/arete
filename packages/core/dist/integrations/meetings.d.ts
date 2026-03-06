@@ -19,6 +19,8 @@ export interface MeetingForSave {
     } | string>;
     url: string;
     share_url?: string;
+    /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
+    status?: 'synced' | 'processed' | 'approved';
 }
 export declare function meetingFilename(meeting: MeetingForSave): string;
 export declare function saveMeetingFile(storage: StorageAdapter, meeting: MeetingForSave, outputDir: string, templateContent: string, options?: {

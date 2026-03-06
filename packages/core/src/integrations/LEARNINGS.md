@@ -65,6 +65,29 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 ---
 
+## Staged Items Pattern (2026-03-04)
+
+`staged-items.ts` implements parsing/writing of staged action items, decisions, and learnings for the meeting triage workflow.
+
+### Key Design Decisions
+
+- **`yaml` package only** — `gray-matter` is NOT a dependency of `packages/core`. Use `yaml.parse` / `yaml.stringify` directly for frontmatter handling (the `parseFrontmatter` / `serializeFrontmatter` helpers in `staged-items.ts`). Do not add `gray-matter` to `packages/core/package.json`.
+
+- **Action items are task-tracking, not institutional memory** — `commitApprovedItems` intentionally does NOT append approved action items to any memory file. Only decisions → `decisions.md` and learnings → `learnings.md` are written. This is a deliberate design choice.
+
+- **Round-trip frontmatter safety** — Always read → parse (yaml) → mutate object → stringify (yaml) → write. Never use regex to patch frontmatter strings. The `serializeFrontmatter` helper enforces this discipline.
+
+- **`saveMeetingFile` frontmatter format changed** — Previously wrote simple strings like `attendees: "Alice, Bob"`. Now writes structured YAML:
+  ```yaml
+  status: synced
+  attendees:
+    - name: Alice
+      email: alice@example.com
+  ```
+  If downstream code parses attendees from frontmatter as a plain string, it will break. Update consumers accordingly.
+
+- **`parseStagedSections` stops at any `##` non-staged header** — The parser resets `currentType` to `null` whenever it encounters a `##` header that is not a staged section. This prevents content from unrelated sections (e.g., `## Transcript`) from being parsed as item lines.
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new calendar config field: check every consumer in `pull.ts`, `integration.ts`, `status.ts` for alignment

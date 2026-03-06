@@ -15,6 +15,7 @@ export type { IDEAdapter, IDETarget } from './adapters/index.js';
 export { getCalendarProvider, type BusyBlock, type FreeBusyResult, type FreeBusyCalendarResult, type CalendarProvider, type CreateEventInput, type CreatedEvent, } from './integrations/calendar/index.js';
 export { saveMeetingFile, meetingFilename, } from './integrations/meetings.js';
 export type { MeetingForSave } from './integrations/meetings.js';
+export { generateItemId, parseStagedSections, parseStagedItemStatus, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 export type { ConversationForSave, ConversationInsights, ConversationProvenance, ParsedConversation, ParsedMessage, LLMCallFn, } from './integrations/conversations/index.js';
 export { createServices } from './factory.js';
