@@ -165,6 +165,38 @@ async function scanPeopleDir(workspaceRoot) {
     }
     return results;
 }
+async function findMeetingsForPerson(workspaceRoot, personSlug) {
+    const meetingsDir = join(workspaceRoot, 'resources', 'meetings');
+    let files;
+    try {
+        files = await fs.readdir(meetingsDir);
+    }
+    catch {
+        return [];
+    }
+    const meetings = [];
+    for (const file of files) {
+        if (!file.endsWith('.md'))
+            continue;
+        try {
+            const raw = await fs.readFile(join(meetingsDir, file), 'utf8');
+            const { data } = matter(raw);
+            const fm = data;
+            const attendeeIds = Array.isArray(fm['attendee_ids']) ? fm['attendee_ids'] : [];
+            if (!attendeeIds.includes(personSlug))
+                continue;
+            const slug = file.slice(0, -3);
+            const date = typeof fm['date'] === 'string' ? fm['date'] : slug.slice(0, 10);
+            const title = typeof fm['title'] === 'string' ? fm['title'] : slug;
+            meetings.push({ slug, date, title, attendeeIds });
+        }
+        catch {
+            // skip unreadable files
+        }
+    }
+    meetings.sort((a, b) => b.date.localeCompare(a.date));
+    return meetings;
+}
 export function createPeopleRouter(workspaceRoot) {
     const app = new Hono();
     // GET /api/people — all people with summary data
@@ -225,14 +257,20 @@ export function createPeopleRouter(workspaceRoot) {
             if (!found) {
                 return c.json({ error: 'Person not found' }, 404);
             }
-            const [raw, commitments] = await Promise.all([
+            const [raw, commitments, allMeetings] = await Promise.all([
                 fs.readFile(found.filePath, 'utf8'),
                 loadCommitments(workspaceRoot),
+                findMeetingsForPerson(workspaceRoot, slug),
             ]);
             const { data, content } = matter(raw);
             const fm = data;
             const autoMemory = parseAutoMemoryBlock(raw);
             const recentMeetings = parseRecentMeetings(content);
+            // Strip auto-managed sections from content for rawContent
+            const rawContent = content
+                .replace(/<!-- AUTO_PERSON_MEMORY:START -->[\s\S]*?<!-- AUTO_PERSON_MEMORY:END -->/i, '')
+                .replace(/^##\s+Recent Meetings[\s\S]*?(?=\n##\s|$)/im, '')
+                .trim();
             const openCommitmentItems = commitments.filter((c) => c.personSlug === slug && c.status === 'open');
             const openCommitmentsCount = openCommitmentItems.length;
             const lastMeetingDate = autoMemory.lastMeetingDate ??
@@ -262,6 +300,8 @@ export function createPeopleRouter(workspaceRoot) {
                 stances: autoMemory.stances,
                 repeatedAsks: autoMemory.repeatedAsks,
                 repeatedConcerns: autoMemory.repeatedConcerns,
+                rawContent,
+                allMeetings,
             };
             return c.json(detail);
         }

@@ -94,6 +94,8 @@ export type PersonDetail = PersonSummary & {
   stances: string[];
   repeatedAsks: string[];
   repeatedConcerns: string[];
+  rawContent: string;
+  allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }>;
 };
 
 export type PeopleResponse = {

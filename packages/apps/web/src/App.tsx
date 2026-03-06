@@ -8,6 +8,7 @@ import Dashboard from "@/pages/Dashboard";
 import MeetingsIndex from "@/pages/MeetingsIndex";
 import MeetingDetail from "@/pages/MeetingDetail";
 import PeopleIndex from "@/pages/PeopleIndex";
+import PersonDetailPage from "@/pages/PersonDetailPage";
 import GoalsView from "@/pages/GoalsView";
 import MemoryFeed from "@/pages/MemoryFeed";
 import IntelligencePage from "@/pages/IntelligencePage";
@@ -33,7 +34,7 @@ function AppRoutes() {
         <Route path="/meetings/:slug" element={<MeetingDetail />} />
         {/* New pages */}
         <Route path="/people" element={<PeopleIndex />} />
-        <Route path="/people/:slug" element={<PeopleIndex />} />
+        <Route path="/people/:slug" element={<PersonDetailPage />} />
         <Route path="/commitments" element={<CommitmentsPage />} />
         <Route path="/goals" element={<GoalsView />} />
         <Route path="/memory" element={<MemoryFeed />} />

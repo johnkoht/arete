@@ -88,7 +88,7 @@ describe('GET /api/people — empty people directory', () => {
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-test-empty-'));
     // Create empty people subdirs
-    await mkdir(join(tmpDir, 'people', 'internals'), { recursive: true });
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
     await mkdir(join(tmpDir, 'people', 'customers'), { recursive: true });
     await mkdir(join(tmpDir, 'people', 'users'), { recursive: true });
   });
@@ -156,9 +156,9 @@ describe('GET /api/people — person with AUTO_PERSON_MEMORY block', () => {
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-test-memory-'));
-    await mkdir(join(tmpDir, 'people', 'internals'), { recursive: true });
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
     await mkdir(join(tmpDir, '.arete'), { recursive: true });
-    await writeFile(join(tmpDir, 'people', 'internals', 'bob-smith.md'), PERSON_WITH_MEMORY_MD, 'utf8');
+    await writeFile(join(tmpDir, 'people', 'internal', 'bob-smith.md'), PERSON_WITH_MEMORY_MD, 'utf8');
   });
 
   after(async () => {
@@ -309,5 +309,192 @@ describe('GET /api/people/:slug — full PersonDetail', () => {
     const body = json as { openCommitments: number; openCommitmentItems: unknown[] };
     assert.equal(body.openCommitments, 1);
     assert.equal(body.openCommitmentItems.length, 1);
+  });
+});
+
+// ── rawContent & allMeetings ──────────────────────────────────────────────────
+
+const PERSON_WITH_NOTES_MD = `---
+name: Carol Jones
+role: Designer
+company: Creative Co
+email: carol@creative.co
+category: internal
+---
+
+# Carol Jones
+
+Carol is a talented designer who focuses on user experience.
+
+She prefers async communication and values clear documentation.
+
+## Recent Meetings
+
+- 2026-03-01 — Design Review
+- 2026-02-15 — Sprint Planning
+
+<!-- AUTO_PERSON_MEMORY:START -->
+## Relationship Health
+
+Last met: 2026-03-01 (5 days ago)
+Meetings: 2 in last 30d, 5 in last 90d
+Status: Active
+
+### Stances
+- Values clear documentation
+
+### Repeated asks
+- None detected yet.
+
+### Repeated concerns
+- None detected yet.
+
+<!-- AUTO_PERSON_MEMORY:END -->
+`;
+
+const MEETING_WITH_ATTENDEE_MD = `---
+title: Design Review
+date: 2026-03-01
+attendee_ids:
+  - carol-jones
+  - bob-smith
+---
+
+# Design Review
+
+Meeting notes here.
+`;
+
+const MEETING_WITHOUT_ATTENDEE_MD = `---
+title: Unrelated Meeting
+date: 2026-02-20
+attendee_ids:
+  - bob-smith
+---
+
+# Unrelated Meeting
+
+Notes.
+`;
+
+describe('GET /api/people/:slug — rawContent field', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-rawcontent-'));
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(join(tmpDir, 'people', 'internal', 'carol-jones.md'), PERSON_WITH_NOTES_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns rawContent as a string', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { rawContent: unknown };
+    assert.equal(typeof body.rawContent, 'string');
+  });
+
+  it('rawContent is non-empty when person has notes', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { rawContent: string };
+    assert.ok(body.rawContent.length > 0, 'rawContent should not be empty');
+    assert.ok(body.rawContent.includes('Carol is a talented designer'));
+  });
+
+  it('rawContent does NOT contain AUTO_PERSON_MEMORY markers', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { rawContent: string };
+    assert.ok(!body.rawContent.includes('AUTO_PERSON_MEMORY'), 'rawContent must not include AUTO_PERSON_MEMORY');
+  });
+
+  it('rawContent does NOT contain ## Recent Meetings section', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { rawContent: string };
+    assert.ok(!body.rawContent.includes('## Recent Meetings'), 'rawContent must not include ## Recent Meetings');
+  });
+});
+
+describe('GET /api/people/:slug — allMeetings field', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-allmeetings-'));
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await mkdir(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    await writeFile(join(tmpDir, 'people', 'internal', 'carol-jones.md'), PERSON_WITH_NOTES_MD, 'utf8');
+    await writeFile(
+      join(tmpDir, 'resources', 'meetings', '2026-03-01-design-review.md'),
+      MEETING_WITH_ATTENDEE_MD,
+      'utf8',
+    );
+    await writeFile(
+      join(tmpDir, 'resources', 'meetings', '2026-02-20-unrelated.md'),
+      MEETING_WITHOUT_ATTENDEE_MD,
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns allMeetings as an array', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { allMeetings: unknown[] };
+    assert.ok(Array.isArray(body.allMeetings), 'allMeetings should be an array');
+  });
+
+  it('allMeetings only includes meetings where person is an attendee', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }> };
+    assert.equal(body.allMeetings.length, 1, 'only 1 meeting has carol-jones as attendee');
+    assert.equal(body.allMeetings[0]?.slug, '2026-03-01-design-review');
+  });
+
+  it('allMeetings items have slug/date/title/attendeeIds shape', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/carol-jones');
+    assert.equal(status, 200);
+    const body = json as { allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }> };
+    const meeting = body.allMeetings[0];
+    assert.ok(meeting, 'first meeting should exist');
+    assert.equal(typeof meeting.slug, 'string');
+    assert.equal(typeof meeting.date, 'string');
+    assert.equal(typeof meeting.title, 'string');
+    assert.ok(Array.isArray(meeting.attendeeIds));
+    assert.ok(meeting.attendeeIds.includes('carol-jones'));
+  });
+
+  it('allMeetings returns empty array when meetings dir does not exist', async () => {
+    // Use a temp dir without a meetings subdirectory
+    const emptyDir = await mkdtemp(join(tmpdir(), 'arete-people-nomeeting-'));
+    try {
+      await mkdir(join(emptyDir, 'people', 'internal'), { recursive: true });
+      await writeFile(join(emptyDir, 'people', 'internal', 'carol-jones.md'), PERSON_WITH_NOTES_MD, 'utf8');
+      const router = createPeopleRouter(emptyDir);
+      const { status, json } = await req(router, 'GET', '/carol-jones');
+      assert.equal(status, 200);
+      const body = json as { allMeetings: unknown[] };
+      assert.ok(Array.isArray(body.allMeetings));
+      assert.equal(body.allMeetings.length, 0);
+    } finally {
+      await rm(emptyDir, { recursive: true, force: true });
+    }
   });
 });
