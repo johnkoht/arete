@@ -14,6 +14,12 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - `packages/core/src/storage/adapter.ts` — `StorageAdapter` interface (read/write/list/exists)
 - `packages/core/test/` — service tests (mock StorageAdapter pattern)
 
+## New Services (2026-03-05)
+
+- **`patterns.ts`** — `detectCrossPersonPatterns(meetingsDirPath, storage, { days })`. Reads `.md` files in the meetings dir, extracts topics from `## Key Points` and `## Summary` sections, groups by normalized topic, returns `SignalPattern[]` for topics appearing in 2+ meetings across 2+ distinct attendees. Supports both `attendee_ids` (slug list) and `attendees: [{name, email}]` formats. Topic extraction caps at 20 per meeting and normalizes for comparison (lowercase + strip punctuation).
+
+- **`momentum.ts`** — Two pure functions: `computeCommitmentMomentum(commitments, refDate?)` buckets open commitments into hot (<7d), stale (7–30d), critical (>30d) by `date` field age. `computeRelationshipMomentum(meetingsDir, peopleDir, storage, opts?)` scans meeting frontmatter for attendees, tracks last meeting date per person, and returns active/cooling/stale buckets. Resolves person names from `people/{internal,customers,users}/{slug}.md` profiles.
+
 ## Gotchas
 
 - **`createServices()` is async — it loads `arete.yaml` from disk.** Callers must `await createServices(process.cwd())`. Forgetting the `await` gives a Promise, not `AreteServices`. Every CLI command in `packages/cli/src/commands/` correctly awaits it — follow that pattern. Defined in `packages/core/src/factory.ts` L54.

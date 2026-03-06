@@ -31,3 +31,18 @@ export type {
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
+
+// Pattern detection
+export { detectCrossPersonPatterns } from './patterns.js';
+export type { SignalPattern } from './patterns.js';
+
+// Momentum analysis
+export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
+export type {
+  CommitmentBucket,
+  CommitmentMomentumItem,
+  CommitmentMomentum,
+  RelationshipBucket,
+  RelationshipMomentumItem,
+  RelationshipMomentum,
+} from './momentum.js';

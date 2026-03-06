@@ -35,6 +35,8 @@ import { registerAvailabilityCommands } from './commands/availability.js';
 import { registerCalendarCommands } from './commands/calendar.js';
 import { registerCommitmentsCommand } from './commands/commitments.js';
 import { registerViewCommand } from './commands/view.js';
+import { registerDailyCommand } from './commands/daily.js';
+import { registerMomentumCommand } from './commands/momentum.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -57,6 +59,8 @@ ${chalk.bold('Setup & Workspace')}
   status                           Check workspace health
 
 ${chalk.bold('Intelligence')}
+  daily                            Morning intelligence brief
+  momentum [--person <slug>]       Commitment and relationship momentum
   context --for "query"            Get relevant workspace files
   context --inventory              Show freshness dashboard & coverage gaps
   memory search "query"           Search decisions, learnings
@@ -125,5 +129,7 @@ registerAvailabilityCommands(program);
 registerCalendarCommands(program);
 registerCommitmentsCommand(program);
 registerViewCommand(program);
+registerDailyCommand(program);
+registerMomentumCommand(program);
 
 program.parse();
