@@ -1,0 +1,65 @@
+{
+  "planSlug": "reimagine-v2",
+  "title": "Aret\u00e9 Web App \u2014 v2",
+  "description": "6 tasks to enhance the reimagined web app: people category tabs, person detail page, interactive goal priorities, API key settings UI, markdown editor, and general polish.",
+  "tasks": [
+    {
+      "id": "V2-2",
+      "title": "People Page \u2014 Category Tabs",
+      "description": "Add filter tabs (All/Internal/Customer/User) with counts above the people table. URL-sync tab state. Filter applies before search+sort.",
+      "dependsOn": [],
+      "status": "complete",
+      "commitSha": "e960f9f"
+    },
+    {
+      "id": "V2-3",
+      "title": "People Detail \u2014 Full Page (replace drawer)",
+      "description": "New /people/:slug full page with two-column layout. Enhance backend to return rawContent + allMeetings. Meeting rows open a Sheet drawer with summary. Remove old PersonDrawer from PeopleIndex.",
+      "dependsOn": [
+        "V2-2"
+      ],
+      "status": "complete",
+      "commitSha": "c496c05"
+    },
+    {
+      "id": "V2-4",
+      "title": "Goals \u2014 Interactive Priorities",
+      "description": "Make weekly priority checkboxes interactive. PATCH /api/goals/week/priority backend route. Optimistic update with rollback on error.",
+      "dependsOn": [],
+      "status": "pending",
+      "commitSha": null
+    },
+    {
+      "id": "V2-1",
+      "title": "API Key Management UI",
+      "description": "Settings page at /settings with API key section (show/save/remove). New backend routes GET/POST/DELETE /api/settings/apikey. Settings gear icon in sidebar links to /settings.",
+      "dependsOn": [],
+      "status": "pending",
+      "commitSha": null
+    },
+    {
+      "id": "V2-5",
+      "title": "Markdown Editor (WYSIWYG-style)",
+      "description": "Reusable MarkdownEditor component using TipTap. Wire into PersonDetailPage Notes section with edit/save/cancel. New PATCH /api/people/:slug/notes backend route.",
+      "dependsOn": [
+        "V2-3"
+      ],
+      "status": "pending",
+      "commitSha": null
+    },
+    {
+      "id": "V2-6",
+      "title": "General Polish & Bug Fixes",
+      "description": "Empty state copy improvements, Settings sidebar link, meetings sidebar link verification, dashboard calendar empty state.",
+      "dependsOn": [
+        "V2-1",
+        "V2-2",
+        "V2-3",
+        "V2-4",
+        "V2-5"
+      ],
+      "status": "pending",
+      "commitSha": null
+    }
+  ]
+}

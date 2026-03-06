@@ -159,6 +159,20 @@ CommitmentsPage reads `?filter=` from URL on mount for direct-link support (Dash
 When setting the default filter state, use `"open"` not `undefined` — the backend accepts `filter=open`
 as a valid explicit filter (returns only open commitments), which is the same as the unfiltered default.
 
+### `people/` gitignore pattern catches source code paths (V2-3)
+
+The root `.gitignore` has a `people/` entry to ignore workspace data. This pattern also
+matches `packages/apps/web/src/components/people/` — any new source files under that directory
+require `git add -f` to force-add. This affects V2-5 if it adds more files there.
+
+### PersonDetail `rawContent` field — already stripped, no parsing in components (V2-3)
+
+`rawContent` returned from `GET /api/people/:slug` has already had the `## Recent Meetings`
+section and `AUTO_PERSON_MEMORY` block stripped server-side. Components should render it
+directly (e.g. `whitespace-pre-wrap`). Do NOT attempt to strip further in the frontend.
+For V2-5's TipTap editor: `rawContent` is the correct initial content — feed it directly to
+the editor's `content` prop.
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
