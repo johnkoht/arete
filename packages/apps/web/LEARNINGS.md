@@ -173,6 +173,29 @@ directly (e.g. `whitespace-pre-wrap`). Do NOT attempt to strip further in the fr
 For V2-5's TipTap editor: `rawContent` is the correct initial content — feed it directly to
 the editor's `content` prop.
 
+## TipTap Integration (first use: V2-5)
+
+### BubbleMenu import — NOT from @tiptap/react
+`BubbleMenu` is exported from `@tiptap/extension-bubble-menu`, not `@tiptap/react`:
+```typescript
+// ✓ Correct
+import { BubbleMenu } from '@tiptap/extension-bubble-menu';
+// ✗ Wrong — build will fail (BubbleMenu not exported from @tiptap/react)
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+```
+
+### Markdown serialization
+Use `editor.storage.markdown.getMarkdown()` in the `onUpdate` callback to get markdown output.
+Requires the `Markdown` extension from `@tiptap/markdown` to be registered.
+
+### Feed rawContent directly
+`rawContent` from `GET /api/people/:slug` is already clean — pass it directly to TipTap's `content` prop. No further parsing needed.
+
+### @tailwindcss/typography was installed but not enabled
+It was in devDependencies already; just needed to be added to `plugins` in `tailwind.config.ts` to enable `prose` CSS classes that style TipTap output.
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`

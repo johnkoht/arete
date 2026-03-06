@@ -89,3 +89,85 @@ Working dir: /Users/johnkoht/code/worktrees/arete--reimagine
 1. **Memory impact**: The `people/` gitignore pattern in the root `.gitignore` catches `packages/apps/web/src/components/people/` — required `git add -f`. This is worth documenting for V2-5 since the markdown editor may add more files under a `people/` path. Also discovered the `internals/` vs `internal/` directory naming mismatch in test fixtures — pre-existing bug silently masking 4 tests.
 2. **Pattern for V2-5**: `rawContent` is already in `PersonDetail` and rendered as `whitespace-pre-wrap` in the Notes section. V2-5's TipTap editor just needs to: (a) add a new PATCH /api/people/:slug/notes route that writes back to the file, (b) toggle between `<div className="whitespace-pre-wrap">` display mode and `<TipTapEditor>` edit mode. The `rawContent` field is already the right source — no parsing needed.
 3. **Token estimate**: ~22k tokens.
+
+---
+
+## V2-3 Bug Fix — rawContent Recent Meetings stripping (2026-03-06)
+
+**What was fixed**: The `## Recent Meetings` stripping regex used the `m` flag with lazy `[\s\S]*?`, causing `$` to match end-of-line. The regex stripped only the heading line; all list items survived into `rawContent`.
+
+**Fix**: Changed to greedy `[\s\S]*` (no `?`) with `\n?^##\s+Recent Meetings[\s\S]*/im`. Greedy is safe because `## Recent Meetings` is always the last user-visible section (auto-memory block is stripped first).
+
+**Files changed**:
+- `packages/apps/backend/src/routes/people.ts` — greedy regex
+- `packages/apps/backend/test/routes/people.test.ts` — added test verifying list items absent
+
+**Quality**: typecheck ✓, 121 tests pass ✓  
+**Commit**: 8d94d18
+
+### V2-4 — Goals Interactive Priorities (2026-03-06)
+**Done**: Added `PATCH /api/goals/week/priority` backend route and wired up interactive checkboxes in GoalsView.
+
+**Files Changed**:
+- `packages/apps/backend/src/routes/goals.ts` — added `PATCH /week/priority` handler: reads `now/week.md`, finds `### N.` section via regex, appends/removes `[x]` line, writes file back
+- `packages/apps/backend/test/routes/goals.test.ts` — added `reqWithBody` helper + 8 tests for PATCH (toggle on, toggle off, idempotent double-toggle, 404 for missing priority, 400 for bad body)
+- `packages/apps/web/src/api/goals.ts` — added `patchWeekPriority(index, done)` function
+- `packages/apps/web/src/hooks/goals.ts` — added `useToggleWeekPriority()` mutation hook (invalidates query on success, shows sonner toast on error)
+- `packages/apps/web/src/pages/GoalsView.tsx` — replaced static `CheckCircle2`/`Circle` icons in PriorityItem with `<Checkbox>`; imported `useToggleWeekPriority`; wired `onCheckedChange` → `handleToggle`; disabled while mutation is pending
+
+**Quality Checks**:
+- `cd packages/apps/backend && npx tsc` ✓
+- `npm test` ✓ (1436 pass)
+- `cd packages/apps/web && npm run build` ✓
+
+**Commit**: a93f3cb
+
+**Reflection**: Clean implementation — the targeted string replacement strategy (find section header via regex, slice body, mutate, rejoin) kept the file write surgery minimal without a full markdown AST. The task correctly noted that `now/week.md` doesn't exist in this dev worktree, but that's fine because the tests use temp dirs. ~6k tokens.
+
+### V2-1 — API Key Management UI (2026-03-06)
+**Done**: Added `/settings` page with Anthropic API key management. Backend routes GET/POST/DELETE at `/api/settings/apikey`. Settings gear icon in sidebar now routes to `/settings`.
+
+**Files Changed**:
+- `packages/apps/backend/src/routes/settings.ts` — new; `createSettingsRouter` with GET/POST/DELETE `/apikey`; stores key in `.credentials/anthropic-api-key`, sets `process.env.ANTHROPIC_API_KEY` immediately on save
+- `packages/apps/backend/src/server.ts` — imported `createSettingsRouter`; registered at `/api/settings`
+- `packages/apps/backend/test/routes/settings.test.ts` — new; 13 tests covering all routes (no-key state, POST+file+env, GET masking, DELETE idempotency, validation errors)
+- `packages/apps/web/src/api/settings.ts` — new; `fetchApiKeyStatus`, `saveApiKey`, `deleteApiKey`
+- `packages/apps/web/src/pages/SettingsPage.tsx` — new; API Key Card (masked display + Remove AlertDialog, or Input + Save); About Card
+- `packages/apps/web/src/components/AppSidebar.tsx` — Settings dead `<button>` → `<Link to="/settings">` with active state styling
+- `packages/apps/web/src/App.tsx` — imported `SettingsPage`; added `/settings` route inside AppLayout
+
+**Quality Checks**:
+- `cd packages/apps/backend && npx tsc` ✓
+- `npm run typecheck` ✓
+- `npm test` ✓ (1436 pass, core/cli only)
+- `cd packages/apps/backend && npm test` ✓ (143 pass, includes 13 new settings tests)
+- `cd packages/apps/web && npm run build` ✓
+
+**Commit**: fb19977
+
+**Reflection**: Straightforward implementation following established patterns. The key insight was that `npm test` at root only covers `packages/core` and `packages/cli` — backend tests run separately via `cd packages/apps/backend && npm test`. New tests confirmed all backend routes work correctly including env var side effects. ~7k tokens.
+
+### V2-5 — Markdown Editor WYSIWYG-style (2026-03-06)
+**Done**: Created reusable TipTap-based `MarkdownEditor` component and wired it into `PersonDetailPage`'s Notes section with edit/save/cancel flow.
+
+**Files Changed**:
+- `packages/apps/web/src/components/MarkdownEditor.tsx` — new; TipTap editor with StarterKit, Markdown extension, Placeholder, BubbleMenu (Bold/Italic/H2/H3/Code); readOnly mode
+- `packages/apps/web/tailwind.config.ts` — added `@tailwindcss/typography` plugin (enables `prose` classes)
+- `packages/apps/web/src/api/people.ts` — added `patchPersonNotes(slug, content)` function
+- `packages/apps/web/src/hooks/people.ts` — added `useUpdatePersonNotes(slug)` mutation hook
+- `packages/apps/web/src/pages/PersonDetailPage.tsx` — Notes section now has Edit/Save/Cancel mode; edit mode uses `MarkdownEditor`; read-only uses `MarkdownEditor` with `readOnly`; imports `Button`, `toast`, `MarkdownEditor`, `useUpdatePersonNotes`
+- `packages/apps/backend/src/routes/people.ts` — added `PATCH /:slug/notes` route; reads file, preserves frontmatter via `matter.stringify`, writes new body
+- `packages/apps/backend/test/routes/people.test.ts` — added 4 new PATCH tests (200+success, frontmatter preserved, 400 missing content, 404 not found)
+
+**Quality Checks**:
+- `cd packages/apps/backend && npx tsc` ✓
+- `cd packages/apps/backend && npm test` ✓ (147 pass)
+- `cd packages/apps/web && npm run build` ✓ (TipTap builds cleanly)
+- `npm run typecheck` ✓ (web + core + cli)
+
+**Commit**: db2c2de
+
+**Reflection**: 
+1. **TipTap install**: Installed cleanly. One gotcha: `BubbleMenu` is not exported from `@tiptap/react` in this version — it's exported from `@tiptap/extension-bubble-menu`. The task prompt assumed it came from `@tiptap/react` which caused the initial build failure. Fixed by importing from the correct package.
+2. **Pattern for future editor integrations**: Import `BubbleMenu` from `@tiptap/extension-bubble-menu`, not `@tiptap/react`. Use `editor.storage.markdown.getMarkdown()` for serializing content. Feed `rawContent` directly to `content` prop — it's already clean.
+3. **Token estimate**: ~6k tokens.
