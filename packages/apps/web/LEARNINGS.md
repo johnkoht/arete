@@ -102,9 +102,50 @@ Previously duplicated in both `momentum.ts` and `patterns.ts`. Now lives in `pac
 
 ---
 
+---
+
+## Iteration 3 Patterns (2026-03-06)
+
+### useSearch — Debounce in Hook, Not Component
+
+The `useSearch` hook in `hooks/search.ts` owns the 300ms debounce logic using `useState` + `useEffect`.
+Components pass raw `q` string and get debounced results. Don't add debounce at the component level
+too — one layer of debounce is enough. The hook also guards with `enabled: debouncedQ.length >= 2`.
+
+### useMutation with Optimistic Updates — cancelQueries Pattern
+
+For `useMarkCommitmentDone`, the mutation must call `queryClient.cancelQueries` before setting
+optimistic data to avoid overwriting optimistic updates with in-flight query results:
+```typescript
+onMutate: async ({ id }) => {
+  await queryClient.cancelQueries({ queryKey: ['commitments'] });
+  const previousData = queryClient.getQueriesData({ queryKey: ['commitments'] });
+  queryClient.setQueriesData({ queryKey: ['commitments', 'list'] }, (old) => ...);
+  return { previousData };
+},
+onError: (_err, _vars, context) => {
+  for (const [key, data] of context.previousData) queryClient.setQueryData(key, data);
+},
+```
+`getQueriesData` + `setQueriesData` (plural) hit all cached query key variants (open, overdue, all, etc).
+
+### SearchPage URL Sync Pattern
+
+SearchPage syncs query and filter to URL params using `useSearchParams` + `useEffect`. The URL
+update uses `{ replace: true }` to avoid creating browser history entries on every keystroke.
+Initial state is read from `searchParams.get("q")` and `searchParams.get("type")` so the page
+works on direct URL load and back-button navigation.
+
+### CommitmentsPage Filter via URL — Default is "open"
+
+CommitmentsPage reads `?filter=` from URL on mount for direct-link support (Dashboard pulse cards).
+When setting the default filter state, use `"open"` not `undefined` — the backend accepts `filter=open`
+as a valid explicit filter (returns only open commitments), which is the same as the unfiltered default.
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
 - [ ] SSE streams need cleanup in `useEffect` return function
 - [ ] TanStack Query v5: mutations use `isPending`, not `isLoading`
 - [ ] Don't import from `@/data/meetings` in production components — use `@/api/types` and `@/hooks/meetings`
+- [ ] New pages need: loading skeletons, error state, empty state (per tab for tabbed pages)
