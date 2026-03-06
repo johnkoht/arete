@@ -18,12 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { usePeople, usePerson } from "@/hooks/people.js";
 import type { PersonSummary, PersonCategory } from "@/api/types.js";
 
 type CommitmentFilter = "overdue" | "thisweek" | null;
+type CategoryTab = "all" | PersonCategory;
 
 // ── Health indicator ──────────────────────────────────────────────────────────
 
@@ -260,6 +262,13 @@ export default function PeopleIndex() {
   const commitmentFilter: CommitmentFilter =
     filterParam === "overdue" || filterParam === "thisweek" ? filterParam : null;
 
+  // Read category tab from URL ?category=internal|customer|user
+  const categoryParam = searchParams.get("category");
+  const activeCategory: CategoryTab =
+    categoryParam === "internal" || categoryParam === "customer" || categoryParam === "user"
+      ? categoryParam
+      : "all";
+
   // When filter is "overdue" or "thisweek", default sort to openCommitments desc
   useEffect(() => {
     if (commitmentFilter) {
@@ -269,14 +278,30 @@ export default function PeopleIndex() {
   }, [commitmentFilter]);
 
   const clearFilter = () => {
-    setSearchParams({});
+    // Preserve ?category= param when clearing the commitment filter
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("filter");
+      return next;
+    });
     setSortColumn("name");
     setSortDirection("asc");
   };
 
+  const handleCategoryChange = (cat: CategoryTab) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (cat === "all") next.delete("category");
+      else next.set("category", cat);
+      return next;
+    });
+  };
+
   const people = data?.people ?? [];
 
-  const filtered = useMemo(() => {
+  // Search-filtered (with commitment filter), but NOT yet category-filtered.
+  // Used for computing per-tab counts that reflect the current search query.
+  const searchFiltered = useMemo(() => {
     let result = people;
 
     // Apply commitment filter
@@ -294,6 +319,23 @@ export default function PeopleIndex() {
         p.role.toLowerCase().includes(q)
     );
   }, [people, search, commitmentFilter]);
+
+  // Dynamic tab counts — reflect current search query per category
+  const tabCounts = useMemo(
+    () => ({
+      all: searchFiltered.length,
+      internal: searchFiltered.filter((p) => p.category === "internal").length,
+      customer: searchFiltered.filter((p) => p.category === "customer").length,
+      user: searchFiltered.filter((p) => p.category === "user").length,
+    }),
+    [searchFiltered]
+  );
+
+  // Category-filtered (shown in table)
+  const filtered = useMemo(() => {
+    if (activeCategory === "all") return searchFiltered;
+    return searchFiltered.filter((p) => p.category === activeCategory);
+  }, [searchFiltered, activeCategory]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -347,6 +389,33 @@ export default function PeopleIndex() {
           </div>
         }
       />
+
+      {/* Category tabs */}
+      <div className="px-6 pt-3 pb-0 border-b">
+        <Tabs value={activeCategory} onValueChange={(v) => handleCategoryChange(v as CategoryTab)}>
+          <TabsList className="h-9 bg-transparent p-0 gap-0">
+            {(
+              [
+                { value: "all", label: "All" },
+                { value: "internal", label: "Internal" },
+                { value: "customer", label: "Customer" },
+                { value: "user", label: "User" },
+              ] as const
+            ).map(({ value, label }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent hover:text-foreground"
+              >
+                {label}{" "}
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  ({tabCounts[value]})
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
 
       {/* Filter badge */}
       {commitmentFilter && (
