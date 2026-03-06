@@ -194,6 +194,11 @@ Requires the `Markdown` extension from `@tiptap/markdown` to be registered.
 ### @tailwindcss/typography was installed but not enabled
 It was in devDependencies already; just needed to be added to `plugins` in `tailwind.config.ts` to enable `prose` CSS classes that style TipTap output.
 
+### TipTap content is initial-only — use `key` to force remount
+`useEditor({ content: ... })` only initializes content once. React prop changes to `initialValue`
+do NOT update the live editor. To reflect new content (e.g. after a query refetch),
+add `key={content}` to the component — this forces a remount and fresh initialization.
+
 ---
 
 ## Pre-Edit Checklist

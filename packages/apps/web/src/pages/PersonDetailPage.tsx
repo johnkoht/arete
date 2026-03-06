@@ -362,6 +362,7 @@ export default function PersonDetailPage() {
                 </>
               ) : (
                 <MarkdownEditor
+                  key={person.rawContent}
                   initialValue={person.rawContent ?? ''}
                   onChange={() => {}}
                   readOnly

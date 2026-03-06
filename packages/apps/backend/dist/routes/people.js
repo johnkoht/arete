@@ -312,5 +312,30 @@ export function createPeopleRouter(workspaceRoot) {
             return c.json({ error: 'Failed to load person' }, 500);
         }
     });
+    // PATCH /api/people/:slug/notes — update person notes (body after frontmatter)
+    app.patch('/:slug/notes', async (c) => {
+        const slug = c.req.param('slug');
+        try {
+            const personFiles = await scanPeopleDir(workspaceRoot);
+            const found = personFiles.find((p) => p.slug === slug);
+            if (!found) {
+                return c.json({ error: 'Person not found' }, 404);
+            }
+            const body = await c.req.json();
+            if (typeof body.content !== 'string') {
+                return c.json({ error: 'content (string) is required' }, 400);
+            }
+            const raw = await fs.readFile(found.filePath, 'utf8');
+            const { data } = matter(raw);
+            // matter.stringify(content, frontmatterData) correctly reconstructs frontmatter + body
+            const updated = matter.stringify('\n' + body.content, data);
+            await fs.writeFile(found.filePath, updated, 'utf8');
+            return c.json({ success: true });
+        }
+        catch (err) {
+            console.error('[people] notes patch error:', err);
+            return c.json({ error: 'Failed to update notes' }, 500);
+        }
+    });
     return app;
 }
