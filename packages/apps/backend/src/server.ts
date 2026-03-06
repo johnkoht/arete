@@ -10,6 +10,11 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createMeetingsRouter } from './routes/meetings.js';
 import jobsRouter from './routes/jobs.js';
 import { createIntelligenceRouter } from './routes/intelligence.js';
+import { createCalendarRouter } from './routes/calendar.js';
+import { createProjectsRouter } from './routes/projects.js';
+import { createMemoryRouter } from './routes/memory.js';
+import { createPeopleRouter } from './routes/people.js';
+import { createGoalsRouter } from './routes/goals.js';
 
 // Absolute path to packages/apps/web/dist/ — resolved from this file's location
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -96,6 +101,11 @@ export function createApp(workspaceRoot: string): Hono {
   app.route('/api/meetings', createMeetingsRouter(workspaceRoot));
   app.route('/api/jobs', jobsRouter);
   app.route('/api/intelligence', createIntelligenceRouter(workspaceRoot));
+  app.route('/api/calendar', createCalendarRouter(workspaceRoot));
+  app.route('/api/projects', createProjectsRouter(workspaceRoot));
+  app.route('/api/memory', createMemoryRouter(workspaceRoot));
+  app.route('/api/people', createPeopleRouter(workspaceRoot));
+  app.route('/api/goals', createGoalsRouter(workspaceRoot));
 
   // Serve static web app from packages/apps/web/dist/
   // Assets (JS/CSS with content-hashed filenames)

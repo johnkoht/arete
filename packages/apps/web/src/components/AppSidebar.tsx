@@ -1,19 +1,32 @@
-import { Calendar, CheckSquare, LayoutGrid, Users, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  Calendar,
+  Users,
+  Target,
+  Brain,
+  Settings,
+} from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const navItems = [
-  { icon: Calendar, label: "Meetings", path: "/", enabled: true },
-  { icon: CheckSquare, label: "Action Items", path: "#", enabled: false },
-  { icon: LayoutGrid, label: "Plans", path: "#", enabled: false },
-  { icon: Users, label: "People", path: "#", enabled: false },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/", enabled: true },
+  { icon: Calendar, label: "Meetings", path: "/meetings", enabled: true },
+  { icon: Users, label: "People", path: "/people", enabled: true },
+  { icon: Target, label: "Goals", path: "/goals", enabled: true },
+  { icon: Brain, label: "Memory", path: "/memory", enabled: true },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
 
+  const isActive = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
+
   return (
-    <aside className="flex h-screen w-14 flex-col items-center border-r-0 bg-sidebar py-4">
+    <aside className="flex h-screen w-14 flex-col items-center border-r-0 bg-sidebar py-4 flex-shrink-0">
       {/* Logo */}
       <Link to="/" className="mb-6 text-xs font-bold tracking-wider text-sidebar-primary">
         Aβ
@@ -22,7 +35,7 @@ export function AppSidebar() {
       {/* Nav icons */}
       <nav className="flex flex-1 flex-col items-center gap-1">
         {navItems.map((item) => {
-          const isActive = item.enabled && location.pathname === item.path;
+          const active = item.enabled && isActive(item.path);
           return (
             <Tooltip key={item.label} delayDuration={0}>
               <TooltipTrigger asChild>
@@ -30,7 +43,7 @@ export function AppSidebar() {
                   <Link
                     to={item.path}
                     className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
-                      isActive
+                      active
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
                         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     }`}
