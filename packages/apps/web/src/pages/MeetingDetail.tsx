@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { MetadataPanel } from "@/components/MetadataPanel";
 import { ReviewItemsSection, ApprovedItemsSection } from "@/components/ReviewItems";
+import { ParsedItemsSection } from "@/components/ParsedItemsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   Dialog,
@@ -383,7 +384,14 @@ export default function MeetingDetail() {
                   setSummaryOpen={setSummaryOpen}
                   readOnly={true}
                 />
-                <ApprovedItemsSection approvedItems={meeting.approvedItems} />
+                <ParsedItemsSection
+                  parsedSections={meeting.parsedSections}
+                  onToggleActionItem={(index, completed) => {
+                    // TODO: Implement toggle action item
+                    console.log('Toggle action item', index, completed);
+                    toast.info('Action item toggle not yet implemented');
+                  }}
+                />
               </>
             )}
 
@@ -401,7 +409,7 @@ export default function MeetingDetail() {
             )}
 
             {/* Transcript */}
-            {meeting.body && (
+            {meeting.transcript && (
               <div>
                 <button
                   onClick={() => setTranscriptOpen(!transcriptOpen)}
@@ -416,7 +424,7 @@ export default function MeetingDetail() {
                 </button>
                 {transcriptOpen && (
                   <div className="rounded-md border bg-muted/30 p-4 text-sm leading-7 font-mono whitespace-pre-wrap">
-                    {meeting.body.split("\n").map((line, i) => {
+                    {meeting.transcript.split("\n").map((line, i) => {
                       const boldMatch = line.match(/^\*\*(.+?)\*\*(.*)$/);
                       if (boldMatch) {
                         return (

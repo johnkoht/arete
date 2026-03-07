@@ -54,14 +54,27 @@ type RawApprovedItems = {
   learnings: string[];
 };
 
+type RawParsedItem = {
+  text: string;
+  completed?: boolean;
+};
+
+type RawParsedSections = {
+  actionItems: RawParsedItem[];
+  decisions: RawParsedItem[];
+  learnings: RawParsedItem[];
+};
+
 type RawFullMeeting = RawMeetingSummary & {
   summary: string;
   body: string;
+  transcript: string;
   frontmatter: Record<string, unknown>;
   stagedSections: RawStagedSections;
   stagedItemStatus: Record<string, 'approved' | 'skipped' | 'pending'>;
   stagedItemEdits: Record<string, string>;
   approvedItems: RawApprovedItems;
+  parsedSections: RawParsedSections;
 };
 
 // ── Mapping helpers ─────────────────────────────────────────────────────────
@@ -82,9 +95,9 @@ function parseDuration(s: string): number {
 
 function normalizeStatus(s: string): MeetingStatus {
   const lower = s.toLowerCase();
-  if (lower === 'processed') return 'Processed';
-  if (lower === 'approved') return 'Approved';
-  return 'Synced';
+  if (lower === 'processed') return 'processed';
+  if (lower === 'approved') return 'approved';
+  return 'synced';
 }
 
 const TYPE_MAP = { ai: 'action', de: 'decision', le: 'learning' } as const;
@@ -121,8 +134,10 @@ function mapFullMeeting(raw: RawFullMeeting): Meeting {
     ...mapSummary(raw),
     summary: raw.summary,
     body: raw.body,
+    transcript: raw.transcript,
     reviewItems: flattenStagedItems(raw),
     approvedItems: raw.approvedItems,
+    parsedSections: raw.parsedSections,
   };
 }
 

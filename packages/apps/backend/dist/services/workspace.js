@@ -75,6 +75,43 @@ function extractSummary(fm, body) {
     return '';
 }
 /**
+ * Parse a markdown section with list items into an array of item objects.
+ * Handles both plain items (- text) and checkbox items (- [ ] text, - [x] text).
+ */
+function parseListSection(body, sectionName) {
+    const match = body.match(new RegExp(`^##\\s+${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n---|$)`, 'im'));
+    if (!match)
+        return [];
+    const content = match[1];
+    const items = [];
+    // Match list items: - [ ] text, - [x] text, - [X] text, or just - text
+    const lines = content.split('\n');
+    for (const line of lines) {
+        // Checkbox format: - [ ] or - [x] or - [X]
+        const checkboxMatch = line.match(/^-\s+\[([ xX])\]\s+(.+)$/);
+        if (checkboxMatch) {
+            items.push({
+                text: checkboxMatch[2].trim(),
+                completed: checkboxMatch[1].toLowerCase() === 'x',
+            });
+            continue;
+        }
+        // Plain format: - text
+        const plainMatch = line.match(/^-\s+(.+)$/);
+        if (plainMatch) {
+            items.push({ text: plainMatch[1].trim() });
+        }
+    }
+    return items;
+}
+/**
+ * Extract transcript from body (everything under ## Transcript header).
+ */
+function extractTranscript(body) {
+    const match = body.match(/^##\s+Transcript\s*\n([\s\S]*)$/im);
+    return match ? match[1].trim() : '';
+}
+/**
  * Detect meeting status based on content.
  *
  * Status hierarchy:
@@ -210,6 +247,12 @@ export async function getMeeting(workspaceRoot, slug) {
         if (Array.isArray(ra['learnings']))
             approvedItems.learnings = ra['learnings'].filter((x) => typeof x === 'string');
     }
+    // Parse sections from body (for old meetings or detailed view)
+    const parsedSections = {
+        actionItems: parseListSection(content, 'Action Items'),
+        decisions: parseListSection(content, 'Decisions'),
+        learnings: parseListSection(content, 'Learnings'),
+    };
     return {
         slug,
         title: typeof fm['title'] === 'string' ? fm['title'] : slug,
@@ -221,11 +264,13 @@ export async function getMeeting(workspaceRoot, slug) {
         recordingUrl: typeof fm['recording_link'] === 'string' ? fm['recording_link'] : '',
         summary: extractSummary(fm, content),
         body: content,
+        transcript: extractTranscript(content),
         frontmatter: fm,
         stagedSections,
         stagedItemStatus,
         stagedItemEdits,
         approvedItems,
+        parsedSections,
     };
 }
 export async function deleteMeeting(workspaceRoot, slug) {

@@ -231,6 +231,19 @@ export type ApprovedItems = {
   learnings: string[];
 };
 
+/** Parsed item from meeting body (for viewing/editing approved items) */
+export type ParsedItem = {
+  text: string;
+  completed?: boolean;
+};
+
+/** Parsed sections from meeting body */
+export type ParsedSections = {
+  actionItems: ParsedItem[];
+  decisions: ParsedItem[];
+  learnings: ParsedItem[];
+};
+
 export type Meeting = {
   slug: string;
   title: string;
@@ -243,8 +256,12 @@ export type Meeting = {
   recordingUrl?: string;
   summary?: string;
   body?: string;
+  /** Just the transcript portion */
+  transcript?: string;
   reviewItems?: ReviewItem[];
   approvedItems?: ApprovedItems;
+  /** Parsed sections from body (for viewing approved items) */
+  parsedSections?: ParsedSections;
 };
 
 export type JobStatus = 'running' | 'done' | 'error';
