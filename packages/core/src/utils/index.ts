@@ -32,3 +32,6 @@ export {
   injectIntegrationSection,
   deriveIntegrationFromLegacy,
 } from './integration.js';
+export { parseAgendaItems, getUncheckedAgendaItems } from './agenda.js';
+export type { AgendaItem } from './agenda.js';
+export { extractAttendeeSlugs } from './attendees.js';

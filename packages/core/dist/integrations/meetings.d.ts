@@ -19,9 +19,21 @@ export interface MeetingForSave {
     } | string>;
     url: string;
     share_url?: string;
+    agenda?: string;
     /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
     status?: 'synced' | 'processed' | 'approved';
 }
+/**
+ * Find a matching agenda file for a meeting by date and title.
+ * Requires exact date match and title similarity > 0.7.
+ *
+ * @param storage - Storage adapter
+ * @param workspaceRoot - Workspace root path
+ * @param date - Meeting date (YYYY-MM-DD)
+ * @param title - Meeting title
+ * @returns Relative path to agenda if found, null otherwise
+ */
+export declare function findMatchingAgenda(storage: StorageAdapter, workspaceRoot: string, date: string, title: string): Promise<string | null>;
 export declare function meetingFilename(meeting: MeetingForSave): string;
 export declare function saveMeetingFile(storage: StorageAdapter, meeting: MeetingForSave, outputDir: string, templateContent: string, options?: {
     integration?: string;

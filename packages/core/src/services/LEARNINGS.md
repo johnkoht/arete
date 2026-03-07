@@ -14,6 +14,12 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - `packages/core/src/storage/adapter.ts` — `StorageAdapter` interface (read/write/list/exists)
 - `packages/core/test/` — service tests (mock StorageAdapter pattern)
 
+## New Services (2026-03-05)
+
+- **`patterns.ts`** — `detectCrossPersonPatterns(meetingsDirPath, storage, { days })`. Reads `.md` files in the meetings dir, extracts topics from `## Key Points` and `## Summary` sections, groups by normalized topic, returns `SignalPattern[]` for topics appearing in 2+ meetings across 2+ distinct attendees. Supports both `attendee_ids` (slug list) and `attendees: [{name, email}]` formats. Topic extraction caps at 20 per meeting and normalizes for comparison (lowercase + strip punctuation).
+
+- **`momentum.ts`** — Two pure functions: `computeCommitmentMomentum(commitments, refDate?)` buckets open commitments into hot (<7d), stale (7–30d), critical (>30d) by `date` field age. `computeRelationshipMomentum(meetingsDir, peopleDir, storage, opts?)` scans meeting frontmatter for attendees, tracks last meeting date per person, and returns active/cooling/stale buckets. Resolves person names from `people/{internal,customers,users}/{slug}.md` profiles.
+
 ## Gotchas
 
 - **`createServices()` is async — it loads `arete.yaml` from disk.** Callers must `await createServices(process.cwd())`. Forgetting the `await` gives a Promise, not `AreteServices`. Every CLI command in `packages/cli/src/commands/` correctly awaits it — follow that pattern. Defined in `packages/core/src/factory.ts` L54.
@@ -65,7 +71,9 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **Action item lifecycle design** (2026-03-01): 30-day auto-stale via `isActionItemStale()`, 10-item cap per direction via `capActionItems()`, content-hash dedup via `computeActionItemHash()` (sha256 of normalized text + slug + direction). Applied in order: stale filter → dedup → cap. Functions in `person-signals.ts`. When adding new signal types with lifecycle, follow this three-phase pattern.
 
-- **`extractActionItemsForPerson` is now async with shifted ownerName arg** (2026-03-03): Signature changed from `(content, personName, source, date, ownerName?)` to `(content, personName, source, date, callLLM?, ownerName?)`. The `ownerName` moved from 5th to 6th positional. Any call site passing `ownerName` must insert `undefined` as the 5th arg. The entity.ts call site already updated. If you add more callers, grep for `extractActionItemsForPerson` and verify arg count.
+- **`extractActionItemsForPerson` is now async with shifted ownerName arg** (2026-03-03): Signature changed from `(content, personName, source, date, ownerName?)` to `(content, personName, source, date, callLLM?, ownerName?)`. The `ownerName` moved from 5th to 6th positional. Any call site passing `ownerName` must insert `undefined` as the 5th arg. **Note**: as of 2026-03-04, `refreshPersonMemory()` uses `parseActionItemsFromMeeting()` instead — see next entry.
+
+- **Action item extraction is now parsing-based, not LLM-based** (2026-03-04): `refreshPersonMemory()` uses `parseActionItemsFromMeeting()` from `meeting-parser.ts` instead of `extractActionItemsForPerson()`. This means: (1) meetings MUST have a `## Action Items` section for action items to be extracted — no section = empty array, (2) no LLM calls for action item extraction (LLM only used for stance extraction now), (3) `ownerSlug` is computed from profile.md `name` via `slugifyPersonName()`. The parser handles arrow notation (`@owner → @counterparty`) and falls back to owner-name heuristics when notation is missing. If `ownerSlug` is undefined (no profile.md), no action items are extracted.
 
 - **Commitment deletion detection requires prior hash comments — skip when `fileHashes.size === 0`** (2026-03-04): The deletion detection logic (`hash in CommitmentsService but NOT in file`) must be guarded by `fileHashes.size > 0`. If the file has never been rendered with commitments (no `<!-- h:XXXXXXXX -->` comments anywhere), then ALL open commitments in the service appear "absent" and would be falsely resolved on the very first refresh. The guard in `entity.ts` `refreshPersonMemory()` write loop is: `if (fileHashes.size > 0) { detect deleted hashes }`. Without this guard, every first-render silently wipes open commitments. Tests: `person-memory.test.ts` "skips bulkResolve when no checked or deleted hashes detected" and "renders open commitments as unchecked checkboxes with hash comment".
 

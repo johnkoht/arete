@@ -767,10 +767,16 @@ describe('WorkspaceService', () => {
       return { sourceRoot, sourceSkills };
     }
 
-    it('create() copies root-level .md files to .agents/skills/', async () => {
+    it('create() excludes documentation files (PATTERNS.md, README.md, LEARNINGS.md, etc.) from .agents/skills/', async () => {
+      // Documentation files in skills/ root cause pi skill parsing errors — they're not skills
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
       writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Skill Patterns\n', 'utf8');
       writeFileSync(join(sourceSkills, 'README.md'), '# Skills README\n', 'utf8');
+      writeFileSync(join(sourceSkills, 'LEARNINGS.md'), '# Learnings\n', 'utf8');
+      writeFileSync(join(sourceSkills, '_authoring-guide.md'), '# Authoring\n', 'utf8');
+      writeFileSync(join(sourceSkills, '_integration-guide.md'), '# Integration\n', 'utf8');
+      // A non-doc .md file should still be copied (if we ever have one)
+      writeFileSync(join(sourceSkills, 'custom-file.md'), '# Custom\n', 'utf8');
 
       await service.create(tmpDir, {
         ideTarget: 'cursor',
@@ -786,51 +792,38 @@ describe('WorkspaceService', () => {
         },
       });
 
+      // Documentation files should NOT be copied
       assert.equal(
         existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
-        true,
-        'PATTERNS.md should be copied to .agents/skills/',
+        false,
+        'PATTERNS.md should NOT be copied (doc file)',
       );
       assert.equal(
         existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
+        false,
+        'README.md should NOT be copied (doc file)',
+      );
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'LEARNINGS.md')),
+        false,
+        'LEARNINGS.md should NOT be copied (doc file)',
+      );
+      // Non-doc files should still be copied
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'custom-file.md')),
         true,
-        'README.md should be copied to .agents/skills/',
+        'Non-documentation .md files should still be copied',
       );
     });
 
-    it('create() skips root-level .md files that already exist (skip-if-exists)', async () => {
-      const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
-      writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Source PATTERNS\n', 'utf8');
-
-      // Pre-create the workspace and pre-plant a PATTERNS.md
-      mkdirSync(join(tmpDir, '.agents', 'skills'), { recursive: true });
-      writeFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), '# Existing PATTERNS\n', 'utf8');
-
-      await service.create(tmpDir, {
-        ideTarget: 'cursor',
-        source: 'npm',
-        sourcePaths: {
-          root: sourceRoot,
-          skills: sourceSkills,
-          tools: join(sourceRoot, 'tools'),
-          rules: join(sourceRoot, 'rules'),
-          integrations: join(sourceRoot, 'integrations'),
-          templates: join(sourceRoot, 'templates'),
-          guide: join(sourceRoot, 'GUIDE.md'),
-        },
-      });
-
-      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), 'utf8');
-      assert.ok(content.includes('Existing PATTERNS'), 'existing PATTERNS.md should not be overwritten by create()');
-    });
-
-    it('syncCoreSkills via update() copies root-level .md files, always overwriting', async () => {
+    it('syncCoreSkills via update() excludes documentation files', async () => {
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
       writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Updated PATTERNS\n', 'utf8');
+      writeFileSync(join(sourceSkills, 'custom-file.md'), '# Custom Updated\n', 'utf8');
 
-      // Pre-plant an old PATTERNS.md in the workspace
+      // Pre-plant files in the workspace
       mkdirSync(join(tmpDir, '.agents', 'skills'), { recursive: true });
-      writeFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), '# Old PATTERNS\n', 'utf8');
+      writeFileSync(join(tmpDir, '.agents', 'skills', 'custom-file.md'), '# Old Custom\n', 'utf8');
       writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
 
       await service.update(tmpDir, {
@@ -844,8 +837,15 @@ describe('WorkspaceService', () => {
         },
       });
 
-      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md'), 'utf8');
-      assert.ok(content.includes('Updated PATTERNS'), 'PATTERNS.md should be overwritten by syncCoreSkills on update');
+      // PATTERNS.md should NOT be copied (doc file)
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
+        false,
+        'PATTERNS.md should NOT be copied by update (doc file)',
+      );
+      // Non-doc files should be updated
+      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'custom-file.md'), 'utf8');
+      assert.ok(content.includes('Custom Updated'), 'Non-doc .md files should be overwritten by syncCoreSkills');
     });
 
     it('syncCoreSkills does not copy nested .md files from skill subdirectories as root-level files', async () => {

@@ -165,3 +165,50 @@ function buildTestApp(meetingsMock: { ... }) {
 }
 const res = await app.request('/api/meetings', { method: 'GET' });
 ```
+
+---
+
+## Iteration 3 Patterns (2026-03-06)
+
+### broadcastSseEvent is Caller-Owned — Side Effects Belong in index.ts
+
+`broadcastSseEvent` in `server.ts` is a pure SSE broadcaster (module-level, no workspaceRoot access).
+When you need to persist side effects on SSE events (e.g., writing activity.json), do it in `index.ts`
+at the call site — **not** inside `broadcastSseEvent`. This keeps the broadcaster pure and side effects
+explicit:
+```typescript
+// index.ts
+broadcastSseEvent('meeting:processed', data);
+await writeActivityEvent(workspaceRoot, { ... });  // called alongside, not inside broadcastSseEvent
+```
+
+### CommitmentsFile Filter Gotcha — filter=all vs default open
+
+The original `GET /api/commitments` defaulted to `status === 'open'` for all requests. After adding
+`filter=all` support, the filter-selection logic must check `filter === 'all'` **before** the `open`
+default — otherwise `filter=all` still returns only open items. Order matters:
+```typescript
+if (filterParam === 'all') {
+  sourceCommitments = allCommitments;  // all statuses
+} else {
+  sourceCommitments = allCommitments.filter((c) => c.status === 'open');  // default: open only
+}
+```
+
+### Search Router — Excerpt Extraction Exported for Unit Testing
+
+The `extractExcerpt` helper in `routes/search.ts` is exported specifically so it can be tested
+in isolation (unit tests) independently of the full file-scanning pipeline. This pattern (export
+pure helpers for unit testability) is worth following for other route files with complex string logic.
+
+### Activity File — Prepend Not Append
+
+`writeActivityEvent` prepends new events to the front of the array (most recent first), not appends.
+The `readActivityEvents` return order is therefore newest-first without any sorting. Don't reverse
+or sort the array when reading — the insert order is the display order.
+
+### Pre-Existing Test Failure in goals.test.ts (2026-03-06)
+
+`parses commitments with done status` in `test/routes/goals.test.ts` was failing **before** iteration 3.
+Confirmed by git stash → test fails → git stash pop. Do not fix this test in iteration 3 (out of scope).
+It's the only backend test failing across the `test/**/*.test.ts` suite.

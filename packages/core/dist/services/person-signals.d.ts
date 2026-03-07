@@ -70,12 +70,25 @@ export declare function deduplicateActionItems(existing: PersonActionItem[], new
 /**
  * Build the LLM prompt for extracting action items / commitments from content
  * for a specific person.
+ *
+ * @deprecated For meetings, use {@link parseActionItemsFromMeeting} from meeting-parser.ts.
+ * This LLM-based extraction path is deprecated. The meeting processing workflow now
+ * extracts action items during `arete meeting extract` and saves them to structured
+ * `## Action Items` sections, which are parsed by meeting-parser.ts during person
+ * memory refresh. This prompt builder is preserved for potential non-meeting sources
+ * (conversations, etc.) but should not be used for new meeting workflows.
  */
 export declare function buildActionItemPrompt(content: string, personName: string): string;
 /**
  * Parse the LLM response into an array of raw action item objects.
  * Handles code fences, extra text, malformed JSON — never throws.
  * Returns objects with text + direction only; caller adds source/date/hash/stale.
+ *
+ * @deprecated For meetings, use {@link parseActionItemsFromMeeting} from meeting-parser.ts.
+ * This LLM response parser is deprecated. Action items are now extracted during meeting
+ * processing and stored in structured `## Action Items` sections, which are parsed by
+ * meeting-parser.ts. This parser is preserved for potential non-meeting sources but
+ * should not be used for new meeting workflows.
  */
 export declare function parseActionItemResponse(response: string): Array<{
     text: string;
@@ -84,18 +97,25 @@ export declare function parseActionItemResponse(response: string): Array<{
 /**
  * Extract action items for a specific person from meeting content.
  *
- * When `callLLM` is provided, uses LLM-based extraction via `buildActionItemPrompt` →
- * `callLLM` → `parseActionItemResponse` to distinguish genuine commitments from
- * descriptions, explanations, and general discussion.
+ * **LLM Path (deprecated)**: When `callLLM` is provided, uses LLM-based extraction via
+ * `buildActionItemPrompt` → `callLLM` → `parseActionItemResponse` to distinguish genuine
+ * commitments from descriptions, explanations, and general discussion.
  *
- * When `callLLM` is NOT provided, falls back to the existing regex implementation —
- * no silent zero-result regression.
+ * **Regex Path (active)**: When `callLLM` is NOT provided, falls back to the existing
+ * regex implementation — no silent zero-result regression. This path remains available
+ * for non-meeting sources (conversations, etc.).
+ *
+ * @deprecated The LLM path (when callLLM is provided) is deprecated. For meetings, use
+ * {@link parseActionItemsFromMeeting} from meeting-parser.ts. The meeting processing
+ * workflow now extracts action items during `arete meeting extract` and saves them to
+ * structured `## Action Items` sections. The regex fallback (when callLLM is omitted)
+ * remains available for potential non-meeting sources.
  *
  * @param content - Meeting notes/transcript text
  * @param personName - Name of the person to extract items for
  * @param source - Meeting filename
  * @param date - Meeting date (YYYY-MM-DD)
- * @param callLLM - Optional LLM function; when omitted, regex fallback runs
+ * @param callLLM - Optional LLM function; when omitted, regex fallback runs (deprecated when provided)
  * @param ownerName - Workspace owner name (from profile.md); enables owner detection (regex path only)
  */
 export declare function extractActionItemsForPerson(content: string, personName: string, source: string, date: string, callLLM?: LLMCallFn, ownerName?: string): Promise<PersonActionItem[]>;

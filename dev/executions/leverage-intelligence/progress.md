@@ -1,0 +1,78 @@
+# Progress Log — leverage-intelligence
+
+Started: 2026-03-05T03:35:00.000Z
+
+---
+
+## t2-process-meetings — Complete
+**Date**: 2026-03-05
+**Commit**: 8c58ccf
+
+**What was done**: Updated `packages/runtime/skills/process-meetings/SKILL.md` to introduce the Significance Analyst expert pattern for Step 7 (extraction to workspace memory).
+
+**Changes**:
+- Added **Step 6.5: Assemble Context Bundle** between Steps 6 and 7. Instructs the agent to use `context_bundle_assembly` to gather strategy, memory, and people context. Includes topic derivation method (meeting title + first 100 chars of summary), reuse rule for person context already gathered in Steps 2–3, and sparse-context fallback.
+- Rewrote **Step 7: Extract Decisions and Learnings** to use the `significance_analyst` pattern. Replaced keyword-scanning instructions ("we decided", "going with") with 6-step context-aware judgment workflow. Added grounding directive (cite specific bundle content per candidate), ranked candidate presentation with WHY reasoning, and sparse-context behavior note.
+- Added explicit **two-destination split** callout at the top of Step 7 explaining that Step 4 → meeting file and Step 7 → workspace memory are complementary, not redundant.
+- Updated References section to include `context_bundle_assembly` and `significance_analyst`.
+- Step 4 (Extract Meeting Intelligence to meeting file) is **unchanged**.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md files (markdown instruction documents).
+
+**Reflection**: Straightforward surgical edit — the two patterns were already fully defined in PATTERNS.md, so Step 7 just needed to be rewired to consume them. The most important design detail was the reuse rule (don't re-run `arete people show` if Steps 2-3 already gathered person context) and making the two-destination split unambiguous with a blockquote callout.
+
+---
+
+## t3-meeting-prep — Complete
+**Date**: 2026-03-05
+**Commit**: c362b5d
+
+**What was done**: Updated `packages/runtime/skills/meeting-prep/SKILL.md` to introduce the Relationship Intelligence expert pattern as a new workflow step and brief section.
+
+**Changes**:
+- Added **Step 4: Relationship Intelligence Analysis** between "Gather Context" and "Build Prep Brief". Instructs the agent to use the `relationship_intelligence` pattern from PATTERNS.md on person profiles already gathered by `get_meeting_context` — with explicit instruction not to re-run `arete people show`. Four sub-steps mirror the pattern: review known state, compare against recent content, assess trajectory, generate recommendations.
+- Added **Intelligence Insights section** to the brief output template. Specifies three content areas — relationship changes since last meeting (trajectory + evidence), topics needing proactive attention, and recommended approach per attendee — with a concrete worked example for two attendees.
+- Renumbered the former Step 4 "Build Prep Brief" → Step 5 and Step 5 "Close" → Step 6.
+- Added `relationship_intelligence` to the References section alongside the existing `get_meeting_context` reference.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md files (markdown instruction documents).
+
+**Reflection**: Clean additive edit. The key design constraint — reuse `get_meeting_context` people context rather than re-running `arete people show` — was already called out explicitly in PATTERNS.md's `context_bundle_assembly` step 4, so the instruction was easy to mirror. The Intelligence Insights section stays inside the brief's markdown fence so it's part of the single output document, not a separate artifact.
+
+---
+
+## t5-update-pattern-and-guide — Complete
+**Date**: 2026-03-05
+**Commit**: 6cdce5e
+
+**What was done**: Updated `extract_decisions_learnings` in PATTERNS.md with conditional significance analyst reference, and added "Expert Agent Patterns" section to `_authoring-guide.md`.
+
+**Impact assessment — finalize-project**: Read `finalize-project/SKILL.md` before editing. It references `extract_decisions_learnings` but assembles no context bundle upstream (no `context_bundle_assembly` step, no `arete context` call, no `arete memory search` before the extraction step). The conditional preamble explicitly names this case: "When no context bundle is available (e.g., `finalize-project` which does not assemble a bundle), fall back to keyword scanning." finalize-project continues to work unchanged — it uses the keyword-scanning fallback path automatically.
+
+**Changes**:
+- **PATTERNS.md — `extract_decisions_learnings`**: Added conditional preamble before the steps explaining when to use `significance_analyst` (bundle available) vs keyword scanning (no bundle). Renamed existing steps heading to "Steps (keyword-scanning fallback)". Added `See also: significance_analyst, context_bundle_assembly` cross-reference.
+- **PATTERNS.md — `significance_analyst`**: Added bidirectional `See also` pointing back to `extract_decisions_learnings` and `context_bundle_assembly`.
+- **`_authoring-guide.md`**: Added "## Expert Agent Patterns" section covering what they are (instruction-based intelligence phases), the three available patterns with a reference table, when to use them (intelligence-heavy skills needing context-aware reasoning), a how-to example of referencing from a skill, and the same-conversation Phase 1 note.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md and PATTERNS.md files (markdown instruction documents).
+
+**Reflection**: Clean surgical task. The finalize-project backward-compat design was the main thing to get right — naming it explicitly in the preamble so future skill authors understand the pattern is callable from non-bundle-assembling skills too. Bidirectional cross-reference between `extract_decisions_learnings` and `significance_analyst` required adding a `See also` to the analyst section (it had none). ~1,000 tokens.
+
+---
+
+## t4-week-review — Complete
+**Date**: 2026-03-05
+**Commit**: 67a4fe0
+
+**What was done**: Updated `packages/runtime/skills/week-review/SKILL.md` to introduce the Significance Analyst expert pattern for weekly significance assessment.
+
+**Changes**:
+- Added **Step 3.5: Weekly Significance Analysis** between Quarter Goal Progress and Optional Capture. Instructs the agent to assemble a context bundle (goals + memory ONLY — explicitly no `arete people show` calls) using `context_bundle_assembly`, then apply `significance_analyst` to the week's raw content.
+- Step 3.5 includes: topic derivation from the week's focus areas, two-section bundle (strategy/goals and memory — people section explicitly excluded), the four significance_analyst judgment questions, grounding directive (cite specific bundle content per significant item), and sparse-context fallback behavior.
+- Added **Weekly Intelligence output section** as a markdown template within Step 3.5: Most Significant Events (with reasoning), Patterns Identified (themes, blocked areas, momentum shifts), Strategic Connections (how week advances/hinders quarter goals).
+- Updated **References** to include `context_bundle_assembly` and `significance_analyst` patterns with a note that the bundle is limited to goals + memory only.
+- All existing steps (1, 2, 2.5, 3, 4, 5) preserved without modification.
+
+**Quality checks**: No typecheck/test suite applies to skill SKILL.md files (markdown instruction documents).
+
+**Reflection**: Straightforward additive edit. The key constraint was the explicit exclusion of `arete people show` calls — week-review is a solo workflow with no attendees to resolve, so people context is not applicable. Inserted Step 3.5 after quarter progress (Step 3) so the significance analysis has the full mechanical review as input before applying judgment. 1–2 tokens of implementation work.

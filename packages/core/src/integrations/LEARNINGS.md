@@ -174,3 +174,21 @@ Authorization: Bearer <access_token>
 Body: { jsonrpc: "2.0", method: "tools/call", params: { name, arguments: args }, id: 1 }
 ```
 Before adding any SDK dependency, verify the transport protocol. If it's JSON-RPC over HTTP/HTTPS, `fetch` is enough.
+
+---
+
+## Meeting Workflow — Agenda Linking (2026-03-04)
+
+### Agenda Matching Algorithm
+
+`findMatchingAgenda()` in `meetings.ts` links agendas to pulled meetings using:
+1. **Exact date match**: Agenda filename must start with `YYYY-MM-DD-` matching meeting date
+2. **Fuzzy title match**: Jaccard similarity on words > 0.7 threshold
+
+**Filename parsing**: Assumes agenda filenames follow `YYYY-MM-DD-title-slug.md` format. The 11-character slice (`filename.slice(11, -3)`) extracts the title slug after the date prefix and before `.md`. Filenames with empty slugs (e.g., `2026-03-04-.md`) produce empty titles and won't match.
+
+**Similarity function**: Normalized titles are lowercased, stripped of punctuation, and compared using word-level Jaccard index (intersection / union). A score of 1.0 = identical words; threshold of 0.7 requires ~70% word overlap.
+
+**Key references**:
+- `packages/core/src/integrations/meetings.ts` — `findMatchingAgenda()`, `titleSimilarity()`, `normalizeTitle()`
+- `packages/core/test/integrations/meetings.test.ts` — 20 tests including edge cases for single-word titles, empty slugs

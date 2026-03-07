@@ -381,7 +381,8 @@ function escapeTableCell(s) {
 }
 // Person memory signal collection, aggregation, rendering, and upsert — extracted to person-memory.ts
 import { collectSignalsForPerson, aggregateSignals, renderPersonMemorySection, getPersonMemoryLastRefreshed, isMemoryStale, upsertPersonMemorySection, extractHashesFromContent, extractCheckedHashes, } from './person-memory.js';
-import { extractStancesForPerson, extractActionItemsForPerson, isActionItemStale, deduplicateActionItems, capActionItems, } from './person-signals.js';
+import { extractStancesForPerson, isActionItemStale, deduplicateActionItems, capActionItems, } from './person-signals.js';
+import { parseActionItemsFromMeeting } from './meeting-parser.js';
 import { computeRelationshipHealth } from './person-health.js';
 const DEFAULT_FEATURE_TOGGLES = {
     enableExtractionTuning: false,
@@ -783,12 +784,14 @@ export class EntityService {
             : [];
         // Read workspace owner name from profile.md once for action item direction classification.
         let ownerName;
+        let ownerSlug;
         const profilePath = join(workspacePaths.context, 'profile.md');
         const profileContent = await this.storage.read(profilePath);
         if (profileContent) {
             const parsedProfile = parseFrontmatter(profileContent);
             if (parsedProfile && typeof parsedProfile.frontmatter.name === 'string') {
                 ownerName = parsedProfile.frontmatter.name;
+                ownerSlug = slugifyPersonName(ownerName);
             }
         }
         const personSignals = new Map();
@@ -804,9 +807,6 @@ export class EntityService {
         // LLM stance cache — prevents duplicate LLM calls for the same meeting+person
         // within a single refresh. Keyed by normalized absolute path + ':' + person slug.
         const stanceCache = new Map();
-        // LLM action item cache — same pattern as stanceCache. Only populated when
-        // callLLM is provided; regex fallback is fast and does not warrant caching.
-        const actionItemCache = new Map();
         // Meeting content cache — keyed by normalized absolute path so that the
         // same physical file is read at most once, regardless of whether the path
         // came from storage.list() (absolute) or SearchProvider (possibly relative).
@@ -907,21 +907,12 @@ export class EntityService {
                         personStanceList.push(...stances);
                     }
                 }
-                // Action item extraction (LLM when callLLM provided, regex fallback otherwise)
-                const actionItemCacheKey = resolve(workspacePaths.root, meetingPath) + ':' + person.slug;
-                let actionItems;
-                if (options.callLLM) {
-                    if (actionItemCache.has(actionItemCacheKey)) {
-                        actionItems = actionItemCache.get(actionItemCacheKey);
-                    }
-                    else {
-                        actionItems = await extractActionItemsForPerson(content, person.name, source, date, options.callLLM, ownerName);
-                        actionItemCache.set(actionItemCacheKey, actionItems);
-                    }
-                }
-                else {
-                    actionItems = await extractActionItemsForPerson(content, person.name, source, date, undefined, ownerName);
-                }
+                // Action item extraction: parse structured ## Action Items section.
+                // If section exists → use parseActionItemsFromMeeting()
+                // If section missing → returns empty array (preserves existing commitments via sync path)
+                const actionItems = ownerSlug
+                    ? parseActionItemsFromMeeting(content, person.slug, ownerSlug, source)
+                    : [];
                 const personActionItemList = personActionItems.get(person.slug);
                 if (personActionItemList) {
                     personActionItemList.push(...actionItems);

@@ -67,7 +67,18 @@ After attendee slugs are resolved, refresh only if stale/missing:
 
 Run **get_meeting_context** (see PATTERNS.md). Use the outputs to build the brief.
 
-### 4. Build Prep Brief
+### 4. Relationship Intelligence Analysis
+
+Using the person profiles and context already gathered by **get_meeting_context** (do NOT re-run `arete people show`), apply the **relationship_intelligence** pattern from PATTERNS.md for each attendee who has a person profile:
+
+1. **Review known relationship state** — Note current stances (strength/direction), open items, relationship health score, last interaction date from the people context already in hand.
+2. **Compare against recent meeting content** — Identify new or shifted stances, resolved items, and positive/negative health signals since the last recorded interaction.
+3. **Assess trajectory** — Is the relationship strengthening, stable, or weakening? Are concerns accumulating?
+4. **Generate prep recommendations** — Topics to address proactively, wins to acknowledge, questions to ask, and recommended approach (direct vs. exploratory) for each key attendee.
+
+Collect the resulting intelligence insights; they populate the **Intelligence Insights** section of the brief.
+
+### 5. Build Prep Brief
 
 Output markdown:
 
@@ -115,11 +126,23 @@ Generate from person intelligence and meeting history:
 - Be aware: [person] [stance] (e.g. "Be aware: Sarah is skeptical of timeline estimates")
 - Share update on [Y]
 - Ask about [Z]
+
+### Intelligence Insights
+Derived from the **relationship_intelligence** pattern (Step 4). One entry per attendee with a person profile:
+
+- **Relationship changes since last meeting** — trajectory direction (strengthening / stable / weakening) and key evidence (e.g., "Architecture doc still overdue → health declining")
+- **Topics needing proactive attention** — unresolved concerns or accumulating issues the builder should raise first
+- **Recommended approach per attendee** — direct vs. exploratory, what to lead with, what to acknowledge, what to leverage
+
+Example:
+
+- **Sarah Chen** — WEAKENING (doc delay + workarounds). Lead with concrete architecture doc ETA. Acknowledge the block. Use webhook enthusiasm to rebuild goodwill.
+- **Alex Rivera** — STABLE. No open items. Ask about Q2 planning to surface new priorities.
 ```
 
 Keep it concise and prep-focused.
 
-### 5. Close
+### 6. Close
 
 - Offer to save the brief to a note or scratchpad if useful.
 - Suggest **process-meetings** after the meeting to propagate attendees and extract decisions.
@@ -127,6 +150,7 @@ Keep it concise and prep-focused.
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — relationship_intelligence
 - **People**: `people/` (internal, customers, users)
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `attendees`)
 - **Projects**: `projects/active/` READMEs (`stakeholders`)

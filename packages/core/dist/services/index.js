@@ -11,4 +11,12 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
+// Meeting extraction
+export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, } from './meeting-extraction.js';
+// Meeting file parsing
+export { parseActionItemsFromMeeting } from './meeting-parser.js';
+// Pattern detection
+export { detectCrossPersonPatterns } from './patterns.js';
+// Momentum analysis
+export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
 //# sourceMappingURL=index.js.map

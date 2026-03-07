@@ -7,6 +7,17 @@ import { join, dirname, resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
 import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST, } from '../workspace-structure.js';
+/**
+ * Root-level .md files in skills/ that are documentation, not skills.
+ * These should NOT be copied to user workspaces (they cause pi skill parsing errors).
+ */
+const SKILLS_DOC_FILES = new Set([
+    'LEARNINGS.md',
+    'PATTERNS.md',
+    'README.md',
+    '_authoring-guide.md',
+    '_integration-guide.md',
+]);
 import { loadConfig, getDefaultConfig } from '../config.js';
 import { SkillService } from './skills.js';
 import { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from '../utils/integration.js';
@@ -141,10 +152,11 @@ export class WorkspaceService {
                     }
                 }
                 // Copy root-level .md files (skip if exists — consistent with create() skip-if-exists behavior)
+                // Exclude documentation files that aren't skills (LEARNINGS.md, PATTERNS.md, etc.)
                 const rootMdFiles = await this.storage.list(sourcePaths.skills, { extensions: ['.md'] });
                 for (const src of rootMdFiles) {
                     const filename = src.split(/[/\\]/).pop() ?? '';
-                    if (!filename)
+                    if (!filename || SKILLS_DOC_FILES.has(filename))
                         continue;
                     const dest = join(paths.agentSkills, filename);
                     const destExists = await this.storage.exists(dest);
@@ -509,6 +521,7 @@ export class WorkspaceService {
             }
         }
         // Copy root-level .md files to target (always overwrite — consistent with copyDirectory behavior for core content)
+        // Exclude documentation files that aren't skills (LEARNINGS.md, PATTERNS.md, etc.)
         const rootMdFiles = await this.storage.list(sourceSkillsDir, { extensions: ['.md'] });
         for (const src of rootMdFiles) {
             // Safety: only files directly in the root (no extra path separator after sourceSkillsDir)
@@ -516,7 +529,7 @@ export class WorkspaceService {
             if (rel.includes('/') || rel.includes('\\'))
                 continue;
             const filename = rel;
-            if (!filename)
+            if (!filename || SKILLS_DOC_FILES.has(filename))
                 continue;
             const dest = join(targetSkillsDir, filename);
             try {
