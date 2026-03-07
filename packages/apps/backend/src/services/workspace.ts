@@ -95,7 +95,17 @@ function extractSummary(fm: Record<string, unknown>, body: string): string {
  * Handles both plain items (- text) and checkbox items (- [ ] text, - [x] text).
  */
 function parseListSection(body: string, sectionName: string): Array<{ text: string; completed?: boolean }> {
-  const match = body.match(new RegExp(`^##\\s+${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n---|$)`, 'im'));
+  // Note: Can't use $ with 'm' flag as it matches end-of-line, not end-of-string
+  // Instead, match until next ## header, --- divider, or end of content
+  const regex = new RegExp(`^##\\s+${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|\\n---)`, 'im');
+  let match = body.match(regex);
+  
+  // If no match with lookahead, try matching to end of string (section is last in file)
+  if (!match) {
+    const endRegex = new RegExp(`^##\\s+${sectionName}\\s*\\n([\\s\\S]*)$`, 'im');
+    match = body.match(endRegex);
+  }
+  
   if (!match) return [];
   
   const content = match[1];
