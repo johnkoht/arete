@@ -278,6 +278,54 @@ content changes (e.g. switching between person records).
 
 ---
 
+## Navigation Guard Pattern (first use: V3-2)
+
+### useBlocker requires a data router
+
+React Router's `useBlocker` hook only works with data routers (`createBrowserRouter`, `createMemoryRouter`
+with `RouterProvider`). It does NOT work with `MemoryRouter` or `BrowserRouter` directly.
+
+For testing components that use `useBlocker`, use `createMemoryRouter`:
+```tsx
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+
+function renderPage(initialPath = '/people/john-doe') {
+  const router = createMemoryRouter(
+    [{ path: '/people/:slug', element: <PersonDetailPage /> }],
+    { initialEntries: [initialPath] }
+  );
+  return render(<RouterProvider router={router} />);
+}
+```
+
+### useBlocker pattern for unsaved changes
+
+The canonical pattern for warning users about unsaved changes:
+```tsx
+import { useBlocker } from 'react-router-dom';
+
+// Condition: block navigation when editing AND content differs from original
+const blocker = useBlocker(isEditing && editContent !== (person?.rawContent ?? ''));
+
+useEffect(() => {
+  if (blocker.state === 'blocked') {
+    if (window.confirm('You have unsaved changes. Discard them?')) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }
+}, [blocker]);
+```
+
+Key points:
+- The blocker condition must be a boolean (not just truthy/falsy)
+- `blocker.state` is 'idle', 'blocked', or 'proceeding'
+- Call `blocker.proceed()` to allow navigation, `blocker.reset()` to cancel
+- The confirm dialog appears in the useEffect when state becomes 'blocked'
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
