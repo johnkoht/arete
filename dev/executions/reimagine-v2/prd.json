@@ -58,8 +58,8 @@
         "V2-4",
         "V2-5"
       ],
-      "status": "pending",
-      "commitSha": null
+      "status": "complete",
+      "commitSha": "69d922f"
     }
   ]
 }

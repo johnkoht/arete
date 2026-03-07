@@ -179,3 +179,28 @@ Working dir: /Users/johnkoht/code/worktrees/arete--reimagine
 **Files changed**: `packages/apps/backend/dist/routes/people.js`, `packages/apps/web/src/pages/PersonDetailPage.tsx`, `packages/apps/web/LEARNINGS.md`
 **Quality checks**: `tsc` ✓, `vite build` ✓
 **Commit**: 98615f7
+
+---
+
+## V2-6 — General Polish & Bug Fixes
+**Completed**: 2026-03-06
+**Commit**: 69d922f
+
+### What Was Done
+- Updated Dashboard Recent Activity empty state: "Activity appears as meetings are processed with `arete view` running."
+- Updated Dashboard Today's Meetings (calendar not connected) empty state: "Connect your calendar with `arete pull calendar` to see today's meetings here."
+- Updated PeopleIndex empty search state to include the search query: `No people match "${search}". Try a different name or clear the filter.`
+- Updated MemoryFeed empty state title to "No decisions or learnings captured yet" and description to "Process your meetings with `arete view` to start building memory."
+- Verified AppSidebar: Meetings → `/meetings` ✅, Settings → `/settings` ✅
+
+### Files Changed
+- `packages/apps/web/src/pages/Dashboard.tsx`
+- `packages/apps/web/src/pages/PeopleIndex.tsx`
+- `packages/apps/web/src/pages/MemoryFeed.tsx`
+
+### Quality Checks
+- build: ✓ (vite build passes, 957KB bundle)
+- No backend changes
+
+### Reflection
+Straightforward copy polish pass; all changes were string replacements with no logic changes. ~3K tokens.
