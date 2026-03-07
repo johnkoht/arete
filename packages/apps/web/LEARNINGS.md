@@ -175,12 +175,16 @@ the editor's `content` prop.
 
 ## TipTap Integration (first use: V2-5)
 
-### BubbleMenu import — NOT from @tiptap/react
-`BubbleMenu` is exported from `@tiptap/extension-bubble-menu`, not `@tiptap/react`:
+### BubbleMenu import — from @tiptap/react/menus (TipTap v3)
+In TipTap v3, `BubbleMenu` React component is in the `/menus` subpath:
 ```typescript
-// ✓ Correct
+// ✓ Correct (TipTap v3)
+import { BubbleMenu } from '@tiptap/react/menus';
+
+// ✗ Wrong — this is the Extension, not the React component
 import { BubbleMenu } from '@tiptap/extension-bubble-menu';
-// ✗ Wrong — build will fail (BubbleMenu not exported from @tiptap/react)
+
+// ✗ Wrong — not exported from root @tiptap/react
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 ```
 
