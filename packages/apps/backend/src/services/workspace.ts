@@ -29,6 +29,16 @@ function slugToPath(workspaceRoot: string, slug: string): string {
   return join(meetingsDir(workspaceRoot), `${slug}.md`);
 }
 
+/**
+ * Safely extract a date string from frontmatter.
+ * YAML may parse unquoted dates as Date objects, so handle both string and Date.
+ */
+function extractDate(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  return '';
+}
+
 function parseAttendees(
   raw: unknown
 ): Array<{ name: string; email: string }> {
@@ -180,7 +190,7 @@ export async function listMeetings(workspaceRoot: string): Promise<MeetingSummar
       summaries.push({
         slug,
         title: typeof fm['title'] === 'string' ? fm['title'] : slug,
-        date: typeof fm['date'] === 'string' ? fm['date'] : '',
+        date: extractDate(fm['date']),
         status: detectMeetingStatus(fm, content),
         attendees: parseAttendees(fm['attendees']),
         duration: extractDuration(fm, content),
@@ -232,8 +242,8 @@ export async function getMeeting(
   return {
     slug,
     title: typeof fm['title'] === 'string' ? fm['title'] : slug,
-    date: typeof fm['date'] === 'string' ? fm['date'] : '',
-    status: typeof fm['status'] === 'string' ? fm['status'] : 'synced',
+    date: extractDate(fm['date']),
+    status: detectMeetingStatus(fm, content),
     attendees: parseAttendees(fm['attendees']),
     duration: extractDuration(fm, content),
     source: typeof fm['source'] === 'string' ? fm['source'] : '',
