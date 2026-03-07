@@ -106,8 +106,8 @@ describe("useMeetings", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]?.status).toBe("Processed");
-    expect(result.current.data?.[1]?.status).toBe("Synced");
+    expect(result.current.data?.[0]?.status).toBe("processed");
+    expect(result.current.data?.[1]?.status).toBe("synced");
   });
 
   it("computes attendee initials from name", async () => {

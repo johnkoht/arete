@@ -140,13 +140,13 @@ export default function MeetingDetail() {
     );
   }
 
-  const isProcessed = meeting.status === "Processed";
-  const isSynced = meeting.status === "Synced";
-  const isApproved = meeting.status === "Approved";
+  const isProcessed = meeting.status === "processed";
+  const isSynced = meeting.status === "synced";
+  const isApproved = meeting.status === "approved";
 
   // Next triage meeting (from the meetings list, excluding current)
   const triageMeetings = allMeetings.filter(
-    (m) => (m.status === "Synced" || m.status === "Processed") && m.slug !== safeSlug
+    (m) => (m.status === "synced" || m.status === "processed") && m.slug !== safeSlug
   );
   const nextTriageMeeting = triageMeetings[0];
   const triageRemaining = triageMeetings.length;
@@ -279,7 +279,7 @@ export default function MeetingDetail() {
 
   // Header badge
   const headerBadge = isApproved ? (
-    <StatusBadge status="Approved" size="sm" />
+    <StatusBadge status="approved" size="sm" />
   ) : isProcessed ? (
     <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-status-processed/10 text-status-processed">
       Needs Review
@@ -289,7 +289,7 @@ export default function MeetingDetail() {
       Needs Processing
     </span>
   ) : (
-    <StatusBadge status="Approved" size="sm" />
+    <StatusBadge status="approved" size="sm" />
   );
 
   return (

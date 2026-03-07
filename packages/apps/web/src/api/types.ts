@@ -208,7 +208,7 @@ export type ActivityResponse = {
 
 // ── Meeting types (existing) ──────────────────────────────────────────────────
 
-export type MeetingStatus = 'Synced' | 'Processed' | 'Approved';
+export type MeetingStatus = 'synced' | 'processed' | 'approved';
 export type ItemStatus = 'pending' | 'approved' | 'skipped';
 export type ItemType = 'action' | 'decision' | 'learning';
 

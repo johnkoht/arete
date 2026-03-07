@@ -59,15 +59,15 @@ export default function MeetingsIndex() {
   };
 
   const triageCount = meetings.filter(
-    (m) => m.status === "Synced" || m.status === "Processed"
+    (m) => m.status === "synced" || m.status === "processed"
   ).length;
-  const approvedCount = meetings.filter((m) => m.status === "Approved").length;
+  const approvedCount = meetings.filter((m) => m.status === "approved").length;
 
   const tabFiltered = useMemo(() => {
     if (activeTab === "Triage")
-      return meetings.filter((m) => m.status === "Synced" || m.status === "Processed");
+      return meetings.filter((m) => m.status === "synced" || m.status === "processed");
     if (activeTab === "Approved")
-      return meetings.filter((m) => m.status === "Approved");
+      return meetings.filter((m) => m.status === "approved");
     return meetings;
   }, [activeTab, meetings]);
 
@@ -130,7 +130,7 @@ export default function MeetingsIndex() {
   ];
 
   const actionButton = (m: Meeting) => {
-    if (m.status === "Processed") {
+    if (m.status === "processed") {
       return (
         <Link to={`/meetings/${m.slug}`}>
           <Button
@@ -143,7 +143,7 @@ export default function MeetingsIndex() {
         </Link>
       );
     }
-    if (m.status === "Synced") {
+    if (m.status === "synced") {
       return (
         <Link to={`/meetings/${m.slug}`}>
           <Button variant="outline" size="sm">
@@ -330,7 +330,7 @@ export default function MeetingsIndex() {
                   key={m.slug}
                   onClick={() => navigate(`/meetings/${m.slug}`)}
                   className={`border-b transition-colors hover:bg-accent/50 cursor-pointer ${
-                    m.status === "Processed"
+                    m.status === "processed"
                       ? "border-l-2 border-l-status-processed bg-status-processed/5"
                       : ""
                   }`}
