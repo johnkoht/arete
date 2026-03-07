@@ -241,8 +241,8 @@ export function createGoalsRouter(workspaceRoot: string): Hono {
 
       if (done) {
         // Toggle first unchecked box to checked
-        if (/- \[ \]/.test(sectionBody)) {
-          sectionBody = sectionBody.replace(/- \[ \]/, '- [x]');
+        if (/- \[\s*\]/.test(sectionBody)) {
+          sectionBody = sectionBody.replace(/- \[\s*\]/, '- [x]');
         } else {
           return c.json({ error: 'No unchecked items to mark done' }, 400);
         }
@@ -250,6 +250,11 @@ export function createGoalsRouter(workspaceRoot: string): Hono {
         // Toggle first checked box to unchecked
         if (/- \[x\]/i.test(sectionBody)) {
           sectionBody = sectionBody.replace(/- \[x\]/i, '- [ ]');
+        } else if (/^\[x\]$/im.test(sectionBody)) {
+          // Handle legacy standalone [x] lines (from old buggy code)
+          sectionBody = sectionBody.split('\n').filter(line => !/^\[x\]$/i.test(line.trim())).join('\n');
+          // Ensure section ends with newline
+          if (!sectionBody.endsWith('\n')) sectionBody += '\n';
         } else {
           return c.json({ error: 'No checked items to uncheck' }, 400);
         }

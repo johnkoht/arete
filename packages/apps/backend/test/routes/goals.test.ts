@@ -467,4 +467,52 @@ describe('PATCH /week/priority — toggle done on/off', () => {
 
     await rm(freshDir, { recursive: true, force: true });
   });
+
+  it('handles legacy standalone [x] format — backwards compatibility', async () => {
+    // Create workspace with old-style standalone [x] (from buggy code)
+    const legacyDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-legacy-'));
+    await mkdir(join(legacyDir, 'now'), { recursive: true });
+    
+    const legacyContent = `# This Week
+
+**Week of**: 2026-03-03
+
+## Priorities
+
+### 1. Legacy priority
+
+Some text about this priority.
+[x]
+
+### 2. Another priority
+
+- [ ] Task A
+`;
+    await writeFile(join(legacyDir, 'now', 'week.md'), legacyContent, 'utf8');
+
+    const router = createGoalsRouter(legacyDir);
+    
+    // First verify GET sees it as done
+    const getRes = await req(router, 'GET', '/week');
+    assert.equal(getRes.status, 200);
+    const getBody = getRes.json as { priorities: Array<{ index: number; done: boolean }> };
+    const p1 = getBody.priorities.find(p => p.index === 1);
+    assert.equal(p1?.done, true, 'legacy [x] should be detected as done');
+
+    // Now PATCH to unmark done — should succeed and remove standalone [x]
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: false });
+    assert.equal(status, 200, 'should successfully unmark legacy done');
+    const body = json as { success: boolean; updatedContent: string };
+    assert.equal(body.success, true);
+    assert.ok(!body.updatedContent.includes('[x]'), 'standalone [x] should be removed');
+    assert.ok(body.updatedContent.includes('Some text about this priority.'), 'other content preserved');
+
+    // Verify GET now sees it as not done
+    const getRes2 = await req(router, 'GET', '/week');
+    const getBody2 = getRes2.json as { priorities: Array<{ index: number; done: boolean }> };
+    const p1After = getBody2.priorities.find(p => p.index === 1);
+    assert.equal(p1After?.done, false, 'should now be marked as not done');
+
+    await rm(legacyDir, { recursive: true, force: true });
+  });
 });

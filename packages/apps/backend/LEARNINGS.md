@@ -207,8 +207,12 @@ pure helpers for unit testability) is worth following for other route files with
 The `readActivityEvents` return order is therefore newest-first without any sorting. Don't reverse
 or sort the array when reading — the insert order is the display order.
 
-### Pre-Existing Test Failure in goals.test.ts (2026-03-06)
+### Pre-Existing Test Failures in goals.test.ts (2026-03-06, updated 2026-03-07)
 
-`parses commitments with done status` in `test/routes/goals.test.ts` was failing **before** iteration 3.
-Confirmed by git stash → test fails → git stash pop. Do not fix this test in iteration 3 (out of scope).
-It's the only backend test failing across the `test/**/*.test.ts` suite.
+The GET /quarter tests in `test/routes/goals.test.ts` were failing **before** iteration 3:
+- `returns found=true and parsed outcomes`
+- `parses outcome id and title`
+- `parses success criteria`
+
+These are parser mismatches — the test data uses `### Q1-1` format but `parseQuarterOutcomes` expects `## Goal N:` format.
+Do not fix these tests as part of other bug fixes (out of scope). The `parses commitments with done status` test now passes.
