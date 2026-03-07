@@ -222,6 +222,62 @@ add `key={content}` to the component — this forces a remount and fresh initial
 
 ---
 
+## BlockNote Integration (first use: V3-1)
+
+BlockNote (`@blocknote/react`, `@blocknote/mantine`) is used for the Notion-like rich text editor.
+It replaces TipTap for the main block editor experience.
+
+### Markdown round-trip is intentionally lossy
+
+BlockNote's `blocksToMarkdownLossy()` normalizes markdown on export:
+- Extra blank lines between paragraphs may be collapsed
+- Trailing whitespace is trimmed
+- Leading/trailing newlines are normalized
+- List indentation uses 4 spaces (BlockNote's standard)
+
+This is expected behavior — test for *valid* output, not *identical* output.
+
+### Lazy loading for bundle size
+
+BlockEditor exports `LazyBlockEditor` for code splitting:
+```typescript
+import { LazyBlockEditor } from '@/components/BlockEditor.js';
+
+// In component:
+<Suspense fallback={<Skeleton />}>
+  <LazyBlockEditor initialMarkdown={content} onChange={setContent} />
+</Suspense>
+```
+
+### Theme CSS variables map to shadcn
+
+BlockNote's `--bn-colors-*` variables are mapped to shadcn's `--background`, `--foreground`, 
+`--card`, `--border`, etc. in the inline `<style>` tag. If you change the theme in 
+`src/index.css`, the editor will inherit those changes.
+
+### Read-only mode hides editing UI via CSS
+
+The CSS rule `.block-editor-wrapper:has([data-editable="false"]) .bn-side-menu { display: none; }`
+hides drag handles and the side menu when `editable={false}`. The `slashMenu={editable}` prop
+also disables the slash command menu in read-only mode.
+
+### Keyboard shortcuts work out of the box
+
+BlockNote's built-in shortcuts are handled at the ProseMirror level:
+- `Cmd+B` — bold
+- `Cmd+I` — italic
+- `/` — slash menu (at line start)
+
+These are tested manually; automated keyboard testing in jsdom is unreliable for ProseMirror.
+
+### Content initialization like TipTap — use `key` to remount
+
+Like TipTap, BlockNote's `useCreateBlockNote()` only initializes once. Use `key={content}` 
+on the `<BlockEditor>` or `<LazyBlockEditor>` component to force remount when external 
+content changes (e.g. switching between person records).
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`

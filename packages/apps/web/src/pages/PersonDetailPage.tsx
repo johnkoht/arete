@@ -3,7 +3,7 @@
  * Route: /people/:slug
  */
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Mail, Building2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { HealthDot, CategoryBadge } from "@/components/people/PersonBadges.js";
-import { MarkdownEditor } from "@/components/MarkdownEditor.js";
+import { LazyBlockEditor } from "@/components/BlockEditor.js";
 import { usePerson, useUpdatePersonNotes } from "@/hooks/people.js";
 import { useMeeting } from "@/hooks/meetings.js";
 
@@ -327,12 +327,16 @@ export default function PersonDetailPage() {
 
               {isEditing ? (
                 <>
-                  <MarkdownEditor
-                    initialValue={editContent}
-                    onChange={setEditContent}
-                    placeholder="Add notes about this person..."
-                    className="min-h-[200px] border rounded-md p-3"
-                  />
+                  <div className="min-h-[200px] border rounded-md p-3">
+                    <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
+                      <LazyBlockEditor
+                        key={`editing-${person.slug}`}
+                        initialMarkdown={editContent}
+                        onChange={setEditContent}
+                        editable={true}
+                      />
+                    </Suspense>
+                  </div>
                   <div className="flex gap-2 mt-2">
                     <Button
                       size="sm"
@@ -361,13 +365,16 @@ export default function PersonDetailPage() {
                   </div>
                 </>
               ) : (
-                <MarkdownEditor
-                  key={person.rawContent}
-                  initialValue={person.rawContent ?? ''}
-                  onChange={() => {}}
-                  readOnly
-                  className="text-sm text-muted-foreground"
-                />
+                <div className="text-sm text-muted-foreground">
+                  <Suspense fallback={<Skeleton className="h-[100px] w-full" />}>
+                    <LazyBlockEditor
+                      key={`readonly-${person.slug}-${person.rawContent}`}
+                      initialMarkdown={person.rawContent ?? ''}
+                      onChange={() => {}}
+                      editable={false}
+                    />
+                  </Suspense>
+                </div>
               )}
             </div>
           </div>
