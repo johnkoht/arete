@@ -53,7 +53,7 @@ function extractSummary(fm, body) {
         return fm['summary'];
     }
     // Try ## Summary section in body
-    const match = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const match = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     if (match) {
         const summaryText = match[1].trim();
         // Skip placeholder text
@@ -91,7 +91,7 @@ function detectMeetingStatus(fm, body) {
         return 'processed';
     }
     // Has non-staged Action Items with real content → approved (old format, already committed)
-    const actionItemsMatch = body.match(/^##\s+Action Items\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const actionItemsMatch = body.match(/^##\s+Action Items\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     if (actionItemsMatch) {
         const content = actionItemsMatch[1].trim();
         // Skip placeholder text
@@ -102,14 +102,14 @@ function detectMeetingStatus(fm, body) {
         }
     }
     // Has Decisions or Learnings sections with real content → approved
-    const decisionsMatch = body.match(/^##\s+Decisions\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const decisionsMatch = body.match(/^##\s+Decisions\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     if (decisionsMatch) {
         const content = decisionsMatch[1].trim();
         if (content && !content.toLowerCase().includes('no decisions') && /^-\s+/m.test(content)) {
             return 'approved';
         }
     }
-    const learningsMatch = body.match(/^##\s+Learnings\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const learningsMatch = body.match(/^##\s+Learnings\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     if (learningsMatch) {
         const content = learningsMatch[1].trim();
         if (content && !content.toLowerCase().includes('no learnings') && /^-\s+/m.test(content)) {
@@ -117,12 +117,12 @@ function detectMeetingStatus(fm, body) {
         }
     }
     // Has Summary with real content → processed (but no items extracted yet)
-    const summaryMatch = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const summaryMatch = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     const hasSummary = summaryMatch &&
         summaryMatch[1].trim() &&
         !summaryMatch[1].toLowerCase().includes('no summary available');
     // Has Key Points with real content
-    const keyPointsMatch = body.match(/^##\s+Key Points\s*\n([\s\S]*?)(?=\n##\s|\n---|\Z)/im);
+    const keyPointsMatch = body.match(/^##\s+Key Points\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     const hasKeyPoints = keyPointsMatch &&
         keyPointsMatch[1].trim() &&
         !keyPointsMatch[1].toLowerCase().includes('no key points');
