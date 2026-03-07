@@ -342,11 +342,18 @@ describe('PATCH /week/priority — toggle done on/off', () => {
 **Advances quarter goal**: Q1-1
 **Effort**: large
 
+- [ ] Complete frontend
+- [ ] Write tests
+- [ ] Get review
+
 ### 2. Finalize pricing model
 
 **Success criteria**: Approved by finance
 **Advances quarter goal**: Q1-3
 **Effort**: medium
+
+- [ ] Draft pricing doc
+- [ ] Review with finance
 
 ## Commitments due this week
 
@@ -363,13 +370,14 @@ describe('PATCH /week/priority — toggle done on/off', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('marks priority 1 as done — file contains [x]', async () => {
+  it('marks priority 1 as done — toggles first checkbox to [x]', async () => {
     const router = createGoalsRouter(tmpDir);
     const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: true });
     assert.equal(status, 200);
     const body = json as { success: boolean; updatedContent: string };
     assert.equal(body.success, true);
-    assert.ok(body.updatedContent.includes('[x]'), 'updated content should contain [x]');
+    assert.ok(body.updatedContent.includes('- [x] Complete frontend'), 'first checkbox should be toggled to [x]');
+    assert.ok(body.updatedContent.includes('- [ ] Write tests'), 'second checkbox should remain unchecked');
   });
 
   it('GET /week now shows priority 1 as done', async () => {
@@ -382,13 +390,13 @@ describe('PATCH /week/priority — toggle done on/off', () => {
     assert.equal(p1?.done, true);
   });
 
-  it('marks priority 1 as not done — [x] is removed', async () => {
+  it('marks priority 1 as not done — toggles first [x] back to [ ]', async () => {
     const router = createGoalsRouter(tmpDir);
     const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: false });
     assert.equal(status, 200);
     const body = json as { success: boolean; updatedContent: string };
     assert.equal(body.success, true);
-    assert.ok(!body.updatedContent.includes('[x]'), 'updated content should not contain [x]');
+    assert.ok(body.updatedContent.includes('- [ ] Complete frontend'), 'first checkbox should be toggled back to [ ]');
   });
 
   it('GET /week now shows priority 1 as not done after toggling off', async () => {
@@ -420,17 +428,43 @@ describe('PATCH /week/priority — toggle done on/off', () => {
     assert.equal(status, 400);
   });
 
-  it('toggling done=true twice does not duplicate [x]', async () => {
+  it('toggling done=true multiple times marks more checkboxes', async () => {
     const router = createGoalsRouter(tmpDir);
-    // First toggle on
-    await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
-    // Second toggle on
+    // First toggle on priority 2 - marks first checkbox
+    const res1 = await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
+    assert.equal(res1.status, 200);
+    const body1 = res1.json as { updatedContent: string };
+    assert.ok(body1.updatedContent.includes('- [x] Draft pricing doc'), 'first checkbox marked');
+
+    // Second toggle on priority 2 - marks second checkbox
+    const res2 = await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
+    assert.equal(res2.status, 200);
+    const body2 = res2.json as { updatedContent: string };
+    assert.ok(body2.updatedContent.includes('- [x] Draft pricing doc'), 'first checkbox still marked');
+    assert.ok(body2.updatedContent.includes('- [x] Review with finance'), 'second checkbox now marked');
+  });
+
+  it('returns 400 when no unchecked items to mark done', async () => {
+    const router = createGoalsRouter(tmpDir);
+    // Priority 2 already has all checkboxes marked from previous test
     const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 2, done: true });
-    assert.equal(status, 200);
-    const body = json as { updatedContent: string };
-    // Count occurrences of [x]
-    const matches = body.updatedContent.match(/\[x\]/gi) ?? [];
-    // Should have exactly 1 [x] in priority 2's section
-    assert.equal(matches.length, 1);
+    assert.equal(status, 400);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('No unchecked items'), 'should return error about no unchecked items');
+  });
+
+  it('returns 400 when no checked items to uncheck', async () => {
+    // Create a fresh workspace with no checked items
+    const freshDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-no-checked-'));
+    await mkdir(join(freshDir, 'now'), { recursive: true });
+    await writeFile(join(freshDir, 'now', 'week.md'), WEEK_MD, 'utf8');
+
+    const router = createGoalsRouter(freshDir);
+    const { status, json } = await reqWithBody(router, 'PATCH', '/week/priority', { index: 1, done: false });
+    assert.equal(status, 400);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('No checked items'), 'should return error about no checked items');
+
+    await rm(freshDir, { recursive: true, force: true });
   });
 });

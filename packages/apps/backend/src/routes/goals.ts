@@ -29,34 +29,49 @@ export type WeekCommitment = {
 };
 
 /**
- * Parse quarter.md — extract `### Q1-N Title` outcome sections.
+ * Parse quarter.md — extract goals from `## Goal N: Title` sections.
+ * Looks for ### Key Outcomes subsections with checkbox items.
  */
 function parseQuarterOutcomes(content: string): QuarterOutcome[] {
   const outcomes: QuarterOutcome[] = [];
 
-  // Match ### Q1-1 Title ... up to next ### or end
-  const outcomePattern = /^###\s+([\w-]+)\s+(.+)$/gm;
+  // Match ## Goal N: Title sections
+  const goalPattern = /^##\s+Goal\s+(\d+):\s*(.+)$/gm;
   let match: RegExpExecArray | null;
 
-  while ((match = outcomePattern.exec(content)) !== null) {
-    const id = match[1] ?? '';
+  while ((match = goalPattern.exec(content)) !== null) {
+    const goalNum = match[1] ?? '';
     const title = (match[2] ?? '').trim();
 
-    // Extract the content for this outcome (until next ### or ##)
+    // Extract the content for this goal (until next ## Goal or end)
     const startIdx = match.index + match[0].length;
-    const nextHeader = /^##/m.exec(content.slice(startIdx));
-    const endIdx = nextHeader ? startIdx + nextHeader.index : content.length;
+    const restContent = content.slice(startIdx);
+    const nextGoal = /^##\s+Goal\s+\d+:/m.exec(restContent);
+    const endIdx = nextGoal ? startIdx + nextGoal.index : content.length;
     const body = content.slice(startIdx, endIdx);
 
-    // Parse success criteria
-    const scMatch = /\*\*Success criteria\*\*:\s*(.+)$/im.exec(body);
-    const successCriteria = scMatch ? (scMatch[1] ?? '').trim() : '';
+    // Parse Strategic Pillar
+    const pillarMatch = /\*\*Strategic Pillar\*\*:\s*(.+)$/im.exec(body);
+    const orgAlignment = pillarMatch ? (pillarMatch[1] ?? '').trim() : '';
 
-    // Parse org alignment
-    const alignMatch = /\*\*Org alignment\*\*:\s*(.+)$/im.exec(body);
-    const orgAlignment = alignMatch ? (alignMatch[1] ?? '').trim() : '';
+    // Extract key outcomes (checkbox items under ### Key Outcomes)
+    const keyOutcomesMatch = /###\s+Key Outcomes\s*\n([\s\S]*?)(?=\n###|\n##|$)/i.exec(body);
+    let successCriteria = '';
+    if (keyOutcomesMatch) {
+      const outcomeLines = keyOutcomesMatch[1]
+        .split('\n')
+        .filter(line => /^[-*]\s+\[.\]/.test(line.trim()))
+        .map(line => line.replace(/^[-*]\s+\[.\]\s*/, '').trim())
+        .filter(Boolean);
+      successCriteria = outcomeLines.join('; ');
+    }
 
-    outcomes.push({ id, title, successCriteria, orgAlignment });
+    outcomes.push({
+      id: `Goal ${goalNum}`,
+      title,
+      successCriteria,
+      orgAlignment,
+    });
   }
 
   return outcomes;
@@ -225,18 +240,19 @@ export function createGoalsRouter(workspaceRoot: string): Hono {
       const after = content.slice(sectionEnd);
 
       if (done) {
-        // Add [x] if not already present
-        if (!/\[x\]/i.test(sectionBody)) {
-          sectionBody = sectionBody.trimEnd() + '\n[x]\n';
+        // Toggle first unchecked box to checked
+        if (/- \[ \]/.test(sectionBody)) {
+          sectionBody = sectionBody.replace(/- \[ \]/, '- [x]');
+        } else {
+          return c.json({ error: 'No unchecked items to mark done' }, 400);
         }
       } else {
-        // Remove [x] lines
-        sectionBody = sectionBody
-          .split('\n')
-          .filter(line => !/^\[x\]$/i.test(line.trim()))
-          .join('\n');
-        // Ensure section ends with newline
-        if (!sectionBody.endsWith('\n')) sectionBody += '\n';
+        // Toggle first checked box to unchecked
+        if (/- \[x\]/i.test(sectionBody)) {
+          sectionBody = sectionBody.replace(/- \[x\]/i, '- [ ]');
+        } else {
+          return c.json({ error: 'No checked items to uncheck' }, 400);
+        }
       }
 
       const updated = before + sectionBody + after;
