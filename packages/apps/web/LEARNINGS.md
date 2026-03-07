@@ -188,9 +188,26 @@ import { BubbleMenu } from '@tiptap/extension-bubble-menu';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 ```
 
-### Markdown serialization
-Use `editor.storage.markdown.getMarkdown()` in the `onUpdate` callback to get markdown output.
-Requires the `Markdown` extension from `@tiptap/markdown` to be registered.
+### BubbleMenu props changed in TipTap v3
+`tippyOptions` no longer exists. TipTap v3 uses `@floating-ui/dom` instead of Tippy:
+```typescript
+// ✗ Wrong (v2 API)
+<BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+
+// ✓ Correct (v3 API)
+<BubbleMenu editor={editor}>
+```
+
+### Markdown serialization (TipTap v3)
+The `Markdown` extension adds `getMarkdown()` directly to the editor instance:
+```typescript
+onUpdate: ({ editor }) => {
+  // Markdown extension adds getMarkdown() to editor
+  const md = (editor as unknown as { getMarkdown: () => string }).getMarkdown();
+  onChange(md);
+},
+```
+Do NOT use `editor.storage.markdown.getMarkdown()` — that property doesn't exist in v3.
 
 ### Feed rawContent directly
 `rawContent` from `GET /api/people/:slug` is already clean — pass it directly to TipTap's `content` prop. No further parsing needed.
