@@ -211,12 +211,19 @@ export function createMeetingsRouter(workspaceRoot) {
             return c.json({ error: 'jobId required' }, 400);
         }
         let lastSent = 0;
+        let closed = false;
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             start(controller) {
                 const interval = setInterval(() => {
+                    // Guard against enqueueing after close (race condition)
+                    if (closed) {
+                        clearInterval(interval);
+                        return;
+                    }
                     const job = jobsService.getJob(jobId);
                     if (!job) {
+                        closed = true;
                         clearInterval(interval);
                         controller.close();
                         return;
@@ -228,6 +235,7 @@ export function createMeetingsRouter(workspaceRoot) {
                     }
                     if (job.status === 'done' || job.status === 'error') {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, status: job.status })}\n\n`));
+                        closed = true;
                         clearInterval(interval);
                         controller.close();
                     }
