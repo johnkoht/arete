@@ -110,5 +110,11 @@
   - `--json` - Output as JSON
 - `arete credentials test` - Test configured provider connections
   - `--json` - Output as JSON
+- `arete config show ai` - Display AI configuration (tiers, tasks, providers)
+  - `--json` - Output as JSON
+- `arete config set <path> <value>` - Set AI config value
+  - `ai.tiers.<tier>` - Set model for tier (fast|standard|frontier)
+  - `ai.tasks.<task>` - Set tier for task
+  - `--json` - Output as JSON
 
 

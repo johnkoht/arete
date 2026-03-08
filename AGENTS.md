@@ -70,6 +70,8 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |arete credentials set <provider>:Set API key for a provider (validates with test call)
 |arete credentials show:Show configured providers (keys masked)
 |arete credentials test:Test configured provider connections
+|arete config show ai:Display AI configuration (tiers, tasks, providers)
+|arete config set <path> <value>:Set AI config value (ai.tiers.<tier>, ai.tasks.<task>)
 
 [Skills]|root:.agents/skills
 |execute-prd:{triggers:"User says Execute this PRD or Build everything in prd.json; multi-task PRDs with dependencies (3+ tasks); want autonomous execution with quality review",does:"Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Includes pre-mortem, structured feedback, and holistic review."}
