@@ -11,6 +11,7 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
+export { AIService, parseModelSpec } from './ai.js';
 // Meeting extraction
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, } from './meeting-extraction.js';
 // Meeting file parsing

@@ -45,6 +45,19 @@ export type { ModelTier, TaskClassification } from './model-router.js';
 // Config (for calendar, etc.)
 export { loadConfig, getWorkspaceConfigPath } from './config.js';
 
+// AI credentials management
+export {
+  loadCredentials,
+  saveCredential,
+  getApiKey,
+  getEnvVarName,
+  getConfiguredProviders,
+  getCredentialsPath,
+  hasSecurePermissions,
+  loadCredentialsIntoEnv,
+} from './credentials.js';
+export type { ProviderCredentials, CredentialsFile, ConfiguredProvider } from './credentials.js';
+
 // Package root resolution (for install, etc.)
 export { getPackageRoot } from './package-root.js';
 

@@ -210,6 +210,38 @@
         "week-review",
         "process-meetings"
       ]
+    },
+    {
+      "id": "ai-service",
+      "name": "AI Service",
+      "type": "service",
+      "description": "Unified AI integration wrapping pi-ai with task-based model routing, credential management, and structured output support. Provides callStructured() for typed JSON responses with TypeBox schema validation.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/ai.ts",
+        "packages/core/src/credentials.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/ai.ts",
+        "packages/core/src/credentials.ts"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/ai.ts",
+        "packages/core/src/credentials.ts",
+        "packages/core/src/models/workspace.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Credentials stored in ~/.arete/credentials.yaml (global, not workspace-level)",
+        "Uses testDeps injection pattern for mocking pi-ai calls in tests",
+        "Task routing: task -> tier -> model via config.ai"
+      ],
+      "lastVerified": "2026-03-07"
     }
   ]
 }

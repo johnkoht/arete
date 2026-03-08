@@ -9,6 +9,30 @@ import type { AgentMode } from './common.js';
 /** Supported IDE targets */
 export type IDETarget = 'cursor' | 'claude';
 
+/** AI task types for tier routing */
+export type AITask =
+  | 'summary'
+  | 'extraction'
+  | 'decision_extraction'
+  | 'learning_extraction'
+  | 'significance_analysis'
+  | 'reconciliation';
+
+/** AI tier levels */
+export type AITier = 'fast' | 'standard' | 'frontier';
+
+/** AI configuration section */
+export type AIConfig = {
+  /** Model tier configuration: tier name → model ID */
+  tiers?: {
+    fast?: string;
+    standard?: string;
+    frontier?: string;
+  };
+  /** Task-to-tier routing: task → tier */
+  tasks?: Partial<Record<AITask, AITier>>;
+};
+
 /** Shape of the resolved config object */
 export type AreteConfig = {
   schema: number;
@@ -23,6 +47,8 @@ export type AreteConfig = {
   internal_email_domain?: string;
   /** QMD collection name for this workspace (auto-generated on install) */
   qmd_collection?: string;
+  /** AI configuration for model routing and tiers */
+  ai?: AIConfig;
   skills: {
     core: string[];
     overrides: string[];
