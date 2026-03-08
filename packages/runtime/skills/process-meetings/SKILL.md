@@ -126,9 +126,33 @@ Behavior depends on whether `--commit` is passed.
 
 ---
 
+#### Extraction Path Decision
+
+The primary extraction path uses the CLI command, which delegates to core's unified extraction logic:
+
+1. **Try CLI extraction**: `arete meeting extract <file> --stage --json`
+2. **If success** → staged sections written to meeting file, proceed to Step 6
+3. **If error** (no AI configured) → agent fallback: extract inline using agent's LLM
+
+**CLI errors clearly when AI is not configured**:
+```json
+{
+  "success": false,
+  "error": "No AI provider configured. Run `arete credentials configure` or set up via arete.yaml."
+}
+```
+
+When this error occurs, the agent has LLM access (it's running in an AI context) and should perform extraction inline using the rules below.
+
+---
+
 #### Staged Output Mode (Default — no `--commit`)
 
 Extract action items, decisions, and learnings from the meeting body and write them as staged sections directly into the meeting file. Do **not** write to `.arete/memory/items/`.
+
+**CLI Path (preferred)**: Run `arete meeting extract <file> --stage` — handles extraction and formatting via core.
+
+**Agent Fallback Path**: If CLI errors (no AI configured), extract inline following the rules below.
 
 **What to extract**:
 
@@ -279,5 +303,6 @@ Staged: 3 action items (ai_001–ai_003), 1 decision (de_001), 2 learnings (le_0
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
+- **Extraction**: `arete meeting extract <file> --stage` — primary extraction path (uses core via AIService)
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `status`, `processed_at`, `company`, `pillar`)
