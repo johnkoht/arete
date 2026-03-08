@@ -59,6 +59,12 @@
 - `arete meeting add` - Add a meeting from JSON file or stdin
   - `--file <path>` - Path to meeting JSON
   - `--skip-qmd` - Skip automatic qmd index update
+- `arete meeting extract <file>` - Extract intelligence from a meeting file using AI
+  - `--json` - Output structured JSON
+  - `--stage` - Write staged sections (Summary, Action Items, Decisions, Learnings) to meeting file
+  - `--dry-run` - Show what would be written without writing
+  - `--skip-qmd` - Skip automatic qmd index update
+  - Requires AI configuration (see `arete credentials set`)
 - `arete meeting process` - Process a meeting file with People Intelligence classification
   - `--file <path>` - Path to meeting markdown file
   - `--latest` - Process latest meeting in resources/meetings
