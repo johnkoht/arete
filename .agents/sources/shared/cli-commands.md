@@ -100,4 +100,15 @@
 - `arete skill install <url>` - Install skill from URL (e.g. skills.sh)
 - `arete tool list` - List available tools
 
+## AI Configuration
+
+- `arete credentials set <provider>` - Set API key for a provider (validates with test call)
+  - `--api-key <key>` - API key (non-interactive)
+  - `--no-validate` - Skip validation test call
+  - `--json` - Output as JSON
+- `arete credentials show` - Show configured providers (keys masked)
+  - `--json` - Output as JSON
+- `arete credentials test` - Test configured provider connections
+  - `--json` - Output as JSON
+
 

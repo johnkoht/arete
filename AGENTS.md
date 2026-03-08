@@ -67,6 +67,9 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |arete skill list:List available skills
 |arete skill install <url>:Install skill from URL (e.g. skills.sh)
 |arete tool list:List available tools
+|arete credentials set <provider>:Set API key for a provider (validates with test call)
+|arete credentials show:Show configured providers (keys masked)
+|arete credentials test:Test configured provider connections
 
 [Skills]|root:.agents/skills
 |execute-prd:{triggers:"User says Execute this PRD or Build everything in prd.json; multi-task PRDs with dependencies (3+ tasks); want autonomous execution with quality review",does:"Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Includes pre-mortem, structured feedback, and holistic review."}
@@ -99,7 +102,8 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |before_work:scan MEMORY.md + collaboration.md
 |after_work:add entry to memory/entries/, update index
 |synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion
-|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/
+|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/, packages/apps/backend/, packages/apps/web/
+|expertise:domain maps in .pi/expertise/{domain}/PROFILE.md — read before working on a package; available: cli, core, backend, web
 
 [Personas]|council:Harvester + Architect + Preparer — three GUIDE MODE behavioral archetypes for BUILD MODE planning
 |purpose:Voice-of-customer check during feature planning; prevents BUILD enthusiasm from producing GUIDE complexity
