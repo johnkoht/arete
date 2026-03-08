@@ -2,7 +2,7 @@
  * arete onboard — Quick identity setup for new workspaces
  *
  * Collects name, email, company to bootstrap context/profile.md
- * before full conversational onboarding.
+ * before full conversational onboarding. Optionally configures AI credentials.
  */
 import type { Command } from 'commander';
 export declare function registerOnboardCommand(program: Command): void;

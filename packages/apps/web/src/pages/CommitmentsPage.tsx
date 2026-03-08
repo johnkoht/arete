@@ -348,143 +348,149 @@ export default function CommitmentsPage() {
         description="Track what you've promised and what's owed to you"
       />
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-5xl mx-auto space-y-4">
-          {/* Direction subnav */}
-          <div className="flex items-center gap-1 border-b pb-3">
-            {DIRECTION_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => selectDirection(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeDirection === tab.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+      {/* Direction subnav */}
+      <div className="px-6 pt-3 pb-0 border-b">
+        <div className="flex items-center gap-1 pb-3">
+          {DIRECTION_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => selectDirection(tab.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeDirection === tab.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="px-6 py-2 border-b">
+        <div className="flex items-center gap-1">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => selectFilter(tab.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeFilter === tab.value
+                  ? "bg-secondary text-secondary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Person filter chip */}
+      {personParam && (
+        <div className="px-6 py-2 border-b bg-muted/30">
+          <PersonFilterChip personSlug={personParam} onClear={clearPersonFilter} />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto">
+
+        {/* Content */}
+        {isLoading && (
+          <div className="px-6 py-4">
+            <CommitmentSkeletons />
           </div>
+        )}
 
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1">
-            {FILTER_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => selectFilter(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeFilter === tab.value
-                    ? "bg-secondary text-secondary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+        {!isLoading && error && (
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm text-destructive font-medium">Failed to load commitments</p>
+            <p className="text-xs text-muted-foreground mt-1">Please try again.</p>
           </div>
+        )}
 
-          {/* Person filter chip */}
-          {personParam && (
-            <PersonFilterChip personSlug={personParam} onClear={clearPersonFilter} />
-          )}
-
-          {/* Content */}
-          {isLoading && <CommitmentSkeletons />}
-
-          {!isLoading && error && (
-            <p className="text-sm text-destructive py-8 text-center">
-              Failed to load commitments. Please try again.
-            </p>
-          )}
-
-          {!isLoading && !error && sortedCommitments.length === 0 && (
+        {!isLoading && !error && sortedCommitments.length === 0 && (
+          <div className="px-6">
             <EmptyState
               icon={emptyState.icon}
               title={emptyState.title}
               description={emptyState.description}
               className="py-16"
             />
-          )}
+          </div>
+        )}
 
-          {!isLoading && !error && sortedCommitments.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                {sortedCommitments.length} commitment{sortedCommitments.length !== 1 ? "s" : ""}
-              </p>
-              
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                    <th className="px-4 py-3 w-[140px]">
-                      <SortableHeader
-                        label="Person"
-                        sortKey="person"
-                        currentSort={sortBy}
-                        currentOrder={sortOrder}
-                        onSort={handleSort}
-                      />
-                    </th>
-                    <th className="px-4 py-3">Commitment</th>
-                    <th className="px-4 py-3 w-[110px]">Direction</th>
-                    <th className="px-4 py-3 w-[80px]">
-                      <SortableHeader
-                        label="Age"
-                        sortKey="age"
-                        currentSort={sortBy}
-                        currentOrder={sortOrder}
-                        onSort={handleSort}
-                      />
-                    </th>
-                    <th className="px-4 py-3 w-[120px] text-right">Actions</th>
+        {!isLoading && !error && sortedCommitments.length > 0 && (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                <th className="px-4 py-3">
+                  <SortableHeader
+                    label="Person"
+                    sortKey="person"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">Commitment</th>
+                <th className="px-4 py-3">Direction</th>
+                <th className="px-4 py-3">
+                  <SortableHeader
+                    label="Age"
+                    sortKey="age"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCommitments.map((item) => {
+                const isSettled = item.status === "resolved" || item.status === "dropped";
+                return (
+                  <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
+                    <td className="px-4 py-3">
+                      {item.personSlug ? (
+                        <Link
+                          to={`/people/${item.personSlug}`}
+                          className="text-sm text-primary hover:underline font-medium"
+                        >
+                          {item.personSlug.replace(/-/g, " ")}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
+                          {item.text}
+                        </p>
+                        {item.date && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <DirectionBadge direction={item.direction} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <AgeBadge daysOpen={item.daysOpen} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <CommitmentActions item={item} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {sortedCommitments.map((item) => {
-                    const isSettled = item.status === "resolved" || item.status === "dropped";
-                    return (
-                      <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
-                        <td className="px-4 py-3">
-                          {item.personSlug ? (
-                            <Link
-                              to={`/people/${item.personSlug}`}
-                              className="text-sm text-primary hover:underline font-medium"
-                            >
-                              {item.personSlug.replace(/-/g, " ")}
-                            </Link>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
-                              {item.text}
-                            </p>
-                            {item.date && (
-                              <span className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <DirectionBadge direction={item.direction} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <AgeBadge daysOpen={item.daysOpen} />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <CommitmentActions item={item} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

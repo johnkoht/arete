@@ -198,3 +198,10 @@ export async function processMeeting(slug: string): Promise<ProcessResponse> {
     method: 'POST',
   });
 }
+
+/** DELETE /api/meetings/:slug — delete meeting file */
+export async function deleteMeeting(slug: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(`/api/meetings/${slug}`, {
+    method: 'DELETE',
+  });
+}

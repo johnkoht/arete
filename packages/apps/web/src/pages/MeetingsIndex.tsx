@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AvatarStack } from "@/components/AvatarStack";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useMeetings, useSyncKrisp, useJobStatus } from "@/hooks/meetings.js";
+import { useMeetings, useSyncKrisp, useJobStatus, useProcessMeeting } from "@/hooks/meetings.js";
+import { processMeeting } from "@/api/meetings.js";
 import type { Meeting } from "@/api/types.js";
 import { formatDistanceToNow, format } from "date-fns";
 
@@ -26,6 +27,7 @@ export default function MeetingsIndex() {
   const [syncJobId, setSyncJobId] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [processingSlug, setProcessingSlug] = useState<string | null>(null);
 
   const { data: meetings = [], isLoading, error } = useMeetings();
   const syncMutation = useSyncKrisp();
@@ -56,6 +58,23 @@ export default function MeetingsIndex() {
         toast.error(`Failed to start sync: ${err instanceof Error ? err.message : "Unknown error"}`);
       },
     });
+  };
+
+  const handleProcess = async (slug: string) => {
+    setProcessingSlug(slug);
+    try {
+      const result = await processMeeting(slug);
+      // Navigate to meeting detail to show processing stream
+      navigate(`/meetings/${slug}?jobId=${result.jobId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      if (message.includes("AI not configured")) {
+        toast.error("AI not configured. Please add your Anthropic API key in Settings.");
+      } else {
+        toast.error(`Failed to start processing: ${message}`);
+      }
+      setProcessingSlug(null);
+    }
   };
 
   const triageCount = meetings.filter(
@@ -144,12 +163,25 @@ export default function MeetingsIndex() {
       );
     }
     if (m.status === "synced") {
+      const isProcessing = processingSlug === m.slug;
       return (
-        <Link to={`/meetings/${m.slug}`}>
-          <Button variant="outline" size="sm">
-            Process Meeting <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
-        </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleProcess(m.slug)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              Process Meeting <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </>
+          )}
+        </Button>
       );
     }
     return (

@@ -259,6 +259,95 @@ Tasks can be executed in this order (each is independent):
 
 ---
 
+---
+
+## Critical Architecture Issue: Backend Bypasses Core Services
+
+> Documented: 2026-03-07 | From comprehensive gap audit
+
+### The Problem
+
+The web backend (`packages/apps/backend/`) **does not use `@arete/core` services**. Instead, it reimplements basic file operations with raw `fs` calls and `gray-matter` parsing.
+
+**Core has 17 service modules:**
+```
+commitments, context, entity, index, integrations, intelligence, 
+meeting-extraction, meeting-parser, memory, momentum, patterns, 
+person-health, person-memory, person-signals, skills, tools, workspace
+```
+
+**Backend imports only 8 low-level utilities:**
+```typescript
+// From @arete/core:
+FileStorageAdapter           // file I/O wrapper
+parseStagedSections          // parse ## Staged Action Items
+parseStagedItemStatus        // parse frontmatter status
+parseStagedItemEdits         // parse frontmatter edits
+writeItemStatusToFile        // write staged item changes
+commitApprovedItems          // commit approved items to memory
+loadConfig                   // load workspace config
+refreshQmdIndex              // refresh search index
+detectCrossPersonPatterns    // one intelligence function
+```
+
+**None of the service classes are used:**
+- `ContextService` — context injection, relevant file retrieval
+- `MemoryService` — search, create, timeline
+- `EntityService` — resolve, find mentions, relationships
+- `IntelligenceService` — briefing, skill routing
+- `CommitmentsService` — sync, reconcile
+- `MomentumService` — health scoring, trends
+- etc.
+
+### Impact
+
+| Feature | Core Service | What Backend Does |
+|---------|--------------|-------------------|
+| List meetings | Could use core parsing | Raw `fs.readdir()` + `gray-matter` |
+| Search memory | `MemoryService.search()` | **Not implemented** |
+| Get context | `ContextService.getRelevant()` | **Not implemented** |
+| Daily briefing | `IntelligenceService.assembleBriefing()` | **Not implemented** |
+| Person lookup | `EntityService.resolve()` | Raw `fs.readFile()` each request |
+| Commitments | `CommitmentsService` | Raw JSON read/write |
+| Momentum/health | `MomentumService` | Always returns `null` |
+
+### Why This Matters
+
+1. **Duplicated logic** — Backend reimplements what core already does, but worse
+2. **Missing features** — Intelligence, search, briefing completely absent from web
+3. **Inconsistent behavior** — CLI uses core services; web uses raw fs
+4. **Every new feature** requires reimplementing core logic or finally wiring it up
+
+### Recommended Fix
+
+Before adding new features, wire the backend to use core services:
+
+```typescript
+// Instead of:
+const raw = await fs.readFile(filePath, 'utf8');
+const { data } = matter(raw);
+
+// Use:
+import { createServices } from '@arete/core';
+const services = createServices(storage, workspaceRoot);
+const meeting = await services.meetings.get(slug);
+```
+
+This is **not a rewrite** — the services exist. The backend just needs to call them instead of reimplementing everything.
+
+### Audit Files
+
+Full gap analysis in `dev/reimagine/audit/`:
+- `holistic-audit-a.md` — Pages, routes, workspace gaps
+- `holistic-audit-b.md` — Data parsing gaps, CRUD gaps
+- `cli-gaps.md` — 21 CLI commands with no UI equivalent
+- `core-gaps.md` — All 9 core services unused
+- `skills-gaps.md` — 33 skills, 25 with no UI support
+- `engineering-review.md` — Engineering priorities
+- `product-review.md` — Product priorities
+
+---
+
 ## How to Hand Off to a Fresh Agent
 
 The fresh agent needs to read (in order):

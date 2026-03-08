@@ -29,6 +29,8 @@ import { registerCommitmentsCommand } from './commands/commitments.js';
 import { registerViewCommand } from './commands/view.js';
 import { registerDailyCommand } from './commands/daily.js';
 import { registerMomentumCommand } from './commands/momentum.js';
+import { registerCredentialsCommand } from './commands/credentials.js';
+import { registerConfigCommand } from './commands/config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -89,6 +91,13 @@ ${chalk.bold('Meetings & Templates')}
   meeting add --file <path>        Add meeting from JSON
   template list meeting-agendas    List templates
   template view meeting-agenda --type <name>  View template
+
+${chalk.bold('AI Configuration')}
+  credentials set <provider>       Set API key for a provider
+  credentials show                 Show configured providers (keys masked)
+  credentials test                 Test provider connections
+  config show ai                   Show AI tier/task configuration
+  config set <path> <value>        Set AI config (ai.tiers.<tier>, ai.tasks.<task>)
 `);
 // Register commands
 registerInstallCommand(program);
@@ -115,5 +124,7 @@ registerCommitmentsCommand(program);
 registerViewCommand(program);
 registerDailyCommand(program);
 registerMomentumCommand(program);
+registerCredentialsCommand(program);
+registerConfigCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

@@ -296,6 +296,8 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
 
             if (apiKeyInput && apiKeyInput.trim()) {
               apiKeyToSave = apiKeyInput.trim();
+              // Show masked key so user can verify they pasted correctly
+              console.log(chalk.dim(`  Key entered: ${maskApiKey(apiKeyToSave)}`));
             } else {
               aiSkipped = true;
               info('Skipping AI configuration — you can configure later with: arete credentials set anthropic');

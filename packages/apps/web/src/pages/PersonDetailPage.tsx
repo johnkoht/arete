@@ -8,11 +8,10 @@
  * - Recent Meetings (5 items max)
  * - Intelligence with health status + stances/asks/concerns
  * - Notes with LazyBlockEditor
- * - Navigation guard via useBlocker
  */
 
 import { useState, useEffect, Suspense, lazy } from "react";
-import { useParams, Link, useBlocker } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Mail, Building2, ChevronDown, ChevronRight, Clock, Users } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -244,18 +243,8 @@ export default function PersonDetailPage() {
   const [editContent, setEditContent] = useState('');
   const { mutate: saveNotes, isPending: isSaving } = useUpdatePersonNotes(slug ?? '');
 
-  // Navigation guard for unsaved changes
-  const blocker = useBlocker(isEditing && editContent !== (person?.rawContent ?? ''));
-
-  useEffect(() => {
-    if (blocker.state === 'blocked') {
-      if (window.confirm('You have unsaved changes. Discard them?')) {
-        blocker.proceed();
-      } else {
-        blocker.reset();
-      }
-    }
-  }, [blocker]);
+  // TODO: Navigation guard for unsaved changes requires data router (createBrowserRouter)
+  // For now, we skip the useBlocker feature until router migration
 
   if (isLoading) {
     return (
