@@ -67,7 +67,12 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **`arete people memory refresh` must pass `commitments: services.commitments` to `refreshPersonMemory()`** (2026-03-04): The `commitments` option in `RefreshPersonMemoryOptions` is the gate for the entire 7-step CommitmentsService sync inside `entity.ts`. Without it, action items are rendered as plain text in person files but `CommitmentsService.sync()` is never called — so `.arete/commitments.json` stays empty and `arete commitments list` returns nothing. The CLI command had this option missing on launch. Symptom: items visible in person memory (`### Open Items (I owe them)`), invisible to `arete commitments list`. Fix: add `commitments: services.commitments` to the `refreshPersonMemory()` call in `people.ts`.
 
-- **CLI commands should NOT require direct LLM access** (2026-03-04): The `arete meeting extract` command was removed because it required an `ANTHROPIC_API_KEY` environment variable. Instead, LLM-dependent operations should be performed by the agent (which has LLM access) and CLI commands should handle structured input/output. For meeting extraction, the `process-meetings` skill now instructs the agent to extract inline and write structured sections to the meeting file. The `meeting-parser.ts` service parses the structured `## Action Items` section during `people memory refresh`.
+- **~~CLI commands should NOT require direct LLM access~~ SUPERSEDED** (2026-03-04, superseded 2026-03-08): The original entry stated CLI commands shouldn't require LLM access. This is now superseded by the AIService architecture:
+  - **AIService** (not raw API keys) manages credentials via `~/.arete/credentials.yaml`
+  - **`services.ai.isConfigured()`** enables graceful detection — CLI can error cleanly with a helpful message if no AI is configured
+  - **Unified extraction in core** (`extractMeetingIntelligence()`) enables DRY between CLI (`arete meeting extract`) and backend
+  - The `arete meeting extract <file>` command now exists and uses AIService. It requires AI configuration (via `arete credentials configure` or `arete.yaml`), but the early `isConfigured()` check provides a clear error path rather than crashing on missing API keys.
+  - Pattern: check `services.ai.isConfigured()` before any AI call; if false, emit `"No AI provider configured. Run \`arete credentials configure\` or set up via arete.yaml."` and exit with code 1.
 
 ## Pre-Edit Checklist
 
