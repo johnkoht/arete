@@ -26,6 +26,8 @@ export {
   buildMeetingExtractionPrompt,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
+  formatStagedSections,
+  updateMeetingContent,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,

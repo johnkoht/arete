@@ -4,8 +4,10 @@ import {
   buildMeetingExtractionPrompt,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
+  formatStagedSections,
+  updateMeetingContent,
 } from '../../src/services/meeting-extraction.js';
-import type { LLMCallFn } from '../../src/services/meeting-extraction.js';
+import type { LLMCallFn, MeetingExtractionResult, ActionItem } from '../../src/services/meeting-extraction.js';
 
 // ---------------------------------------------------------------------------
 // buildMeetingExtractionPrompt
@@ -556,5 +558,612 @@ describe('extractMeetingIntelligence', () => {
 
     assert.equal(result.intelligence.actionItems.length, 0);
     assert.equal(result.validationWarnings.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatStagedSections - Action Item Formatting
+// ---------------------------------------------------------------------------
+
+describe('formatStagedSections - action item formatting', () => {
+  function makeResult(
+    actionItems: ActionItem[],
+    decisions: string[] = [],
+    learnings: string[] = [],
+    summary = 'Test summary',
+  ): MeetingExtractionResult {
+    return {
+      intelligence: {
+        summary,
+        actionItems,
+        nextSteps: [],
+        decisions,
+        learnings,
+      },
+      validationWarnings: [],
+    };
+  }
+
+  it('formats i_owe_them with counterparty using → arrow', () => {
+    const result = makeResult([
+      {
+        owner: 'John Smith',
+        ownerSlug: 'john-smith',
+        description: 'Send API docs',
+        direction: 'i_owe_them',
+        counterpartySlug: 'sarah-chen',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('- ai_001: [@john-smith → @sarah-chen] Send API docs'));
+  });
+
+  it('formats they_owe_me with counterparty using ← arrow', () => {
+    const result = makeResult([
+      {
+        owner: 'Sarah Chen',
+        ownerSlug: 'sarah-chen',
+        description: 'Review the PR',
+        direction: 'they_owe_me',
+        counterpartySlug: 'john-smith',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('- ai_001: [@sarah-chen ← @john-smith] Review the PR'));
+  });
+
+  it('formats i_owe_them without counterparty', () => {
+    const result = makeResult([
+      {
+        owner: 'John Smith',
+        ownerSlug: 'john-smith',
+        description: 'Submit proposal',
+        direction: 'i_owe_them',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('- ai_001: [@john-smith →] Submit proposal'));
+  });
+
+  it('formats they_owe_me without counterparty', () => {
+    const result = makeResult([
+      {
+        owner: 'Sarah Chen',
+        ownerSlug: 'sarah-chen',
+        description: 'Send meeting notes',
+        direction: 'they_owe_me',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('- ai_001: [@sarah-chen ←] Send meeting notes'));
+  });
+
+  it('includes due date in parentheses when present', () => {
+    const result = makeResult([
+      {
+        owner: 'John Smith',
+        ownerSlug: 'john-smith',
+        description: 'Send API docs',
+        direction: 'i_owe_them',
+        counterpartySlug: 'sarah-chen',
+        due: 'Friday',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('- ai_001: [@john-smith → @sarah-chen] Send API docs (Friday)'));
+  });
+
+  it('omits due date when not present', () => {
+    const result = makeResult([
+      {
+        owner: 'John Smith',
+        ownerSlug: 'john-smith',
+        description: 'Send API docs',
+        direction: 'i_owe_them',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('[@john-smith →] Send API docs'));
+    assert.ok(!output.includes('('));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatStagedSections - ID Formatting
+// ---------------------------------------------------------------------------
+
+describe('formatStagedSections - ID zero-padding', () => {
+  function makeResult(
+    actionItems: ActionItem[],
+    decisions: string[] = [],
+    learnings: string[] = [],
+  ): MeetingExtractionResult {
+    return {
+      intelligence: {
+        summary: 'Test summary',
+        actionItems,
+        nextSteps: [],
+        decisions,
+        learnings,
+      },
+      validationWarnings: [],
+    };
+  }
+
+  it('zero-pads single digit IDs (001)', () => {
+    const result = makeResult([
+      {
+        owner: 'Alice',
+        ownerSlug: 'alice',
+        description: 'Task one',
+        direction: 'i_owe_them',
+      },
+    ]);
+
+    const output = formatStagedSections(result);
+    assert.ok(output.includes('ai_001'));
+  });
+
+  it('zero-pads double digit IDs (010)', () => {
+    const items: ActionItem[] = [];
+    for (let i = 0; i < 10; i++) {
+      items.push({
+        owner: `Person ${i}`,
+        ownerSlug: `person-${i}`,
+        description: `Task ${i}`,
+        direction: 'i_owe_them',
+      });
+    }
+
+    const result = makeResult(items);
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('ai_001'));
+    assert.ok(output.includes('ai_009'));
+    assert.ok(output.includes('ai_010'));
+  });
+
+  it('handles triple digit IDs (100)', () => {
+    const items: ActionItem[] = [];
+    for (let i = 0; i < 100; i++) {
+      items.push({
+        owner: `Person ${i}`,
+        ownerSlug: `person-${i}`,
+        description: `Task ${i}`,
+        direction: 'i_owe_them',
+      });
+    }
+
+    const result = makeResult(items);
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('ai_099'));
+    assert.ok(output.includes('ai_100'));
+  });
+
+  it('applies zero-padding to all section types', () => {
+    const result = makeResult(
+      [
+        { owner: 'A', ownerSlug: 'a', description: 'AI 1', direction: 'i_owe_them' },
+      ],
+      ['Decision 1'],
+      ['Learning 1'],
+    );
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('ai_001'));
+    assert.ok(output.includes('de_001'));
+    assert.ok(output.includes('le_001'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatStagedSections - Section Inclusion
+// ---------------------------------------------------------------------------
+
+describe('formatStagedSections - section inclusion', () => {
+  it('includes all sections when populated', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'A productive meeting',
+        actionItems: [
+          {
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Do something',
+            direction: 'i_owe_them',
+          },
+        ],
+        nextSteps: ['Step 1'],
+        decisions: ['Decision 1'],
+        learnings: ['Learning 1'],
+      },
+      validationWarnings: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+    assert.ok(output.includes('A productive meeting'));
+    assert.ok(output.includes('## Staged Action Items'));
+    assert.ok(output.includes('## Staged Decisions'));
+    assert.ok(output.includes('## Staged Learnings'));
+  });
+
+  it('omits empty Staged Action Items section', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Meeting',
+        actionItems: [],
+        nextSteps: [],
+        decisions: ['Decision 1'],
+        learnings: [],
+      },
+      validationWarnings: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(!output.includes('## Staged Action Items'));
+    assert.ok(output.includes('## Staged Decisions'));
+  });
+
+  it('omits empty Staged Decisions section', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Meeting',
+        actionItems: [
+          { owner: 'A', ownerSlug: 'a', description: 'Task', direction: 'i_owe_them' },
+        ],
+        nextSteps: [],
+        decisions: [],
+        learnings: ['Learning 1'],
+      },
+      validationWarnings: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Staged Action Items'));
+    assert.ok(!output.includes('## Staged Decisions'));
+    assert.ok(output.includes('## Staged Learnings'));
+  });
+
+  it('omits empty Staged Learnings section', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Meeting',
+        actionItems: [],
+        nextSteps: [],
+        decisions: ['Decision 1'],
+        learnings: [],
+      },
+      validationWarnings: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(!output.includes('## Staged Learnings'));
+    assert.ok(output.includes('## Staged Decisions'));
+  });
+
+  it('always includes Summary even when empty', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        summary: '',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+      },
+      validationWarnings: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateMeetingContent - basic operations
+// ---------------------------------------------------------------------------
+
+describe('updateMeetingContent - basic operations', () => {
+  it('appends staged sections at end when no existing summary', () => {
+    const original = `---
+title: Team Meeting
+date: 2026-03-01
+---
+
+## Transcript
+Alice: Hello
+Bob: Hi there`;
+
+    const staged = `## Summary
+A brief meeting.
+
+## Staged Action Items
+- ai_001: [@alice →] Send docs
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('## Transcript'));
+    assert.ok(result.endsWith(staged));
+    assert.ok(result.includes('\n\n## Summary'));
+  });
+
+  it('replaces existing summary and staged sections in place', () => {
+    const original = `---
+title: Team Meeting
+---
+
+## Transcript
+Alice: Hello
+
+## Summary
+Old summary
+
+## Staged Action Items
+- ai_001: [@bob →] Old task
+`;
+
+    const staged = `## Summary
+New summary
+
+## Staged Decisions
+- de_001: New decision
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('## Transcript'));
+    assert.ok(result.includes('New summary'));
+    assert.ok(!result.includes('Old summary'));
+    assert.ok(!result.includes('Old task'));
+    assert.ok(result.includes('de_001: New decision'));
+  });
+
+  it('preserves content after staged sections', () => {
+    const original = `---
+title: Meeting
+---
+
+## Summary
+Old summary
+
+## Staged Action Items
+- ai_001: Old task
+
+## Notes
+These are my notes.
+
+## Follow-up
+Need to check on X.`;
+
+    const staged = `## Summary
+New summary
+
+## Staged Decisions
+- de_001: Decision
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('New summary'));
+    assert.ok(result.includes('## Notes'));
+    assert.ok(result.includes('These are my notes.'));
+    assert.ok(result.includes('## Follow-up'));
+    assert.ok(result.includes('Need to check on X.'));
+  });
+
+  it('preserves frontmatter and transcript before Summary', () => {
+    const original = `---
+title: Planning Meeting
+date: 2026-03-01
+attendees:
+  - alice
+  - bob
+---
+
+## Transcript
+Alice: Let's discuss the roadmap.
+Bob: Sounds good.
+
+## Summary
+Old summary`;
+
+    const staged = `## Summary
+New summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('title: Planning Meeting'));
+    assert.ok(result.includes('## Transcript'));
+    assert.ok(result.includes("Let's discuss the roadmap"));
+    assert.ok(result.includes('New summary'));
+    assert.ok(!result.includes('Old summary'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateMeetingContent - idempotency
+// ---------------------------------------------------------------------------
+
+describe('updateMeetingContent - idempotency', () => {
+  it('produces same result when run twice', () => {
+    const original = `---
+title: Meeting
+---
+
+## Transcript
+Some transcript`;
+
+    const staged = `## Summary
+Meeting summary
+
+## Staged Action Items
+- ai_001: [@alice → @bob] Send docs (Friday)
+
+## Staged Decisions
+- de_001: Use REST API
+`;
+
+    const firstRun = updateMeetingContent(original, staged);
+    const secondRun = updateMeetingContent(firstRun, staged);
+
+    assert.equal(firstRun, secondRun);
+  });
+
+  it('produces same result with different initial staged content', () => {
+    const withOldStaged = `---
+title: Meeting
+---
+
+## Transcript
+Some transcript
+
+## Summary
+Old summary
+
+## Staged Action Items
+- ai_001: [@carol →] Old task
+
+## Staged Learnings
+- le_001: Old learning`;
+
+    const staged = `## Summary
+New summary
+
+## Staged Decisions
+- de_001: New decision
+`;
+
+    const firstRun = updateMeetingContent(withOldStaged, staged);
+    const secondRun = updateMeetingContent(firstRun, staged);
+
+    assert.equal(firstRun, secondRun);
+  });
+
+  it('is idempotent with content after staged sections', () => {
+    const original = `---
+title: Meeting
+---
+
+## Transcript
+Content
+
+## Summary
+Old
+
+## Notes
+Important notes`;
+
+    const staged = `## Summary
+New summary
+
+## Staged Action Items
+- ai_001: [@alice →] Task
+`;
+
+    const firstRun = updateMeetingContent(original, staged);
+    const secondRun = updateMeetingContent(firstRun, staged);
+
+    assert.equal(firstRun, secondRun);
+    assert.ok(secondRun.includes('## Notes'));
+    assert.ok(secondRun.includes('Important notes'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateMeetingContent - edge cases
+// ---------------------------------------------------------------------------
+
+describe('updateMeetingContent - edge cases', () => {
+  it('handles content with no headers at all', () => {
+    const original = 'Just some plain text content.';
+    const staged = `## Summary
+Meeting summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('Just some plain text content.'));
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('Meeting summary'));
+  });
+
+  it('handles empty original content', () => {
+    const original = '';
+    const staged = `## Summary
+Summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('## Summary'));
+  });
+
+  it('handles whitespace-only original content', () => {
+    const original = '   \n\n   ';
+    const staged = `## Summary
+Summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('## Summary'));
+  });
+
+  it('does not confuse ## Summary-like text with actual header', () => {
+    const original = `## Transcript
+Bob: The ## Summary section is important.
+
+## Notes
+More notes`;
+
+    const staged = `## Summary
+Real summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    // Should append since there's no real ## Summary header (at line start with nothing after)
+    assert.ok(result.includes('## Transcript'));
+    assert.ok(result.includes('## Notes'));
+    assert.ok(result.includes('Real summary'));
+  });
+
+  it('handles multiple ## Summary headers (uses first one)', () => {
+    const original = `## Transcript
+Content
+
+## Summary
+First summary
+
+## Notes
+Some notes
+
+## Summary
+Duplicate summary`;
+
+    const staged = `## Summary
+New summary
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('New summary'));
+    assert.ok(result.includes('## Notes'));
+    // The second Summary should be treated as non-staged content
   });
 });
