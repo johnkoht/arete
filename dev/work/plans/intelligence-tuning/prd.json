@@ -1,0 +1,79 @@
+{
+  "name": "INT-0 Service Normalization",
+  "slug": "int-0-service-normalization",
+  "description": "Normalize meeting extraction: Core owns extraction and formatting. CLI and Backend orchestrate.",
+  "tasks": [
+    {
+      "id": "int-0.1",
+      "title": "Move Formatting Functions to Core",
+      "description": "Move formatStagedSections() and updateMeetingContent() from backend to core's meeting-extraction.ts. Adapt to work with MeetingIntelligence type (structured ActionItem[]).",
+      "acceptanceCriteria": [
+        "formatStagedSections(result: MeetingExtractionResult) exported from core",
+        "updateMeetingContent(content: string, stagedSections: string) exported from core",
+        "Both functions work with MeetingIntelligence type",
+        "Test: complete intelligence → all sections with correct IDs (ai_001, de_001, le_001)",
+        "Test: empty sections omitted",
+        "Test: ActionItem formatting includes owner, direction, description",
+        "Test: ID zero-padding (001, 010, 100)",
+        "Test: no existing summary → appends at end",
+        "Test: existing summary → replaces in place",
+        "Test: preserves content after staged sections",
+        "Test: idempotent (running twice = same result)"
+      ],
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": "int-0.2",
+      "title": "Create CLI Extraction Command",
+      "description": "Add `arete meeting extract` command using core extraction via AIService. Supports --json, --stage, --dry-run flags.",
+      "acceptanceCriteria": [
+        "arete meeting extract <file> outputs human-readable extraction",
+        "--json outputs structured JSON",
+        "--stage writes staged sections to meeting file",
+        "--dry-run shows what would be written without writing",
+        "--skip-qmd skips search index refresh",
+        "Early check: if aiService.isConfigured() === false, error with clear message",
+        "Uses extractMeetingIntelligence() from core",
+        "Uses formatStagedSections() from core",
+        "Uses updateMeetingContent() for --stage",
+        "Test: happy path with mock AIService",
+        "Test: no AI configured → clear error",
+        "Test: invalid file → graceful error",
+        "Test: --json produces valid JSON",
+        "Test: --stage modifies file correctly",
+        "Test: --dry-run doesn't write"
+      ],
+      "dependencies": ["int-0.1"],
+      "status": "pending"
+    },
+    {
+      "id": "int-0.3",
+      "title": "Backend Uses Core Functions",
+      "description": "Backend imports formatStagedSections and updateMeetingContent from core. Create type adapter to bridge MeetingExtraction → MeetingIntelligence.",
+      "acceptanceCriteria": [
+        "Backend imports formatStagedSections from @arete/core",
+        "Backend imports updateMeetingContent from @arete/core",
+        "Type adapter bridges MeetingExtraction → MeetingIntelligence",
+        "Backend's duplicate formatStagedSections() deleted",
+        "POST /api/meetings/:slug/process output unchanged (snapshot test)",
+        "All existing backend tests pass"
+      ],
+      "dependencies": ["int-0.1"],
+      "status": "pending"
+    },
+    {
+      "id": "int-0.4",
+      "title": "Update Skill with CLI-First Path",
+      "description": "Update process-meetings skill to document CLI command as primary path with agent fallback for no-API-key case.",
+      "acceptanceCriteria": [
+        "Skill documents arete meeting extract as primary path",
+        "Skill shows how to check for AI config",
+        "Skill provides full agent fallback for no-API-key case",
+        "Files this skill reads/writes section updated"
+      ],
+      "dependencies": ["int-0.2"],
+      "status": "pending"
+    }
+  ]
+}

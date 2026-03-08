@@ -1,16 +1,16 @@
 ---
 title: "Areté Intelligence Tuning"
 slug: intelligence-tuning
-status: idea
+status: building
 size: medium
 tags: [ai, intelligence, backend]
 created: "2026-03-07"
-updated: "2026-03-07"
+updated: 2026-03-08T21:38:07.096Z
 completed: null
 execution: null
 has_review: false
-has_pre_mortem: false
-has_prd: false
+has_pre_mortem: true
+has_prd: true
 steps: 5
 ---
 
