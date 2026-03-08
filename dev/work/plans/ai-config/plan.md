@@ -1,15 +1,15 @@
 ---
 title: Areté AI Configuration
 slug: ai-config
-status: building
+status: complete
 size: medium
 tags: [ai, intelligence, backend, cli]
 created: 2026-03-08T05:05:45.242Z
-updated: 2026-03-08T05:33:30.061Z
-completed: null
-execution: null
+updated: 2026-03-08T17:30:00.000Z
+completed: 2026-03-08T17:30:00.000Z
+execution: dev/work/archive/ai-config/
 has_review: true
-has_pre_mortem: false
+has_pre_mortem: true
 has_prd: true
 steps: 5
 ---

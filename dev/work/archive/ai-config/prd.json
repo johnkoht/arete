@@ -1,0 +1,96 @@
+{
+  "name": "ai-config",
+  "branchName": "feature/ai-config",
+  "goal": "Establish unified AI configuration for Areté: create AIService wrapper around pi-ai, migrate backend from pi-coding-agent to direct pi-ai calls, add CLI credential management, onboarding integration, and config commands. Enables multi-model task routing and unblocks Intelligence Tuning.",
+  "userStories": [
+    {
+      "id": "ai-1",
+      "title": "Core AIService Foundation",
+      "description": "Create AIService in @arete/core that wraps pi-ai with task-based model routing, credential loading, and structured output support. Add ai section to AreteConfig, create credentials module for secure API key storage.",
+      "acceptanceCriteria": [
+        "AIService can call pi-ai with task-based model routing (task → tier → model)",
+        "callStructured() returns typed JSON responses using TypeBox schema",
+        "Credentials loaded from ~/.arete/credentials.yaml with 600 permissions",
+        "Env var override works (env > file) - existing env vars not overwritten",
+        "Graceful error when no API key configured (descriptive error message)",
+        "dev/catalog/capabilities.json updated with ai-service entry",
+        "Tests with mocked pi-ai calls (no real API calls in tests)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "049fd26fdb5e8ac9f22353656baafc0927b9274b"
+    },
+    {
+      "id": "ai-2",
+      "title": "Backend Migration to pi-ai",
+      "description": "Replace pi-coding-agent with pi-ai direct calls in backend. Rewrite runProcessingSession() to use AIService for meeting processing (summarization, extraction). Remove agent session overhead.",
+      "acceptanceCriteria": [
+        "runProcessingSession() uses AIService instead of pi-coding-agent",
+        "Meeting processing produces same output format (staged sections with action items, decisions, learnings)",
+        "pi-coding-agent removed from backend package.json",
+        "Existing tests pass with mocked AIService",
+        "Error handling for no API key (descriptive error, job marked as error)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "bc4cec74bac6a0e7ba3356cf6540c47e92fda6e1"
+    },
+    {
+      "id": "ai-3",
+      "title": "CLI Credential Management",
+      "description": "Add CLI commands to manage API keys: arete credentials set <provider>, arete credentials show, arete credentials test. Store credentials securely in ~/.arete/credentials.yaml.",
+      "acceptanceCriteria": [
+        "arete credentials set anthropic prompts for key, validates with test call, saves securely",
+        "arete credentials show lists providers without exposing keys (masked output)",
+        "arete credentials test verifies each configured provider with test call",
+        "File created with 0600 permissions (owner read/write only)",
+        "Help text explains env var override behavior"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "58638b3, 43365a0 (docs)"
+    },
+    {
+      "id": "ai-4",
+      "title": "Onboarding Integration",
+      "description": "Add AI configuration step to arete onboard. After profile setup, prompt for Anthropic API key (skippable). Validate key before saving, write default tier config to arete.yaml.",
+      "acceptanceCriteria": [
+        "arete onboard prompts for Anthropic API key after profile setup",
+        "User can skip (Enter) — onboarding continues without AI config",
+        "API key validated before saving (test call to provider)",
+        "Default tier config written to arete.yaml when key provided",
+        "Re-running onboard allows updating existing key (idempotent)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "fdc5441d5cc0553ee9d523478f25d0d58067066a"
+    },
+    {
+      "id": "ai-5",
+      "title": "Config CLI Commands",
+      "description": "Add CLI commands to view and modify AI settings: arete config show ai, arete config set ai.tiers.<tier> <model>, arete config set ai.tasks.<task> <tier>. Validate model and tier names.",
+      "acceptanceCriteria": [
+        "arete config show ai displays full AI config (tiers, tasks, configured providers)",
+        "arete config set ai.tiers.fast <model> modifies arete.yaml",
+        "arete config set ai.tasks.summary <tier> modifies arete.yaml",
+        "Invalid model names show warning but allow (pi-ai model list check)",
+        "Invalid tier names rejected with helpful error",
+        "Changes take effect on next command (config reloaded)"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "f645b3bfb04973eb97515a82c70960804e1a554c"
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-08T05:45:00.000Z",
+    "totalTasks": 5,
+    "completedTasks": 5,
+    "failedTasks": 0
+  }
+}
