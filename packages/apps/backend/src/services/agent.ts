@@ -38,14 +38,6 @@ type MeetingExtraction = Static<typeof MeetingExtractionSchema>;
 /**
  * Dependencies that can be injected for testing.
  */
-/** Extracted meeting data shape (matches MeetingExtractionSchema) */
-export interface MeetingExtraction {
-  summary: string;
-  actionItems: string[];
-  decisions: string[];
-  learnings: string[];
-}
-
 export interface ProcessingDeps {
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, content: string) => Promise<void>;
@@ -209,7 +201,7 @@ export async function runProcessingSessionTestable(
     jobs.appendEvent(jobId, 'Extracting content with AI...');
     let extraction: MeetingExtraction;
     try {
-      const result = await deps.aiService.callStructured<MeetingExtraction>(
+      const result = await deps.aiService.callStructured(
         'extraction',
         buildExtractionPrompt(content),
         MeetingExtractionSchema,
