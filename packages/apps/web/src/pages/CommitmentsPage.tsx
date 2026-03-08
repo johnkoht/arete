@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, type LucideIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ const DIRECTION_TABS: { label: string; value: DirectionFilter }[] = [
   { label: "All", value: "all" },
 ];
 
-const EMPTY_STATES: Record<FilterType, { icon: React.ComponentType<{ className?: string }>; title: string; description: string }> = {
+const EMPTY_STATES: Record<FilterType, { icon: LucideIcon; title: string; description: string }> = {
   open: {
     icon: CheckCircle2,
     title: "All caught up — no open commitments",
