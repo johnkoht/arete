@@ -1,48 +1,13 @@
 /**
- * Tests for services/agent.ts — Pi SDK agent integration.
+ * Tests for services/agent.ts — Meeting processing with AIService.
  *
- * Mocks @mariozechner/pi-coding-agent (createAgentSession) and
- * @mariozechner/pi-ai (getEnvApiKey) to exercise job lifecycle
- * transitions without touching the real SDK or network.
+ * Mocks file operations and AIService to test job lifecycle
+ * and content generation without touching real files or network.
  */
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Minimal types for mocking
-// ──────────────────────────────────────────────────────────────────────────────
-
-type EventListener = (event: unknown) => void;
-
-type MockSession = {
-  listeners: EventListener[];
-  subscribe: (listener: EventListener) => () => void;
-  prompt: (text: string) => Promise<void>;
-  /** Emit an event to all registered listeners (test helper) */
-  emit: (event: unknown) => void;
-};
-
-function makeMockSession(promptImpl?: () => Promise<void>): MockSession {
-  const listeners: EventListener[] = [];
-  const session: MockSession = {
-    listeners,
-    subscribe(listener) {
-      listeners.push(listener);
-      return () => {
-        const idx = listeners.indexOf(listener);
-        if (idx !== -1) listeners.splice(idx, 1);
-      };
-    },
-    async prompt(_text) {
-      if (promptImpl) await promptImpl();
-    },
-    emit(event) {
-      for (const l of listeners) l(event);
-    },
-  };
-  return session;
-}
+import { runProcessingSessionTestable, type ProcessingDeps } from '../../src/services/agent.js';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Mock jobs service
@@ -67,69 +32,68 @@ function makeMockJobs() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Inline implementation of runProcessingSession for testing
-// (avoids ES module mocking complexity — tests the exact same logic)
+// Mock dependencies factory
 // ──────────────────────────────────────────────────────────────────────────────
 
-type JobsService = {
-  appendEvent: (id: string, line: string) => void;
-  setJobStatus: (id: string, status: 'running' | 'done' | 'error') => void;
-};
+interface MockDepsOptions {
+  fileContent?: string;
+  readError?: Error;
+  writeError?: Error;
+  aiResponse?: {
+    summary: string;
+    actionItems: string[];
+    decisions: string[];
+    learnings: string[];
+  };
+  aiError?: Error;
+}
 
-type SessionLike = {
-  subscribe: (listener: EventListener) => () => void;
-  prompt: (text: string) => Promise<void>;
-};
+function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
+  writtenFiles: Array<{ path: string; content: string }>;
+} {
+  const writtenFiles: Array<{ path: string; content: string }> = [];
 
-/**
- * Inline version of runProcessingSession that accepts injected deps for testing.
- * This mirrors the real implementation but allows us to swap out:
- *   - apiKeyFn: replaces getEnvApiKey
- *   - createSession: replaces createAgentSession
- */
-async function runProcessingSessionTestable(
-  workspaceRoot: string,
-  meetingSlug: string,
-  jobId: string,
-  jobs: JobsService,
-  apiKeyFn: () => string | undefined,
-  createSession: () => Promise<{ session: SessionLike }>,
-): Promise<void> {
-  const apiKey = apiKeyFn();
-  if (!apiKey) {
-    jobs.setJobStatus(jobId, 'error');
-    jobs.appendEvent(jobId, 'Error: ANTHROPIC_API_KEY is not configured');
-    throw new Error('ANTHROPIC_API_KEY is not configured');
-  }
+  return {
+    writtenFiles,
+    readFile: async (path: string) => {
+      if (options.readError) throw options.readError;
+      return options.fileContent ?? `---
+title: Test Meeting
+status: pending
+---
 
-  const { session } = await createSession();
+## Summary
+No summary available.
 
-  const unsubscribe = session.subscribe((event: unknown) => {
-    const ev = event as Record<string, unknown>;
-    switch (ev.type) {
-      case 'message_update': {
-        const ame = ev.assistantMessageEvent as Record<string, unknown> | undefined;
-        if (ame?.type === 'text_delta') {
-          jobs.appendEvent(jobId, ame.delta as string);
-        }
-        break;
-      }
-      case 'tool_execution_start': {
-        jobs.appendEvent(jobId, `[tool] ${ev.toolName as string}`);
-        break;
-      }
-    }
-  });
-
-  try {
-    await session.prompt(`Process the meeting at resources/meetings/${meetingSlug}.md`);
-    jobs.setJobStatus(jobId, 'done');
-  } catch (err) {
-    jobs.setJobStatus(jobId, 'error');
-    throw err;
-  } finally {
-    unsubscribe();
-  }
+## Transcript
+Alice: Let's discuss the roadmap.
+Bob: I think we should focus on Q2 priorities.
+Alice: Agreed. Action item: Bob will draft the Q2 plan by Friday.
+Bob: Sounds good. We've decided to postpone the refactor.
+`;
+    },
+    writeFile: async (path: string, content: string) => {
+      if (options.writeError) throw options.writeError;
+      writtenFiles.push({ path, content });
+    },
+    aiService: {
+      callStructured: async () => {
+        if (options.aiError) throw options.aiError;
+        return {
+          data: options.aiResponse ?? {
+            summary: 'Alice and Bob discussed the Q2 roadmap priorities. They agreed to focus on Q2 and postpone the refactor.',
+            actionItems: ['Bob will draft the Q2 plan by Friday'],
+            decisions: ['Postpone the refactor to focus on Q2'],
+            learnings: [],
+          },
+          text: '{}',
+          usage: { input: 100, output: 50, total: 150 },
+          model: 'claude-3-haiku-20240307',
+          provider: 'anthropic',
+        };
+      },
+    },
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -141,126 +105,36 @@ describe('runProcessingSession', () => {
   const SLUG = '2024-01-15-standup';
   const JOB_ID = 'job-abc-123';
 
-  describe('API key missing', () => {
-    it('sets job status to error and throws without creating a session', async () => {
+  describe('successful processing', () => {
+    it('reads meeting file, calls AI, and writes updated content', async () => {
       const jobs = makeMockJobs();
-      let sessionCreated = false;
+      const deps = makeMockDeps();
 
-      await assert.rejects(
-        () =>
-          runProcessingSessionTestable(
-            WORKSPACE,
-            SLUG,
-            JOB_ID,
-            jobs,
-            () => undefined,
-            async () => {
-              sessionCreated = true;
-              return { session: makeMockSession() };
-            },
-          ),
-        (err) => {
-          assert(err instanceof Error);
-          assert.match(err.message, /ANTHROPIC_API_KEY/);
-          return true;
-        },
-      );
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
-      assert.equal(sessionCreated, false, 'session should not be created when API key missing');
-      assert.equal(jobs.statuses.length, 1);
-      assert.equal(jobs.statuses[0]!.status, 'error');
-      assert.ok(jobs.appended.some((e) => e.line.includes('ANTHROPIC_API_KEY')));
+      // Should have written the file
+      assert.equal(deps.writtenFiles.length, 1);
+      assert.ok(deps.writtenFiles[0]!.path.includes(SLUG));
     });
-  });
 
-  describe('agent emits text delta', () => {
-    it('appends delta text to job events via appendEvent', async () => {
+    it('emits progress events to the job', async () => {
       const jobs = makeMockJobs();
-      let capturedSession!: MockSession;
+      const deps = makeMockDeps();
 
-      const sessionPromise = runProcessingSessionTestable(
-        WORKSPACE,
-        SLUG,
-        JOB_ID,
-        jobs,
-        () => 'sk-test-key',
-        async () => {
-          capturedSession = makeMockSession();
-          return { session: capturedSession };
-        },
-      );
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
-      // Emit a text_delta event after session is created
-      // We need to wait for subscribe to be called — happens synchronously inside runProcessingSessionTestable
-      // So the session is subscribed before prompt() is called. Simulate it:
-      await Promise.resolve(); // flush microtasks so subscribe is registered
-
-      capturedSession.emit({
-        type: 'message_update',
-        assistantMessageEvent: {
-          type: 'text_delta',
-          delta: 'Hello world',
-          contentIndex: 0,
-          partial: {},
-        },
-      });
-
-      await sessionPromise;
-
-      assert.ok(
-        jobs.appended.some((e) => e.id === JOB_ID && e.line === 'Hello world'),
-        'Expected "Hello world" to be appended',
-      );
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(events.some((e) => e.includes('Reading meeting file')));
+      assert.ok(events.some((e) => e.includes('Extracting content with AI')));
+      assert.ok(events.some((e) => e.includes('Writing staged sections')));
+      assert.ok(events.some((e) => e.includes('processed successfully')));
     });
-  });
 
-  describe('agent emits tool_execution_start', () => {
-    it('appends [tool] toolName to job events', async () => {
+    it('sets job status to done on completion', async () => {
       const jobs = makeMockJobs();
-      let capturedSession!: MockSession;
+      const deps = makeMockDeps();
 
-      const sessionPromise = runProcessingSessionTestable(
-        WORKSPACE,
-        SLUG,
-        JOB_ID,
-        jobs,
-        () => 'sk-test-key',
-        async () => {
-          capturedSession = makeMockSession();
-          return { session: capturedSession };
-        },
-      );
-
-      await Promise.resolve();
-
-      capturedSession.emit({
-        type: 'tool_execution_start',
-        toolName: 'read',
-        toolCallId: 'tc-001',
-        args: {},
-      });
-
-      await sessionPromise;
-
-      assert.ok(
-        jobs.appended.some((e) => e.id === JOB_ID && e.line === '[tool] read'),
-        'Expected "[tool] read" to be appended',
-      );
-    });
-  });
-
-  describe('agent completes successfully', () => {
-    it('sets job status to done when prompt resolves', async () => {
-      const jobs = makeMockJobs();
-
-      await runProcessingSessionTestable(
-        WORKSPACE,
-        SLUG,
-        JOB_ID,
-        jobs,
-        () => 'sk-test-key',
-        async () => ({ session: makeMockSession() }),
-      );
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
       const doneCall = jobs.statuses.find((s) => s.status === 'done');
       assert.ok(doneCall, 'Expected job status to be set to "done"');
@@ -268,79 +142,226 @@ describe('runProcessingSession', () => {
     });
   });
 
-  describe('agent throws an error', () => {
-    it('sets job status to error and re-throws', async () => {
+  describe('output format', () => {
+    it('includes Summary section with AI-generated summary', async () => {
       const jobs = makeMockJobs();
-      const boom = new Error('API overloaded');
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Test summary of the meeting.',
+          actionItems: [],
+          decisions: [],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Summary'));
+      assert.ok(content.includes('Test summary of the meeting.'));
+    });
+
+    it('formats action items with ai_XXX IDs', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Summary.',
+          actionItems: ['First action', 'Second action'],
+          decisions: [],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Staged Action Items'));
+      assert.ok(content.includes('- ai_001: First action'));
+      assert.ok(content.includes('- ai_002: Second action'));
+    });
+
+    it('formats decisions with de_XXX IDs', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Summary.',
+          actionItems: [],
+          decisions: ['First decision', 'Second decision'],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Staged Decisions'));
+      assert.ok(content.includes('- de_001: First decision'));
+      assert.ok(content.includes('- de_002: Second decision'));
+    });
+
+    it('formats learnings with le_XXX IDs', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Summary.',
+          actionItems: [],
+          decisions: [],
+          learnings: ['First learning', 'Second learning'],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Staged Learnings'));
+      assert.ok(content.includes('- le_001: First learning'));
+      assert.ok(content.includes('- le_002: Second learning'));
+    });
+
+    it('omits empty sections', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Summary.',
+          actionItems: ['One action'],
+          decisions: [],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Staged Action Items'));
+      assert.ok(!content.includes('## Staged Decisions'));
+      assert.ok(!content.includes('## Staged Learnings'));
+    });
+
+    it('updates frontmatter with status: processed and processed_at timestamp', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps();
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('status: processed'));
+      assert.ok(content.includes('processed_at:'));
+    });
+
+    it('uses zero-padded 3-digit IDs', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        aiResponse: {
+          summary: 'Summary.',
+          actionItems: Array.from({ length: 12 }, (_, i) => `Action ${i + 1}`),
+          decisions: [],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('- ai_001: Action 1'));
+      assert.ok(content.includes('- ai_010: Action 10'));
+      assert.ok(content.includes('- ai_012: Action 12'));
+    });
+  });
+
+  describe('error handling', () => {
+    it('sets job to error when file cannot be read', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        readError: new Error('ENOENT: no such file'),
+      });
 
       await assert.rejects(
-        () =>
-          runProcessingSessionTestable(
-            WORKSPACE,
-            SLUG,
-            JOB_ID,
-            jobs,
-            () => 'sk-test-key',
-            async () => ({
-              session: makeMockSession(async () => {
-                throw boom;
-              }),
-            }),
-          ),
+        () => runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps),
         (err) => {
-          assert.equal(err, boom);
+          assert(err instanceof Error);
+          assert.match(err.message, /Could not read meeting file/);
           return true;
         },
       );
 
       const errorCall = jobs.statuses.find((s) => s.status === 'error');
       assert.ok(errorCall, 'Expected job status to be set to "error"');
-      assert.equal(errorCall!.id, JOB_ID);
     });
-  });
 
-  describe('unsubscribe is called after completion', () => {
-    it('removes listener after prompt resolves', async () => {
+    it('sets job to error when AI call fails', async () => {
       const jobs = makeMockJobs();
-      let capturedSession!: MockSession;
+      const deps = makeMockDeps({
+        aiError: new Error('AI service unavailable'),
+      });
 
-      await runProcessingSessionTestable(
-        WORKSPACE,
-        SLUG,
-        JOB_ID,
-        jobs,
-        () => 'sk-test-key',
-        async () => {
-          capturedSession = makeMockSession();
-          return { session: capturedSession };
+      await assert.rejects(
+        () => runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps),
+        (err) => {
+          assert(err instanceof Error);
+          assert.match(err.message, /AI extraction failed/);
+          return true;
         },
       );
 
-      // After the session completes, the listener should have been removed
-      assert.equal(capturedSession.listeners.length, 0, 'Listener should be unsubscribed');
+      const errorCall = jobs.statuses.find((s) => s.status === 'error');
+      assert.ok(errorCall, 'Expected job status to be set to "error"');
+      assert.ok(jobs.appended.some((e) => e.line.includes('AI extraction failed')));
     });
 
-    it('removes listener even when prompt throws', async () => {
+    it('handles API key error with descriptive message', async () => {
       const jobs = makeMockJobs();
-      let capturedSession!: MockSession;
+      const deps = makeMockDeps({
+        aiError: new Error("No API key for provider 'anthropic'. Set ANTHROPIC_API_KEY or configure via ~/.arete/credentials.yaml"),
+      });
 
-      await assert.rejects(() =>
-        runProcessingSessionTestable(
-          WORKSPACE,
-          SLUG,
-          JOB_ID,
-          jobs,
-          () => 'sk-test-key',
-          async () => {
-            capturedSession = makeMockSession(async () => {
-              throw new Error('fail');
-            });
-            return { session: capturedSession };
-          },
-        ),
+      await assert.rejects(
+        () => runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps),
+        (err) => {
+          assert(err instanceof Error);
+          assert.match(err.message, /API key/);
+          return true;
+        },
       );
 
-      assert.equal(capturedSession.listeners.length, 0, 'Listener should be unsubscribed on error');
+      const errorCall = jobs.statuses.find((s) => s.status === 'error');
+      assert.ok(errorCall, 'Expected job status to be set to "error"');
+      assert.ok(jobs.appended.some((e) => e.line.includes('API key')));
+    });
+  });
+
+  describe('content preservation', () => {
+    it('preserves content before Summary section', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        fileContent: `---
+title: Important Meeting
+date: 2024-01-15
+---
+
+# Meeting Notes
+
+Some important preamble text here.
+
+## Summary
+Old summary to replace.
+
+## Transcript
+The actual transcript content.
+`,
+        aiResponse: {
+          summary: 'New AI summary.',
+          actionItems: ['Action item'],
+          decisions: [],
+          learnings: [],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('# Meeting Notes'));
+      assert.ok(content.includes('Some important preamble text here.'));
+      assert.ok(content.includes('New AI summary.'));
     });
   });
 });

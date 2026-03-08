@@ -20,6 +20,28 @@ package uses the `yaml` library directly. Don't mix them — gray-matter's `matt
 produces slightly different output than yaml.stringify. Use `matter.stringify()` for round-trip
 safety in backend service code.
 
+### gray-matter Caches Frontmatter Data Objects (2026-03-07)
+
+`gray-matter` caches the `data` object across parses. If you mutate `data` and then re-parse
+a different file, the cached object pollutes the new parse. This causes phantom properties to
+appear in frontmatter that don't exist in the file.
+
+**Always clone** frontmatter before mutating:
+```typescript
+const { data, content } = matter(raw);
+const fm = { ...data };  // Clone before mutation
+fm['favorite'] = true;   // Safe to mutate
+const updated = matter.stringify(content, fm);
+```
+
+NOT:
+```typescript
+const { data, content } = matter(raw);
+data['favorite'] = true;  // BAD: mutates cached object
+```
+
+This affects any PATCH endpoint that reads, modifies, and writes frontmatter.
+
 ### Per-Slug Write Queue
 
 Concurrent PUT / PATCH / approve requests to the same slug can corrupt frontmatter (read-
@@ -64,7 +86,70 @@ Before editing `services/workspace.ts`:
 
 ---
 
-## Pi SDK Integration (2026-03-04)
+## AIService Integration (2026-03-08)
+
+Meeting processing uses `AIService` from `@arete/core` for AI calls. This replaced the previous
+pi-coding-agent integration.
+
+### Module-Level Service Initialization
+
+AIService is initialized once at startup and shared via module-level state:
+```typescript
+// index.ts
+import { loadConfig, loadCredentialsIntoEnv, AIService, FileStorageAdapter } from '@arete/core';
+import { initializeAIService } from './services/agent.js';
+
+loadCredentialsIntoEnv();  // Load ~/.arete/credentials.yaml into env
+const storage = new FileStorageAdapter();
+const config = await loadConfig(storage, workspaceRoot);
+const aiService = new AIService(config);
+initializeAIService(aiService);  // Set module-level reference
+```
+
+### Testable Pattern with Dependency Injection
+
+The `runProcessingSessionTestable()` function accepts injected dependencies for testing:
+```typescript
+export interface ProcessingDeps {
+  readFile: (path: string) => Promise<string>;
+  writeFile: (path: string, content: string) => Promise<void>;
+  aiService: {
+    callStructured: <T>(task: 'extraction', prompt: string, schema: TSchema) => Promise<AIStructuredResult<T>>;
+  };
+}
+
+// Tests inject mocks
+const deps = makeMockDeps({ aiResponse: { summary: '...', actionItems: [...] } });
+await runProcessingSessionTestable(workspace, slug, jobId, jobs, deps);
+```
+
+### TypeBox Schema for Structured Output
+
+Meeting extraction uses a TypeBox schema for type-safe structured output:
+```typescript
+const MeetingExtractionSchema = Type.Object({
+  summary: Type.String(),
+  actionItems: Type.Array(Type.String()),
+  decisions: Type.Array(Type.String()),
+  learnings: Type.Array(Type.String()),
+});
+
+const result = await aiService.callStructured('extraction', prompt, MeetingExtractionSchema);
+const extraction = result.data;  // Typed as MeetingExtraction
+```
+
+### SSE Events for Progress (unchanged)
+
+The fire-and-forget 202 pattern and SSE polling pattern remain unchanged from before —
+only the internal AI call mechanism changed.
+
+---
+
+## Pi SDK Integration (SUPERSEDED 2026-03-08)
+
+> **Note**: This section is historical. The backend now uses `AIService` from `@arete/core`
+> instead of `@mariozechner/pi-coding-agent`. Keeping for reference if agent-based processing
+> is ever needed again.
 
 ### createAgentSession / SessionManager.inMemory()
 
@@ -97,47 +182,6 @@ NOT `ev.type === 'content_block_delta' && ev.delta.type === 'text_delta'` (that'
 ### getEnvApiKey — canonical API key check
 
 Use `getEnvApiKey('anthropic')` from `@mariozechner/pi-ai` to check if the key is configured. Returns `undefined` if not set. Always check before creating a session to give a clear 503 rather than a cryptic SDK error.
-
-### Fire-and-forget 202 pattern
-
-```typescript
-app.post('/:slug/process', async (c) => {
-  const apiKey = getEnvApiKey('anthropic');
-  if (!apiKey) return c.json({ error: '...', hint: '...' }, 503);
-
-  const jobId = jobsService.createJob('process');
-  runProcessingSession(workspaceRoot, slug, jobId, jobsService).catch(err => {
-    console.error('[process] Agent error:', err);
-    jobsService.setJobStatus(jobId, 'error');
-  });
-  return c.json({ jobId }, 202);
-});
-```
-Do the API key check in the route (synchronous, returns 503 immediately). Don't await the agent; return 202 with jobId. The catch on the floating promise is the only error handler — the service itself also sets error status before re-throwing.
-
-### SSE polling pattern (ReadableStream + setInterval)
-
-```typescript
-const stream = new ReadableStream({
-  start(controller) {
-    const interval = setInterval(() => {
-      const job = jobsService.getJob(jobId);
-      if (!job) { clearInterval(interval); controller.close(); return; }
-      const newEvents = job.events.slice(lastSent);
-      for (const ev of newEvents) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: ev })}\n\n`));
-        lastSent++;
-      }
-      if (job.status === 'done' || job.status === 'error') {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, status: job.status })}\n\n`));
-        clearInterval(interval); controller.close();
-      }
-    }, 500);
-  }
-});
-return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', ... } });
-```
-Slice-based polling is simpler than cursors because the events array only grows. The `lastSent` counter tracks the slice offset. Use `new Response(stream, ...)` directly (not `c.body`) to get correct SSE headers.
 
 ---
 
