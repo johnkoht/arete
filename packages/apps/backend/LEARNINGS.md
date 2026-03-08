@@ -6,6 +6,16 @@ Component-local gotchas, invariants, and pre-edit checklists for `packages/apps/
 
 ## Gotchas
 
+### npm run typecheck Does NOT Check Backend (2026-03-08)
+
+`npm run typecheck` in the repo root only checks `packages/core` and `packages/cli`. The backend
+is in `packages/apps/backend` and has its own TypeScript config. To verify backend compiles:
+```bash
+npm run build:apps:backend   # or npm run build for everything
+```
+
+Always run `npm run build:apps:backend` after modifying backend code — `npm run typecheck` will miss errors.
+
 ### WriteItemStatusOptions Not Re-Exported from @arete/core
 
 `WriteItemStatusOptions` is defined in `packages/core/src/integrations/staged-items.ts` but
