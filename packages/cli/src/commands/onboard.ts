@@ -306,6 +306,23 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           }
         }
 
+        // Default AI configuration for the workspace
+        const DEFAULT_AI_CONFIG = {
+          tiers: {
+            fast: 'gemini-2.0-flash',
+            standard: 'claude-sonnet-4-20250514',
+            frontier: 'claude-3-opus',
+          },
+          tasks: {
+            summary: 'fast',
+            extraction: 'fast',
+            decision_extraction: 'standard',
+            learning_extraction: 'standard',
+            significance_analysis: 'frontier',
+            reconciliation: 'fast',
+          },
+        };
+
         // Validate and save key if we have one
         if (apiKeyToSave) {
           if (!opts.json) {
@@ -319,22 +336,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
             saveCredential('anthropic', apiKeyToSave);
 
             // Write default AI config to arete.yaml
-            const aiConfig = {
-              tiers: {
-                fast: 'gemini-2.0-flash',
-                standard: 'claude-sonnet-4-20250514',
-                frontier: 'claude-3-opus',
-              },
-              tasks: {
-                summary: 'fast',
-                extraction: 'fast',
-                decision_extraction: 'standard',
-                learning_extraction: 'standard',
-                significance_analysis: 'frontier',
-                reconciliation: 'fast',
-              },
-            };
-            await services.workspace.updateManifestField(root, 'ai', aiConfig);
+            await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
 
             aiConfigured = true;
 
@@ -354,22 +356,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
               saveCredential('anthropic', apiKeyToSave);
 
               // Still write AI config
-              const aiConfig = {
-                tiers: {
-                  fast: 'gemini-2.0-flash',
-                  standard: 'claude-sonnet-4-20250514',
-                  frontier: 'claude-3-opus',
-                },
-                tasks: {
-                  summary: 'fast',
-                  extraction: 'fast',
-                  decision_extraction: 'standard',
-                  learning_extraction: 'standard',
-                  significance_analysis: 'frontier',
-                  reconciliation: 'fast',
-                },
-              };
-              await services.workspace.updateManifestField(root, 'ai', aiConfig);
+              await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
               aiConfigured = true;
             } else {
               // Auth error - don't save
