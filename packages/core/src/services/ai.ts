@@ -64,6 +64,8 @@ export interface AIServiceTestDeps {
   completeSimple: typeof completeSimple;
   getModel: typeof getModel;
   getEnvApiKey: typeof getEnvApiKey;
+  /** Optional: mock getApiKey for file credential lookup */
+  getApiKey?: typeof getApiKey;
 }
 
 /** Model specification: provider/model format */
@@ -195,8 +197,9 @@ export class AIService {
       return apiKey;
     }
 
-    // Try our own getApiKey as fallback
-    const fileKey = getApiKey(provider);
+    // Try our own getApiKey as fallback (use mocked version if provided)
+    const getApiKeyFn = this.deps.getApiKey ?? getApiKey;
+    const fileKey = getApiKeyFn(provider);
     if (fileKey) {
       return fileKey;
     }

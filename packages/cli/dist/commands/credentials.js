@@ -23,9 +23,9 @@ const SUPPORTED_PROVIDERS = [
     'mistral',
     'openrouter',
 ];
-/** Models used for validation test calls */
+/** Models used for validation test calls — use cheapest/fastest models */
 const VALIDATION_MODELS = {
-    anthropic: { provider: 'anthropic', model: 'claude-haiku' },
+    anthropic: { provider: 'anthropic', model: 'claude-3-5-haiku-latest' },
     google: { provider: 'google', model: 'gemini-2.0-flash' },
     openai: { provider: 'openai', model: 'gpt-4o-mini' },
 };

@@ -401,6 +401,8 @@ describe('AIService', () => {
       const deps = createMockDeps({ apiKey: '' }); // Empty = no key
       // Override getEnvApiKey to return null
       deps.getEnvApiKey = () => null;
+      // Also mock getApiKey (file credential lookup) to return null
+      (deps as AIServiceTestDeps & { getApiKey?: () => null }).getApiKey = () => null;
       const service = new AIService(config, deps);
 
       await assert.rejects(

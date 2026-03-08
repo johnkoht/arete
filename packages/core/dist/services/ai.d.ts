@@ -6,6 +6,7 @@
  */
 import { type TSchema, type Static } from '@sinclair/typebox';
 import type { AreteConfig, AITask, AITier } from '../models/workspace.js';
+import { getApiKey } from '../credentials.js';
 import type { KnownProvider } from '@mariozechner/pi-ai';
 import { getModel, completeSimple, getEnvApiKey } from '@mariozechner/pi-ai';
 /** Options for AI completion calls */
@@ -44,6 +45,8 @@ export interface AIServiceTestDeps {
     completeSimple: typeof completeSimple;
     getModel: typeof getModel;
     getEnvApiKey: typeof getEnvApiKey;
+    /** Optional: mock getApiKey for file credential lookup */
+    getApiKey?: typeof getApiKey;
 }
 /** Model specification: provider/model format */
 export interface ModelSpec {

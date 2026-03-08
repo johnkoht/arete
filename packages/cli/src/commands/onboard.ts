@@ -309,9 +309,11 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         }
 
         // Default AI configuration for the workspace
+        // Uses Anthropic models since we're onboarding with Anthropic key
+        // TODO: Multi-provider onboarding (see backlog)
         const DEFAULT_AI_CONFIG = {
           tiers: {
-            fast: 'gemini-2.0-flash',
+            fast: 'claude-3-5-haiku-latest',
             standard: 'claude-sonnet-4-20250514',
             frontier: 'claude-3-opus',
           },

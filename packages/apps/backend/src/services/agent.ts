@@ -38,15 +38,23 @@ type MeetingExtraction = Static<typeof MeetingExtractionSchema>;
 /**
  * Dependencies that can be injected for testing.
  */
+/** Extracted meeting data shape (matches MeetingExtractionSchema) */
+export interface MeetingExtraction {
+  summary: string;
+  actionItems: string[];
+  decisions: string[];
+  learnings: string[];
+}
+
 export interface ProcessingDeps {
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, content: string) => Promise<void>;
   aiService: {
-    callStructured: <T>(
+    callStructured: (
       task: 'extraction',
       prompt: string,
       schema: typeof MeetingExtractionSchema,
-    ) => Promise<AIStructuredResult<T>>;
+    ) => Promise<AIStructuredResult<MeetingExtraction>>;
   };
 }
 
