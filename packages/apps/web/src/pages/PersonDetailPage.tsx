@@ -11,7 +11,7 @@
  * - Navigation guard via useBlocker
  */
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { useParams, Link, useBlocker } from "react-router-dom";
 import { ArrowLeft, Mail, Building2, ChevronDown, ChevronRight, Clock, Users } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -22,8 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { HealthDot, TrendIcon, CategoryBadge } from "@/components/people/PersonBadges.js";
-import { LazyBlockEditor } from "@/components/BlockEditor.js";
 import { usePerson, useUpdatePersonNotes } from "@/hooks/people.js";
+
+// Lazy load BlockEditor to avoid bundle size impact
+const LazyBlockEditor = lazy(() =>
+  import("@/components/BlockEditor.js").then((m) => ({ default: m.BlockEditor }))
+);
 import { useMeeting } from "@/hooks/meetings.js";
 import type { ParsedItem } from "@/api/types.js";
 

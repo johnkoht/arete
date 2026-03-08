@@ -315,10 +315,12 @@ describe('theme integration', () => {
 });
 
 describe('lazy loading', () => {
-  it('exports LazyBlockEditor for code splitting', async () => {
-    const { LazyBlockEditor } = await import('./BlockEditor.js');
-    expect(LazyBlockEditor).toBeDefined();
-    // LazyBlockEditor is a React.lazy component — it's a function
-    expect(typeof LazyBlockEditor).toBe('object'); // lazy components are objects with $$typeof
+  it('can be imported for lazy loading by consumers', async () => {
+    // BlockEditor exports the component directly
+    // Consumers create their own lazy wrapper:
+    //   const LazyBlockEditor = lazy(() => import('./BlockEditor.js').then(m => ({ default: m.BlockEditor })));
+    const mod = await import('./BlockEditor.js');
+    expect(mod.BlockEditor).toBeDefined();
+    expect(typeof mod.BlockEditor).toBe('function');
   });
 });

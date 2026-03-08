@@ -15,7 +15,7 @@ import '@blocknote/mantine/style.css';
 import { useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import type { PartialBlock } from '@blocknote/core';
-import { useCallback, useEffect, useRef, lazy } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 export type BlockEditorProps = {
   initialMarkdown: string;
@@ -190,14 +190,6 @@ export function BlockEditor({
   );
 }
 
-/**
- * Lazy-loaded version of BlockEditor for code splitting.
- * Usage:
- *   import { LazyBlockEditor } from '@/components/BlockEditor.js';
- *   <Suspense fallback={<Skeleton />}>
- *     <LazyBlockEditor ... />
- *   </Suspense>
- */
-export const LazyBlockEditor = lazy(() =>
-  import('./BlockEditor.js').then((mod) => ({ default: mod.BlockEditor }))
-);
+// Note: For lazy loading, consumers should create their own lazy wrapper:
+//   const LazyBlockEditor = lazy(() => import('./BlockEditor.js').then(m => ({ default: m.BlockEditor })));
+// This avoids circular import issues.

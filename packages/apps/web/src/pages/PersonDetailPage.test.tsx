@@ -114,8 +114,10 @@ vi.mock('@/hooks/meetings.js', () => ({
 }));
 
 // Mock BlockEditor to avoid full BlockNote initialization
+// The component uses lazy(() => import('./BlockEditor.js').then(m => ({ default: m.BlockEditor })))
+// So we need to mock the BlockEditor export
 vi.mock('@/components/BlockEditor.js', () => ({
-  LazyBlockEditor: ({ initialMarkdown, editable }: { initialMarkdown: string; editable: boolean }) => (
+  BlockEditor: ({ initialMarkdown, editable }: { initialMarkdown: string; editable: boolean }) => (
     <div data-testid="block-editor" data-editable={editable}>
       {initialMarkdown}
     </div>

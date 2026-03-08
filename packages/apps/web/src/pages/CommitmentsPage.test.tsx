@@ -153,7 +153,9 @@ describe("CommitmentsPage", () => {
       await waitFor(() => {
         expect(screen.getByRole("button", { name: "Mine" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Theirs" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /^All$/i })).toBeInTheDocument();
+        // There are two "All" buttons (direction filter and status filter), so use getAllByRole
+        const allButtons = screen.getAllByRole("button", { name: /^All$/i });
+        expect(allButtons.length).toBeGreaterThanOrEqual(2);
       });
     });
 

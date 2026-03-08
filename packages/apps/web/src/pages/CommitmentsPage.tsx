@@ -16,14 +16,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "sonner";
@@ -421,77 +413,75 @@ export default function CommitmentsPage() {
                 {sortedCommitments.length} commitment{sortedCommitments.length !== 1 ? "s" : ""}
               </p>
               
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[140px]">
-                        <SortableHeader
-                          label="Person"
-                          sortKey="person"
-                          currentSort={sortBy}
-                          currentOrder={sortOrder}
-                          onSort={handleSort}
-                        />
-                      </TableHead>
-                      <TableHead>Commitment</TableHead>
-                      <TableHead className="w-[110px]">Direction</TableHead>
-                      <TableHead className="w-[80px]">
-                        <SortableHeader
-                          label="Age"
-                          sortKey="age"
-                          currentSort={sortBy}
-                          currentOrder={sortOrder}
-                          onSort={handleSort}
-                        />
-                      </TableHead>
-                      <TableHead className="w-[120px] text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedCommitments.map((item) => {
-                      const isSettled = item.status === "resolved" || item.status === "dropped";
-                      return (
-                        <TableRow key={item.id} className={isSettled ? "opacity-50" : ""}>
-                          <TableCell>
-                            {item.personSlug ? (
-                              <Link
-                                to={`/people/${item.personSlug}`}
-                                className="text-sm text-primary hover:underline font-medium"
-                              >
-                                {item.personSlug.replace(/-/g, " ")}
-                              </Link>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">—</span>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                    <th className="px-4 py-3 w-[140px]">
+                      <SortableHeader
+                        label="Person"
+                        sortKey="person"
+                        currentSort={sortBy}
+                        currentOrder={sortOrder}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th className="px-4 py-3">Commitment</th>
+                    <th className="px-4 py-3 w-[110px]">Direction</th>
+                    <th className="px-4 py-3 w-[80px]">
+                      <SortableHeader
+                        label="Age"
+                        sortKey="age"
+                        currentSort={sortBy}
+                        currentOrder={sortOrder}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th className="px-4 py-3 w-[120px] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCommitments.map((item) => {
+                    const isSettled = item.status === "resolved" || item.status === "dropped";
+                    return (
+                      <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
+                        <td className="px-4 py-3">
+                          {item.personSlug ? (
+                            <Link
+                              to={`/people/${item.personSlug}`}
+                              className="text-sm text-primary hover:underline font-medium"
+                            >
+                              {item.personSlug.replace(/-/g, " ")}
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
+                              {item.text}
+                            </p>
+                            {item.date && (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                              </span>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
-                                {item.text}
-                              </p>
-                              {item.date && (
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <DirectionBadge direction={item.direction} />
-                          </TableCell>
-                          <TableCell>
-                            <AgeBadge daysOpen={item.daysOpen} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <CommitmentActions item={item} />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <DirectionBadge direction={item.direction} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <AgeBadge daysOpen={item.daysOpen} />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <CommitmentActions item={item} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
