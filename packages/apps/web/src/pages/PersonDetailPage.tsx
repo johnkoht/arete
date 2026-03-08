@@ -13,17 +13,63 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useParams, Link, useBlocker } from "react-router-dom";
-import { ArrowLeft, Mail, Building2 } from "lucide-react";
+import { ArrowLeft, Mail, Building2, ChevronDown, ChevronRight, Clock, Users } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { HealthDot, TrendIcon, CategoryBadge } from "@/components/people/PersonBadges.js";
 import { LazyBlockEditor } from "@/components/BlockEditor.js";
 import { usePerson, useUpdatePersonNotes } from "@/hooks/people.js";
 import { useMeeting } from "@/hooks/meetings.js";
+import type { ParsedItem } from "@/api/types.js";
+
+// ── Collapsible Section ───────────────────────────────────────────────────────
+
+function CollapsibleSection({
+  title,
+  items,
+  defaultOpen = false,
+}: {
+  title: string;
+  items: ParsedItem[];
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  // Hide section if no items
+  if (items.length === 0) return null;
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors w-full">
+        {isOpen ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+        {title} ({items.length})
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2">
+        <ul className="space-y-1.5 pl-5">
+          {items.map((item, idx) => (
+            <li key={idx} className="text-sm text-foreground">
+              {item.completed !== undefined && (
+                <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                  {item.text}
+                </span>
+              )}
+              {item.completed === undefined && item.text}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 // ── Meeting Sheet ─────────────────────────────────────────────────────────────
 
@@ -37,12 +83,29 @@ function MeetingSheet({
   onClose: () => void;
 }) {
   const { data: meeting, isLoading } = useMeeting(open ? slug : "");
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
+
+  // Guard parsedSections with ?? operator
+  const parsedSections = meeting?.parsedSections ?? {
+    actionItems: [],
+    decisions: [],
+    learnings: [],
+  };
+
+  // Format duration as "X min" or "X hr Y min"
+  const formatDuration = (minutes: number | undefined) => {
+    if (!minutes) return null;
+    if (minutes < 60) return `${minutes} min`;
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`;
+  };
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto" side="right">
         {isLoading || !meeting ? (
-          <div className="space-y-4 pt-4">
+          <div className="space-y-4 pt-4" data-testid="meeting-sheet-loading">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-4 w-full" />
@@ -52,35 +115,92 @@ function MeetingSheet({
         ) : (
           <>
             <SheetHeader className="pb-4">
-              <SheetTitle className="text-left">{meeting.title}</SheetTitle>
+              <SheetTitle className="text-left" data-testid="meeting-sheet-title">
+                {meeting.title}
+              </SheetTitle>
               {meeting.date && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" data-testid="meeting-sheet-date">
                   {format(parseISO(meeting.date), "MMMM d, yyyy")}
                 </p>
               )}
             </SheetHeader>
 
             <div className="space-y-5">
+              {/* Metadata: attendees + duration */}
+              <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
+                {meeting.attendees.length > 0 && (
+                  <div className="flex items-center gap-1.5" data-testid="meeting-sheet-attendees">
+                    <Users className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>{meeting.attendees.map(a => a.name).join(", ")}</span>
+                  </div>
+                )}
+                {formatDuration(meeting.duration) && (
+                  <div className="flex items-center gap-1.5" data-testid="meeting-sheet-duration">
+                    <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>{formatDuration(meeting.duration)}</span>
+                  </div>
+                )}
+              </div>
+
               {meeting.summary && (
                 <div>
                   <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Summary
                   </h3>
-                  <p className="text-sm text-foreground leading-relaxed">{meeting.summary}</p>
+                  <p className="text-sm text-foreground leading-relaxed" data-testid="meeting-sheet-summary">
+                    {meeting.summary}
+                  </p>
                 </div>
               )}
 
-              {meeting.body && (
+              {/* Parsed items: decisions, learnings, actions */}
+              {(parsedSections.decisions.length > 0 ||
+                parsedSections.learnings.length > 0 ||
+                parsedSections.actionItems.length > 0) && (
                 <>
                   <Separator />
-                  <div>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Notes
-                    </h3>
-                    <div className="whitespace-pre-wrap text-sm text-muted-foreground font-mono">
-                      {meeting.body}
-                    </div>
+                  <div className="space-y-3" data-testid="meeting-sheet-parsed-items">
+                    <CollapsibleSection
+                      title="Decisions"
+                      items={parsedSections.decisions}
+                    />
+                    <CollapsibleSection
+                      title="Learnings"
+                      items={parsedSections.learnings}
+                    />
+                    <CollapsibleSection
+                      title="Actions"
+                      items={parsedSections.actionItems}
+                    />
                   </div>
+                </>
+              )}
+
+              {/* Transcript */}
+              {meeting.transcript && (
+                <>
+                  <Separator />
+                  <Collapsible open={transcriptOpen} onOpenChange={setTranscriptOpen}>
+                    <CollapsibleTrigger
+                      className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="meeting-sheet-transcript-toggle"
+                    >
+                      {transcriptOpen ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                      {transcriptOpen ? "Hide Transcript" : "Show Transcript"}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div
+                        className="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground font-mono p-3 bg-muted/50 rounded-md"
+                        data-testid="meeting-sheet-transcript"
+                      >
+                        {meeting.transcript}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </>
               )}
 
@@ -88,6 +208,7 @@ function MeetingSheet({
               <Link
                 to={`/meetings/${slug}`}
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                data-testid="meeting-sheet-full-link"
               >
                 Open full meeting →
               </Link>

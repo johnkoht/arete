@@ -68,12 +68,29 @@ const mockMeeting: Meeting = {
   slug: 'weekly-sync',
   title: 'Weekly Sync',
   date: '2026-03-01',
-  attendees: [{ name: 'John Doe', email: 'john@acme.com', initials: 'JD' }],
+  attendees: [
+    { name: 'John Doe', email: 'john@acme.com', initials: 'JD' },
+    { name: 'Alice Smith', email: 'alice@acme.com', initials: 'AS' },
+  ],
   status: 'processed',
-  duration: 30,
+  duration: 90,
   source: 'fathom',
   summary: 'Discussed project updates',
   body: 'Meeting notes here',
+  transcript: 'John: Hello everyone.\nAlice: Hi John, ready to start?\nJohn: Yes, let\'s begin.',
+  parsedSections: {
+    decisions: [
+      { text: 'Move to weekly sprints' },
+      { text: 'Use Slack for async updates' },
+    ],
+    learnings: [
+      { text: 'Daily standups improve visibility' },
+    ],
+    actionItems: [
+      { text: 'Send proposal by Friday', completed: false },
+      { text: 'Schedule follow-up call', completed: true },
+    ],
+  },
 };
 
 // Mock the hooks before importing the component
@@ -108,6 +125,7 @@ vi.mock('@/components/BlockEditor.js', () => ({
 // Import after mocks are set up
 import PersonDetailPage from './PersonDetailPage.js';
 import { usePerson } from '@/hooks/people.js';
+import { useMeeting } from '@/hooks/meetings.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -387,5 +405,304 @@ describe('useBlocker navigation guard', () => {
 
     // Editing with changes → block
     expect(blockerConditionExample(true, 'modified', 'original')).toBe(true);
+  });
+});
+
+describe('MeetingSheet', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(usePerson).mockReturnValue({
+      data: mockPerson,
+      isLoading: false,
+      error: null,
+      isError: false,
+      isPending: false,
+      isSuccess: true,
+      status: 'success',
+    } as ReturnType<typeof usePerson>);
+    vi.mocked(useMeeting).mockReturnValue({
+      data: mockMeeting,
+      isLoading: false,
+      error: null,
+      isError: false,
+      isPending: false,
+      isSuccess: true,
+      status: 'success',
+    } as ReturnType<typeof useMeeting>);
+  });
+
+  it('opens sheet when clicking a meeting', async () => {
+    renderPage();
+
+    // Wait for page to load
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting in Recent Meetings
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    expect(meetingButton).toBeDefined();
+    fireEvent.click(meetingButton!);
+
+    // Sheet should open with meeting title
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-title')).toHaveTextContent('Weekly Sync');
+    });
+  });
+
+  it('displays meeting title and date', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-title')).toHaveTextContent('Weekly Sync');
+      expect(screen.getByTestId('meeting-sheet-date')).toHaveTextContent('March 1, 2026');
+    });
+  });
+
+  it('displays meeting summary', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-summary')).toHaveTextContent('Discussed project updates');
+    });
+  });
+
+  it('displays attendees', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      const attendeesEl = screen.getByTestId('meeting-sheet-attendees');
+      expect(attendeesEl).toHaveTextContent('John Doe, Alice Smith');
+    });
+  });
+
+  it('displays formatted duration', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      // 90 minutes = 1 hr 30 min
+      const durationEl = screen.getByTestId('meeting-sheet-duration');
+      expect(durationEl).toHaveTextContent('1 hr 30 min');
+    });
+  });
+
+  it('displays collapsed parsed items sections', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      // Parsed items section should be visible
+      expect(screen.getByTestId('meeting-sheet-parsed-items')).toBeInTheDocument();
+      // Section headers should be visible (collapsed by default)
+      expect(screen.getByText('Decisions (2)')).toBeInTheDocument();
+      expect(screen.getByText('Learnings (1)')).toBeInTheDocument();
+      expect(screen.getByText('Actions (2)')).toBeInTheDocument();
+    });
+  });
+
+  it('expands parsed items section on click', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Decisions (2)')).toBeInTheDocument();
+    });
+
+    // Click to expand Decisions
+    fireEvent.click(screen.getByText('Decisions (2)'));
+
+    // Should show the decision items
+    await waitFor(() => {
+      expect(screen.getByText('Move to weekly sprints')).toBeInTheDocument();
+      expect(screen.getByText('Use Slack for async updates')).toBeInTheDocument();
+    });
+  });
+
+  it('shows transcript toggle (collapsed by default)', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-transcript-toggle')).toHaveTextContent('Show Transcript');
+    });
+
+    // Transcript content should not be visible yet
+    expect(screen.queryByTestId('meeting-sheet-transcript')).not.toBeInTheDocument();
+  });
+
+  it('expands transcript when toggle clicked', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-transcript-toggle')).toBeInTheDocument();
+    });
+
+    // Click to show transcript
+    fireEvent.click(screen.getByTestId('meeting-sheet-transcript-toggle'));
+
+    await waitFor(() => {
+      // Toggle should now say Hide
+      expect(screen.getByTestId('meeting-sheet-transcript-toggle')).toHaveTextContent('Hide Transcript');
+      // Transcript content should be visible
+      const transcriptEl = screen.getByTestId('meeting-sheet-transcript');
+      expect(transcriptEl).toHaveTextContent('John: Hello everyone.');
+    });
+  });
+
+  it('shows "Open full meeting" link', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    await waitFor(() => {
+      const fullMeetingLink = screen.getByTestId('meeting-sheet-full-link');
+      expect(fullMeetingLink).toHaveTextContent('Open full meeting →');
+      expect(fullMeetingLink).toHaveAttribute('href', '/meetings/weekly-sync');
+    });
+  });
+
+  it('closes sheet via X button (Sheet default)', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    // Wait for sheet to open
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-title')).toBeInTheDocument();
+    });
+
+    // Find and click X button (Sheet's default close button)
+    const closeButton = screen.getByRole('button', { name: /close/i });
+    fireEvent.click(closeButton);
+
+    // Sheet should close — title should no longer be visible
+    await waitFor(() => {
+      expect(screen.queryByTestId('meeting-sheet-title')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows loading state when meeting is loading', async () => {
+    // Start with meeting loading
+    vi.mocked(useMeeting).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      isError: false,
+      isPending: true,
+      isSuccess: false,
+      status: 'pending',
+    } as ReturnType<typeof useMeeting>);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // Click a meeting
+    const meetingButton = screen.getAllByRole('button').find(
+      btn => btn.textContent?.includes('Weekly Sync')
+    );
+    fireEvent.click(meetingButton!);
+
+    // Should show loading skeleton
+    await waitFor(() => {
+      expect(screen.getByTestId('meeting-sheet-loading')).toBeInTheDocument();
+    });
   });
 });
