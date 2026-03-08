@@ -43,6 +43,9 @@ export type {
 // Workspace domain
 export type {
   IDETarget,
+  AITask,
+  AITier,
+  AIConfig,
   AreteConfig,
   WorkspacePaths,
   WorkspaceStatus,
