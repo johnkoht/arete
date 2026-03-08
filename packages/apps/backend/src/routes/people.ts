@@ -22,6 +22,7 @@ export type PersonSummary = {
   lastMeetingTitle: string | null;
   openCommitments: number;
   trend: 'up' | 'flat' | 'down' | null;
+  favorite?: boolean;
 };
 
 export type PersonDetail = PersonSummary & {
@@ -38,6 +39,7 @@ export type PersonDetail = PersonSummary & {
   repeatedConcerns: string[];
   rawContent: string;
   allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }>;
+  // favorite is inherited from PersonSummary
 };
 
 type CommitmentEntry = {
@@ -320,6 +322,7 @@ export function createPeopleRouter(workspaceRoot: string): Hono {
             lastMeetingTitle,
             openCommitments,
             trend,
+            favorite: fm['favorite'] === true,
           });
         } catch {
           // skip unreadable files
@@ -394,6 +397,7 @@ export function createPeopleRouter(workspaceRoot: string): Hono {
         lastMeetingTitle,
         openCommitments: openCommitmentsCount,
         trend,
+        favorite: fm['favorite'] === true,
         recentMeetings: recentMeetings.slice(0, 5),
         openCommitmentItems: openCommitmentItems.map((ci) => ({
           id: ci.id,
@@ -442,6 +446,47 @@ export function createPeopleRouter(workspaceRoot: string): Hono {
     } catch (err) {
       console.error('[people] notes patch error:', err);
       return c.json({ error: 'Failed to update notes' }, 500);
+    }
+  });
+
+  // PATCH /api/people/:slug — update person frontmatter (e.g. favorite status)
+  app.patch('/:slug', async (c) => {
+    const slug = c.req.param('slug');
+
+    try {
+      const personFiles = await scanPeopleDir(workspaceRoot);
+      const found = personFiles.find((p) => p.slug === slug);
+      if (!found) {
+        return c.json({ error: 'Person not found' }, 404);
+      }
+
+      const body = await c.req.json() as { favorite?: boolean };
+
+      // Validate that at least one valid field is provided
+      if (typeof body.favorite !== 'boolean') {
+        return c.json({ error: 'favorite (boolean) is required' }, 400);
+      }
+
+      const raw = await fs.readFile(found.filePath, 'utf8');
+      const { data, content } = matter(raw);
+      // Clone frontmatter to avoid gray-matter caching issues
+      const fm = { ...data } as Record<string, unknown>;
+
+      // Update favorite status in frontmatter
+      if (body.favorite) {
+        fm['favorite'] = true;
+      } else {
+        // Remove the field when false (cleaner files)
+        delete fm['favorite'];
+      }
+
+      const updated = matter.stringify(content, fm);
+      await fs.writeFile(found.filePath, updated, 'utf8');
+
+      return c.json({ success: true });
+    } catch (err) {
+      console.error('[people] patch error:', err);
+      return c.json({ error: 'Failed to update person' }, 500);
     }
   });
 

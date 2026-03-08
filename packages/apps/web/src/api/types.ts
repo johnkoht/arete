@@ -78,6 +78,7 @@ export type PersonSummary = {
   lastMeetingTitle: string | null;
   openCommitments: number;
   trend: 'up' | 'flat' | 'down' | null;
+  favorite?: boolean;
 };
 
 export type PersonCommitmentItem = {
@@ -96,6 +97,7 @@ export type PersonDetail = PersonSummary & {
   repeatedConcerns: string[];
   rawContent: string;
   allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }>;
+  // favorite is inherited from PersonSummary
 };
 
 export type PeopleResponse = {

@@ -23,3 +23,12 @@ export async function patchPersonNotes(slug: string, content: string): Promise<{
     body: JSON.stringify({ content }),
   });
 }
+
+/** PATCH /api/people/:slug — update person properties (e.g. favorite status) */
+export async function patchPerson(slug: string, data: { favorite?: boolean }): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/people/${slug}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}

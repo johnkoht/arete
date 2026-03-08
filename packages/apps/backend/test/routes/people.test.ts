@@ -510,6 +510,75 @@ describe('GET /api/people/:slug — allMeetings field', () => {
   });
 });
 
+// ── favorite field in responses ───────────────────────────────────────────────
+
+describe('GET /api/people — favorite field in response', () => {
+  let tmpDir: string;
+
+  const PERSON_WITH_FAVORITE_MD = `---
+name: Favorited Person
+role: Engineer
+company: Acme
+email: fav@acme.com
+category: internal
+favorite: true
+---
+
+Notes here.
+`;
+
+  const PERSON_WITHOUT_FAVORITE_MD = `---
+name: Not Favorited
+role: Designer
+company: Acme
+email: notfav@acme.com
+category: internal
+---
+
+Notes here.
+`;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-favorite-'));
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await writeFile(join(tmpDir, 'people', 'internal', 'fav-person.md'), PERSON_WITH_FAVORITE_MD, 'utf8');
+    await writeFile(join(tmpDir, 'people', 'internal', 'not-fav.md'), PERSON_WITHOUT_FAVORITE_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns favorite: true for favorited person', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/');
+    assert.equal(status, 200);
+    const body = json as { people: Array<{ slug: string; favorite?: boolean }> };
+    const favPerson = body.people.find((p) => p.slug === 'fav-person');
+    assert.ok(favPerson, 'favorited person should exist');
+    assert.equal(favPerson.favorite, true);
+  });
+
+  it('returns favorite: false for non-favorited person', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/');
+    assert.equal(status, 200);
+    const body = json as { people: Array<{ slug: string; favorite?: boolean }> };
+    const notFav = body.people.find((p) => p.slug === 'not-fav');
+    assert.ok(notFav, 'not favorited person should exist');
+    assert.equal(notFav.favorite, false);
+  });
+
+  it('includes favorite in detail response', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/fav-person');
+    assert.equal(status, 200);
+    const body = json as { favorite?: boolean };
+    assert.equal(body.favorite, true);
+  });
+});
+
 // ── PATCH /api/people/:slug/notes ─────────────────────────────────────────────
 
 async function patchReq(
@@ -576,5 +645,119 @@ describe('PATCH /api/people/:slug/notes', () => {
     assert.equal(status, 404);
     const body = json as { error: string };
     assert.ok(body.error.includes('not found') || body.error.includes('Person'), 'error should indicate not found');
+  });
+});
+
+// ── PATCH /api/people/:slug — update favorite status ──────────────────────────
+
+describe('PATCH /api/people/:slug — favorite status', () => {
+  let tmpDir: string;
+
+  const PERSON_NO_FAVORITE_MD = `---
+name: Test Person
+role: Developer
+company: Test Co
+email: test@test.com
+category: internal
+---
+
+Some notes.
+`;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-patch-favorite-'));
+    await mkdir(join(tmpDir, 'people', 'internal'), { recursive: true });
+    await writeFile(join(tmpDir, 'people', 'internal', 'test-person.md'), PERSON_NO_FAVORITE_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('sets favorite: true and persists to file', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/test-person', { favorite: true });
+    assert.equal(status, 200);
+    assert.deepEqual(json, { success: true });
+
+    // Verify file was updated
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(join(tmpDir, 'people', 'internal', 'test-person.md'), 'utf8');
+    assert.ok(raw.includes('favorite: true'), 'favorite should be added to frontmatter');
+  });
+
+  it('GET returns favorite: true after setting', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/test-person');
+    assert.equal(status, 200);
+    const body = json as { favorite?: boolean };
+    assert.equal(body.favorite, true);
+  });
+
+  it('sets favorite: false and removes from frontmatter', async () => {
+    // First ensure favorite is true so we can test unsetting it
+    const router = createPeopleRouter(tmpDir);
+    await patchReq(router, '/test-person', { favorite: true });
+
+    // Now unset it
+    const { status, json } = await patchReq(router, '/test-person', { favorite: false });
+    assert.equal(status, 200);
+    assert.deepEqual(json, { success: true });
+
+    // Verify file was updated — favorite should be removed
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(join(tmpDir, 'people', 'internal', 'test-person.md'), 'utf8');
+    assert.ok(!raw.includes('favorite:'), 'favorite field should be removed from frontmatter');
+  });
+
+  it('GET returns favorite: false after unsetting', async () => {
+    // First set favorite to true
+    const router = createPeopleRouter(tmpDir);
+    await patchReq(router, '/test-person', { favorite: true });
+
+    // Now unset it
+    await patchReq(router, '/test-person', { favorite: false });
+
+    // Verify GET returns false
+    const { status, json } = await req(router, 'GET', '/test-person');
+    assert.equal(status, 200);
+    const body = json as { favorite?: boolean };
+    assert.equal(body.favorite, false);
+  });
+
+  it('returns 400 when favorite field is not a boolean', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/test-person', { favorite: 'yes' });
+    assert.equal(status, 400);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('favorite'), 'error should mention favorite field');
+  });
+
+  it('returns 400 when body is empty', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/test-person', {});
+    assert.equal(status, 400);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('favorite'), 'error should mention favorite field');
+  });
+
+  it('returns 404 for non-existent slug', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await patchReq(router, '/nonexistent-person', { favorite: true });
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.ok(body.error.includes('not found') || body.error.includes('Person'), 'error should indicate not found');
+  });
+
+  it('preserves other frontmatter fields when updating favorite', async () => {
+    const router = createPeopleRouter(tmpDir);
+    await patchReq(router, '/test-person', { favorite: true });
+
+    const { readFile } = await import('node:fs/promises');
+    const raw = await readFile(join(tmpDir, 'people', 'internal', 'test-person.md'), 'utf8');
+    assert.ok(raw.includes('name: Test Person'), 'name should be preserved');
+    assert.ok(raw.includes('role: Developer'), 'role should be preserved');
+    assert.ok(raw.includes('company: Test Co'), 'company should be preserved');
+    assert.ok(raw.includes('email: test@test.com'), 'email should be preserved');
   });
 });
