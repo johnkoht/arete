@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ReviewItem, ItemStatus, ItemType, ApprovedItems } from "@/api/types.js";
-import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown } from "lucide-react";
+import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const TYPE_LABELS: Record<ItemType, string> = {
@@ -74,7 +74,8 @@ function ItemCard({ item, onStatusChange, onTextChange, readOnly }: ItemCardProp
             <TooltipTrigger asChild>
               <button
                 onClick={() => onStatusChange(item.id, item.status === "approved" ? "pending" : "approved")}
-                className={`rounded p-1 transition-colors ${
+                aria-label={item.status === "approved" ? `Unapprove ${typeLabel}` : `Approve ${typeLabel}`}
+                className={`rounded p-1 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                   item.status === "approved"
                     ? "text-status-approved bg-status-approved/10"
                     : "text-muted-foreground hover:text-status-approved hover:bg-status-approved/10"
@@ -89,7 +90,8 @@ function ItemCard({ item, onStatusChange, onTextChange, readOnly }: ItemCardProp
             <TooltipTrigger asChild>
               <button
                 onClick={() => onStatusChange(item.id, item.status === "skipped" ? "pending" : "skipped")}
-                className={`rounded p-1 transition-colors ${
+                aria-label={item.status === "skipped" ? `Unskip ${typeLabel}` : `Skip ${typeLabel}`}
+                className={`rounded p-1 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
                   item.status === "skipped"
                     ? "text-muted-foreground bg-muted"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -106,13 +108,38 @@ function ItemCard({ item, onStatusChange, onTextChange, readOnly }: ItemCardProp
   );
 }
 
+const STORAGE_KEY = "arete-review-collapsed";
+
 interface ReviewItemsSectionProps {
   items: ReviewItem[];
   onItemsChange: (items: ReviewItem[]) => void;
   onSaveApprove?: () => void;
+  /** Called when "Approve All" is clicked for a section. Receives the IDs that were approved. */
+  onBulkApprove?: (ids: string[]) => void;
 }
 
-export function ReviewItemsSection({ items, onItemsChange, onSaveApprove }: ReviewItemsSectionProps) {
+function getInitialOpenGroups(): Record<string, boolean> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const collapsed = JSON.parse(stored) as string[];
+      return {
+        "Action Items": !collapsed.includes("Action Items"),
+        Decisions: !collapsed.includes("Decisions"),
+        Learnings: !collapsed.includes("Learnings"),
+      };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return {
+    "Action Items": true,
+    Decisions: true,
+    Learnings: true,
+  };
+}
+
+export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulkApprove }: ReviewItemsSectionProps) {
   const actions = items.filter((i) => i.type === "action");
   const decisions = items.filter((i) => i.type === "decision");
   const learnings = items.filter((i) => i.type === "learning");
@@ -121,13 +148,13 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove }: Revi
   const approved = items.filter((i) => i.status === "approved").length;
   const skipped = items.filter((i) => i.status === "skipped").length;
 
-  const handleStatusChange = (id: string, status: ItemStatus) => {
+  const handleStatusChange = useCallback((id: string, status: ItemStatus) => {
     onItemsChange(items.map((i) => (i.id === id ? { ...i, status } : i)));
-  };
+  }, [items, onItemsChange]);
 
-  const handleTextChange = (id: string, text: string) => {
+  const handleTextChange = useCallback((id: string, text: string) => {
     onItemsChange(items.map((i) => (i.id === id ? { ...i, text } : i)));
-  };
+  }, [items, onItemsChange]);
 
   const groups = [
     { label: "Action Items", icon: ListTodo, items: actions },
@@ -135,11 +162,37 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove }: Revi
     { label: "Learnings", icon: Lightbulb, items: learnings },
   ];
 
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "Action Items": true,
-    Decisions: true,
-    Learnings: true,
-  });
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(getInitialOpenGroups);
+
+  // Persist collapse state to localStorage
+  useEffect(() => {
+    const collapsed = Object.entries(openGroups)
+      .filter(([, isOpen]) => !isOpen)
+      .map(([label]) => label);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsed));
+    } catch {
+      // ignore write errors
+    }
+  }, [openGroups]);
+
+  const handleApproveAll = useCallback((sectionItems: ReviewItem[]) => {
+    // Get items that need to be approved (not already approved)
+    const itemsToApprove = sectionItems.filter((i) => i.status !== "approved");
+    if (itemsToApprove.length === 0) return;
+
+    // Update all items in the section to approved
+    const idsToApprove = new Set(itemsToApprove.map((i) => i.id));
+    const newItems = items.map((i) =>
+      idsToApprove.has(i.id) ? { ...i, status: "approved" as ItemStatus } : i
+    );
+    onItemsChange(newItems);
+
+    // Notify parent (for PATCH calls)
+    if (onBulkApprove) {
+      onBulkApprove(itemsToApprove.map((i) => i.id));
+    }
+  }, [items, onItemsChange, onBulkApprove]);
 
   return (
     <div>
@@ -154,39 +207,63 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove }: Revi
       </p>
 
       <div className="space-y-5">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <button
-              onClick={() =>
-                setOpenGroups((g) => ({ ...g, [group.label]: !g[group.label] }))
-              }
-              className="mb-2 flex w-full items-center gap-2 text-sm font-medium text-foreground"
-            >
-              <group.icon className="h-4 w-4 text-muted-foreground" />
-              {group.label}
-              <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                {group.items.length}
-              </span>
-              <ChevronDown
-                className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${
-                  openGroups[group.label] ? "" : "-rotate-90"
-                }`}
-              />
-            </button>
-            {openGroups[group.label] && (
-              <div className="space-y-2">
-                {group.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    onStatusChange={handleStatusChange}
-                    onTextChange={handleTextChange}
+        {groups.map((group) => {
+          const unapprovedCount = group.items.filter((i) => i.status !== "approved").length;
+          return (
+            <div key={group.label}>
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setOpenGroups((g) => ({ ...g, [group.label]: !g[group.label] }))
+                  }
+                  aria-expanded={openGroups[group.label]}
+                  aria-label={`${openGroups[group.label] ? "Collapse" : "Expand"} ${group.label}`}
+                  className="flex flex-1 items-center gap-2 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded"
+                >
+                  <group.icon className="h-4 w-4 text-muted-foreground" />
+                  {group.label}
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {group.items.length}
+                  </span>
+                  <ChevronDown
+                    className={`ml-auto h-4 w-4 text-muted-foreground transition-transform ${
+                      openGroups[group.label] ? "" : "-rotate-90"
+                    }`}
                   />
-                ))}
+                </button>
+                {group.items.length > 0 && unapprovedCount > 0 && (
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleApproveAll(group.items)}
+                        aria-label={`Approve all ${group.label}`}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-status-approved/10 hover:text-status-approved focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Approve All
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs">
+                      Approve all {unapprovedCount} unapproved {group.label.toLowerCase()}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+              {openGroups[group.label] && (
+                <div className="space-y-2">
+                  {group.items.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onStatusChange={handleStatusChange}
+                      onTextChange={handleTextChange}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Sticky bottom bar */}

@@ -34,6 +34,7 @@ import {
   useApproveItem,
   useSaveApprove,
   useProcessMeeting,
+  useDeleteMeeting,
 } from "@/hooks/meetings.js";
 import type { ReviewItem, ApprovedItems } from "@/api/types.js";
 import { BASE_URL } from "@/api/client.js";
@@ -51,16 +52,22 @@ export default function MeetingDetail() {
   const approveItemMutation = useApproveItem(safeSlug);
   const saveApproveMutation = useSaveApprove(safeSlug);
   const processMutation = useProcessMeeting(safeSlug);
+  const deleteMutation = useDeleteMeeting();
 
   // Local review items state — kept in sync with query data, plus optimistic updates
+  // Items default to "approved" in local state — user skips bad items (frontend-only; backend still returns pending)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const prevReviewItemsRef = useRef<ReviewItem[]>([]);
 
   // Sync local state when query data changes (e.g. after approval)
+  // Transform pending → approved on initialization (smart default: approve all, user skips bad ones)
   useEffect(() => {
     if (meeting?.reviewItems) {
-      setReviewItems(meeting.reviewItems);
-      prevReviewItemsRef.current = meeting.reviewItems;
+      const transformedItems = meeting.reviewItems.map((item) =>
+        item.status === "pending" ? { ...item, status: "approved" as const } : item
+      );
+      setReviewItems(transformedItems);
+      prevReviewItemsRef.current = transformedItems;
     }
   }, [meeting?.reviewItems]);
 
@@ -188,6 +195,26 @@ export default function MeetingDetail() {
     setReviewItems(newItems);
   };
 
+  // Bulk approve: fire individual PATCHes per existing pattern
+  const handleBulkApprove = (ids: string[]) => {
+    for (const id of ids) {
+      approveItemMutation.mutate(
+        { id, status: "approved" },
+        {
+          onError: (err) => {
+            toast.error(
+              `Failed to approve item: ${err instanceof Error ? err.message : "Unknown error"}`
+            );
+          },
+        }
+      );
+    }
+    // Update prevReviewItemsRef after bulk approve
+    prevReviewItemsRef.current = reviewItems.map((item) =>
+      ids.includes(item.id) ? { ...item, status: "approved" as const } : item
+    );
+  };
+
   const handleSaveApprove = () => {
     saveApproveMutation.mutate(undefined, {
       onSuccess: () => {
@@ -276,6 +303,19 @@ export default function MeetingDetail() {
         void queryClient.invalidateQueries({ queryKey: ["meetings"] });
       }
     }
+  };
+
+  const handleDeleteClick = () => {
+    if (!confirm("Are you sure you want to delete this meeting?")) return;
+    deleteMutation.mutate(safeSlug, {
+      onSuccess: () => {
+        toast.success("Meeting deleted");
+        navigate("/meetings");
+      },
+      onError: (err) => {
+        toast.error(`Failed to delete meeting: ${err instanceof Error ? err.message : "Unknown error"}`);
+      },
+    });
   };
 
   // Header badge
@@ -368,6 +408,7 @@ export default function MeetingDetail() {
                   items={reviewItems}
                   onItemsChange={handleItemsChange}
                   onSaveApprove={handleSaveApprove}
+                  onBulkApprove={handleBulkApprove}
                 />
               </>
             )}
@@ -452,6 +493,7 @@ export default function MeetingDetail() {
               approved={isApproved || saveApproveMutation.isSuccess}
               onProcessClick={handleProcessClick}
               onReprocessClick={handleProcessClick}
+              onDeleteClick={handleDeleteClick}
             />
           </div>
         </div>
