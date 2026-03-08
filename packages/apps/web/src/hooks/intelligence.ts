@@ -4,6 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPatterns, fetchCommitments, patchCommitment, fetchActivity } from '@/api/intelligence.js';
+import type { CommitmentsParams, DirectionFilter } from '@/api/intelligence.js';
 import type { SignalPattern, CommitmentItem, ActivityItem } from '@/api/types.js';
 
 /**
@@ -29,16 +30,20 @@ export function useSignalPatterns(days = 30): {
 }
 
 /**
- * Fetch commitments list with optional filter.
+ * Fetch commitments list with optional filter, direction, and person.
  */
-export function useCommitments(filter?: 'overdue' | 'thisweek' | 'open' | 'all'): {
+export function useCommitments(params?: CommitmentsParams): {
   data: CommitmentItem[];
   isLoading: boolean;
   error: Error | null;
 } {
+  const filter = params?.filter ?? 'open';
+  const direction = params?.direction ?? 'all';
+  const person = params?.person ?? null;
+
   const result = useQuery({
-    queryKey: ['commitments', 'list', filter ?? 'open'],
-    queryFn: () => fetchCommitments(filter),
+    queryKey: ['commitments', 'list', filter, direction, person],
+    queryFn: () => fetchCommitments(params),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -48,6 +53,9 @@ export function useCommitments(filter?: 'overdue' | 'thisweek' | 'open' | 'all')
     error: result.error,
   };
 }
+
+// Re-export types for consumers
+export type { CommitmentsParams, DirectionFilter };
 
 /**
  * Mutation to mark a commitment as resolved or dropped.
