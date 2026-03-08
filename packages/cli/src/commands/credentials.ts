@@ -68,7 +68,7 @@ function validateProviderName(provider: string): provider is SupportedProvider {
  * Test an API key by making a minimal call to the provider.
  * Returns true on success, throws on error.
  */
-async function testProviderConnection(
+export async function testProviderConnection(
   provider: SupportedProvider,
   apiKey: string,
 ): Promise<{ success: true; model: string } | { success: false; error: string; isNetworkError: boolean }> {
