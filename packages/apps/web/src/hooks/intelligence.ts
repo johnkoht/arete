@@ -4,7 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPatterns, fetchCommitments, patchCommitment, fetchActivity } from '@/api/intelligence.js';
-import type { CommitmentsParams, DirectionFilter } from '@/api/intelligence.js';
+import type { CommitmentsParams, DirectionFilter, PriorityFilter } from '@/api/intelligence.js';
 import type { SignalPattern, CommitmentItem, ActivityItem } from '@/api/types.js';
 
 /**
@@ -30,7 +30,7 @@ export function useSignalPatterns(days = 30): {
 }
 
 /**
- * Fetch commitments list with optional filter, direction, and person.
+ * Fetch commitments list with optional filter, direction, person, and priority.
  */
 export function useCommitments(params?: CommitmentsParams): {
   data: CommitmentItem[];
@@ -40,9 +40,10 @@ export function useCommitments(params?: CommitmentsParams): {
   const filter = params?.filter ?? 'open';
   const direction = params?.direction ?? 'all';
   const person = params?.person ?? null;
+  const priority = params?.priority ?? 'all';
 
   const result = useQuery({
-    queryKey: ['commitments', 'list', filter, direction, person],
+    queryKey: ['commitments', 'list', filter, direction, person, priority],
     queryFn: () => fetchCommitments(params),
     staleTime: 2 * 60 * 1000,
   });
@@ -55,7 +56,7 @@ export function useCommitments(params?: CommitmentsParams): {
 }
 
 // Re-export types for consumers
-export type { CommitmentsParams, DirectionFilter };
+export type { CommitmentsParams, DirectionFilter, PriorityFilter };
 
 /**
  * Mutation to mark a commitment as resolved or dropped.

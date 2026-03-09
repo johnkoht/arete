@@ -163,6 +163,8 @@ export type PatternsResponse = {
   count: number;
 };
 
+export type PriorityLevel = 'high' | 'medium' | 'low';
+
 export type CommitmentItem = {
   id: string;
   text: string;
@@ -171,6 +173,8 @@ export type CommitmentItem = {
   date: string;
   daysOpen: number;
   status: string;
+  priority: number;
+  priorityLevel: PriorityLevel;
 };
 
 export type CommitmentsListResponse = {

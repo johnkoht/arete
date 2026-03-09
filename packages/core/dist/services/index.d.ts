@@ -10,7 +10,8 @@ export { SkillService } from './skills.js';
 export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
-export { CommitmentsService } from './commitments.js';
+export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
+export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, } from './meeting-extraction.js';
@@ -21,4 +22,6 @@ export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
 export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
 export type { CommitmentBucket, CommitmentMomentumItem, CommitmentMomentum, RelationshipBucket, RelationshipMomentumItem, RelationshipMomentum, } from './momentum.js';
+export { computeRelationshipHealth } from './person-health.js';
+export type { HealthIndicator, RelationshipHealth } from './person-health.js';
 //# sourceMappingURL=index.d.ts.map

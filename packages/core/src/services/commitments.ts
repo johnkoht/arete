@@ -18,6 +18,7 @@ import type {
   CommitmentStatus,
 } from '../models/index.js';
 import type { PersonActionItem } from './person-signals.js';
+import type { HealthIndicator } from './person-health.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,6 +26,149 @@ import type { PersonActionItem } from './person-signals.js';
 
 const COMMITMENTS_FILE = '.arete/commitments.json';
 const PRUNE_DAYS = 30;
+
+// ---------------------------------------------------------------------------
+// Priority scoring
+// ---------------------------------------------------------------------------
+
+/**
+ * Priority levels for commitments based on computed score.
+ */
+export type PriorityLevel = 'high' | 'medium' | 'low';
+
+/**
+ * Input for computing commitment priority.
+ */
+export type CommitmentPriorityInput = {
+  daysOpen: number;
+  healthIndicator: HealthIndicator;
+  direction: CommitmentDirection;
+  text: string;
+};
+
+/**
+ * Output from priority computation.
+ */
+export type CommitmentPriorityResult = {
+  score: number;
+  level: PriorityLevel;
+};
+
+// Action verbs that indicate specific, actionable commitments
+const ACTION_VERBS = [
+  'send',
+  'call',
+  'email',
+  'schedule',
+  'review',
+  'follow',
+  'share',
+  'update',
+  'create',
+  'prepare',
+  'draft',
+  'submit',
+  'complete',
+  'deliver',
+  'setup',
+  'set up',
+  'organize',
+  'finalize',
+  'confirm',
+  'book',
+  'provide',
+  'respond',
+  'reach',
+  'discuss',
+  'meet',
+  'write',
+];
+
+/**
+ * Compute staleness score (0-100) based on days open.
+ * 0 days = 0, 7 days = 50, 14+ days = 100.
+ */
+function computeStalenessScore(daysOpen: number): number {
+  if (daysOpen <= 0) return 0;
+  if (daysOpen >= 14) return 100;
+  // Linear interpolation: 0→0, 7→50, 14→100
+  if (daysOpen <= 7) {
+    return Math.round((daysOpen / 7) * 50);
+  }
+  // 7 < days < 14: interpolate from 50 to 100
+  return Math.round(50 + ((daysOpen - 7) / 7) * 50);
+}
+
+/**
+ * Convert health indicator to score (0-100).
+ * active=100, regular=66, cooling=33, dormant=0
+ */
+function healthIndicatorToScore(indicator: HealthIndicator): number {
+  switch (indicator) {
+    case 'active':
+      return 100;
+    case 'regular':
+      return 66;
+    case 'cooling':
+      return 33;
+    case 'dormant':
+      return 0;
+  }
+}
+
+/**
+ * Compute direction score (0-100).
+ * i_owe_them = 100 (higher priority), they_owe_me = 50
+ */
+function computeDirectionScore(direction: CommitmentDirection): number {
+  return direction === 'i_owe_them' ? 100 : 50;
+}
+
+/**
+ * Compute specificity score (0-100) based on text characteristics.
+ * text.length >= 50 chars AND contains action verbs = 100, else 50
+ */
+function computeSpecificityScore(text: string): number {
+  const normalized = text.toLowerCase();
+  const hasActionVerb = ACTION_VERBS.some((verb) => normalized.includes(verb));
+  const isLongEnough = text.length >= 50;
+  return hasActionVerb && isLongEnough ? 100 : 50;
+}
+
+/**
+ * Convert priority score to level.
+ * High: ≥50, Medium: 25-49, Low: <25
+ */
+function scoreToLevel(score: number): PriorityLevel {
+  if (score >= 50) return 'high';
+  if (score >= 25) return 'medium';
+  return 'low';
+}
+
+/**
+ * Compute priority score for a commitment.
+ *
+ * Formula: priority = (staleness * 30) + (health * 25) + (direction * 25) + (specificity * 20)
+ * All component scores are 0-100, so the final score is 0-100.
+ *
+ * @param input - Commitment attributes needed for scoring
+ * @returns Priority score (0-100) and level (high/medium/low)
+ */
+export function computeCommitmentPriority(input: CommitmentPriorityInput): CommitmentPriorityResult {
+  const stalenessScore = computeStalenessScore(input.daysOpen);
+  const healthScore = healthIndicatorToScore(input.healthIndicator);
+  const directionScore = computeDirectionScore(input.direction);
+  const specificityScore = computeSpecificityScore(input.text);
+
+  const score = Math.round(
+    stalenessScore * 0.3 + healthScore * 0.25 + directionScore * 0.25 + specificityScore * 0.2
+  );
+
+  return {
+    score,
+    level: scoreToLevel(score),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers

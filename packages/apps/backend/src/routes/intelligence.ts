@@ -6,7 +6,8 @@
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import { Hono } from 'hono';
-import { FileStorageAdapter, detectCrossPersonPatterns } from '@arete/core';
+import { FileStorageAdapter, detectCrossPersonPatterns, computeCommitmentPriority } from '@arete/core';
+import type { PriorityLevel, HealthIndicator } from '@arete/core';
 
 type CommitmentEntry = {
   id: string;
@@ -106,7 +107,76 @@ export type CommitmentListItem = {
   date: string;
   daysOpen: number;
   status: string;
+  priority: number;
+  priorityLevel: PriorityLevel;
 };
+
+// ---------------------------------------------------------------------------
+// Health status helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Map health status string from person file to HealthIndicator.
+ * Handles variations like "Active", "active", "ACTIVE".
+ */
+function healthStatusToIndicator(status: string | null): HealthIndicator {
+  if (!status) return 'regular';
+  const normalized = status.toLowerCase().trim();
+  if (normalized === 'active') return 'active';
+  if (normalized === 'cooling') return 'cooling';
+  if (normalized === 'dormant') return 'dormant';
+  return 'regular';
+}
+
+/**
+ * Parse AUTO_PERSON_MEMORY block to extract health status.
+ * Returns null if no block or no status found.
+ */
+function parseHealthStatusFromContent(content: string): string | null {
+  const blockMatch = /<!-- AUTO_PERSON_MEMORY:START -->([\s\S]*?)<!-- AUTO_PERSON_MEMORY:END -->/i.exec(
+    content
+  );
+  if (!blockMatch) return null;
+
+  const block = blockMatch[1] ?? '';
+  const statusMatch = /Status:\s*(.+)$/im.exec(block);
+  if (statusMatch) return (statusMatch[1] ?? '').trim();
+  return null;
+}
+
+/**
+ * Load health indicators for all people from their profile files.
+ * Returns a Map<personSlug, HealthIndicator>.
+ */
+async function loadPersonHealthMap(workspaceRoot: string): Promise<Map<string, HealthIndicator>> {
+  const healthMap = new Map<string, HealthIndicator>();
+  const categories = ['internal', 'customers', 'users'];
+
+  for (const cat of categories) {
+    const dir = join(workspaceRoot, 'people', cat);
+    let entries: string[];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.endsWith('.md') || entry === 'index.md') continue;
+      const slug = entry.slice(0, -3);
+      try {
+        const raw = await fs.readFile(join(dir, entry), 'utf8');
+        const status = parseHealthStatusFromContent(raw);
+        healthMap.set(slug, healthStatusToIndicator(status));
+      } catch {
+        // Skip unreadable files — use default
+        healthMap.set(slug, 'regular');
+      }
+    }
+  }
+
+  return healthMap;
+}
 
 /**
  * Create the /api/commitments router.
@@ -137,6 +207,7 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
       const filterParam = c.req.query('filter');
       const directionParam = c.req.query('direction');
       const personParam = c.req.query('person');
+      const priorityParam = c.req.query('priority'); // high, medium, low
 
       let sourceCommitments: CommitmentEntry[];
 
@@ -158,11 +229,24 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
         sourceCommitments = sourceCommitments.filter((c) => c.personSlug === personParam);
       }
 
+      // Load health indicators for all people (for priority scoring)
+      const healthMap = await loadPersonHealthMap(workspaceRoot);
+
       const items: CommitmentListItem[] = sourceCommitments.map((c) => {
         const itemDate = new Date(c.date);
         const daysOpen = Number.isNaN(itemDate.getTime())
           ? 0
           : Math.floor((now.getTime() - itemDate.getTime()) / 86400000);
+
+        // Compute priority
+        const healthIndicator = healthMap.get(c.personSlug) ?? 'regular';
+        const priorityResult = computeCommitmentPriority({
+          daysOpen,
+          healthIndicator,
+          direction: c.direction as 'i_owe_them' | 'they_owe_me',
+          text: c.text,
+        });
+
         return {
           id: c.id,
           text: c.text,
@@ -171,6 +255,8 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
           date: c.date,
           daysOpen,
           status: c.status,
+          priority: priorityResult.score,
+          priorityLevel: priorityResult.level,
         };
       });
 
@@ -183,6 +269,18 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
       } else if (filterParam === 'open') {
         filtered = items.filter((i) => i.status === 'open');
       }
+
+      // Apply priority filter
+      if (priorityParam === 'high') {
+        filtered = filtered.filter((i) => i.priorityLevel === 'high');
+      } else if (priorityParam === 'medium') {
+        filtered = filtered.filter((i) => i.priorityLevel === 'medium');
+      } else if (priorityParam === 'low') {
+        filtered = filtered.filter((i) => i.priorityLevel === 'low');
+      }
+
+      // Sort by priority descending (highest priority first)
+      filtered.sort((a, b) => b.priority - a.priority);
 
       return c.json({ commitments: filtered });
     } catch (err) {

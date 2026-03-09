@@ -22,13 +22,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "sonner";
 import { useCommitments, useMarkCommitmentDone } from "@/hooks/intelligence.js";
-import type { DirectionFilter } from "@/hooks/intelligence.js";
-import type { CommitmentItem } from "@/api/types.js";
+import type { DirectionFilter, PriorityFilter } from "@/hooks/intelligence.js";
+import type { CommitmentItem, PriorityLevel } from "@/api/types.js";
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 
 type FilterType = "open" | "overdue" | "thisweek" | "all";
-type SortBy = "person" | "age";
+type SortBy = "person" | "age" | "priority";
 type SortOrder = "asc" | "desc";
 
 const FILTER_TABS: { label: string; value: FilterType }[] = [
@@ -42,6 +42,13 @@ const DIRECTION_TABS: { label: string; value: DirectionFilter }[] = [
   { label: "Mine", value: "mine" },
   { label: "Theirs", value: "theirs" },
   { label: "All", value: "all" },
+];
+
+const PRIORITY_TABS: { label: string; value: PriorityFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "High", value: "high" },
+  { label: "Medium", value: "medium" },
+  { label: "Low", value: "low" },
 ];
 
 const EMPTY_STATES: Record<FilterType, { icon: LucideIcon; title: string; description: string }> = {
@@ -88,6 +95,29 @@ function DirectionIcon({ direction }: { direction: string }) {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+// ── Priority badge ────────────────────────────────────────────────────────────
+
+function PriorityBadge({ level, score }: { level: PriorityLevel; score: number }) {
+  const colorClass =
+    level === "high"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+      : level === "medium"
+        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400"
+        : "bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400";
+
+  const label = level.charAt(0).toUpperCase() + level.slice(1);
+
+  return (
+    <Badge
+      variant="secondary"
+      className={`text-xs font-medium flex-shrink-0 ${colorClass}`}
+      title={`Priority score: ${score}`}
+    >
+      {label}
+    </Badge>
   );
 }
 
@@ -301,11 +331,13 @@ export default function CommitmentsPage() {
   // Read URL params
   const initialFilter = (searchParams.get("filter") as FilterType) ?? "open";
   const initialDirection = (searchParams.get("direction") as DirectionFilter) ?? "all";
+  const initialPriority = (searchParams.get("priority") as PriorityFilter) ?? "all";
   const personParam = searchParams.get("person") ?? undefined;
   
   // Local state
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [activeDirection, setActiveDirection] = useState<DirectionFilter>(initialDirection);
+  const [activePriority, setActivePriority] = useState<PriorityFilter>(initialPriority);
   const [sortBy, setSortBy] = useState<SortBy | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
@@ -313,6 +345,7 @@ export default function CommitmentsPage() {
     filter: activeFilter,
     direction: activeDirection,
     person: personParam,
+    priority: activePriority,
   });
 
   // Update URL params (functional setter to preserve other params)
@@ -320,7 +353,7 @@ export default function CommitmentsPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       for (const [key, value] of Object.entries(updates)) {
-        if (value === undefined || (key === "filter" && value === "open") || (key === "direction" && value === "all")) {
+        if (value === undefined || (key === "filter" && value === "open") || (key === "direction" && value === "all") || (key === "priority" && value === "all")) {
           next.delete(key);
         } else {
           next.set(key, value);
@@ -340,6 +373,11 @@ export default function CommitmentsPage() {
     updateSearchParams({ direction: d !== "all" ? d : undefined });
   }
 
+  function selectPriority(p: PriorityFilter) {
+    setActivePriority(p);
+    updateSearchParams({ priority: p !== "all" ? p : undefined });
+  }
+
   function clearPersonFilter() {
     updateSearchParams({ person: undefined });
   }
@@ -354,8 +392,9 @@ export default function CommitmentsPage() {
     }
   }
 
-  // Sort commitments
+  // Sort commitments — backend already sorts by priority desc, but allow local re-sorting
   const sortedCommitments = useMemo(() => {
+    // If no local sort is selected, use backend's default (priority desc)
     if (!sortBy || !commitments.length) return commitments;
 
     return [...commitments].sort((a, b) => {
@@ -364,6 +403,8 @@ export default function CommitmentsPage() {
         cmp = (a.personSlug ?? "").localeCompare(b.personSlug ?? "");
       } else if (sortBy === "age") {
         cmp = a.daysOpen - b.daysOpen;
+      } else if (sortBy === "priority") {
+        cmp = a.priority - b.priority;
       }
       return sortOrder === "desc" ? -cmp : cmp;
     });
@@ -397,20 +438,39 @@ export default function CommitmentsPage() {
 
       {/* Filter tabs */}
       <div className="px-6 py-2 border-b">
-        <div className="flex items-center gap-1">
-          {FILTER_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => selectFilter(tab.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeFilter === tab.value
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => selectFilter(tab.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeFilter === tab.value
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground mr-1">Priority:</span>
+            {PRIORITY_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => selectPriority(tab.value)}
+                className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  activePriority === tab.value
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -465,6 +525,15 @@ export default function CommitmentsPage() {
                 <th className="px-4 py-3">Commitment</th>
                 <th className="w-16 px-4 py-3 text-center">Dir</th>
                 <th className="w-16 px-4 py-3">
+                  <SortableHeader
+                    label="Priority"
+                    sortKey="priority"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">
                   <SortableHeader
                     label="Age"
                     sortKey="age"
@@ -523,6 +592,9 @@ export default function CommitmentsPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <DirectionIcon direction={item.direction} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <PriorityBadge level={item.priorityLevel} score={item.priority} />
                     </td>
                     <td className="px-4 py-3">
                       <AgeBadge daysOpen={item.daysOpen} />

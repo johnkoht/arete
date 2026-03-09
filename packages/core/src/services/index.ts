@@ -11,7 +11,12 @@ export { SkillService } from './skills.js';
 export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
-export { CommitmentsService } from './commitments.js';
+export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
+export type {
+  PriorityLevel,
+  CommitmentPriorityInput,
+  CommitmentPriorityResult,
+} from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
   AICallOptions,
@@ -58,3 +63,7 @@ export type {
   RelationshipMomentumItem,
   RelationshipMomentum,
 } from './momentum.js';
+
+// Person health
+export { computeRelationshipHealth } from './person-health.js';
+export type { HealthIndicator, RelationshipHealth } from './person-health.js';
