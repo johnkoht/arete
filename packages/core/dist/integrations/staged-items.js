@@ -86,7 +86,7 @@ export function parseStagedSections(body) {
             continue;
         const id = itemMatch[1];
         const text = itemMatch[2].trim();
-        const item = { id, text, type: currentType };
+        const item = { id, text, type: currentType, source: 'ai' };
         if (currentType === 'ai') {
             result.actionItems.push(item);
         }

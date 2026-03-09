@@ -5,9 +5,11 @@ status: idea
 size: medium
 tags: [ai, intelligence, backend]
 created: "2026-03-07"
-updated: "2026-03-08"
+updated: 2026-03-09T03:59:36.826Z
 completed: null
 notes: "INT-0 (Service Normalization) completed separately. This covers the remaining quality improvements."
+has_review: true
+has_pre_mortem: true
 ---
 
 # Intelligence Tuning Plan (INT-1 through INT-5)

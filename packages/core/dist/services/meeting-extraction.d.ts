@@ -27,6 +27,8 @@ export type ActionItem = {
     direction: ActionItemDirection;
     counterpartySlug?: string;
     due?: string;
+    /** LLM confidence score (0-1) for this item. */
+    confidence?: number;
 };
 /** Full meeting intelligence extracted from a transcript. */
 export type MeetingIntelligence = {
@@ -41,10 +43,20 @@ export type ValidationWarning = {
     item: string;
     reason: string;
 };
+/** Raw item before validation filtering (for debugging/analysis). */
+export type RawExtractedItem = {
+    type: 'action' | 'decision' | 'learning';
+    text: string;
+    owner?: string;
+    direction?: string;
+    confidence?: number;
+};
 /** Result of parsing extraction response (includes validation warnings). */
 export type MeetingExtractionResult = {
     intelligence: MeetingIntelligence;
     validationWarnings: ValidationWarning[];
+    /** All items parsed from LLM response before validation filtering (for debugging). */
+    rawItems: RawExtractedItem[];
 };
 /**
  * Build the LLM prompt for extracting meeting intelligence.
