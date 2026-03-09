@@ -1,8 +1,8 @@
 # INT-0 Service Normalization — Learnings
 
 **Date**: 2026-03-08
-**PRD**: `dev/work/plans/intelligence-tuning/prd.md`
-**Execution**: `dev/executions/intelligence-tuning/`
+**PRD**: `dev/archive/plans/intelligence-tuning/prd.md` (archived)
+**Status**: Complete
 
 ---
 
@@ -111,3 +111,21 @@
 ## Refactor Items
 
 None — no technical debt identified during execution.
+
+---
+
+## Bonus Work (Testing Phase)
+
+During user testing of `arete meeting extract`, discovered:
+
+1. **Silent error swallowing** — AIService returned empty results when API errors occurred (e.g., insufficient credits). Fixed to throw when `response.stopReason === 'error'`.
+
+2. **OAuth credential support added** — User had Claude Pro/Max subscription but no API credits. Added full OAuth support:
+   - `arete credentials login [provider]` — OAuth flow for Claude Pro/Max, GitHub Copilot, Google Gemini, etc.
+   - Updated `arete credentials show/test` to display and test OAuth credentials
+   - Updated `arete onboard` to offer OAuth login or API key choice
+   - AIService checks OAuth before API keys (priority: env > OAuth > file)
+   - Auto-refresh expired OAuth tokens
+   - 14 new OAuth tests added
+
+3. **Model validation warning bug identified** (not fixed) — `arete config set ai.tiers.fast anthropic/claude-sonnet-4-20250514` shows "Model not found" warning because validation checks full string against model IDs without provider prefix. The command works correctly; just misleading warning.
