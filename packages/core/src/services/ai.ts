@@ -12,6 +12,7 @@ import {
   getApiKey,
   getEnvVarName,
   loadCredentialsIntoEnv,
+  getOAuthApiKeyForProvider,
 } from '../credentials.js';
 
 // pi-ai imports
@@ -66,6 +67,8 @@ export interface AIServiceTestDeps {
   getEnvApiKey: typeof getEnvApiKey;
   /** Optional: mock getApiKey for file credential lookup */
   getApiKey?: typeof getApiKey;
+  /** Optional: mock getOAuthApiKey for OAuth credential lookup */
+  getOAuthApiKey?: typeof getOAuthApiKeyForProvider;
 }
 
 /** Model specification: provider/model format */
@@ -184,17 +187,32 @@ export class AIService {
   }
 
   /**
-   * Get API key for a provider, checking env vars and credentials file.
+   * Get API key for a provider, checking env vars, OAuth, and credentials file.
+   * Priority: env vars > OAuth > credentials file
    *
    * @throws Error if no API key configured
    */
-  private getApiKeyOrThrow(provider: string): string {
+  private async getApiKeyOrThrow(provider: string): Promise<string> {
     this.ensureCredentials();
 
     // First check env var (which may have been populated by loadCredentialsIntoEnv)
     const apiKey = this.deps.getEnvApiKey(provider as KnownProvider);
     if (apiKey) {
       return apiKey;
+    }
+
+    // Check OAuth credentials (with automatic token refresh)
+    const getOAuthApiKeyFn = this.deps.getOAuthApiKey ?? getOAuthApiKeyForProvider;
+    try {
+      const oauthResult = await getOAuthApiKeyFn(provider);
+      if (oauthResult?.apiKey) {
+        return oauthResult.apiKey;
+      }
+    } catch (err) {
+      // OAuth refresh failed - continue to check other sources
+      // but log the error for debugging
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`OAuth token refresh failed for ${provider}: ${errMsg}`);
     }
 
     // Try our own getApiKey as fallback (use mocked version if provided)
@@ -206,7 +224,7 @@ export class AIService {
 
     const envVarName = getEnvVarName(provider) ?? `${provider.toUpperCase()}_API_KEY`;
     throw new Error(
-      `No API key for provider '${provider}'. Set ${envVarName} or configure via ~/.arete/credentials.yaml`,
+      `No API key for provider '${provider}'. Set ${envVarName}, login via 'arete credentials login ${provider}', or configure via ~/.arete/credentials.yaml`,
     );
   }
 
@@ -240,7 +258,7 @@ export class AIService {
     prompt: string,
     options?: AICallOptions,
   ): Promise<AICallResult> {
-    const apiKey = this.getApiKeyOrThrow(modelSpec.provider);
+    const apiKey = await this.getApiKeyOrThrow(modelSpec.provider);
 
     // Get the model from pi-ai
     // Use type assertion since we don't have the full model registry types
@@ -272,6 +290,12 @@ export class AIService {
       context,
       streamOptions,
     );
+
+    // Check for errors in the response
+    if (response.stopReason === 'error') {
+      const errorMsg = response.errorMessage ?? 'Unknown AI error';
+      throw new Error(`AI call failed: ${errorMsg}`);
+    }
 
     // Extract text from response
     const textContent = response.content.find((c) => c.type === 'text');

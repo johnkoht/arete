@@ -55,8 +55,15 @@ export {
   getCredentialsPath,
   hasSecurePermissions,
   loadCredentialsIntoEnv,
+  // OAuth support
+  getOAuthPath,
+  loadOAuthCredentials,
+  saveOAuthCredentials,
+  getAvailableOAuthProviders,
+  hasOAuthCredentials,
+  getOAuthApiKeyForProvider,
 } from './credentials.js';
-export type { ProviderCredentials, CredentialsFile, ConfiguredProvider } from './credentials.js';
+export type { ProviderCredentials, CredentialsFile, ConfiguredProvider, OAuthCredentialsFile } from './credentials.js';
 
 // Package root resolution (for install, etc.)
 export { getPackageRoot } from './package-root.js';

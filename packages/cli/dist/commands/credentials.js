@@ -2,15 +2,21 @@
  * arete credentials — Manage AI provider API keys
  *
  * Commands:
- *   arete credentials set <provider>  - Set API key for a provider
+ *   arete credentials set <provider>   - Set API key for a provider
+ *   arete credentials login [provider] - Login via OAuth (Claude Pro/Max, etc.)
  *   arete credentials show             - Show configured providers (masked keys)
  *   arete credentials test             - Test configured provider connections
  *
  * Credentials stored in ~/.arete/credentials.yaml with 600 permissions.
- * Environment variables override file credentials.
+ * OAuth credentials stored in ~/.arete/auth.json with 600 permissions.
+ * Environment variables override all other credentials.
  */
 import chalk from 'chalk';
-import { saveCredential, getApiKey, getEnvVarName, getConfiguredProviders, getCredentialsPath, hasSecurePermissions, loadCredentials, } from '@arete/core';
+import { createInterface } from 'readline';
+import { saveCredential, getApiKey, getEnvVarName, getConfiguredProviders, getCredentialsPath, hasSecurePermissions, 
+// OAuth support
+getOAuthPath, getAvailableOAuthProviders, loadOAuthCredentials, saveOAuthCredentials, } from '@arete/core';
+import { getOAuthProvider } from '@mariozechner/pi-ai/oauth';
 import { header, success, error, info, warn, listItem, formatPath } from '../formatters.js';
 /** Supported provider names - must match PROVIDER_ENV_VARS in credentials.ts */
 const SUPPORTED_PROVIDERS = [
@@ -91,19 +97,24 @@ export async function testProviderConnection(provider, apiKey) {
     }
 }
 export function registerCredentialsCommand(program) {
+    const oauthProviders = getAvailableOAuthProviders();
+    const oauthProviderNames = oauthProviders.map(p => p.id).join(', ');
     const credentialsCmd = program
         .command('credentials')
         .description('Manage AI provider API keys')
         .addHelpText('after', `
-${chalk.bold('Provider Priority')}
-  Environment variables take precedence over stored credentials.
-  Set ${chalk.cyan('ANTHROPIC_API_KEY')}, ${chalk.cyan('OPENAI_API_KEY')}, etc. to override.
+${chalk.bold('Credential Priority')}
+  Environment variables > OAuth (login) > API keys (file)
 
 ${chalk.bold('Storage')}
-  Credentials stored in ${chalk.dim('~/.arete/credentials.yaml')} with secure permissions (600).
+  API keys: ${chalk.dim('~/.arete/credentials.yaml')} (600 permissions)
+  OAuth:    ${chalk.dim('~/.arete/auth.json')} (600 permissions)
 
-${chalk.bold('Supported Providers')}
+${chalk.bold('API Key Providers')}
   ${SUPPORTED_PROVIDERS.join(', ')}
+
+${chalk.bold('OAuth Providers')} (use 'arete credentials login')
+  ${oauthProviderNames}
 `);
     // --- credentials set <provider> ---
     credentialsCmd
@@ -237,6 +248,142 @@ ${chalk.bold('Supported Providers')}
             }
         }
     });
+    // --- credentials login [provider] ---
+    credentialsCmd
+        .command('login [provider]')
+        .description('Login via OAuth (Claude Pro/Max, GitHub Copilot, etc.)')
+        .option('--json', 'Output as JSON')
+        .action(async (providerArg, opts) => {
+        const oauthProviders = getAvailableOAuthProviders();
+        let providerId;
+        // Get provider from arg or prompt
+        if (providerArg) {
+            providerId = providerArg;
+        }
+        else if (opts?.json) {
+            console.log(JSON.stringify({
+                success: false,
+                error: 'JSON mode requires provider argument',
+                availableProviders: oauthProviders,
+            }));
+            process.exit(1);
+        }
+        else {
+            // Interactive selection
+            const { select } = await import('@inquirer/prompts');
+            console.log('');
+            header('OAuth Login');
+            console.log(chalk.dim('  Login with your AI subscription (Claude Pro/Max, etc.)'));
+            console.log('');
+            try {
+                providerId = await select({
+                    message: 'Select provider:',
+                    choices: oauthProviders.map(p => ({
+                        name: `${p.name} (${p.id})`,
+                        value: p.id,
+                    })),
+                });
+            }
+            catch {
+                // User cancelled
+                console.log('');
+                info('Cancelled');
+                process.exit(0);
+            }
+        }
+        // Validate provider
+        const provider = getOAuthProvider(providerId);
+        if (!provider) {
+            if (opts?.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Unknown OAuth provider: ${providerId}`,
+                    availableProviders: oauthProviders,
+                }));
+            }
+            else {
+                error(`Unknown OAuth provider: ${providerId}`);
+                console.log('');
+                info('Available OAuth providers:');
+                for (const p of oauthProviders) {
+                    console.log(`  ${chalk.dim('•')} ${p.name} (${chalk.cyan(p.id)})`);
+                }
+                console.log('');
+            }
+            process.exit(1);
+        }
+        if (!opts?.json) {
+            console.log('');
+            info(`Logging in to ${chalk.bold(provider.name)}...`);
+        }
+        // Create readline interface for prompts
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const promptFn = (msg) => {
+            return new Promise((resolve) => rl.question(`${msg} `, resolve));
+        };
+        try {
+            const credentials = await provider.login({
+                onAuth: (authInfo) => {
+                    if (!opts?.json) {
+                        console.log('');
+                        console.log(chalk.bold('  Open this URL in your browser:'));
+                        console.log(`  ${chalk.cyan(authInfo.url)}`);
+                        if (authInfo.instructions) {
+                            console.log('');
+                            console.log(chalk.dim(`  ${authInfo.instructions}`));
+                        }
+                        console.log('');
+                    }
+                },
+                onPrompt: async (prompt) => {
+                    const placeholder = prompt.placeholder ? ` (${prompt.placeholder})` : '';
+                    return await promptFn(`${prompt.message}${placeholder}:`);
+                },
+                onProgress: (msg) => {
+                    if (!opts?.json) {
+                        console.log(chalk.dim(`  ${msg}`));
+                    }
+                },
+            });
+            // Save credentials
+            saveOAuthCredentials(providerId, credentials);
+            const authPath = getOAuthPath();
+            if (opts?.json) {
+                console.log(JSON.stringify({
+                    success: true,
+                    provider: providerId,
+                    path: authPath,
+                }));
+            }
+            else {
+                console.log('');
+                success(`Logged in to ${provider.name}`);
+                listItem('Credentials saved', formatPath(authPath));
+                console.log('');
+                console.log(chalk.dim('  Your AI calls will now use this OAuth session.'));
+                console.log(chalk.dim('  Token refresh is automatic.'));
+                console.log('');
+            }
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (opts?.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: message,
+                    provider: providerId,
+                }));
+            }
+            else {
+                console.log('');
+                error(`Login failed: ${message}`);
+            }
+            process.exit(1);
+        }
+        finally {
+            rl.close();
+        }
+    });
     // --- credentials show ---
     credentialsCmd
         .command('show')
@@ -244,38 +391,45 @@ ${chalk.bold('Supported Providers')}
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         const configured = getConfiguredProviders();
-        const credentials = loadCredentials();
         const credPath = getCredentialsPath();
+        const authPath = getOAuthPath();
         const securePerms = hasSecurePermissions();
+        const oauthCreds = loadOAuthCredentials();
         // Build provider details with masked keys
         const providers = configured.map((entry) => {
-            const apiKey = getApiKey(entry.provider);
+            const apiKey = entry.source !== 'oauth' ? getApiKey(entry.provider) : null;
             const envVar = getEnvVarName(entry.provider);
+            const oauthExpires = entry.source === 'oauth' && oauthCreds[entry.provider]
+                ? new Date(oauthCreds[entry.provider].expires).toISOString()
+                : null;
             return {
                 provider: entry.provider,
                 source: entry.source,
                 envVar,
                 maskedKey: apiKey ? maskApiKey(apiKey) : null,
+                oauthExpires,
             };
         });
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
                 credentialsPath: credPath,
+                oauthPath: authPath,
                 securePermissions: securePerms,
                 providers,
             }));
             return;
         }
         header('AI Credentials');
-        listItem('Path', formatPath(credPath));
+        listItem('API Keys', formatPath(credPath));
+        listItem('OAuth', formatPath(authPath));
         listItem('Permissions', securePerms ? '600 (secure)' : chalk.red('INSECURE'));
         console.log('');
         if (providers.length === 0) {
             info('No providers configured');
             console.log('');
             console.log(chalk.dim('  Run: arete credentials set <provider>'));
-            console.log(chalk.dim(`  Supported: ${SUPPORTED_PROVIDERS.join(', ')}`));
+            console.log(chalk.dim('  Or:  arete credentials login [provider]'));
             console.log('');
             return;
         }
@@ -284,13 +438,18 @@ ${chalk.bold('Supported Providers')}
         for (const p of providers) {
             const sourceLabel = p.source === 'env'
                 ? chalk.cyan('[env]')
-                : chalk.dim('[file]');
+                : p.source === 'oauth'
+                    ? chalk.green('[oauth]')
+                    : chalk.dim('[file]');
             console.log(`  ${chalk.dim('•')} ${chalk.bold(p.provider)} ${sourceLabel}`);
             if (p.maskedKey) {
                 console.log(`      ${chalk.dim('Key:')} ${p.maskedKey}`);
             }
             if (p.source === 'env' && p.envVar) {
                 console.log(`      ${chalk.dim('Env:')} ${p.envVar}`);
+            }
+            if (p.source === 'oauth' && p.oauthExpires) {
+                console.log(`      ${chalk.dim('Expires:')} ${p.oauthExpires}`);
             }
         }
         console.log('');
@@ -323,7 +482,32 @@ ${chalk.bold('Supported Providers')}
         }
         const results = [];
         for (const entry of configured) {
-            const apiKey = getApiKey(entry.provider);
+            let apiKey = null;
+            // Get API key based on source
+            if (entry.source === 'oauth') {
+                // For OAuth, we need to get the API key asynchronously
+                const { getOAuthApiKeyForProvider } = await import('@arete/core');
+                try {
+                    const result = await getOAuthApiKeyForProvider(entry.provider);
+                    apiKey = result?.apiKey ?? null;
+                }
+                catch (err) {
+                    const errorMsg = err instanceof Error ? err.message : String(err);
+                    results.push({
+                        provider: entry.provider,
+                        source: entry.source,
+                        success: false,
+                        error: `OAuth error: ${errorMsg}`,
+                    });
+                    if (!opts.json) {
+                        console.log(`  ${chalk.red('✗')} ${entry.provider} — OAuth error: ${errorMsg}`);
+                    }
+                    continue;
+                }
+            }
+            else {
+                apiKey = getApiKey(entry.provider);
+            }
             if (!apiKey) {
                 results.push({
                     provider: entry.provider,

@@ -2,9 +2,10 @@
  * Global AI credentials management.
  *
  * Credentials are stored in ~/.arete/credentials.yaml with 600 permissions.
+ * OAuth credentials are stored in ~/.arete/auth.json.
  * This is distinct from workspace-level integration credentials (.credentials/).
  *
- * Priority: Environment variable > credentials file
+ * Priority: Environment variable > OAuth > credentials file
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, chmodSync } from 'fs';
@@ -12,6 +13,11 @@ import { homedir } from 'os';
 import { join, dirname } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { KnownProvider } from '@mariozechner/pi-ai';
+import {
+  getOAuthApiKey,
+  getOAuthProviders,
+  type OAuthCredentials,
+} from '@mariozechner/pi-ai/oauth';
 
 /** Credential entry for a provider */
 export interface ProviderCredentials {
@@ -24,8 +30,11 @@ export type CredentialsFile = Partial<Record<string, ProviderCredentials>>;
 /** Return type for getConfiguredProviders */
 export interface ConfiguredProvider {
   provider: string;
-  source: 'env' | 'file';
+  source: 'env' | 'file' | 'oauth';
 }
+
+/** OAuth credentials file structure */
+export type OAuthCredentialsFile = Record<string, OAuthCredentials & { type: 'oauth' }>;
 
 /** Map of providers to their environment variable names */
 const PROVIDER_ENV_VARS: Record<string, string> = {
@@ -44,6 +53,103 @@ const PROVIDER_ENV_VARS: Record<string, string> = {
  */
 export function getCredentialsPath(): string {
   return join(homedir(), '.arete', 'credentials.yaml');
+}
+
+/**
+ * Get the path to the global OAuth credentials file.
+ */
+export function getOAuthPath(): string {
+  return join(homedir(), '.arete', 'auth.json');
+}
+
+/**
+ * Load OAuth credentials from auth.json.
+ */
+export function loadOAuthCredentials(): OAuthCredentialsFile {
+  const authPath = getOAuthPath();
+  if (!existsSync(authPath)) {
+    return {};
+  }
+
+  try {
+    const content = readFileSync(authPath, 'utf8');
+    return JSON.parse(content) as OAuthCredentialsFile;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save OAuth credentials to auth.json.
+ * Uses read-modify-write to avoid clobbering other providers' credentials.
+ */
+export function saveOAuthCredentials(provider: string, credentials: OAuthCredentials): void {
+  const authPath = getOAuthPath();
+  const dir = dirname(authPath);
+
+  // Ensure directory exists
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+
+  // Read existing OAuth credentials
+  const oauthCreds = loadOAuthCredentials();
+
+  // Update the provider's credentials
+  oauthCreds[provider] = { type: 'oauth', ...credentials };
+
+  // Write back with secure permissions
+  writeFileSync(authPath, JSON.stringify(oauthCreds, null, 2), { mode: 0o600 });
+
+  // Ensure permissions are correct
+  chmodSync(authPath, 0o600);
+}
+
+/**
+ * Get list of OAuth providers that support login.
+ */
+export function getAvailableOAuthProviders(): Array<{ id: string; name: string }> {
+  return getOAuthProviders().map(p => ({ id: p.id, name: p.name }));
+}
+
+/**
+ * Check if a provider has OAuth credentials configured.
+ */
+export function hasOAuthCredentials(provider: string): boolean {
+  const oauthCreds = loadOAuthCredentials();
+  return !!oauthCreds[provider];
+}
+
+/**
+ * Get API key for a provider via OAuth.
+ * Automatically refreshes expired tokens.
+ * Returns null if no OAuth credentials exist.
+ * Throws if refresh fails.
+ */
+export async function getOAuthApiKeyForProvider(provider: string): Promise<{
+  apiKey: string;
+  refreshed: boolean;
+} | null> {
+  const oauthCreds = loadOAuthCredentials();
+  if (!oauthCreds[provider]) {
+    return null;
+  }
+
+  const originalExpires = oauthCreds[provider].expires;
+  const result = await getOAuthApiKey(provider, oauthCreds);
+  if (!result) {
+    return null;
+  }
+
+  // Check if credentials were refreshed
+  const refreshed = result.newCredentials.expires !== originalExpires;
+  
+  // Save updated credentials if refreshed
+  if (refreshed) {
+    saveOAuthCredentials(provider, result.newCredentials);
+  }
+
+  return { apiKey: result.apiKey, refreshed };
 }
 
 /**
@@ -128,13 +234,13 @@ export function getEnvVarName(provider: string): string | null {
 
 /**
  * Get list of providers that have credentials configured.
- * Returns both env-var and file-based credentials with source info.
+ * Returns env-var, OAuth, and file-based credentials with source info.
  */
 export function getConfiguredProviders(): ConfiguredProvider[] {
   const configured: ConfiguredProvider[] = [];
   const seen = new Set<string>();
 
-  // Check env vars first
+  // Check env vars first (highest priority)
   for (const [provider, envVar] of Object.entries(PROVIDER_ENV_VARS)) {
     if (process.env[envVar]) {
       configured.push({ provider, source: 'env' });
@@ -142,7 +248,16 @@ export function getConfiguredProviders(): ConfiguredProvider[] {
     }
   }
 
-  // Check credentials file
+  // Check OAuth credentials (second priority)
+  const oauthCreds = loadOAuthCredentials();
+  for (const provider of Object.keys(oauthCreds)) {
+    if (!seen.has(provider)) {
+      configured.push({ provider, source: 'oauth' });
+      seen.add(provider);
+    }
+  }
+
+  // Check credentials file (lowest priority)
   const credentials = loadCredentials();
   for (const [provider, creds] of Object.entries(credentials)) {
     if (creds?.api_key && !seen.has(provider)) {

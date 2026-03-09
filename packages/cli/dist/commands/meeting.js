@@ -1,10 +1,11 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, } from '@arete/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import chalk from 'chalk';
 import { success, error, info, warn } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 const DEFAULT_TEMPLATE = `# {title}
@@ -266,6 +267,177 @@ export function registerMeetingCommands(program) {
             warn('Some attendees remain in unknown_queue and require review.');
         }
         displayQmdResult(qmdResult);
+    });
+    // Extract subcommand - uses AIService for LLM-based extraction
+    meetingCmd
+        .command('extract <file>')
+        .description('Extract intelligence from a meeting transcript using AI')
+        .option('--json', 'Output as JSON')
+        .option('--stage', 'Write staged sections to the meeting file')
+        .option('--dry-run', 'Show what would be written without writing')
+        .option('--skip-qmd', 'Skip automatic qmd index update')
+        .action(async (file, opts) => {
+        const services = await createServices(process.cwd());
+        // Early check: is AI configured?
+        if (!services.ai.isConfigured()) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: 'No AI provider configured. Run `arete credentials configure` or set up via arete.yaml.',
+                }));
+            }
+            else {
+                error('No AI provider configured. Run `arete credentials configure` or set up via arete.yaml.');
+            }
+            process.exit(1);
+        }
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const config = await loadConfig(services.storage, root);
+        const paths = services.workspace.getPaths(root);
+        // Resolve file path
+        const meetingPath = file.startsWith('/') ? file : join(root, file);
+        // Read meeting content
+        const content = await services.storage.read(meetingPath);
+        if (!content) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Meeting file not found: ${file}` }));
+            }
+            else {
+                error(`Meeting file not found: ${file}`);
+            }
+            process.exit(1);
+        }
+        // Extract transcript/body for analysis
+        const { frontmatter, body } = extractFrontmatter(content);
+        const transcript = body.trim();
+        if (!transcript) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Meeting file has no content to extract from' }));
+            }
+            else {
+                error('Meeting file has no content to extract from');
+            }
+            process.exit(1);
+        }
+        // Get attendees from frontmatter if available
+        const attendees = [];
+        if (Array.isArray(frontmatter.attendees)) {
+            for (const a of frontmatter.attendees) {
+                if (typeof a === 'string') {
+                    const parsed = parseAttendeeToken(a);
+                    if (parsed.name)
+                        attendees.push(parsed.name);
+                }
+            }
+        }
+        // Create LLM call wrapper using AIService
+        const callLLM = async (prompt) => {
+            const result = await services.ai.call('extraction', prompt);
+            return result.text;
+        };
+        // Extract intelligence
+        let extractionResult;
+        try {
+            extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
+                attendees: attendees.length > 0 ? attendees : undefined,
+            });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Extraction failed: ${msg}` }));
+            }
+            else {
+                error(`Extraction failed: ${msg}`);
+            }
+            process.exit(1);
+        }
+        // Format staged sections
+        const stagedSections = formatStagedSections(extractionResult);
+        // Handle --stage (write to file)
+        let qmdResult;
+        const dryRun = Boolean(opts.dryRun);
+        const shouldStage = Boolean(opts.stage);
+        if (shouldStage && !dryRun) {
+            const updatedContent = updateMeetingContent(content, stagedSections);
+            await services.storage.write(meetingPath, updatedContent);
+            // Refresh qmd index unless --skip-qmd
+            if (!opts.skipQmd) {
+                qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+            }
+        }
+        // Build response
+        const response = {
+            success: true,
+            file: meetingPath,
+            intelligence: extractionResult.intelligence,
+            validationWarnings: extractionResult.validationWarnings,
+            staged: shouldStage,
+            dryRun,
+            qmd: qmdResult ?? { indexed: false, skipped: true },
+        };
+        if (opts.json) {
+            console.log(JSON.stringify(response, null, 2));
+            return;
+        }
+        // Human-readable output
+        if (shouldStage && dryRun) {
+            info('Dry run — would write the following staged sections:');
+            console.log('');
+            console.log(stagedSections);
+            return;
+        }
+        if (shouldStage) {
+            success(`Staged sections written to: ${meetingPath}`);
+            displayQmdResult(qmdResult);
+            return;
+        }
+        // Default: output formatted extraction
+        const { intelligence } = extractionResult;
+        console.log('');
+        console.log(chalk.bold('Summary'));
+        console.log(chalk.dim('─'.repeat(40)));
+        console.log(intelligence.summary);
+        console.log('');
+        if (intelligence.actionItems.length > 0) {
+            console.log(chalk.bold('Action Items'));
+            console.log(chalk.dim('─'.repeat(40)));
+            for (const item of intelligence.actionItems) {
+                const arrow = item.direction === 'i_owe_them' ? '→' : '←';
+                const counterparty = item.counterpartySlug ? ` @${item.counterpartySlug}` : '';
+                const due = item.due ? chalk.dim(` (${item.due})`) : '';
+                console.log(`  • [@${item.ownerSlug} ${arrow}${counterparty}] ${item.description}${due}`);
+            }
+            console.log('');
+        }
+        if (intelligence.decisions.length > 0) {
+            console.log(chalk.bold('Decisions'));
+            console.log(chalk.dim('─'.repeat(40)));
+            for (const decision of intelligence.decisions) {
+                console.log(`  • ${decision}`);
+            }
+            console.log('');
+        }
+        if (intelligence.learnings.length > 0) {
+            console.log(chalk.bold('Learnings'));
+            console.log(chalk.dim('─'.repeat(40)));
+            for (const learning of intelligence.learnings) {
+                console.log(`  • ${learning}`);
+            }
+            console.log('');
+        }
+        if (extractionResult.validationWarnings.length > 0) {
+            warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
+        }
     });
 }
 async function resolveMeetingPath(services, resourcesPath, root, file, latest) {

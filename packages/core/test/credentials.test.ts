@@ -322,4 +322,179 @@ describe('credentials module', () => {
       assert.equal(process.env.GOOGLE_API_KEY, 'goog-key');
     });
   });
+
+  describe('OAuth credentials', () => {
+    let getOAuthPath: typeof import('../src/credentials.js').getOAuthPath;
+    let loadOAuthCredentials: typeof import('../src/credentials.js').loadOAuthCredentials;
+    let saveOAuthCredentials: typeof import('../src/credentials.js').saveOAuthCredentials;
+    let hasOAuthCredentials: typeof import('../src/credentials.js').hasOAuthCredentials;
+    let getAvailableOAuthProviders: typeof import('../src/credentials.js').getAvailableOAuthProviders;
+
+    beforeEach(async () => {
+      const mod = await import('../src/credentials.js');
+      getOAuthPath = mod.getOAuthPath;
+      loadOAuthCredentials = mod.loadOAuthCredentials;
+      saveOAuthCredentials = mod.saveOAuthCredentials;
+      hasOAuthCredentials = mod.hasOAuthCredentials;
+      getAvailableOAuthProviders = mod.getAvailableOAuthProviders;
+    });
+
+    describe('getOAuthPath', () => {
+      it('returns path under ~/.arete', () => {
+        const path = getOAuthPath();
+        assert.ok(path.includes('.arete'));
+        assert.ok(path.endsWith('auth.json'));
+      });
+    });
+
+    describe('loadOAuthCredentials', () => {
+      it('returns empty object when file does not exist', () => {
+        const creds = loadOAuthCredentials();
+        assert.deepEqual(creds, {});
+      });
+
+      it('loads OAuth credentials from json file', () => {
+        const credDir = join(tmpDir, '.arete');
+        mkdirSync(credDir, { recursive: true });
+        writeFileSync(
+          join(credDir, 'auth.json'),
+          JSON.stringify({
+            anthropic: {
+              type: 'oauth',
+              refresh: 'refresh-token',
+              access: 'access-token',
+              expires: Date.now() + 3600000,
+            },
+          }),
+        );
+
+        const creds = loadOAuthCredentials();
+        assert.equal(creds.anthropic?.type, 'oauth');
+        assert.equal(creds.anthropic?.refresh, 'refresh-token');
+        assert.equal(creds.anthropic?.access, 'access-token');
+      });
+
+      it('returns empty object for invalid json', () => {
+        const credDir = join(tmpDir, '.arete');
+        mkdirSync(credDir, { recursive: true });
+        writeFileSync(join(credDir, 'auth.json'), 'not valid json {{{');
+
+        const creds = loadOAuthCredentials();
+        assert.deepEqual(creds, {});
+      });
+    });
+
+    describe('saveOAuthCredentials', () => {
+      it('creates directory and file with 600 permissions', () => {
+        const oauthCreds = {
+          refresh: 'refresh-token',
+          access: 'access-token',
+          expires: Date.now() + 3600000,
+        };
+        saveOAuthCredentials('anthropic', oauthCreds);
+
+        const authPath = join(tmpDir, '.arete', 'auth.json');
+        assert.ok(existsSync(authPath));
+
+        const stats = statSync(authPath);
+        const mode = stats.mode & 0o777;
+        assert.equal(mode, 0o600, `Expected mode 0600, got ${mode.toString(8)}`);
+      });
+
+      it('preserves existing credentials when adding new provider', () => {
+        const creds1 = { refresh: 'r1', access: 'a1', expires: Date.now() + 3600000 };
+        const creds2 = { refresh: 'r2', access: 'a2', expires: Date.now() + 3600000 };
+        
+        saveOAuthCredentials('anthropic', creds1);
+        saveOAuthCredentials('github-copilot', creds2);
+
+        const creds = loadOAuthCredentials();
+        assert.equal(creds.anthropic?.refresh, 'r1');
+        assert.equal(creds['github-copilot']?.refresh, 'r2');
+      });
+
+      it('updates existing provider credentials', () => {
+        const old = { refresh: 'old', access: 'old', expires: Date.now() + 3600000 };
+        const newCreds = { refresh: 'new', access: 'new', expires: Date.now() + 7200000 };
+        
+        saveOAuthCredentials('anthropic', old);
+        saveOAuthCredentials('anthropic', newCreds);
+
+        const creds = loadOAuthCredentials();
+        assert.equal(creds.anthropic?.refresh, 'new');
+      });
+    });
+
+    describe('hasOAuthCredentials', () => {
+      it('returns false when no credentials', () => {
+        assert.equal(hasOAuthCredentials('anthropic'), false);
+      });
+
+      it('returns true when credentials exist', () => {
+        const creds = { refresh: 'r', access: 'a', expires: Date.now() + 3600000 };
+        saveOAuthCredentials('anthropic', creds);
+
+        assert.equal(hasOAuthCredentials('anthropic'), true);
+        assert.equal(hasOAuthCredentials('google'), false);
+      });
+    });
+
+    describe('getAvailableOAuthProviders', () => {
+      it('returns array of OAuth providers', () => {
+        const providers = getAvailableOAuthProviders();
+        assert.ok(Array.isArray(providers));
+        assert.ok(providers.length > 0);
+        
+        // Should include known OAuth providers
+        const ids = providers.map(p => p.id);
+        assert.ok(ids.includes('anthropic'));
+        assert.ok(ids.includes('github-copilot'));
+      });
+
+      it('returns providers with id and name', () => {
+        const providers = getAvailableOAuthProviders();
+        for (const p of providers) {
+          assert.ok(p.id, 'provider should have id');
+          assert.ok(p.name, 'provider should have name');
+        }
+      });
+    });
+
+    describe('getConfiguredProviders with OAuth', () => {
+      it('returns oauth-sourced providers', () => {
+        const creds = { refresh: 'r', access: 'a', expires: Date.now() + 3600000 };
+        saveOAuthCredentials('anthropic', creds);
+
+        const providers = getConfiguredProviders();
+        assert.ok(providers.some((p) => p.provider === 'anthropic' && p.source === 'oauth'));
+      });
+
+      it('prefers env over oauth', () => {
+        process.env.ANTHROPIC_API_KEY = 'env-key';
+        const creds = { refresh: 'r', access: 'a', expires: Date.now() + 3600000 };
+        saveOAuthCredentials('anthropic', creds);
+
+        const providers = getConfiguredProviders();
+        const anthropic = providers.filter((p) => p.provider === 'anthropic');
+        assert.equal(anthropic.length, 1);
+        assert.equal(anthropic[0].source, 'env');
+      });
+
+      it('prefers oauth over file', () => {
+        const credDir = join(tmpDir, '.arete');
+        mkdirSync(credDir, { recursive: true });
+        writeFileSync(
+          join(credDir, 'credentials.yaml'),
+          'anthropic:\n  api_key: "file-key"\n',
+        );
+        const oauthCreds = { refresh: 'r', access: 'a', expires: Date.now() + 3600000 };
+        saveOAuthCredentials('anthropic', oauthCreds);
+
+        const providers = getConfiguredProviders();
+        const anthropic = providers.filter((p) => p.provider === 'anthropic');
+        assert.equal(anthropic.length, 1);
+        assert.equal(anthropic[0].source, 'oauth');
+      });
+    });
+  });
 });

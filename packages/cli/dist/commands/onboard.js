@@ -2,10 +2,13 @@
  * arete onboard — Quick identity setup for new workspaces
  *
  * Collects name, email, company to bootstrap context/profile.md
- * before full conversational onboarding. Optionally configures AI credentials.
+ * before full conversational onboarding. Optionally configures AI credentials
+ * via OAuth login or API key.
  */
-import { createServices, loadConfig, refreshQmdIndex, saveCredential, getApiKey } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, saveCredential, getApiKey, saveOAuthCredentials, getOAuthPath, hasOAuthCredentials, } from '@arete/core';
+import { getOAuthProvider } from '@mariozechner/pi-ai/oauth';
 import { createInterface } from 'node:readline/promises';
+import { createInterface as createReadlineInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import { join } from 'node:path';
 import chalk from 'chalk';
@@ -208,7 +211,8 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         }
         else {
             const existingKey = getApiKey('anthropic');
-            // Determine if we should prompt for AI key
+            const existingOAuth = hasOAuthCredentials('anthropic');
+            // Determine if we should prompt for AI credentials
             let shouldPrompt = false;
             let apiKeyToSave = null;
             if (opts.apiKey) {
@@ -219,20 +223,23 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                 // JSON mode without --api-key: skip AI config (can't prompt)
                 aiSkipped = true;
             }
-            else if (existingKey) {
-                // Interactive mode with existing key: ask to update
+            else if (existingKey || existingOAuth) {
+                // Interactive mode with existing credentials: ask to update
                 console.log('');
                 const { confirm } = await import('@inquirer/prompts');
+                const currentCred = existingOAuth
+                    ? 'OAuth login'
+                    : `API key: ${maskApiKey(existingKey)}`;
                 try {
                     const update = await confirm({
-                        message: `Update Anthropic API key? (current: ${maskApiKey(existingKey)})`,
+                        message: `Update Anthropic credentials? (current: ${currentCred})`,
                         default: false,
                     });
                     if (update) {
                         shouldPrompt = true;
                     }
                     else {
-                        info('Keeping existing API key');
+                        info('Keeping existing credentials');
                         aiConfigured = true; // Already configured
                     }
                 }
@@ -242,7 +249,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                 }
             }
             else {
-                // Interactive mode with no existing key: prompt for initial key
+                // Interactive mode with no existing credentials: prompt for setup
                 shouldPrompt = true;
             }
             // Prompt for key if needed
@@ -250,36 +257,142 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                 console.log('');
                 info('AI Configuration');
                 console.log(chalk.dim('  Areté uses AI to extract insights from your meetings and context.'));
-                console.log(chalk.dim('  Get your API key at: https://console.anthropic.com/account/keys'));
                 console.log('');
-                const { password } = await import('@inquirer/prompts');
+                const { select, password } = await import('@inquirer/prompts');
+                let authChoice;
                 try {
-                    const apiKeyInput = await password({
-                        message: 'Enter your Anthropic API key (or press Enter to skip):',
+                    authChoice = await select({
+                        message: 'How would you like to authenticate with Anthropic?',
+                        choices: [
+                            {
+                                name: 'Login with Claude subscription (Pro/Max)',
+                                value: 'oauth',
+                                description: 'Opens browser for OAuth login — no API key needed',
+                            },
+                            {
+                                name: 'Paste API key',
+                                value: 'apikey',
+                                description: 'Get key from console.anthropic.com',
+                            },
+                            {
+                                name: 'Skip for now',
+                                value: 'skip',
+                                description: 'Configure later with: arete credentials login',
+                            },
+                        ],
                     });
-                    if (apiKeyInput && apiKeyInput.trim()) {
-                        apiKeyToSave = apiKeyInput.trim();
-                        // Show masked key so user can verify they pasted correctly
-                        console.log(chalk.dim(`  Key entered: ${maskApiKey(apiKeyToSave)}`));
-                    }
-                    else {
-                        aiSkipped = true;
-                        info('Skipping AI configuration — you can configure later with: arete credentials set anthropic');
-                    }
                 }
                 catch {
-                    // User cancelled (Ctrl+C)
+                    // User cancelled
                     aiSkipped = true;
+                    authChoice = 'skip';
+                }
+                if (authChoice === 'oauth') {
+                    // OAuth flow
+                    const provider = getOAuthProvider('anthropic');
+                    if (!provider) {
+                        error('OAuth provider not available');
+                        aiSkipped = true;
+                    }
+                    else {
+                        console.log('');
+                        info(`Logging in to ${chalk.bold(provider.name)}...`);
+                        const rl = createReadlineInterface({ input, output });
+                        const promptFn = (msg) => {
+                            return new Promise((resolve) => rl.question(`${msg} `, resolve));
+                        };
+                        try {
+                            const credentials = await provider.login({
+                                onAuth: (authInfo) => {
+                                    console.log('');
+                                    console.log(chalk.bold('  Open this URL in your browser:'));
+                                    console.log(`  ${chalk.cyan(authInfo.url)}`);
+                                    if (authInfo.instructions) {
+                                        console.log('');
+                                        console.log(chalk.dim(`  ${authInfo.instructions}`));
+                                    }
+                                    console.log('');
+                                },
+                                onPrompt: async (prompt) => {
+                                    const placeholder = prompt.placeholder ? ` (${prompt.placeholder})` : '';
+                                    return await promptFn(`${prompt.message}${placeholder}:`);
+                                },
+                                onProgress: (msg) => {
+                                    console.log(chalk.dim(`  ${msg}`));
+                                },
+                            });
+                            // Save OAuth credentials
+                            saveOAuthCredentials('anthropic', credentials);
+                            // Write default AI config to arete.yaml
+                            const DEFAULT_AI_CONFIG = {
+                                tiers: {
+                                    fast: 'anthropic/claude-3-5-haiku-latest',
+                                    standard: 'anthropic/claude-sonnet-4-20250514',
+                                    frontier: 'anthropic/claude-3-opus',
+                                },
+                                tasks: {
+                                    summary: 'fast',
+                                    extraction: 'fast',
+                                    decision_extraction: 'standard',
+                                    learning_extraction: 'standard',
+                                    significance_analysis: 'frontier',
+                                    reconciliation: 'fast',
+                                },
+                            };
+                            await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
+                            aiConfigured = true;
+                            console.log('');
+                            success('Logged in to Anthropic');
+                            listItem('Credentials saved', getOAuthPath());
+                        }
+                        catch (err) {
+                            const message = err instanceof Error ? err.message : String(err);
+                            error(`Login failed: ${message}`);
+                            info('You can try again later with: arete credentials login anthropic');
+                            aiSkipped = true;
+                        }
+                        finally {
+                            rl.close();
+                        }
+                    }
+                }
+                else if (authChoice === 'apikey') {
+                    // API key flow
+                    console.log(chalk.dim('  Get your API key at: https://console.anthropic.com/account/keys'));
+                    console.log('');
+                    try {
+                        const apiKeyInput = await password({
+                            message: 'Enter your Anthropic API key:',
+                        });
+                        if (apiKeyInput && apiKeyInput.trim()) {
+                            apiKeyToSave = apiKeyInput.trim();
+                            // Show masked key so user can verify they pasted correctly
+                            console.log(chalk.dim(`  Key entered: ${maskApiKey(apiKeyToSave)}`));
+                        }
+                        else {
+                            aiSkipped = true;
+                            info('Skipping AI configuration — you can configure later with: arete credentials set anthropic');
+                        }
+                    }
+                    catch {
+                        // User cancelled (Ctrl+C)
+                        aiSkipped = true;
+                    }
+                }
+                else {
+                    // Skip
+                    aiSkipped = true;
+                    info('Skipping AI configuration — you can configure later with: arete credentials login');
                 }
             }
             // Default AI configuration for the workspace
             // Uses Anthropic models since we're onboarding with Anthropic key
             // TODO: Multi-provider onboarding (see backlog)
-            const DEFAULT_AI_CONFIG = {
+            const API_KEY_AI_CONFIG = {
                 tiers: {
-                    fast: 'claude-3-5-haiku-latest',
-                    standard: 'claude-sonnet-4-20250514',
-                    frontier: 'claude-3-opus',
+                    fast: 'anthropic/claude-3-5-haiku-latest',
+                    standard: 'anthropic/claude-sonnet-4-20250514',
+                    frontier: 'anthropic/claude-3-opus',
                 },
                 tasks: {
                     summary: 'fast',
@@ -300,7 +413,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                     // Save credential
                     saveCredential('anthropic', apiKeyToSave);
                     // Write default AI config to arete.yaml
-                    await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
+                    await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
                     aiConfigured = true;
                     if (!opts.json) {
                         success('API key validated and saved');
@@ -317,7 +430,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                         }
                         saveCredential('anthropic', apiKeyToSave);
                         // Still write AI config
-                        await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
+                        await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
                         aiConfigured = true;
                     }
                     else {

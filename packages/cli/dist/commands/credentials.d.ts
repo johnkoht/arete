@@ -2,12 +2,14 @@
  * arete credentials — Manage AI provider API keys
  *
  * Commands:
- *   arete credentials set <provider>  - Set API key for a provider
+ *   arete credentials set <provider>   - Set API key for a provider
+ *   arete credentials login [provider] - Login via OAuth (Claude Pro/Max, etc.)
  *   arete credentials show             - Show configured providers (masked keys)
  *   arete credentials test             - Test configured provider connections
  *
  * Credentials stored in ~/.arete/credentials.yaml with 600 permissions.
- * Environment variables override file credentials.
+ * OAuth credentials stored in ~/.arete/auth.json with 600 permissions.
+ * Environment variables override all other credentials.
  */
 import type { Command } from 'commander';
 /** Supported provider names - must match PROVIDER_ENV_VARS in credentials.ts */

@@ -279,17 +279,24 @@ google:
       assert.ok(stdout.includes('<provider>'), 'should include <provider> arg');
       assert.ok(stdout.includes('show'), 'should include show subcommand');
       assert.ok(stdout.includes('test'), 'should include test subcommand');
-      assert.ok(stdout.includes('ANTHROPIC_API_KEY'), 'should mention env var override');
-      assert.ok(stdout.includes('~/.arete/credentials.yaml'), 'should mention storage path');
+      assert.ok(stdout.includes('login'), 'should include login subcommand');
+      assert.ok(stdout.includes('Environment variables'), 'should mention env var priority');
+      assert.ok(stdout.includes('~/.arete/credentials.yaml'), 'should mention API key storage path');
+      assert.ok(stdout.includes('~/.arete/auth.json'), 'should mention OAuth storage path');
     });
 
     it('lists supported providers in help', () => {
       const { stdout, exitCode } = runCli('credentials --help');
       assert.equal(exitCode, 0);
       
+      // API key providers
       assert.ok(stdout.includes('anthropic'));
       assert.ok(stdout.includes('google'));
       assert.ok(stdout.includes('openai'));
+      
+      // OAuth providers
+      assert.ok(stdout.includes('github-copilot'));
+      assert.ok(stdout.includes('google-gemini-cli'));
     });
   });
 });

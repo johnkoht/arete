@@ -108,13 +108,23 @@
 
 ## AI Configuration
 
+### Credential Priority
+Environment variables > OAuth (login) > API keys (file)
+
+### Commands
+
+- `arete credentials login [provider]` - Login via OAuth (Claude Pro/Max, GitHub Copilot, Google Gemini, etc.)
+  - Opens browser for OAuth authentication; paste code when prompted
+  - Tokens auto-refresh when expired
+  - Available providers: anthropic, github-copilot, google-gemini-cli, google-antigravity, openai-codex
+  - `--json` - Output as JSON
 - `arete credentials set <provider>` - Set API key for a provider (validates with test call)
   - `--api-key <key>` - API key (non-interactive)
   - `--no-validate` - Skip validation test call
   - `--json` - Output as JSON
-- `arete credentials show` - Show configured providers (keys masked)
+- `arete credentials show` - Show configured providers (OAuth and API keys, masked)
   - `--json` - Output as JSON
-- `arete credentials test` - Test configured provider connections
+- `arete credentials test` - Test configured provider connections (OAuth tokens auto-refresh)
   - `--json` - Output as JSON
 - `arete config show ai` - Display AI configuration (tiers, tasks, providers)
   - `--json` - Output as JSON

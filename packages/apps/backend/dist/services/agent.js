@@ -8,6 +8,7 @@ import { Type } from '@sinclair/typebox';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
+import { updateMeetingContent } from '@arete/core';
 import * as jobsService from './jobs.js';
 /**
  * TypeBox schema for meeting extraction response.
@@ -74,50 +75,6 @@ function formatStagedSections(extraction) {
         lines.push('');
     }
     return lines.join('\n');
-}
-/**
- * Replace or insert staged sections in meeting content.
- * Preserves content before ## Summary and after staged sections.
- */
-function updateMeetingContent(originalContent, stagedSections) {
-    // Find where ## Summary starts (or where to insert)
-    const summaryMatch = originalContent.match(/^## Summary\s*$/m);
-    if (!summaryMatch) {
-        // No existing summary — append staged sections at end
-        return originalContent.trimEnd() + '\n\n' + stagedSections;
-    }
-    // Find the position of ## Summary
-    const summaryIndex = originalContent.indexOf(summaryMatch[0]);
-    // Get content before ## Summary
-    const beforeSummary = originalContent.substring(0, summaryIndex).trimEnd();
-    // Find content after staged sections (look for ## that isn't Summary, Staged Action Items, Staged Decisions, or Staged Learnings)
-    const stagedHeaders = /^## (?:Summary|Staged Action Items|Staged Decisions|Staged Learnings)\s*$/gm;
-    let afterStagedContent = '';
-    // Find all headers in the original content
-    const lines = originalContent.substring(summaryIndex).split('\n');
-    let pastStagedSections = false;
-    const afterLines = [];
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.startsWith('## ')) {
-            const headerName = line.replace(/^## /, '').trim();
-            if (['Summary', 'Staged Action Items', 'Staged Decisions', 'Staged Learnings'].includes(headerName)) {
-                // This is a staged section header - skip until next header
-                continue;
-            }
-            else {
-                // This is a different header - keep everything from here
-                pastStagedSections = true;
-            }
-        }
-        if (pastStagedSections) {
-            afterLines.push(line);
-        }
-    }
-    if (afterLines.length > 0) {
-        afterStagedContent = '\n' + afterLines.join('\n');
-    }
-    return beforeSummary + '\n\n' + stagedSections + afterStagedContent;
 }
 /**
  * Testable version of runProcessingSession with injected dependencies.

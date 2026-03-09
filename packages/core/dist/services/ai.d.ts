@@ -6,7 +6,7 @@
  */
 import { type TSchema, type Static } from '@sinclair/typebox';
 import type { AreteConfig, AITask, AITier } from '../models/workspace.js';
-import { getApiKey } from '../credentials.js';
+import { getApiKey, getOAuthApiKeyForProvider } from '../credentials.js';
 import type { KnownProvider } from '@mariozechner/pi-ai';
 import { getModel, completeSimple, getEnvApiKey } from '@mariozechner/pi-ai';
 /** Options for AI completion calls */
@@ -47,6 +47,8 @@ export interface AIServiceTestDeps {
     getEnvApiKey: typeof getEnvApiKey;
     /** Optional: mock getApiKey for file credential lookup */
     getApiKey?: typeof getApiKey;
+    /** Optional: mock getOAuthApiKey for OAuth credential lookup */
+    getOAuthApiKey?: typeof getOAuthApiKeyForProvider;
 }
 /** Model specification: provider/model format */
 export interface ModelSpec {
@@ -96,7 +98,8 @@ export declare class AIService {
      */
     getModelForTask(task: AITask): ModelSpec;
     /**
-     * Get API key for a provider, checking env vars and credentials file.
+     * Get API key for a provider, checking env vars, OAuth, and credentials file.
+     * Priority: env vars > OAuth > credentials file
      *
      * @throws Error if no API key configured
      */

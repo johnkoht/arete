@@ -67,9 +67,10 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |arete skill list:List available skills
 |arete skill install <url>:Install skill from URL (e.g. skills.sh)
 |arete tool list:List available tools
+|arete credentials login [provider]:Login via OAuth (Claude Pro/Max, GitHub Copilot, etc.) — tokens auto-refresh
 |arete credentials set <provider>:Set API key for a provider (validates with test call)
-|arete credentials show:Show configured providers (keys masked)
-|arete credentials test:Test configured provider connections
+|arete credentials show:Show configured providers (OAuth and API keys, masked)
+|arete credentials test:Test configured provider connections (OAuth tokens auto-refresh)
 |arete config show ai:Display AI configuration (tiers, tasks, providers)
 |arete config set <path> <value>:Set AI config value (ai.tiers.<tier>, ai.tasks.<task>)
 

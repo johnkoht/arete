@@ -403,11 +403,13 @@ describe('AIService', () => {
       deps.getEnvApiKey = () => null;
       // Also mock getApiKey (file credential lookup) to return null
       (deps as AIServiceTestDeps & { getApiKey?: () => null }).getApiKey = () => null;
+      // Also mock getOAuthApiKey to return null
+      (deps as AIServiceTestDeps & { getOAuthApiKey?: () => Promise<null> }).getOAuthApiKey = async () => null;
       const service = new AIService(config, deps);
 
       await assert.rejects(
         () => service.call('summary', 'Test'),
-        /No API key for provider 'anthropic'\. Set ANTHROPIC_API_KEY or configure via ~\/\.arete\/credentials\.yaml/,
+        /No API key for provider 'anthropic'\. Set ANTHROPIC_API_KEY, login via 'arete credentials login anthropic', or configure via ~\/\.arete\/credentials\.yaml/,
       );
     });
   });
