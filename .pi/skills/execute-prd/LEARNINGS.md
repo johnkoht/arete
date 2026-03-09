@@ -27,6 +27,24 @@ When pre-mortem identifies potential code duplication (e.g., "Task 2 might reimp
 
 **Anti-pattern**: Flagging duplication in code review but allowing it to merge, then filing a refactor item. Better to prevent during implementation.
 
+### 4. Phantom task detection before execution
+
+Before starting a PRD, verify proposed files don't already exist and functionality isn't already implemented. This catches "phantom tasks" — work the PRD requests that has already been done (perhaps by prior work, or the PRD is stale).
+
+**Evidence**: reimagine-v2-orchestration PRD (2026-03-07) — Engineering review found 5/6 tasks were phantom (already implemented). This check saved ~80% of planned work.
+
+### 5. Backwards compatibility for data-writing code
+
+When fixing bugs in data-writing code, always ask: "What about existing data created by the old buggy code?" Users with legacy data formats shouldn't be stranded.
+
+**Evidence**: reimagine-v2-orchestration PRD (2026-03-07) — Priority toggle fix initially only handled new format (`- [x]`). Grumpy reviewer caught that old format (standalone `[x]`) would strand users. Fix needed dual-format support.
+
+### 6. Extract constants for repeated structures
+
+If you use the same config object, schema, or data structure more than once, extract it to a named constant. Catch DRY violations during implementation, not in code review.
+
+**Evidence**: ai-config PRD (2026-03-08) — Task AI-4 had duplicate `aiConfig` objects caught in review. Could have been prevented with upfront guidance.
+
 ---
 
 ## Gaps to Address
@@ -52,10 +70,17 @@ When two tasks will need the same formatter/helper, the PRD should either:
 | calendar-events (2026-02-25) | 5/5 | 100% | 0 | +57 | 9/9 mitigated |
 | calendar-freebusy (2026-02-25) | 6/6 | 100% | 1 | +59 | 7/7 mitigated |
 | project-updates (2026-02-25) | 6/6 | 100% | 0 | +9 | 7/7 mitigated |
+| reimagine-v2 (2026-03-07) | 1/6* | 100% | 1 | n/a | 9/9 mitigated |
+| ai-config (2026-03-08) | 5/5 | 100% | 3 | +75 | 8/8 mitigated |
+
+*5/6 tasks were phantom (already implemented); only 1 task required actual work
 
 ---
 
 ## References
 
-- Memory entries: `memory/entries/2026-02-25_calendar-events-learnings.md`
+- Memory entries:
+  - `memory/entries/2026-02-25_calendar-events-learnings.md` (patterns 1-3)
+  - `memory/entries/2026-03-07_reimagine-v2-orchestration-learnings.md` (patterns 4-5)
+  - `memory/entries/2026-03-08_ai-config-learnings.md` (pattern 6)
 - Collaboration profile: `memory/collaboration.md`
