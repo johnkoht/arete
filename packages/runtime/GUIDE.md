@@ -716,6 +716,36 @@ arete brief --for "query"             # Assemble briefing (context + memory + en
 arete route "query" [--json]          # Route to skill/tool with model suggestion
 ```
 
+### Daily Intelligence
+
+```bash
+arete daily                           # Morning brief: calendar, commitments, projects, decisions, patterns
+arete momentum                        # Commitment momentum (hot/stale/critical) + relationship health
+arete view [--port N]                 # Open web dashboard in browser (launches backend server)
+```
+
+### Commitments
+
+```bash
+arete commitments list                        # List all open commitments
+arete commitments list --person <slug>        # Commitments for one person
+arete commitments list --direction i-owe-them # Filter by direction
+arete commitments resolve <id> [--yes]        # Mark commitment as resolved
+```
+
+### AI Configuration
+
+```bash
+arete credentials login [provider]    # OAuth login (anthropic, github-copilot, google-gemini-cli)
+arete credentials set <provider>      # Set API key for provider
+arete credentials show                # Show configured providers (masked)
+arete credentials test                # Test provider connections
+
+arete config show ai                  # Display AI tier/task configuration
+arete config set ai.tiers.fast <model>        # Set model for fast tier
+arete config set ai.tasks.extraction <tier>   # Set tier for extraction task
+```
+
 ### Skills & Tools
 
 ```bash
@@ -761,6 +791,7 @@ arete availability find --with <name|email>              # Find mutual availabil
 arete meeting add --file <path>                 # Add meeting from JSON
 arete meeting process --latest [--json]         # Process latest meeting with people intelligence
 arete meeting process --file <path> [--json]    # Process a specific meeting file
+arete meeting extract <file>                    # Extract intelligence from meeting transcript (requires AI config)
 ```
 
 ### Integrations

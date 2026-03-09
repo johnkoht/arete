@@ -25,7 +25,8 @@ factory.ts (createServices) ─── wires everything
   ├─ Infrastructure:  storage/ (FileStorageAdapter), search/ (SearchProvider)
   ├─ Core Services:   ContextService, MemoryService, EntityService
   ├─ Orchestration:   IntelligenceService (composes core services)
-  └─ Management:      WorkspaceService, SkillService, ToolService, IntegrationService
+  ├─ Management:      WorkspaceService, SkillService, ToolService, IntegrationService
+  └─ AI:              AIService (wraps pi-ai, credential management)
 ```
 
 **Entry point**: `createServices(workspaceRoot)` in `factory.ts` → `AreteServices` (flat, fully constructed). CLI commands destructure what they need; never construct services directly.
@@ -131,6 +132,36 @@ These modules implement the People Intelligence feature and are called by `Entit
 **Dependencies**: `StorageAdapter`, `AreteConfig` (unique — only service that takes config directly)
 
 **Important**: Calendar uses provider alias mapping (`macos` → `apple-calendar`, `google` → `google-calendar`). Registry in `integrations/registry.ts` is canonical.
+
+### AIService (2026-03-08)
+`services/ai.ts`
+
+**What it does**: Unified AI integration wrapping pi-ai with task-based model routing, credential management, and structured output support. Provides text and structured (JSON with TypeBox validation) AI calls.
+
+**Key exports**: `AIService` class — `call(task, prompt)`, `callWithModel(spec, prompt)`, `callStructured(task, prompt, schema)`, `isConfigured()`
+
+**Dependencies**: `AreteConfig` (for tier-to-model mapping), pi-ai library
+
+**Credential resolution order**: Environment variables > OAuth tokens (`~/.arete/auth.json`) > API keys (`~/.arete/credentials.yaml`)
+
+**Testing pattern**: Uses `testDeps` injection for mocking pi-ai calls — same pattern as qmd.ts.
+
+**Important**: This is the second service (after `IntegrationService`) to receive `AreteConfig` directly. AIService needs config at construction for tier mappings.
+
+### Credentials
+`credentials.ts` (module, not service)
+
+**What it does**: Manages global AI credentials stored at `~/.arete/credentials.yaml` (API keys) and `~/.arete/auth.json` (OAuth tokens). Credentials are global, not workspace-level.
+
+**Key exports**:
+- `loadCredentials()`, `saveCredentials()` — API key management
+- `loadOAuthCredentials()`, `saveOAuthCredentials()` — OAuth token management
+- `getOAuthApiKeyForProvider()` — auto-refreshes expired OAuth tokens
+- `getConfiguredProviders()` — lists all configured providers (env vars, OAuth, API keys)
+
+**OAuth flow**: CLI `arete credentials login` → browser OAuth → paste code → token saved → auto-refresh on expiry
+
+**Used by**: `AIService` for credential resolution, CLI `credentials` command for management
 
 ### Search
 `search/`

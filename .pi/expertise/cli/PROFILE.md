@@ -81,6 +81,7 @@ Four commands registered from one file. The intelligence hub.
 ### meeting.ts — Meeting Import & Processing
 - **`meeting add`** → normalizes JSON input → `saveMeetingFile()` → `refreshQmdIndex()`
 - **`meeting process`** → extracts attendees → `services.entity.suggestPeopleIntelligence()` → writes person files → `refreshQmdIndex()`
+- **`meeting extract <file>`** (2026-03-08) → `services.ai.isConfigured()` guard → `extractMeetingIntelligence()` → `updateMeetingContent()` — requires AI configuration
 - Template-based meeting file generation with frontmatter
 
 ### pull.ts — Integration Data Fetch
@@ -127,6 +128,18 @@ Four commands registered from one file. The intelligence hub.
 ### index-search.ts — Search Index Management
 - **`index`** → `refreshQmdIndex(root, config.qmd_collection)` — re-indexes qmd search
 - **`index --status`** → shows collection name, attempts `qmd status` for vector count
+
+### credentials.ts — AI Credential Management (2026-03-08)
+- **`credentials login [provider]`** → OAuth flow (browser → paste code) → `saveOAuthCredentials()` — supports anthropic, github-copilot, google-gemini-cli
+- **`credentials set <provider>`** → API key prompt → `saveCredentials()` → validation test call
+- **`credentials show`** → `getConfiguredProviders()` — shows both OAuth and API key sources with masked values
+- **`credentials test`** → tests configured provider connections, auto-refreshes OAuth tokens
+- Uses `@arete/core` credentials module for storage (`~/.arete/credentials.yaml`, `~/.arete/auth.json`)
+
+### config.ts — AI Configuration (2026-03-08)
+- **`config show ai`** → displays AI config (tiers, task mappings, providers)
+- **`config set <path> <value>`** → sets AI config values (e.g., `ai.tiers.fast`, `ai.tasks.extraction`)
+- Reads/writes `arete.yaml` via `loadConfig()` + YAML
 
 ---
 
