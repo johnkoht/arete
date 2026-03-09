@@ -28,6 +28,13 @@ import {
 	type TodoItem,
 } from "./utils.js";
 import { resolveExecutionProgress } from "./execution-progress.js";
+import {
+	checkMemoryEntry,
+	checkMemoryIndex,
+	checkPlanStatus,
+	getChangedDirectories,
+	checkCapabilityCatalog,
+} from "./wrap-checks.js";
 
 // ────────────────────────────────────────────────────────────
 // Shared types for command handlers
@@ -1227,11 +1234,42 @@ export async function handleWrap(
 
 	ctx.ui.notify("📋 Starting close-out check...", "info");
 
+	// Run detection checks
+	const slug = state.currentSlug;
+	const hasMemoryEntry = checkMemoryEntry(slug);
+	const hasMemoryIndex = checkMemoryIndex(slug);
+	const planStatus = checkPlanStatus(slug);
+	const catalogDate = checkCapabilityCatalog();
+
+	// Get changed directories since plan creation (or last 7 days if no date)
+	const planCreated = plan.frontmatter.created
+		? new Date(plan.frontmatter.created)
+		: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+	const changedDirs = getChangedDirectories(planCreated);
+
+	// Build detection results for Task 3 to format
+	const detectionResults = {
+		slug,
+		planTitle: plan.frontmatter.title,
+		planStatus,
+		hasMemoryEntry,
+		hasMemoryIndex,
+		catalogDate,
+		changedDirs,
+		hasPrd: plan.frontmatter.has_prd,
+	};
+
 	pi.sendUserMessage(
-		`Starting close-out check for plan: ${plan.frontmatter.title}...\n\n` +
-			`[Close-out detection logic will be added in Task 2. This is the /wrap command skeleton.]\n\n` +
-			`Plan slug: ${state.currentSlug}\n` +
-			`Status: ${plan.frontmatter.status}`,
+		`Starting close-out check for plan: ${plan.frontmatter.title}\n\n` +
+			`**Detection Results:**\n` +
+			`- Plan slug: ${slug}\n` +
+			`- Plan status: ${planStatus ?? "unknown"}\n` +
+			`- Memory entry exists: ${hasMemoryEntry}\n` +
+			`- Memory index contains slug: ${hasMemoryIndex}\n` +
+			`- Capability catalog last updated: ${catalogDate ? catalogDate.toISOString().split("T")[0] : "not found"}\n` +
+			`- Changed directories: ${changedDirs ? (changedDirs.length > 0 ? changedDirs.join(", ") : "none") : "git unavailable"}\n` +
+			`- Has PRD: ${detectionResults.hasPrd}\n\n` +
+			`[Tiered output formatting will be added in Task 3.]`,
 	);
 }
 
