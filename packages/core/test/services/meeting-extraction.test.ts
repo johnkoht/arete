@@ -451,6 +451,116 @@ describe('parseMeetingExtractionResponse - validation rejections', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - rawItems (pre-filter capture)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - rawItems', () => {
+  it('rawItems includes action items that get filtered by validation', () => {
+    const response = JSON.stringify({
+      summary: 'Test meeting',
+      action_items: [
+        { owner: 'John', description: 'Valid action item', direction: 'i_owe_them' },
+        { owner: 'Jane', description: 'Me: Yeah, I will look into that definitely later on', direction: 'i_owe_them' }, // garbage prefix
+      ],
+      decisions: [],
+      learnings: [],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have BOTH items (pre-filter)
+    assert.equal(result.rawItems.length, 2);
+    // But actionItems should only have the valid one (post-filter)
+    assert.equal(result.intelligence.actionItems.length, 1);
+  });
+
+  it('rawItems captures action items, decisions, and learnings', () => {
+    const response = JSON.stringify({
+      summary: 'Test',
+      action_items: [{ owner: 'A', description: 'Action', direction: 'i_owe_them' }],
+      decisions: ['Decision one'],
+      learnings: ['Learning one'],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    assert.equal(result.rawItems.length, 3);
+  });
+
+  it('rawItems preserves items filtered due to length', () => {
+    const longDescription = 'A'.repeat(160); // exceeds 150 char limit
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Alice', description: longDescription, direction: 'i_owe_them' },
+        { owner: 'Bob', description: 'Short valid item', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have both
+    assert.equal(result.rawItems.length, 2);
+    // actionItems should only have the valid short one
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].owner, 'Bob');
+    // validation warning should exist for the long one
+    assert.equal(result.validationWarnings.length, 1);
+  });
+
+  it('rawItems preserves items filtered due to invalid direction', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Carol', description: 'Valid with good direction', direction: 'i_owe_them' },
+        { owner: 'Dan', description: 'Invalid direction item', direction: 'invalid_direction' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have both
+    assert.equal(result.rawItems.length, 2);
+    // actionItems should only have the one with valid direction
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].owner, 'Carol');
+  });
+
+  it('rawItems includes type information for each item', () => {
+    const response = JSON.stringify({
+      action_items: [{ owner: 'A', description: 'Action item', direction: 'i_owe_them' }],
+      decisions: ['Decision made'],
+      learnings: ['Something learned'],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    const actionRaw = result.rawItems.find(r => r.type === 'action');
+    const decisionRaw = result.rawItems.find(r => r.type === 'decision');
+    const learningRaw = result.rawItems.find(r => r.type === 'learning');
+
+    assert.ok(actionRaw);
+    assert.equal(actionRaw.text, 'Action item');
+    assert.equal(actionRaw.owner, 'A');
+    assert.equal(actionRaw.direction, 'i_owe_them');
+
+    assert.ok(decisionRaw);
+    assert.equal(decisionRaw.text, 'Decision made');
+
+    assert.ok(learningRaw);
+    assert.equal(learningRaw.text, 'Something learned');
+  });
+
+  it('rawItems is empty array for empty response', () => {
+    const result = parseMeetingExtractionResponse('');
+    assert.deepEqual(result.rawItems, []);
+  });
+
+  it('rawItems is empty array for malformed JSON', () => {
+    const result = parseMeetingExtractionResponse('not valid json');
+    assert.deepEqual(result.rawItems, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractMeetingIntelligence
 // ---------------------------------------------------------------------------
 
