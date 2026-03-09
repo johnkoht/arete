@@ -30,6 +30,7 @@ import {
 	handleApprove,
 	handleReview,
 	handlePreMortem,
+	handleWrap,
 	handlePrd,
 	handleBuild,
 	handlePlanSave,
@@ -338,6 +339,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Run pre-mortem analysis on the current plan",
 		handler: async (args, ctx) => {
 			await handlePreMortem(args, ctx, pi, state);
+			updateStatus(ctx);
+			persistState();
+		},
+	});
+
+	pi.registerCommand("wrap", {
+		description: "Run close-out checklist for the current plan",
+		handler: async (args, ctx) => {
+			await handleWrap(args, ctx, pi, state);
 			updateStatus(ctx);
 			persistState();
 		},

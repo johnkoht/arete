@@ -13,6 +13,7 @@ import {
 	handlePlanSave,
 	handlePlanRename,
 	handlePlanStatus,
+	handleWrap,
 	parsePlanListFilter,
 	preparePlanListItems,
 	checkPrdExecutionComplete,
@@ -1581,6 +1582,73 @@ describe("session restore → agent_end protection (simulated)", () => {
 		assert.equal(state.planText, originalContent, "planText must not change for loaded plans");
 		assert.equal(state.todoItems.length, 3, "todoItems count must not change");
 		assert.ok(state.todoItems[0].text.includes("Fix package"), "todoItems content must be original");
+	});
+});
+
+describe("handleWrap", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("errors when no active plan exists", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null });
+
+		await handleWrap("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No active plan"), "Should warn about no active plan");
+		assert.equal(notifyType, "warning");
+	});
+
+	it("errors when plan not found on disk", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "nonexistent-plan" });
+
+		await handleWrap("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("Plan not found"), "Should error about missing plan");
+		assert.equal(notifyType, "error");
+	});
+
+	it("sends close-out message for valid plan", async () => {
+		let notifyMessage = "";
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = {
+			...createTestPi(),
+			sendUserMessage: (msg: string) => {
+				sentMessage = msg;
+			},
+		};
+		const state = createTestState({ currentSlug: "test-wrap-plan" });
+
+		// Create a test plan
+		createTestPlan("test-wrap-plan", "# Test Plan\n\n1. Step one\n2. Step two");
+
+		await handleWrap("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("close-out check"), "Should notify about starting close-out");
+		assert.ok(sentMessage.includes("Starting close-out check"), "Should send close-out message");
+		assert.ok(sentMessage.includes("test-wrap-plan"), "Message should include plan slug");
 	});
 });
 

@@ -1205,6 +1205,37 @@ export async function handlePreMortem(
 }
 
 // ────────────────────────────────────────────────────────────
+// /wrap command handler
+// ────────────────────────────────────────────────────────────
+
+export async function handleWrap(
+	args: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	if (!state.currentSlug) {
+		ctx.ui.notify("No active plan. Use /plan open to load a plan first.", "warning");
+		return;
+	}
+
+	const plan = loadPlan(state.currentSlug);
+	if (!plan) {
+		ctx.ui.notify(`Plan not found: ${state.currentSlug}`, "error");
+		return;
+	}
+
+	ctx.ui.notify("📋 Starting close-out check...", "info");
+
+	pi.sendUserMessage(
+		`Starting close-out check for plan: ${plan.frontmatter.title}...\n\n` +
+			`[Close-out detection logic will be added in Task 2. This is the /wrap command skeleton.]\n\n` +
+			`Plan slug: ${state.currentSlug}\n` +
+			`Status: ${plan.frontmatter.status}`,
+	);
+}
+
+// ────────────────────────────────────────────────────────────
 // /prd command handler
 // ────────────────────────────────────────────────────────────
 
