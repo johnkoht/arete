@@ -1647,8 +1647,9 @@ describe("handleWrap", () => {
 		await handleWrap("", ctx, pi, state);
 
 		assert.ok(notifyMessage.includes("close-out check"), "Should notify about starting close-out");
-		assert.ok(sentMessage.includes("Starting close-out check"), "Should send close-out message");
+		assert.ok(sentMessage.includes("Close-out checklist for:"), "Should send close-out checklist message");
 		assert.ok(sentMessage.includes("test-wrap-plan"), "Message should include plan slug");
+		assert.ok(sentMessage.includes("Tier 1"), "Message should include Tier 1 items");
 	});
 });
 

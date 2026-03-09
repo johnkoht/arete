@@ -8,6 +8,8 @@
  */
 
 import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
 	savePlan,
 	loadPlan,
@@ -1215,6 +1217,202 @@ export async function handlePreMortem(
 // /wrap command handler
 // ────────────────────────────────────────────────────────────
 
+/** Checklist tier — determines which items to show */
+export type ChecklistTier = 1 | 2 | 3;
+
+/** Code paths that trigger Tier 2 (code changes) */
+const CODE_PATHS = ["packages/", ".pi/extensions/", ".pi/skills/", "src/"];
+
+/** Keywords in PRD tasks that trigger Tier 3 (new capabilities) */
+const CAPABILITY_KEYWORDS = ["command", "skill", "service", "cli", "tool"];
+
+/** Minimal PRD task structure for tier detection */
+interface PrdTask {
+	title?: string;
+	description?: string;
+}
+
+/** Minimal PRD structure for tier detection */
+interface PrdJson {
+	userStories?: PrdTask[];
+}
+
+/**
+ * Detect which checklist tier applies based on plan context.
+ *
+ * - Tier 1: All plans (default)
+ * - Tier 2: Code changes (changedDirs includes code paths)
+ * - Tier 3: New capabilities (PRD tasks mention command/skill/service)
+ */
+export function detectChecklistTier(
+	planDir: string,
+	changedDirs: string[] | null,
+	hasPrd: boolean,
+): ChecklistTier {
+	// Check for Tier 3: PRD with capability keywords
+	if (hasPrd) {
+		const prdJsonPath = join(planDir, "prd.json");
+		if (existsSync(prdJsonPath)) {
+			try {
+				const content = readFileSync(prdJsonPath, "utf-8");
+				const prd = JSON.parse(content) as PrdJson;
+				const tasks = prd.userStories ?? [];
+
+				// Check if any task mentions capability keywords
+				for (const task of tasks) {
+					const text = `${task.title ?? ""} ${task.description ?? ""}`.toLowerCase();
+					if (CAPABILITY_KEYWORDS.some((kw) => text.includes(kw))) {
+						return 3;
+					}
+				}
+			} catch {
+				// JSON parse failed — fall through to Tier 2 check
+			}
+		}
+	}
+
+	// Check for Tier 2: Code changes
+	if (changedDirs && changedDirs.length > 0) {
+		const hasCodeChanges = changedDirs.some((dir) =>
+			CODE_PATHS.some((codePath) => dir.startsWith(codePath) || dir.includes(`/${codePath}`)),
+		);
+		if (hasCodeChanges) {
+			return 2;
+		}
+	}
+
+	// Default: Tier 1
+	return 1;
+}
+
+/**
+ * Find directories that have LEARNINGS.md files.
+ * Used for Tier 2 suggested review items.
+ */
+export function findLearningsInDirs(changedDirs: string[] | null, cwd: string = process.cwd()): string[] {
+	if (!changedDirs || changedDirs.length === 0) {
+		return [];
+	}
+
+	const dirsWithLearnings: string[] = [];
+
+	for (const dir of changedDirs) {
+		const learningsPath = join(cwd, dir, "LEARNINGS.md");
+		if (existsSync(learningsPath)) {
+			dirsWithLearnings.push(dir);
+		}
+	}
+
+	return dirsWithLearnings;
+}
+
+/**
+ * Format the close-out checklist output based on detection results and tier.
+ * Returns markdown string ready for sendUserMessage.
+ */
+export function formatCloseoutChecklist(
+	planTitle: string,
+	slug: string,
+	tier: ChecklistTier,
+	results: {
+		hasMemoryEntry: boolean;
+		hasMemoryIndex: boolean;
+		planStatus: string | null;
+		catalogDate: Date | null;
+		changedDirs: string[] | null;
+		dirsWithLearnings: string[];
+	},
+): string {
+	const lines: string[] = [];
+	const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+	let needsAttention = 0;
+
+	lines.push(`📋 **Close-out checklist for: ${planTitle}**`);
+	lines.push("");
+
+	// ─────────────────────────────────────────────────────────
+	// Tier 1: Required for all plans
+	// ─────────────────────────────────────────────────────────
+	lines.push("**Tier 1 — Required for all plans:**");
+
+	// Memory entry check
+	if (results.hasMemoryEntry) {
+		lines.push(`✅ Memory entry exists: memory/entries/*_${slug}*.md`);
+	} else {
+		needsAttention++;
+		lines.push(`❌ Memory entry missing — Create memory entry at \`memory/entries/${today}_${slug}-learnings.md\``);
+	}
+
+	// Memory index check
+	if (results.hasMemoryIndex) {
+		lines.push(`✅ MEMORY.md index contains slug`);
+	} else {
+		needsAttention++;
+		lines.push(`❌ MEMORY.md index missing slug — Add index line to \`memory/MEMORY.md\``);
+	}
+
+	// Plan status check
+	if (results.planStatus === "building") {
+		needsAttention++;
+		lines.push(`❌ Plan status still "building" — Run \`/plan archive\` to mark complete or abandoned`);
+	} else if (results.planStatus === "complete" || results.planStatus === "abandoned") {
+		lines.push(`✅ Plan status: ${results.planStatus}`);
+	} else {
+		lines.push(`⚠️ Plan status: ${results.planStatus ?? "unknown"} — suggested review`);
+	}
+
+	// ─────────────────────────────────────────────────────────
+	// Tier 2: Code changes
+	// ─────────────────────────────────────────────────────────
+	if (tier >= 2) {
+		lines.push("");
+		lines.push("**Tier 2 — Code changes:**");
+
+		if (results.changedDirs === null) {
+			lines.push("⚠️ Unable to determine changed directories — manual review needed");
+		} else if (results.dirsWithLearnings.length > 0) {
+			for (const dir of results.dirsWithLearnings) {
+				lines.push(`⚠️ LEARNINGS.md suggested review in: \`${dir}/\``);
+			}
+		} else {
+			lines.push("✅ No LEARNINGS.md files in changed directories");
+		}
+	}
+
+	// ─────────────────────────────────────────────────────────
+	// Tier 3: New capabilities
+	// ─────────────────────────────────────────────────────────
+	if (tier >= 3) {
+		lines.push("");
+		lines.push("**Tier 3 — New capabilities:**");
+
+		// Capability catalog freshness
+		if (results.catalogDate) {
+			const catalogDateStr = results.catalogDate.toISOString().split("T")[0];
+			lines.push(`⚠️ Capability catalog last updated: ${catalogDateStr} — suggested review`);
+		} else {
+			lines.push("⚠️ Capability catalog not found — suggested review if new capabilities added");
+		}
+
+		// AGENTS.md freshness
+		lines.push("⚠️ AGENTS.md — suggested review if CLI/skill changed");
+	}
+
+	// ─────────────────────────────────────────────────────────
+	// Summary
+	// ─────────────────────────────────────────────────────────
+	lines.push("");
+	if (needsAttention === 0) {
+		lines.push("**Summary**: All required items complete! ✅");
+	} else if (needsAttention === 1) {
+		lines.push("**Summary**: 1 item needs attention.");
+	} else {
+		lines.push(`**Summary**: ${needsAttention} items need attention.`);
+	}
+
+	return lines.join("\n");
+}
+
 export async function handleWrap(
 	args: string,
 	ctx: CommandContext,
@@ -1247,30 +1445,30 @@ export async function handleWrap(
 		: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 	const changedDirs = getChangedDirectories(planCreated);
 
-	// Build detection results for Task 3 to format
-	const detectionResults = {
-		slug,
-		planTitle: plan.frontmatter.title,
-		planStatus,
-		hasMemoryEntry,
-		hasMemoryIndex,
-		catalogDate,
-		changedDirs,
-		hasPrd: plan.frontmatter.has_prd,
-	};
+	// Detect tier based on plan context
+	const planDir = `dev/work/plans/${slug}`;
+	const hasPrd = plan.frontmatter.has_prd;
+	const tier = detectChecklistTier(planDir, changedDirs, hasPrd);
 
-	pi.sendUserMessage(
-		`Starting close-out check for plan: ${plan.frontmatter.title}\n\n` +
-			`**Detection Results:**\n` +
-			`- Plan slug: ${slug}\n` +
-			`- Plan status: ${planStatus ?? "unknown"}\n` +
-			`- Memory entry exists: ${hasMemoryEntry}\n` +
-			`- Memory index contains slug: ${hasMemoryIndex}\n` +
-			`- Capability catalog last updated: ${catalogDate ? catalogDate.toISOString().split("T")[0] : "not found"}\n` +
-			`- Changed directories: ${changedDirs ? (changedDirs.length > 0 ? changedDirs.join(", ") : "none") : "git unavailable"}\n` +
-			`- Has PRD: ${detectionResults.hasPrd}\n\n` +
-			`[Tiered output formatting will be added in Task 3.]`,
+	// Find directories with LEARNINGS.md for Tier 2 suggested review
+	const dirsWithLearnings = findLearningsInDirs(changedDirs);
+
+	// Format and send the tiered checklist output
+	const checklistOutput = formatCloseoutChecklist(
+		plan.frontmatter.title,
+		slug,
+		tier,
+		{
+			hasMemoryEntry,
+			hasMemoryIndex,
+			planStatus,
+			catalogDate,
+			changedDirs,
+			dirsWithLearnings,
+		},
 	);
+
+	pi.sendUserMessage(checklistOutput);
 }
 
 // ────────────────────────────────────────────────────────────
