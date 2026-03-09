@@ -272,16 +272,32 @@ export async function commitApprovedItems(
   // ── 4. Strip staged sections from body ──────────────────────────────────
   let cleanedBody = removeStagedSections(body);
 
-  // ── 4.5 Write approved action items to ## Approved Action Items section ──
+  // ── 4.5 Write approved items to markdown sections ──
+  // Build all approved sections (action items, decisions, learnings)
+  let approvedSections = '';
+  
   if (approvedActionItems.length > 0) {
-    const actionItemsSection = '\n## Approved Action Items\n' +
+    approvedSections += '\n## Approved Action Items\n' +
       approvedActionItems.map(item => `- [ ] ${item.text}`).join('\n') + '\n';
-    // Insert before ## Transcript if it exists, otherwise append
+  }
+  
+  if (approvedDecisions.length > 0) {
+    approvedSections += '\n## Approved Decisions\n' +
+      approvedDecisions.map(item => `- ${item.text}`).join('\n') + '\n';
+  }
+  
+  if (approvedLearnings.length > 0) {
+    approvedSections += '\n## Approved Learnings\n' +
+      approvedLearnings.map(item => `- ${item.text}`).join('\n') + '\n';
+  }
+  
+  // Insert before ## Transcript if it exists, otherwise append
+  if (approvedSections) {
     const transcriptIndex = cleanedBody.indexOf('\n## Transcript');
     if (transcriptIndex !== -1) {
-      cleanedBody = cleanedBody.slice(0, transcriptIndex) + actionItemsSection + cleanedBody.slice(transcriptIndex);
+      cleanedBody = cleanedBody.slice(0, transcriptIndex) + approvedSections + cleanedBody.slice(transcriptIndex);
     } else {
-      cleanedBody = cleanedBody + actionItemsSection;
+      cleanedBody = cleanedBody + approvedSections;
     }
   }
 

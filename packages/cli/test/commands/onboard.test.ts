@@ -118,4 +118,64 @@ describe('onboard command', () => {
     // Should extract foo.org, not www.foo.org
     assert.ok(output.profile.domains.includes('foo.org'));
   });
+
+  it('JSON output includes ai field with skipped status when no key provided', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --skip-qmd --name "Test" --email "test@foo.org" --company "Foo"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.success, true);
+    // AI is skipped because JSON mode can't prompt and no --api-key provided
+    assert.ok('ai' in output, 'output should have ai field');
+    assert.equal(output.ai.skipped, true);
+    assert.equal(output.ai.configured, false);
+  });
+
+  it('--skip-ai flag skips AI configuration', async () => {
+    await createMinimalWorkspace(tempDir);
+
+    const result = runCli(
+      'onboard --json --skip-qmd --skip-ai --name "Test" --email "test@foo.org" --company "Foo"',
+      tempDir
+    );
+
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.success, true);
+    assert.ok('ai' in output);
+    assert.equal(output.ai.skipped, true);
+    assert.equal(output.ai.configured, false);
+  });
+
+  it('skips profile setup but includes ai field when profile exists', async () => {
+    await createMinimalWorkspace(tempDir);
+    
+    // First run to create profile
+    const first = runCli(
+      'onboard --json --skip-qmd --name "Existing" --email "existing@test.com" --company "Test Co"',
+      tempDir
+    );
+    assert.equal(first.status, 0);
+
+    // Second run should skip profile but still have ai field
+    const result = runCli(
+      'onboard --json --skip-qmd --skip-ai',
+      tempDir
+    );
+
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.success, true);
+    // Profile should be marked as skipped
+    assert.ok('profile' in output);
+    assert.equal(output.profile.skipped, true);
+    // AI config should be present
+    assert.ok('ai' in output);
+    assert.equal(output.ai.skipped, true);
+  });
 });

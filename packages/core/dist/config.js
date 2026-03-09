@@ -13,6 +13,21 @@ const DEFAULT_CONFIG = {
     source: 'npm',
     agent_mode: undefined,
     ide_target: undefined,
+    ai: {
+        tiers: {
+            fast: undefined,
+            standard: undefined,
+            frontier: undefined,
+        },
+        tasks: {
+            summary: 'fast',
+            extraction: 'fast',
+            decision_extraction: 'standard',
+            learning_extraction: 'standard',
+            significance_analysis: 'standard',
+            reconciliation: 'standard',
+        },
+    },
     skills: {
         core: [],
         overrides: [],

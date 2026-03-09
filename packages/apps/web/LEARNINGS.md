@@ -175,18 +175,39 @@ the editor's `content` prop.
 
 ## TipTap Integration (first use: V2-5)
 
-### BubbleMenu import — NOT from @tiptap/react
-`BubbleMenu` is exported from `@tiptap/extension-bubble-menu`, not `@tiptap/react`:
+### BubbleMenu import — from @tiptap/react/menus (TipTap v3)
+In TipTap v3, `BubbleMenu` React component is in the `/menus` subpath:
 ```typescript
-// ✓ Correct
+// ✓ Correct (TipTap v3)
+import { BubbleMenu } from '@tiptap/react/menus';
+
+// ✗ Wrong — this is the Extension, not the React component
 import { BubbleMenu } from '@tiptap/extension-bubble-menu';
-// ✗ Wrong — build will fail (BubbleMenu not exported from @tiptap/react)
+
+// ✗ Wrong — not exported from root @tiptap/react
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 ```
 
-### Markdown serialization
-Use `editor.storage.markdown.getMarkdown()` in the `onUpdate` callback to get markdown output.
-Requires the `Markdown` extension from `@tiptap/markdown` to be registered.
+### BubbleMenu props changed in TipTap v3
+`tippyOptions` no longer exists. TipTap v3 uses `@floating-ui/dom` instead of Tippy:
+```typescript
+// ✗ Wrong (v2 API)
+<BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+
+// ✓ Correct (v3 API)
+<BubbleMenu editor={editor}>
+```
+
+### Markdown serialization (TipTap v3)
+The `Markdown` extension adds `getMarkdown()` directly to the editor instance:
+```typescript
+onUpdate: ({ editor }) => {
+  // Markdown extension adds getMarkdown() to editor
+  const md = (editor as unknown as { getMarkdown: () => string }).getMarkdown();
+  onChange(md);
+},
+```
+Do NOT use `editor.storage.markdown.getMarkdown()` — that property doesn't exist in v3.
 
 ### Feed rawContent directly
 `rawContent` from `GET /api/people/:slug` is already clean — pass it directly to TipTap's `content` prop. No further parsing needed.
@@ -198,6 +219,110 @@ It was in devDependencies already; just needed to be added to `plugins` in `tail
 `useEditor({ content: ... })` only initializes content once. React prop changes to `initialValue`
 do NOT update the live editor. To reflect new content (e.g. after a query refetch),
 add `key={content}` to the component — this forces a remount and fresh initialization.
+
+---
+
+## BlockNote Integration (first use: V3-1)
+
+BlockNote (`@blocknote/react`, `@blocknote/mantine`) is used for the Notion-like rich text editor.
+It replaces TipTap for the main block editor experience.
+
+### Markdown round-trip is intentionally lossy
+
+BlockNote's `blocksToMarkdownLossy()` normalizes markdown on export:
+- Extra blank lines between paragraphs may be collapsed
+- Trailing whitespace is trimmed
+- Leading/trailing newlines are normalized
+- List indentation uses 4 spaces (BlockNote's standard)
+
+This is expected behavior — test for *valid* output, not *identical* output.
+
+### Lazy loading for bundle size
+
+BlockEditor exports `LazyBlockEditor` for code splitting:
+```typescript
+import { LazyBlockEditor } from '@/components/BlockEditor.js';
+
+// In component:
+<Suspense fallback={<Skeleton />}>
+  <LazyBlockEditor initialMarkdown={content} onChange={setContent} />
+</Suspense>
+```
+
+### Theme CSS variables map to shadcn
+
+BlockNote's `--bn-colors-*` variables are mapped to shadcn's `--background`, `--foreground`, 
+`--card`, `--border`, etc. in the inline `<style>` tag. If you change the theme in 
+`src/index.css`, the editor will inherit those changes.
+
+### Read-only mode hides editing UI via CSS
+
+The CSS rule `.block-editor-wrapper:has([data-editable="false"]) .bn-side-menu { display: none; }`
+hides drag handles and the side menu when `editable={false}`. The `slashMenu={editable}` prop
+also disables the slash command menu in read-only mode.
+
+### Keyboard shortcuts work out of the box
+
+BlockNote's built-in shortcuts are handled at the ProseMirror level:
+- `Cmd+B` — bold
+- `Cmd+I` — italic
+- `/` — slash menu (at line start)
+
+These are tested manually; automated keyboard testing in jsdom is unreliable for ProseMirror.
+
+### Content initialization like TipTap — use `key` to remount
+
+Like TipTap, BlockNote's `useCreateBlockNote()` only initializes once. Use `key={content}` 
+on the `<BlockEditor>` or `<LazyBlockEditor>` component to force remount when external 
+content changes (e.g. switching between person records).
+
+---
+
+## Navigation Guard Pattern (first use: V3-2)
+
+### useBlocker requires a data router
+
+React Router's `useBlocker` hook only works with data routers (`createBrowserRouter`, `createMemoryRouter`
+with `RouterProvider`). It does NOT work with `MemoryRouter` or `BrowserRouter` directly.
+
+For testing components that use `useBlocker`, use `createMemoryRouter`:
+```tsx
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+
+function renderPage(initialPath = '/people/john-doe') {
+  const router = createMemoryRouter(
+    [{ path: '/people/:slug', element: <PersonDetailPage /> }],
+    { initialEntries: [initialPath] }
+  );
+  return render(<RouterProvider router={router} />);
+}
+```
+
+### useBlocker pattern for unsaved changes
+
+The canonical pattern for warning users about unsaved changes:
+```tsx
+import { useBlocker } from 'react-router-dom';
+
+// Condition: block navigation when editing AND content differs from original
+const blocker = useBlocker(isEditing && editContent !== (person?.rawContent ?? ''));
+
+useEffect(() => {
+  if (blocker.state === 'blocked') {
+    if (window.confirm('You have unsaved changes. Discard them?')) {
+      blocker.proceed();
+    } else {
+      blocker.reset();
+    }
+  }
+}, [blocker]);
+```
+
+Key points:
+- The blocker condition must be a boolean (not just truthy/falsy)
+- `blocker.state` is 'idle', 'blocked', or 'proceeding'
+- Call `blocker.proceed()` to allow navigation, `blocker.reset()` to cancel
+- The confirm dialog appears in the useEffect when state becomes 'blocked'
 
 ---
 

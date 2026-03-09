@@ -240,6 +240,70 @@ describe('GET /api/commitments — with data', () => {
       assert.ok(typeof c['daysOpen'] === 'number', 'daysOpen should be number');
     }
   });
+
+  it('filters by direction=mine (i_owe_them)', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?direction=mine');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string; direction: string }> };
+    // c-overdue and c-hot have direction i_owe_them
+    assert.ok(body.commitments.length >= 1);
+    assert.ok(body.commitments.every((c) => c.direction === 'i_owe_them'), 'all should be i_owe_them');
+    assert.ok(body.commitments.some((c) => c.id === 'c-overdue' || c.id === 'c-hot'));
+  });
+
+  it('filters by direction=theirs (they_owe_me)', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?direction=theirs');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string; direction: string }> };
+    // c-thisweek has direction they_owe_me
+    assert.ok(body.commitments.every((c) => c.direction === 'they_owe_me'), 'all should be they_owe_me');
+    assert.ok(body.commitments.some((c) => c.id === 'c-thisweek'));
+  });
+
+  it('filters by person slug', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?person=bob-smith');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string; personSlug: string }> };
+    assert.ok(body.commitments.every((c) => c.personSlug === 'bob-smith'), 'all should be bob-smith');
+    assert.equal(body.commitments.length, 1);
+    assert.equal(body.commitments[0]?.id, 'c-thisweek');
+  });
+
+  it('combines direction and person filters', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    // alice-jones has c-hot (i_owe_them) and c-resolved (i_owe_them, but resolved)
+    const { status, json } = await req(router, 'GET', '/?direction=mine&person=alice-jones');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string; personSlug: string; direction: string }> };
+    // Only c-hot should match (open + i_owe_them + alice-jones)
+    assert.equal(body.commitments.length, 1);
+    assert.equal(body.commitments[0]?.id, 'c-hot');
+    assert.equal(body.commitments[0]?.direction, 'i_owe_them');
+  });
+
+  it('combines filter, direction, and person params', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    // filter=all includes resolved, direction=mine, person=alice-jones
+    const { status, json } = await req(router, 'GET', '/?filter=all&direction=mine&person=alice-jones');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string }> };
+    // Should include both c-hot and c-resolved
+    assert.equal(body.commitments.length, 2);
+    const ids = body.commitments.map((c) => c.id);
+    assert.ok(ids.includes('c-hot'));
+    assert.ok(ids.includes('c-resolved'));
+  });
+
+  it('returns empty array when person filter has no matches', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?person=nonexistent-person');
+    assert.equal(status, 200);
+    const body = json as { commitments: unknown[] };
+    assert.equal(body.commitments.length, 0);
+  });
 });
 
 // ── commitments summary route (existing) ──────────────────────────────────────

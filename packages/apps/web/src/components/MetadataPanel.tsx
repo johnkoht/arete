@@ -9,9 +9,10 @@ interface MetadataPanelProps {
   approved?: boolean;
   onProcessClick?: () => void;
   onReprocessClick?: () => void;
+  onDeleteClick?: () => void;
 }
 
-export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onReprocessClick }: MetadataPanelProps) {
+export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onReprocessClick, onDeleteClick }: MetadataPanelProps) {
   return (
     <div className="rounded-md border bg-card p-5 shadow-sm space-y-5">
       <div>
@@ -93,7 +94,12 @@ export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onR
             Reprocess Meeting
           </Button>
         )}
-        <Button variant="ghost" size="sm" className="w-full justify-start text-destructive hover:text-destructive">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-destructive hover:text-destructive"
+          onClick={onDeleteClick}
+        >
           <Trash2 className="mr-2 h-4 w-4" />
           Delete Meeting
         </Button>

@@ -16,6 +16,7 @@ import {
   approveMeeting,
   processPeople,
   processMeeting,
+  deleteMeeting,
 } from '@/api/meetings.js';
 import type { PatchItemParams } from '@/api/types.js';
 
@@ -115,5 +116,19 @@ export function useProcessPeople(slug: string) {
 export function useProcessMeeting(slug: string) {
   return useMutation({
     mutationFn: () => processMeeting(slug),
+  });
+}
+
+/**
+ * Delete a meeting file.
+ * Invalidates the meetings list on success.
+ */
+export function useDeleteMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) => deleteMeeting(slug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+    },
   });
 }

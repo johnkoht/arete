@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { MetadataPanel } from "@/components/MetadataPanel";
 import { ReviewItemsSection, ApprovedItemsSection } from "@/components/ReviewItems";
+import { ParsedItemsSection } from "@/components/ParsedItemsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import {
   useApproveItem,
   useSaveApprove,
   useProcessMeeting,
+  useDeleteMeeting,
 } from "@/hooks/meetings.js";
 import type { ReviewItem, ApprovedItems } from "@/api/types.js";
 import { BASE_URL } from "@/api/client.js";
@@ -50,16 +52,22 @@ export default function MeetingDetail() {
   const approveItemMutation = useApproveItem(safeSlug);
   const saveApproveMutation = useSaveApprove(safeSlug);
   const processMutation = useProcessMeeting(safeSlug);
+  const deleteMutation = useDeleteMeeting();
 
   // Local review items state — kept in sync with query data, plus optimistic updates
+  // Items default to "approved" in local state — user skips bad items (frontend-only; backend still returns pending)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const prevReviewItemsRef = useRef<ReviewItem[]>([]);
 
   // Sync local state when query data changes (e.g. after approval)
+  // Transform pending → approved on initialization (smart default: approve all, user skips bad ones)
   useEffect(() => {
     if (meeting?.reviewItems) {
-      setReviewItems(meeting.reviewItems);
-      prevReviewItemsRef.current = meeting.reviewItems;
+      const transformedItems = meeting.reviewItems.map((item) =>
+        item.status === "pending" ? { ...item, status: "approved" as const } : item
+      );
+      setReviewItems(transformedItems);
+      prevReviewItemsRef.current = transformedItems;
     }
   }, [meeting?.reviewItems]);
 
@@ -140,13 +148,13 @@ export default function MeetingDetail() {
     );
   }
 
-  const isProcessed = meeting.status === "Processed";
-  const isSynced = meeting.status === "Synced";
-  const isApproved = meeting.status === "Approved";
+  const isProcessed = meeting.status === "processed";
+  const isSynced = meeting.status === "synced";
+  const isApproved = meeting.status === "approved";
 
   // Next triage meeting (from the meetings list, excluding current)
   const triageMeetings = allMeetings.filter(
-    (m) => (m.status === "Synced" || m.status === "Processed") && m.slug !== safeSlug
+    (m) => (m.status === "synced" || m.status === "processed") && m.slug !== safeSlug
   );
   const nextTriageMeeting = triageMeetings[0];
   const triageRemaining = triageMeetings.length;
@@ -185,6 +193,26 @@ export default function MeetingDetail() {
     }
     prevReviewItemsRef.current = newItems;
     setReviewItems(newItems);
+  };
+
+  // Bulk approve: fire individual PATCHes per existing pattern
+  const handleBulkApprove = (ids: string[]) => {
+    for (const id of ids) {
+      approveItemMutation.mutate(
+        { id, status: "approved" },
+        {
+          onError: (err) => {
+            toast.error(
+              `Failed to approve item: ${err instanceof Error ? err.message : "Unknown error"}`
+            );
+          },
+        }
+      );
+    }
+    // Update prevReviewItemsRef after bulk approve
+    prevReviewItemsRef.current = reviewItems.map((item) =>
+      ids.includes(item.id) ? { ...item, status: "approved" as const } : item
+    );
   };
 
   const handleSaveApprove = () => {
@@ -277,9 +305,22 @@ export default function MeetingDetail() {
     }
   };
 
+  const handleDeleteClick = () => {
+    if (!confirm("Are you sure you want to delete this meeting?")) return;
+    deleteMutation.mutate(safeSlug, {
+      onSuccess: () => {
+        toast.success("Meeting deleted");
+        navigate("/meetings");
+      },
+      onError: (err) => {
+        toast.error(`Failed to delete meeting: ${err instanceof Error ? err.message : "Unknown error"}`);
+      },
+    });
+  };
+
   // Header badge
   const headerBadge = isApproved ? (
-    <StatusBadge status="Approved" size="sm" />
+    <StatusBadge status="approved" size="sm" />
   ) : isProcessed ? (
     <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-status-processed/10 text-status-processed">
       Needs Review
@@ -289,7 +330,7 @@ export default function MeetingDetail() {
       Needs Processing
     </span>
   ) : (
-    <StatusBadge status="Approved" size="sm" />
+    <StatusBadge status="approved" size="sm" />
   );
 
   return (
@@ -367,6 +408,7 @@ export default function MeetingDetail() {
                   items={reviewItems}
                   onItemsChange={handleItemsChange}
                   onSaveApprove={handleSaveApprove}
+                  onBulkApprove={handleBulkApprove}
                 />
               </>
             )}
@@ -383,7 +425,14 @@ export default function MeetingDetail() {
                   setSummaryOpen={setSummaryOpen}
                   readOnly={true}
                 />
-                <ApprovedItemsSection approvedItems={meeting.approvedItems} />
+                <ParsedItemsSection
+                  parsedSections={meeting.parsedSections}
+                  onToggleActionItem={(index, completed) => {
+                    // TODO: Implement toggle action item
+                    console.log('Toggle action item', index, completed);
+                    toast.info('Action item toggle not yet implemented');
+                  }}
+                />
               </>
             )}
 
@@ -401,7 +450,7 @@ export default function MeetingDetail() {
             )}
 
             {/* Transcript */}
-            {meeting.body && (
+            {meeting.transcript && (
               <div>
                 <button
                   onClick={() => setTranscriptOpen(!transcriptOpen)}
@@ -416,7 +465,7 @@ export default function MeetingDetail() {
                 </button>
                 {transcriptOpen && (
                   <div className="rounded-md border bg-muted/30 p-4 text-sm leading-7 font-mono whitespace-pre-wrap">
-                    {meeting.body.split("\n").map((line, i) => {
+                    {meeting.transcript.split("\n").map((line, i) => {
                       const boldMatch = line.match(/^\*\*(.+?)\*\*(.*)$/);
                       if (boldMatch) {
                         return (
@@ -444,6 +493,7 @@ export default function MeetingDetail() {
               approved={isApproved || saveApproveMutation.isSuccess}
               onProcessClick={handleProcessClick}
               onReprocessClick={handleProcessClick}
+              onDeleteClick={handleDeleteClick}
             />
           </div>
         </div>

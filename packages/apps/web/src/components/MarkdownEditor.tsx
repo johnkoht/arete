@@ -5,7 +5,7 @@
  */
 
 import { useEditor, EditorContent } from '@tiptap/react';
-import { BubbleMenu } from '@tiptap/extension-bubble-menu';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -35,7 +35,9 @@ export function MarkdownEditor({
     content: initialValue,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
-      onChange(editor.storage.markdown.getMarkdown());
+      // Markdown extension adds getMarkdown() to editor instance
+      const md = (editor as unknown as { getMarkdown: () => string }).getMarkdown();
+      onChange(md);
     },
   });
 
@@ -44,7 +46,7 @@ export function MarkdownEditor({
   return (
     <div className={`relative ${className}`}>
       {!readOnly && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+        <BubbleMenu editor={editor}>
           <div className="flex items-center gap-1 rounded-md border bg-background shadow-md p-1">
             <button
               onClick={() => editor.chain().focus().toggleBold().run()}

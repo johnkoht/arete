@@ -14,6 +14,9 @@
     "packages/cli/package.json",
     "packages/core/dist/",
     "packages/core/package.json",
+    "packages/apps/backend/dist/",
+    "packages/apps/backend/package.json",
+    "packages/apps/web/dist/",
     "packages/runtime/",
     "AGENTS.md",
     "dist/"
@@ -21,8 +24,11 @@
   "scripts": {
     "dev": "tsx packages/cli/src/index.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
-    "build": "npm run build:agents:prod && npm run build:packages",
+    "build": "npm run build:agents:prod && npm run build:packages && npm run build:apps",
     "build:packages": "./node_modules/.bin/tsc -b packages/core packages/cli",
+    "build:apps:backend": "./node_modules/.bin/tsc -b packages/apps/backend",
+    "build:apps:web": "cd packages/apps/web && npm install && npm run build",
+    "build:apps": "npm run build:apps:backend && npm run build:apps:web",
     "build:agents:prod": "./node_modules/.bin/tsx scripts/build-agents.ts prod",
     "typecheck": "./node_modules/.bin/tsc -b packages/core packages/cli",
     "prepare": "[ -f packages/core/dist/index.js ] && echo 'Build artifacts exist, skipping prepare' || npm run build",
@@ -34,8 +40,7 @@
     "test:integration:full": "npm run test:integration",
     "test:all": "npm run typecheck && npm test",
     "dev:web": "npm run dev --prefix packages/apps/web",
-    "dev:backend": "tsx packages/apps/backend/src/index.ts",
-    "build:apps": "tsc -b packages/apps/backend"
+    "dev:backend": "tsx packages/apps/backend/src/index.ts"
   },
   "keywords": [
     "product-management",
@@ -53,17 +58,21 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@arete/core": "file:./packages/core",
+    "@hono/node-server": "^1.13.0",
     "@inquirer/prompts": "^8.3.0",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "fs-extra": "^11.2.0",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.6.0",
     "yaml": "^2.4.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.13.1",
     "tsx": "^4.19.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vite": "^5.4.19"
   },
   "engines": {
     "node": ">=18.0.0"

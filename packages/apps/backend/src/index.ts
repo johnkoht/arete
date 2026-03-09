@@ -6,13 +6,34 @@ import { serve } from '@hono/node-server';
 import { createApp, broadcastSseEvent } from './server.js';
 import { startMeetingWatcher } from './services/watcher.js';
 import * as jobsService from './services/jobs.js';
-import { runProcessingSession } from './services/agent.js';
+import { runProcessingSession, initializeAIService } from './services/agent.js';
 import { writeActivityEvent } from './services/activity.js';
+import {
+  loadConfig,
+  loadCredentialsIntoEnv,
+  AIService,
+  FileStorageAdapter,
+} from '@arete/core';
 
 const workspaceRoot = process.env['ARETE_WORKSPACE'];
 if (!workspaceRoot) {
   console.error('ARETE_WORKSPACE environment variable is required');
   process.exit(1);
+}
+
+// Load credentials from ~/.arete/credentials.yaml into environment
+loadCredentialsIntoEnv();
+
+// Load configuration and initialize AIService
+const storage = new FileStorageAdapter();
+const config = await loadConfig(storage, workspaceRoot);
+const aiService = new AIService(config);
+initializeAIService(aiService);
+
+if (aiService.isConfigured()) {
+  console.log('[startup] AIService initialized with AI configuration');
+} else {
+  console.log('[startup] AIService initialized but no AI provider configured');
 }
 
 const port = parseInt(process.env['PORT'] ?? '3847', 10);

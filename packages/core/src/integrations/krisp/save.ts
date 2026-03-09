@@ -44,6 +44,7 @@ export function meetingFromKrisp(meeting: KrispMeeting, fetchedTranscript?: stri
   const notes = resolveNotes(meeting);
 
   const action_items = (notes.action_items ?? [])
+    .filter(item => item.text) // Skip items without text to avoid "undefined"
     .map(item => item.text + (item.assignee ? ` (@${item.assignee})` : ''));
 
   const highlights = notes.key_points ?? [];

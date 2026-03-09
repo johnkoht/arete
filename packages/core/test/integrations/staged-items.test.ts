@@ -24,6 +24,11 @@
  * 17. commitApprovedItems — frontmatter cleaned and status set to approved
  * 18. commitApprovedItems — uses edited text when staged_item_edits present
  * 19. generateItemId — produces correct IDs for each type
+ * 20. commitApprovedItems — writes ## Approved Action Items section to body
+ * 21. commitApprovedItems — writes ## Approved Decisions section to body
+ * 22. commitApprovedItems — writes ## Approved Learnings section to body
+ * 23. commitApprovedItems — approved sections appear before ## Transcript
+ * 24. commitApprovedItems — only writes sections for types with approved items
  */
 
 import { describe, it, beforeEach } from 'node:test';
@@ -418,6 +423,69 @@ staged_item_status:
     const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
     assert.ok(decisions.includes('Existing decision'), 'existing content must be preserved');
     assert.ok(decisions.includes('Prioritize enterprise tier'), 'new decision must be appended');
+  });
+
+  it('(20) writes ## Approved Action Items section to meeting body', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.ok(updated.includes('## Approved Action Items'), 'should have Approved Action Items section');
+    assert.ok(updated.includes('- [ ] Follow up on pricing model'), 'action item should be in section');
+  });
+
+  it('(21) writes ## Approved Decisions section to meeting body', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.ok(updated.includes('## Approved Decisions'), 'should have Approved Decisions section');
+    assert.ok(updated.includes('- Prioritize enterprise tier'), 'decision should be in section');
+  });
+
+  it('(22) writes ## Approved Learnings section to meeting body', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.ok(updated.includes('## Approved Learnings'), 'should have Approved Learnings section');
+    assert.ok(updated.includes('- Enterprise customers care about audit logs'), 'learning should be in section');
+  });
+
+  it('(23) approved sections appear before ## Transcript', async () => {
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const actionItemsIndex = updated.indexOf('## Approved Action Items');
+    const decisionsIndex = updated.indexOf('## Approved Decisions');
+    const learningsIndex = updated.indexOf('## Approved Learnings');
+    const transcriptIndex = updated.indexOf('## Transcript');
+
+    assert.ok(actionItemsIndex < transcriptIndex, 'Approved Action Items should be before Transcript');
+    assert.ok(decisionsIndex < transcriptIndex, 'Approved Decisions should be before Transcript');
+    assert.ok(learningsIndex < transcriptIndex, 'Approved Learnings should be before Transcript');
+  });
+
+  it('(24) only writes sections for item types that have approved items', async () => {
+    const meetingOnlyDecisions = `---
+title: "Decisions Only"
+date: "2026-03-01"
+status: processed
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Only decision
+
+## Transcript
+Content here.
+`;
+    storage.files.set(MEETING_FILE, meetingOnlyDecisions);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    assert.ok(updated.includes('## Approved Decisions'), 'should have Approved Decisions section');
+    assert.ok(!updated.includes('## Approved Action Items'), 'should NOT have Approved Action Items section (no items)');
+    assert.ok(!updated.includes('## Approved Learnings'), 'should NOT have Approved Learnings section (no items)');
   });
 });
 

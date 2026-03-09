@@ -405,3 +405,142 @@ export async function extractMeetingIntelligence(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Staging Sections Formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Format an action item as a markdown list item.
+ * 
+ * Format: `- ai_XXX: [@{ownerSlug} {arrow} @{counterpartySlug}] {description}{ (due)}`
+ * - Arrow: `→` if direction is `i_owe_them`, `←` if direction is `they_owe_me`
+ * - Counterparty: omit `@{counterpartySlug}` if undefined
+ * - Due: append ` ({due})` only if defined
+ * 
+ * @param item - The structured action item
+ * @param index - Zero-based index for ID generation (1-indexed in output)
+ */
+function formatActionItem(item: ActionItem, index: number): string {
+  const id = `ai_${String(index + 1).padStart(3, '0')}`;
+  const arrow = item.direction === 'i_owe_them' ? '→' : '←';
+  const counterparty = item.counterpartySlug ? ` @${item.counterpartySlug}` : '';
+  const dueStr = item.due ? ` (${item.due})` : '';
+  
+  return `- ${id}: [@${item.ownerSlug} ${arrow}${counterparty}] ${item.description}${dueStr}`;
+}
+
+/**
+ * Format extraction result as markdown sections.
+ * IDs are zero-padded 3 digits (ai_001, de_001, le_001).
+ * Empty sections are omitted entirely.
+ * 
+ * @param result - The meeting extraction result containing structured intelligence
+ * @returns Formatted markdown string with Summary and staged sections
+ */
+export function formatStagedSections(result: MeetingExtractionResult): string {
+  const { intelligence } = result;
+  const lines: string[] = [];
+
+  // Summary section (always included)
+  lines.push('## Summary');
+  lines.push(intelligence.summary);
+  lines.push('');
+
+  // Staged Action Items (only if non-empty)
+  if (intelligence.actionItems.length > 0) {
+    lines.push('## Staged Action Items');
+    intelligence.actionItems.forEach((item, index) => {
+      lines.push(formatActionItem(item, index));
+    });
+    lines.push('');
+  }
+
+  // Staged Decisions (only if non-empty)
+  if (intelligence.decisions.length > 0) {
+    lines.push('## Staged Decisions');
+    intelligence.decisions.forEach((item, index) => {
+      const id = `de_${String(index + 1).padStart(3, '0')}`;
+      lines.push(`- ${id}: ${item}`);
+    });
+    lines.push('');
+  }
+
+  // Staged Learnings (only if non-empty)
+  if (intelligence.learnings.length > 0) {
+    lines.push('## Staged Learnings');
+    intelligence.learnings.forEach((item, index) => {
+      const id = `le_${String(index + 1).padStart(3, '0')}`;
+      lines.push(`- ${id}: ${item}`);
+    });
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Headers that are part of the staged sections.
+ * Used to identify where staged content ends and other content begins.
+ */
+const STAGED_HEADERS = new Set([
+  'Summary',
+  'Staged Action Items',
+  'Staged Decisions',
+  'Staged Learnings',
+]);
+
+/**
+ * Replace or insert staged sections in meeting content.
+ * Preserves content before ## Summary and after staged sections.
+ * 
+ * @param originalContent - The original meeting file content
+ * @param stagedSections - The formatted staged sections to insert
+ * @returns Updated content with staged sections replaced/inserted
+ */
+export function updateMeetingContent(originalContent: string, stagedSections: string): string {
+  // Find where ## Summary starts (or where to insert)
+  const summaryMatch = originalContent.match(/^## Summary\s*$/m);
+
+  if (!summaryMatch) {
+    // No existing summary — append staged sections at end
+    return originalContent.trimEnd() + '\n\n' + stagedSections;
+  }
+
+  // Find the position of ## Summary
+  const summaryIndex = originalContent.indexOf(summaryMatch[0]);
+
+  // Get content before ## Summary
+  const beforeSummary = originalContent.substring(0, summaryIndex).trimEnd();
+
+  // Find content after staged sections (look for ## that isn't a staged header)
+  const afterSummaryContent = originalContent.substring(summaryIndex);
+  const lines = afterSummaryContent.split('\n');
+  let pastStagedSections = false;
+  const afterLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('## ')) {
+      const headerName = line.replace(/^## /, '').trim();
+      if (STAGED_HEADERS.has(headerName)) {
+        // This is a staged section header - skip until next header
+        continue;
+      } else {
+        // This is a different header - keep everything from here
+        pastStagedSections = true;
+      }
+    }
+
+    if (pastStagedSections) {
+      afterLines.push(line);
+    }
+  }
+
+  let afterStagedContent = '';
+  if (afterLines.length > 0) {
+    afterStagedContent = '\n' + afterLines.join('\n');
+  }
+
+  return beforeSummary + '\n\n' + stagedSections + afterStagedContent;
+}

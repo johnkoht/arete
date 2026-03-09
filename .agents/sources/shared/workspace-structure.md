@@ -28,10 +28,15 @@ arete/                 # Build workspace root
 ├── .agents/           # Build-specific agent resources
 │   └── sources/       # AGENTS.md source files (guide only)
 ├── dev/               # Development tooling
-│   ├── catalog/       # Machine-friendly capability inventory (tools/extensions/services/packages)
-│   ├── plans/         # All plans and ideas (status determines lifecycle)
-│   ├── archive/prds/  # Archived legacy PRD documents
-│   └── autonomous/    # Autonomous execution templates
+│   ├── work/          # Plans, archive, backlog
+│   │   ├── plans/     # Active plans (status determines lifecycle)
+│   │   ├── archive/   # Completed/archived work
+│   │   └── backlog/   # Future work ideas
+│   ├── catalog/       # Capability inventory (tools/extensions/services/packages)
+│   ├── autonomous/    # Autonomous execution templates
+│   ├── executions/    # PRD execution logs
+│   ├── personas/      # Persona council definitions
+│   └── docs/          # Development documentation
 ├── .pi/               # Pi coding agent configuration
 │   ├── skills/        # Build skills (execute-prd, plan-to-prd, etc.)
 │   ├── agents/        # Role definitions (orchestrator, reviewer, developer, etc.)

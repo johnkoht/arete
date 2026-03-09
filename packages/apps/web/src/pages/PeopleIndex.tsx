@@ -6,6 +6,7 @@ import {
   ArrowUp,
   ArrowDown,
   X,
+  Star,
 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
@@ -16,11 +17,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { HealthDot, CategoryBadge, TrendIcon } from "@/components/people/PersonBadges.js";
-import { usePeople } from "@/hooks/people.js";
+import { usePeople, useToggleFavorite } from "@/hooks/people.js";
+import { useToast } from "@/hooks/use-toast.js";
 import type { PersonSummary, PersonCategory } from "@/api/types.js";
 
 type CommitmentFilter = "overdue" | "thisweek" | null;
-type CategoryTab = "all" | PersonCategory;
+type CategoryTab = "favorites" | "all" | PersonCategory;
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,8 @@ const FILTER_LABELS: Record<NonNullable<CommitmentFilter>, string> = {
 export default function PeopleIndex() {
   const navigate = useNavigate();
   const { data, isLoading, error } = usePeople();
+  const toggleFavorite = useToggleFavorite();
+  const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
@@ -66,10 +70,10 @@ export default function PeopleIndex() {
   const commitmentFilter: CommitmentFilter =
     filterParam === "overdue" || filterParam === "thisweek" ? filterParam : null;
 
-  // Read category tab from URL ?category=internal|customer|user
+  // Read category tab from URL ?category=favorites|internal|customer|user
   const categoryParam = searchParams.get("category");
   const activeCategory: CategoryTab =
-    categoryParam === "internal" || categoryParam === "customer" || categoryParam === "user"
+    categoryParam === "favorites" || categoryParam === "internal" || categoryParam === "customer" || categoryParam === "user"
       ? categoryParam
       : "all";
 
@@ -95,8 +99,11 @@ export default function PeopleIndex() {
   const handleCategoryChange = (cat: CategoryTab) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (cat === "all") next.delete("category");
-      else next.set("category", cat);
+      if (cat === "all") {
+        next.delete("category");
+      } else {
+        next.set("category", cat);
+      }
       return next;
     });
   };
@@ -127,6 +134,7 @@ export default function PeopleIndex() {
   // Dynamic tab counts — reflect current search query per category
   const tabCounts = useMemo(
     () => ({
+      favorites: searchFiltered.filter((p) => p.favorite).length,
       all: searchFiltered.length,
       internal: searchFiltered.filter((p) => p.category === "internal").length,
       customer: searchFiltered.filter((p) => p.category === "customer").length,
@@ -137,6 +145,9 @@ export default function PeopleIndex() {
 
   // Category-filtered (shown in table)
   const filtered = useMemo(() => {
+    if (activeCategory === "favorites") {
+      return searchFiltered.filter((p) => p.favorite);
+    }
     if (activeCategory === "all") return searchFiltered;
     return searchFiltered.filter((p) => p.category === activeCategory);
   }, [searchFiltered, activeCategory]);
@@ -144,6 +155,13 @@ export default function PeopleIndex() {
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
+      // In "all" tab, sort favorites first
+      if (activeCategory === "all") {
+        const aFav = a.favorite ? 1 : 0;
+        const bFav = b.favorite ? 1 : 0;
+        if (aFav !== bFav) return bFav - aFav; // favorites first
+      }
+
       let cmp = 0;
       switch (sortColumn) {
         case "name":
@@ -165,7 +183,7 @@ export default function PeopleIndex() {
       return sortDirection === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [filtered, sortColumn, sortDirection]);
+  }, [filtered, sortColumn, sortDirection, activeCategory]);
 
   const handleSort = (col: SortColumn) => {
     if (sortColumn === col) {
@@ -174,6 +192,22 @@ export default function PeopleIndex() {
       setSortColumn(col);
       setSortDirection("asc");
     }
+  };
+
+  const handleToggleFavorite = (e: React.MouseEvent, person: PersonSummary) => {
+    e.stopPropagation(); // Prevent row click navigation
+    toggleFavorite.mutate(
+      { slug: person.slug, favorite: !person.favorite },
+      {
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to update favorite status",
+            variant: "destructive",
+          });
+        },
+      }
+    );
   };
 
   return (
@@ -198,6 +232,17 @@ export default function PeopleIndex() {
       <div className="px-6 pt-3 pb-0 border-b">
         <Tabs value={activeCategory} onValueChange={(v) => handleCategoryChange(v as CategoryTab)}>
           <TabsList className="h-9 bg-transparent p-0 gap-0">
+            {/* Favorites tab first with star icon */}
+            <TabsTrigger
+              value="favorites"
+              className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent hover:text-foreground"
+            >
+              <Star className="h-3.5 w-3.5 mr-1 fill-amber-400 text-amber-400" />
+              Favorites{" "}
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                ({tabCounts.favorites})
+              </span>
+            </TabsTrigger>
             {(
               [
                 { value: "all", label: "All" },
@@ -255,7 +300,8 @@ export default function PeopleIndex() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                <th className="px-6 py-3">Name</th>
+                <th className="w-10 px-3 py-3"></th>
+                <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Health</th>
                 <th className="px-4 py-3">Last Meeting</th>
@@ -266,7 +312,8 @@ export default function PeopleIndex() {
             <tbody>
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b">
-                  <td className="px-6 py-3"><Skeleton className="h-4 w-36" /></td>
+                  <td className="px-3 py-3"><Skeleton className="h-4 w-4" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-5 w-20" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-2.5 w-2.5 rounded-full" /></td>
                   <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
@@ -282,7 +329,8 @@ export default function PeopleIndex() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                <th className="px-6 py-3">
+                <th className="w-10 px-3 py-3"></th>
+                <th className="px-4 py-3">
                   <button
                     onClick={() => handleSort("name")}
                     className="inline-flex items-center hover:text-foreground"
@@ -328,14 +376,22 @@ export default function PeopleIndex() {
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8">
+                  <td colSpan={7} className="px-6 py-8">
                     <EmptyState
-                      icon={Users}
-                      title={search ? "No people match your search" : "No people found"}
+                      icon={activeCategory === "favorites" ? Star : Users}
+                      title={
+                        activeCategory === "favorites"
+                          ? "No favorites yet"
+                          : search
+                            ? "No people match your search"
+                            : "No people found"
+                      }
                       description={
-                        search
-                          ? `No people match "${search}". Try a different name or clear the filter.`
-                          : "Add people files to people/internal/, people/customers/, or people/users/."
+                        activeCategory === "favorites"
+                          ? "Click the star icon on any person to add them to your favorites."
+                          : search
+                            ? `No people match "${search}". Try a different name or clear the filter.`
+                            : "Add people files to people/internal/, people/customers/, or people/users/."
                       }
                     />
                   </td>
@@ -347,7 +403,22 @@ export default function PeopleIndex() {
                     onClick={() => void navigate(`/people/${person.slug}`)}
                     className="border-b transition-colors hover:bg-accent/50 cursor-pointer"
                   >
-                    <td className="px-6 py-3">
+                    <td className="px-3 py-3">
+                      <button
+                        onClick={(e) => handleToggleFavorite(e, person)}
+                        className="p-1 rounded hover:bg-accent transition-colors"
+                        aria-label={person.favorite ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Star
+                          className={`h-4 w-4 ${
+                            person.favorite
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-muted-foreground/50 hover:text-amber-400"
+                          }`}
+                        />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
                       <div>
                         <p className="font-medium text-foreground">{person.name}</p>
                         {(person.role || person.company) && (

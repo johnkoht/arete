@@ -12,12 +12,22 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService } from './commitments.js';
+export { AIService, parseModelSpec } from './ai.js';
+export type {
+  AICallOptions,
+  AICallResult,
+  AIStructuredResult,
+  AIServiceTestDeps,
+  ModelSpec,
+} from './ai.js';
 
 // Meeting extraction
 export {
   buildMeetingExtractionPrompt,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
+  formatStagedSections,
+  updateMeetingContent,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,

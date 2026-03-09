@@ -1,0 +1,14 @@
+# Execute ai-config PRD
+
+## Pi (preferred)
+
+Open the plan in plan mode and use `/build`:
+
+```
+/plan open ai-config
+/build
+```
+
+## Manual (fallback)
+
+Execute the ai-config PRD. Load the execute-prd skill from `.pi/skills/execute-prd/SKILL.md`. The PRD is at `dev/work/plans/ai-config/prd.md` and the task list is at `dev/work/plans/ai-config/prd.json`. Run the full workflow: pre-mortem → task execution loop → holistic review.

@@ -64,3 +64,12 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - [ ] If editing execution progress tracking: read `execution-progress.ts` — it reads prd.json by slug path; path assumptions must stay in sync with `persistence.ts`
 - [ ] If changing execution completion logic: both todo-based (`todoItems.every()`) and PRD-based (`resolveExecutionProgress()`) paths in `agent_end` must be updated together — they share `handleExecutionComplete()` but have different detection triggers
 - [ ] Verify `npm run typecheck` still passes (catches packages/ — extension errors need separate `tsc`)
+
+## dev/ Directory Structure (2026-03-08)
+
+The canonical paths are defined in `persistence.ts`:
+- `DEFAULT_PLANS_DIR = "dev/work/plans"`
+- `DEFAULT_ARCHIVE_DIR = "dev/work/archive"`
+- `DEFAULT_BACKLOG_DIR = "dev/work/backlog"`
+
+When updating AGENTS.md or workspace-structure.md, ensure they match these constants. Drift between documentation and code causes agents to create files in wrong locations.

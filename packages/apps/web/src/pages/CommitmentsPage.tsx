@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, type LucideIcon } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "sonner";
 import { useCommitments, useMarkCommitmentDone } from "@/hooks/intelligence.js";
+import type { DirectionFilter } from "@/hooks/intelligence.js";
 import type { CommitmentItem } from "@/api/types.js";
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 
 type FilterType = "open" | "overdue" | "thisweek" | "all";
+type SortBy = "person" | "age";
+type SortOrder = "asc" | "desc";
 
 const FILTER_TABS: { label: string; value: FilterType }[] = [
   { label: "Open", value: "open" },
@@ -33,7 +36,13 @@ const FILTER_TABS: { label: string; value: FilterType }[] = [
   { label: "All", value: "all" },
 ];
 
-const EMPTY_STATES: Record<FilterType, { icon: React.ComponentType<{ className?: string }>; title: string; description: string }> = {
+const DIRECTION_TABS: { label: string; value: DirectionFilter }[] = [
+  { label: "Mine", value: "mine" },
+  { label: "Theirs", value: "theirs" },
+  { label: "All", value: "all" },
+];
+
+const EMPTY_STATES: Record<FilterType, { icon: LucideIcon; title: string; description: string }> = {
   open: {
     icon: CheckCircle2,
     title: "All caught up — no open commitments",
@@ -91,9 +100,9 @@ function AgeBadge({ daysOpen }: { daysOpen: number }) {
   );
 }
 
-// ── Commitment row ────────────────────────────────────────────────────────────
+// ── Action buttons ────────────────────────────────────────────────────────────
 
-function CommitmentRow({ item }: { item: CommitmentItem }) {
+function CommitmentActions({ item }: { item: CommitmentItem }) {
   const { mutate, isPending } = useMarkCommitmentDone();
 
   function handleMarkDone() {
@@ -120,97 +129,100 @@ function CommitmentRow({ item }: { item: CommitmentItem }) {
   const isDropped = item.status === "dropped";
   const isSettled = isResolved || isDropped;
 
-  return (
-    <div
-      className={`flex items-center gap-3 rounded-lg border bg-card px-4 py-3 transition-opacity ${
-        isSettled ? "opacity-40" : ""
-      }`}
-    >
-      {/* Commitment text */}
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
-          {item.text}
-        </p>
-        <div className="mt-1 flex items-center gap-2 flex-wrap">
-          {item.personSlug && (
-            <Link
-              to={`/people/${item.personSlug}`}
-              className="text-xs text-primary hover:underline"
-            >
-              {item.personSlug.replace(/-/g, " ")}
-            </Link>
-          )}
-          {item.date && (
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Direction */}
-      <DirectionBadge direction={item.direction} />
-
-      {/* Age */}
-      <AgeBadge daysOpen={item.daysOpen} />
-
-      {/* Actions */}
-      {!isSettled && (
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs gap-1"
-            onClick={handleMarkDone}
-            disabled={isPending}
-          >
-            <Check className="h-3 w-3" />
-            Done
-          </Button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                disabled={isPending}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Drop this commitment?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  It won't show up again. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDrop}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Drop
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
-
-      {isResolved && (
+  if (isSettled) {
+    if (isResolved) {
+      return (
         <Badge variant="secondary" className="text-xs flex-shrink-0 bg-emerald-50 text-emerald-700">
           Resolved
         </Badge>
-      )}
-      {isDropped && (
-        <Badge variant="secondary" className="text-xs flex-shrink-0">
-          Dropped
-        </Badge>
-      )}
+      );
+    }
+    return (
+      <Badge variant="secondary" className="text-xs flex-shrink-0">
+        Dropped
+      </Badge>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-shrink-0">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs gap-1"
+        onClick={handleMarkDone}
+        disabled={isPending}
+      >
+        <Check className="h-3 w-3" />
+        Done
+      </Button>
+
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+            disabled={isPending}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Drop this commitment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It won't show up again. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDrop}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Drop
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+// ── Sortable column header ────────────────────────────────────────────────────
+
+function SortableHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentOrder,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortBy;
+  currentSort: SortBy | null;
+  currentOrder: SortOrder;
+  onSort: (key: SortBy) => void;
+}) {
+  const isActive = currentSort === sortKey;
+  
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className="flex items-center gap-1 hover:text-foreground transition-colors"
+    >
+      {label}
+      {isActive ? (
+        currentOrder === "asc" ? (
+          <ChevronUp className="h-3 w-3" />
+        ) : (
+          <ChevronDown className="h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-50" />
+      )}
+    </button>
   );
 }
 
@@ -220,8 +232,33 @@ function CommitmentSkeletons() {
   return (
     <div className="flex flex-col gap-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-16 w-full rounded-lg" />
+        <Skeleton key={i} className="h-12 w-full rounded-lg" />
       ))}
+    </div>
+  );
+}
+
+// ── Person filter chip ────────────────────────────────────────────────────────
+
+function PersonFilterChip({ 
+  personSlug, 
+  onClear 
+}: { 
+  personSlug: string; 
+  onClear: () => void; 
+}) {
+  const displayName = personSlug.replace(/-/g, " ");
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
+      <span>Filtered by:</span>
+      <span className="font-medium">{displayName}</span>
+      <button
+        onClick={onClear}
+        className="text-muted-foreground hover:text-foreground transition-colors"
+        aria-label="Clear person filter"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -230,15 +267,77 @@ function CommitmentSkeletons() {
 
 export default function CommitmentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Read URL params
   const initialFilter = (searchParams.get("filter") as FilterType) ?? "open";
+  const initialDirection = (searchParams.get("direction") as DirectionFilter) ?? "all";
+  const personParam = searchParams.get("person") ?? undefined;
+  
+  // Local state
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
+  const [activeDirection, setActiveDirection] = useState<DirectionFilter>(initialDirection);
+  const [sortBy, setSortBy] = useState<SortBy | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
-  const { data: commitments, isLoading, error } = useCommitments(activeFilter);
+  const { data: commitments, isLoading, error } = useCommitments({
+    filter: activeFilter,
+    direction: activeDirection,
+    person: personParam,
+  });
+
+  // Update URL params (functional setter to preserve other params)
+  function updateSearchParams(updates: Record<string, string | undefined>) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === undefined || (key === "filter" && value === "open") || (key === "direction" && value === "all")) {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+      }
+      return next;
+    }, { replace: true });
+  }
 
   function selectFilter(f: FilterType) {
     setActiveFilter(f);
-    setSearchParams(f !== "open" ? { filter: f } : {}, { replace: true });
+    updateSearchParams({ filter: f !== "open" ? f : undefined });
   }
+
+  function selectDirection(d: DirectionFilter) {
+    setActiveDirection(d);
+    updateSearchParams({ direction: d !== "all" ? d : undefined });
+  }
+
+  function clearPersonFilter() {
+    updateSearchParams({ person: undefined });
+  }
+
+  function handleSort(key: SortBy) {
+    if (sortBy === key) {
+      // Toggle order
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortOrder("asc");
+    }
+  }
+
+  // Sort commitments
+  const sortedCommitments = useMemo(() => {
+    if (!sortBy || !commitments.length) return commitments;
+
+    return [...commitments].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "person") {
+        cmp = (a.personSlug ?? "").localeCompare(b.personSlug ?? "");
+      } else if (sortBy === "age") {
+        cmp = a.daysOpen - b.daysOpen;
+      }
+      return sortOrder === "desc" ? -cmp : cmp;
+    });
+  }, [commitments, sortBy, sortOrder]);
 
   const emptyState = EMPTY_STATES[activeFilter];
 
@@ -249,54 +348,149 @@ export default function CommitmentsPage() {
         description="Track what you've promised and what's owed to you"
       />
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-4">
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1">
-            {FILTER_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => selectFilter(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeFilter === tab.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+      {/* Direction subnav */}
+      <div className="px-6 pt-3 pb-0 border-b">
+        <div className="flex items-center gap-1 pb-3">
+          {DIRECTION_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => selectDirection(tab.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeDirection === tab.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="px-6 py-2 border-b">
+        <div className="flex items-center gap-1">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => selectFilter(tab.value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeFilter === tab.value
+                  ? "bg-secondary text-secondary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Person filter chip */}
+      {personParam && (
+        <div className="px-6 py-2 border-b bg-muted/30">
+          <PersonFilterChip personSlug={personParam} onClear={clearPersonFilter} />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto">
+
+        {/* Content */}
+        {isLoading && (
+          <div className="px-6 py-4">
+            <CommitmentSkeletons />
           </div>
+        )}
 
-          {/* Content */}
-          {isLoading && <CommitmentSkeletons />}
+        {!isLoading && error && (
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm text-destructive font-medium">Failed to load commitments</p>
+            <p className="text-xs text-muted-foreground mt-1">Please try again.</p>
+          </div>
+        )}
 
-          {!isLoading && error && (
-            <p className="text-sm text-destructive py-8 text-center">
-              Failed to load commitments. Please try again.
-            </p>
-          )}
-
-          {!isLoading && !error && commitments.length === 0 && (
+        {!isLoading && !error && sortedCommitments.length === 0 && (
+          <div className="px-6">
             <EmptyState
               icon={emptyState.icon}
               title={emptyState.title}
               description={emptyState.description}
               className="py-16"
             />
-          )}
+          </div>
+        )}
 
-          {!isLoading && !error && commitments.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">
-                {commitments.length} commitment{commitments.length !== 1 ? "s" : ""}
-              </p>
-              {commitments.map((item) => (
-                <CommitmentRow key={item.id} item={item} />
-              ))}
-            </div>
-          )}
-        </div>
+        {!isLoading && !error && sortedCommitments.length > 0 && (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                <th className="px-4 py-3">
+                  <SortableHeader
+                    label="Person"
+                    sortKey="person"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">Commitment</th>
+                <th className="px-4 py-3">Direction</th>
+                <th className="px-4 py-3">
+                  <SortableHeader
+                    label="Age"
+                    sortKey="age"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCommitments.map((item) => {
+                const isSettled = item.status === "resolved" || item.status === "dropped";
+                return (
+                  <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
+                    <td className="px-4 py-3">
+                      {item.personSlug ? (
+                        <Link
+                          to={`/people/${item.personSlug}`}
+                          className="text-sm text-primary hover:underline font-medium"
+                        >
+                          {item.personSlug.replace(/-/g, " ")}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
+                          {item.text}
+                        </p>
+                        {item.date && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <DirectionBadge direction={item.direction} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <AgeBadge daysOpen={item.daysOpen} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <CommitmentActions item={item} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

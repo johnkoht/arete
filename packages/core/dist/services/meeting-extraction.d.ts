@@ -72,4 +72,22 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
     attendees?: string[];
     ownerSlug?: string;
 }): Promise<MeetingExtractionResult>;
+/**
+ * Format extraction result as markdown sections.
+ * IDs are zero-padded 3 digits (ai_001, de_001, le_001).
+ * Empty sections are omitted entirely.
+ *
+ * @param result - The meeting extraction result containing structured intelligence
+ * @returns Formatted markdown string with Summary and staged sections
+ */
+export declare function formatStagedSections(result: MeetingExtractionResult): string;
+/**
+ * Replace or insert staged sections in meeting content.
+ * Preserves content before ## Summary and after staged sections.
+ *
+ * @param originalContent - The original meeting file content
+ * @param stagedSections - The formatted staged sections to insert
+ * @returns Updated content with staged sections replaced/inserted
+ */
+export declare function updateMeetingContent(originalContent: string, stagedSections: string): string;
 //# sourceMappingURL=meeting-extraction.d.ts.map

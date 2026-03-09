@@ -2,18 +2,32 @@
  * arete onboard — Quick identity setup for new workspaces
  *
  * Collects name, email, company to bootstrap context/profile.md
- * before full conversational onboarding.
+ * before full conversational onboarding. Optionally configures AI credentials
+ * via OAuth login or API key.
  */
 
-import { createServices, loadConfig, refreshQmdIndex } from '@arete/core';
+import {
+  createServices,
+  loadConfig,
+  refreshQmdIndex,
+  saveCredential,
+  getApiKey,
+  getAvailableOAuthProviders,
+  saveOAuthCredentials,
+  getOAuthPath,
+  hasOAuthCredentials,
+} from '@arete/core';
+import { getOAuthProvider } from '@mariozechner/pi-ai/oauth';
 import type { QmdRefreshResult } from '@arete/core';
 import type { Command } from 'commander';
 import { createInterface } from 'node:readline/promises';
+import { createInterface as createReadlineInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import { join } from 'node:path';
 import chalk from 'chalk';
-import { header, success, error, info, warn } from '../formatters.js';
+import { header, success, error, info, warn, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
+import { testProviderConnection, maskApiKey } from './credentials.js';
 
 interface OnboardAnswers {
   name: string;
@@ -46,6 +60,8 @@ export function registerOnboardCommand(program: Command): void {
     .option('--company <company>', 'Your company name')
     .option('--website <url>', 'Company website URL (optional)')
     .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--skip-ai', 'Skip AI configuration step')
+    .option('--api-key <key>', 'Anthropic API key (non-interactive)')
     .action(async (opts: {
       json?: boolean;
       name?: string;
@@ -53,6 +69,8 @@ export function registerOnboardCommand(program: Command): void {
       company?: string;
       website?: string;
       skipQmd?: boolean;
+      skipAi?: boolean;
+      apiKey?: string;
     }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
@@ -70,88 +88,93 @@ export function registerOnboardCommand(program: Command): void {
       // Check if profile already exists
       const profilePath = join(root, 'context', 'profile.md');
       const profileExists = await services.storage.exists(profilePath);
+      let profileSkipped = false;
 
-      if (profileExists && !opts.json) {
+      if (profileExists) {
         const existingContent = await services.storage.read(profilePath);
         if (existingContent && !existingContent.includes('[Your name]')) {
-          warn('Profile already exists at context/profile.md');
-          info('To update, edit the file directly or delete it first');
+          profileSkipped = true;
+          if (!opts.json) {
+            warn('Profile already exists — skipping profile setup');
+          }
+          // DON'T return here — continue to AI config
+        }
+      }
+
+      // ========================================
+      // PHASE 1: Profile Setup
+      // ========================================
+      let answers: OnboardAnswers | null = null;
+      let domains: string[] = [];
+
+      if (!profileSkipped) {
+        // Use CLI options if all required fields provided
+        if (opts.name && opts.email && opts.company) {
+          answers = {
+            name: opts.name,
+            email: opts.email,
+            company: opts.company,
+            website: opts.website,
+          };
+        } else if (opts.json) {
+          // JSON mode requires all fields via options
+          console.log(JSON.stringify({
+            success: false,
+            error: 'JSON mode requires --name, --email, and --company options',
+          }));
+          process.exit(1);
+        } else {
+          // Interactive mode
+          header('Areté Onboarding');
+          console.log('Let me get to know you before we set up your workspace.');
           console.log('');
-          info('Continue onboarding by saying "Let\'s get started" in chat');
-          return;
-        }
-      }
 
-      let answers: OnboardAnswers;
+          const rl = createInterface({ input, output });
 
-      // Use CLI options if all required fields provided
-      if (opts.name && opts.email && opts.company) {
-        answers = {
-          name: opts.name,
-          email: opts.email,
-          company: opts.company,
-          website: opts.website,
-        };
-      } else if (opts.json) {
-        // JSON mode requires all fields via options
-        console.log(JSON.stringify({
-          success: false,
-          error: 'JSON mode requires --name, --email, and --company options',
-        }));
-        process.exit(1);
-      } else {
-        // Interactive mode
-        header('Areté Onboarding');
-        console.log('Let me get to know you before we set up your workspace.');
-        console.log('');
+          try {
+            const name = await rl.question(chalk.cyan('What\'s your name? '));
+            if (!name.trim()) {
+              error('Name is required');
+              process.exit(1);
+            }
 
-        const rl = createInterface({ input, output });
+            const email = await rl.question(chalk.cyan('What\'s your work email? '));
+            if (!email.trim() || !email.includes('@')) {
+              error('Valid email is required');
+              process.exit(1);
+            }
 
-        try {
-          const name = await rl.question(chalk.cyan('What\'s your name? '));
-          if (!name.trim()) {
-            error('Name is required');
-            process.exit(1);
+            const company = await rl.question(chalk.cyan('What company are you at? '));
+            if (!company.trim()) {
+              error('Company name is required');
+              process.exit(1);
+            }
+
+            // Ask for website optionally
+            const websiteInput = await rl.question(
+              chalk.dim('Company website? (optional, press enter to skip) ')
+            );
+            const website = websiteInput.trim() || undefined;
+
+            answers = { name: name.trim(), email: email.trim(), company: company.trim(), website };
+          } finally {
+            rl.close();
           }
-
-          const email = await rl.question(chalk.cyan('What\'s your work email? '));
-          if (!email.trim() || !email.includes('@')) {
-            error('Valid email is required');
-            process.exit(1);
-          }
-
-          const company = await rl.question(chalk.cyan('What company are you at? '));
-          if (!company.trim()) {
-            error('Company name is required');
-            process.exit(1);
-          }
-
-          // Ask for website optionally
-          const websiteInput = await rl.question(
-            chalk.dim('Company website? (optional, press enter to skip) ')
-          );
-          const website = websiteInput.trim() || undefined;
-
-          answers = { name: name.trim(), email: email.trim(), company: company.trim(), website };
-        } finally {
-          rl.close();
         }
-      }
 
-      // Extract domains for People Intelligence
-      const domains: string[] = [];
-      const emailDomain = extractDomainFromEmail(answers.email);
-      if (emailDomain) domains.push(emailDomain);
-      if (answers.website) {
-        const websiteDomain = extractDomainFromUrl(answers.website);
-        if (websiteDomain && !domains.includes(websiteDomain)) {
-          domains.push(websiteDomain);
+        // Extract domains for People Intelligence
+        const emailDomain = extractDomainFromEmail(answers.email);
+        if (emailDomain) domains.push(emailDomain);
+        if (answers.website) {
+          const websiteDomain = extractDomainFromUrl(answers.website);
+          if (websiteDomain && !domains.includes(websiteDomain)) {
+            domains.push(websiteDomain);
+          }
         }
-      }
 
-      // Generate profile content
-      const now = new Date().toISOString();
-      const profileContent = `---
+        // Generate profile content
+        const now = new Date().toISOString();
+        const profileContent = `---
 name: ${answers.name}
 email: ${answers.email}
 company: ${answers.company}
@@ -177,13 +200,14 @@ ${domains.length > 0 ? domains.map(d => `- ${d}`).join('\n') : '- (none extracte
 *These domains help identify internal vs external contacts in People Intelligence.*
 `;
 
-      // Write profile
-      await services.storage.write(profilePath, profileContent);
+        // Write profile
+        await services.storage.write(profilePath, profileContent);
 
-      // Write domain hints for Contract v1
-      if (domains.length > 0) {
-        const domainHintsPath = join(root, 'context', 'domain-hints.md');
-        const domainHintsContent = `---
+        // Write domain hints for Contract v1
+        if (domains.length > 0) {
+          const emailDomain = extractDomainFromEmail(answers.email);
+          const domainHintsPath = join(root, 'context', 'domain-hints.md');
+          const domainHintsContent = `---
 domains:
 ${domains.map(d => `  - ${d}`).join('\n')}
 extracted_from:
@@ -204,45 +228,324 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
 - Email domain: ${emailDomain || '(none)'}
 - Website domain: ${answers.website ? extractDomainFromUrl(answers.website) || '(none)' : '(not provided)'}
 `;
-        await services.storage.write(domainHintsPath, domainHintsContent);
+          await services.storage.write(domainHintsPath, domainHintsContent);
+        }
+
+        // Auto-refresh qmd index after writes
+        if (!opts.skipQmd) {
+          const config = await loadConfig(services.storage, root);
+          await refreshQmdIndex(root, config.qmd_collection);
+        }
+
+        if (!opts.json) {
+          console.log('');
+          success('Profile created!');
+          console.log('');
+          console.log(chalk.dim('  Profile saved to: context/profile.md'));
+          if (domains.length > 0) {
+            console.log(chalk.dim('  Domain hints saved to: context/domain-hints.md'));
+          }
+        }
       }
 
-      // Auto-refresh qmd index after writes
-      let qmdResult: QmdRefreshResult | undefined;
-      if (!opts.skipQmd) {
-        const config = await loadConfig(services.storage, root);
-        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      // ========================================
+      // PHASE 2: AI Configuration
+      // ========================================
+      let aiConfigured = false;
+      let aiSkipped = false;
+
+      if (opts.skipAi) {
+        aiSkipped = true;
+      } else {
+        const existingKey = getApiKey('anthropic');
+        const existingOAuth = hasOAuthCredentials('anthropic');
+
+        // Determine if we should prompt for AI credentials
+        let shouldPrompt = false;
+        let apiKeyToSave: string | null = null;
+
+        if (opts.apiKey) {
+          // Non-interactive: use provided key
+          apiKeyToSave = opts.apiKey;
+        } else if (opts.json) {
+          // JSON mode without --api-key: skip AI config (can't prompt)
+          aiSkipped = true;
+        } else if (existingKey || existingOAuth) {
+          // Interactive mode with existing credentials: ask to update
+          console.log('');
+          const { confirm } = await import('@inquirer/prompts');
+          const currentCred = existingOAuth
+            ? 'OAuth login'
+            : `API key: ${maskApiKey(existingKey!)}`;
+          try {
+            const update = await confirm({
+              message: `Update Anthropic credentials? (current: ${currentCred})`,
+              default: false,
+            });
+            if (update) {
+              shouldPrompt = true;
+            } else {
+              info('Keeping existing credentials');
+              aiConfigured = true; // Already configured
+            }
+          } catch {
+            // User cancelled (Ctrl+C)
+            aiSkipped = true;
+          }
+        } else {
+          // Interactive mode with no existing credentials: prompt for setup
+          shouldPrompt = true;
+        }
+
+        // Prompt for key if needed
+        if (shouldPrompt && !opts.json) {
+          console.log('');
+          info('AI Configuration');
+          console.log(chalk.dim('  Areté uses AI to extract insights from your meetings and context.'));
+          console.log('');
+
+          const { select, password } = await import('@inquirer/prompts');
+
+          // Offer choice between OAuth login and API key
+          type AuthChoice = 'oauth' | 'apikey' | 'skip';
+          let authChoice: AuthChoice;
+          try {
+            authChoice = await select<AuthChoice>({
+              message: 'How would you like to authenticate with Anthropic?',
+              choices: [
+                {
+                  name: 'Login with Claude subscription (Pro/Max)',
+                  value: 'oauth' as AuthChoice,
+                  description: 'Opens browser for OAuth login — no API key needed',
+                },
+                {
+                  name: 'Paste API key',
+                  value: 'apikey' as AuthChoice,
+                  description: 'Get key from console.anthropic.com',
+                },
+                {
+                  name: 'Skip for now',
+                  value: 'skip' as AuthChoice,
+                  description: 'Configure later with: arete credentials login',
+                },
+              ],
+            });
+          } catch {
+            // User cancelled
+            aiSkipped = true;
+            authChoice = 'skip';
+          }
+
+          if (authChoice === 'oauth') {
+            // OAuth flow
+            const provider = getOAuthProvider('anthropic');
+            if (!provider) {
+              error('OAuth provider not available');
+              aiSkipped = true;
+            } else {
+              console.log('');
+              info(`Logging in to ${chalk.bold(provider.name)}...`);
+
+              const rl = createReadlineInterface({ input, output });
+              const promptFn = (msg: string): Promise<string> => {
+                return new Promise((resolve) => rl.question(`${msg} `, resolve));
+              };
+
+              try {
+                const credentials = await provider.login({
+                  onAuth: (authInfo) => {
+                    console.log('');
+                    console.log(chalk.bold('  Open this URL in your browser:'));
+                    console.log(`  ${chalk.cyan(authInfo.url)}`);
+                    if (authInfo.instructions) {
+                      console.log('');
+                      console.log(chalk.dim(`  ${authInfo.instructions}`));
+                    }
+                    console.log('');
+                  },
+                  onPrompt: async (prompt) => {
+                    const placeholder = prompt.placeholder ? ` (${prompt.placeholder})` : '';
+                    return await promptFn(`${prompt.message}${placeholder}:`);
+                  },
+                  onProgress: (msg) => {
+                    console.log(chalk.dim(`  ${msg}`));
+                  },
+                });
+
+                // Save OAuth credentials
+                saveOAuthCredentials('anthropic', credentials);
+
+                // Write default AI config to arete.yaml
+                const DEFAULT_AI_CONFIG = {
+                  tiers: {
+                    fast: 'anthropic/claude-3-5-haiku-latest',
+                    standard: 'anthropic/claude-sonnet-4-20250514',
+                    frontier: 'anthropic/claude-3-opus',
+                  },
+                  tasks: {
+                    summary: 'fast',
+                    extraction: 'fast',
+                    decision_extraction: 'standard',
+                    learning_extraction: 'standard',
+                    significance_analysis: 'frontier',
+                    reconciliation: 'fast',
+                  },
+                };
+                await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
+
+                aiConfigured = true;
+
+                console.log('');
+                success('Logged in to Anthropic');
+                listItem('Credentials saved', getOAuthPath());
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                error(`Login failed: ${message}`);
+                info('You can try again later with: arete credentials login anthropic');
+                aiSkipped = true;
+              } finally {
+                rl.close();
+              }
+            }
+          } else if (authChoice === 'apikey') {
+            // API key flow
+            console.log(chalk.dim('  Get your API key at: https://console.anthropic.com/account/keys'));
+            console.log('');
+
+            try {
+              const apiKeyInput = await password({
+                message: 'Enter your Anthropic API key:',
+              });
+
+              if (apiKeyInput && apiKeyInput.trim()) {
+                apiKeyToSave = apiKeyInput.trim();
+                // Show masked key so user can verify they pasted correctly
+                console.log(chalk.dim(`  Key entered: ${maskApiKey(apiKeyToSave)}`));
+              } else {
+                aiSkipped = true;
+                info('Skipping AI configuration — you can configure later with: arete credentials set anthropic');
+              }
+            } catch {
+              // User cancelled (Ctrl+C)
+              aiSkipped = true;
+            }
+          } else {
+            // Skip
+            aiSkipped = true;
+            info('Skipping AI configuration — you can configure later with: arete credentials login');
+          }
+        }
+
+        // Default AI configuration for the workspace
+        // Uses Anthropic models since we're onboarding with Anthropic key
+        // TODO: Multi-provider onboarding (see backlog)
+        const API_KEY_AI_CONFIG = {
+          tiers: {
+            fast: 'anthropic/claude-3-5-haiku-latest',
+            standard: 'anthropic/claude-sonnet-4-20250514',
+            frontier: 'anthropic/claude-3-opus',
+          },
+          tasks: {
+            summary: 'fast',
+            extraction: 'fast',
+            decision_extraction: 'standard',
+            learning_extraction: 'standard',
+            significance_analysis: 'frontier',
+            reconciliation: 'fast',
+          },
+        };
+
+        // Validate and save key if we have one
+        if (apiKeyToSave) {
+          if (!opts.json) {
+            info('Validating API key...');
+          }
+
+          const result = await testProviderConnection('anthropic', apiKeyToSave);
+
+          if (result.success) {
+            // Save credential
+            saveCredential('anthropic', apiKeyToSave);
+
+            // Write default AI config to arete.yaml
+            await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
+
+            aiConfigured = true;
+
+            if (!opts.json) {
+              success('API key validated and saved');
+              listItem('Model', result.model);
+            }
+          } else {
+            // Validation failed
+            if (result.isNetworkError) {
+              // Network error - warn but allow save
+              if (!opts.json) {
+                warn(`Could not validate: ${result.error}`);
+                info('Saving anyway');
+              }
+
+              saveCredential('anthropic', apiKeyToSave);
+
+              // Still write AI config
+              await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
+              aiConfigured = true;
+            } else {
+              // Auth error - don't save
+              if (opts.json) {
+                console.log(JSON.stringify({
+                  success: false,
+                  error: `Invalid API key: ${result.error}`,
+                }));
+                process.exit(1);
+              } else {
+                error(`Invalid API key: ${result.error}`);
+                info('API key was not saved. Run "arete credentials set anthropic" to try again.');
+                aiSkipped = true;
+              }
+            }
+          }
+        }
       }
 
+      // ========================================
+      // PHASE 3: Output
+      // ========================================
       if (opts.json) {
-        console.log(JSON.stringify({
+        const output: Record<string, unknown> = {
           success: true,
-          profile: {
-            name: answers.name,
-            email: answers.email,
-            company: answers.company,
-            website: answers.website,
-            domains,
+          profile: profileSkipped
+            ? { skipped: true }
+            : {
+                name: answers!.name,
+                email: answers!.email,
+                company: answers!.company,
+                website: answers!.website,
+                domains,
+              },
+          files: profileSkipped
+            ? { profile: profilePath, domainHints: null }
+            : {
+                profile: profilePath,
+                domainHints: domains.length > 0 ? join(root, 'context', 'domain-hints.md') : null,
+              },
+          ai: {
+            configured: aiConfigured,
+            provider: aiConfigured ? 'anthropic' : null,
+            skipped: aiSkipped,
           },
-          files: {
-            profile: profilePath,
-            domainHints: domains.length > 0 ? join(root, 'context', 'domain-hints.md') : null,
-          },
-          qmd: qmdResult ?? { indexed: false, skipped: true },
-        }, null, 2));
+        };
+        console.log(JSON.stringify(output, null, 2));
         return;
       }
 
+      // Non-JSON mode final output
       console.log('');
-      success('Profile created!');
-      console.log('');
-      console.log(chalk.dim('  Profile saved to: context/profile.md'));
-      if (domains.length > 0) {
-        console.log(chalk.dim('  Domain hints saved to: context/domain-hints.md'));
+      if (!aiSkipped && !aiConfigured) {
+        info('Continue onboarding by saying "Let\'s get started" in chat');
+      } else {
+        info('Continue onboarding by saying "Let\'s get started" in chat');
       }
-      displayQmdResult(qmdResult);
-      console.log('');
-      info('Continue onboarding by saying "Let\'s get started" in chat');
       console.log('');
       console.log(chalk.dim('The agent will help you:'));
       console.log(chalk.dim('  • Import your existing docs and context'));

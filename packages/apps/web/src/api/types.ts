@@ -78,6 +78,7 @@ export type PersonSummary = {
   lastMeetingTitle: string | null;
   openCommitments: number;
   trend: 'up' | 'flat' | 'down' | null;
+  favorite?: boolean;
 };
 
 export type PersonCommitmentItem = {
@@ -96,6 +97,7 @@ export type PersonDetail = PersonSummary & {
   repeatedConcerns: string[];
   rawContent: string;
   allMeetings: Array<{ slug: string; date: string; title: string; attendeeIds: string[] }>;
+  // favorite is inherited from PersonSummary
 };
 
 export type PeopleResponse = {
@@ -208,7 +210,7 @@ export type ActivityResponse = {
 
 // ── Meeting types (existing) ──────────────────────────────────────────────────
 
-export type MeetingStatus = 'Synced' | 'Processed' | 'Approved';
+export type MeetingStatus = 'synced' | 'processed' | 'approved';
 export type ItemStatus = 'pending' | 'approved' | 'skipped';
 export type ItemType = 'action' | 'decision' | 'learning';
 
@@ -231,6 +233,19 @@ export type ApprovedItems = {
   learnings: string[];
 };
 
+/** Parsed item from meeting body (for viewing/editing approved items) */
+export type ParsedItem = {
+  text: string;
+  completed?: boolean;
+};
+
+/** Parsed sections from meeting body */
+export type ParsedSections = {
+  actionItems: ParsedItem[];
+  decisions: ParsedItem[];
+  learnings: ParsedItem[];
+};
+
 export type Meeting = {
   slug: string;
   title: string;
@@ -243,8 +258,12 @@ export type Meeting = {
   recordingUrl?: string;
   summary?: string;
   body?: string;
+  /** Just the transcript portion */
+  transcript?: string;
   reviewItems?: ReviewItem[];
   approvedItems?: ApprovedItems;
+  /** Parsed sections from body (for viewing approved items) */
+  parsedSections?: ParsedSections;
 };
 
 export type JobStatus = 'running' | 'done' | 'error';

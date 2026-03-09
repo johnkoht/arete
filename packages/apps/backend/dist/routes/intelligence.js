@@ -69,8 +69,10 @@ export function createIntelligenceRouter(workspaceRoot) {
 /**
  * Create the /api/commitments router.
  *
- * Supports ?filter=overdue (daysOpen > 14) and ?filter=thisweek (daysOpen <= 7
- * and commitment date is within last 7 days).
+ * Supports query params:
+ * - ?filter=overdue (daysOpen > 14) | thisweek (daysOpen <= 7) | open | all
+ * - ?direction=mine (i_owe_them) | theirs (they_owe_me) — filters by direction
+ * - ?person=<slug> — filters by person slug
  */
 export function createCommitmentsRouter(workspaceRoot) {
     const app = new Hono();
@@ -88,12 +90,25 @@ export function createCommitmentsRouter(workspaceRoot) {
             }
             const now = new Date();
             const filterParam = c.req.query('filter');
+            const directionParam = c.req.query('direction');
+            const personParam = c.req.query('person');
             let sourceCommitments;
             if (filterParam === 'all') {
                 sourceCommitments = allCommitments;
             }
             else {
                 sourceCommitments = allCommitments.filter((c) => c.status === 'open');
+            }
+            // Apply direction filter
+            if (directionParam === 'mine') {
+                sourceCommitments = sourceCommitments.filter((c) => c.direction === 'i_owe_them');
+            }
+            else if (directionParam === 'theirs') {
+                sourceCommitments = sourceCommitments.filter((c) => c.direction === 'they_owe_me');
+            }
+            // Apply person filter
+            if (personParam) {
+                sourceCommitments = sourceCommitments.filter((c) => c.personSlug === personParam);
             }
             const items = sourceCommitments.map((c) => {
                 const itemDate = new Date(c.date);

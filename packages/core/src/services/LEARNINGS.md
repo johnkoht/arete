@@ -20,6 +20,8 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **`momentum.ts`** — Two pure functions: `computeCommitmentMomentum(commitments, refDate?)` buckets open commitments into hot (<7d), stale (7–30d), critical (>30d) by `date` field age. `computeRelationshipMomentum(meetingsDir, peopleDir, storage, opts?)` scans meeting frontmatter for attendees, tracks last meeting date per person, and returns active/cooling/stale buckets. Resolves person names from `people/{internal,customers,users}/{slug}.md` profiles.
 
+- **`ai.ts`** (2026-03-08) — `AIService` wraps pi-ai with task-based model routing, credential loading, and structured output support. Takes `AreteConfig` at construction to read `ai.tiers` (fast/standard/frontier → model ID) and `ai.tasks` (task → tier). Methods: `call(task, prompt)` for simple text, `callWithModel(spec, prompt)` for explicit model, `callStructured(task, prompt, schema)` for JSON with TypeBox validation. Uses `testDeps` injection for mocking pi-ai calls — same pattern as qmd.ts. **Credentials** handled by sibling module `credentials.ts` (global `~/.arete/credentials.yaml`, not workspace-level).
+
 ## Gotchas
 
 - **`createServices()` is async — it loads `arete.yaml` from disk.** Callers must `await createServices(process.cwd())`. Forgetting the `await` gives a Promise, not `AreteServices`. Every CLI command in `packages/cli/src/commands/` correctly awaits it — follow that pattern. Defined in `packages/core/src/factory.ts` L54.
@@ -35,6 +37,10 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - **`options?.config` override in `createServices()` bypasses `arete.yaml` loading.** Pass a pre-loaded `AreteConfig` to avoid disk reads in tests: `createServices('/workspace', { config: mockConfig })`. Without this, tests that call `createServices()` will try to read `arete.yaml` from the test temp dir and may fail silently with default config. From `2026-02-15` entry: DI pattern made testing straightforward.
 
 - **`WorkspaceService.findRoot()` traverses upward to find the workspace root.** CLI commands call `createServices(process.cwd())` then `services.workspace.findRoot()`. If `findRoot()` returns `null`, the workspace root couldn't be found (not inside an Areté workspace). This is the canonical "not in a workspace" check — do not replicate it with ad-hoc `arete.yaml` file searches.
+
+- **`AIService` receives `AreteConfig` directly — second service to do so after `IntegrationService`** (2026-03-08). AIService needs config at construction to read tier-to-model mappings. It doesn't use StorageAdapter because credentials are global (~/.arete/credentials.yaml) not workspace-level.
+
+- **Ajv import: use named export `{ Ajv }` not default import** (2026-03-08). With NodeNext module resolution, `import Ajv from 'ajv'` gives TypeScript error "cannot use namespace as type". The named export `import { Ajv } from 'ajv'` works. This is an ESM/CJS interop edge case.
 
 ## Invariants
 

@@ -16,6 +16,7 @@ import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
 import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
+import { AIService } from './services/ai.js';
 /**
  * All services created by the factory, keyed by role.
  */
@@ -31,6 +32,7 @@ export type AreteServices = {
     tools: ToolService;
     integrations: IntegrationService;
     commitments: CommitmentsService;
+    ai: AIService;
 };
 /**
  * Options for createServices. All optional — sensible defaults are used.
