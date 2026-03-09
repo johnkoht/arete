@@ -134,11 +134,12 @@ const TRIVIAL_PATTERNS = [
 
 /**
  * Normalize text for Jaccard comparison.
- * Lowercase, strip non-alphanumeric, split on whitespace.
+ * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
  */
-function normalizeForJaccard(text: string): string[] {
+export function normalizeForJaccard(text: string): string[] {
   return text
     .toLowerCase()
+    .replace(/[\r\n]+/g, ' ')  // Convert newlines to spaces first
     .replace(/[^a-z0-9 ]/g, '')
     .split(/\s+/)
     .filter(Boolean);
@@ -148,7 +149,7 @@ function normalizeForJaccard(text: string): string[] {
  * Compute Jaccard similarity between two word arrays.
  * Returns 0-1 where 1 is identical.
  */
-function jaccardSimilarity(a: string[], b: string[]): number {
+export function jaccardSimilarity(a: string[], b: string[]): number {
   const setA = new Set(a);
   const setB = new Set(b);
   const intersection = [...setA].filter((w) => setB.has(w)).length;

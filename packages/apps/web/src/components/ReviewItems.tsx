@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ReviewItem, ItemStatus, ItemType, ApprovedItems } from "@/api/types.js";
-import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck, Folder } from "lucide-react";
+import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck, Folder, FileText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchableSelect, type SearchableSelectItem } from "@/components/ui/searchable-select";
+import { Badge } from "@/components/ui/badge";
 import { useProjects } from "@/hooks/projects.js";
 
 const TYPE_LABELS: Record<ItemType, string> = {
@@ -73,6 +74,13 @@ function ItemCard({ item, onStatusChange, onTextChange, onProjectChange, project
     >
       {statusIcon()}
       <div className="flex-1 min-w-0">
+        {/* "from your notes" badge for dedup items */}
+        {item.source === "dedup" && (
+          <Badge variant="outline" className="mb-1.5 text-xs font-normal text-muted-foreground">
+            <FileText className="mr-1 h-3 w-3" />
+            from your notes
+          </Badge>
+        )}
         {editing && !readOnly ? (
           <input
             className="w-full bg-transparent text-sm outline-none border-b border-primary/30 pb-0.5"

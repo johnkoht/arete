@@ -28,6 +28,8 @@ export {
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  normalizeForJaccard,
+  jaccardSimilarity,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,

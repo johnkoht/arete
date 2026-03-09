@@ -3,13 +3,16 @@
  *
  * Reads meeting files, extracts content via AI, and writes staged sections.
  * Replaces the previous pi-coding-agent implementation with direct AI calls.
+ *
+ * Includes user notes deduplication: items matching user-written notes
+ * (Jaccard > 0.7) are marked source: 'dedup' for auto-approval.
  */
 
 import { Type, type Static } from '@sinclair/typebox';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent } from '@arete/core';
+import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity } from '@arete/core';
 import type { AIService, AIStructuredResult } from '@arete/core';
 import * as jobsService from './jobs.js';
 
@@ -35,6 +38,92 @@ const MeetingExtractionSchema = Type.Object({
 });
 
 type MeetingExtraction = Static<typeof MeetingExtractionSchema>;
+
+/** Item source type: 'ai' (LLM extracted) or 'dedup' (matched user notes) */
+type ItemSource = 'ai' | 'dedup';
+
+/** Map of item ID to source */
+type ItemSources = Record<string, ItemSource>;
+
+/** Jaccard similarity threshold for user notes deduplication */
+const DEDUP_JACCARD_THRESHOLD = 0.7;
+
+/**
+ * Extract user-written notes from meeting body.
+ * Excludes: ## Transcript, ## Staged Action Items, ## Staged Decisions, ## Staged Learnings
+ */
+function extractUserNotes(body: string): string {
+  const lines = body.split('\n');
+  const output: string[] = [];
+  let inExcludedSection = false;
+
+  const excludedHeaders = new Set([
+    'transcript',
+    'staged action items',
+    'staged decisions',
+    'staged learnings',
+  ]);
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^##\s+(.+)$/);
+    if (headerMatch) {
+      const normalized = headerMatch[1].trim().toLowerCase();
+      inExcludedSection = excludedHeaders.has(normalized);
+      if (!inExcludedSection) {
+        output.push(line);
+      }
+      continue;
+    }
+
+    if (!inExcludedSection) {
+      output.push(line);
+    }
+  }
+
+  return output.join('\n');
+}
+
+/**
+ * Check if an extracted item matches user notes.
+ * Returns true if Jaccard similarity > threshold.
+ */
+function itemMatchesUserNotes(itemText: string, userNotesNormalized: string[]): boolean {
+  const itemNormalized = normalizeForJaccard(itemText);
+  const similarity = jaccardSimilarity(itemNormalized, userNotesNormalized);
+  return similarity > DEDUP_JACCARD_THRESHOLD;
+}
+
+/**
+ * Determine sources for extracted items by comparing against user notes.
+ * Items matching user notes (Jaccard > 0.7) get source: 'dedup'.
+ */
+function determineItemSources(
+  extraction: MeetingExtraction,
+  userNotes: string,
+): ItemSources {
+  const sources: ItemSources = {};
+  const userNotesNormalized = normalizeForJaccard(userNotes);
+
+  // Check action items
+  extraction.actionItems.forEach((item, index) => {
+    const id = `ai_${String(index + 1).padStart(3, '0')}`;
+    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+  });
+
+  // Check decisions
+  extraction.decisions.forEach((item, index) => {
+    const id = `de_${String(index + 1).padStart(3, '0')}`;
+    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+  });
+
+  // Check learnings
+  extraction.learnings.forEach((item, index) => {
+    const id = `le_${String(index + 1).padStart(3, '0')}`;
+    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+  });
+
+  return sources;
+}
 
 /**
  * Dependencies that can be injected for testing.
@@ -274,17 +363,40 @@ export async function runProcessingSessionTestable(
       throw new Error(`AI extraction failed: ${message}`);
     }
 
-    // 4. Format staged sections
+    // 4. Extract user notes and determine item sources
+    jobs.appendEvent(jobId, 'Checking for user notes...');
+    const userNotes = extractUserNotes(content);
+    const itemSources = determineItemSources(extraction, userNotes);
+    
+    // Count dedup items for logging
+    const dedupCount = Object.values(itemSources).filter(s => s === 'dedup').length;
+    if (dedupCount > 0) {
+      jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
+    }
+
+    // 5. Format staged sections
     const stagedSections = formatStagedSections(extraction);
 
-    // 5. Update content with staged sections
+    // 6. Update content with staged sections
     const updatedContent = updateMeetingContent(content, stagedSections);
 
-    // 6. Update frontmatter
+    // 7. Update frontmatter with status, sources, and auto-approve dedup items
     fm['status'] = 'processed';
     fm['processed_at'] = new Date().toISOString();
+    fm['staged_item_source'] = itemSources;
+    
+    // Auto-approve dedup items
+    const autoApproveStatus: Record<string, string> = {};
+    for (const [id, source] of Object.entries(itemSources)) {
+      if (source === 'dedup') {
+        autoApproveStatus[id] = 'approved';
+      }
+    }
+    if (Object.keys(autoApproveStatus).length > 0) {
+      fm['staged_item_status'] = autoApproveStatus;
+    }
 
-    // 7. Write updated file
+    // 8. Write updated file
     jobs.appendEvent(jobId, 'Writing staged sections...');
     const updatedFile = matter.stringify(updatedContent, fm);
     await deps.writeFile(meetingPath, updatedFile);
