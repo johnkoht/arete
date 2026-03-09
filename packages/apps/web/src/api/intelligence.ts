@@ -9,6 +9,7 @@ import type {
   CommitmentItem,
   ActivityResponse,
   ActivityItem,
+  ReconcileResponse,
 } from './types.js';
 
 /**
@@ -67,4 +68,14 @@ export async function patchCommitment(
 export async function fetchActivity(limit = 5): Promise<ActivityItem[]> {
   const response = await apiFetch<ActivityResponse>(`/api/activity?limit=${limit}`);
   return response.events;
+}
+
+/**
+ * POST /api/commitments/reconcile — scan meetings for completion signals.
+ * Returns candidates matching open commitments.
+ */
+export async function reconcileCommitments(): Promise<ReconcileResponse> {
+  return apiFetch<ReconcileResponse>('/api/commitments/reconcile', {
+    method: 'POST',
+  });
 }

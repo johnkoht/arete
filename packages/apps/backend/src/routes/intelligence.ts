@@ -3,11 +3,17 @@
  * Also exports createCommitmentsRouter for /api/commitments.
  */
 
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import fs from 'node:fs/promises';
 import { Hono } from 'hono';
-import { FileStorageAdapter, detectCrossPersonPatterns, computeCommitmentPriority } from '@arete/core';
-import type { PriorityLevel, HealthIndicator } from '@arete/core';
+import {
+  FileStorageAdapter,
+  detectCrossPersonPatterns,
+  computeCommitmentPriority,
+  CommitmentsService,
+} from '@arete/core';
+import type { PriorityLevel, HealthIndicator, Commitment } from '@arete/core';
+import { parse as parseYaml } from 'yaml';
 
 type CommitmentEntry = {
   id: string;
@@ -24,6 +30,96 @@ type CommitmentEntry = {
 type CommitmentsFile = {
   commitments: CommitmentEntry[];
 };
+
+// ---------------------------------------------------------------------------
+// Helpers for meeting text extraction (used by reconcile endpoint)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse YAML frontmatter from meeting content.
+ */
+function parseFrontmatter(content: string): { data: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { data: {}, body: content };
+  try {
+    return {
+      data: parseYaml(match[1]) as Record<string, unknown>,
+      body: match[2],
+    };
+  } catch {
+    return { data: {}, body: content };
+  }
+}
+
+/**
+ * Parse a date string into a Date object, returning null if invalid.
+ */
+function parseDate(s: unknown): Date | null {
+  if (typeof s !== 'string') return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Extract completion-related text from meeting body.
+ * Looks at ## Summary and ## Key Points sections.
+ * Returns array of text snippets that might indicate completed work.
+ */
+function extractCompletionText(body: string): string[] {
+  const results: string[] = [];
+  const seen = new Set<string>();
+
+  function addItem(raw: string): void {
+    // Clean up markdown formatting
+    const cleaned = raw
+      .replace(/^\s*[-*•]\s*/, '')
+      .replace(/^\s*\[[ x]\]\s*/i, '')
+      .replace(/[*_`]/g, '')
+      .trim();
+
+    if (cleaned.length < 10 || cleaned.length > 200) return;
+
+    const normalized = cleaned.toLowerCase();
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    results.push(cleaned);
+  }
+
+  /**
+   * Extract content from a markdown section (between ## headers).
+   */
+  function extractSection(header: RegExp): string {
+    const m = body.match(header);
+    if (!m) return '';
+    const afterHeader = body.slice(m.index! + m[0].length);
+    const nextSection = afterHeader.search(/\n## /);
+    return nextSection >= 0 ? afterHeader.slice(0, nextSection) : afterHeader.slice(0, 2000);
+  }
+
+  // Extract from ## Summary
+  const summary = extractSection(/^## Summary\s*$/m);
+  if (summary.trim()) {
+    // Split on sentence-ending punctuation and add each sentence
+    const sentences = summary
+      .replace(/\n+/g, ' ')
+      .split(/(?<=[.!?])\s+/)
+      .slice(0, 5);
+    for (const s of sentences) {
+      addItem(s);
+    }
+  }
+
+  // Extract from ## Key Points
+  const keyPoints = extractSection(/^## Key Points\s*$/m);
+  for (const line of keyPoints.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+      addItem(trimmed);
+    }
+  }
+
+  return results.slice(0, 20); // Cap per meeting
+}
 
 export function createIntelligenceRouter(workspaceRoot: string): Hono {
   const app = new Hono();
@@ -286,6 +382,70 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
     } catch (err) {
       console.error('[commitments] error:', err);
       return c.json({ error: 'Failed to load commitments' }, 500);
+    }
+  });
+
+  // POST /api/commitments/reconcile — scan meetings for completion signals
+  app.post('/reconcile', async (c) => {
+    try {
+      const storage = new FileStorageAdapter();
+      const commitmentsService = new CommitmentsService(storage, workspaceRoot);
+
+      // 1. Get recent meetings (last 14 days)
+      const meetingsDir = join(workspaceRoot, 'resources', 'meetings');
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 14);
+
+      let meetingFiles: string[] = [];
+      try {
+        meetingFiles = await storage.list(meetingsDir, { extensions: ['.md'] });
+      } catch {
+        // No meetings directory — no candidates
+        return c.json({ candidates: [], count: 0 });
+      }
+
+      // 2. Extract text from Summary and Key Points sections
+      const completedItems: { text: string; source: string }[] = [];
+
+      for (const filePath of meetingFiles) {
+        const content = await storage.read(filePath);
+        if (!content) continue;
+
+        // Parse frontmatter to get date
+        const { data: fm, body } = parseFrontmatter(content);
+        const meetingDate = parseDate(fm['date']);
+        if (!meetingDate || meetingDate < cutoffDate) continue;
+
+        const slug = basename(filePath, '.md');
+        const extracted = extractCompletionText(body);
+
+        for (const text of extracted) {
+          completedItems.push({ text, source: slug });
+        }
+      }
+
+      if (completedItems.length === 0) {
+        return c.json({ candidates: [], count: 0 });
+      }
+
+      // 3. Call CommitmentsService.reconcile()
+      const matches = await commitmentsService.reconcile(completedItems);
+
+      // 4. Return top 10 candidates
+      const candidates = matches.slice(0, 10).map((m) => ({
+        commitmentId: m.commitment.id,
+        commitmentText: m.commitment.text,
+        personSlug: m.commitment.personSlug,
+        personName: m.commitment.personName ?? m.commitment.personSlug,
+        sourceMeeting: m.completedItem.source,
+        matchedText: m.completedItem.text,
+        confidence: Math.round(m.confidence * 100) / 100, // Round to 2 decimals
+      }));
+
+      return c.json({ candidates, count: candidates.length });
+    } catch (err) {
+      console.error('[commitments] reconcile error:', err);
+      return c.json({ error: 'Failed to reconcile commitments' }, 500);
     }
   });
 

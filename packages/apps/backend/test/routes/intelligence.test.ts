@@ -333,6 +333,269 @@ describe('GET /commitments/summary — via intelligence router', () => {
 
 // ── PATCH /api/commitments/:id ────────────────────────────────────────────────
 
+// ── POST /api/commitments/reconcile ────────────────────────────────────────────
+
+describe('POST /api/commitments/reconcile — scan meetings for completion signals', () => {
+  let tmpDir: string;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+  async function reqPost(
+    app: ReturnType<typeof createCommitmentsRouter>,
+    path: string,
+  ): Promise<{ status: number; json: unknown }> {
+    const res = await app.request(path, { method: 'POST' });
+    const json = await res.json() as unknown;
+    return { status: res.status, json };
+  }
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-reconcile-test-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await mkdir(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+
+    // Create open commitments
+    const commitments = {
+      commitments: [
+        {
+          id: 'c-rec-1',
+          text: 'Send the quarterly roadmap update to Alice',
+          direction: 'i_owe_them',
+          personSlug: 'alice-jones',
+          personName: 'Alice Jones',
+          source: 'meeting-2026-01-01',
+          date: twoDaysAgo,
+          status: 'open',
+          resolvedAt: null,
+        },
+        {
+          id: 'c-rec-2',
+          text: 'Review the API documentation',
+          direction: 'i_owe_them',
+          personSlug: 'bob-smith',
+          personName: 'Bob Smith',
+          source: 'meeting-2026-01-02',
+          date: twoDaysAgo,
+          status: 'open',
+          resolvedAt: null,
+        },
+        {
+          id: 'c-rec-3',
+          text: 'Schedule a follow-up meeting with Charlie',
+          direction: 'i_owe_them',
+          personSlug: 'charlie-brown',
+          personName: 'Charlie Brown',
+          source: 'meeting-2026-01-03',
+          date: twoDaysAgo,
+          status: 'open',
+          resolvedAt: null,
+        },
+      ],
+    };
+
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify(commitments),
+      'utf8',
+    );
+
+    // Create a recent meeting with completion signals that match c-rec-1
+    // Note: Using text that achieves >0.6 Jaccard similarity with commitment text
+    // Commitment: "Send the quarterly roadmap update to Alice"
+    // Match needs sufficient word overlap for 0.6 threshold
+    const recentMeeting = `---
+date: ${today}
+title: Weekly Sync
+attendees:
+  - alice-jones
+---
+
+## Summary
+
+We completed several action items today. We sent the quarterly roadmap update to Alice as promised.
+
+## Key Points
+
+- Sent the quarterly roadmap update to Alice
+- Discussed next quarter planning
+`;
+
+    await writeFile(
+      join(tmpDir, 'resources', 'meetings', `${today}-weekly-sync.md`),
+      recentMeeting,
+      'utf8',
+    );
+
+    // Create an old meeting (>14 days) that shouldn't be included
+    const oldMeeting = `---
+date: ${thirtyDaysAgo}
+title: Old Meeting
+attendees:
+  - bob-smith
+---
+
+## Summary
+
+Review the API documentation was completed in this meeting.
+
+## Key Points
+
+- Completed API documentation review
+`;
+
+    await writeFile(
+      join(tmpDir, 'resources', 'meetings', `${thirtyDaysAgo}-old-meeting.md`),
+      oldMeeting,
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns candidates for matching completions in recent meetings', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await reqPost(router, '/reconcile');
+    assert.equal(status, 200);
+    
+    const body = json as { candidates: Array<{ commitmentId: string; confidence: number }>; count: number };
+    assert.ok(Array.isArray(body.candidates), 'candidates should be an array');
+    // Should have at least one match for the roadmap commitment
+    assert.ok(body.candidates.length > 0, 'should find at least one candidate');
+    assert.ok(body.candidates.some((c) => c.commitmentId === 'c-rec-1'), 'should match roadmap commitment');
+  });
+
+  it('does not include old meetings (>14 days)', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await reqPost(router, '/reconcile');
+    assert.equal(status, 200);
+    
+    const body = json as { candidates: Array<{ sourceMeeting: string }> };
+    // Should not include the old meeting from 30 days ago
+    assert.ok(
+      !body.candidates.some((c) => c.sourceMeeting.includes(thirtyDaysAgo)),
+      'should not include meetings older than 14 days'
+    );
+  });
+
+  it('returns candidates with required fields', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await reqPost(router, '/reconcile');
+    assert.equal(status, 200);
+    
+    const body = json as { candidates: Array<Record<string, unknown>> };
+    for (const c of body.candidates) {
+      assert.ok(typeof c['commitmentId'] === 'string', 'commitmentId should be string');
+      assert.ok(typeof c['commitmentText'] === 'string', 'commitmentText should be string');
+      assert.ok(typeof c['personSlug'] === 'string', 'personSlug should be string');
+      assert.ok(typeof c['sourceMeeting'] === 'string', 'sourceMeeting should be string');
+      assert.ok(typeof c['matchedText'] === 'string', 'matchedText should be string');
+      assert.ok(typeof c['confidence'] === 'number', 'confidence should be number');
+      assert.ok((c['confidence'] as number) >= 0 && (c['confidence'] as number) <= 1, 'confidence should be 0-1');
+    }
+  });
+});
+
+describe('POST /api/commitments/reconcile — empty workspace', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-reconcile-empty-test-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    // No meetings directory, no commitments
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns empty candidates when no meetings directory', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const res = await router.request('/reconcile', { method: 'POST' });
+    const json = await res.json() as { candidates: unknown[]; count: number };
+    
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(json.candidates));
+    assert.equal(json.candidates.length, 0);
+    assert.equal(json.count, 0);
+  });
+});
+
+describe('POST /api/commitments/reconcile — no open commitments', () => {
+  let tmpDir: string;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-reconcile-noopen-test-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+    await mkdir(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+
+    // All commitments are resolved
+    const commitments = {
+      commitments: [
+        {
+          id: 'c-resolved',
+          text: 'Send proposal',
+          direction: 'i_owe_them',
+          personSlug: 'alice-jones',
+          personName: 'Alice Jones',
+          source: 'meeting-2026-01-01',
+          date: today,
+          status: 'resolved',
+          resolvedAt: today,
+        },
+      ],
+    };
+
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify(commitments),
+      'utf8',
+    );
+
+    // Create a meeting with text that would match if commitments were open
+    const meeting = `---
+date: ${today}
+title: Test Meeting
+attendees:
+  - alice-jones
+---
+
+## Summary
+
+We sent the proposal to Alice.
+
+## Key Points
+
+- Proposal sent successfully
+`;
+
+    await writeFile(
+      join(tmpDir, 'resources', 'meetings', `${today}-test-meeting.md`),
+      meeting,
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns empty candidates when all commitments are resolved', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const res = await router.request('/reconcile', { method: 'POST' });
+    const json = await res.json() as { candidates: unknown[]; count: number };
+    
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(json.candidates));
+    assert.equal(json.candidates.length, 0);
+  });
+});
+
 describe('PATCH /api/commitments/:id — mark done or drop', () => {
   let tmpDir: string;
 

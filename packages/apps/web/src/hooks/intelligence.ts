@@ -3,9 +3,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPatterns, fetchCommitments, patchCommitment, fetchActivity } from '@/api/intelligence.js';
+import { fetchPatterns, fetchCommitments, patchCommitment, fetchActivity, reconcileCommitments } from '@/api/intelligence.js';
 import type { CommitmentsParams, DirectionFilter, PriorityFilter } from '@/api/intelligence.js';
-import type { SignalPattern, CommitmentItem, ActivityItem } from '@/api/types.js';
+import type { SignalPattern, CommitmentItem, ActivityItem, ReconciliationCandidate } from '@/api/types.js';
 
 /**
  * Fetch cross-person signal patterns for the last N days.
@@ -126,3 +126,16 @@ export function useActivity(limit = 5): {
     error: result.error,
   };
 }
+
+/**
+ * Mutation to scan meetings and reconcile against open commitments.
+ * Returns candidates that match completion signals from recent meetings.
+ */
+export function useReconcileCommitments() {
+  return useMutation({
+    mutationFn: reconcileCommitments,
+  });
+}
+
+// Re-export ReconciliationCandidate for consumers
+export type { ReconciliationCandidate };

@@ -181,6 +181,21 @@ export type CommitmentsListResponse = {
   commitments: CommitmentItem[];
 };
 
+export type ReconciliationCandidate = {
+  commitmentId: string;
+  commitmentText: string;
+  personSlug: string;
+  personName: string;
+  sourceMeeting: string;
+  matchedText: string;
+  confidence: number;
+};
+
+export type ReconcileResponse = {
+  candidates: ReconciliationCandidate[];
+  count: number;
+};
+
 // ── Search types ──────────────────────────────────────────────────────────────
 
 export type SearchResultType = 'meeting' | 'person' | 'decision' | 'learning' | 'project';
