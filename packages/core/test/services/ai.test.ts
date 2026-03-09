@@ -11,6 +11,7 @@ import { AIService, parseModelSpec } from '../../src/services/ai.js';
 import type { AIServiceTestDeps, ModelSpec } from '../../src/services/ai.js';
 import type { AreteConfig, AITask, AITier } from '../../src/models/workspace.js';
 import type { AssistantMessage, Context, KnownProvider, Model, SimpleStreamOptions } from '@mariozechner/pi-ai';
+import { getModel, getEnvApiKey } from '@mariozechner/pi-ai';
 
 // Mock response factory
 function createMockResponse(text: string, model = 'test-model', provider = 'anthropic'): AssistantMessage {
@@ -51,7 +52,7 @@ function createMockDeps(options?: {
       calls.push({ model, context, options: opts });
       return options?.response ?? createMockResponse('Test response');
     },
-    getModel: (provider: KnownProvider, modelId: string) => {
+    getModel: ((provider: KnownProvider, modelId: string) => {
       return {
         id: modelId,
         name: modelId,
@@ -63,11 +64,11 @@ function createMockDeps(options?: {
         cost: { input: 0.003, output: 0.015, cacheRead: 0.0003, cacheWrite: 0.00375 },
         contextWindow: 200000,
         maxTokens: 8192,
-      } as Model<any>;
-    },
-    getEnvApiKey: (provider: KnownProvider) => {
+      } as Model<never>;
+    }) as typeof getModel,
+    getEnvApiKey: ((provider: KnownProvider | string) => {
       return options?.apiKey ?? 'test-api-key';
-    },
+    }) as typeof getEnvApiKey,
   };
 }
 
@@ -399,8 +400,8 @@ describe('AIService', () => {
     it('throws descriptive error when no API key available', async () => {
       const config = createTestConfig();
       const deps = createMockDeps({ apiKey: '' }); // Empty = no key
-      // Override getEnvApiKey to return null
-      deps.getEnvApiKey = () => null;
+      // Override getEnvApiKey to return undefined (no key)
+      deps.getEnvApiKey = (() => undefined) as typeof getEnvApiKey;
       // Also mock getApiKey (file credential lookup) to return null
       (deps as AIServiceTestDeps & { getApiKey?: () => null }).getApiKey = () => null;
       // Also mock getOAuthApiKey to return null
