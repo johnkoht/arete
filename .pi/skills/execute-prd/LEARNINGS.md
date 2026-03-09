@@ -79,5 +79,8 @@ When two tasks will need the same formatter/helper, the PRD should either:
 
 ## References
 
-- Memory entries: `memory/entries/2026-02-25_calendar-events-learnings.md`
+- Memory entries:
+  - `memory/entries/2026-02-25_calendar-events-learnings.md` (patterns 1-3)
+  - `memory/entries/2026-03-07_reimagine-v2-orchestration-learnings.md` (patterns 4-5)
+  - `memory/entries/2026-03-08_ai-config-learnings.md` (pattern 6)
 - Collaboration profile: `memory/collaboration.md`
