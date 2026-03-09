@@ -31,7 +31,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 
 [Workspace]|two contexts: USER (installed) vs BUILD (this repo)
 |user:now/ goals/ context/ projects/ resources/ .arete/ people/ templates/ .agents/skills/
-|build:packages/ memory/ .agents/ dev/(plans, archive/prds, autonomous)/ .cursor/ .pi/ scripts/
+|build:packages/ memory/ .agents/ dev/work/(plans, archive, backlog)/ dev/(autonomous, catalog, personas)/ .cursor/ .pi/ scripts/
 |key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .agents/skills/ = build skills (BUILD) vs product skills (USER)
 
 [CLI]
