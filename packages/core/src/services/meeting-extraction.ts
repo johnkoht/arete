@@ -51,10 +51,20 @@ export type ValidationWarning = {
   reason: string;
 };
 
+/** Raw item before validation filtering (for debugging/analysis). */
+export type RawExtractedItem = {
+  type: 'action' | 'decision' | 'learning';
+  text: string;
+  owner?: string;
+  direction?: string;
+};
+
 /** Result of parsing extraction response (includes validation warnings). */
 export type MeetingExtractionResult = {
   intelligence: MeetingIntelligence;
   validationWarnings: ValidationWarning[];
+  /** All items parsed from LLM response before validation filtering (for debugging). */
+  rawItems: RawExtractedItem[];
 };
 
 /**
@@ -228,6 +238,7 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
       learnings: [],
     },
     validationWarnings: [],
+    rawItems: [],
   };
 
   const trimmed = response.trim();
@@ -258,6 +269,7 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
 
   const validationWarnings: ValidationWarning[] = [];
   const actionItems: ActionItem[] = [];
+  const rawItems: RawExtractedItem[] = [];
 
   // Parse summary
   const summary = typeof raw.summary === 'string' ? raw.summary.trim() : '';
@@ -273,6 +285,14 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
 
       // Skip items missing required fields
       if (!description || !owner) continue;
+
+      // Store raw item BEFORE validation filtering (for debugging/analysis)
+      rawItems.push({
+        type: 'action',
+        text: description,
+        owner,
+        direction,
+      });
 
       // Validate against garbage patterns
       const garbageReason = isGarbageItem(description);
@@ -325,7 +345,10 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
   if (Array.isArray(raw.decisions)) {
     for (const decision of raw.decisions) {
       if (typeof decision === 'string' && decision.trim()) {
-        decisions.push(decision.trim());
+        const text = decision.trim();
+        // Store raw item for debugging/analysis
+        rawItems.push({ type: 'decision', text });
+        decisions.push(text);
       }
     }
   }
@@ -335,7 +358,10 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
   if (Array.isArray(raw.learnings)) {
     for (const learning of raw.learnings) {
       if (typeof learning === 'string' && learning.trim()) {
-        learnings.push(learning.trim());
+        const text = learning.trim();
+        // Store raw item for debugging/analysis
+        rawItems.push({ type: 'learning', text });
+        learnings.push(text);
       }
     }
   }
@@ -349,6 +375,7 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
       learnings,
     },
     validationWarnings,
+    rawItems,
   };
 }
 
@@ -379,6 +406,7 @@ export async function extractMeetingIntelligence(
         learnings: [],
       },
       validationWarnings: [],
+      rawItems: [],
     };
   }
 
@@ -402,6 +430,7 @@ export async function extractMeetingIntelligence(
         learnings: [],
       },
       validationWarnings: [],
+      rawItems: [],
     };
   }
 }

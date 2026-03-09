@@ -40,6 +40,8 @@ type RawStagedItem = {
   id: string;
   text: string;
   type: 'ai' | 'de' | 'le';
+  source?: 'ai' | 'user' | 'dedup';
+  confidence?: number;
 };
 
 type RawStagedSections = {
@@ -113,6 +115,8 @@ function flattenStagedItems(raw: RawFullMeeting): ReviewItem[] {
     type: TYPE_MAP[item.type],
     text: raw.stagedItemEdits[item.id] ?? item.text,
     status: raw.stagedItemStatus[item.id] ?? 'pending',
+    source: item.source,
+    confidence: item.confidence,
   }));
 }
 
