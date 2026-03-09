@@ -4,6 +4,47 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 9, 2026
+
+**Close-out checklist for your plans.** When you finish a plan and want to make sure all the documentation is up to date, run `/wrap` in plan mode. It checks:
+- Memory entry exists for this plan
+- MEMORY.md index is updated
+- LEARNINGS.md files in changed directories
+- Capability catalog freshness (if you added new commands)
+
+Each item shows ✅ (done), ❌ (missing with what to do), or ⚠️ (suggested review). No more manually remembering what needs updating after a build.
+
+---
+
+## Week of March 8, 2026
+
+Big week for visibility and AI configuration.
+
+**Product Intelligence Dashboard is here.** Run `arete view` to open a full web dashboard in your browser. See your meetings, people, commitments, goals, and intelligence patterns all in one place. The dashboard includes:
+- **Dashboard** — Today's meetings, commitment pulse, recent activity, signal patterns
+- **Meeting Triage** — Review and process meetings with AI-assisted extraction
+- **People Intelligence** — Sortable table with relationship health, stances, commitments
+- **Goals Alignment** — Strategy → Quarter → Week → Commitments cascade
+- **Commitments** — Full commitment management with mark-done and drop actions
+- **Global Search** — Search across meetings, people, memory, and projects
+
+The backend runs locally and the dashboard opens in your default browser. All your data stays on your machine.
+
+**Morning intelligence brief.** Run `arete daily` each morning to see what's on your plate: today's calendar, overdue commitments, active projects, recent decisions, and cross-person signal patterns. It's a quick way to orient before diving into work.
+
+**Momentum tracking.** `arete momentum` shows you commitment momentum (what's hot, stale, or critical) and relationship momentum (who you're actively meeting with vs. relationships that have gone quiet). Useful for weekly reviews and ensuring nothing slips through the cracks.
+
+**AI configuration is simpler.** You can now configure AI providers without editing YAML files:
+- `arete credentials login` — OAuth login for Claude, GitHub Copilot, or Google Gemini
+- `arete credentials set <provider>` — Set an API key
+- `arete credentials show` — See what's configured
+- `arete config show ai` — View tier and task mappings
+- `arete config set ai.tiers.fast <model>` — Customize which model handles which tasks
+
+OAuth tokens refresh automatically, so once you're logged in, it just works.
+
+---
+
 ## Wednesday, March 4, 2026
 
 A lot of meeting intelligence improvements landed today.
