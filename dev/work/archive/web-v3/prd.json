@@ -16,9 +16,10 @@
         "Integration test: mount BlockEditor, type content, verify onChange fires with markdown",
         "No lint/typecheck errors"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "99bb69d"
     },
     {
       "id": "v3-2-people-detail",
@@ -36,9 +37,10 @@
         "Loading skeleton matches new layout",
         "Tests: render page, verify sections present, test edit flow"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "bf94662"
     },
     {
       "id": "v3-3-favorites",
@@ -54,9 +56,10 @@
         "Optimistic update: star click immediately reflects in UI",
         "Tests: toggle favorite, verify API call, verify UI update"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "a0d69d5"
     },
     {
       "id": "v3-4-commitments",
@@ -72,9 +75,10 @@
         "Full URL structure: ?direction=mine&filter=open&person=anita-law",
         "Tests: filter by direction, verify correct items shown"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "13a1a1e"
     },
     {
       "id": "v3-5-meeting-review",
@@ -89,9 +93,10 @@
         "Keyboard accessible: Tab through items, Enter to toggle",
         "Tests: collapse section, verify localStorage; bulk approve; toggle item status"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "4630808"
     },
     {
       "id": "v3-6-meeting-sheet",
@@ -107,15 +112,16 @@
         "Click outside closes; X button closes",
         "Tests: open sheet, verify content rendered, close via X"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "2801dac"
     }
   ],
   "metadata": {
     "createdAt": "2026-03-07T16:45:00Z",
     "totalTasks": 6,
-    "completedTasks": 0,
+    "completedTasks": 6,
     "failedTasks": 0
   }
 }

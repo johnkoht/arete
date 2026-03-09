@@ -1,7 +1,7 @@
 ---
 title: "Areté Web App V3 — Frontend UX"
 slug: web-v3
-status: draft
+status: complete
 size: large
 tags: [web, frontend, ux]
 created: "2026-03-07"
