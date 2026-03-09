@@ -59,6 +59,16 @@ export type MeetingExtractionResult = {
     rawItems: RawExtractedItem[];
 };
 /**
+ * Normalize text for Jaccard comparison.
+ * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
+ */
+export declare function normalizeForJaccard(text: string): string[];
+/**
+ * Compute Jaccard similarity between two word arrays.
+ * Returns 0-1 where 1 is identical.
+ */
+export declare function jaccardSimilarity(a: string[], b: string[]): number;
+/**
  * Build the LLM prompt for extracting meeting intelligence.
  *
  * @param transcript - Meeting transcript text

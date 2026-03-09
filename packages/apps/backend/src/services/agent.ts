@@ -28,16 +28,22 @@ type JobsService = {
 };
 
 /**
- * TypeBox schema for meeting extraction response.
+ * TypeBox schema for meeting extraction response with confidence scores.
  */
+const ExtractionItemSchema = Type.Object({
+  text: Type.String({ description: 'The extracted item text' }),
+  confidence: Type.Number({ description: 'Confidence score 0-1' }),
+});
+
 const MeetingExtractionSchema = Type.Object({
   summary: Type.String({ description: '2-4 sentence summary of the meeting' }),
-  actionItems: Type.Array(Type.String(), { description: 'Action items extracted' }),
-  decisions: Type.Array(Type.String(), { description: 'Decisions made in the meeting' }),
-  learnings: Type.Array(Type.String(), { description: 'Learnings or insights' }),
+  actionItems: Type.Array(ExtractionItemSchema, { description: 'Action items extracted with confidence' }),
+  decisions: Type.Array(ExtractionItemSchema, { description: 'Decisions made in the meeting with confidence' }),
+  learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
 });
 
 type MeetingExtraction = Static<typeof MeetingExtractionSchema>;
+type ExtractionItem = Static<typeof ExtractionItemSchema>;
 
 /** Item source type: 'ai' (LLM extracted) or 'dedup' (matched user notes) */
 type ItemSource = 'ai' | 'dedup';
@@ -93,36 +99,112 @@ function itemMatchesUserNotes(itemText: string, userNotesNormalized: string[]): 
   return similarity > DEDUP_JACCARD_THRESHOLD;
 }
 
+/** Confidence thresholds for pre-selection */
+const CONFIDENCE_THRESHOLD_APPROVED = 0.8;
+const CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
+
+/** Result of applying confidence thresholds */
+interface FilteredExtraction {
+  actionItems: ExtractionItem[];
+  decisions: ExtractionItem[];
+  learnings: ExtractionItem[];
+}
+
+/**
+ * Filter extraction items by confidence threshold.
+ * Items with confidence < 0.5 are filtered out.
+ */
+function filterByConfidence(extraction: MeetingExtraction): FilteredExtraction {
+  return {
+    actionItems: extraction.actionItems.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+    decisions: extraction.decisions.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+    learnings: extraction.learnings.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+  };
+}
+
 /**
  * Determine sources for extracted items by comparing against user notes.
  * Items matching user notes (Jaccard > 0.7) get source: 'dedup'.
  */
 function determineItemSources(
-  extraction: MeetingExtraction,
+  filtered: FilteredExtraction,
   userNotes: string,
 ): ItemSources {
   const sources: ItemSources = {};
   const userNotesNormalized = normalizeForJaccard(userNotes);
 
   // Check action items
-  extraction.actionItems.forEach((item, index) => {
+  filtered.actionItems.forEach((item, index) => {
     const id = `ai_${String(index + 1).padStart(3, '0')}`;
-    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+    sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
   });
 
   // Check decisions
-  extraction.decisions.forEach((item, index) => {
+  filtered.decisions.forEach((item, index) => {
     const id = `de_${String(index + 1).padStart(3, '0')}`;
-    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+    sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
   });
 
   // Check learnings
-  extraction.learnings.forEach((item, index) => {
+  filtered.learnings.forEach((item, index) => {
     const id = `le_${String(index + 1).padStart(3, '0')}`;
-    sources[id] = itemMatchesUserNotes(item, userNotesNormalized) ? 'dedup' : 'ai';
+    sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
   });
 
   return sources;
+}
+
+/** Map of item ID to confidence score */
+type ItemConfidences = Record<string, number>;
+
+/**
+ * Build confidence map for all items.
+ */
+function buildConfidenceMap(filtered: FilteredExtraction): ItemConfidences {
+  const confidences: ItemConfidences = {};
+
+  filtered.actionItems.forEach((item, index) => {
+    const id = `ai_${String(index + 1).padStart(3, '0')}`;
+    confidences[id] = item.confidence;
+  });
+
+  filtered.decisions.forEach((item, index) => {
+    const id = `de_${String(index + 1).padStart(3, '0')}`;
+    confidences[id] = item.confidence;
+  });
+
+  filtered.learnings.forEach((item, index) => {
+    const id = `le_${String(index + 1).padStart(3, '0')}`;
+    confidences[id] = item.confidence;
+  });
+
+  return confidences;
+}
+
+/**
+ * Determine item status based on confidence and dedup source.
+ * - dedup items → 'approved' (user notes match)
+ * - confidence > 0.8 → 'approved' (high confidence)
+ * - confidence 0.5-0.8 → 'pending' (needs review)
+ */
+function determineItemStatus(
+  itemSources: ItemSources,
+  confidences: ItemConfidences,
+): Record<string, string> {
+  const statuses: Record<string, string> = {};
+
+  for (const [id, source] of Object.entries(itemSources)) {
+    if (source === 'dedup') {
+      // Dedup items are always approved
+      statuses[id] = 'approved';
+    } else {
+      // Use confidence threshold for AI-extracted items
+      const confidence = confidences[id] ?? 0;
+      statuses[id] = confidence > CONFIDENCE_THRESHOLD_APPROVED ? 'approved' : 'pending';
+    }
+  }
+
+  return statuses;
 }
 
 /**
@@ -204,10 +286,12 @@ function buildExtractionPrompt(content: string): string {
 3. Decisions - choices or conclusions that were explicitly made during the meeting.
 4. Learnings - insights, lessons learned, or important information shared.
 
-Meeting transcript:
----
-${textToAnalyze}
----
+For each action item, decision, and learning, provide a confidence score from 0 to 1:
+- 0.9-1.0: Explicitly stated, very clear
+- 0.7-0.9: Clearly implied or strongly suggested
+- 0.5-0.7: Somewhat implied, moderate confidence
+- 0.3-0.5: Weakly implied, low confidence
+- 0.0-0.3: Very uncertain, possibly misinterpreted
 
 IMPORTANT INSTRUCTIONS:
 - Read the actual conversation carefully and identify action items from what people SAY they will do.
@@ -216,47 +300,53 @@ IMPORTANT INSTRUCTIONS:
 - Each item should be a separate entry - do not combine multiple items.
 - Write clean, standalone text for each item.
 
-If a category has no items, return an empty array.`;
+Meeting content:
+---
+${textToAnalyze}
+---
+
+Extract the above information. For action items, decisions, and learnings, only include items that are clearly stated or implied in the meeting. If a category has no items, return an empty array. Include confidence scores for each extracted item.`;
 }
 
 /**
  * Format extraction result as markdown sections.
  * IDs are zero-padded 3 digits (ai_001, de_001, le_001).
+ * Takes FilteredExtraction (post-confidence filtering) and original summary.
  */
-function formatStagedSections(extraction: MeetingExtraction): string {
+function formatStagedSections(filtered: FilteredExtraction, summary: string): string {
   const lines: string[] = [];
 
   // Summary section
   lines.push('## Summary');
-  lines.push(extraction.summary);
+  lines.push(summary);
   lines.push('');
 
   // Staged Action Items
-  if (extraction.actionItems.length > 0) {
+  if (filtered.actionItems.length > 0) {
     lines.push('## Staged Action Items');
-    extraction.actionItems.forEach((item, index) => {
+    filtered.actionItems.forEach((item, index) => {
       const id = `ai_${String(index + 1).padStart(3, '0')}`;
-      lines.push(`- ${id}: ${item}`);
+      lines.push(`- ${id}: ${item.text}`);
     });
     lines.push('');
   }
 
   // Staged Decisions
-  if (extraction.decisions.length > 0) {
+  if (filtered.decisions.length > 0) {
     lines.push('## Staged Decisions');
-    extraction.decisions.forEach((item, index) => {
+    filtered.decisions.forEach((item, index) => {
       const id = `de_${String(index + 1).padStart(3, '0')}`;
-      lines.push(`- ${id}: ${item}`);
+      lines.push(`- ${id}: ${item.text}`);
     });
     lines.push('');
   }
 
   // Staged Learnings
-  if (extraction.learnings.length > 0) {
+  if (filtered.learnings.length > 0) {
     lines.push('## Staged Learnings');
-    extraction.learnings.forEach((item, index) => {
+    filtered.learnings.forEach((item, index) => {
       const id = `le_${String(index + 1).padStart(3, '0')}`;
-      lines.push(`- ${id}: ${item}`);
+      lines.push(`- ${id}: ${item.text}`);
     });
     lines.push('');
   }
@@ -363,10 +453,23 @@ export async function runProcessingSessionTestable(
       throw new Error(`AI extraction failed: ${message}`);
     }
 
-    // 4. Extract user notes and determine item sources
+    // 4. Filter items by confidence threshold (exclude confidence < 0.5)
+    jobs.appendEvent(jobId, 'Applying confidence thresholds...');
+    const filtered = filterByConfidence(extraction);
+    
+    // Log filtered counts
+    const filteredOutCount = 
+      (extraction.actionItems.length - filtered.actionItems.length) +
+      (extraction.decisions.length - filtered.decisions.length) +
+      (extraction.learnings.length - filtered.learnings.length);
+    if (filteredOutCount > 0) {
+      jobs.appendEvent(jobId, `Filtered out ${filteredOutCount} low-confidence items.`);
+    }
+
+    // 5. Extract user notes and determine item sources
     jobs.appendEvent(jobId, 'Checking for user notes...');
     const userNotes = extractUserNotes(content);
-    const itemSources = determineItemSources(extraction, userNotes);
+    const itemSources = determineItemSources(filtered, userNotes);
     
     // Count dedup items for logging
     const dedupCount = Object.values(itemSources).filter(s => s === 'dedup').length;
@@ -374,34 +477,37 @@ export async function runProcessingSessionTestable(
       jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
     }
 
-    // 5. Format staged sections
-    const stagedSections = formatStagedSections(extraction);
+    // 6. Build confidence map and determine item status
+    const confidences = buildConfidenceMap(filtered);
+    const itemStatus = determineItemStatus(itemSources, confidences);
+    
+    // Count high-confidence auto-approved items (excluding dedup)
+    const highConfidenceApproved = Object.entries(itemStatus)
+      .filter(([id, status]) => status === 'approved' && itemSources[id] !== 'dedup')
+      .length;
+    if (highConfidenceApproved > 0) {
+      jobs.appendEvent(jobId, `Auto-approved ${highConfidenceApproved} high-confidence items.`);
+    }
 
-    // 6. Update content with staged sections
+    // 7. Format staged sections
+    const stagedSections = formatStagedSections(filtered, extraction.summary);
+
+    // 8. Update content with staged sections
     const updatedContent = updateMeetingContent(content, stagedSections);
 
-    // 7. Update frontmatter with status, sources, and auto-approve dedup items
+    // 9. Update frontmatter with status, sources, confidence, and item status
     fm['status'] = 'processed';
     fm['processed_at'] = new Date().toISOString();
     fm['staged_item_source'] = itemSources;
-    
-    // Auto-approve dedup items
-    const autoApproveStatus: Record<string, string> = {};
-    for (const [id, source] of Object.entries(itemSources)) {
-      if (source === 'dedup') {
-        autoApproveStatus[id] = 'approved';
-      }
-    }
-    if (Object.keys(autoApproveStatus).length > 0) {
-      fm['staged_item_status'] = autoApproveStatus;
-    }
+    fm['staged_item_confidence'] = confidences;
+    fm['staged_item_status'] = itemStatus;
 
-    // 8. Write updated file
+    // 10. Write updated file
     jobs.appendEvent(jobId, 'Writing staged sections...');
     const updatedFile = matter.stringify(updatedContent, fm);
     await deps.writeFile(meetingPath, updatedFile);
 
-    // 8. Mark job done
+    // 11. Mark job done
     jobs.setJobStatus(jobId, 'done');
     jobs.appendEvent(jobId, 'Meeting processed successfully.');
   } catch (err) {

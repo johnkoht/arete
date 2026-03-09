@@ -3,162 +3,218 @@
  *
  * Reads meeting files, extracts content via AI, and writes staged sections.
  * Replaces the previous pi-coding-agent implementation with direct AI calls.
+ *
+ * Includes user notes deduplication: items matching user-written notes
+ * (Jaccard > 0.7) are marked source: 'dedup' for auto-approval.
  */
 import { Type } from '@sinclair/typebox';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent } from '@arete/core';
+import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity } from '@arete/core';
 import * as jobsService from './jobs.js';
 /**
- * TypeBox schema for meeting extraction response.
+ * TypeBox schema for meeting extraction response with confidence scores.
  */
+const ExtractionItemSchema = Type.Object({
+    text: Type.String({ description: 'The extracted item text' }),
+    confidence: Type.Number({ description: 'Confidence score 0-1' }),
+});
 const MeetingExtractionSchema = Type.Object({
     summary: Type.String({ description: '2-4 sentence summary of the meeting' }),
-    actionItems: Type.Array(Type.String(), { description: 'Action items extracted' }),
-    decisions: Type.Array(Type.String(), { description: 'Decisions made in the meeting' }),
-    learnings: Type.Array(Type.String(), { description: 'Learnings or insights' }),
+    actionItems: Type.Array(ExtractionItemSchema, { description: 'Action items extracted with confidence' }),
+    decisions: Type.Array(ExtractionItemSchema, { description: 'Decisions made in the meeting with confidence' }),
+    learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
 });
+/** Jaccard similarity threshold for user notes deduplication */
+const DEDUP_JACCARD_THRESHOLD = 0.7;
+/**
+ * Extract user-written notes from meeting body.
+ * Excludes: ## Transcript, ## Staged Action Items, ## Staged Decisions, ## Staged Learnings
+ */
+function extractUserNotes(body) {
+    const lines = body.split('\n');
+    const output = [];
+    let inExcludedSection = false;
+    const excludedHeaders = new Set([
+        'transcript',
+        'staged action items',
+        'staged decisions',
+        'staged learnings',
+    ]);
+    for (const line of lines) {
+        const headerMatch = line.match(/^##\s+(.+)$/);
+        if (headerMatch) {
+            const normalized = headerMatch[1].trim().toLowerCase();
+            inExcludedSection = excludedHeaders.has(normalized);
+            if (!inExcludedSection) {
+                output.push(line);
+            }
+            continue;
+        }
+        if (!inExcludedSection) {
+            output.push(line);
+        }
+    }
+    return output.join('\n');
+}
+/**
+ * Check if an extracted item matches user notes.
+ * Returns true if Jaccard similarity > threshold.
+ */
+function itemMatchesUserNotes(itemText, userNotesNormalized) {
+    const itemNormalized = normalizeForJaccard(itemText);
+    const similarity = jaccardSimilarity(itemNormalized, userNotesNormalized);
+    return similarity > DEDUP_JACCARD_THRESHOLD;
+}
+/** Confidence thresholds for pre-selection */
+const CONFIDENCE_THRESHOLD_APPROVED = 0.8;
+const CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
+/**
+ * Filter extraction items by confidence threshold.
+ * Items with confidence < 0.5 are filtered out.
+ */
+function filterByConfidence(extraction) {
+    return {
+        actionItems: extraction.actionItems.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+        decisions: extraction.decisions.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+        learnings: extraction.learnings.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+    };
+}
+/**
+ * Determine sources for extracted items by comparing against user notes.
+ * Items matching user notes (Jaccard > 0.7) get source: 'dedup'.
+ */
+function determineItemSources(filtered, userNotes) {
+    const sources = {};
+    const userNotesNormalized = normalizeForJaccard(userNotes);
+    // Check action items
+    filtered.actionItems.forEach((item, index) => {
+        const id = `ai_${String(index + 1).padStart(3, '0')}`;
+        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
+    });
+    // Check decisions
+    filtered.decisions.forEach((item, index) => {
+        const id = `de_${String(index + 1).padStart(3, '0')}`;
+        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
+    });
+    // Check learnings
+    filtered.learnings.forEach((item, index) => {
+        const id = `le_${String(index + 1).padStart(3, '0')}`;
+        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
+    });
+    return sources;
+}
+/**
+ * Build confidence map for all items.
+ */
+function buildConfidenceMap(filtered) {
+    const confidences = {};
+    filtered.actionItems.forEach((item, index) => {
+        const id = `ai_${String(index + 1).padStart(3, '0')}`;
+        confidences[id] = item.confidence;
+    });
+    filtered.decisions.forEach((item, index) => {
+        const id = `de_${String(index + 1).padStart(3, '0')}`;
+        confidences[id] = item.confidence;
+    });
+    filtered.learnings.forEach((item, index) => {
+        const id = `le_${String(index + 1).padStart(3, '0')}`;
+        confidences[id] = item.confidence;
+    });
+    return confidences;
+}
+/**
+ * Determine item status based on confidence and dedup source.
+ * - dedup items → 'approved' (user notes match)
+ * - confidence > 0.8 → 'approved' (high confidence)
+ * - confidence 0.5-0.8 → 'pending' (needs review)
+ */
+function determineItemStatus(itemSources, confidences) {
+    const statuses = {};
+    for (const [id, source] of Object.entries(itemSources)) {
+        if (source === 'dedup') {
+            // Dedup items are always approved
+            statuses[id] = 'approved';
+        }
+        else {
+            // Use confidence threshold for AI-extracted items
+            const confidence = confidences[id] ?? 0;
+            statuses[id] = confidence > CONFIDENCE_THRESHOLD_APPROVED ? 'approved' : 'pending';
+        }
+    }
+    return statuses;
+}
 /**
  * Build extraction prompt from meeting content.
  */
-/**
- * Extract just the raw transcript portion from meeting content.
- * The raw transcript has speaker names with timestamps like "**John Koht | 00:14**"
- * We want to skip pre-processed sections like "## Action Items", "## Key Points", etc.
- */
-function extractRawTranscript(content) {
-    const lines = content.split('\n');
-    const transcriptLines = [];
-    let inTranscript = false;
-    let skipUntilNextHeader = false;
-    for (const line of lines) {
-        // Check for transcript section headers
-        if (line.match(/^##\s*Transcript\s*\d*\s*$/i)) {
-            inTranscript = true;
-            skipUntilNextHeader = false;
-            continue;
-        }
-        // Check for non-transcript headers to skip
-        if (line.match(/^##\s*(Action Items|Key Points|Summary|Decisions|Learnings|Recorder Notes)/i)) {
-            skipUntilNextHeader = true;
-            inTranscript = false;
-            continue;
-        }
-        // Any other ## header ends skip mode
-        if (line.startsWith('## ')) {
-            skipUntilNextHeader = false;
-            inTranscript = false;
-        }
-        // Collect transcript lines (look for speaker pattern: **Name | timestamp**)
-        if (inTranscript && !skipUntilNextHeader) {
-            transcriptLines.push(line);
-        }
-        else if (line.match(/^\*\*[^|]+\|\s*\d{2}:\d{2}\*\*$/)) {
-            // Speaker line outside explicit transcript section - start collecting
-            inTranscript = true;
-            transcriptLines.push(line);
-        }
-        else if (inTranscript && !line.startsWith('## ')) {
-            transcriptLines.push(line);
-        }
-    }
-    return transcriptLines.join('\n').trim();
-}
 function buildExtractionPrompt(content) {
-    // Extract only the raw transcript, not pre-processed sections
-    const rawTranscript = extractRawTranscript(content);
-    // Fall back to full content if no transcript found
-    const textToAnalyze = rawTranscript || content;
     return `Analyze this meeting transcript and extract the following:
 
 1. A 2-4 sentence summary of the meeting highlighting key topics and outcomes.
-2. Action items - specific tasks that were assigned or committed to (things people said they would do).
-3. Decisions - choices or conclusions that were explicitly made during the meeting.
-4. Learnings - insights, lessons learned, or important information shared.
+2. Action items - specific tasks that were assigned or committed to.
+3. Decisions - choices or conclusions that were made.
+4. Learnings - insights, lessons learned, or knowledge gained.
 
-Meeting transcript:
+For each action item, decision, and learning, provide a confidence score from 0 to 1:
+- 0.9-1.0: Explicitly stated, very clear
+- 0.7-0.9: Clearly implied or strongly suggested
+- 0.5-0.7: Somewhat implied, moderate confidence
+- 0.3-0.5: Weakly implied, low confidence
+- 0.0-0.3: Very uncertain, possibly misinterpreted
+
+Meeting content:
 ---
-${textToAnalyze}
+${content}
 ---
 
-IMPORTANT INSTRUCTIONS:
-- Read the actual conversation carefully and identify action items from what people SAY they will do.
-- Action items should be specific tasks assigned to or committed to by a person.
-- Do not include timestamp references in your output.
-- Each item should be a separate entry - do not combine multiple items.
-- Write clean, standalone text for each item.
-
-If a category has no items, return an empty array.`;
+Extract the above information. For action items, decisions, and learnings, only include items that are clearly stated or implied in the meeting. If a category has no items, return an empty array. Include confidence scores for each extracted item.`;
 }
 /**
  * Format extraction result as markdown sections.
  * IDs are zero-padded 3 digits (ai_001, de_001, le_001).
+ * Takes FilteredExtraction (post-confidence filtering) and original summary.
  */
-function formatStagedSections(extraction) {
+function formatStagedSections(filtered, summary) {
     const lines = [];
     // Summary section
     lines.push('## Summary');
-    lines.push(extraction.summary);
+    lines.push(summary);
     lines.push('');
     // Staged Action Items
-    if (extraction.actionItems.length > 0) {
+    if (filtered.actionItems.length > 0) {
         lines.push('## Staged Action Items');
-        extraction.actionItems.forEach((item, index) => {
+        filtered.actionItems.forEach((item, index) => {
             const id = `ai_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item}`);
+            lines.push(`- ${id}: ${item.text}`);
         });
         lines.push('');
     }
     // Staged Decisions
-    if (extraction.decisions.length > 0) {
+    if (filtered.decisions.length > 0) {
         lines.push('## Staged Decisions');
-        extraction.decisions.forEach((item, index) => {
+        filtered.decisions.forEach((item, index) => {
             const id = `de_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item}`);
+            lines.push(`- ${id}: ${item.text}`);
         });
         lines.push('');
     }
     // Staged Learnings
-    if (extraction.learnings.length > 0) {
+    if (filtered.learnings.length > 0) {
         lines.push('## Staged Learnings');
-        extraction.learnings.forEach((item, index) => {
+        filtered.learnings.forEach((item, index) => {
             const id = `le_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item}`);
+            lines.push(`- ${id}: ${item.text}`);
         });
         lines.push('');
     }
     return lines.join('\n');
 }
 /**
- * Remove approved sections from meeting content.
- * Removes: ## Approved Action Items, ## Approved Decisions, ## Approved Learnings
- */
-function clearApprovedSections(content) {
-    const lines = content.split('\n');
-    const result = [];
-    let skipping = false;
-    for (const line of lines) {
-        // Check for approved section headers
-        if (line.match(/^## Approved (Action Items|Decisions|Learnings)\s*$/)) {
-            skipping = true;
-            continue;
-        }
-        // Stop skipping at next header
-        if (skipping && line.startsWith('## ')) {
-            skipping = false;
-        }
-        if (!skipping) {
-            result.push(line);
-        }
-    }
-    return result.join('\n');
-}
-/**
  * Testable version of runProcessingSession with injected dependencies.
  * Used by tests to mock file operations and AI service.
  */
-export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options = {}) {
+export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps) {
     const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${meetingSlug}.md`);
     try {
         // 1. Read meeting file
@@ -173,18 +229,9 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             throw new Error(`Could not read meeting file: ${meetingSlug}.md`);
         }
         // 2. Parse frontmatter and content
-        const { data, content: rawContent } = matter(fileContent);
+        const { data, content } = matter(fileContent);
         // Clone frontmatter before mutating (gray-matter caching gotcha)
         const fm = { ...data };
-        // 2b. Optionally clear previously approved items
-        let content = rawContent;
-        if (options.clearApproved) {
-            jobs.appendEvent(jobId, 'Clearing previously approved items...');
-            content = clearApprovedSections(rawContent);
-            // Clear approved items from frontmatter
-            delete fm['approved_items'];
-            delete fm['approved_at'];
-        }
         // 3. Call AI for extraction
         jobs.appendEvent(jobId, 'Extracting content with AI...');
         let extraction;
@@ -204,18 +251,50 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             jobs.appendEvent(jobId, `Error: AI extraction failed: ${message}`);
             throw new Error(`AI extraction failed: ${message}`);
         }
-        // 4. Format staged sections
-        const stagedSections = formatStagedSections(extraction);
-        // 5. Update content with staged sections
+        // 4. Filter items by confidence threshold (exclude confidence < 0.5)
+        jobs.appendEvent(jobId, 'Applying confidence thresholds...');
+        const filtered = filterByConfidence(extraction);
+        // Log filtered counts
+        const filteredOutCount = (extraction.actionItems.length - filtered.actionItems.length) +
+            (extraction.decisions.length - filtered.decisions.length) +
+            (extraction.learnings.length - filtered.learnings.length);
+        if (filteredOutCount > 0) {
+            jobs.appendEvent(jobId, `Filtered out ${filteredOutCount} low-confidence items.`);
+        }
+        // 5. Extract user notes and determine item sources
+        jobs.appendEvent(jobId, 'Checking for user notes...');
+        const userNotes = extractUserNotes(content);
+        const itemSources = determineItemSources(filtered, userNotes);
+        // Count dedup items for logging
+        const dedupCount = Object.values(itemSources).filter(s => s === 'dedup').length;
+        if (dedupCount > 0) {
+            jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
+        }
+        // 6. Build confidence map and determine item status
+        const confidences = buildConfidenceMap(filtered);
+        const itemStatus = determineItemStatus(itemSources, confidences);
+        // Count high-confidence auto-approved items (excluding dedup)
+        const highConfidenceApproved = Object.entries(itemStatus)
+            .filter(([id, status]) => status === 'approved' && itemSources[id] !== 'dedup')
+            .length;
+        if (highConfidenceApproved > 0) {
+            jobs.appendEvent(jobId, `Auto-approved ${highConfidenceApproved} high-confidence items.`);
+        }
+        // 7. Format staged sections
+        const stagedSections = formatStagedSections(filtered, extraction.summary);
+        // 8. Update content with staged sections
         const updatedContent = updateMeetingContent(content, stagedSections);
-        // 6. Update frontmatter
+        // 9. Update frontmatter with status, sources, confidence, and item status
         fm['status'] = 'processed';
         fm['processed_at'] = new Date().toISOString();
-        // 7. Write updated file
+        fm['staged_item_source'] = itemSources;
+        fm['staged_item_confidence'] = confidences;
+        fm['staged_item_status'] = itemStatus;
+        // 10. Write updated file
         jobs.appendEvent(jobId, 'Writing staged sections...');
         const updatedFile = matter.stringify(updatedContent, fm);
         await deps.writeFile(meetingPath, updatedFile);
-        // 8. Mark job done
+        // 11. Mark job done
         jobs.setJobStatus(jobId, 'done');
         jobs.appendEvent(jobId, 'Meeting processed successfully.');
     }
@@ -257,9 +336,8 @@ export function initializeAIService(aiService) {
  * @param meetingSlug    Meeting file slug (no .md extension)
  * @param jobId          ID of the background job to append events to
  * @param jobs           Jobs service (real or mock) — defaults to the real module
- * @param options        Processing options (e.g. clearApproved)
  */
-export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jobs = jobsService, options = {}) {
+export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jobs = jobsService) {
     // Validate AIService is initialized
     if (!moduleAiService) {
         jobs.setJobStatus(jobId, 'error');
@@ -273,5 +351,5 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
         throw new Error('No AI provider configured. Set up API keys via arete credentials set anthropic.');
     }
     const deps = createDefaultDeps(moduleAiService);
-    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options);
+    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps);
 }
