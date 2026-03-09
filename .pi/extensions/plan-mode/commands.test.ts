@@ -17,6 +17,8 @@ import {
 	parsePlanListFilter,
 	preparePlanListItems,
 	checkPrdExecutionComplete,
+	detectChecklistTier,
+	findLearningsInDirs,
 	type PlanModeState,
 	type CommandContext,
 	type CommandPi,
@@ -1830,6 +1832,173 @@ describe("formatCloseoutChecklist — git failure handling", () => {
 			output.includes("⚠️") && output.includes("Unable to determine changed directories"),
 			`Tier 3 with null changedDirs should show ⚠️ fallback. Got: ${output}`,
 		);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// detectChecklistTier tests
+// ────────────────────────────────────────────────────────────
+
+describe("detectChecklistTier", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("returns Tier 1 for plan without PRD and no code changes", () => {
+		// Simple plan with no PRD, no code-related directories changed
+		const planDir = join(TEST_PLANS_DIR, "simple-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		const tier = detectChecklistTier(planDir, ["docs/", "readme.md"], false);
+		assert.equal(tier, 1);
+	});
+
+	it("returns Tier 2 when changedDirs includes packages/", () => {
+		const planDir = join(TEST_PLANS_DIR, "code-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		const tier = detectChecklistTier(planDir, ["packages/core/src/", "docs/"], false);
+		assert.equal(tier, 2);
+	});
+
+	it("returns Tier 2 when changedDirs includes .pi/extensions/", () => {
+		const planDir = join(TEST_PLANS_DIR, "extension-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		const tier = detectChecklistTier(planDir, [".pi/extensions/plan-mode/"], false);
+		assert.equal(tier, 2);
+	});
+
+	it("returns Tier 3 when PRD tasks mention 'command'", () => {
+		const planDir = join(TEST_PLANS_DIR, "command-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		// Create prd.json with a task mentioning "command"
+		const prdJson = {
+			userStories: [
+				{ title: "Add new CLI command", description: "Implement the /foo command" },
+			],
+		};
+		writeFileSync(join(planDir, "prd.json"), JSON.stringify(prdJson), "utf-8");
+
+		const tier = detectChecklistTier(planDir, ["packages/cli/"], true);
+		assert.equal(tier, 3);
+	});
+
+	it("returns Tier 3 when PRD tasks mention 'skill'", () => {
+		const planDir = join(TEST_PLANS_DIR, "skill-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		// Create prd.json with a task mentioning "skill"
+		const prdJson = {
+			userStories: [
+				{ title: "Create new skill", description: "Build a skill for X" },
+			],
+		};
+		writeFileSync(join(planDir, "prd.json"), JSON.stringify(prdJson), "utf-8");
+
+		const tier = detectChecklistTier(planDir, [".pi/skills/"], true);
+		assert.equal(tier, 3);
+	});
+
+	it("returns Tier 2 (not 3) when PRD exists but no capability keywords", () => {
+		const planDir = join(TEST_PLANS_DIR, "normal-prd-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		// Create prd.json WITHOUT capability keywords
+		const prdJson = {
+			userStories: [
+				{ title: "Fix bug", description: "Resolve the issue with parsing" },
+				{ title: "Add tests", description: "Improve test coverage" },
+			],
+		};
+		writeFileSync(join(planDir, "prd.json"), JSON.stringify(prdJson), "utf-8");
+
+		const tier = detectChecklistTier(planDir, ["packages/core/"], true);
+		assert.equal(tier, 2, "Should be Tier 2 (code changes) not Tier 3 (no capability keywords)");
+	});
+
+	it("returns Tier 1 when PRD exists but prd.json is missing", () => {
+		const planDir = join(TEST_PLANS_DIR, "prd-no-json-plan");
+		mkdirSync(planDir, { recursive: true });
+		// No prd.json file created
+
+		const tier = detectChecklistTier(planDir, ["docs/"], true);
+		assert.equal(tier, 1, "Should fall through to Tier 1 when prd.json missing");
+	});
+
+	it("returns Tier 1 when changedDirs is null (git unavailable)", () => {
+		const planDir = join(TEST_PLANS_DIR, "no-git-plan");
+		mkdirSync(planDir, { recursive: true });
+
+		const tier = detectChecklistTier(planDir, null, false);
+		assert.equal(tier, 1, "Should return Tier 1 when changedDirs is null");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// findLearningsInDirs tests
+// ────────────────────────────────────────────────────────────
+
+describe("findLearningsInDirs", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("returns empty array for null changedDirs", () => {
+		const result = findLearningsInDirs(null, TEST_PLANS_DIR);
+		assert.deepEqual(result, []);
+	});
+
+	it("returns empty array for empty changedDirs", () => {
+		const result = findLearningsInDirs([], TEST_PLANS_DIR);
+		assert.deepEqual(result, []);
+	});
+
+	it("returns dirs that contain LEARNINGS.md", () => {
+		// Create a directory structure with LEARNINGS.md
+		const dirWithLearnings = "with-learnings";
+		mkdirSync(join(TEST_PLANS_DIR, dirWithLearnings), { recursive: true });
+		writeFileSync(join(TEST_PLANS_DIR, dirWithLearnings, "LEARNINGS.md"), "# Learnings", "utf-8");
+
+		const result = findLearningsInDirs([dirWithLearnings], TEST_PLANS_DIR);
+		assert.deepEqual(result, [dirWithLearnings]);
+	});
+
+	it("excludes dirs without LEARNINGS.md", () => {
+		// Create directories: one with LEARNINGS.md, one without
+		const withLearnings = "dir-with";
+		const withoutLearnings = "dir-without";
+
+		mkdirSync(join(TEST_PLANS_DIR, withLearnings), { recursive: true });
+		mkdirSync(join(TEST_PLANS_DIR, withoutLearnings), { recursive: true });
+
+		writeFileSync(join(TEST_PLANS_DIR, withLearnings, "LEARNINGS.md"), "# Learnings", "utf-8");
+		// No LEARNINGS.md in withoutLearnings
+
+		const result = findLearningsInDirs([withLearnings, withoutLearnings], TEST_PLANS_DIR);
+
+		assert.deepEqual(result, [withLearnings], "Should only include dir with LEARNINGS.md");
+		assert.ok(!result.includes(withoutLearnings), "Should exclude dir without LEARNINGS.md");
+	});
+
+	it("handles multiple dirs with LEARNINGS.md", () => {
+		// Create multiple directories with LEARNINGS.md
+		const dir1 = "learnings-dir-1";
+		const dir2 = "learnings-dir-2";
+		const dir3 = "no-learnings";
+
+		mkdirSync(join(TEST_PLANS_DIR, dir1), { recursive: true });
+		mkdirSync(join(TEST_PLANS_DIR, dir2), { recursive: true });
+		mkdirSync(join(TEST_PLANS_DIR, dir3), { recursive: true });
+
+		writeFileSync(join(TEST_PLANS_DIR, dir1, "LEARNINGS.md"), "# L1", "utf-8");
+		writeFileSync(join(TEST_PLANS_DIR, dir2, "LEARNINGS.md"), "# L2", "utf-8");
+
+		const result = findLearningsInDirs([dir1, dir2, dir3], TEST_PLANS_DIR);
+
+		assert.equal(result.length, 2, "Should find both dirs with LEARNINGS.md");
+		assert.ok(result.includes(dir1));
+		assert.ok(result.includes(dir2));
+		assert.ok(!result.includes(dir3));
 	});
 });
 
