@@ -7,8 +7,9 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import type { SpawnSyncReturns } from 'node:child_process';
 import { createTmpDir, cleanupTmpDir, runCli } from '../helpers.js';
-import { runView, type ViewCommandDeps } from '../../src/commands/view.js';
+import { runView, ensureWebBuild, type ViewCommandDeps } from '../../src/commands/view.js';
 
 // ─── Fake child process ───────────────────────────────────────────────────────
 
@@ -43,7 +44,118 @@ function makeFetchFail(): typeof fetch {
     Promise.reject(new Error('connection refused'));
 }
 
+/** Mock spawnSync that always returns success. */
+function makeSpawnSyncOk(): typeof import('child_process').spawnSync {
+  return ((_cmd: string, _args?: readonly string[]) => ({
+    status: 0,
+    signal: null,
+    output: [],
+    pid: 0,
+    stdout: Buffer.from(''),
+    stderr: Buffer.from(''),
+  })) as unknown as typeof import('child_process').spawnSync;
+}
+
+/** Mock existsSync that returns true for specified paths. */
+function makeExistsSyncFor(
+  existingPaths: string[],
+): typeof import('fs').existsSync {
+  return ((path: string) => existingPaths.some(p => path.includes(p))) as typeof import('fs').existsSync;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('ensureWebBuild', () => {
+  it('returns true when dist/index.html already exists', () => {
+    const existsSyncFn = makeExistsSyncFor(['dist/index.html']);
+    const spawnSyncFn = makeSpawnSyncOk();
+
+    const result = ensureWebBuild('/fake/root', false, spawnSyncFn, existsSyncFn);
+
+    assert.equal(result, true);
+  });
+
+  it('runs npm install + npm run build when dist does not exist', () => {
+    const calls: string[][] = [];
+    const spawnSyncFn = ((_cmd: string, args?: readonly string[]) => {
+      calls.push([_cmd, ...(args ?? [])]);
+      return { status: 0 } as SpawnSyncReturns<Buffer>;
+    }) as unknown as typeof import('child_process').spawnSync;
+
+    // First call: no dist. After build: dist exists.
+    let buildRan = false;
+    const existsSyncFn = ((path: string) => {
+      if (path.includes('dist/index.html')) return buildRan;
+      if (path.includes('node_modules')) return false; // trigger npm install
+      return false;
+    }) as typeof import('fs').existsSync;
+
+    // Simulate build creating dist
+    const originalSpawnSync = spawnSyncFn;
+    const wrappedSpawnSync = ((cmd: string, args?: readonly string[], opts?: unknown) => {
+      const result = originalSpawnSync(cmd, args, opts);
+      if (args?.includes('build')) buildRan = true;
+      return result;
+    }) as typeof import('child_process').spawnSync;
+
+    const result = ensureWebBuild('/fake/root', false, wrappedSpawnSync, existsSyncFn);
+
+    assert.equal(result, true);
+    assert.ok(calls.some(c => c.includes('install')), 'Expected npm install to be called');
+    assert.ok(calls.some(c => c.includes('build')), 'Expected npm run build to be called');
+  });
+
+  it('skips npm install when node_modules exists', () => {
+    const calls: string[][] = [];
+    const spawnSyncFn = ((_cmd: string, args?: readonly string[]) => {
+      calls.push([_cmd, ...(args ?? [])]);
+      return { status: 0 } as SpawnSyncReturns<Buffer>;
+    }) as unknown as typeof import('child_process').spawnSync;
+
+    const existsSyncFn = ((path: string) => {
+      if (path.includes('dist/index.html')) return false;
+      if (path.includes('node_modules')) return true; // node_modules exists
+      return false;
+    }) as typeof import('fs').existsSync;
+
+    ensureWebBuild('/fake/root', false, spawnSyncFn, existsSyncFn);
+
+    assert.ok(!calls.some(c => c.includes('install')), 'Should not run npm install');
+    assert.ok(calls.some(c => c.includes('build')), 'Should run npm run build');
+  });
+
+  it('returns false when npm install fails', () => {
+    const spawnSyncFn = ((_cmd: string, args?: readonly string[]) => {
+      if (args?.includes('install')) return { status: 1 } as SpawnSyncReturns<Buffer>;
+      return { status: 0 } as SpawnSyncReturns<Buffer>;
+    }) as unknown as typeof import('child_process').spawnSync;
+
+    const existsSyncFn = ((path: string) => {
+      if (path.includes('node_modules')) return false;
+      return false;
+    }) as typeof import('fs').existsSync;
+
+    const result = ensureWebBuild('/fake/root', false, spawnSyncFn, existsSyncFn);
+
+    assert.equal(result, false);
+  });
+
+  it('returns false when npm run build fails', () => {
+    const spawnSyncFn = ((_cmd: string, args?: readonly string[]) => {
+      if (args?.includes('build')) return { status: 1 } as SpawnSyncReturns<Buffer>;
+      return { status: 0 } as SpawnSyncReturns<Buffer>;
+    }) as unknown as typeof import('child_process').spawnSync;
+
+    const existsSyncFn = ((path: string) => {
+      if (path.includes('node_modules')) return true;
+      return false;
+    }) as typeof import('fs').existsSync;
+
+    const result = ensureWebBuild('/fake/root', false, spawnSyncFn, existsSyncFn);
+
+    assert.equal(result, false);
+  });
+});
 
 describe('view command — workspace-not-found', () => {
   let tmpDir: string;
@@ -146,6 +258,8 @@ describe('view command — all-ports-busy', () => {
       const deps: ViewCommandDeps = {
         isPortAvailableFn: async (_port: number) => false,
         spawnFn: (() => makeFakeChild()) as unknown as typeof import('child_process').spawn,
+        spawnSyncFn: makeSpawnSyncOk(),
+        existsSyncFn: makeExistsSyncFor(['dist/index.html', 'dist/index.js']),
         fetchFn: makeFetchOk(),
         openBrowserFn: async (_url: string) => {},
       };
@@ -163,6 +277,8 @@ describe('view command — all-ports-busy', () => {
       const deps: ViewCommandDeps = {
         isPortAvailableFn: async (_port: number) => false,
         spawnFn: (() => makeFakeChild()) as unknown as typeof import('child_process').spawn,
+        spawnSyncFn: makeSpawnSyncOk(),
+        existsSyncFn: makeExistsSyncFor(['dist/index.html', 'dist/index.js']),
         fetchFn: makeFetchOk(),
         openBrowserFn: async (_url: string) => {},
       };
@@ -220,6 +336,8 @@ describe('view command — server-start-success', () => {
         spawnCalled = true;
         return fakeChild;
       }) as unknown as typeof import('child_process').spawn,
+      spawnSyncFn: makeSpawnSyncOk(),
+      existsSyncFn: makeExistsSyncFor(['dist/index.html', 'dist/index.js']),
       fetchFn: makeFetchOk(),
       openBrowserFn: async (url: string) => {
         browserOpened = url;
@@ -297,6 +415,8 @@ describe('view command — SIGINT cleanup', () => {
     const deps: ViewCommandDeps = {
       isPortAvailableFn: async (port: number) => port === 3847,
       spawnFn: ((_cmd: string, _args: string[], _opts: unknown) => fakeChild) as unknown as typeof import('child_process').spawn,
+      spawnSyncFn: makeSpawnSyncOk(),
+      existsSyncFn: makeExistsSyncFor(['dist/index.html', 'dist/index.js']),
       fetchFn: makeFetchOk(),
       openBrowserFn: async (_url: string) => {},
     };
