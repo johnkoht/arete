@@ -28,6 +28,10 @@ function runCli(args: string, options: { env?: Record<string, string> } = {}): {
   const cliPath = join(__dirname, '../../src/index.ts');
   const env = {
     ...process.env,
+    // Clear API key env vars to ensure test isolation
+    ANTHROPIC_API_KEY: '',
+    GOOGLE_API_KEY: '',
+    OPENAI_API_KEY: '',
     ...options.env,
     // Redirect HOME to temp dir for isolated credential storage
     HOME: TEST_TMPDIR,
