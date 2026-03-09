@@ -91,12 +91,11 @@ describe('ensureWebBuild', () => {
     }) as typeof import('fs').existsSync;
 
     // Simulate build creating dist
-    const originalSpawnSync = spawnSyncFn;
-    const wrappedSpawnSync = ((cmd: string, args?: readonly string[], opts?: unknown) => {
-      const result = originalSpawnSync(cmd, args, opts);
+    const wrappedSpawnSync = ((cmd: string, args?: readonly string[]) => {
+      const result = spawnSyncFn(cmd, args);
       if (args?.includes('build')) buildRan = true;
       return result;
-    }) as typeof import('child_process').spawnSync;
+    }) as unknown as typeof import('child_process').spawnSync;
 
     const result = ensureWebBuild('/fake/root', false, wrappedSpawnSync, existsSyncFn);
 
