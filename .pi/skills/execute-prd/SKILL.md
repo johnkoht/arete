@@ -91,6 +91,8 @@ The Reviewer acts as a sr. engineer in two moments:
 1. **Before work begins**: When a task is about to go to a subagent, the Reviewer reviews and confirms details, AC, and clarity on what to build. This is a **sanity check** before work begins.
 2. **After the subagent completes**: The Reviewer performs a **thorough code review** as a sr. engineer: validates the work, acceptance criteria, and tests (technical review, AC review, quality check DRY/KISS, reuse and duplication check, refactor items when applicable). Accept or iterate with structured feedback to the subagent.
 
+**Mindset**: Adopt the "grumpy senior engineer who doesn't trust anything" persona. Ask adversarial questions: "What if this already exists?", "What about legacy data?", "Did you verify or assume?" This skeptical approach caught 5 phantom tasks and a critical backwards-compatibility issue in the reimagine-v2 PRD (2026-03-07).
+
 ## When to Use
 
 - User says: "Execute this PRD" or "Build everything in prd.json"
@@ -124,6 +126,12 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
    - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
    - Understand dependencies between tasks (A1→A2→A3→B1...).
+   - **Phantom Task Detection** (verify PRD is current):
+     - Check if proposed files already exist (`ls -la` the paths in prd.json)
+     - Check if proposed functionality already works (not just file existence — does the feature run?)
+     - Verify PRD reflects current codebase state (it may have been written before recent changes)
+     - **If phantom tasks detected** (features already implemented): Surface to builder with options — (a) skip them, (b) verify AC and mark complete, (c) proceed anyway
+     - *Source*: reimagine-v2 PRD (2026-03-07) — 5/6 tasks were phantom, saving ~80% of planned work
 
 3. **Clarity and Alignment**
    - If anything is unclear (scope, problem statement, success criteria, or how it fits Areté), **ask the builder** before proceeding. Do not assume.
@@ -180,6 +188,7 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
    | **State Tracking** | How to track progress? | "Update prd.json after each task" |
    | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, plan items with doc tasks" |
+   | **Build Scripts** | Do referenced scripts exist? | "Verify `npm run build:agents:dev` exists before putting in prompts" |
 
 7. **Document Mitigations**
    
@@ -201,6 +210,14 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    4. Doc subagent runs checklist, updates files, commits.
 
    **Pattern:** Orchestrator spawns doc subagent after all implementation tasks complete. Subagent has full context of what changed and runs systematic audit.
+
+   **Shared Utility Mitigation:**
+
+   If pre-mortem identifies that two tasks will need the same helper/formatter/utility:
+   - **Option A**: Add a Task 0 to create the shared utility first (before both dependent tasks).
+   - **Option B**: In Task 2's prompt, explicitly state: "Import [utility] from Task 1's file; do not reimplement."
+
+   **Anti-pattern**: Flagging duplication in code review then filing a refactor item. Better to prevent during implementation.
 
 8. **Share Pre-Mortem with User**
    
@@ -262,6 +279,7 @@ For each pending task (in dependency order):
    **Reuse & Design**:
    - Use existing services, helpers, and abstractions per AGENTS.md (e.g. getSearchProvider(), shared CLI helpers). Do not reimplement what already exists.
    - Apply DRY (don't repeat yourself) and KISS (simplest solution that meets acceptance criteria). Prefer existing modules over new ones when they fit.
+   - **Extract constants for repeated structures**: If you use the same config object, schema, or data structure more than once, extract it to a named constant. *Source*: ai-config PRD (2026-03-08) — duplicate aiConfig objects caught in review.
    
    **Pre-Mortem Mitigations Applied**:
    - [Mitigation 1 from pre-mortem]
@@ -340,6 +358,8 @@ For each pending task (in dependency order):
     ```
 
     The reviewer follows its full review process: file deletion check, technical review, AC review, quality check (DRY/KISS), reuse check, quality gates, and accept/iterate decision (see `.pi/agents/reviewer.md` for the complete checklist).
+
+    **Backwards Compatibility Check** (for data-writing code): If the task modifies code that writes/updates data, ask: "Does the implementation handle legacy data formats? What about existing data created by the old code?" *Source*: reimagine-v2 PRD (2026-03-07) — priority toggle fix needed to handle both old (`[x]`) and new (`- [x]`) formats.
 
     **Orchestrator actions based on verdict:**
 
