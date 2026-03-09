@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-04",
+  "lastUpdated": "2026-03-08",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -35,7 +35,8 @@
         "/pre-mortem",
         "/prd",
         "/build",
-        "/build status"
+        "/build status",
+        "/wrap"
       ],
       "readBeforeChange": [
         ".pi/extensions/plan-mode/index.ts",
@@ -221,27 +222,185 @@
       "owner": "build",
       "implementationPaths": [
         "packages/core/src/services/ai.ts",
-        "packages/core/src/credentials.ts"
+        "packages/core/src/credentials.ts",
+        "packages/cli/src/commands/credentials.ts",
+        "packages/cli/src/commands/config.ts"
       ],
       "entrypoints": [
         "packages/core/src/services/ai.ts",
-        "packages/core/src/credentials.ts"
+        "packages/core/src/credentials.ts",
+        "arete credentials login [provider]",
+        "arete credentials set <provider>",
+        "arete credentials show",
+        "arete credentials test",
+        "arete config show ai",
+        "arete config set <path> <value>"
       ],
       "readBeforeChange": [
         "packages/core/src/services/ai.ts",
         "packages/core/src/credentials.ts",
-        "packages/core/src/models/workspace.ts"
+        "packages/core/src/models/workspace.ts",
+        "packages/cli/src/commands/credentials.ts"
       ],
       "testCommands": [
         "npm run typecheck",
         "npm test"
       ],
       "notes": [
-        "Credentials stored in ~/.arete/credentials.yaml (global, not workspace-level)",
+        "Credentials stored in ~/.arete/credentials.yaml (API keys) and ~/.arete/auth.json (OAuth)",
         "Uses testDeps injection pattern for mocking pi-ai calls in tests",
-        "Task routing: task -> tier -> model via config.ai"
+        "Task routing: task -> tier -> model via config.ai",
+        "OAuth flow: browser consent -> paste code -> token auto-refresh"
       ],
-      "lastVerified": "2026-03-07"
+      "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "meeting-extraction",
+      "name": "Meeting Extraction",
+      "type": "cli-command",
+      "description": "AI-powered meeting intelligence extraction from transcript files. Extracts summary, key points, decisions, action items, and next steps.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/cli/src/commands/meeting.ts",
+        "packages/core/src/services/meeting-extraction.ts"
+      ],
+      "entrypoints": [
+        "arete meeting extract <file>"
+      ],
+      "readBeforeChange": [
+        "packages/cli/src/commands/meeting.ts",
+        "packages/core/src/services/meeting-extraction.ts",
+        "packages/cli/src/commands/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Requires AI configuration (arete credentials configure or arete.yaml)",
+        "Uses formatStagedSections() for extraction, updateMeetingContent() for file update",
+        "Shared extraction logic between CLI and backend"
+      ],
+      "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "web-dashboard",
+      "name": "Product Intelligence Dashboard",
+      "type": "application",
+      "description": "Full web application for product intelligence visualization. Includes Dashboard, Meeting Triage, People Intelligence, Goals Alignment, Memory Feed, Intelligence Patterns, Commitments, and Global Search pages.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/apps/web/",
+        "packages/apps/backend/",
+        "packages/cli/src/commands/view.ts"
+      ],
+      "entrypoints": [
+        "arete view [--port]",
+        "GET /api/meetings",
+        "GET /api/people",
+        "GET /api/goals",
+        "GET /api/memory",
+        "GET /api/intelligence",
+        "GET /api/commitments",
+        "GET /api/search",
+        "GET /api/events (SSE)"
+      ],
+      "readBeforeChange": [
+        "packages/apps/backend/LEARNINGS.md",
+        "packages/apps/web/LEARNINGS.md",
+        "packages/cli/src/commands/view.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test",
+        "cd packages/apps/backend && npm test"
+      ],
+      "notes": [
+        "Backend: Hono server with per-slug file locking",
+        "Web: React + Vite + TanStack Query v5 + TipTap editor",
+        "Launched via arete view command which spawns backend and opens browser",
+        "SSE endpoint for real-time meeting processing updates"
+      ],
+      "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "daily-intelligence",
+      "name": "Daily Intelligence Brief",
+      "type": "cli-command",
+      "description": "Morning intelligence brief showing today's calendar, overdue commitments, active projects, recent decisions, and signal patterns.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/cli/src/commands/daily.ts"
+      ],
+      "entrypoints": [
+        "arete daily"
+      ],
+      "readBeforeChange": [
+        "packages/cli/src/commands/daily.ts",
+        "packages/core/src/services/patterns.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "momentum-tracking",
+      "name": "Momentum Tracking",
+      "type": "service",
+      "description": "Commitment momentum (hot/stale/critical buckets) and relationship momentum (active/cooling/stale based on meeting recency). Pure computation functions.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/momentum.ts",
+        "packages/cli/src/commands/momentum.ts"
+      ],
+      "entrypoints": [
+        "arete momentum",
+        "packages/core/src/services/momentum.ts"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/momentum.ts",
+        "packages/core/src/services/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "signal-patterns",
+      "name": "Signal Pattern Detection",
+      "type": "service",
+      "description": "Cross-person signal pattern detection — identifies topics appearing in 2+ meetings across 2+ distinct people. Used for intelligence dashboard and daily brief.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/patterns.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/patterns.ts",
+        "GET /api/intelligence/patterns"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/patterns.ts",
+        "packages/core/src/services/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "lastVerified": "2026-03-08"
     }
   ]
 }

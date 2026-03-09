@@ -1651,5 +1651,185 @@ describe("handleWrap", () => {
 		assert.ok(sentMessage.includes("test-wrap-plan"), "Message should include plan slug");
 		assert.ok(sentMessage.includes("Tier 1"), "Message should include Tier 1 items");
 	});
+
+	it("shows ✅ when memory entry exists", async () => {
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = {
+			...createTestPi(),
+			sendUserMessage: (msg: string) => {
+				sentMessage = msg;
+			},
+		};
+		const state = createTestState({ currentSlug: "test-memory-plan" });
+
+		// Create a test plan
+		createTestPlan("test-memory-plan", "# Test Memory Plan\n\n1. Step one");
+
+		// Create a memory entry for this plan
+		const entriesDir = join(TEST_PLANS_DIR, "..", "..", "memory", "entries");
+		mkdirSync(entriesDir, { recursive: true });
+		writeFileSync(
+			join(entriesDir, "2026-03-08_test-memory-plan-learnings.md"),
+			"# Test Memory Plan Learnings\n\nSome content",
+			"utf-8",
+		);
+
+		// Temporarily override cwd for the test to find the memory entry
+		const originalCwd = process.cwd();
+		process.chdir(join(TEST_PLANS_DIR, "..", ".."));
+
+		try {
+			await handleWrap("", ctx, pi, state);
+
+			assert.ok(
+				sentMessage.includes("✅") && sentMessage.includes("Memory entry exists"),
+				`Should show ✅ for existing memory entry. Got: ${sentMessage}`,
+			);
+		} finally {
+			process.chdir(originalCwd);
+		}
+	});
+
+	it("shows ❌ with instructions when memory entry missing", async () => {
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = {
+			...createTestPi(),
+			sendUserMessage: (msg: string) => {
+				sentMessage = msg;
+			},
+		};
+		const state = createTestState({ currentSlug: "test-no-memory-plan" });
+
+		// Create a test plan but NO memory entry
+		createTestPlan("test-no-memory-plan", "# Test No Memory Plan\n\n1. Step one");
+
+		await handleWrap("", ctx, pi, state);
+
+		// Should show ❌ for missing memory entry with creation instructions
+		assert.ok(
+			sentMessage.includes("❌") && sentMessage.includes("Memory entry missing"),
+			`Should show ❌ for missing memory entry. Got: ${sentMessage}`,
+		);
+		assert.ok(
+			sentMessage.includes("memory/entries/") && sentMessage.includes("test-no-memory-plan"),
+			`Should include path instruction with slug. Got: ${sentMessage}`,
+		);
+	});
+
+	it("shows Tier 1 baseline checklist for simple plan", async () => {
+		// Tests graceful fallback: a simple plan without PRD or code changes
+		// should show Tier 1 baseline checklist (the minimum required items)
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = {
+			...createTestPi(),
+			sendUserMessage: (msg: string) => {
+				sentMessage = msg;
+			},
+		};
+		const state = createTestState({ currentSlug: "test-simple-plan" });
+
+		// Create a simple test plan (no PRD, no code changes)
+		const planDir = join(TEST_PLANS_DIR, "test-simple-plan");
+		mkdirSync(planDir, { recursive: true });
+		// Use a very recent created date so getChangedDirectories finds no commits
+		// This simulates the scenario where there are no detectable code changes
+		const frontmatter = `---
+title: Test Simple Plan
+slug: test-simple-plan
+status: draft
+size: small
+tags: []
+created: ${new Date().toISOString()}
+updated: ${new Date().toISOString()}
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# Test Simple Plan
+`;
+		writeFileSync(join(planDir, "plan.md"), frontmatter, "utf-8");
+
+		await handleWrap("", ctx, pi, state);
+
+		// Should generate a Tier 1 checklist (baseline)
+		assert.ok(
+			sentMessage.includes("Close-out checklist"),
+			`Should generate checklist. Got: ${sentMessage}`,
+		);
+		assert.ok(
+			sentMessage.includes("Tier 1"),
+			`Should include Tier 1 items. Got: ${sentMessage}`,
+		);
+		// Memory entry check should be included
+		assert.ok(
+			sentMessage.includes("Memory entry"),
+			`Should check memory entry. Got: ${sentMessage}`,
+		);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// formatCloseoutChecklist git failure handling
+// ────────────────────────────────────────────────────────────
+
+import { formatCloseoutChecklist } from "./commands.js";
+
+describe("formatCloseoutChecklist — git failure handling", () => {
+	it("shows ⚠️ warning for null changedDirs at Tier 2", () => {
+		// When git fails, changedDirs is null. At Tier 2+, this should show a warning.
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			2, // Force Tier 2
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "building",
+				catalogDate: null,
+				changedDirs: null, // Simulates git failure
+				dirsWithLearnings: [],
+			},
+		);
+
+		assert.ok(
+			output.includes("⚠️") && output.includes("Unable to determine changed directories"),
+			`Tier 2 with null changedDirs should show ⚠️ fallback. Got: ${output}`,
+		);
+	});
+
+	it("shows ⚠️ warning for null changedDirs at Tier 3", () => {
+		// Tier 3 also includes Tier 2 checks
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			3, // Force Tier 3
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "building",
+				catalogDate: null,
+				changedDirs: null, // Simulates git failure
+				dirsWithLearnings: [],
+			},
+		);
+
+		assert.ok(
+			output.includes("⚠️") && output.includes("Unable to determine changed directories"),
+			`Tier 3 with null changedDirs should show ⚠️ fallback. Got: ${output}`,
+		);
+	});
 });
 
