@@ -16,10 +16,9 @@
         "dev/catalog/capabilities.json updated with ai-service entry",
         "Tests with mocked pi-ai calls (no real API calls in tests)"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "049fd26fdb5e8ac9f22353656baafc0927b9274b"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
       "id": "ai-2",
@@ -32,10 +31,9 @@
         "Existing tests pass with mocked AIService",
         "Error handling for no API key (descriptive error, job marked as error)"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "bc4cec74bac6a0e7ba3356cf6540c47e92fda6e1"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
       "id": "ai-3",
@@ -48,10 +46,9 @@
         "File created with 0600 permissions (owner read/write only)",
         "Help text explains env var override behavior"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "58638b3, 43365a0 (docs)"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
       "id": "ai-4",
@@ -64,10 +61,9 @@
         "Default tier config written to arete.yaml when key provided",
         "Re-running onboard allows updating existing key (idempotent)"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "fdc5441d5cc0553ee9d523478f25d0d58067066a"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
       "id": "ai-5",
@@ -81,16 +77,15 @@
         "Invalid tier names rejected with helpful error",
         "Changes take effect on next command (config reloaded)"
       ],
-      "status": "complete",
-      "passes": true,
-      "attemptCount": 1,
-      "commitSha": "f645b3bfb04973eb97515a82c70960804e1a554c"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     }
   ],
   "metadata": {
     "createdAt": "2026-03-08T05:45:00.000Z",
     "totalTasks": 5,
-    "completedTasks": 5,
+    "completedTasks": 0,
     "failedTasks": 0
   }
 }
