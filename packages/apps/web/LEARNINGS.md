@@ -47,6 +47,21 @@ Components using `EventSource` import `BASE_URL` from `@/api/client.js`. Don't h
 ### Sync job coordination
 `useSyncKrisp` returns `{ jobId }`. The component stores `jobId` in state and passes it to `useJobStatus(jobId)`. A `useEffect` on `jobStatus.data?.status` triggers `invalidateQueries(['meetings'])` and toast on done/error. This separation is intentional — hooks can't call other hooks inside `onSuccess`.
 
+### Approved vs Parsed Items — Use Correct Component for Status (2026-03-09)
+
+When rendering meeting items, the component must match the meeting status:
+- `status: 'approved'` → `<ApprovedItemsSection approvedItems={meeting.approvedItems} />`
+- `status: 'processed'` → `<ReviewItemsSection reviewItems={meeting.reviewItems} ... />`
+
+**Bug that was fixed**: The `isApproved` branch was incorrectly using `ParsedItemsSection`
+which showed Fathom's raw extraction (with `{{03:33}}` timestamp artifacts) instead of 
+the user's approved content. The component was rendering the wrong data source.
+
+**Testing pattern**: When testing component rendering by status, include mock data with
+intentionally different content in each data source (e.g., `approvedItems` vs `parsedSections`)
+to verify the correct source is used. Don't just check that *something* renders — check that
+the *wrong* thing does NOT render.
+
 ---
 
 ### Multi-Page Architecture (first use: Plan B)
