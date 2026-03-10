@@ -40,7 +40,7 @@ type RawStagedItem = {
   id: string;
   text: string;
   type: 'ai' | 'de' | 'le';
-  source?: 'ai' | 'user' | 'dedup';
+  source?: 'ai' | 'dedup';
   confidence?: number;
 };
 

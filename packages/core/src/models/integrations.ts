@@ -19,8 +19,8 @@ export type StagedItem = {
   id: string;   // e.g. "ai_001"
   text: string;
   type: 'ai' | 'de' | 'le';
-  /** Origin of this item: ai (LLM extracted), user (from notes), dedup (matched user notes) */
-  source?: 'ai' | 'user' | 'dedup';
+  /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
+  source?: 'ai' | 'dedup';
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
 };

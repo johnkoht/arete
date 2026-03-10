@@ -26,8 +26,21 @@ const MeetingExtractionSchema = Type.Object({
     decisions: Type.Array(ExtractionItemSchema, { description: 'Decisions made in the meeting with confidence' }),
     learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
 });
-/** Jaccard similarity threshold for user notes deduplication */
-const DEDUP_JACCARD_THRESHOLD = 0.7;
+// ---------------------------------------------------------------------------
+// Configurable thresholds (defaults, overridable via arete.yaml)
+// ---------------------------------------------------------------------------
+/** Default: items above this confidence are auto-approved */
+const DEFAULT_CONFIDENCE_THRESHOLD_APPROVED = 0.8;
+/** Default: items below this confidence are filtered out */
+const DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
+/** Default: Jaccard similarity threshold for user notes deduplication */
+const DEFAULT_DEDUP_JACCARD_THRESHOLD = 0.7;
+/** Module-level thresholds, set at initialization */
+let moduleThresholds = {
+    confidenceApproved: DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
+    confidenceInclude: DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
+    dedupJaccard: DEFAULT_DEDUP_JACCARD_THRESHOLD,
+};
 /**
  * Extract user-written notes from meeting body.
  * Excludes: ## Transcript, ## Staged Action Items, ## Staged Decisions, ## Staged Learnings
@@ -65,20 +78,18 @@ function extractUserNotes(body) {
 function itemMatchesUserNotes(itemText, userNotesNormalized) {
     const itemNormalized = normalizeForJaccard(itemText);
     const similarity = jaccardSimilarity(itemNormalized, userNotesNormalized);
-    return similarity > DEDUP_JACCARD_THRESHOLD;
+    return similarity > moduleThresholds.dedupJaccard;
 }
-/** Confidence thresholds for pre-selection */
-const CONFIDENCE_THRESHOLD_APPROVED = 0.8;
-const CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
 /**
  * Filter extraction items by confidence threshold.
- * Items with confidence < 0.5 are filtered out.
+ * Items with confidence below the include threshold are filtered out.
  */
 function filterByConfidence(extraction) {
+    const threshold = moduleThresholds.confidenceInclude;
     return {
-        actionItems: extraction.actionItems.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
-        decisions: extraction.decisions.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
-        learnings: extraction.learnings.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+        actionItems: extraction.actionItems.filter(item => item.confidence >= threshold),
+        decisions: extraction.decisions.filter(item => item.confidence >= threshold),
+        learnings: extraction.learnings.filter(item => item.confidence >= threshold),
     };
 }
 /**
@@ -132,6 +143,7 @@ function buildConfidenceMap(filtered) {
  */
 function determineItemStatus(itemSources, confidences) {
     const statuses = {};
+    const threshold = moduleThresholds.confidenceApproved;
     for (const [id, source] of Object.entries(itemSources)) {
         if (source === 'dedup') {
             // Dedup items are always approved
@@ -140,7 +152,7 @@ function determineItemStatus(itemSources, confidences) {
         else {
             // Use confidence threshold for AI-extracted items
             const confidence = confidences[id] ?? 0;
-            statuses[id] = confidence > CONFIDENCE_THRESHOLD_APPROVED ? 'approved' : 'pending';
+            statuses[id] = confidence > threshold ? 'approved' : 'pending';
         }
     }
     return statuses;
@@ -318,11 +330,20 @@ function createDefaultDeps(aiService) {
 // Module-level AIService reference, set by initializeAIService()
 let moduleAiService = null;
 /**
- * Initialize the AIService for meeting processing.
+ * Initialize the AIService and extraction thresholds for meeting processing.
  * Call this at server startup after loading config.
  */
-export function initializeAIService(aiService) {
+export function initializeAIService(aiService, config) {
     moduleAiService = aiService;
+    // Apply config thresholds if provided, otherwise use defaults
+    if (config?.intelligence?.extraction) {
+        const extraction = config.intelligence.extraction;
+        moduleThresholds = {
+            confidenceApproved: extraction.confidence_threshold_approved ?? DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
+            confidenceInclude: extraction.confidence_threshold_include ?? DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
+            dedupJaccard: extraction.dedup_jaccard_threshold ?? DEFAULT_DEDUP_JACCARD_THRESHOLD,
+        };
+    }
 }
 /**
  * Run a processing session to extract content from a meeting.

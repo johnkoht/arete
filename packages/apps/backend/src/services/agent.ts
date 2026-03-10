@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
 import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity } from '@arete/core';
-import type { AIService, AIStructuredResult } from '@arete/core';
+import type { AIService, AIStructuredResult, AreteConfig } from '@arete/core';
 import * as jobsService from './jobs.js';
 
 export type { JobsService };
@@ -51,8 +51,32 @@ type ItemSource = 'ai' | 'dedup';
 /** Map of item ID to source */
 type ItemSources = Record<string, ItemSource>;
 
-/** Jaccard similarity threshold for user notes deduplication */
-const DEDUP_JACCARD_THRESHOLD = 0.7;
+// ---------------------------------------------------------------------------
+// Configurable thresholds (defaults, overridable via arete.yaml)
+// ---------------------------------------------------------------------------
+
+/** Default: items above this confidence are auto-approved */
+const DEFAULT_CONFIDENCE_THRESHOLD_APPROVED = 0.8;
+
+/** Default: items below this confidence are filtered out */
+const DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
+
+/** Default: Jaccard similarity threshold for user notes deduplication */
+const DEFAULT_DEDUP_JACCARD_THRESHOLD = 0.7;
+
+/** Resolved thresholds (from config or defaults) */
+interface ExtractionThresholds {
+  confidenceApproved: number;
+  confidenceInclude: number;
+  dedupJaccard: number;
+}
+
+/** Module-level thresholds, set at initialization */
+let moduleThresholds: ExtractionThresholds = {
+  confidenceApproved: DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
+  confidenceInclude: DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
+  dedupJaccard: DEFAULT_DEDUP_JACCARD_THRESHOLD,
+};
 
 /**
  * Extract user-written notes from meeting body.
@@ -96,12 +120,8 @@ function extractUserNotes(body: string): string {
 function itemMatchesUserNotes(itemText: string, userNotesNormalized: string[]): boolean {
   const itemNormalized = normalizeForJaccard(itemText);
   const similarity = jaccardSimilarity(itemNormalized, userNotesNormalized);
-  return similarity > DEDUP_JACCARD_THRESHOLD;
+  return similarity > moduleThresholds.dedupJaccard;
 }
-
-/** Confidence thresholds for pre-selection */
-const CONFIDENCE_THRESHOLD_APPROVED = 0.8;
-const CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
 
 /** Result of applying confidence thresholds */
 interface FilteredExtraction {
@@ -112,13 +132,14 @@ interface FilteredExtraction {
 
 /**
  * Filter extraction items by confidence threshold.
- * Items with confidence < 0.5 are filtered out.
+ * Items with confidence below the include threshold are filtered out.
  */
 function filterByConfidence(extraction: MeetingExtraction): FilteredExtraction {
+  const threshold = moduleThresholds.confidenceInclude;
   return {
-    actionItems: extraction.actionItems.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
-    decisions: extraction.decisions.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
-    learnings: extraction.learnings.filter(item => item.confidence >= CONFIDENCE_THRESHOLD_INCLUDE),
+    actionItems: extraction.actionItems.filter(item => item.confidence >= threshold),
+    decisions: extraction.decisions.filter(item => item.confidence >= threshold),
+    learnings: extraction.learnings.filter(item => item.confidence >= threshold),
   };
 }
 
@@ -192,6 +213,7 @@ function determineItemStatus(
   confidences: ItemConfidences,
 ): Record<string, string> {
   const statuses: Record<string, string> = {};
+  const threshold = moduleThresholds.confidenceApproved;
 
   for (const [id, source] of Object.entries(itemSources)) {
     if (source === 'dedup') {
@@ -200,7 +222,7 @@ function determineItemStatus(
     } else {
       // Use confidence threshold for AI-extracted items
       const confidence = confidences[id] ?? 0;
-      statuses[id] = confidence > CONFIDENCE_THRESHOLD_APPROVED ? 'approved' : 'pending';
+      statuses[id] = confidence > threshold ? 'approved' : 'pending';
     }
   }
 
@@ -534,11 +556,21 @@ function createDefaultDeps(aiService: AIService): ProcessingDeps {
 let moduleAiService: AIService | null = null;
 
 /**
- * Initialize the AIService for meeting processing.
+ * Initialize the AIService and extraction thresholds for meeting processing.
  * Call this at server startup after loading config.
  */
-export function initializeAIService(aiService: AIService): void {
+export function initializeAIService(aiService: AIService, config?: AreteConfig): void {
   moduleAiService = aiService;
+
+  // Apply config thresholds if provided, otherwise use defaults
+  if (config?.intelligence?.extraction) {
+    const extraction = config.intelligence.extraction;
+    moduleThresholds = {
+      confidenceApproved: extraction.confidence_threshold_approved ?? DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
+      confidenceInclude: extraction.confidence_threshold_include ?? DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
+      dedupJaccard: extraction.dedup_jaccard_threshold ?? DEFAULT_DEDUP_JACCARD_THRESHOLD,
+    };
+  }
 }
 
 /**
