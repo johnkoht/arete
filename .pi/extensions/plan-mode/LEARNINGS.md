@@ -61,6 +61,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Pure module architecture**: `persistence.ts`, `utils.ts`, `widget.ts`, and `commands.ts` are all Pi-free pure modules. Command handlers take `CommandContext`/`CommandPi` interfaces — mock those in tests rather than importing Pi runtime. This pattern from `2026-02-16_plan-lifecycle-system-learnings.md` enables extensive testing with 0 Pi dependency.
 
+- **Plan → PRD is 1:1**: Each plan can have at most one PRD. When remaining items from a partially-executed plan need separate PRDs (e.g., pagination vs page redesign), create new plans for each rather than trying to attach multiple PRDs to the original plan. Example: `web-fast-follow` completed Phase 1, then spawned `web-pagination` and `person-detail-redesign` as separate plans for the remaining scope. (2026-03-10)
+
 ## Pre-Edit Checklist
 
 - [ ] Run `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'` before and after changes to catch regressions

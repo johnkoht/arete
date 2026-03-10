@@ -341,6 +341,39 @@ Key points:
 
 ---
 
+## SearchableSelect Component (2026-03-10)
+
+### Null vs empty string for "None" selection
+
+When implementing a "None" or "Clear" option in SearchableSelect, use `null` not `""`:
+
+```tsx
+// ❌ WRONG - passes empty string
+onClick={() => onSelect("")}
+
+// ✅ CORRECT - passes null as expected by consumers
+onClick={() => onSelect(null)}
+```
+
+The type signature `onSelect: (id: string | null) => void` expects `null` for "no selection". 
+Consumers checking `if (selected === null)` will break if they receive `""` instead.
+
+### Markdown rendering - avoid underscore italic in technical content
+
+The `_text_` italic pattern conflicts with snake_case identifiers:
+
+```tsx
+// ❌ This will render "user_profile_id" as "user<em>profile</em>id"
+const regex = /(\*\*(.+?)\*\*)|(_(.+?)_)/g;
+
+// ✅ For technical content, only support bold (**text**)
+const regex = /\*\*(.+?)\*\*/g;
+```
+
+If italic is needed, use word boundary checks to avoid mid-word matches.
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
