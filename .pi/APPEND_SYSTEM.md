@@ -49,11 +49,17 @@ When spawning any BUILD mode subagent, compose context in this order:
 ## Execution Path Decision Tree
 
 ```
+User reports a bug
+ └─ Load hotfix skill → Diagnose → Present game plan
+    └─ User approves → Implement → Review (spawn or self) → Close with LEARNINGS.md
+
 User approves plan
  ├─ Tiny (1-2 steps) → Direct execution → quality gates
  ├─ Small (2-3 steps) → Offer pre-mortem → quality gates → offer memory capture
  └─ Medium/Large (3+) → Recommend PRD path → execute-prd skill
 ```
+
+**Bug fixes require structure.** Do not make ad-hoc code changes. Load the hotfix skill and follow its process.
 
 **When in doubt**: Offer both paths and let builder choose.
 

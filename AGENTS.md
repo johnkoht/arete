@@ -74,7 +74,8 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |arete config show ai:Display AI configuration (tiers, tasks, providers)
 |arete config set <path> <value>:Set AI config value (ai.tiers.<tier>, ai.tasks.<task>)
 
-[Skills]|root:.agents/skills
+[Skills]|root:.pi/skills
+|hotfix:{triggers:"bug; fix; broken; not working; issue; fix this; yes fix it; please fix; regression; User reports a bug and asks to fix it",does:"Structured bug fix process: diagnose (as eng lead), implement, spawn reviewer, close with LEARNINGS.md update. Lighter than PRD but ensures quality."}
 |execute-prd:{triggers:"User says Execute this PRD or Build everything in prd.json; multi-task PRDs with dependencies (3+ tasks); want autonomous execution with quality review",does:"Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Includes pre-mortem, structured feedback, and holistic review."}
 |plan-to-prd:{triggers:"User chose Convert to PRD when offered the PRD path in Plan Mode; after plan-pre-mortem rule offers the choice and user selects the PRD path",does:"Convert an approved plan into a PRD, prd.json, and handoff prompt for autonomous execution via execute-prd."}
 |prd-to-json:{triggers:"Convert this PRD to JSON, Create prd.json from [PRD file], Prepare PRD for autonomous execution; after creating a PRD for an Areté feature you want to build autonomously",does:"Convert markdown PRD to JSON task list for autonomous execution. Reads build memory for context."}
