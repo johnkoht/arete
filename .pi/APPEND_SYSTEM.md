@@ -7,6 +7,10 @@
 
 ## Routing: When to Spawn Experts
 
+**Bug fixes** (user reports a bug, asks to fix something broken):
+→ Load `.pi/skills/hotfix/SKILL.md`. Follow structured process: diagnose → implement → review → close.
+→ **Do not** make ad-hoc code changes without following the hotfix skill.
+
 **Ad-hoc questions** (user asks about code, architecture, debugging):
 → Spawn expert with appropriate expertise profile. Attach PROFILE.md for the relevant domain.
 
@@ -80,6 +84,7 @@ User approves plan
 | `/prd` | Convert plan → PRD |
 | `/approve` | Mark ready for building |
 | `/build` | Start execution |
+| `/wrap` | Close-out checklist (memory entry, index, LEARNINGS review) |
 
 **Lifecycle**: `idea → draft → planned → building → complete` (+ `abandoned`)
 **Gate requirements**: tiny/small = optional gates; medium = recommended pre-mortem; large = mandatory pre-mortem + PRD

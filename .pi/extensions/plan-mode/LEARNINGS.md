@@ -15,6 +15,11 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 ## Gotchas
 
+- **`/wrap` is the close-out checklist command.** Run it after completing a plan to verify documentation is complete. It checks: (1) memory entry exists matching the slug, (2) MEMORY.md index contains the slug, (3) plan status is appropriate, (4) changed directories have LEARNINGS.md reviewed, (5) capability catalog freshness. Output is tiered:
+  - **Tier 1** (all plans): memory entry, memory index, plan status
+  - **Tier 2** (code changes): + LEARNINGS.md in changed directories
+  - **Tier 3** (new capabilities): + capability catalog, AGENTS.md review suggested
+
 - **`/wrap` relies on git for changed directory detection.** The `getChangedDirectories()` function uses `git log --since` to find files changed since plan creation. Returns `null` if git is unavailable or command fails. At Tier 2+, output shows "⚠️ Unable to determine changed directories" in this case. Don't assume changedDirs will always be an array.
 
 - **Auto-save overwrote loaded plans with unrelated content.** When a plan was loaded via `/plan open`, auto-save would still fire whenever the agent produced numbered steps — even if those steps were from a tangential conversation. Since `state.currentSlug` was already set to the loaded plan, the new content would overwrite the original plan. Fixed by adding a `loadedFromDisk` flag to state. Plans loaded via `/plan open` (or session restore) set `loadedFromDisk = true`, which disables auto-save. Fresh plans from `/plan new` set `loadedFromDisk = false` and get auto-save. Users with loaded plans must explicitly use `/plan save` to persist changes.
