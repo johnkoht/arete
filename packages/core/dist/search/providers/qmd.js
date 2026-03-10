@@ -7,6 +7,15 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 export const QMD_PROVIDER_NAME = 'qmd';
 const DEFAULT_TIMEOUT_MS = 5000;
+/**
+ * Strip `qmd://collection-name/` prefix from QMD file paths.
+ * Returns the relative path portion (e.g., "resources/meetings/foo.md").
+ */
+function stripQmdPrefix(qmdPath) {
+    // Format: qmd://collection-name/relative/path.md
+    const match = qmdPath.match(/^qmd:\/\/[^/]+\/(.+)$/);
+    return match ? match[1] : qmdPath;
+}
 /** Parse QMD CLI JSON output into SearchResult[]. Exported for tests. */
 export function parseQmdJson(stdout) {
     const trimmed = stdout.trim();
@@ -16,15 +25,19 @@ export function parseQmdJson(stdout) {
         const data = JSON.parse(trimmed);
         const rows = Array.isArray(data) ? data : (data.results != null ? data.results : []);
         return rows
-            .filter((r) => r && (r.path != null || r.content != null))
+            .filter((r) => r && (r.file != null || r.path != null || r.snippet != null || r.content != null))
             .map((r) => {
             let score = typeof r.score === 'number' ? r.score : 1;
             if (score > 1 || score < 0) {
                 score = Math.max(0, Math.min(1, score));
             }
+            // Prefer new field names, fall back to legacy
+            const rawPath = typeof r.file === 'string' ? r.file : (typeof r.path === 'string' ? r.path : '');
+            const path = stripQmdPrefix(rawPath);
+            const content = typeof r.snippet === 'string' ? r.snippet : (typeof r.content === 'string' ? r.content : '');
             return {
-                path: typeof r.path === 'string' ? r.path : '',
-                content: typeof r.content === 'string' ? r.content : '',
+                path,
+                content,
                 score,
                 matchType: 'semantic',
             };
