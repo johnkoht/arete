@@ -166,6 +166,8 @@ export type Commitment = {
     date: string;
     status: CommitmentStatus;
     resolvedAt: string | null;
+    /** Optional project association — inherited from meeting's projectSlug */
+    projectSlug?: string;
 };
 /** Persisted commitments file structure */
 export type CommitmentsFile = {
