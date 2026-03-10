@@ -1599,7 +1599,8 @@ describe("appendEntry calls include loadedFromDisk — regression test", () => {
 	it("handlePlanSave includes loadedFromDisk in appendEntry", async () => {
 		let appendedData: Record<string, unknown> | null = null;
 		const pi = createTestPi({
-			appendEntry: (_type: string, data: Record<string, unknown>) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			appendEntry: (_type: string, data: any) => {
 				appendedData = data;
 			},
 		});
@@ -1638,7 +1639,8 @@ describe("appendEntry calls include loadedFromDisk — regression test", () => {
 	it("handlePlanClose includes loadedFromDisk in appendEntry", async () => {
 		let appendedData: Record<string, unknown> | null = null;
 		const pi = createTestPi({
-			appendEntry: (_type: string, data: Record<string, unknown>) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			appendEntry: (_type: string, data: any) => {
 				appendedData = data;
 			},
 		});
