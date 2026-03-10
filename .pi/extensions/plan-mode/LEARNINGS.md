@@ -38,7 +38,7 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Extension tests are NOT run by `npm test`.** The package test runner doesn't discover `.pi/extensions/plan-mode/*.test.ts`. Run them explicitly: `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'`. Skipping this means command handler regressions won't be caught by CI.
 
-- **State restoration fields must stay in sync.** `index.ts` persists `enabled`, `todos`, `executing`, `currentSlug`, `planSize`, `preMortemRun`, `reviewRun`, `prdConverted`, `loadedFromDisk` together. On resume, the frontmatter from disk overwrites in-memory flags — if `persistence.ts` and the persisted entry disagree, the frontmatter wins (see `session_start` reconciliation block). Adding a new flag requires updating both `pi.appendEntry()` calls and the session restore block.
+- **State restoration fields must stay in sync.** `index.ts:persistState()` and ALL `appendEntry("plan-mode", {...})` calls in `commands.ts` must include the same fields. Currently: `enabled`, `todos`, `executing`, `currentSlug`, `planSize`, `preMortemRun`, `reviewRun`, `prdConverted`, `loadedFromDisk`. Missing a field in ANY call causes session restore to use default (e.g., `loadedFromDisk: false`), which can corrupt state. On resume, the frontmatter from disk overwrites in-memory flags — if `persistence.ts` and the persisted entry disagree, the frontmatter wins (see `session_start` reconciliation block). Adding a new flag requires updating both `persistState()` AND all `appendEntry` calls in commands.ts.
 
 - **`inPrdConversion` flag is NOT exception-safe — a throw from `/prd` leaves it stuck `true`.** The `/prd` handler sets `inPrdConversion = true`, grants full tool access, awaits `handlePrd()`, then resets it. There is no `try/finally`. If `handlePrd()` throws, the flag stays `true` for the rest of the session. Mitigation: if you add error handling to `/prd`, wrap the reset in `finally`.
 
@@ -63,25 +63,15 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Plan → PRD is 1:1**: Each plan can have at most one PRD. When remaining items from a partially-executed plan need separate PRDs (e.g., pagination vs page redesign), create new plans for each rather than trying to attach multiple PRDs to the original plan. Example: `web-fast-follow` completed Phase 1, then spawned `web-pagination` and `person-detail-redesign` as separate plans for the remaining scope. (2026-03-10)
 
-## Known Issues / Bug Reports
+## Resolved Issues
 
-### `/plan close` save may wipe plan content (reported 2026-03-10)
+### `/plan close` save could wipe plan content [RESOLVED 2026-03-10]
 
 **Symptom**: User ran `/plan close`, selected "yes" to save changes, and the plan.md was wiped (content replaced with minimal/empty content).
 
-**Investigation status**: Root cause not yet confirmed. Potential causes:
-1. `state.planText` corrupted before save (but `loadedFromDisk` guard should prevent agent_end from overwriting)
-2. `loadedFromDisk` not being persisted correctly across all `appendEntry` calls
-3. Some code path modifying `planText` that bypasses the `loadedFromDisk` check
-4. Race condition in async operations
+**Root cause**: `loadedFromDisk` was not persisted in 5 `appendEntry` calls in `commands.ts` (handlePlanClose, handlePlanSave, handlePlanRename, handleApprove, handleBuild). When session restored from an entry missing this field, it defaulted to `false`, allowing `agent_end` to overwrite `state.planText` with tangential agent responses.
 
-**Workaround**: Keep plan open in editor. If wipe occurs, use editor's undo or `git checkout` to recover.
-
-**Debug approach needed**: Add logging to track `state.planText` value and `loadedFromDisk` state at key points:
-- session_start (after loading)
-- agent_end (before/after mutation guard)
-- handlePlanClose (before save prompt)
-- handlePlanSave (before write)
+**Resolution**: Added `loadedFromDisk: state.loadedFromDisk` to all 5 `appendEntry` calls in `commands.ts`. Regression tests added to verify `loadedFromDisk` is preserved.
 
 ---
 
