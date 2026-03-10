@@ -103,7 +103,8 @@ function TodaysMeetings() {
 // ── Recent Meetings ───────────────────────────────────────────────────────────
 
 function RecentMeetings() {
-  const { data: meetings = [], isLoading, error } = useMeetings();
+  const { data, isLoading, error } = useMeetings();
+  const meetings = data?.meetings ?? [];
 
   const recent = [...meetings]
     .sort((a, b) => b.date.localeCompare(a.date))

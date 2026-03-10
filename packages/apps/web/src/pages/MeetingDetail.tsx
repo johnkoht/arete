@@ -47,7 +47,8 @@ export default function MeetingDetail() {
   const safeSlug = slug ?? "";
 
   const { data: meeting, isLoading, error } = useMeeting(safeSlug);
-  const { data: allMeetings = [] } = useMeetings();
+  const { data: meetingsData } = useMeetings();
+  const allMeetings = meetingsData?.meetings ?? [];
 
   const approveItemMutation = useApproveItem(safeSlug);
   const saveApproveMutation = useSaveApprove(safeSlug);

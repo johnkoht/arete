@@ -378,6 +378,24 @@ If italic is needed, use word boundary checks to avoid mid-word matches.
 
 **Gotcha**: When adding pagination to a query that has optimistic update mutations, update those mutations to use `getQueriesData`/`setQueriesData` (plural forms) instead of singular forms. The singular forms require exact key match; the plural forms do partial matching across all pagination variants.
 
+### Pagination response format change breaks consumers (2026-03-10)
+
+**What broke**: Dashboard and MeetingDetail pages crashed after pagination merge.
+
+**Why**: The `useMeetings()` hook changed from returning `Meeting[]` to returning `{ meetings: Meeting[], total, offset, limit }`. Pages using the old destructure pattern `const { data: meetings = [] } = useMeetings()` got an object instead of an array, then crashed when calling array methods.
+
+**Fix**: Update all consumers to extract the array:
+```tsx
+// ❌ WRONG - data is now { meetings, total, offset, limit }, not Meeting[]
+const { data: meetings = [] } = useMeetings();
+
+// ✅ CORRECT - extract the array from the paginated response
+const { data } = useMeetings();
+const meetings = data?.meetings ?? [];
+```
+
+**Prevention**: When changing a hook's return type, grep for ALL usages and update them in the same PR. The pagination PR updated `MeetingsIndex` but missed `Dashboard` and `MeetingDetail`.
+
 **Why this breaks**: Before pagination, cache key is `['people']`. After pagination, cache key is `['people', 25, 0]` (with limit/offset). `getQueryData(['people'])` returns `undefined` because there's no exact match. The optimistic update silently fails.
 
 **Pattern**:
