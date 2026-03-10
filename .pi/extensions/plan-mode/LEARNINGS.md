@@ -63,6 +63,28 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Plan → PRD is 1:1**: Each plan can have at most one PRD. When remaining items from a partially-executed plan need separate PRDs (e.g., pagination vs page redesign), create new plans for each rather than trying to attach multiple PRDs to the original plan. Example: `web-fast-follow` completed Phase 1, then spawned `web-pagination` and `person-detail-redesign` as separate plans for the remaining scope. (2026-03-10)
 
+## Known Issues / Bug Reports
+
+### `/plan close` save may wipe plan content (reported 2026-03-10)
+
+**Symptom**: User ran `/plan close`, selected "yes" to save changes, and the plan.md was wiped (content replaced with minimal/empty content).
+
+**Investigation status**: Root cause not yet confirmed. Potential causes:
+1. `state.planText` corrupted before save (but `loadedFromDisk` guard should prevent agent_end from overwriting)
+2. `loadedFromDisk` not being persisted correctly across all `appendEntry` calls
+3. Some code path modifying `planText` that bypasses the `loadedFromDisk` check
+4. Race condition in async operations
+
+**Workaround**: Keep plan open in editor. If wipe occurs, use editor's undo or `git checkout` to recover.
+
+**Debug approach needed**: Add logging to track `state.planText` value and `loadedFromDisk` state at key points:
+- session_start (after loading)
+- agent_end (before/after mutation guard)
+- handlePlanClose (before save prompt)
+- handlePlanSave (before write)
+
+---
+
 ## Pre-Edit Checklist
 
 - [ ] Run `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'` before and after changes to catch regressions
