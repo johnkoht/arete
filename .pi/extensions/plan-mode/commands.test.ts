@@ -1597,7 +1597,8 @@ describe("appendEntry calls include loadedFromDisk — regression test", () => {
 	afterEach(() => cleanupTestPlansDir());
 
 	it("handlePlanSave includes loadedFromDisk in appendEntry", async () => {
-		let appendedData: Record<string, unknown> | null = null;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let appendedData: any = null;
 		const pi = createTestPi({
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			appendEntry: (_type: string, data: any) => {
@@ -1637,7 +1638,8 @@ describe("appendEntry calls include loadedFromDisk — regression test", () => {
 	});
 
 	it("handlePlanClose includes loadedFromDisk in appendEntry", async () => {
-		let appendedData: Record<string, unknown> | null = null;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let appendedData: any = null;
 		const pi = createTestPi({
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			appendEntry: (_type: string, data: any) => {
