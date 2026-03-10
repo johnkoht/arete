@@ -30,10 +30,13 @@ export function useSignalPatterns(days = 30): {
 }
 
 /**
- * Fetch commitments list with optional filter, direction, person, and priority.
+ * Fetch commitments list with optional filter, direction, person, priority, and pagination.
  */
 export function useCommitments(params?: CommitmentsParams): {
   data: CommitmentItem[];
+  total: number;
+  offset: number;
+  limit: number;
   isLoading: boolean;
   error: Error | null;
 } {
@@ -41,15 +44,20 @@ export function useCommitments(params?: CommitmentsParams): {
   const direction = params?.direction ?? 'all';
   const person = params?.person ?? null;
   const priority = params?.priority ?? 'all';
+  const limit = params?.limit;
+  const offset = params?.offset;
 
   const result = useQuery({
-    queryKey: ['commitments', 'list', filter, direction, person, priority],
+    queryKey: ['commitments', 'list', filter, direction, person, priority, limit, offset],
     queryFn: () => fetchCommitments(params),
     staleTime: 2 * 60 * 1000,
   });
 
   return {
     data: result.data?.commitments ?? [],
+    total: result.data?.total ?? 0,
+    offset: result.data?.offset ?? 0,
+    limit: result.data?.limit ?? 25,
     isLoading: result.isLoading,
     error: result.error,
   };

@@ -27,11 +27,16 @@ async function withSlugLock(slug, fn) {
 }
 export function createMeetingsRouter(workspaceRoot) {
     const app = new Hono();
-    // GET /api/meetings — list all meeting summaries
+    // GET /api/meetings — list meeting summaries with pagination
+    // Query params: limit (default 25, max 100), offset (default 0)
     app.get('/', async (c) => {
         try {
-            const meetings = await workspaceService.listMeetings(workspaceRoot);
-            return c.json(meetings);
+            const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100);
+            const offset = parseInt(c.req.query('offset') ?? '0', 10);
+            const allMeetings = await workspaceService.listMeetings(workspaceRoot);
+            const total = allMeetings.length;
+            const meetings = allMeetings.slice(offset, offset + limit);
+            return c.json({ meetings, total, offset, limit });
         }
         catch (err) {
             console.error('[meetings] listMeetings error:', err);

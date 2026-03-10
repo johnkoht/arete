@@ -242,7 +242,12 @@ export function createPeopleRouter(workspaceRoot) {
             }
             // Sort by name
             people.sort((a, b) => a.name.localeCompare(b.name));
-            return c.json({ people });
+            // Parse pagination params (default limit 25, max 100)
+            const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100);
+            const offset = parseInt(c.req.query('offset') ?? '0', 10);
+            const total = people.length;
+            const page = people.slice(offset, offset + limit);
+            return c.json({ people: page, total, offset, limit });
         }
         catch (err) {
             console.error('[people] error:', err);

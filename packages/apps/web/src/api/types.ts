@@ -182,6 +182,9 @@ export type CommitmentItem = {
 
 export type CommitmentsListResponse = {
   commitments: CommitmentItem[];
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 export type ReconciliationCandidate = {

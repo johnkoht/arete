@@ -160,13 +160,60 @@ function determineItemStatus(itemSources, confidences) {
 /**
  * Build extraction prompt from meeting content.
  */
+/**
+ * Extract just the raw transcript portion from meeting content.
+ * The raw transcript has speaker names with timestamps like "**John Koht | 00:14**"
+ * We want to skip pre-processed sections like "## Action Items", "## Key Points", etc.
+ */
+function extractRawTranscript(content) {
+    const lines = content.split('\n');
+    const transcriptLines = [];
+    let inTranscript = false;
+    let skipUntilNextHeader = false;
+    for (const line of lines) {
+        // Check for transcript section headers
+        if (line.match(/^##\s*Transcript\s*\d*\s*$/i)) {
+            inTranscript = true;
+            skipUntilNextHeader = false;
+            continue;
+        }
+        // Check for non-transcript headers to skip
+        if (line.match(/^##\s*(Action Items|Key Points|Summary|Decisions|Learnings|Recorder Notes)/i)) {
+            skipUntilNextHeader = true;
+            inTranscript = false;
+            continue;
+        }
+        // Any other ## header ends skip mode
+        if (line.startsWith('## ')) {
+            skipUntilNextHeader = false;
+            inTranscript = false;
+        }
+        // Collect transcript lines (look for speaker pattern: **Name | timestamp**)
+        if (inTranscript && !skipUntilNextHeader) {
+            transcriptLines.push(line);
+        }
+        else if (line.match(/^\*\*[^|]+\|\s*\d{2}:\d{2}\*\*$/)) {
+            // Speaker line outside explicit transcript section - start collecting
+            inTranscript = true;
+            transcriptLines.push(line);
+        }
+        else if (inTranscript && !line.startsWith('## ')) {
+            transcriptLines.push(line);
+        }
+    }
+    return transcriptLines.join('\n').trim();
+}
 function buildExtractionPrompt(content) {
+    // Extract only the raw transcript, not pre-processed sections
+    const rawTranscript = extractRawTranscript(content);
+    // Fall back to full content if no transcript found
+    const textToAnalyze = rawTranscript || content;
     return `Analyze this meeting transcript and extract the following:
 
 1. A 2-4 sentence summary of the meeting highlighting key topics and outcomes.
-2. Action items - specific tasks that were assigned or committed to.
-3. Decisions - choices or conclusions that were made.
-4. Learnings - insights, lessons learned, or knowledge gained.
+2. Action items - specific tasks that were assigned or committed to (things people said they would do).
+3. Decisions - choices or conclusions that were explicitly made during the meeting.
+4. Learnings - insights, lessons learned, or important information shared.
 
 For each action item, decision, and learning, provide a confidence score from 0 to 1:
 - 0.9-1.0: Explicitly stated, very clear
@@ -175,9 +222,16 @@ For each action item, decision, and learning, provide a confidence score from 0 
 - 0.3-0.5: Weakly implied, low confidence
 - 0.0-0.3: Very uncertain, possibly misinterpreted
 
+IMPORTANT INSTRUCTIONS:
+- Read the actual conversation carefully and identify action items from what people SAY they will do.
+- Action items should be specific tasks assigned to or committed to by a person.
+- Do not include timestamp references in your output.
+- Each item should be a separate entry - do not combine multiple items.
+- Write clean, standalone text for each item.
+
 Meeting content:
 ---
-${content}
+${textToAnalyze}
 ---
 
 Extract the above information. For action items, decisions, and learnings, only include items that are clearly stated or implied in the meeting. If a category has no items, return an empty array. Include confidence scores for each extracted item.`;
@@ -223,10 +277,34 @@ function formatStagedSections(filtered, summary) {
     return lines.join('\n');
 }
 /**
+ * Remove approved sections from meeting content.
+ * Removes: ## Approved Action Items, ## Approved Decisions, ## Approved Learnings
+ */
+function clearApprovedSections(content) {
+    const lines = content.split('\n');
+    const result = [];
+    let skipping = false;
+    for (const line of lines) {
+        // Check for approved section headers
+        if (line.match(/^## Approved (Action Items|Decisions|Learnings)\s*$/)) {
+            skipping = true;
+            continue;
+        }
+        // Stop skipping at next header
+        if (skipping && line.startsWith('## ')) {
+            skipping = false;
+        }
+        if (!skipping) {
+            result.push(line);
+        }
+    }
+    return result.join('\n');
+}
+/**
  * Testable version of runProcessingSession with injected dependencies.
  * Used by tests to mock file operations and AI service.
  */
-export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps) {
+export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options = {}) {
     const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${meetingSlug}.md`);
     try {
         // 1. Read meeting file
@@ -241,9 +319,18 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             throw new Error(`Could not read meeting file: ${meetingSlug}.md`);
         }
         // 2. Parse frontmatter and content
-        const { data, content } = matter(fileContent);
+        const { data, content: rawContent } = matter(fileContent);
         // Clone frontmatter before mutating (gray-matter caching gotcha)
         const fm = { ...data };
+        // 2b. Optionally clear previously approved items
+        let content = rawContent;
+        if (options.clearApproved) {
+            jobs.appendEvent(jobId, 'Clearing previously approved items...');
+            content = clearApprovedSections(rawContent);
+            // Clear approved items from frontmatter
+            delete fm['approved_items'];
+            delete fm['approved_at'];
+        }
         // 3. Call AI for extraction
         jobs.appendEvent(jobId, 'Extracting content with AI...');
         let extraction;
@@ -357,8 +444,9 @@ export function initializeAIService(aiService, config) {
  * @param meetingSlug    Meeting file slug (no .md extension)
  * @param jobId          ID of the background job to append events to
  * @param jobs           Jobs service (real or mock) — defaults to the real module
+ * @param options        Processing options (e.g. clearApproved)
  */
-export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jobs = jobsService) {
+export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jobs = jobsService, options = {}) {
     // Validate AIService is initialized
     if (!moduleAiService) {
         jobs.setJobStatus(jobId, 'error');
@@ -372,5 +460,5 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
         throw new Error('No AI provider configured. Set up API keys via arete credentials set anthropic.');
     }
     const deps = createDefaultDeps(moduleAiService);
-    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps);
+    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options);
 }
