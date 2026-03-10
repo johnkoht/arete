@@ -311,3 +311,10 @@ export type PatchItemParams = {
   status: ItemStatus;
   editedText?: string;
 };
+
+export type MeetingsResponse = {
+  meetings: Meeting[];
+  total: number;
+  offset: number;
+  limit: number;
+};

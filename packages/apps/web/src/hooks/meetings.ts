@@ -18,15 +18,16 @@ import {
   processMeeting,
   deleteMeeting,
 } from '@/api/meetings.js';
+import type { FetchMeetingsParams } from '@/api/meetings.js';
 import type { PatchItemParams } from '@/api/types.js';
 
 // ── Read hooks ──────────────────────────────────────────────────────────────
 
-/** Fetch all meeting summaries. Re-use cached data if available. */
-export function useMeetings() {
+/** Fetch meeting summaries with optional pagination. Re-use cached data if available. */
+export function useMeetings(params?: FetchMeetingsParams) {
   return useQuery({
-    queryKey: ['meetings'],
-    queryFn: fetchMeetings,
+    queryKey: ['meetings', params?.limit, params?.offset],
+    queryFn: () => fetchMeetings(params),
   });
 }
 

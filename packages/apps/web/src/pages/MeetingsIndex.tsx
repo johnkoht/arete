@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Cloud, Loader2, Search, ArrowRight, Plus, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Cloud, Loader2, Search, ArrowRight, Plus, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { processMeeting } from "@/api/meetings.js";
 import type { Meeting } from "@/api/types.js";
 import { formatDistanceToNow, format } from "date-fns";
 
+const PAGE_SIZE = 25;
+
 type FilterTab = "All" | "Triage" | "Approved";
 type SortColumn = "title" | "date" | "status" | "duration" | "source";
 type SortDirection = "asc" | "desc";
@@ -22,6 +24,7 @@ type SortDirection = "asc" | "desc";
 export default function MeetingsIndex() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [search, setSearch] = useState("");
@@ -30,7 +33,16 @@ export default function MeetingsIndex() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [processingSlug, setProcessingSlug] = useState<string | null>(null);
 
-  const { data: meetings = [], isLoading, error } = useMeetings();
+  // URL-based pagination state
+  const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const { data, isLoading, error } = useMeetings({ limit: PAGE_SIZE, offset });
+  const meetings = data?.meetings ?? [];
+  const totalItems = data?.total ?? 0;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
   const syncMutation = useSyncKrisp();
   const jobStatus = useJobStatus(syncJobId);
 
@@ -49,6 +61,29 @@ export default function MeetingsIndex() {
 
   const isSyncing =
     syncMutation.isPending || !!(syncJobId && jobStatus.data?.status === "running");
+
+  // Set page via URL params (preserves other params)
+  const setPage = (newPage: number) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage === 1) {
+        next.delete("page");
+      } else {
+        next.set("page", String(newPage));
+      }
+      return next;
+    });
+  };
+
+  // Reset page when tab changes
+  const handleTabChange = (tab: FilterTab) => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("page");
+      return next;
+    });
+  };
 
   const handleSync = () => {
     syncMutation.mutate(undefined, {
@@ -240,7 +275,7 @@ export default function MeetingsIndex() {
         {tabs.map((tab) => (
           <button
             key={tab.label}
-            onClick={() => setActiveTab(tab.label)}
+            onClick={() => handleTabChange(tab.label)}
             className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.label
                 ? "border-primary text-foreground"
@@ -319,89 +354,123 @@ export default function MeetingsIndex() {
 
         {/* Data table */}
         {!isLoading && !error && (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                <th className="px-6 py-3">
-                  <button onClick={() => handleSort("title")} className="inline-flex items-center hover:text-foreground">
-                    Title <SortIcon column="title" />
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button onClick={() => handleSort("date")} className="inline-flex items-center hover:text-foreground">
-                    Date <SortIcon column="date" />
-                  </button>
-                </th>
-                <th className="px-4 py-3">Attendees</th>
-                <th className="px-4 py-3">
-                  <button onClick={() => handleSort("status")} className="inline-flex items-center hover:text-foreground">
-                    Status <SortIcon column="status" />
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button onClick={() => handleSort("duration")} className="inline-flex items-center hover:text-foreground">
-                    Duration <SortIcon column="duration" />
-                  </button>
-                </th>
-                <th className="px-4 py-3">
-                  <button onClick={() => handleSort("source")} className="inline-flex items-center hover:text-foreground">
-                    Source <SortIcon column="source" />
-                  </button>
-                </th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
-                    {search ? "No meetings match your search." : "No meetings yet. Sync Krisp to import."}
-                  </td>
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                  <th className="px-6 py-3">
+                    <button onClick={() => handleSort("title")} className="inline-flex items-center hover:text-foreground">
+                      Title <SortIcon column="title" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3">
+                    <button onClick={() => handleSort("date")} className="inline-flex items-center hover:text-foreground">
+                      Date <SortIcon column="date" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3">Attendees</th>
+                  <th className="px-4 py-3">
+                    <button onClick={() => handleSort("status")} className="inline-flex items-center hover:text-foreground">
+                      Status <SortIcon column="status" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3">
+                    <button onClick={() => handleSort("duration")} className="inline-flex items-center hover:text-foreground">
+                      Duration <SortIcon column="duration" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3">
+                    <button onClick={() => handleSort("source")} className="inline-flex items-center hover:text-foreground">
+                      Source <SortIcon column="source" />
+                    </button>
+                  </th>
+                  <th className="px-4 py-3"></th>
                 </tr>
-              )}
-              {sorted.map((m) => (
-                <tr
-                  key={m.slug}
-                  onClick={() => navigate(`/meetings/${m.slug}`)}
-                  className={`border-b transition-colors hover:bg-accent/50 cursor-pointer ${
-                    m.status === "processed"
-                      ? "border-l-2 border-l-status-processed bg-status-processed/5"
-                      : ""
-                  }`}
-                >
-                  <td className="px-6 py-3">
-                    <span className="font-medium text-foreground">{m.title}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger className="cursor-default">
-                        {m.date ? formatDistanceToNow(new Date(m.date), { addSuffix: true }) : "—"}
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs">
-                        {m.date ? format(new Date(m.date), "MMMM d, yyyy 'at' h:mm a") : "Unknown date"}
-                      </TooltipContent>
-                    </Tooltip>
-                  </td>
-                  <td className="px-4 py-3">
-                    <AvatarStack attendees={m.attendees} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={m.status} />
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {m.duration > 0 ? `${m.duration} min` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{m.source || "—"}</td>
-                  <td
-                    className="px-4 py-3 text-right"
-                    onClick={(e) => e.stopPropagation()}
+              </thead>
+              <tbody>
+                {sorted.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                      {search ? "No meetings match your search." : "No meetings yet. Sync Krisp to import."}
+                    </td>
+                  </tr>
+                )}
+                {sorted.map((m) => (
+                  <tr
+                    key={m.slug}
+                    onClick={() => navigate(`/meetings/${m.slug}`)}
+                    className={`border-b transition-colors hover:bg-accent/50 cursor-pointer ${
+                      m.status === "processed"
+                        ? "border-l-2 border-l-status-processed bg-status-processed/5"
+                        : ""
+                    }`}
                   >
-                    {actionButton(m)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <td className="px-6 py-3">
+                      <span className="font-medium text-foreground">{m.title}</span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger className="cursor-default">
+                          {m.date ? formatDistanceToNow(new Date(m.date), { addSuffix: true }) : "—"}
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">
+                          {m.date ? format(new Date(m.date), "MMMM d, yyyy 'at' h:mm a") : "Unknown date"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </td>
+                    <td className="px-4 py-3">
+                      <AvatarStack attendees={m.attendees} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={m.status} />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {m.duration > 0 ? `${m.duration} min` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.source || "—"}</td>
+                    <td
+                      className="px-4 py-3 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {actionButton(m)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalItems)} of {totalItems}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(page - 1)}
+                    disabled={!hasPrevPage}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(page + 1)}
+                    disabled={!hasNextPage}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
