@@ -330,7 +330,7 @@ export default function PeopleIndex() {
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
                 <th className="w-10 px-3 py-3"></th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-3 w-full">
                   <button
                     onClick={() => handleSort("name")}
                     className="inline-flex items-center hover:text-foreground"
@@ -338,7 +338,7 @@ export default function PeopleIndex() {
                     Name <SortIcon column="name" active={sortColumn} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-3 whitespace-nowrap">
                   <button
                     onClick={() => handleSort("category")}
                     className="inline-flex items-center hover:text-foreground"
@@ -346,7 +346,7 @@ export default function PeopleIndex() {
                     Category <SortIcon column="category" active={sortColumn} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-3 whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("health")}
                     className="inline-flex items-center hover:text-foreground"
@@ -354,7 +354,7 @@ export default function PeopleIndex() {
                     Health <SortIcon column="health" active={sortColumn} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-3 whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("lastMeeting")}
                     className="inline-flex items-center hover:text-foreground"
@@ -362,7 +362,7 @@ export default function PeopleIndex() {
                     Last Meeting <SortIcon column="lastMeeting" active={sortColumn} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3">
+                <th className="px-4 py-3 whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("openCommitments")}
                     className="inline-flex items-center hover:text-foreground"
@@ -370,7 +370,7 @@ export default function PeopleIndex() {
                     Open <SortIcon column="openCommitments" active={sortColumn} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3">Trend</th>
+                <th className="px-4 py-3 whitespace-nowrap text-right">Trend</th>
               </tr>
             </thead>
             <tbody>
@@ -431,17 +431,17 @@ export default function PeopleIndex() {
                     <td className="px-4 py-3">
                       <CategoryBadge category={person.category} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <HealthDot score={person.healthScore} />
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                    <td className="px-4 py-3 text-muted-foreground text-xs text-right whitespace-nowrap">
                       {person.lastMeetingDate
                         ? formatDistanceToNow(new Date(person.lastMeetingDate), {
                             addSuffix: true,
                           })
                         : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <span
                         className={`font-medium tabular-nums ${
                           person.openCommitments > 0
@@ -452,7 +452,7 @@ export default function PeopleIndex() {
                         {person.openCommitments}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <TrendIcon trend={person.trend} />
                     </td>
                   </tr>

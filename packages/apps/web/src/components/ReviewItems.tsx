@@ -9,6 +9,35 @@ const TYPE_LABELS: Record<ItemType, string> = {
   learning: "Learning",
 };
 
+/**
+ * Render text with basic markdown (bold only).
+ * Converts **text** to <strong>text</strong>.
+ */
+function renderMarkdownText(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const boldRegex = /\*\*(.+?)\*\*/g;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = boldRegex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    // Add the bold text
+    parts.push(<strong key={key++}>{match[1]}</strong>);
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 interface ItemCardProps {
   item: ReviewItem;
   onStatusChange: (id: string, status: ItemStatus) => void;
@@ -64,7 +93,7 @@ function ItemCard({ item, onStatusChange, onTextChange, readOnly }: ItemCardProp
             }`}
             onClick={() => !readOnly && setEditing(true)}
           >
-            {item.text}
+            {renderMarkdownText(item.text)}
           </p>
         )}
       </div>
@@ -324,7 +353,7 @@ export function ApprovedItemsSection({ approvedItems }: ApprovedItemsProps) {
                   className="flex items-start gap-3 rounded-md border bg-card p-3 shadow-sm"
                 >
                   <CheckCircle2 className="h-5 w-5 text-status-approved flex-shrink-0" />
-                  <p className="text-sm">{text}</p>
+                  <p className="text-sm">{renderMarkdownText(text)}</p>
                 </div>
               ))}
             </div>

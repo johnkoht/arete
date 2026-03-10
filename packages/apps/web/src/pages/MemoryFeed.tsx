@@ -1,12 +1,15 @@
 import { useState, useMemo } from "react";
-import { Search, Brain } from "lucide-react";
+import { Search, Brain, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { useMemory } from "@/hooks/memory.js";
 import type { MemoryItem, MemoryItemType } from "@/api/types.js";
+
+const PAGE_SIZE = 25;
 
 // ── Type tabs ─────────────────────────────────────────────────────────────────
 
@@ -69,8 +72,19 @@ function MemoryCard({ item }: { item: MemoryItem }) {
 export default function MemoryFeed() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
-  const { data, isLoading, error } = useMemory({ type: activeTab, limit: 200 });
+  const { data, isLoading, error } = useMemory({
+    type: activeTab,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  });
+
+  // Reset page when tab changes
+  const handleTabChange = (tab: FilterTab) => {
+    setActiveTab(tab);
+    setPage(0);
+  };
 
   // Client-side search filter on loaded data
   const filtered = useMemo(() => {
@@ -83,13 +97,18 @@ export default function MemoryFeed() {
     );
   }, [data?.items, search]);
 
-  const decisionCount = (data?.items ?? []).filter((i) => i.type === "decision").length;
-  const learningCount = (data?.items ?? []).filter((i) => i.type === "learning").length;
+  // Tab counts are approximate (from current page) - total is accurate for 'all'
+  const totalItems = data?.total ?? 0;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const hasNextPage = page < totalPages - 1;
+  const hasPrevPage = page > 0;
 
+  // Tab counts - we show total for "all", but for filtered tabs we'd need separate API calls
+  // For now, just show the counts from the current fetched data as a simplification
   const tabCounts: Record<FilterTab, number | undefined> = {
-    all: data?.total,
-    decision: decisionCount,
-    learning: learningCount,
+    all: totalItems,
+    decision: undefined, // Would need separate count endpoint
+    learning: undefined, // Would need separate count endpoint
   };
 
   return (
@@ -115,7 +134,7 @@ export default function MemoryFeed() {
         {TABS.map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
+            onClick={() => handleTabChange(tab.value)}
             className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.value
                 ? "border-primary text-foreground"
@@ -180,6 +199,38 @@ export default function MemoryFeed() {
             {filtered.map((item) => (
               <MemoryCard key={item.id} item={item} />
             ))}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4 border-t mt-6">
+                <p className="text-sm text-muted-foreground">
+                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} of {totalItems}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={!hasPrevPage}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    Page {page + 1} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={!hasNextPage}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

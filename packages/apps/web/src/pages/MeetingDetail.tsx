@@ -382,7 +382,7 @@ export default function MeetingDetail() {
       <div className="flex-1 overflow-auto">
         <div className="flex gap-6 p-6">
           {/* Left column */}
-          <div className="flex-1 min-w-0 space-y-6" style={{ maxWidth: "65%" }}>
+          <div className="flex-1 min-w-0 space-y-6 max-w-4xl">
             {/* Synced state banner */}
             {isSynced && (
               <div className="flex items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-4">
