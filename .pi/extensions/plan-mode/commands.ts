@@ -36,6 +36,8 @@ import {
 	checkPlanStatus,
 	getChangedDirectories,
 	checkCapabilityCatalog,
+	hasUserFacingChanges,
+	checkUpdatesModified,
 } from "./wrap-checks.js";
 
 // ────────────────────────────────────────────────────────────
@@ -1321,6 +1323,8 @@ export function formatCloseoutChecklist(
 		catalogDate: Date | null;
 		changedDirs: string[] | null;
 		dirsWithLearnings: string[];
+		hasUserFacingChanges: boolean;
+		updatesModified: boolean;
 	},
 ): string {
 	const lines: string[] = [];
@@ -1376,6 +1380,16 @@ export function formatCloseoutChecklist(
 			}
 		} else {
 			lines.push("✅ No LEARNINGS.md files in changed directories");
+		}
+
+		// UPDATES.md check for user-facing changes
+		if (results.hasUserFacingChanges) {
+			if (results.updatesModified) {
+				lines.push("✅ UPDATES.md was updated (user-facing changes detected)");
+			} else {
+				needsAttention++;
+				lines.push("❌ UPDATES.md not updated — User-facing changes detected in packages/runtime/ or packages/apps/. Add release notes to `packages/runtime/UPDATES.md`");
+			}
 		}
 	}
 
@@ -1453,6 +1467,10 @@ export async function handleWrap(
 	// Find directories with LEARNINGS.md for Tier 2 suggested review
 	const dirsWithLearnings = findLearningsInDirs(changedDirs);
 
+	// Check for user-facing changes and UPDATES.md status
+	const userFacingChanges = hasUserFacingChanges(changedDirs);
+	const updatesModified = userFacingChanges ? checkUpdatesModified(planCreated) : false;
+
 	// Format and send the tiered checklist output
 	const checklistOutput = formatCloseoutChecklist(
 		plan.frontmatter.title,
@@ -1465,6 +1483,8 @@ export async function handleWrap(
 			catalogDate,
 			changedDirs,
 			dirsWithLearnings,
+			hasUserFacingChanges: userFacingChanges,
+			updatesModified,
 		},
 	);
 

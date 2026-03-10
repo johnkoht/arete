@@ -1803,6 +1803,8 @@ describe("formatCloseoutChecklist — git failure handling", () => {
 				catalogDate: null,
 				changedDirs: null, // Simulates git failure
 				dirsWithLearnings: [],
+				hasUserFacingChanges: false,
+				updatesModified: false,
 			},
 		);
 
@@ -1825,12 +1827,112 @@ describe("formatCloseoutChecklist — git failure handling", () => {
 				catalogDate: null,
 				changedDirs: null, // Simulates git failure
 				dirsWithLearnings: [],
+				hasUserFacingChanges: false,
+				updatesModified: false,
 			},
 		);
 
 		assert.ok(
 			output.includes("⚠️") && output.includes("Unable to determine changed directories"),
 			`Tier 3 with null changedDirs should show ⚠️ fallback. Got: ${output}`,
+		);
+	});
+});
+
+describe("formatCloseoutChecklist — UPDATES.md check", () => {
+	it("shows ❌ when user-facing changes detected but UPDATES.md not modified", () => {
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			2,
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "complete",
+				catalogDate: null,
+				changedDirs: ["packages/runtime/skills"],
+				dirsWithLearnings: [],
+				hasUserFacingChanges: true,
+				updatesModified: false,
+			},
+		);
+
+		assert.ok(
+			output.includes("❌") && output.includes("UPDATES.md not updated"),
+			`Should show ❌ for missing UPDATES.md. Got: ${output}`,
+		);
+		assert.ok(
+			output.includes("packages/runtime/UPDATES.md"),
+			`Should mention the file path. Got: ${output}`,
+		);
+	});
+
+	it("shows ✅ when user-facing changes detected and UPDATES.md was modified", () => {
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			2,
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "complete",
+				catalogDate: null,
+				changedDirs: ["packages/apps/web/src"],
+				dirsWithLearnings: [],
+				hasUserFacingChanges: true,
+				updatesModified: true,
+			},
+		);
+
+		assert.ok(
+			output.includes("✅") && output.includes("UPDATES.md was updated"),
+			`Should show ✅ for updated UPDATES.md. Got: ${output}`,
+		);
+	});
+
+	it("does not show UPDATES.md check when no user-facing changes", () => {
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			2,
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "complete",
+				catalogDate: null,
+				changedDirs: ["packages/core/src/services"],
+				dirsWithLearnings: [],
+				hasUserFacingChanges: false,
+				updatesModified: false,
+			},
+		);
+
+		assert.ok(
+			!output.includes("UPDATES.md"),
+			`Should not mention UPDATES.md when no user-facing changes. Got: ${output}`,
+		);
+	});
+
+	it("increments needsAttention count when UPDATES.md not modified", () => {
+		const output = formatCloseoutChecklist(
+			"Test Plan",
+			"test-plan",
+			2,
+			{
+				hasMemoryEntry: true,
+				hasMemoryIndex: true,
+				planStatus: "complete",
+				catalogDate: null,
+				changedDirs: ["packages/runtime/tools"],
+				dirsWithLearnings: [],
+				hasUserFacingChanges: true,
+				updatesModified: false,
+			},
+		);
+
+		assert.ok(
+			output.includes("1 item needs attention") || output.includes("items need attention"),
+			`Should increment needsAttention. Got: ${output}`,
 		);
 	});
 });

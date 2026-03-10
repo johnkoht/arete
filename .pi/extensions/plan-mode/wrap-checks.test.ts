@@ -9,6 +9,8 @@ import {
 	checkPlanStatus,
 	getChangedDirectories,
 	checkCapabilityCatalog,
+	hasUserFacingChanges,
+	checkUpdatesModified,
 } from "./wrap-checks.js";
 import { savePlan, type PlanFrontmatter } from "./persistence.js";
 
@@ -284,5 +286,80 @@ describe("checkCapabilityCatalog", () => {
 		const result = checkCapabilityCatalog(tmpDir);
 		assert.ok(result instanceof Date);
 		assert.equal(result.getUTCFullYear(), 2026);
+	});
+});
+
+describe("hasUserFacingChanges", () => {
+	it("returns false for null changedDirs", () => {
+		const result = hasUserFacingChanges(null);
+		assert.equal(result, false);
+	});
+
+	it("returns false for empty changedDirs", () => {
+		const result = hasUserFacingChanges([]);
+		assert.equal(result, false);
+	});
+
+	it("returns false when no user-facing paths changed", () => {
+		const changedDirs = [
+			"packages/core/src/services",
+			"packages/cli/src/commands",
+			".pi/extensions/plan-mode",
+			"memory/entries",
+		];
+		const result = hasUserFacingChanges(changedDirs);
+		assert.equal(result, false);
+	});
+
+	it("returns true when packages/runtime/ is changed", () => {
+		const changedDirs = [
+			"packages/core/src/services",
+			"packages/runtime/skills/meeting-prep",
+		];
+		const result = hasUserFacingChanges(changedDirs);
+		assert.equal(result, true);
+	});
+
+	it("returns true when packages/apps/ is changed", () => {
+		const changedDirs = [
+			"packages/apps/web/src/pages",
+			"packages/core/src/services",
+		];
+		const result = hasUserFacingChanges(changedDirs);
+		assert.equal(result, true);
+	});
+
+	it("returns true when packages/apps/backend/ is changed", () => {
+		const changedDirs = ["packages/apps/backend/src/routes"];
+		const result = hasUserFacingChanges(changedDirs);
+		assert.equal(result, true);
+	});
+});
+
+describe("checkUpdatesModified", () => {
+	it("returns true when UPDATES.md was recently modified in current repo", () => {
+		// Test against actual repo - UPDATES.md was just modified
+		const recentDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); // 2 days ago
+		const result = checkUpdatesModified(recentDate, process.cwd());
+		// This should be true since we just updated UPDATES.md
+		assert.equal(result, true);
+	});
+
+	it("returns false when UPDATES.md was not modified since old date", () => {
+		// Check from a date in the future - no commits since then
+		const futureDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year in future
+		const result = checkUpdatesModified(futureDate, process.cwd());
+		assert.equal(result, false);
+	});
+
+	it("returns false when not in a git repository", () => {
+		const tmpDir = mkdtempSync(join(tmpdir(), "wrap-checks-test-"));
+		try {
+			const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+			const result = checkUpdatesModified(since, tmpDir);
+			assert.equal(result, false);
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
 	});
 });

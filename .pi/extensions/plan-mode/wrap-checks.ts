@@ -172,3 +172,56 @@ export function checkCapabilityCatalog(cwd: string = process.cwd()): Date | null
 function escapeRegExp(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+// User-facing paths that should trigger UPDATES.md review
+const USER_FACING_PATHS = [
+	"packages/runtime/",
+	"packages/apps/",
+];
+
+const UPDATES_FILE = "packages/runtime/UPDATES.md";
+
+/**
+ * Check if changed directories include user-facing code paths.
+ * User-facing paths: packages/runtime/, packages/apps/
+ *
+ * @param changedDirs - Array of changed directory paths from getChangedDirectories
+ * @returns true if any user-facing paths were changed
+ */
+export function hasUserFacingChanges(changedDirs: string[] | null): boolean {
+	if (!changedDirs || changedDirs.length === 0) {
+		return false;
+	}
+
+	return changedDirs.some((dir) =>
+		USER_FACING_PATHS.some((userPath) => dir.startsWith(userPath)),
+	);
+}
+
+/**
+ * Check if UPDATES.md was modified since a given date.
+ * Uses git log to check for commits touching the file.
+ *
+ * @param since - Date to check from
+ * @param cwd - Working directory (defaults to process.cwd())
+ * @returns true if UPDATES.md was updated since the date, false otherwise
+ */
+export function checkUpdatesModified(since: Date, cwd: string = process.cwd()): boolean {
+	try {
+		const sinceStr = since.toISOString();
+		const output = execSync(
+			`git log --oneline --since="${sinceStr}" -- "${UPDATES_FILE}"`,
+			{
+				cwd,
+				encoding: "utf-8",
+				stdio: ["pipe", "pipe", "pipe"],
+			},
+		);
+
+		// If there's any output, the file was modified
+		return output.trim().length > 0;
+	} catch {
+		// Git not available or command failed — assume not modified
+		return false;
+	}
+}
