@@ -6,6 +6,20 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ## Week of March 9, 2026
 
+**Smarter meeting intelligence with less noise.** Meeting extraction now produces fewer, higher-quality items:
+- **Quality filters** — Vague intentions ("we should...") and trivial follow-ups ("schedule a meeting") are filtered out automatically
+- **Confidence scoring** — Each extracted item has a confidence score; high-confidence items are pre-approved so you only review edge cases
+- **"From your notes" detection** — If you already wrote something in your meeting notes, Areté recognizes it and auto-approves instead of asking you to approve a duplicate
+- **Priority scoring for commitments** — Open commitments are now scored by staleness, relationship health, direction (what you owe vs. what they owe), and specificity. High-priority items surface first.
+- **Commitment reconciliation** — Areté scans recent meetings for completion signals and suggests commitments that may already be done. One click to mark them resolved.
+
+The goal: spend less time reviewing AI extractions and more time on the work that matters.
+
+**Web dashboard polish.** Several UI improvements landed:
+- **Category badges** — People and projects now show consistent category badges throughout the UI
+- **Searchable dropdowns** — Long lists (like project pickers) now have search built in
+- **Project linking in reviews** — When reviewing meeting items, you can now link them to projects directly
+
 **Close-out checklist for your plans.** When you finish a plan and want to make sure all the documentation is up to date, run `/wrap` in plan mode. It checks:
 - Memory entry exists for this plan
 - MEMORY.md index is updated
