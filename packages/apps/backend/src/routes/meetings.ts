@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { spawn } from 'node:child_process';
 import { getEnvApiKey } from '@mariozechner/pi-ai';
+import { hasOAuthCredentials } from '@arete/core';
 import * as workspaceService from '../services/workspace.js';
 import * as jobsService from '../services/jobs.js';
 import { runProcessingSession } from '../services/agent.js';
@@ -224,23 +225,35 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
   });
 
   // POST /api/meetings/:slug/process — kick off Pi SDK agent session (returns 202 + jobId)
+  // Body: { clearApproved?: boolean } - if true, clears previously approved items before reprocessing
   app.post('/:slug/process', async (c) => {
     const apiKey = getEnvApiKey('anthropic');
-    if (!apiKey) {
+    const hasOAuth = hasOAuthCredentials('anthropic');
+    if (!apiKey && !hasOAuth) {
       return c.json(
         {
           error: 'AI not configured',
-          hint: 'Set ANTHROPIC_API_KEY environment variable and restart the server',
+          hint: 'Run `arete credentials login anthropic` or set ANTHROPIC_API_KEY environment variable',
         },
         503
       );
     }
 
     const slug = c.req.param('slug');
+    
+    // Parse optional body for clearApproved flag
+    let clearApproved = false;
+    try {
+      const body = await c.req.json() as { clearApproved?: boolean };
+      clearApproved = body.clearApproved ?? false;
+    } catch {
+      // No body or invalid JSON — use defaults
+    }
+
     const jobId = jobsService.createJob('process');
 
     // Fire and forget — return 202 immediately
-    runProcessingSession(workspaceRoot, slug, jobId, jobsService).catch((err) => {
+    runProcessingSession(workspaceRoot, slug, jobId, jobsService, { clearApproved }).catch((err) => {
       console.error('[process] Agent error:', err);
       jobsService.setJobStatus(jobId, 'error');
     });
@@ -270,29 +283,38 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
 
           const job = jobsService.getJob(jobId);
           if (!job) {
-            closed = true;
-            clearInterval(interval);
-            controller.close();
+            if (!closed) {
+              closed = true;
+              clearInterval(interval);
+              try { controller.close(); } catch { /* already closed */ }
+            }
             return;
           }
 
           const newEvents = job.events.slice(lastSent);
           for (const ev of newEvents) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ text: ev })}\n\n`)
-            );
-            lastSent++;
+            if (closed) break;
+            try {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: ev })}\n\n`)
+              );
+              lastSent++;
+            } catch { /* stream closed */ }
           }
 
           if (job.status === 'done' || job.status === 'error') {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ done: true, status: job.status })}\n\n`
-              )
-            );
-            closed = true;
-            clearInterval(interval);
-            controller.close();
+            if (!closed) {
+              try {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ done: true, status: job.status })}\n\n`
+                  )
+                );
+              } catch { /* stream closed */ }
+              closed = true;
+              clearInterval(interval);
+              try { controller.close(); } catch { /* already closed */ }
+            }
           }
         }, 500);
       },

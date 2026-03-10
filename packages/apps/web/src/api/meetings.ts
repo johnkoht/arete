@@ -192,10 +192,18 @@ export async function processPeople(slug: string): Promise<unknown> {
   });
 }
 
+/** Options for processing a meeting */
+export interface ProcessMeetingOptions {
+  /** If true, clears previously approved items before reprocessing */
+  clearApproved?: boolean;
+}
+
 /** POST /api/meetings/:slug/process — start Pi SDK agent processing job */
-export async function processMeeting(slug: string): Promise<ProcessResponse> {
+export async function processMeeting(slug: string, options?: ProcessMeetingOptions): Promise<ProcessResponse> {
   return apiFetch<ProcessResponse>(`/api/meetings/${slug}/process`, {
     method: 'POST',
+    headers: options ? { 'Content-Type': 'application/json' } : undefined,
+    body: options ? JSON.stringify(options) : undefined,
   });
 }
 

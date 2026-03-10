@@ -115,7 +115,7 @@ export function useProcessPeople(slug: string) {
  */
 export function useProcessMeeting(slug: string) {
   return useMutation({
-    mutationFn: () => processMeeting(slug),
+    mutationFn: (options?: { clearApproved?: boolean }) => processMeeting(slug, options),
   });
 }
 
