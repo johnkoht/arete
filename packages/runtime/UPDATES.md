@@ -19,6 +19,7 @@ The goal: spend less time reviewing AI extractions and more time on the work tha
 - **Category badges** — People and projects now show consistent category badges throughout the UI
 - **Searchable dropdowns** — Long lists (like project pickers) now have search built in
 - **Project linking in reviews** — When reviewing meeting items, you can now link them to projects directly
+- **Person page improvements** — The Edit button is now in the page header for better discoverability
 
 **Close-out checklist for your plans.** When you finish a plan and want to make sure all the documentation is up to date, run `/wrap` in plan mode. It checks:
 - Memory entry exists for this plan

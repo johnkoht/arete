@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-10: [person-detail-redesign-learnings](entries/2026-03-10_person-detail-redesign-learnings.md) — PersonDetailPage Edit button relocation: pre-mortem revealed ~80% of "medium" plan already done, scoped to 1 task. 100% first-attempt, 0 iterations. Key: risk-first scoping prevented ~8 hours wasted work.
 - 2026-03-10: [web-fast-follow-learnings](entries/2026-03-10_web-fast-follow-learnings.md) — Web UI consistency: CategoryBadge pattern, SearchableSelect component, project picker in ReviewItems, projectSlug data model. Phase 1 + Track A complete. Created web-pagination and person-detail-redesign follow-up plans.
 - 2026-03-09: [intelligence-tuning-learnings](entries/2026-03-09_intelligence-tuning-learnings.md) — Intelligence Tuning PRD: 6/6 tasks (schema extension, quality tuning, user notes dedup, confidence pre-selection, priority scoring, reconciliation). ~100 new tests, 0 pre-mortem risks materialized. Key: dual extraction flows (agent.ts vs meeting-extraction.ts), Jaccard similarity reuse, reviewer pre-work checks caught 5 architectural issues.
 - 2026-03-09: [improve-execution-learnings](entries/2026-03-09_improve-execution-learnings.md) — Incorporated learnings from ai-config/reimagine-v2 into execute-prd skill: phantom task detection, grumpy reviewer mindset, DRY constants, backwards compat check, build scripts risk, shared utility mitigation. 4/4 tasks, 0/5 pre-mortem risks, 42 lines added.

@@ -1,17 +1,17 @@
 ---
 title: Person Detail Page Redesign
 slug: person-detail-redesign
-status: draft
-size: medium
+status: complete
+size: tiny
 tags: [web, ui, people]
 created: 2026-03-09T17:30:00.000Z
-updated: 2026-03-09T17:30:00.000Z
+updated: 2026-03-10T06:01:00.000Z
 completed: null
 execution: null
-has_review: false
-has_pre_mortem: false
-has_prd: false
-steps: 4
+has_review: true
+has_pre_mortem: true
+has_prd: true
+steps: 1
 ---
 
 # Person Detail Page Redesign
@@ -32,119 +32,85 @@ Users need to quickly understand a person's context (role, working style) while 
 
 ## Success Criteria
 
-- Two-column layout separates activity (left) from profile info (right)
-- Recent commitments and meetings visible at a glance
-- Edit functionality moved to drawer (cleaner UX)
-- Category badge uses standardized style
+- ✅ Two-column layout separates activity (left) from profile info (right)
+- ✅ Recent commitments and meetings visible at a glance
+- ⬜ Edit button in header (cleaner UX)
+- ✅ Category badge uses standardized style
 
 ---
 
-## Plan
+## Current State Analysis (Post-Review)
 
-### 1. Header Bar Redesign
+After code review, **~95% of this work is already implemented**:
 
-Create a proper header matching PageHeader style.
+### Already Completed ✅
+
+1. **Header Bar** - Back link, name, CategoryBadge ✅
+2. **Two-Column Layout** - lg:grid-cols-3 with lg:col-span-2, responsive ✅
+3. **Left Column Activity Sections**:
+   - Open Commitments with direction indicators ✅
+   - Recent Meetings with "Showing X of Y" ✅
+   - Notes section with BlockEditor ✅
+   - "See all commitments →" link ✅
+4. **Right Column Profile Cards**:
+   - Overview Card with health status, stats ✅
+   - Role & Context Card ✅
+   - Working Style Card (stances, repeated asks/concerns) ✅
+5. **EditNotesSheet** - For editing person notes ✅
+
+### Scope Revisions from Review
+
+| Original Plan Item | Decision | Reason |
+|--------------------|----------|--------|
+| PersonEditDrawer | **REMOVED** | Backend API only supports notes editing (`patchPersonNotes`), not roleContext/workingStyle fields |
+| View All Meetings link | **REMOVED** | MeetingsIndex doesn't support `?person=` filtering; "Showing X of Y" is acceptable |
+| Header Edit button | **KEEP** | Only remaining UX improvement |
+
+---
+
+## Revised Plan
+
+### 1. Move Edit Button to Header
+
+Move the Edit button from the Notes card to the header bar for better discoverability.
 
 **Acceptance Criteria:**
-- [ ] Back link to /people
-- [ ] Person name as title
-- [ ] Category badge (uses CategoryBadge component)
-- [ ] Edit button on right side
-- [ ] Consistent height with other page headers
+- [ ] Edit button appears in header row (right side, after CategoryBadge)
+- [ ] Clicking Edit opens the existing EditNotesSheet
+- [ ] Edit button removed from Notes card header
+- [ ] Edit button uses appropriate variant (ghost or secondary)
 
 **Files:**
 - `packages/apps/web/src/pages/PersonDetailPage.tsx`
 
----
-
-### 2. Two-Column Layout Structure
-
-Implement responsive two-column layout.
-
-**Acceptance Criteria:**
-- [ ] Max-width ~1200px container
-- [ ] Left column: ~60% width (activity)
-- [ ] Right column: ~40% width (profile info)
-- [ ] Responsive: stacks on mobile (<768px)
-- [ ] Proper gap/spacing between columns
-
-**Files:**
-- `packages/apps/web/src/pages/PersonDetailPage.tsx`
-
----
-
-### 3. Left Column: Activity Sections
-
-Build activity sections with compact tables.
-
-**Acceptance Criteria:**
-- [ ] **Open Commitments** section (3-5 rows)
-  - Status icon, text, due date
-  - "View All" link to /commitments?person={slug}
-- [ ] **Recent Meetings** section (5 rows)
-  - Date, title, status badge
-  - "View All" link to /meetings?person={slug}
-- [ ] **Key Notes** section (if person has notes)
-  - Rendered markdown
-  - Collapsible if long
-
-**Files:**
-- `packages/apps/web/src/pages/PersonDetailPage.tsx`
-- Possibly new sub-components in `src/components/people/`
-
----
-
-### 4. Right Column: Profile Cards + Edit Drawer
-
-Build profile info cards and edit drawer.
-
-**Acceptance Criteria:**
-- [ ] **Overview Card**
-  - Company, role, contact info
-  - Clean card styling
-- [ ] **Role & Context Card**
-  - Rendered markdown from person.roleContext
-- [ ] **Working Style Card**
-  - Rendered markdown from person.workingStyle
-- [ ] **Edit Drawer**
-  - Opens from Edit button in header
-  - MarkdownEditor for roleContext and workingStyle
-  - Save/Cancel buttons
-  - Drawer slides in from right
-
-**Files:**
-- `packages/apps/web/src/pages/PersonDetailPage.tsx`
-- `packages/apps/web/src/components/people/PersonEditDrawer.tsx` (new)
+**Risk Mitigations Applied:**
+- Keep EditNotesSheet working as-is (just change where the button is)
+- Test edit → save and edit → cancel flows after change
 
 ---
 
 ## Out of Scope
 
-- Person creation flow (separate feature)
-- Inline field editing (using drawer instead)
+- ~~PersonEditDrawer for roleContext/workingStyle~~ (API doesn't support)
+- ~~View All Meetings link~~ (MeetingsIndex doesn't support person filter)
+- Person creation flow
 - Activity timeline (just recent items)
 - Person merge/delete functionality
 
 ---
 
-## Dependencies
-
-- CategoryBadge component (already exists from Web Fast Follow)
-- MarkdownEditor component (verify exists)
-
----
-
 ## Testing Notes
 
-- Test responsive behavior at various widths
-- Test drawer open/close/save flow
-- Verify commitments/meetings data loads correctly
-- Test empty states (person with no commitments)
+- Verify Edit button click opens sheet
+- Verify save/cancel flow works
+- Responsive behavior unchanged (already tested)
+- Empty states unchanged (already handled)
 
 ---
 
-## Design Reference
+## Pre-Mortem Mitigations
 
-Two-column layout inspired by Linear's contact pages:
-- Left: transaction/activity history
-- Right: static profile information
+From `pre-mortem.md`:
+1. ✅ Scoped down based on actual API capabilities
+2. ✅ No backend changes needed
+3. ✅ Minimal change to existing functionality
