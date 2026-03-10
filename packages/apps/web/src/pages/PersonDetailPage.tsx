@@ -405,6 +405,13 @@ export default function PersonDetailPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-lg font-semibold leading-none tracking-tight">{person.name}</h1>
           <CategoryBadge category={person.category} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsEditingNotes(true)}
+          >
+            Edit
+          </Button>
         </div>
         {(person.role || person.company) && (
           <p className="mt-1 text-sm text-muted-foreground">
@@ -498,16 +505,7 @@ export default function PersonDetailPage() {
             {/* Notes */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center justify-between">
-                  Notes
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditingNotes(true)}
-                  >
-                    Edit
-                  </Button>
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 {!person.rawContent ? (
