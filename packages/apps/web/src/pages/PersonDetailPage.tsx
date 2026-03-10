@@ -1,25 +1,25 @@
 /**
- * Full-page view for a single person — replaces the PersonDrawer fly-out.
+ * Full-page view for a single person — two-column layout.
  * Route: /people/:slug
  * 
- * V3-2: Restructured to single-column layout with:
- * - Contact info inline (email, company horizontal)
- * - Open Commitments (3 items max + "See All")
- * - Recent Meetings (5 items max)
- * - Intelligence with health status + stances/asks/concerns
- * - Notes with LazyBlockEditor
+ * V3-3: Two-column layout with:
+ * - Header: back link, name, category badge
+ * - Left column: Open Commitments (3-5 rows), Recent Meetings (5 rows), Notes
+ * - Right column: Overview card, Role & Context, Working Style
  */
 
-import { useState, useEffect, Suspense, lazy } from "react";
+import { useState, Suspense, lazy } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Mail, Building2, ChevronDown, ChevronRight, Clock, Users } from "lucide-react";
+import { ArrowLeft, Mail, Building2, Briefcase, ChevronDown, ChevronRight, Clock, Users, ArrowRight, ArrowLeftIcon } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { PageHeader } from "@/components/PageHeader";
 import { HealthDot, TrendIcon, CategoryBadge } from "@/components/people/PersonBadges.js";
 import { usePerson, useUpdatePersonNotes } from "@/hooks/people.js";
 
@@ -223,6 +223,78 @@ function MeetingSheet({
   );
 }
 
+// ── Edit Notes Sheet ──────────────────────────────────────────────────────────
+
+function EditNotesSheet({
+  open,
+  onClose,
+  initialContent,
+  slug,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialContent: string;
+  slug: string;
+}) {
+  const [editContent, setEditContent] = useState(initialContent);
+  const { mutate: saveNotes, isPending: isSaving } = useUpdatePersonNotes(slug);
+
+  // Reset content when sheet opens with new content
+  useState(() => {
+    setEditContent(initialContent);
+  });
+
+  function handleSave() {
+    saveNotes(editContent, {
+      onSuccess: () => {
+        toast.success("Notes saved");
+        onClose();
+      },
+      onError: () => {
+        toast.error("Couldn't save notes");
+      },
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto" side="right">
+        <SheetHeader className="pb-4">
+          <SheetTitle>Edit Notes</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4">
+          <div className="min-h-[400px] border rounded-md p-3">
+            <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+              <LazyBlockEditor
+                key={`editing-${slug}-${open}`}
+                initialMarkdown={initialContent}
+                onChange={setEditContent}
+                editable={true}
+              />
+            </Suspense>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={isSaving}
+              onClick={handleSave}
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Section heading ───────────────────────────────────────────────────────────
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
@@ -233,339 +305,348 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ── Direction indicator ───────────────────────────────────────────────────────
+
+function DirectionIndicator({ direction }: { direction: string }) {
+  const isIOwe = direction === "i_owe_them";
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${
+      isIOwe ? "text-amber-600" : "text-sky-600"
+    }`}>
+      {isIOwe ? <ArrowRight className="h-3 w-3" /> : <ArrowLeftIcon className="h-3 w-3" />}
+      {isIOwe ? "You owe" : "They owe"}
+    </span>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PersonDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: person, isLoading, error } = usePerson(slug ?? "");
   const [meetingSlug, setMeetingSlug] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState('');
-  const { mutate: saveNotes, isPending: isSaving } = useUpdatePersonNotes(slug ?? '');
-
-  // TODO: Navigation guard for unsaved changes requires data router (createBrowserRouter)
-  // For now, we skip the useBlocker feature until router migration
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
 
   if (isLoading) {
     return (
-      <div className="p-8 space-y-6 max-w-3xl mx-auto">
-        {/* Back link skeleton */}
-        <Skeleton className="h-4 w-24" />
-        
+      <div className="flex flex-col h-full">
         {/* Header skeleton */}
-        <div className="space-y-2">
+        <div className="border-b px-6 py-4">
+          <Skeleton className="h-4 w-24 mb-4" />
           <div className="flex items-center gap-3">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-2.5 w-2.5 rounded-full" />
+            <Skeleton className="h-7 w-48" />
             <Skeleton className="h-5 w-16 rounded-md" />
           </div>
-          <Skeleton className="h-4 w-32" />
         </div>
         
-        {/* Contact info skeleton */}
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-4 w-24" />
+        {/* Two column skeleton */}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Skeleton className="h-[200px] w-full rounded-lg" />
+              <Skeleton className="h-[150px] w-full rounded-lg" />
+              <Skeleton className="h-[200px] w-full rounded-lg" />
+            </div>
+            <div className="space-y-6">
+              <Skeleton className="h-[120px] w-full rounded-lg" />
+              <Skeleton className="h-[100px] w-full rounded-lg" />
+              <Skeleton className="h-[150px] w-full rounded-lg" />
+            </div>
+          </div>
         </div>
-        
-        {/* Sections skeleton */}
-        <Skeleton className="h-4 w-36" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-        </div>
-        
-        <Skeleton className="h-4 w-36" />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-        </div>
-        
-        <Skeleton className="h-4 w-36" />
-        <Skeleton className="h-[100px] w-full" />
       </div>
     );
   }
 
   if (error || !person) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-sm text-destructive font-medium">Failed to load person</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {error instanceof Error ? error.message : "Person not found"}
-        </p>
-        <Link to="/people" className="mt-4 inline-flex text-sm text-primary hover:underline">
-          ← Back to People
-        </Link>
+      <div className="flex flex-col h-full">
+        <PageHeader
+          title="Person Not Found"
+          action={
+            <Link
+              to="/people"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to People
+            </Link>
+          }
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-sm text-destructive font-medium">Failed to load person</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {error instanceof Error ? error.message : "Person not found"}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   // Limit items for display
-  const visibleCommitments = person.openCommitmentItems.slice(0, 3);
-  const hasMoreCommitments = person.openCommitmentItems.length > 3;
+  const visibleCommitments = person.openCommitmentItems.slice(0, 5);
+  const hasMoreCommitments = person.openCommitmentItems.length > 5;
   const visibleMeetings = person.allMeetings.slice(0, 5);
   const hasMoreMeetings = person.allMeetings.length > 5;
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
-      <div className="p-6 max-w-3xl mx-auto w-full space-y-6">
-        {/* Back link */}
+    <div className="flex flex-col h-full">
+      {/* Header with back link, name, category badge */}
+      <div className="border-b px-6 py-4">
         <Link
           to="/people"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
         >
           <ArrowLeft className="h-4 w-4" />
           People
         </Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-lg font-semibold leading-none tracking-tight">{person.name}</h1>
+          <CategoryBadge category={person.category} />
+        </div>
+        {(person.role || person.company) && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {[person.role, person.company].filter(Boolean).join(" · ")}
+          </p>
+        )}
+      </div>
 
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-3 flex-wrap mb-1">
-            <h1 className="text-2xl font-semibold">{person.name}</h1>
-            <HealthDot score={person.healthScore} />
-            <CategoryBadge category={person.category} />
+      {/* Two-column layout */}
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: Commitments, Meetings, Notes */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Open Commitments */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  Open Commitments
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {person.openCommitments} total
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {person.openCommitmentItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No open commitments.</p>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      {visibleCommitments.map((c) => (
+                        <div key={c.id} className="flex items-start gap-3 text-sm">
+                          <DirectionIndicator direction={c.direction} />
+                          <span className="flex-1 text-foreground">{c.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {hasMoreCommitments && (
+                      <Link
+                        to={`/commitments?person=${slug}`}
+                        className="inline-block mt-4 text-sm text-primary hover:underline"
+                      >
+                        See all commitments →
+                      </Link>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Meetings */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  Recent Meetings
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {person.allMeetings.length} total
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {person.allMeetings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No meetings on record.</p>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      {visibleMeetings.map((m) => (
+                        <button
+                          key={m.slug}
+                          onClick={() => setMeetingSlug(m.slug)}
+                          className="w-full flex items-start gap-3 text-left py-2 px-2 -mx-2 rounded-md hover:bg-accent/50 transition-colors group"
+                        >
+                          <span className="flex-shrink-0 text-xs text-muted-foreground pt-0.5 w-20 tabular-nums">
+                            {m.date}
+                          </span>
+                          <span className="min-w-0 text-sm text-foreground group-hover:text-primary truncate">
+                            {m.title}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {hasMoreMeetings && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Showing 5 of {person.allMeetings.length} meetings
+                      </p>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Notes */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  Notes
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingNotes(true)}
+                  >
+                    Edit
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!person.rawContent ? (
+                  <p className="text-sm text-muted-foreground">No notes yet.</p>
+                ) : (
+                  <div className="text-sm">
+                    <Suspense fallback={<Skeleton className="h-[100px] w-full" />}>
+                      <LazyBlockEditor
+                        key={`readonly-${person.slug}-${person.rawContent}`}
+                        initialMarkdown={person.rawContent ?? ""}
+                        onChange={() => {}}
+                        editable={false}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-          {(person.role || person.company) && (
-            <p className="text-sm text-muted-foreground">
-              {[person.role, person.company].filter(Boolean).join(" · ")}
-            </p>
-          )}
-        </div>
 
-        {/* Contact info — horizontal layout */}
-        <div className="flex items-center gap-4 flex-wrap text-sm">
-          {person.email && (
-            <div className="flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-              <a
-                href={`mailto:${person.email}`}
-                className="text-primary hover:underline"
-              >
-                {person.email}
-              </a>
-            </div>
-          )}
-          {person.company && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-              {person.company}
-            </div>
-          )}
-          {!person.email && !person.company && (
-            <p className="text-muted-foreground">No contact info.</p>
-          )}
-        </div>
+          {/* Right column: Overview, Role & Context, Working Style */}
+          <div className="space-y-6">
+            {/* Overview Card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Overview</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Health status row */}
+                <div className="flex items-center gap-3">
+                  <HealthDot score={person.healthScore} />
+                  <TrendIcon trend={person.trend} />
+                  {person.healthStatus && (
+                    <span className="text-sm text-muted-foreground">{person.healthStatus}</span>
+                  )}
+                  {!person.healthStatus && person.healthScore === null && (
+                    <span className="text-sm text-muted-foreground">No health data</span>
+                  )}
+                </div>
+                
+                {/* Quick stats */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-semibold">{person.openCommitments}</p>
+                    <p className="text-xs text-muted-foreground">Open Commitments</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-semibold">{person.allMeetings.length}</p>
+                    <p className="text-xs text-muted-foreground">Meetings</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Separator />
-
-        {/* Open Commitments */}
-        <div>
-          <SectionHeading>
-            Open Commitments ({person.openCommitments})
-          </SectionHeading>
-          {person.openCommitmentItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No open commitments.</p>
-          ) : (
-            <>
-              <ul className="space-y-2">
-                {visibleCommitments.map((c) => (
-                  <li key={c.id} className="text-sm">
-                    <span className="text-muted-foreground text-xs mr-1.5">
-                      {c.direction === "i_owe_them" ? "→ You owe" : "← They owe"}
-                    </span>
-                    {c.text}
-                  </li>
-                ))}
-              </ul>
-              {hasMoreCommitments && (
-                <Link
-                  to={`/commitments?person=${slug}`}
-                  className="inline-block mt-2 text-sm text-primary hover:underline"
-                >
-                  See All →
-                </Link>
-              )}
-            </>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* Recent Meetings */}
-        <div>
-          <SectionHeading>
-            Recent Meetings ({person.allMeetings.length})
-          </SectionHeading>
-          {person.allMeetings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No meetings on record.</p>
-          ) : (
-            <>
-              <ul className="space-y-1">
-                {visibleMeetings.map((m) => (
-                  <li key={m.slug}>
-                    <button
-                      onClick={() => setMeetingSlug(m.slug)}
-                      className="w-full flex items-start gap-3 text-left py-1.5 px-2 rounded-md hover:bg-accent/50 transition-colors group"
+            {/* Role & Context */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Role & Context</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {person.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <a
+                      href={`mailto:${person.email}`}
+                      className="text-sm text-primary hover:underline truncate"
                     >
-                      <span className="flex-shrink-0 text-xs text-muted-foreground pt-0.5 w-24">
-                        {m.date}
-                      </span>
-                      <span className="min-w-0 text-sm text-foreground group-hover:text-primary truncate">
-                        {m.title}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {hasMoreMeetings && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Showing 5 of {person.allMeetings.length} meetings
-                </p>
-              )}
-            </>
-          )}
-        </div>
+                      {person.email}
+                    </a>
+                  </div>
+                )}
+                {person.role && (
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm">{person.role}</span>
+                  </div>
+                )}
+                {person.company && (
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm">{person.company}</span>
+                  </div>
+                )}
+                {!person.email && !person.role && !person.company && (
+                  <p className="text-sm text-muted-foreground">No contact info.</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Separator />
-
-        {/* Intelligence */}
-        <div>
-          <SectionHeading>Intelligence</SectionHeading>
-          
-          {/* Health status row */}
-          <div className="flex items-center gap-3 mb-4">
-            <HealthDot score={person.healthScore} />
-            <TrendIcon trend={person.trend} />
-            {person.healthStatus && (
-              <span className="text-sm text-muted-foreground">{person.healthStatus}</span>
-            )}
-            {!person.healthStatus && person.healthScore === null && (
-              <span className="text-sm text-muted-foreground">No health data</span>
-            )}
+            {/* Working Style */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Working Style</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {person.stances.length > 0 && (
+                  <div>
+                    <SectionHeading>Stances</SectionHeading>
+                    <ul className="space-y-1">
+                      {person.stances.map((s) => (
+                        <li key={s} className="text-sm text-muted-foreground">
+                          · {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {person.repeatedAsks.length > 0 && (
+                  <div>
+                    <SectionHeading>Repeated Asks</SectionHeading>
+                    <ul className="space-y-1">
+                      {person.repeatedAsks.map((s) => (
+                        <li key={s} className="text-sm text-muted-foreground">
+                          · {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {person.repeatedConcerns.length > 0 && (
+                  <div>
+                    <SectionHeading>Repeated Concerns</SectionHeading>
+                    <ul className="space-y-1">
+                      {person.repeatedConcerns.map((s) => (
+                        <li key={s} className="text-sm text-muted-foreground">
+                          · {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {person.stances.length === 0 &&
+                  person.repeatedAsks.length === 0 &&
+                  person.repeatedConcerns.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No working style data yet.</p>
+                  )}
+              </CardContent>
+            </Card>
           </div>
-
-          {/* Stances, Asks, Concerns */}
-          <div className="space-y-4">
-            {person.stances.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Stances</p>
-                <ul className="space-y-1">
-                  {person.stances.map((s) => (
-                    <li key={s} className="text-sm text-muted-foreground">
-                      · {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {person.repeatedAsks.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Repeated Asks</p>
-                <ul className="space-y-1">
-                  {person.repeatedAsks.map((s) => (
-                    <li key={s} className="text-sm text-muted-foreground">
-                      · {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {person.repeatedConcerns.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">
-                  Repeated Concerns
-                </p>
-                <ul className="space-y-1">
-                  {person.repeatedConcerns.map((s) => (
-                    <li key={s} className="text-sm text-muted-foreground">
-                      · {s}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {person.stances.length === 0 &&
-              person.repeatedAsks.length === 0 &&
-              person.repeatedConcerns.length === 0 &&
-              person.healthScore !== null && (
-                <p className="text-sm text-muted-foreground">No additional intelligence.</p>
-              )}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Notes */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</h3>
-            {!isEditing && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setEditContent(person.rawContent ?? '');
-                  setIsEditing(true);
-                }}
-              >
-                Edit
-              </Button>
-            )}
-          </div>
-
-          {isEditing ? (
-            <>
-              <div className="min-h-[200px] border rounded-md p-3">
-                <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
-                  <LazyBlockEditor
-                    key={`editing-${person.slug}`}
-                    initialMarkdown={editContent}
-                    onChange={setEditContent}
-                    editable={true}
-                  />
-                </Suspense>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button
-                  size="sm"
-                  disabled={isSaving}
-                  onClick={() => {
-                    saveNotes(editContent, {
-                      onSuccess: () => {
-                        toast.success('Notes saved');
-                        setIsEditing(false);
-                      },
-                      onError: () => {
-                        toast.error("Couldn't save notes");
-                      },
-                    });
-                  }}
-                >
-                  {isSaving ? 'Saving...' : 'Save'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditing(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              <Suspense fallback={<Skeleton className="h-[100px] w-full" />}>
-                <LazyBlockEditor
-                  key={`readonly-${person.slug}-${person.rawContent}`}
-                  initialMarkdown={person.rawContent ?? ''}
-                  onChange={() => {}}
-                  editable={false}
-                />
-              </Suspense>
-            </div>
-          )}
         </div>
       </div>
 
@@ -577,6 +658,14 @@ export default function PersonDetailPage() {
           onClose={() => setMeetingSlug(null)}
         />
       )}
+
+      {/* Edit Notes Sheet */}
+      <EditNotesSheet
+        open={isEditingNotes}
+        onClose={() => setIsEditingNotes(false)}
+        initialContent={person?.rawContent ?? ""}
+        slug={slug ?? ""}
+      />
     </div>
   );
 }

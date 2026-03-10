@@ -192,34 +192,55 @@ describe('PersonDetailPage', () => {
       renderPage();
 
       await waitFor(() => {
-        // Section headings
-        expect(screen.getByText(/Open Commitments/)).toBeInTheDocument();
-        expect(screen.getByText(/Recent Meetings/)).toBeInTheDocument();
-        expect(screen.getByText('Intelligence')).toBeInTheDocument();
+        // Two-column layout sections (use getAllByText for "Open Commitments" which appears in header and stats)
+        expect(screen.getAllByText(/Open Commitments/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/Recent Meetings/).length).toBeGreaterThan(0);
+        expect(screen.getByText('Overview')).toBeInTheDocument();
+        expect(screen.getByText('Role & Context')).toBeInTheDocument();
+        expect(screen.getByText('Working Style')).toBeInTheDocument();
         expect(screen.getByText('Notes')).toBeInTheDocument();
       });
     });
   });
 
   describe('Open Commitments section', () => {
-    it('shows up to 3 commitments', async () => {
+    it('shows up to 5 commitments', async () => {
       renderPage();
 
       await waitFor(() => {
-        // Should show first 3 commitments
+        // Should show first 4 commitments (only 4 in mock data)
         expect(screen.getByText('Send proposal')).toBeInTheDocument();
         expect(screen.getByText('Review docs')).toBeInTheDocument();
         expect(screen.getByText('Schedule call')).toBeInTheDocument();
-        // Should NOT show the 4th item
-        expect(screen.queryByText('Hidden item')).not.toBeInTheDocument();
+        expect(screen.getByText('Hidden item')).toBeInTheDocument(); // Shows because we have 4 items, limit is 5
       });
     });
 
-    it('shows "See All" link when more than 3 commitments', async () => {
+    it('shows "See all commitments" link when more than 5 commitments', async () => {
+      // Update mock to have more than 5 commitments
+      vi.mocked(usePerson).mockReturnValue({
+        data: {
+          ...mockPerson,
+          openCommitments: 7,
+          openCommitmentItems: [
+            ...mockPerson.openCommitmentItems,
+            { id: '5', text: 'Fifth item', direction: 'i_owe_them', date: '2026-03-05' },
+            { id: '6', text: 'Sixth item', direction: 'i_owe_them', date: '2026-03-06' },
+            { id: '7', text: 'Seventh item', direction: 'i_owe_them', date: '2026-03-07' },
+          ],
+        },
+        isLoading: false,
+        error: null,
+        isError: false,
+        isPending: false,
+        isSuccess: true,
+        status: 'success',
+      } as ReturnType<typeof usePerson>);
+
       renderPage();
 
       await waitFor(() => {
-        const seeAllLink = screen.getByText('See All →');
+        const seeAllLink = screen.getByText('See all commitments →');
         expect(seeAllLink).toBeInTheDocument();
         expect(seeAllLink.closest('a')).toHaveAttribute('href', '/commitments?person=john-doe');
       });
@@ -251,25 +272,27 @@ describe('PersonDetailPage', () => {
     });
   });
 
-  describe('Intelligence section', () => {
-    it('displays health status text', async () => {
+  describe('Overview and Working Style sections', () => {
+    it('displays health status in Overview card', async () => {
       renderPage();
 
       await waitFor(() => {
+        expect(screen.getByText('Overview')).toBeInTheDocument();
         expect(screen.getByText('Engaged')).toBeInTheDocument();
       });
     });
 
-    it('displays stances', async () => {
+    it('displays stances in Working Style card', async () => {
       renderPage();
 
       await waitFor(() => {
+        expect(screen.getByText('Working Style')).toBeInTheDocument();
         expect(screen.getByText('Stances')).toBeInTheDocument();
         expect(screen.getByText('· Prefers async communication')).toBeInTheDocument();
       });
     });
 
-    it('displays repeated asks', async () => {
+    it('displays repeated asks in Working Style card', async () => {
       renderPage();
 
       await waitFor(() => {
@@ -278,7 +301,7 @@ describe('PersonDetailPage', () => {
       });
     });
 
-    it('displays repeated concerns', async () => {
+    it('displays repeated concerns in Working Style card', async () => {
       renderPage();
 
       await waitFor(() => {
@@ -307,7 +330,7 @@ describe('PersonDetailPage', () => {
       });
     });
 
-    it('switches to edit mode when Edit clicked', async () => {
+    it('opens edit sheet when Edit clicked', async () => {
       renderPage();
 
       await waitFor(() => {
@@ -317,11 +340,11 @@ describe('PersonDetailPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
       await waitFor(() => {
-        // Should show Save and Cancel buttons
+        // Sheet should open with "Edit Notes" title
+        expect(screen.getByText('Edit Notes')).toBeInTheDocument();
+        // Should show Save and Cancel buttons in sheet
         expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-        // Edit button should be gone
-        expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
       });
     });
   });

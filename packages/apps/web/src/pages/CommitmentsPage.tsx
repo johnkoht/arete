@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, type LucideIcon } from "lucide-react";
+import { Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, ArrowRight, ArrowLeft, type LucideIcon, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,27 +61,33 @@ const EMPTY_STATES: Record<FilterType, { icon: LucideIcon; title: string; descri
     description: "Nothing due in the next 7 days.",
   },
   all: {
-    icon: CheckSquare,
+    icon: CheckCircle2,
     title: "No commitments tracked yet",
     description: "Process meetings to start tracking commitments.",
   },
 };
 
-// ── Direction badge ───────────────────────────────────────────────────────────
+// ── Direction icon with tooltip ───────────────────────────────────────────────
 
-function DirectionBadge({ direction }: { direction: string }) {
+function DirectionIcon({ direction }: { direction: string }) {
   const isIOwe = direction === "i_owe_them";
   return (
-    <Badge
-      variant="secondary"
-      className={`text-xs font-normal flex-shrink-0 ${
-        isIOwe
-          ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-          : "bg-sky-50 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400"
-      }`}
-    >
-      {isIOwe ? "I owe them" : "They owe me"}
-    </Badge>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`inline-flex items-center justify-center w-6 h-6 rounded ${
+            isIOwe
+              ? "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400"
+              : "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400"
+          }`}>
+            {isIOwe ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{isIOwe ? "I owe them" : "They owe me"}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -100,9 +108,9 @@ function AgeBadge({ daysOpen }: { daysOpen: number }) {
   );
 }
 
-// ── Action buttons ────────────────────────────────────────────────────────────
+// ── Completion button (left side) ─────────────────────────────────────────────
 
-function CommitmentActions({ item }: { item: CommitmentItem }) {
+function CompletionAction({ item }: { item: CommitmentItem }) {
   const { mutate, isPending } = useMarkCommitmentDone();
 
   function handleMarkDone() {
@@ -115,6 +123,50 @@ function CommitmentActions({ item }: { item: CommitmentItem }) {
     );
   }
 
+  const isResolved = item.status === "resolved";
+  const isDropped = item.status === "dropped";
+  const isSettled = isResolved || isDropped;
+
+  if (isSettled) {
+    if (isResolved) {
+      return (
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+          <Check className="h-3.5 w-3.5" />
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground">
+        <X className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={handleMarkDone}
+            disabled={isPending}
+            className="inline-flex items-center justify-center w-6 h-6 rounded-full border-2 border-muted-foreground/30 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+          >
+            <span className="sr-only">Mark done</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Mark as done</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// ── Delete action (right side) ────────────────────────────────────────────────
+
+function DeleteAction({ item }: { item: CommitmentItem }) {
+  const { mutate, isPending } = useMarkCommitmentDone();
+
   function handleDrop() {
     mutate(
       { id: item.id, status: "dropped" },
@@ -125,68 +177,46 @@ function CommitmentActions({ item }: { item: CommitmentItem }) {
     );
   }
 
-  const isResolved = item.status === "resolved";
-  const isDropped = item.status === "dropped";
-  const isSettled = isResolved || isDropped;
+  const isSettled = item.status === "resolved" || item.status === "dropped";
 
   if (isSettled) {
-    if (isResolved) {
-      return (
-        <Badge variant="secondary" className="text-xs flex-shrink-0 bg-emerald-50 text-emerald-700">
-          Resolved
-        </Badge>
-      );
-    }
     return (
       <Badge variant="secondary" className="text-xs flex-shrink-0">
-        Dropped
+        {item.status === "resolved" ? "Resolved" : "Dropped"}
       </Badge>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5 flex-shrink-0">
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-7 px-2 text-xs gap-1"
-        onClick={handleMarkDone}
-        disabled={isPending}
-      >
-        <Check className="h-3 w-3" />
-        Done
-      </Button>
-
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-            disabled={isPending}
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+          disabled={isPending}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Drop this commitment?</AlertDialogTitle>
+          <AlertDialogDescription>
+            It won't show up again. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDrop}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Drop this commitment?</AlertDialogTitle>
-            <AlertDialogDescription>
-              It won't show up again. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDrop}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Drop
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+            Drop
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -348,23 +378,21 @@ export default function CommitmentsPage() {
         description="Track what you've promised and what's owed to you"
       />
 
-      {/* Direction subnav */}
+      {/* Direction subnav — underlined tabs style */}
       <div className="px-6 pt-3 pb-0 border-b">
-        <div className="flex items-center gap-1 pb-3">
-          {DIRECTION_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => selectDirection(tab.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeDirection === tab.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={activeDirection} onValueChange={(v) => selectDirection(v as DirectionFilter)}>
+          <TabsList className="h-9 bg-transparent p-0 gap-0">
+            {DIRECTION_TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent hover:text-foreground"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Filter tabs */}
@@ -424,6 +452,7 @@ export default function CommitmentsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                <th className="w-12 px-4 py-3"></th>
                 <th className="px-4 py-3">
                   <SortableHeader
                     label="Person"
@@ -434,8 +463,8 @@ export default function CommitmentsPage() {
                   />
                 </th>
                 <th className="px-4 py-3">Commitment</th>
-                <th className="px-4 py-3">Direction</th>
-                <th className="px-4 py-3">
+                <th className="w-16 px-4 py-3 text-center">Dir</th>
+                <th className="w-16 px-4 py-3">
                   <SortableHeader
                     label="Age"
                     sortKey="age"
@@ -444,14 +473,19 @@ export default function CommitmentsPage() {
                     onSort={handleSort}
                   />
                 </th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="w-24 px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {sortedCommitments.map((item) => {
                 const isSettled = item.status === "resolved" || item.status === "dropped";
+                // Check for source field (may be added in future API updates)
+                const source = (item as unknown as { source?: string }).source;
                 return (
                   <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
+                    <td className="px-4 py-3">
+                      <CompletionAction item={item} />
+                    </td>
                     <td className="px-4 py-3">
                       {item.personSlug ? (
                         <Link
@@ -469,21 +503,32 @@ export default function CommitmentsPage() {
                         <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
                           {item.text}
                         </p>
-                        {item.date && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {item.date && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                            </span>
+                          )}
+                          {source && (
+                            <Link
+                              to={`/meetings/${source}`}
+                              className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Source
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <DirectionBadge direction={item.direction} />
+                    <td className="px-4 py-3 text-center">
+                      <DirectionIcon direction={item.direction} />
                     </td>
                     <td className="px-4 py-3">
                       <AgeBadge daysOpen={item.daysOpen} />
                     </td>
                     <td className="px-4 py-3">
-                      <CommitmentActions item={item} />
+                      <DeleteAction item={item} />
                     </td>
                   </tr>
                 );
