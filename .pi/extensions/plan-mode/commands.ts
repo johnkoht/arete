@@ -50,7 +50,7 @@ export interface PlanModeState {
 	executionMode: boolean;
 	currentSlug: string | null;
 	planTitle: string | null;
-	planSize: PlanSize | null;
+	planSize: PlanSize | "unknown" | null;
 	planText: string;
 	todoItems: TodoItem[];
 	preMortemRun: boolean;
@@ -285,7 +285,7 @@ export function hasUnsavedPlanChanges(state: PlanModeState): boolean {
 
 export function getSuggestedNextActions(
 	status: PlanStatus,
-	size: PlanSize,
+	size: PlanSize | "unknown",
 	flags: { hasPreMortem: boolean; hasReview: boolean; hasPrd: boolean },
 ): string[] {
 	const actions: string[] = [];
@@ -451,6 +451,7 @@ export async function handlePlanClose(
 		preMortemRun: false,
 		reviewRun: false,
 		prdConverted: false,
+		loadedFromDisk: false,
 	});
 
 	ctx.ui.notify("Plan closed. Back to default mode.", "info");
@@ -541,7 +542,9 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 
 	// Try rich UI if available
 	if (ctx.hasUI && ctx.ui.custom) {
+		// @ts-ignore - Runtime dependency, types not available at compile time
 		const { Container, SelectList, Text } = await import("@mariozechner/pi-tui");
+		// @ts-ignore - Runtime dependency, types not available at compile time
 		const { DynamicBorder } = await import("@mariozechner/pi-coding-agent");
 
 		selectedSlug = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
@@ -751,6 +754,7 @@ export async function handlePlanSave(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		loadedFromDisk: state.loadedFromDisk,
 	});
 
 	ctx.ui.notify(`💾 Saved to dev/work/plans/${slug}/plan.md`, "info");
@@ -838,6 +842,7 @@ export async function handlePlanRename(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		loadedFromDisk: state.loadedFromDisk,
 	});
 
 	ctx.ui.notify(`📝 Renamed '${oldSlug}' → '${newSlug}' (dev/work/plans/${newSlug}/)`, "info");
@@ -1146,6 +1151,7 @@ export async function handleApprove(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		loadedFromDisk: state.loadedFromDisk,
 	});
 }
 
@@ -1630,6 +1636,7 @@ export async function handleBuild(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		loadedFromDisk: state.loadedFromDisk,
 	});
 }
 

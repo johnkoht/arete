@@ -11,6 +11,7 @@ import {
 	getSuggestedNextActions,
 	handlePlan,
 	handlePlanSave,
+	handlePlanClose,
 	handlePlanRename,
 	handlePlanStatus,
 	handleWrap,
@@ -158,21 +159,21 @@ function createTestContext(overrides: Partial<CommandContext["ui"]> = {}): Comma
 			confirm: async () => true,
 			notify: () => {},
 			editor: async () => undefined,
-			custom: async () => null,
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			custom: async () => null as any,
 			...overrides,
 		},
 	};
 }
 
-function createTestPi(): CommandPi & { entries: unknown[] } {
+function createTestPi(overrides: Partial<CommandPi> = {}): CommandPi & { entries: unknown[] } {
 	const entries: unknown[] = [];
 	return {
 		entries,
 		sendUserMessage: () => {},
 		sendMessage: () => {},
 		appendEntry: (_type, data) => entries.push(data),
-
-
+		...overrides,
 	};
 }
 
@@ -449,7 +450,7 @@ describe("handlePlan — /plan new", () => {
 			planTitle: "Old Plan",
 			planText: "old content",
 			planSize: "large",
-			todoItems: [{ text: "step 1", completed: false }],
+			todoItems: [{ step: 1, text: "step 1", completed: false }],
 			preMortemRun: true,
 			reviewRun: true,
 			prdConverted: true,
@@ -1584,6 +1585,77 @@ describe("session restore → agent_end protection (simulated)", () => {
 		assert.equal(state.planText, originalContent, "planText must not change for loaded plans");
 		assert.equal(state.todoItems.length, 3, "todoItems count must not change");
 		assert.ok(state.todoItems[0].text.includes("Fix package"), "todoItems content must be original");
+	});
+});
+
+describe("appendEntry calls include loadedFromDisk — regression test", () => {
+	// Regression: /plan close save wiped plan content because loadedFromDisk
+	// was not persisted in appendEntry calls, causing session restore to
+	// default to false and allow agent_end to overwrite planText.
+
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("handlePlanSave includes loadedFromDisk in appendEntry", async () => {
+		let appendedData: Record<string, unknown> | null = null;
+		const pi = createTestPi({
+			appendEntry: (_type: string, data: Record<string, unknown>) => {
+				appendedData = data;
+			},
+		});
+		const ctx = createTestContext();
+		const state = createTestState({
+			planModeEnabled: true,
+			planText: "# Test Plan\n\n1. Step one",
+			currentSlug: "test-plan",
+			loadedFromDisk: true,
+		});
+
+		// Create the plan on disk first
+		const { savePlan } = await import("./persistence.js");
+		savePlan("test-plan", {
+			title: "Test Plan",
+			slug: "test-plan",
+			status: "draft",
+			size: "small",
+			tags: [],
+			created: new Date().toISOString(),
+			updated: new Date().toISOString(),
+			completed: null,
+			execution: null,
+			has_review: false,
+			has_pre_mortem: false,
+			has_prd: false,
+			steps: 1,
+		}, "# Test Plan\n\n1. Step one", TEST_PLANS_DIR);
+
+		await handlePlanSave("test-plan", ctx, pi, state);
+
+		assert.ok(appendedData, "appendEntry should have been called");
+		assert.equal(appendedData?.loadedFromDisk, true, "loadedFromDisk must be included and true");
+	});
+
+	it("handlePlanClose includes loadedFromDisk in appendEntry", async () => {
+		let appendedData: Record<string, unknown> | null = null;
+		const pi = createTestPi({
+			appendEntry: (_type: string, data: Record<string, unknown>) => {
+				appendedData = data;
+			},
+		});
+		const ctx = createTestContext({
+			confirm: async () => false, // Don't save
+		});
+		const state = createTestState({
+			planModeEnabled: true,
+			planText: "# Test Plan",
+			currentSlug: "test-plan",
+			loadedFromDisk: true,
+		});
+
+		await handlePlanClose(ctx, pi, state);
+
+		assert.ok(appendedData, "appendEntry should have been called");
+		assert.strictEqual(appendedData?.loadedFromDisk, false, "loadedFromDisk must be false after close");
 	});
 });
 
