@@ -39,17 +39,41 @@ export function TrendIcon({ trend }: { trend: PersonSummary["trend"] }) {
 
 // ── Category badge ────────────────────────────────────────────────────────────
 
-export function CategoryBadge({ category }: { category: PersonCategory }) {
-  const map: Record<PersonCategory, string> = {
-    internal: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:ring-blue-800",
-    customer: "bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:ring-orange-800",
-    user: "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-800",
-  };
+/**
+ * Category badge styled to match StatusBadge pattern (dot + styled container).
+ * Uses consistent color tokens for internal/customer/user categories.
+ */
+const categoryConfig: Record<PersonCategory, { dot: string; text: string; border: string; bg: string }> = {
+  internal: {
+    dot: "bg-blue-500",
+    text: "text-blue-700 dark:text-blue-400",
+    border: "border-blue-200 dark:border-blue-800",
+    bg: "bg-blue-50 dark:bg-blue-950/30",
+  },
+  customer: {
+    dot: "bg-orange-500",
+    text: "text-orange-700 dark:text-orange-400",
+    border: "border-orange-200 dark:border-orange-800",
+    bg: "bg-orange-50 dark:bg-orange-950/30",
+  },
+  user: {
+    dot: "bg-violet-500",
+    text: "text-violet-700 dark:text-violet-400",
+    border: "border-violet-200 dark:border-violet-800",
+    bg: "bg-violet-50 dark:bg-violet-950/30",
+  },
+};
+
+export function CategoryBadge({ category, size = "sm" }: { category: PersonCategory; size?: "sm" | "md" }) {
+  const c = categoryConfig[category];
   return (
     <span
-      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset capitalize ${map[category]}`}
+      className={`inline-flex items-center gap-1.5 rounded-md font-medium border ${c.bg} ${c.text} ${c.border} ${
+        size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs"
+      }`}
     >
-      {category}
+      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
+      <span className="capitalize">{category}</span>
     </span>
   );
 }

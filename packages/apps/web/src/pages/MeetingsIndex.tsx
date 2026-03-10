@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AvatarStack } from "@/components/AvatarStack";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageHeader } from "@/components/PageHeader";
 import { useMeetings, useSyncKrisp, useJobStatus, useProcessMeeting } from "@/hooks/meetings.js";
 import { processMeeting } from "@/api/meetings.js";
 import type { Meeting } from "@/api/types.js";
@@ -195,43 +196,44 @@ export default function MeetingsIndex() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <h1 className="text-lg font-semibold">Meetings</h1>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search meetings..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 w-60"
-            />
+      <PageHeader
+        title="Meetings"
+        action={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search meetings..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-9 w-60"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <Cloud className="mr-1.5 h-4 w-4" />
+                  Sync Krisp
+                </>
+              )}
+            </Button>
+            <Button size="sm" disabled title="Coming soon">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Meeting
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <Cloud className="mr-1.5 h-4 w-4" />
-                Sync Krisp
-              </>
-            )}
-          </Button>
-          <Button size="sm" disabled title="Coming soon">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New Meeting
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Filter tabs */}
       <div className="flex gap-1 border-b px-6 pt-2">

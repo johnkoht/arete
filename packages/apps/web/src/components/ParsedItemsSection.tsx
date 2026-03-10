@@ -3,8 +3,41 @@
  * parsed from meeting body. Action items have toggleable checkboxes.
  */
 
+import type { ReactNode } from "react";
 import { CheckCircle2, Circle, Lightbulb, FileText } from "lucide-react";
 import type { ParsedSections } from "@/api/types.js";
+
+/**
+ * Render text with basic markdown (bold and italic).
+ * Converts **text** to <strong> and _text_ to <em>.
+ */
+function renderMarkdownText(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  let key = 0;
+
+  // Process bold (**text**) only - italic underscore patterns conflict with snake_case
+  const regex = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    
+    // Bold match
+    parts.push(<strong key={key++}>{match[1]}</strong>);
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
 
 interface ParsedItemsSectionProps {
   parsedSections?: ParsedSections;
@@ -56,7 +89,7 @@ export function ParsedItemsSection({ parsedSections, onToggleActionItem }: Parse
                     item.completed ? "text-muted-foreground line-through" : "text-foreground"
                   }`}
                 >
-                  {item.text}
+                  {renderMarkdownText(item.text)}
                 </span>
               </div>
             ))}
@@ -78,7 +111,7 @@ export function ParsedItemsSection({ parsedSections, onToggleActionItem }: Parse
                 className="flex items-start gap-3 rounded-md border border-blue-500/20 bg-blue-500/5 p-3"
               >
                 <FileText className="h-4 w-4 mt-0.5 text-blue-500 flex-shrink-0" />
-                <span className="text-sm">{item.text}</span>
+                <span className="text-sm">{renderMarkdownText(item.text)}</span>
               </div>
             ))}
           </div>
@@ -99,7 +132,7 @@ export function ParsedItemsSection({ parsedSections, onToggleActionItem }: Parse
                 className="flex items-start gap-3 rounded-md border border-yellow-500/20 bg-yellow-500/5 p-3"
               >
                 <Lightbulb className="h-4 w-4 mt-0.5 text-yellow-500 flex-shrink-0" />
-                <span className="text-sm">{item.text}</span>
+                <span className="text-sm">{renderMarkdownText(item.text)}</span>
               </div>
             ))}
           </div>

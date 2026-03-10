@@ -225,6 +225,8 @@ export type ReviewItem = {
   type: ItemType;
   text: string;
   status: ItemStatus;
+  /** Optional project association for action items */
+  projectSlug?: string;
 };
 
 export type ApprovedItems = {
