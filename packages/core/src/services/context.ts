@@ -2,7 +2,7 @@
  * ContextService — assembles relevant context for queries and skills.
  */
 
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
 import { tokenize } from '../search/tokenize.js';
@@ -261,16 +261,19 @@ export class ContextService {
         minScore,
       });
       for (const result of searchResults) {
-        if (seenPaths.has(result.path)) continue;
+        // QMD returns relative paths (e.g., "resources/meetings/foo.md")
+        // Resolve to absolute before processing
+        const absolutePath = resolve(paths.root, result.path);
+        if (seenPaths.has(absolutePath)) continue;
         if (result.score < minScore) continue;
-        const relPath = relative(paths.root, result.path);
+        const relPath = relative(paths.root, absolutePath);
         let category: ContextFile['category'] = 'resources';
         if (relPath.startsWith('context/')) category = 'context';
         else if (relPath.startsWith('goals/')) category = 'goals';
         else if (relPath.startsWith('projects/')) category = 'projects';
         else if (relPath.startsWith('people/')) category = 'people';
         else if (relPath.startsWith('.arete/memory/') || relPath.startsWith('resources/meetings') || relPath.startsWith('resources/conversations')) category = 'memory';
-        await addFile(result.path, category, undefined, result.score);
+        await addFile(absolutePath, category, undefined, result.score);
       }
     } catch {
       // SearchProvider failure: continue with static files only

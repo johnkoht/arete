@@ -54,7 +54,55 @@ describe('search providers', () => {
   });
 
   describe('parseQmdJson', () => {
-    it('parses array output', () => {
+    it('parses current QMD format (file, snippet)', () => {
+      // Actual QMD CLI output format
+      const json = JSON.stringify([
+        {
+          docid: '#abc123',
+          score: 0.93,
+          file: 'qmd://my-workspace-cc38/resources/meetings/2026-03-02-standup.md',
+          title: 'Standup Meeting',
+          snippet: '@@ -10,4 @@ (9 before, 15 after)\n\nDiscussed the new feature rollout...',
+        },
+        {
+          docid: '#def456',
+          score: 0.85,
+          file: 'qmd://my-workspace-cc38/context/business-overview.md',
+          title: 'Business Overview',
+          snippet: '@@ -1,3 @@ (0 before, 50 after)\n\n# Business Overview\n\nOur company...',
+        },
+      ]);
+      const results = parseQmdJson(json);
+      assert.strictEqual(results.length, 2);
+      // Verifies qmd:// prefix is stripped
+      assert.strictEqual(results[0].path, 'resources/meetings/2026-03-02-standup.md');
+      assert.strictEqual(results[0].content, '@@ -10,4 @@ (9 before, 15 after)\n\nDiscussed the new feature rollout...');
+      assert.strictEqual(results[0].score, 0.93);
+      assert.strictEqual(results[0].matchType, 'semantic');
+      assert.strictEqual(results[1].path, 'context/business-overview.md');
+    });
+
+    it('strips qmd://collection-name/ prefix from paths', () => {
+      const json = JSON.stringify([
+        { file: 'qmd://reserv-121f/projects/active/glance-comms/readme.md', score: 0.5 },
+        { file: 'qmd://test-workspace-fa4e/context/overview.md', score: 0.4 },
+      ]);
+      const results = parseQmdJson(json);
+      assert.strictEqual(results[0].path, 'projects/active/glance-comms/readme.md');
+      assert.strictEqual(results[1].path, 'context/overview.md');
+    });
+
+    it('handles paths without qmd:// prefix', () => {
+      const json = JSON.stringify([
+        { file: '/absolute/path/to/file.md', score: 0.5 },
+        { file: 'relative/path.md', score: 0.4 },
+      ]);
+      const results = parseQmdJson(json);
+      assert.strictEqual(results[0].path, '/absolute/path/to/file.md');
+      assert.strictEqual(results[1].path, 'relative/path.md');
+    });
+
+    it('parses legacy format (path, content) for backward compat', () => {
       const json = JSON.stringify([
         { path: '/a.md', content: 'hello', score: 0.9 },
         { path: '/b.md', content: 'world', score: 0.7 },
@@ -68,15 +116,25 @@ describe('search providers', () => {
     });
 
     it('parses results wrapper', () => {
-      const json = JSON.stringify({ results: [{ path: '/x.md', content: 'x' }] });
+      const json = JSON.stringify({ results: [{ file: 'qmd://test/x.md', snippet: 'x' }] });
       const results = parseQmdJson(json);
       assert.strictEqual(results.length, 1);
-      assert.strictEqual(results[0].path, '/x.md');
+      assert.strictEqual(results[0].path, 'x.md');
     });
 
     it('returns empty array for invalid json', () => {
       assert.deepEqual(parseQmdJson('not json'), []);
       assert.deepEqual(parseQmdJson(''), []);
+    });
+
+    it('clamps scores outside [0, 1] range', () => {
+      const json = JSON.stringify([
+        { file: 'qmd://test/a.md', score: 1.5 },
+        { file: 'qmd://test/b.md', score: -0.5 },
+      ]);
+      const results = parseQmdJson(json);
+      assert.strictEqual(results[0].score, 1);
+      assert.strictEqual(results[1].score, 0);
     });
   });
 

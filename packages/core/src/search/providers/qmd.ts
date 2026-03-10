@@ -13,12 +13,36 @@ export const QMD_PROVIDER_NAME = 'qmd';
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
-/** QMD CLI may return array of { path?, content?, score? } */
+/**
+ * QMD CLI returns: { file, snippet, score, docid?, title? }
+ * - `file`: path in format `qmd://collection-name/relative/path.md`
+ * - `snippet`: text excerpt with context markers like `@@ -10,4 @@`
+ * - `score`: relevance score (0-1 for reranked results, may need clamping)
+ *
+ * Legacy format (for backward compat): { path, content, score }
+ */
 interface QmdResultRow {
+  // Current QMD format
+  file?: string;
+  snippet?: string;
+  // Legacy format (backward compat)
   path?: string;
   content?: string;
+  // Common
   score?: number;
+  docid?: string;
+  title?: string;
   [key: string]: unknown;
+}
+
+/**
+ * Strip `qmd://collection-name/` prefix from QMD file paths.
+ * Returns the relative path portion (e.g., "resources/meetings/foo.md").
+ */
+function stripQmdPrefix(qmdPath: string): string {
+  // Format: qmd://collection-name/relative/path.md
+  const match = qmdPath.match(/^qmd:\/\/[^/]+\/(.+)$/);
+  return match ? match[1] : qmdPath;
 }
 
 /** Parse QMD CLI JSON output into SearchResult[]. Exported for tests. */
@@ -29,15 +53,19 @@ export function parseQmdJson(stdout: string): SearchResult[] {
     const data = JSON.parse(trimmed);
     const rows = Array.isArray(data) ? data : (data.results != null ? data.results : []);
     return rows
-      .filter((r: QmdResultRow) => r && (r.path != null || r.content != null))
+      .filter((r: QmdResultRow) => r && (r.file != null || r.path != null || r.snippet != null || r.content != null))
       .map((r: QmdResultRow) => {
         let score = typeof r.score === 'number' ? r.score : 1;
         if (score > 1 || score < 0) {
           score = Math.max(0, Math.min(1, score));
         }
+        // Prefer new field names, fall back to legacy
+        const rawPath = typeof r.file === 'string' ? r.file : (typeof r.path === 'string' ? r.path : '');
+        const path = stripQmdPrefix(rawPath);
+        const content = typeof r.snippet === 'string' ? r.snippet : (typeof r.content === 'string' ? r.content : '');
         return {
-          path: typeof r.path === 'string' ? r.path : '',
-          content: typeof r.content === 'string' ? r.content : '',
+          path,
+          content,
           score,
           matchType: 'semantic' as const,
         };
