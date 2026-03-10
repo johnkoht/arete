@@ -5,9 +5,9 @@ status: complete
 size: large
 tags: [web, ui, polish]
 created: 2026-03-09T16:49:55.423Z
-updated: 2026-03-10T02:15:21.102Z
-completed: null
-execution: null
+updated: 2026-03-10T02:35:00.000Z
+completed: 2026-03-10T02:35:00.000Z
+execution: partial
 has_review: true
 has_pre_mortem: true
 has_prd: false
@@ -17,6 +17,29 @@ steps: 12
 # Web Fast Follow
 
 Fast-follow improvements for the web UI and related data model changes.
+
+## Completion Summary
+
+**Implemented:**
+- ✅ F1: CategoryBadge updated to match StatusBadge pattern
+- ✅ F2: MeetingsIndex uses PageHeader
+- ✅ F3: SearchableSelect component created
+- ✅ F4: projectSlug added to Commitment and ReviewItem types
+- ✅ A1: Project picker added to ReviewItems for action items
+- ✅ Markdown rendering in ParsedItemsSection
+- ✅ Projects API client and useProjects hook
+
+**Already Good (verified during execution):**
+- ✅ CommitmentsPage: Already uses PageHeader, underlined tabs, completion on left
+- ✅ PeopleIndex: Already has proper table layout with w-full name column
+- ✅ MeetingDetail: Already has max-w-4xl constraint
+
+**Remaining (future work):**
+- ⏳ B3: Pagination (requires backend changes)
+- ⏳ C1: PersonDetailPage two-column redesign
+- ⏳ A2: Agent flow project context prompts
+- ⏳ Full keyboard navigation for SearchableSelect
+- ⏳ Unit tests for new components
 
 ---
 
