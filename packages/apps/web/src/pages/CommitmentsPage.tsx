@@ -602,24 +602,18 @@ export default function CommitmentsPage() {
         description="Track what you've promised and what's owed to you"
       />
 
-      {/* Direction subnav — underlined tabs style */}
+      {/* Direction tabs */}
       <div className="px-6 pt-3 pb-0 border-b">
         <div className="flex items-center justify-between pb-3">
-          <div className="flex items-center gap-1">
-            {DIRECTION_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => selectDirection(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeDirection === tab.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <Tabs value={activeDirection} onValueChange={(v) => selectDirection(v as DirectionFilter)}>
+            <TabsList>
+              {DIRECTION_TABS.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           {hasOpenCommitments && (
             <Button
               variant="outline"
@@ -638,21 +632,15 @@ export default function CommitmentsPage() {
       {/* Filter tabs */}
       <div className="px-6 py-2 border-b">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1">
-            {FILTER_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => selectFilter(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeFilter === tab.value
-                    ? "bg-secondary text-secondary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <Tabs value={activeFilter} onValueChange={(v) => selectFilter(v as FilterType)}>
+            <TabsList>
+              {FILTER_TABS.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <div className="h-4 w-px bg-border" />
           <div className="flex items-center gap-1">
             <span className="text-xs text-muted-foreground mr-1">Priority:</span>
