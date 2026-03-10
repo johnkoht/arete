@@ -102,6 +102,9 @@ export type PersonDetail = PersonSummary & {
 
 export type PeopleResponse = {
   people: PersonSummary[];
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 // ── Goals types ──────────────────────────────────────────────────────────────

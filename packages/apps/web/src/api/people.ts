@@ -5,9 +5,18 @@
 import { apiFetch } from './client.js';
 import type { PeopleResponse, PersonDetail } from './types.js';
 
+export type FetchPeopleParams = {
+  limit?: number;
+  offset?: number;
+};
+
 /** GET /api/people — all people with summary data */
-export async function fetchPeople(): Promise<PeopleResponse> {
-  return apiFetch<PeopleResponse>('/api/people');
+export async function fetchPeople(params?: FetchPeopleParams): Promise<PeopleResponse> {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.offset !== undefined) query.set('offset', String(params.offset));
+  const qs = query.toString();
+  return apiFetch<PeopleResponse>(`/api/people${qs ? `?${qs}` : ''}`);
 }
 
 /** GET /api/people/:slug — full person detail */
