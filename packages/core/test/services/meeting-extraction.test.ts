@@ -451,6 +451,537 @@ describe('parseMeetingExtractionResponse - validation rejections', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - rawItems (pre-filter capture)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - rawItems', () => {
+  it('rawItems includes action items that get filtered by validation', () => {
+    const response = JSON.stringify({
+      summary: 'Test meeting',
+      action_items: [
+        { owner: 'John', description: 'Valid action item', direction: 'i_owe_them' },
+        { owner: 'Jane', description: 'Me: Yeah, I will look into that definitely later on', direction: 'i_owe_them' }, // garbage prefix
+      ],
+      decisions: [],
+      learnings: [],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have BOTH items (pre-filter)
+    assert.equal(result.rawItems.length, 2);
+    // But actionItems should only have the valid one (post-filter)
+    assert.equal(result.intelligence.actionItems.length, 1);
+  });
+
+  it('rawItems captures action items, decisions, and learnings', () => {
+    const response = JSON.stringify({
+      summary: 'Test',
+      action_items: [{ owner: 'A', description: 'Action', direction: 'i_owe_them' }],
+      decisions: ['Decision one'],
+      learnings: ['Learning one'],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    assert.equal(result.rawItems.length, 3);
+  });
+
+  it('rawItems preserves items filtered due to length', () => {
+    const longDescription = 'A'.repeat(160); // exceeds 150 char limit
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Alice', description: longDescription, direction: 'i_owe_them' },
+        { owner: 'Bob', description: 'Short valid item', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have both
+    assert.equal(result.rawItems.length, 2);
+    // actionItems should only have the valid short one
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].owner, 'Bob');
+    // validation warning should exist for the long one
+    assert.equal(result.validationWarnings.length, 1);
+  });
+
+  it('rawItems preserves items filtered due to invalid direction', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'Carol', description: 'Valid with good direction', direction: 'i_owe_them' },
+        { owner: 'Dan', description: 'Invalid direction item', direction: 'invalid_direction' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    // rawItems should have both
+    assert.equal(result.rawItems.length, 2);
+    // actionItems should only have the one with valid direction
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].owner, 'Carol');
+  });
+
+  it('rawItems includes type information for each item', () => {
+    const response = JSON.stringify({
+      action_items: [{ owner: 'A', description: 'Action item', direction: 'i_owe_them' }],
+      decisions: ['Decision made'],
+      learnings: ['Something learned'],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+
+    const actionRaw = result.rawItems.find(r => r.type === 'action');
+    const decisionRaw = result.rawItems.find(r => r.type === 'decision');
+    const learningRaw = result.rawItems.find(r => r.type === 'learning');
+
+    assert.ok(actionRaw);
+    assert.equal(actionRaw.text, 'Action item');
+    assert.equal(actionRaw.owner, 'A');
+    assert.equal(actionRaw.direction, 'i_owe_them');
+
+    assert.ok(decisionRaw);
+    assert.equal(decisionRaw.text, 'Decision made');
+
+    assert.ok(learningRaw);
+    assert.equal(learningRaw.text, 'Something learned');
+  });
+
+  it('rawItems is empty array for empty response', () => {
+    const result = parseMeetingExtractionResponse('');
+    assert.deepEqual(result.rawItems, []);
+  });
+
+  it('rawItems is empty array for malformed JSON', () => {
+    const result = parseMeetingExtractionResponse('not valid json');
+    assert.deepEqual(result.rawItems, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - selectivity & confidence (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - selectivity & confidence', () => {
+  it('includes selectivity instructions', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    assert.ok(prompt.includes('ONLY high-confidence'));
+    assert.ok(prompt.includes('Quality over quantity'));
+    assert.ok(prompt.includes('HIGHLY selective'));
+  });
+
+  it('includes negative examples for trivial items', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    // Check for specific trivial patterns mentioned as exclusions
+    assert.ok(prompt.includes('schedule a meeting'));
+    assert.ok(prompt.includes('touch base'));
+    assert.ok(prompt.includes('follow up'));
+    assert.ok(prompt.includes('discuss this later'));
+  });
+
+  it('requests confidence (0-1) per action item in schema', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    assert.ok(prompt.includes('"confidence"'));
+    assert.ok(prompt.includes('0-1'));
+    assert.ok(prompt.includes('your confidence'));
+  });
+
+  it('includes confidence guide with score ranges', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    assert.ok(prompt.includes('0.9-1.0'));
+    assert.ok(prompt.includes('0.7-0.8'));
+    assert.ok(prompt.includes('0.5-0.6'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - confidence parsing (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - confidence parsing', () => {
+  it('parses confidence from action items', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Send API docs by Friday',
+          direction: 'i_owe_them',
+          confidence: 0.95,
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].confidence, 0.95);
+  });
+
+  it('stores confidence in rawItems', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Send docs',
+          direction: 'i_owe_them',
+          confidence: 0.8,
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    const rawAction = result.rawItems.find(r => r.type === 'action');
+    assert.ok(rawAction);
+    assert.equal(rawAction.confidence, 0.8);
+  });
+
+  it('handles missing confidence gracefully', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Send docs',
+          direction: 'i_owe_them',
+          // no confidence field
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].confidence, undefined);
+  });
+
+  it('rejects confidence values outside 0-1 range', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Send docs',
+          direction: 'i_owe_them',
+          confidence: 1.5, // out of range
+        },
+        {
+          owner: 'Jane',
+          description: 'Review PR',
+          direction: 'they_owe_me',
+          confidence: -0.1, // negative
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    // Both should have undefined confidence
+    assert.equal(result.intelligence.actionItems[0].confidence, undefined);
+    assert.equal(result.intelligence.actionItems[1].confidence, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - trivial pattern filtering (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - trivial pattern filtering', () => {
+  it('filters "schedule a meeting" pattern', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John',
+          description: 'Schedule a meeting with the team',
+          direction: 'i_owe_them',
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('trivial pattern')));
+  });
+
+  it('filters "follow up" pattern', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'Jane',
+          description: 'Follow up on the project status',
+          direction: 'i_owe_them',
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('trivial pattern')));
+  });
+
+  it('filters "touch base" pattern', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'Bob',
+          description: 'Touch base with Alice next week',
+          direction: 'i_owe_them',
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('trivial pattern')));
+  });
+
+  it('filters "we should/will/can meet/discuss/talk" patterns', () => {
+    const patterns = [
+      'We should discuss this tomorrow',
+      'We will meet next week',
+      'We can just talk about it later',
+      'We should probably discuss the details',
+    ];
+
+    for (const desc of patterns) {
+      const response = JSON.stringify({
+        action_items: [{ owner: 'John', description: desc, direction: 'i_owe_them' }],
+      });
+      const result = parseMeetingExtractionResponse(response);
+      assert.equal(
+        result.intelligence.actionItems.length,
+        0,
+        `Expected "${desc}" to be filtered`,
+      );
+    }
+  });
+
+  it('does NOT filter items with explicit owner + deadline (false negative test)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        {
+          owner: 'John Smith',
+          description: 'Send API documentation to Sarah by Friday',
+          direction: 'i_owe_them',
+          due: 'Friday',
+          confidence: 0.95,
+        },
+        {
+          owner: 'Alice Chen',
+          description: 'Review the PR and approve by EOD Monday',
+          direction: 'they_owe_me',
+          due: 'Monday',
+          confidence: 0.9,
+        },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    // Both should pass through — explicit owner + deadline = high value
+    assert.equal(result.intelligence.actionItems.length, 2);
+    assert.equal(result.intelligence.actionItems[0].owner, 'John Smith');
+    assert.equal(result.intelligence.actionItems[1].owner, 'Alice Chen');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - near-duplicate deduplication (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - near-duplicate deduplication', () => {
+  it('filters near-duplicate action items (Jaccard > 0.8)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John', description: 'Send the API docs to Sarah', direction: 'i_owe_them' },
+        { owner: 'John', description: 'Send the API docs to Sarah today', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('near-duplicate')));
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('Jaccard')));
+  });
+
+  it('keeps distinct action items (Jaccard ≤ 0.8)', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John', description: 'Send the API docs', direction: 'i_owe_them' },
+        { owner: 'Jane', description: 'Review the PR', direction: 'they_owe_me' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 2);
+  });
+
+  it('filters near-duplicate decisions', () => {
+    // Jaccard similarity: 8/9 = 0.889 (> 0.8 threshold)
+    // Only one word different at the end
+    const response = JSON.stringify({
+      decisions: [
+        'We decided to use REST API for integration',
+        'We decided to use REST API for integration today',
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('near-duplicate')));
+  });
+
+  it('filters near-duplicate learnings', () => {
+    // Jaccard similarity: 6/7 = 0.857 (> 0.8 threshold)
+    // Only one word different at the end
+    const response = JSON.stringify({
+      learnings: [
+        'Team prefers simple and clean interfaces',
+        'Team prefers simple and clean interfaces always',
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.learnings.length, 1);
+  });
+
+  it('preserves first occurrence when deduplicating', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John', description: 'First version of the task', direction: 'i_owe_them' },
+        { owner: 'John', description: 'First version of the task here', direction: 'i_owe_them' },
+      ],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.actionItems[0].description, 'First version of the task');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - category limits (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - category limits', () => {
+  it('enforces action item limit of 7', () => {
+    const items = [];
+    for (let i = 0; i < 10; i++) {
+      items.push({
+        owner: `Person ${i}`,
+        description: `Unique distinct action item number ${i}`,
+        direction: 'i_owe_them',
+      });
+    }
+    const response = JSON.stringify({ action_items: items });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 7);
+    // Warnings for exceeded items
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds action item limit')));
+  });
+
+  it('enforces decision limit of 5', () => {
+    const decisions = [];
+    for (let i = 0; i < 8; i++) {
+      decisions.push(`Unique distinct decision number ${i}`);
+    }
+    const response = JSON.stringify({ decisions });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 5);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds decision limit')));
+  });
+
+  it('enforces learning limit of 5', () => {
+    const learnings = [];
+    for (let i = 0; i < 8; i++) {
+      learnings.push(`Unique distinct learning number ${i}`);
+    }
+    const response = JSON.stringify({ learnings });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.learnings.length, 5);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds learning limit')));
+  });
+
+  it('keeps first N items in LLM response order', () => {
+    const items = [];
+    for (let i = 0; i < 10; i++) {
+      items.push({
+        owner: `Person ${i}`,
+        description: `Unique item ${i} with index identifier`,
+        direction: 'i_owe_them',
+      });
+    }
+    const response = JSON.stringify({ action_items: items });
+
+    const result = parseMeetingExtractionResponse(response);
+    // Should keep items 0-6 (first 7)
+    for (let i = 0; i < 7; i++) {
+      assert.ok(
+        result.intelligence.actionItems[i].description.includes(`Unique item ${i}`),
+        `Item ${i} should be preserved`,
+      );
+    }
+  });
+
+  it('allows fewer items than limit without warnings', () => {
+    const response = JSON.stringify({
+      action_items: [
+        { owner: 'John', description: 'Task one', direction: 'i_owe_them' },
+        { owner: 'Jane', description: 'Task two', direction: 'they_owe_me' },
+      ],
+      decisions: ['Decision one'],
+      learnings: ['Learning one'],
+    });
+
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.actionItems.length, 2);
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.equal(result.intelligence.learnings.length, 1);
+    // No limit warnings
+    const limitWarnings = result.validationWarnings.filter(
+      w => w.reason.includes('exceeds'),
+    );
+    assert.equal(limitWarnings.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractMeetingIntelligence - quality tuning integration (INT-1)
+// ---------------------------------------------------------------------------
+
+describe('extractMeetingIntelligence - quality tuning integration', () => {
+  it('produces fewer items with filters than raw extraction', async () => {
+    // Simulate an LLM returning noisy output with duplicates and trivial items
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        summary: 'Product planning meeting',
+        action_items: [
+          { owner: 'John', description: 'Send API docs to Sarah', direction: 'i_owe_them', confidence: 0.9 },
+          { owner: 'John', description: 'Send API docs to Sarah now', direction: 'i_owe_them', confidence: 0.85 }, // near-duplicate (Jaccard 5/6=0.833)
+          { owner: 'Jane', description: 'Schedule a meeting with team', direction: 'i_owe_them' }, // trivial
+          { owner: 'Bob', description: 'Follow up on the status', direction: 'i_owe_them' }, // trivial
+          { owner: 'Alice', description: 'Review the PR by Monday', direction: 'they_owe_me', confidence: 0.92 }, // valid
+        ],
+        // Jaccard 8/9 = 0.889 - only one word different
+        decisions: ['We decided to use REST API for integration', 'We decided to use REST API for integration today'],
+        // Jaccard 6/7 = 0.857 - only one word different
+        learnings: ['Team prefers simple and clean interfaces', 'Team prefers simple and clean interfaces always'],
+      });
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM);
+
+    // Raw items should have all 5 action items
+    assert.equal(result.rawItems.filter(r => r.type === 'action').length, 5);
+    // Filtered action items should be fewer (2: one valid + one after dedup, minus trivials)
+    assert.ok(
+      result.intelligence.actionItems.length < 5,
+      `Expected fewer than 5 action items, got ${result.intelligence.actionItems.length}`,
+    );
+    // Decisions and learnings should also be deduplicated
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.equal(result.intelligence.learnings.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractMeetingIntelligence
 // ---------------------------------------------------------------------------
 

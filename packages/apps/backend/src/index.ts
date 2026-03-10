@@ -28,7 +28,7 @@ loadCredentialsIntoEnv();
 const storage = new FileStorageAdapter();
 const config = await loadConfig(storage, workspaceRoot);
 const aiService = new AIService(config);
-initializeAIService(aiService);
+initializeAIService(aiService, config);
 
 if (aiService.isConfigured()) {
   console.log('[startup] AIService initialized with AI configuration');

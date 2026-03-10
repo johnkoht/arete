@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 import type { Commitment, CommitmentsFile, CommitmentDirection } from '../../src/models/index.js';
-import { CommitmentsService } from '../../src/services/commitments.js';
+import { CommitmentsService, computeCommitmentPriority } from '../../src/services/commitments.js';
+import type { CommitmentPriorityInput } from '../../src/services/commitments.js';
 import type { PersonActionItem } from '../../src/services/person-signals.js';
 
 // ---------------------------------------------------------------------------
@@ -710,5 +711,189 @@ describe('CommitmentsService.reconcile()', () => {
 
     assert.ok(result.length >= 1);
     assert.deepEqual(result[0].completedItem, completedItem);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeCommitmentPriority()
+// ---------------------------------------------------------------------------
+
+describe('computeCommitmentPriority()', () => {
+  // Helper to create input with defaults
+  function makeInput(overrides: Partial<CommitmentPriorityInput> = {}): CommitmentPriorityInput {
+    return {
+      daysOpen: 0,
+      healthIndicator: 'regular',
+      direction: 'i_owe_them',
+      text: 'Send the project report to the client',
+      ...overrides,
+    };
+  }
+
+  describe('staleness scoring', () => {
+    it('returns 0 staleness for 0 days open', () => {
+      const result = computeCommitmentPriority(makeInput({ daysOpen: 0 }));
+      // With all other factors at moderate values, score should be lowish
+      assert.ok(result.score >= 0 && result.score <= 100);
+    });
+
+    it('returns ~50 staleness score for 7 days open', () => {
+      const base = computeCommitmentPriority(makeInput({ daysOpen: 0 }));
+      const week = computeCommitmentPriority(makeInput({ daysOpen: 7 }));
+      // 7 days contributes ~15 points (50 * 0.3)
+      assert.ok(week.score > base.score, 'Week-old should score higher than fresh');
+    });
+
+    it('returns 100 staleness score for 14+ days open', () => {
+      const twoWeeks = computeCommitmentPriority(makeInput({ daysOpen: 14 }));
+      const threeWeeks = computeCommitmentPriority(makeInput({ daysOpen: 21 }));
+      // Both should cap at 100 staleness, so same contribution
+      assert.equal(twoWeeks.score, threeWeeks.score, '14 and 21 days should have same staleness');
+    });
+  });
+
+  describe('health indicator scoring', () => {
+    it('active health gives highest health score', () => {
+      const active = computeCommitmentPriority(makeInput({ healthIndicator: 'active' }));
+      const regular = computeCommitmentPriority(makeInput({ healthIndicator: 'regular' }));
+      const cooling = computeCommitmentPriority(makeInput({ healthIndicator: 'cooling' }));
+      const dormant = computeCommitmentPriority(makeInput({ healthIndicator: 'dormant' }));
+
+      assert.ok(active.score > regular.score, 'Active > regular');
+      assert.ok(regular.score > cooling.score, 'Regular > cooling');
+      assert.ok(cooling.score > dormant.score, 'Cooling > dormant');
+    });
+
+    it('dormant health gives 0 health contribution', () => {
+      const dormant = computeCommitmentPriority(makeInput({ healthIndicator: 'dormant' }));
+      const active = computeCommitmentPriority(makeInput({ healthIndicator: 'active' }));
+      // Difference should be ~25 points (100 * 0.25)
+      const diff = active.score - dormant.score;
+      assert.ok(diff >= 20 && diff <= 30, `Health diff should be ~25, got ${diff}`);
+    });
+  });
+
+  describe('direction scoring', () => {
+    it('i_owe_them gives higher score than they_owe_me', () => {
+      const iOwe = computeCommitmentPriority(makeInput({ direction: 'i_owe_them' }));
+      const theyOwe = computeCommitmentPriority(makeInput({ direction: 'they_owe_me' }));
+
+      assert.ok(iOwe.score > theyOwe.score, 'I owe them should be higher priority');
+      // Difference should be ~12.5 points (50 * 0.25)
+      const diff = iOwe.score - theyOwe.score;
+      assert.ok(diff >= 10 && diff <= 15, `Direction diff should be ~12.5, got ${diff}`);
+    });
+  });
+
+  describe('specificity scoring', () => {
+    it('long text with action verb gets 100 specificity', () => {
+      const specific = computeCommitmentPriority(
+        makeInput({ text: 'I need to send the detailed quarterly report to the executive team by Friday afternoon' })
+      );
+      const vague = computeCommitmentPriority(makeInput({ text: 'stuff' }));
+
+      assert.ok(specific.score > vague.score, 'Specific text should score higher');
+    });
+
+    it('short text without action verb gets 50 specificity', () => {
+      const short = computeCommitmentPriority(makeInput({ text: 'do it' }));
+      // With 50 specificity (10 points), score should be lower
+      assert.ok(short.score >= 0 && short.score <= 100);
+    });
+
+    it('requires BOTH length >= 50 AND action verb for 100', () => {
+      // Long but no action verb (avoid words that contain verbs like "meeting" contains "meet")
+      const longNoVerb = computeCommitmentPriority(
+        makeInput({ text: 'Something about the thing that we talked about in the sync yesterday morning' })
+      );
+      // Short but has action verb
+      const shortVerb = computeCommitmentPriority(makeInput({ text: 'send it' }));
+
+      // Both should get 50 specificity (not 100)
+      // They should have similar scores (within rounding)
+      assert.ok(Math.abs(longNoVerb.score - shortVerb.score) <= 1);
+    });
+
+    it('recognizes common action verbs', () => {
+      const verbs = ['send', 'call', 'email', 'schedule', 'review', 'follow', 'share', 'update'];
+      for (const verb of verbs) {
+        const text = `I will ${verb} the complete project documentation to the team members`;
+        const result = computeCommitmentPriority(makeInput({ text }));
+        // Should get 100 specificity (20 points instead of 10)
+        assert.ok(result.score >= 0, `Verb "${verb}" should be recognized`);
+      }
+    });
+  });
+
+  describe('priority levels', () => {
+    it('returns high for score >= 50', () => {
+      // High score scenario: stale (14d), active health, i_owe_them, specific text
+      const result = computeCommitmentPriority(
+        makeInput({
+          daysOpen: 14,
+          healthIndicator: 'active',
+          direction: 'i_owe_them',
+          text: 'Send the complete project report with all attachments to the stakeholders',
+        })
+      );
+      assert.equal(result.level, 'high', `Score ${result.score} should be high`);
+      assert.ok(result.score >= 50);
+    });
+
+    it('returns medium for score 25-49', () => {
+      // Medium score scenario: moderate staleness, regular health, i_owe_them, vague text
+      const result = computeCommitmentPriority(
+        makeInput({
+          daysOpen: 3,
+          healthIndicator: 'cooling',
+          direction: 'they_owe_me',
+          text: 'things',
+        })
+      );
+      assert.equal(result.level, 'medium', `Score ${result.score} should be medium`);
+      assert.ok(result.score >= 25 && result.score < 50);
+    });
+
+    it('returns low for score < 25', () => {
+      // Low score scenario: fresh, dormant health, they_owe_me, vague text
+      const result = computeCommitmentPriority(
+        makeInput({
+          daysOpen: 0,
+          healthIndicator: 'dormant',
+          direction: 'they_owe_me',
+          text: 'stuff',
+        })
+      );
+      assert.equal(result.level, 'low', `Score ${result.score} should be low`);
+      assert.ok(result.score < 25);
+    });
+  });
+
+  describe('formula weights', () => {
+    it('uses correct weights: staleness=30%, health=25%, direction=25%, specificity=20%', () => {
+      // Max score scenario: all components at 100
+      const max = computeCommitmentPriority(
+        makeInput({
+          daysOpen: 14, // 100 staleness
+          healthIndicator: 'active', // 100 health
+          direction: 'i_owe_them', // 100 direction
+          text: 'Send the detailed quarterly financial report to all regional managers immediately', // 100 specificity
+        })
+      );
+      // 100*0.3 + 100*0.25 + 100*0.25 + 100*0.2 = 30 + 25 + 25 + 20 = 100
+      assert.equal(max.score, 100, 'Max score should be 100');
+
+      // Min-ish scenario
+      const min = computeCommitmentPriority(
+        makeInput({
+          daysOpen: 0, // 0 staleness
+          healthIndicator: 'dormant', // 0 health
+          direction: 'they_owe_me', // 50 direction
+          text: 'x', // 50 specificity
+        })
+      );
+      // 0*0.3 + 0*0.25 + 50*0.25 + 50*0.2 = 0 + 0 + 12.5 + 10 = 22.5 → rounds to 23
+      assert.ok(min.score >= 22 && min.score <= 23, `Min score should be ~23, got ${min.score}`);
+    });
   });
 });

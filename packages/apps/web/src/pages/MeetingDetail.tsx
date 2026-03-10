@@ -55,19 +55,16 @@ export default function MeetingDetail() {
   const deleteMutation = useDeleteMeeting();
 
   // Local review items state — kept in sync with query data, plus optimistic updates
-  // Items default to "approved" in local state — user skips bad items (frontend-only; backend still returns pending)
+  // Backend now drives status via confidence-based pre-selection (high confidence → approved, low → pending)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const prevReviewItemsRef = useRef<ReviewItem[]>([]);
 
   // Sync local state when query data changes (e.g. after approval)
-  // Transform pending → approved on initialization (smart default: approve all, user skips bad ones)
+  // No transform needed — backend now sets status based on confidence thresholds
   useEffect(() => {
     if (meeting?.reviewItems) {
-      const transformedItems = meeting.reviewItems.map((item) =>
-        item.status === "pending" ? { ...item, status: "approved" as const } : item
-      );
-      setReviewItems(transformedItems);
-      prevReviewItemsRef.current = transformedItems;
+      setReviewItems(meeting.reviewItems);
+      prevReviewItemsRef.current = meeting.reviewItems;
     }
   }, [meeting?.reviewItems]);
 

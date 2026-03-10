@@ -10,6 +10,37 @@
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { Commitment, CommitmentDirection, CommitmentStatus } from '../models/index.js';
 import type { PersonActionItem } from './person-signals.js';
+import type { HealthIndicator } from './person-health.js';
+/**
+ * Priority levels for commitments based on computed score.
+ */
+export type PriorityLevel = 'high' | 'medium' | 'low';
+/**
+ * Input for computing commitment priority.
+ */
+export type CommitmentPriorityInput = {
+    daysOpen: number;
+    healthIndicator: HealthIndicator;
+    direction: CommitmentDirection;
+    text: string;
+};
+/**
+ * Output from priority computation.
+ */
+export type CommitmentPriorityResult = {
+    score: number;
+    level: PriorityLevel;
+};
+/**
+ * Compute priority score for a commitment.
+ *
+ * Formula: priority = (staleness * 30) + (health * 25) + (direction * 25) + (specificity * 20)
+ * All component scores are 0-100, so the final score is 0-100.
+ *
+ * @param input - Commitment attributes needed for scoring
+ * @returns Priority score (0-100) and level (high/medium/low)
+ */
+export declare function computeCommitmentPriority(input: CommitmentPriorityInput): CommitmentPriorityResult;
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;

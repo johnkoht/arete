@@ -33,6 +33,18 @@ export type AIConfig = {
   tasks?: Partial<Record<AITask, AITier>>;
 };
 
+/** Intelligence extraction configuration */
+export type IntelligenceConfig = {
+  extraction?: {
+    /** Items above this confidence threshold are auto-approved (default: 0.8) */
+    confidence_threshold_approved?: number;
+    /** Items below this confidence threshold are filtered out (default: 0.5) */
+    confidence_threshold_include?: number;
+    /** Jaccard similarity threshold for deduplication (default: 0.7) */
+    dedup_jaccard_threshold?: number;
+  };
+};
+
 /** Shape of the resolved config object */
 export type AreteConfig = {
   schema: number;
@@ -49,6 +61,8 @@ export type AreteConfig = {
   qmd_collection?: string;
   /** AI configuration for model routing and tiers */
   ai?: AIConfig;
+  /** Intelligence extraction configuration */
+  intelligence?: IntelligenceConfig;
   skills: {
     core: string[];
     overrides: string[];

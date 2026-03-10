@@ -134,10 +134,10 @@ describe('parseStagedSections', () => {
     assert.equal(result.decisions.length, 1, 'should have 1 decision');
     assert.equal(result.learnings.length, 1, 'should have 1 learning');
 
-    assert.deepEqual(result.actionItems[0], { id: 'ai_001', text: 'Follow up on pricing model', type: 'ai' });
-    assert.deepEqual(result.actionItems[1], { id: 'ai_002', text: 'Share Q1 roadmap deck', type: 'ai' });
-    assert.deepEqual(result.decisions[0], { id: 'de_001', text: 'Prioritize enterprise tier', type: 'de' });
-    assert.deepEqual(result.learnings[0], { id: 'le_001', text: 'Enterprise customers care about audit logs', type: 'le' });
+    assert.deepEqual(result.actionItems[0], { id: 'ai_001', text: 'Follow up on pricing model', type: 'ai', source: 'ai' });
+    assert.deepEqual(result.actionItems[1], { id: 'ai_002', text: 'Share Q1 roadmap deck', type: 'ai', source: 'ai' });
+    assert.deepEqual(result.decisions[0], { id: 'de_001', text: 'Prioritize enterprise tier', type: 'de', source: 'ai' });
+    assert.deepEqual(result.learnings[0], { id: 'le_001', text: 'Enterprise customers care about audit logs', type: 'le', source: 'ai' });
   });
 
   it('(2) returns empty arrays when sections are absent', () => {

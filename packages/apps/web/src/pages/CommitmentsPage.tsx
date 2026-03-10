@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, ArrowRight, ArrowLeft, type LucideIcon, ExternalLink } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, ArrowRight, ArrowLeft, RefreshCw, type LucideIcon, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -18,17 +18,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { toast } from "sonner";
-import { useCommitments, useMarkCommitmentDone } from "@/hooks/intelligence.js";
-import type { DirectionFilter } from "@/hooks/intelligence.js";
-import type { CommitmentItem } from "@/api/types.js";
+import { useCommitments, useMarkCommitmentDone, useReconcileCommitments } from "@/hooks/intelligence.js";
+import type { DirectionFilter, PriorityFilter, ReconciliationCandidate } from "@/hooks/intelligence.js";
+import type { CommitmentItem, PriorityLevel } from "@/api/types.js";
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 
 type FilterType = "open" | "overdue" | "thisweek" | "all";
-type SortBy = "person" | "age";
+type SortBy = "person" | "age" | "priority";
 type SortOrder = "asc" | "desc";
 
 const FILTER_TABS: { label: string; value: FilterType }[] = [
@@ -42,6 +49,13 @@ const DIRECTION_TABS: { label: string; value: DirectionFilter }[] = [
   { label: "Mine", value: "mine" },
   { label: "Theirs", value: "theirs" },
   { label: "All", value: "all" },
+];
+
+const PRIORITY_TABS: { label: string; value: PriorityFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "High", value: "high" },
+  { label: "Medium", value: "medium" },
+  { label: "Low", value: "low" },
 ];
 
 const EMPTY_STATES: Record<FilterType, { icon: LucideIcon; title: string; description: string }> = {
@@ -88,6 +102,29 @@ function DirectionIcon({ direction }: { direction: string }) {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+// ── Priority badge ────────────────────────────────────────────────────────────
+
+function PriorityBadge({ level, score }: { level: PriorityLevel; score: number }) {
+  const colorClass =
+    level === "high"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+      : level === "medium"
+        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400"
+        : "bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400";
+
+  const label = level.charAt(0).toUpperCase() + level.slice(1);
+
+  return (
+    <Badge
+      variant="secondary"
+      className={`text-xs font-medium flex-shrink-0 ${colorClass}`}
+      title={`Priority score: ${score}`}
+    >
+      {label}
+    </Badge>
   );
 }
 
@@ -293,6 +330,102 @@ function PersonFilterChip({
   );
 }
 
+// ── Reconcile modal ───────────────────────────────────────────────────────────
+
+function ReconcileModal({
+  open,
+  onOpenChange,
+  candidates,
+  onConfirm,
+  onDismiss,
+  isConfirming,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidates: ReconciliationCandidate[];
+  onConfirm: (commitmentId: string) => void;
+  onDismiss: (commitmentId: string) => void;
+  isConfirming: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Reconcile Commitments</DialogTitle>
+          <DialogDescription>
+            Found potential matches from recent meetings. Review and confirm to mark as resolved.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {candidates.length === 0 ? (
+          <div className="py-8 text-center">
+            <CheckCircle2 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+            <p className="text-sm text-muted-foreground">No matching completions found in recent meetings.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto space-y-3 py-2">
+            {candidates.map((candidate) => (
+              <div
+                key={candidate.commitmentId}
+                className="border rounded-lg p-4 space-y-3 bg-card"
+              >
+                <div className="space-y-1">
+                  <p className="text-sm font-medium leading-snug">{candidate.commitmentText}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {candidate.personName}
+                  </p>
+                </div>
+                
+                <div className="flex items-start gap-2 text-xs">
+                  <Badge variant="secondary" className="flex-shrink-0">
+                    {Math.round(candidate.confidence * 100)}% match
+                  </Badge>
+                  <div className="text-muted-foreground">
+                    <span className="font-medium">From:</span>{" "}
+                    <Link 
+                      to={`/meetings/${candidate.sourceMeeting}`}
+                      className="text-primary hover:underline"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      {candidate.sourceMeeting}
+                    </Link>
+                  </div>
+                </div>
+                
+                <div className="bg-muted/50 rounded p-2 text-xs text-muted-foreground">
+                  <span className="font-medium">Matched text:</span> "{candidate.matchedText}"
+                </div>
+                
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs"
+                    onClick={() => onConfirm(candidate.commitmentId)}
+                    disabled={isConfirming}
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Confirm Resolved
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => onDismiss(candidate.commitmentId)}
+                    disabled={isConfirming}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CommitmentsPage() {
@@ -301,26 +434,80 @@ export default function CommitmentsPage() {
   // Read URL params
   const initialFilter = (searchParams.get("filter") as FilterType) ?? "open";
   const initialDirection = (searchParams.get("direction") as DirectionFilter) ?? "all";
+  const initialPriority = (searchParams.get("priority") as PriorityFilter) ?? "all";
   const personParam = searchParams.get("person") ?? undefined;
   
   // Local state
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [activeDirection, setActiveDirection] = useState<DirectionFilter>(initialDirection);
+  const [activePriority, setActivePriority] = useState<PriorityFilter>(initialPriority);
   const [sortBy, setSortBy] = useState<SortBy | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  
+  // Reconcile modal state
+  const [reconcileModalOpen, setReconcileModalOpen] = useState(false);
+  const [reconcileCandidates, setReconcileCandidates] = useState<ReconciliationCandidate[]>([]);
 
   const { data: commitments, isLoading, error } = useCommitments({
     filter: activeFilter,
     direction: activeDirection,
     person: personParam,
+    priority: activePriority,
   });
+
+  // Reconcile and mark done mutations
+  const reconcileMutation = useReconcileCommitments();
+  const markDoneMutation = useMarkCommitmentDone();
+
+  // Check if there are open commitments (for showing reconcile button)
+  const hasOpenCommitments = commitments.some((c) => c.status === "open");
+
+  function handleReconcileClick() {
+    reconcileMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        setReconcileCandidates(data.candidates);
+        setReconcileModalOpen(true);
+        if (data.candidates.length === 0) {
+          toast.info("No matching completions found in recent meetings");
+        }
+      },
+      onError: () => {
+        toast.error("Failed to scan for completions");
+      },
+    });
+  }
+
+  function handleConfirmReconcile(commitmentId: string) {
+    markDoneMutation.mutate(
+      { id: commitmentId, status: "resolved" },
+      {
+        onSuccess: () => {
+          // Remove from candidates list
+          setReconcileCandidates((prev) =>
+            prev.filter((c) => c.commitmentId !== commitmentId)
+          );
+          toast.success("Commitment resolved ✓");
+        },
+        onError: () => {
+          toast.error("Failed to resolve commitment");
+        },
+      }
+    );
+  }
+
+  function handleDismissReconcile(commitmentId: string) {
+    // Just remove from candidates (don't mark as resolved)
+    setReconcileCandidates((prev) =>
+      prev.filter((c) => c.commitmentId !== commitmentId)
+    );
+  }
 
   // Update URL params (functional setter to preserve other params)
   function updateSearchParams(updates: Record<string, string | undefined>) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       for (const [key, value] of Object.entries(updates)) {
-        if (value === undefined || (key === "filter" && value === "open") || (key === "direction" && value === "all")) {
+        if (value === undefined || (key === "filter" && value === "open") || (key === "direction" && value === "all") || (key === "priority" && value === "all")) {
           next.delete(key);
         } else {
           next.set(key, value);
@@ -340,6 +527,11 @@ export default function CommitmentsPage() {
     updateSearchParams({ direction: d !== "all" ? d : undefined });
   }
 
+  function selectPriority(p: PriorityFilter) {
+    setActivePriority(p);
+    updateSearchParams({ priority: p !== "all" ? p : undefined });
+  }
+
   function clearPersonFilter() {
     updateSearchParams({ person: undefined });
   }
@@ -354,8 +546,9 @@ export default function CommitmentsPage() {
     }
   }
 
-  // Sort commitments
+  // Sort commitments — backend already sorts by priority desc, but allow local re-sorting
   const sortedCommitments = useMemo(() => {
+    // If no local sort is selected, use backend's default (priority desc)
     if (!sortBy || !commitments.length) return commitments;
 
     return [...commitments].sort((a, b) => {
@@ -364,6 +557,8 @@ export default function CommitmentsPage() {
         cmp = (a.personSlug ?? "").localeCompare(b.personSlug ?? "");
       } else if (sortBy === "age") {
         cmp = a.daysOpen - b.daysOpen;
+      } else if (sortBy === "priority") {
+        cmp = a.priority - b.priority;
       }
       return sortOrder === "desc" ? -cmp : cmp;
     });
@@ -380,37 +575,72 @@ export default function CommitmentsPage() {
 
       {/* Direction subnav — underlined tabs style */}
       <div className="px-6 pt-3 pb-0 border-b">
-        <Tabs value={activeDirection} onValueChange={(v) => selectDirection(v as DirectionFilter)}>
-          <TabsList className="h-9 bg-transparent p-0 gap-0">
+        <div className="flex items-center justify-between pb-3">
+          <div className="flex items-center gap-1">
             {DIRECTION_TABS.map((tab) => (
-              <TabsTrigger
+              <button
                 key={tab.value}
-                value={tab.value}
-                className="rounded-none border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent hover:text-foreground"
+                onClick={() => selectDirection(tab.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeDirection === tab.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
               >
                 {tab.label}
-              </TabsTrigger>
+              </button>
             ))}
-          </TabsList>
-        </Tabs>
+          </div>
+          {hasOpenCommitments && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReconcileClick}
+              disabled={reconcileMutation.isPending}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${reconcileMutation.isPending ? "animate-spin" : ""}`} />
+              Reconcile
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filter tabs */}
       <div className="px-6 py-2 border-b">
-        <div className="flex items-center gap-1">
-          {FILTER_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => selectFilter(tab.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeFilter === tab.value
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            {FILTER_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => selectFilter(tab.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeFilter === tab.value
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground mr-1">Priority:</span>
+            {PRIORITY_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => selectPriority(tab.value)}
+                className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                  activePriority === tab.value
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -465,6 +695,15 @@ export default function CommitmentsPage() {
                 <th className="px-4 py-3">Commitment</th>
                 <th className="w-16 px-4 py-3 text-center">Dir</th>
                 <th className="w-16 px-4 py-3">
+                  <SortableHeader
+                    label="Priority"
+                    sortKey="priority"
+                    currentSort={sortBy}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="px-4 py-3">
                   <SortableHeader
                     label="Age"
                     sortKey="age"
@@ -525,6 +764,9 @@ export default function CommitmentsPage() {
                       <DirectionIcon direction={item.direction} />
                     </td>
                     <td className="px-4 py-3">
+                      <PriorityBadge level={item.priorityLevel} score={item.priority} />
+                    </td>
+                    <td className="px-4 py-3">
                       <AgeBadge daysOpen={item.daysOpen} />
                     </td>
                     <td className="px-4 py-3">
@@ -537,6 +779,16 @@ export default function CommitmentsPage() {
           </table>
         )}
       </div>
+
+      {/* Reconcile modal */}
+      <ReconcileModal
+        open={reconcileModalOpen}
+        onOpenChange={setReconcileModalOpen}
+        candidates={reconcileCandidates}
+        onConfirm={handleConfirmReconcile}
+        onDismiss={handleDismissReconcile}
+        isConfirming={markDoneMutation.isPending}
+      />
     </div>
   );
 }

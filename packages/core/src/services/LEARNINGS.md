@@ -42,6 +42,8 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **Ajv import: use named export `{ Ajv }` not default import** (2026-03-08). With NodeNext module resolution, `import Ajv from 'ajv'` gives TypeScript error "cannot use namespace as type". The named export `import { Ajv } from 'ajv'` works. This is an ESM/CJS interop edge case.
 
+- **Jaccard similarity test strings must be verified mathematically** (2026-03-09). When writing tests for Jaccard-based deduplication (used in `meeting-extraction.ts` and `commitments.ts`), you cannot rely on intuition for what "looks similar". Test strings that appear nearly identical often produce Jaccard scores below threshold because: (1) one different word reduces overlap significantly (e.g., 4/6 = 0.67 for strings differing by 2 words), (2) the normalize function strips punctuation and lowercases, changing token counts. For Jaccard > 0.8 threshold, use test pairs where first string has N words and second has N+1 (adding only one word), giving N/(N+1) similarity. Example: "Send API docs to Sarah" (5 words) vs "Send API docs to Sarah now" (6 words) = 5/6 = 0.833. Debug with: `const w1 = text.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean)` then `intersection.length / union.size`.
+
 ## Invariants
 
 - `AreteServices` returned by `createServices()` is a flat object — no lazy loading, no proxies. All services are fully constructed at call time.

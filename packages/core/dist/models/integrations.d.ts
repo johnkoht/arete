@@ -12,6 +12,10 @@ export type StagedItem = {
     id: string;
     text: string;
     type: 'ai' | 'de' | 'le';
+    /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
+    source?: 'ai' | 'dedup';
+    /** LLM confidence score (0-1) for extracted items */
+    confidence?: number;
 };
 /** All three staged sections for a meeting */
 export type StagedSections = {

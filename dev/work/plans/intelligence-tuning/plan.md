@@ -1,13 +1,15 @@
 ---
 title: "Intelligence Tuning (INT-1 through INT-5)"
 slug: intelligence-tuning
-status: idea
+status: complete
 size: medium
 tags: [ai, intelligence, backend]
 created: "2026-03-07"
-updated: "2026-03-08"
-completed: null
+updated: 2026-03-09T22:55:00.000Z
+completed: 2026-03-09T22:55:00.000Z
 notes: "INT-0 (Service Normalization) completed separately. This covers the remaining quality improvements."
+has_review: true
+has_pre_mortem: true
 ---
 
 # Intelligence Tuning Plan (INT-1 through INT-5)

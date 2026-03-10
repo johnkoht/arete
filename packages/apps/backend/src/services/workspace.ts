@@ -258,6 +258,48 @@ export async function listMeetings(workspaceRoot: string): Promise<MeetingSummar
   return summaries;
 }
 
+/** Parse `staged_item_source` from meeting file frontmatter. */
+function parseStagedItemSource(content: string): Record<string, 'ai' | 'dedup'> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  try {
+    const fm = matter(content).data as Record<string, unknown>;
+    const raw = fm['staged_item_source'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    // Validate values are 'ai' or 'dedup'
+    const result: Record<string, 'ai' | 'dedup'> = {};
+    for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+      if (val === 'ai' || val === 'dedup') {
+        result[key] = val;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/** Parse `staged_item_confidence` from meeting file frontmatter. */
+function parseStagedItemConfidence(content: string): Record<string, number> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  try {
+    const fm = matter(content).data as Record<string, unknown>;
+    const raw = fm['staged_item_confidence'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    // Validate values are numbers
+    const result: Record<string, number> = {};
+    for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof val === 'number') {
+        result[key] = val;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export async function getMeeting(
   workspaceRoot: string,
   slug: string
@@ -275,6 +317,22 @@ export async function getMeeting(
   const stagedSections = parseStagedSections(content);
   const stagedItemStatus = parseStagedItemStatus(raw);
   const stagedItemEdits = parseStagedItemEdits(raw);
+  const stagedItemSource = parseStagedItemSource(raw);
+  const stagedItemConfidence = parseStagedItemConfidence(raw);
+
+  // Apply sources and confidence to staged items
+  for (const item of stagedSections.actionItems) {
+    item.source = stagedItemSource[item.id] ?? 'ai';
+    item.confidence = stagedItemConfidence[item.id];
+  }
+  for (const item of stagedSections.decisions) {
+    item.source = stagedItemSource[item.id] ?? 'ai';
+    item.confidence = stagedItemConfidence[item.id];
+  }
+  for (const item of stagedSections.learnings) {
+    item.source = stagedItemSource[item.id] ?? 'ai';
+    item.confidence = stagedItemConfidence[item.id];
+  }
 
   // Parse approved_items from frontmatter if present
   const rawApproved = fm['approved_items'];

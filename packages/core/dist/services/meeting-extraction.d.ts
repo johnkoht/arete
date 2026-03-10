@@ -27,6 +27,8 @@ export type ActionItem = {
     direction: ActionItemDirection;
     counterpartySlug?: string;
     due?: string;
+    /** LLM confidence score (0-1) for this item. */
+    confidence?: number;
 };
 /** Full meeting intelligence extracted from a transcript. */
 export type MeetingIntelligence = {
@@ -41,11 +43,31 @@ export type ValidationWarning = {
     item: string;
     reason: string;
 };
+/** Raw item before validation filtering (for debugging/analysis). */
+export type RawExtractedItem = {
+    type: 'action' | 'decision' | 'learning';
+    text: string;
+    owner?: string;
+    direction?: string;
+    confidence?: number;
+};
 /** Result of parsing extraction response (includes validation warnings). */
 export type MeetingExtractionResult = {
     intelligence: MeetingIntelligence;
     validationWarnings: ValidationWarning[];
+    /** All items parsed from LLM response before validation filtering (for debugging). */
+    rawItems: RawExtractedItem[];
 };
+/**
+ * Normalize text for Jaccard comparison.
+ * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
+ */
+export declare function normalizeForJaccard(text: string): string[];
+/**
+ * Compute Jaccard similarity between two word arrays.
+ * Returns 0-1 where 1 is identical.
+ */
+export declare function jaccardSimilarity(a: string[], b: string[]): number;
 /**
  * Build the LLM prompt for extracting meeting intelligence.
  *

@@ -163,6 +163,8 @@ export type PatternsResponse = {
   count: number;
 };
 
+export type PriorityLevel = 'high' | 'medium' | 'low';
+
 export type CommitmentItem = {
   id: string;
   text: string;
@@ -171,10 +173,27 @@ export type CommitmentItem = {
   date: string;
   daysOpen: number;
   status: string;
+  priority: number;
+  priorityLevel: PriorityLevel;
 };
 
 export type CommitmentsListResponse = {
   commitments: CommitmentItem[];
+};
+
+export type ReconciliationCandidate = {
+  commitmentId: string;
+  commitmentText: string;
+  personSlug: string;
+  personName: string;
+  sourceMeeting: string;
+  matchedText: string;
+  confidence: number;
+};
+
+export type ReconcileResponse = {
+  candidates: ReconciliationCandidate[];
+  count: number;
 };
 
 // ── Search types ──────────────────────────────────────────────────────────────
@@ -227,6 +246,10 @@ export type ReviewItem = {
   status: ItemStatus;
   /** Optional project association for action items */
   projectSlug?: string;
+  /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
+  source?: 'ai' | 'dedup';
+  /** LLM confidence score (0-1) for extracted items */
+  confidence?: number;
 };
 
 export type ApprovedItems = {

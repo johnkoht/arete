@@ -9,6 +9,7 @@ import type {
   CommitmentItem,
   ActivityResponse,
   ActivityItem,
+  ReconcileResponse,
 } from './types.js';
 
 /**
@@ -20,15 +21,17 @@ export async function fetchPatterns(days = 30): Promise<PatternsResponse> {
 }
 
 export type DirectionFilter = 'mine' | 'theirs' | 'all';
+export type PriorityFilter = 'high' | 'medium' | 'low' | 'all';
 
 export type CommitmentsParams = {
   filter?: 'overdue' | 'thisweek' | 'open' | 'all';
   direction?: DirectionFilter;
   person?: string;
+  priority?: PriorityFilter;
 };
 
 /**
- * GET /api/commitments — commitments list with optional filter, direction, and person.
+ * GET /api/commitments — commitments list with optional filter, direction, person, and priority.
  */
 export async function fetchCommitments(
   params?: CommitmentsParams,
@@ -39,6 +42,9 @@ export async function fetchCommitments(
     searchParams.set('direction', params.direction);
   }
   if (params?.person) searchParams.set('person', params.person);
+  if (params?.priority && params.priority !== 'all') {
+    searchParams.set('priority', params.priority);
+  }
   const qs = searchParams.toString();
   return apiFetch<CommitmentsListResponse>(`/api/commitments${qs ? `?${qs}` : ''}`);
 }
@@ -62,4 +68,14 @@ export async function patchCommitment(
 export async function fetchActivity(limit = 5): Promise<ActivityItem[]> {
   const response = await apiFetch<ActivityResponse>(`/api/activity?limit=${limit}`);
   return response.events;
+}
+
+/**
+ * POST /api/commitments/reconcile — scan meetings for completion signals.
+ * Returns candidates matching open commitments.
+ */
+export async function reconcileCommitments(): Promise<ReconcileResponse> {
+  return apiFetch<ReconcileResponse>('/api/commitments/reconcile', {
+    method: 'POST',
+  });
 }
