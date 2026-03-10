@@ -4,12 +4,13 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchPeople, fetchPerson, patchPersonNotes, patchPerson } from '@/api/people.js';
+import type { FetchPeopleParams } from '@/api/people.js';
 import type { PeopleResponse, PersonSummary } from '@/api/types.js';
 
-export function usePeople() {
+export function usePeople(params?: FetchPeopleParams) {
   return useQuery({
-    queryKey: ['people'],
-    queryFn: fetchPeople,
+    queryKey: ['people', params?.limit, params?.offset],
+    queryFn: () => fetchPeople(params),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -36,6 +37,7 @@ export function useUpdatePersonNotes(slug: string) {
 /**
  * Toggle favorite status with optimistic update.
  * Follows the cancelQueries + rollback pattern from LEARNINGS.md.
+ * Uses getQueriesData/setQueriesData (plural) to handle paginated cache keys.
  */
 export function useToggleFavorite() {
   const queryClient = useQueryClient();
@@ -48,11 +50,11 @@ export function useToggleFavorite() {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: ['people'] });
 
-      // Snapshot the previous value
-      const previousData = queryClient.getQueryData<PeopleResponse>(['people']);
+      // Snapshot all pagination variants (plural form does partial key matching)
+      const previousData = queryClient.getQueriesData<PeopleResponse>({ queryKey: ['people'] });
 
-      // Optimistically update the cache
-      queryClient.setQueryData<PeopleResponse>(['people'], (old) => {
+      // Optimistically update all cached pages (plural form updates all variants)
+      queryClient.setQueriesData<PeopleResponse>({ queryKey: ['people'] }, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -66,9 +68,11 @@ export function useToggleFavorite() {
     },
 
     onError: (_err, _vars, context) => {
-      // Rollback on error
+      // Rollback all cached pages on error
       if (context?.previousData) {
-        queryClient.setQueryData(['people'], context.previousData);
+        for (const [key, data] of context.previousData) {
+          queryClient.setQueryData(key, data);
+        }
       }
     },
 

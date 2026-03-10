@@ -112,13 +112,16 @@ describe('GET /api/commitments — empty workspace', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns empty commitments when no file exists', async () => {
+  it('returns empty commitments with pagination metadata when no file exists', async () => {
     const router = createCommitmentsRouter(tmpDir);
     const { status, json } = await req(router, 'GET', '/');
     assert.equal(status, 200);
-    const body = json as { commitments: unknown[] };
+    const body = json as { commitments: unknown[]; total: number; offset: number; limit: number };
     assert.ok(Array.isArray(body.commitments));
     assert.equal(body.commitments.length, 0);
+    assert.equal(body.total, 0);
+    assert.equal(body.offset, 0);
+    assert.equal(body.limit, 25);
   });
 });
 
@@ -197,13 +200,16 @@ describe('GET /api/commitments — with data', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns only open commitments without filter', async () => {
+  it('returns only open commitments without filter with pagination metadata', async () => {
     const router = createCommitmentsRouter(tmpDir);
     const { status, json } = await req(router, 'GET', '/');
     assert.equal(status, 200);
-    const body = json as { commitments: Array<{ id: string; status?: string }> };
+    const body = json as { commitments: Array<{ id: string; status?: string }>; total: number; offset: number; limit: number };
     // Only 3 open (not the resolved one)
     assert.equal(body.commitments.length, 3);
+    assert.equal(body.total, 3);
+    assert.equal(body.offset, 0);
+    assert.equal(body.limit, 25);
     assert.ok(body.commitments.every((c) => c.id !== 'c-resolved'));
   });
 
@@ -701,5 +707,78 @@ describe('PATCH /api/commitments/:id — mark done or drop', () => {
     assert.ok(c1, 'c-patch-1 should exist in file');
     assert.equal(c1.status, 'resolved');
     assert.ok(c1.resolvedAt !== null);
+  });
+});
+
+// ── commitments pagination tests ──────────────────────────────────────────────
+
+describe('GET /api/commitments — pagination', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-commitments-pagination-test-'));
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+
+    const now = new Date();
+    const commitments = {
+      commitments: Array.from({ length: 10 }, (_, i) => ({
+        id: `c-page-${i + 1}`,
+        text: `Commitment ${i + 1}`,
+        direction: 'i_owe_them',
+        personSlug: 'jane-doe',
+        personName: 'Jane Doe',
+        source: `meeting-${i}`,
+        date: new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10),
+        status: 'open',
+        resolvedAt: null,
+      })),
+    };
+
+    await writeFile(
+      join(tmpDir, '.arete', 'commitments.json'),
+      JSON.stringify(commitments),
+      'utf8',
+    );
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('respects limit and offset query params', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?limit=3&offset=2');
+    assert.equal(status, 200);
+    const body = json as { commitments: Array<{ id: string }>; total: number; offset: number; limit: number };
+    assert.equal(body.commitments.length, 3);
+    assert.equal(body.total, 10);
+    assert.equal(body.offset, 2);
+    assert.equal(body.limit, 3);
+  });
+
+  it('caps limit at 100', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?limit=200');
+    assert.equal(status, 200);
+    const body = json as { limit: number };
+    assert.equal(body.limit, 100);
+  });
+
+  it('uses default limit of 25', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/');
+    assert.equal(status, 200);
+    const body = json as { limit: number };
+    assert.equal(body.limit, 25);
+  });
+
+  it('total reflects filtered count before pagination', async () => {
+    const router = createCommitmentsRouter(tmpDir);
+    // Filter by direction, which should reduce the total
+    const { status, json } = await req(router, 'GET', '/?limit=2&offset=0');
+    assert.equal(status, 200);
+    const body = json as { commitments: unknown[]; total: number };
+    assert.equal(body.commitments.length, 2);
+    assert.equal(body.total, 10); // total is all matching items, not just the page
   });
 });

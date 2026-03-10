@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, X, ArrowRight, ArrowLeft, RefreshCw, type LucideIcon, ExternalLink } from "lucide-react";
+import { CheckSquare, Check, Trash2, AlertCircle, Clock, CheckCircle2, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, ArrowRight, ArrowLeft, RefreshCw, type LucideIcon, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ import { toast } from "sonner";
 import { useCommitments, useMarkCommitmentDone, useReconcileCommitments } from "@/hooks/intelligence.js";
 import type { DirectionFilter, PriorityFilter, ReconciliationCandidate } from "@/hooks/intelligence.js";
 import type { CommitmentItem, PriorityLevel } from "@/api/types.js";
+
+const PAGE_SIZE = 25;
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 
@@ -437,6 +439,10 @@ export default function CommitmentsPage() {
   const initialPriority = (searchParams.get("priority") as PriorityFilter) ?? "all";
   const personParam = searchParams.get("person") ?? undefined;
   
+  // URL-based pagination state
+  const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const offset = (page - 1) * PAGE_SIZE;
+  
   // Local state
   const [activeFilter, setActiveFilter] = useState<FilterType>(initialFilter);
   const [activeDirection, setActiveDirection] = useState<DirectionFilter>(initialDirection);
@@ -448,12 +454,18 @@ export default function CommitmentsPage() {
   const [reconcileModalOpen, setReconcileModalOpen] = useState(false);
   const [reconcileCandidates, setReconcileCandidates] = useState<ReconciliationCandidate[]>([]);
 
-  const { data: commitments, isLoading, error } = useCommitments({
+  const { data: commitments, total: totalItems, isLoading, error } = useCommitments({
     filter: activeFilter,
     direction: activeDirection,
     person: personParam,
     priority: activePriority,
+    limit: PAGE_SIZE,
+    offset,
   });
+  
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
 
   // Reconcile and mark done mutations
   const reconcileMutation = useReconcileCommitments();
@@ -517,23 +529,40 @@ export default function CommitmentsPage() {
     }, { replace: true });
   }
 
+  // Set page via URL params (preserves other params)
+  function setPage(newPage: number) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage === 1) {
+        next.delete("page");
+      } else {
+        next.set("page", String(newPage));
+      }
+      return next;
+    }, { replace: true });
+  }
+
   function selectFilter(f: FilterType) {
     setActiveFilter(f);
-    updateSearchParams({ filter: f !== "open" ? f : undefined });
+    // Reset page when filter changes
+    updateSearchParams({ filter: f !== "open" ? f : undefined, page: undefined });
   }
 
   function selectDirection(d: DirectionFilter) {
     setActiveDirection(d);
-    updateSearchParams({ direction: d !== "all" ? d : undefined });
+    // Reset page when direction changes
+    updateSearchParams({ direction: d !== "all" ? d : undefined, page: undefined });
   }
 
   function selectPriority(p: PriorityFilter) {
     setActivePriority(p);
-    updateSearchParams({ priority: p !== "all" ? p : undefined });
+    // Reset page when priority changes
+    updateSearchParams({ priority: p !== "all" ? p : undefined, page: undefined });
   }
 
   function clearPersonFilter() {
-    updateSearchParams({ person: undefined });
+    // Reset page when person filter changes
+    updateSearchParams({ person: undefined, page: undefined });
   }
 
   function handleSort(key: SortBy) {
@@ -679,104 +708,138 @@ export default function CommitmentsPage() {
         )}
 
         {!isLoading && !error && sortedCommitments.length > 0 && (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs font-medium text-muted-foreground">
-                <th className="w-12 px-4 py-3"></th>
-                <th className="px-4 py-3">
-                  <SortableHeader
-                    label="Person"
-                    sortKey="person"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                  />
-                </th>
-                <th className="px-4 py-3">Commitment</th>
-                <th className="w-16 px-4 py-3 text-center">Dir</th>
-                <th className="w-16 px-4 py-3">
-                  <SortableHeader
-                    label="Priority"
-                    sortKey="priority"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                  />
-                </th>
-                <th className="px-4 py-3">
-                  <SortableHeader
-                    label="Age"
-                    sortKey="age"
-                    currentSort={sortBy}
-                    currentOrder={sortOrder}
-                    onSort={handleSort}
-                  />
-                </th>
-                <th className="w-24 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedCommitments.map((item) => {
-                const isSettled = item.status === "resolved" || item.status === "dropped";
-                // Check for source field (may be added in future API updates)
-                const source = (item as unknown as { source?: string }).source;
-                return (
-                  <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
-                    <td className="px-4 py-3">
-                      <CompletionAction item={item} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.personSlug ? (
-                        <Link
-                          to={`/people/${item.personSlug}`}
-                          className="text-sm text-primary hover:underline font-medium"
-                        >
-                          {item.personSlug.replace(/-/g, " ")}
-                        </Link>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
-                          {item.text}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {item.date && (
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
-                            </span>
-                          )}
-                          {source && (
-                            <Link
-                              to={`/meetings/${source}`}
-                              className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Source
-                            </Link>
-                          )}
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs font-medium text-muted-foreground">
+                  <th className="w-12 px-4 py-3"></th>
+                  <th className="px-4 py-3">
+                    <SortableHeader
+                      label="Person"
+                      sortKey="person"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3">Commitment</th>
+                  <th className="w-16 px-4 py-3 text-center">Dir</th>
+                  <th className="w-16 px-4 py-3">
+                    <SortableHeader
+                      label="Priority"
+                      sortKey="priority"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="px-4 py-3">
+                    <SortableHeader
+                      label="Age"
+                      sortKey="age"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="w-24 px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedCommitments.map((item) => {
+                  const isSettled = item.status === "resolved" || item.status === "dropped";
+                  // Check for source field (may be added in future API updates)
+                  const source = (item as unknown as { source?: string }).source;
+                  return (
+                    <tr key={item.id} className={`border-b transition-colors hover:bg-accent/50 ${isSettled ? "opacity-50" : ""}`}>
+                      <td className="px-4 py-3">
+                        <CompletionAction item={item} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.personSlug ? (
+                          <Link
+                            to={`/people/${item.personSlug}`}
+                            className="text-sm text-primary hover:underline font-medium"
+                          >
+                            {item.personSlug.replace(/-/g, " ")}
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <p className={`text-sm leading-snug ${isSettled ? "line-through text-muted-foreground" : ""}`}>
+                            {item.text}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {item.date && (
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(item.date), { addSuffix: true })}
+                              </span>
+                            )}
+                            {source && (
+                              <Link
+                                to={`/meetings/${source}`}
+                                className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Source
+                              </Link>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <DirectionIcon direction={item.direction} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge level={item.priorityLevel} score={item.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <AgeBadge daysOpen={item.daysOpen} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <DeleteAction item={item} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <DirectionIcon direction={item.direction} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <PriorityBadge level={item.priorityLevel} score={item.priority} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <AgeBadge daysOpen={item.daysOpen} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <DeleteAction item={item} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalItems)} of {totalItems}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(page - 1)}
+                    disabled={!hasPrevPage}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(page + 1)}
+                    disabled={!hasNextPage}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

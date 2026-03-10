@@ -78,8 +78,14 @@ function buildTestApp(
   };
 
   app.get('/api/meetings', async (c) => {
-    const meetings = await ws.listMeetings();
-    return c.json(meetings);
+    const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100);
+    const offset = parseInt(c.req.query('offset') ?? '0', 10);
+
+    const allMeetings = await ws.listMeetings();
+    const total = allMeetings.length;
+    const meetings = (allMeetings as unknown[]).slice(offset, offset + limit);
+
+    return c.json({ meetings, total, offset, limit });
   });
 
   app.post('/api/meetings/sync', async (c) => {
@@ -192,19 +198,52 @@ describe('GET /api/meetings', () => {
     const app = buildTestApp({ listMeetings: () => Promise.resolve([]) });
     const { status, json } = await req(app, 'GET', '/api/meetings');
     assert.equal(status, 200);
-    assert.deepEqual(json, []);
+    const body = json as { meetings: unknown[]; total: number; offset: number; limit: number };
+    assert.deepEqual(body.meetings, []);
+    assert.equal(body.total, 0);
+    assert.equal(body.offset, 0);
+    assert.equal(body.limit, 25);
   });
 
-  it('returns meeting summaries', async () => {
+  it('returns meeting summaries with pagination metadata', async () => {
     const meeting = makeMeeting();
     const app = buildTestApp({ listMeetings: () => Promise.resolve([meeting]) });
     const { status, json } = await req(app, 'GET', '/api/meetings');
     assert.equal(status, 200);
-    assert.ok(Array.isArray(json));
-    const list = json as MockMeeting[];
-    assert.equal(list.length, 1);
-    assert.equal(list[0].slug, meeting.slug);
-    assert.equal(list[0].title, meeting.title);
+    const body = json as { meetings: MockMeeting[]; total: number; offset: number; limit: number };
+    assert.ok(Array.isArray(body.meetings));
+    assert.equal(body.meetings.length, 1);
+    assert.equal(body.meetings[0].slug, meeting.slug);
+    assert.equal(body.meetings[0].title, meeting.title);
+    assert.equal(body.total, 1);
+    assert.equal(body.offset, 0);
+    assert.equal(body.limit, 25);
+  });
+
+  it('respects limit and offset query params', async () => {
+    const meetings = [
+      makeMeeting({ slug: 'meeting-1', title: 'Meeting 1' }),
+      makeMeeting({ slug: 'meeting-2', title: 'Meeting 2' }),
+      makeMeeting({ slug: 'meeting-3', title: 'Meeting 3' }),
+    ];
+    const app = buildTestApp({ listMeetings: () => Promise.resolve(meetings) });
+    const { status, json } = await req(app, 'GET', '/api/meetings?limit=2&offset=1');
+    assert.equal(status, 200);
+    const body = json as { meetings: MockMeeting[]; total: number; offset: number; limit: number };
+    assert.equal(body.meetings.length, 2);
+    assert.equal(body.meetings[0].slug, 'meeting-2');
+    assert.equal(body.meetings[1].slug, 'meeting-3');
+    assert.equal(body.total, 3);
+    assert.equal(body.offset, 1);
+    assert.equal(body.limit, 2);
+  });
+
+  it('caps limit at 100', async () => {
+    const app = buildTestApp({ listMeetings: () => Promise.resolve([]) });
+    const { status, json } = await req(app, 'GET', '/api/meetings?limit=200');
+    assert.equal(status, 200);
+    const body = json as { limit: number };
+    assert.equal(body.limit, 100);
   });
 });
 

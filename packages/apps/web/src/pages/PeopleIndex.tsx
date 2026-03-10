@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search,
   Users,
@@ -7,6 +7,8 @@ import {
   ArrowDown,
   X,
   Star,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
@@ -20,6 +22,8 @@ import { HealthDot, CategoryBadge, TrendIcon } from "@/components/people/PersonB
 import { usePeople, useToggleFavorite } from "@/hooks/people.js";
 import { useToast } from "@/hooks/use-toast.js";
 import type { PersonSummary, PersonCategory } from "@/api/types.js";
+
+const PAGE_SIZE = 25;
 
 type CommitmentFilter = "overdue" | "thisweek" | null;
 type CategoryTab = "favorites" | "all" | PersonCategory;
@@ -57,13 +61,27 @@ const FILTER_LABELS: Record<NonNullable<CommitmentFilter>, string> = {
 
 export default function PeopleIndex() {
   const navigate = useNavigate();
-  const { data, isLoading, error } = usePeople();
   const toggleFavorite = useToggleFavorite();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // URL-based pagination state
+  const page = parseInt(searchParams.get("page") ?? "1", 10);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  // Track previous filter/category to detect changes
+  const prevFilterRef = useRef<string | null>(null);
+  const prevCategoryRef = useRef<string | null>(null);
+
+  const { data, isLoading, error } = usePeople({ limit: PAGE_SIZE, offset });
+  const people = data?.people ?? [];
+  const totalItems = data?.total ?? 0;
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
 
   // Read commitment filter from URL ?filter=overdue|thisweek
   const filterParam = searchParams.get("filter");
@@ -77,6 +95,36 @@ export default function PeopleIndex() {
       ? categoryParam
       : "all";
 
+  // Reset page to 1 when filter or category changes
+  useEffect(() => {
+    const filterChanged = prevFilterRef.current !== null && prevFilterRef.current !== filterParam;
+    const categoryChanged = prevCategoryRef.current !== null && prevCategoryRef.current !== categoryParam;
+
+    if ((filterChanged || categoryChanged) && page !== 1) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("page");
+        return next;
+      });
+    }
+
+    prevFilterRef.current = filterParam;
+    prevCategoryRef.current = categoryParam;
+  }, [filterParam, categoryParam, page, setSearchParams]);
+
+  // Set page via URL params (preserves other params)
+  const setPage = (newPage: number) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (newPage === 1) {
+        next.delete("page");
+      } else {
+        next.set("page", String(newPage));
+      }
+      return next;
+    });
+  };
+
   // When filter is "overdue" or "thisweek", default sort to openCommitments desc
   useEffect(() => {
     if (commitmentFilter) {
@@ -86,10 +134,11 @@ export default function PeopleIndex() {
   }, [commitmentFilter]);
 
   const clearFilter = () => {
-    // Preserve ?category= param when clearing the commitment filter
+    // Preserve ?category= param when clearing the commitment filter; reset page
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("filter");
+      next.delete("page");
       return next;
     });
     setSortColumn("name");
@@ -104,11 +153,11 @@ export default function PeopleIndex() {
       } else {
         next.set("category", cat);
       }
+      // Reset page to 1 when category changes
+      next.delete("page");
       return next;
     });
   };
-
-  const people = data?.people ?? [];
 
   // Search-filtered (with commitment filter), but NOT yet category-filtered.
   // Used for computing per-tab counts that reflect the current search query.
@@ -326,6 +375,7 @@ export default function PeopleIndex() {
         )}
 
         {!isLoading && !error && (
+          <>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs font-medium text-muted-foreground">
@@ -460,6 +510,39 @@ export default function PeopleIndex() {
               )}
             </tbody>
           </table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalItems)} of {totalItems}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page - 1)}
+                  disabled={!hasPrevPage}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page + 1)}
+                  disabled={!hasNextPage}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>

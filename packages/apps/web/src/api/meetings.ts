@@ -12,6 +12,7 @@
 import { apiFetch } from './client.js';
 import type {
   Meeting,
+  MeetingsResponse,
   Attendee,
   ReviewItem,
   MeetingStatus,
@@ -147,10 +148,34 @@ function mapFullMeeting(raw: RawFullMeeting): Meeting {
 
 // ── API functions ───────────────────────────────────────────────────────────
 
-/** GET /api/meetings — list all meeting summaries */
-export async function fetchMeetings(): Promise<Meeting[]> {
-  const raw = await apiFetch<RawMeetingSummary[]>('/api/meetings');
-  return raw.map(mapSummary);
+type RawMeetingsResponse = {
+  meetings: RawMeetingSummary[];
+  total: number;
+  offset: number;
+  limit: number;
+};
+
+export type FetchMeetingsParams = {
+  limit?: number;
+  offset?: number;
+};
+
+/** GET /api/meetings — list meeting summaries with optional pagination */
+export async function fetchMeetings(params?: FetchMeetingsParams): Promise<MeetingsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params?.offset !== undefined) searchParams.set('offset', String(params.offset));
+  
+  const queryString = searchParams.toString();
+  const url = queryString ? `/api/meetings?${queryString}` : '/api/meetings';
+  
+  const raw = await apiFetch<RawMeetingsResponse>(url);
+  return {
+    meetings: raw.meetings.map(mapSummary),
+    total: raw.total,
+    offset: raw.offset,
+    limit: raw.limit,
+  };
 }
 
 /** GET /api/meetings/:slug — full meeting with staged items */

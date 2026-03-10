@@ -102,6 +102,9 @@ export type PersonDetail = PersonSummary & {
 
 export type PeopleResponse = {
   people: PersonSummary[];
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 // ── Goals types ──────────────────────────────────────────────────────────────
@@ -179,6 +182,9 @@ export type CommitmentItem = {
 
 export type CommitmentsListResponse = {
   commitments: CommitmentItem[];
+  total: number;
+  offset: number;
+  limit: number;
 };
 
 export type ReconciliationCandidate = {
@@ -310,4 +316,11 @@ export type PatchItemParams = {
   id: string;
   status: ItemStatus;
   editedText?: string;
+};
+
+export type MeetingsResponse = {
+  meetings: Meeting[];
+  total: number;
+  offset: number;
+  limit: number;
 };

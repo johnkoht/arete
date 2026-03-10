@@ -55,6 +55,7 @@ describe("useMeetings", () => {
       attendees: [{ name: "John Koht", email: "john@example.com" }],
       duration: "62 minutes",
       source: "Krisp",
+      recordingUrl: "",
     },
     {
       slug: "sprint-planning",
@@ -67,11 +68,20 @@ describe("useMeetings", () => {
       ],
       duration: "30 minutes",
       source: "Krisp",
+      recordingUrl: "",
     },
   ];
 
+  // Paginated response shape (Task A backend change)
+  const RAW_RESPONSE = {
+    meetings: RAW_MEETINGS,
+    total: 50,
+    offset: 0,
+    limit: 25,
+  };
+
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(RAW_MEETINGS)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(RAW_RESPONSE)));
   });
 
   afterEach(() => {
@@ -90,14 +100,26 @@ describe("useMeetings", () => {
     );
   });
 
+  it("returns MeetingsResponse with meetings array and pagination info", async () => {
+    const wrapper = createWrapper();
+    const { result } = renderHook(() => useMeetings(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.meetings).toHaveLength(2);
+    expect(result.current.data?.total).toBe(50);
+    expect(result.current.data?.offset).toBe(0);
+    expect(result.current.data?.limit).toBe(25);
+  });
+
   it("maps duration string to number", async () => {
     const wrapper = createWrapper();
     const { result } = renderHook(() => useMeetings(), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]?.duration).toBe(62);
-    expect(result.current.data?.[1]?.duration).toBe(30);
+    expect(result.current.data?.meetings[0]?.duration).toBe(62);
+    expect(result.current.data?.meetings[1]?.duration).toBe(30);
   });
 
   it("normalizes lowercase status to capitalized MeetingStatus", async () => {
@@ -106,8 +128,8 @@ describe("useMeetings", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(result.current.data?.[0]?.status).toBe("processed");
-    expect(result.current.data?.[1]?.status).toBe("synced");
+    expect(result.current.data?.meetings[0]?.status).toBe("processed");
+    expect(result.current.data?.meetings[1]?.status).toBe("synced");
   });
 
   it("computes attendee initials from name", async () => {
@@ -116,15 +138,15 @@ describe("useMeetings", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    const firstMeeting = result.current.data?.[0];
+    const firstMeeting = result.current.data?.meetings[0];
     expect(firstMeeting?.attendees[0]?.initials).toBe("JK");
 
-    const secondMeeting = result.current.data?.[1];
+    const secondMeeting = result.current.data?.meetings[1];
     expect(secondMeeting?.attendees[0]?.initials).toBe("AS");
     expect(secondMeeting?.attendees[1]?.initials).toBe("BJ");
   });
 
-  it("returns empty array and error on API failure", async () => {
+  it("returns error on API failure", async () => {
     vi.unstubAllGlobals();
     vi.stubGlobal(
       "fetch",
@@ -136,6 +158,35 @@ describe("useMeetings", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toBeInstanceOf(Error);
+  });
+
+  it("passes limit and offset params to URL query string", async () => {
+    const wrapper = createWrapper();
+    const { result } = renderHook(() => useMeetings({ limit: 25, offset: 50 }), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/meetings\?limit=25&offset=50/),
+      expect.any(Object)
+    );
+  });
+
+  it("uses different query keys for different offsets", async () => {
+    // Verify that different offset values create different query keys
+    // by checking that passing offset=25 results in a different fetch URL
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(RAW_RESPONSE)));
+    
+    const wrapper = createWrapper();
+    const { result } = renderHook(() => useMeetings({ limit: 25, offset: 25 }), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/offset=25/),
+      expect.any(Object)
+    );
   });
 });
 

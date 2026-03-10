@@ -374,6 +374,30 @@ If italic is needed, use word boundary checks to avoid mid-word matches.
 
 ---
 
+## Pagination + Optimistic Updates (2026-03-10)
+
+**Gotcha**: When adding pagination to a query that has optimistic update mutations, update those mutations to use `getQueriesData`/`setQueriesData` (plural forms) instead of singular forms. The singular forms require exact key match; the plural forms do partial matching across all pagination variants.
+
+**Why this breaks**: Before pagination, cache key is `['people']`. After pagination, cache key is `['people', 25, 0]` (with limit/offset). `getQueryData(['people'])` returns `undefined` because there's no exact match. The optimistic update silently fails.
+
+**Pattern**:
+```typescript
+// ❌ WRONG - won't match paginated keys like ['people', 25, 0]
+const previousData = queryClient.getQueryData<PeopleResponse>(['people']);
+queryClient.setQueryData<PeopleResponse>(['people'], (old) => ...);
+
+// ✅ CORRECT - partial match updates all paginated variants
+const previousData = queryClient.getQueriesData<PeopleResponse>({ queryKey: ['people'] });
+queryClient.setQueriesData<PeopleResponse>({ queryKey: ['people'] }, (old) => ...);
+
+// onError rollback - iterate over array of [key, data] tuples
+for (const [key, data] of context.previousData) {
+  queryClient.setQueryData(key, data);
+}
+```
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`

@@ -28,10 +28,12 @@ export type CommitmentsParams = {
   direction?: DirectionFilter;
   person?: string;
   priority?: PriorityFilter;
+  limit?: number;
+  offset?: number;
 };
 
 /**
- * GET /api/commitments — commitments list with optional filter, direction, person, and priority.
+ * GET /api/commitments — commitments list with optional filter, direction, person, priority, and pagination.
  */
 export async function fetchCommitments(
   params?: CommitmentsParams,
@@ -45,6 +47,8 @@ export async function fetchCommitments(
   if (params?.priority && params.priority !== 'all') {
     searchParams.set('priority', params.priority);
   }
+  if (params?.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params?.offset !== undefined) searchParams.set('offset', String(params.offset));
   const qs = searchParams.toString();
   return apiFetch<CommitmentsListResponse>(`/api/commitments${qs ? `?${qs}` : ''}`);
 }

@@ -378,7 +378,14 @@ export function createCommitmentsRouter(workspaceRoot: string): Hono {
       // Sort by priority descending (highest priority first)
       filtered.sort((a, b) => b.priority - a.priority);
 
-      return c.json({ commitments: filtered });
+      // Parse pagination params (default limit 25, max 100)
+      const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100);
+      const offset = parseInt(c.req.query('offset') ?? '0', 10);
+
+      const total = filtered.length;
+      const page = filtered.slice(offset, offset + limit);
+
+      return c.json({ commitments: page, total, offset, limit });
     } catch (err) {
       console.error('[commitments] error:', err);
       return c.json({ error: 'Failed to load commitments' }, 500);

@@ -97,13 +97,16 @@ describe('GET /api/people — empty people directory', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns empty people array', async () => {
+  it('returns empty people array with pagination metadata', async () => {
     const router = createPeopleRouter(tmpDir);
     const { status, json } = await req(router, 'GET', '/');
     assert.equal(status, 200);
-    const body = json as { people: unknown[] };
+    const body = json as { people: unknown[]; total: number; offset: number; limit: number };
     assert.ok(Array.isArray(body.people));
     assert.equal(body.people.length, 0);
+    assert.equal(body.total, 0);
+    assert.equal(body.offset, 0);
+    assert.equal(body.limit, 25);
   });
 });
 
@@ -135,8 +138,9 @@ describe('GET /api/people — person without AUTO_PERSON_MEMORY block', () => {
       openCommitments: number;
       lastMeetingDate: string | null;
       trend: string | null;
-    }> };
+    }>; total: number; offset: number; limit: number };
     assert.equal(body.people.length, 1);
+    assert.equal(body.total, 1);
     const person = body.people[0];
     assert.ok(person, 'person should exist');
     assert.equal(person.slug, 'jane-doe');
@@ -759,5 +763,62 @@ Some notes.
     assert.ok(raw.includes('role: Developer'), 'role should be preserved');
     assert.ok(raw.includes('company: Test Co'), 'company should be preserved');
     assert.ok(raw.includes('email: test@test.com'), 'email should be preserved');
+  });
+});
+
+// ── pagination tests ──────────────────────────────────────────────────────────
+
+describe('GET /api/people — pagination', () => {
+  let tmpDir: string;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-people-test-pagination-'));
+    await mkdir(join(tmpDir, 'people', 'customers'), { recursive: true });
+    await mkdir(join(tmpDir, '.arete'), { recursive: true });
+
+    // Create 5 people for pagination tests
+    for (let i = 1; i <= 5; i++) {
+      const content = `---
+name: Person ${i}
+role: Role ${i}
+company: Company ${i}
+email: person${i}@test.com
+---
+
+# Person ${i}
+`;
+      await writeFile(join(tmpDir, 'people', 'customers', `person-${i}.md`), content, 'utf8');
+    }
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('respects limit and offset query params', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?limit=2&offset=1');
+    assert.equal(status, 200);
+    const body = json as { people: Array<{ name: string }>; total: number; offset: number; limit: number };
+    assert.equal(body.people.length, 2);
+    assert.equal(body.total, 5);
+    assert.equal(body.offset, 1);
+    assert.equal(body.limit, 2);
+  });
+
+  it('caps limit at 100', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/?limit=200');
+    assert.equal(status, 200);
+    const body = json as { limit: number };
+    assert.equal(body.limit, 100);
+  });
+
+  it('uses default limit of 25', async () => {
+    const router = createPeopleRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/');
+    assert.equal(status, 200);
+    const body = json as { limit: number };
+    assert.equal(body.limit, 25);
   });
 });
