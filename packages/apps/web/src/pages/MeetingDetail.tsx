@@ -92,6 +92,10 @@ export default function MeetingDetail() {
   const [navConfirmOpen, setNavConfirmOpen] = useState(false);
   const [pendingNavSlug, setPendingNavSlug] = useState<string | null>(null);
 
+  // Reprocess confirmation dialog
+  const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
+  const [clearApprovedOnReprocess, setClearApprovedOnReprocess] = useState(true);
+
   // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
@@ -239,8 +243,8 @@ export default function MeetingDetail() {
   };
 
   // Process Meeting — start job, open SSE stream modal
-  const handleProcessClick = () => {
-    processMutation.mutate(undefined, {
+  const handleProcessClick = (options?: { clearApproved?: boolean }) => {
+    processMutation.mutate(options, {
       onSuccess: (data) => {
         setStreamOutput("");
         setStreamDone(false);
@@ -260,7 +264,7 @@ export default function MeetingDetail() {
             status?: string;
           };
           if (payload.text) {
-            setStreamOutput((prev) => prev + payload.text);
+            setStreamOutput((prev) => prev + payload.text + "\n");
           }
           if (payload.done) {
             es.close();
@@ -271,6 +275,9 @@ export default function MeetingDetail() {
               toast.error("Processing failed");
             } else {
               toast.success("Processing complete");
+              // Auto-refresh data after successful processing
+              void queryClient.invalidateQueries({ queryKey: ["meeting", safeSlug] });
+              void queryClient.invalidateQueries({ queryKey: ["meetings"] });
             }
           }
         };
@@ -425,14 +432,7 @@ export default function MeetingDetail() {
                   setSummaryOpen={setSummaryOpen}
                   readOnly={true}
                 />
-                <ParsedItemsSection
-                  parsedSections={meeting.parsedSections}
-                  onToggleActionItem={(index, completed) => {
-                    // TODO: Implement toggle action item
-                    console.log('Toggle action item', index, completed);
-                    toast.info('Action item toggle not yet implemented');
-                  }}
-                />
+                <ApprovedItemsSection approvedItems={meeting.approvedItems} />
               </>
             )}
 
@@ -491,8 +491,8 @@ export default function MeetingDetail() {
               meeting={meeting}
               isSynced={isSynced}
               approved={isApproved || saveApproveMutation.isSuccess}
-              onProcessClick={handleProcessClick}
-              onReprocessClick={handleProcessClick}
+              onProcessClick={() => handleProcessClick()}
+              onReprocessClick={() => setReprocessDialogOpen(true)}
               onDeleteClick={handleDeleteClick}
             />
           </div>
@@ -582,6 +582,53 @@ export default function MeetingDetail() {
               }}
             >
               Continue anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprocess confirmation dialog */}
+      <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reprocess Meeting</DialogTitle>
+            <DialogDescription>
+              The AI will re-analyze the transcript and extract new action items, decisions, and learnings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={clearApprovedOnReprocess}
+                onChange={(e) => setClearApprovedOnReprocess(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">
+                Clear previously approved items
+              </span>
+            </label>
+            <p className="text-xs text-muted-foreground mt-2 ml-7">
+              If unchecked, new items will be added alongside existing approved items.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setReprocessDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setReprocessDialogOpen(false);
+                handleProcessClick({ clearApproved: clearApprovedOnReprocess });
+              }}
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Reprocess
             </Button>
           </DialogFooter>
         </DialogContent>
