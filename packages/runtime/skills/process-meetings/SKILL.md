@@ -249,8 +249,8 @@ Do **not** write staged sections to the meeting file in this mode.
 **Topic derivation**: Combine the meeting title with the first 100 characters of the approved Summary from Step 4. Example: `"Product Review — Discussed API-first priorities and JWT auth decision for Q2..."`.
 
 **Gather these context sections**:
-1. **Strategy & goals** — `arete context --for "<topic>"` (top 3 results, max 300 words each)
-2. **Existing memory** — `arete memory search "<topic>"` (top 5 results, max 200 words each)
+1. **Strategy & goals** — `arete search "<topic>" --scope context` (top 3 results, max 300 words each)
+2. **Existing memory** — `arete search "<topic>" --scope memory` (top 5 results, max 200 words each)
 3. **People context** — For each attendee: stances, open items, and relationship health only (from `arete people show <slug> --memory`)
 
 **Reuse rule**: If `arete people show <slug> --memory` was already run for attendees earlier in this skill run, reuse that output — do **not** re-run `arete people show`.
