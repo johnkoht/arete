@@ -12,11 +12,13 @@ import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
 import {
   runSearch,
   parseQmdResults,
+  deriveIntent,
   type SearchDeps,
   type SearchOutput,
   type SearchErrorOutput,
   type PersonResolution,
   type TimelineOutput,
+  type AnswerOutput,
 } from '../../src/commands/search.js';
 
 /** Install a workspace and inject qmd_collections into arete.yaml */
@@ -1114,6 +1116,385 @@ describe('runSearch', () => {
       for (const item of output.items) {
         assert.notEqual(item.type, 'meeting');
       }
+    });
+  });
+});
+
+describe('deriveIntent', () => {
+  it('derives "past decisions and rationale" for "what did we decide" queries', () => {
+    assert.equal(deriveIntent('what did we decide about the API?'), 'past decisions and rationale');
+    assert.equal(deriveIntent('What did we decide on pricing?'), 'past decisions and rationale');
+  });
+
+  it('derives "finding people or contacts" for "who should I talk to" queries', () => {
+    assert.equal(deriveIntent('who should I talk to about billing?'), 'finding people or contacts');
+    assert.equal(deriveIntent('Who should I talk to for support?'), 'finding people or contacts');
+  });
+
+  it('derives "historical context and reasoning" for "why did we" queries', () => {
+    assert.equal(deriveIntent('why did we choose TypeScript?'), 'historical context and reasoning');
+    assert.equal(deriveIntent('Why did we drop feature X?'), 'historical context and reasoning');
+  });
+
+  it('derives "timeline and dates of events" for "when did we" queries', () => {
+    assert.equal(deriveIntent('when did we launch the product?'), 'timeline and dates of events');
+    assert.equal(deriveIntent('When did we start the project?'), 'timeline and dates of events');
+  });
+
+  it('derives "definitions and explanations" for "what is/are" queries', () => {
+    assert.equal(deriveIntent('what is our pricing model?'), 'definitions and explanations');
+    assert.equal(deriveIntent('What are the main features?'), 'definitions and explanations');
+  });
+
+  it('derives "processes and procedures" for "how do we" queries', () => {
+    assert.equal(deriveIntent('how do we deploy to production?'), 'processes and procedures');
+    assert.equal(deriveIntent('How do we onboard new customers?'), 'processes and procedures');
+  });
+
+  it('returns undefined for queries without matching patterns', () => {
+    assert.equal(deriveIntent('search for meetings'), undefined);
+    assert.equal(deriveIntent('find documents about API'), undefined);
+    assert.equal(deriveIntent('show me recent decisions'), undefined);
+  });
+});
+
+describe('runSearch --answer mode', () => {
+  describe('mutual exclusivity', () => {
+    it('exits with error when both --timeline and --answer are specified', async () => {
+      let exitCode: number | undefined;
+      const originalExit = process.exit;
+      process.exit = ((code: number) => {
+        exitCode = code;
+        throw new Error('process.exit');
+      }) as never;
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('test query', { timeline: true, answer: true, json: true }, createMockDeps());
+      } catch (e) {
+        // Expected
+      } finally {
+        process.exit = originalExit;
+        console.log = originalLog;
+      }
+
+      assert.equal(exitCode, 1);
+      const output = JSON.parse(logs[0]) as SearchErrorOutput;
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('mutually exclusive'));
+    });
+  });
+
+  describe('AI configuration check', () => {
+    it('warns when AI not configured but still returns results', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        ai: {
+          isConfigured: () => false,
+          call: async () => ({ text: 'Should not be called' }),
+        },
+      });
+
+      try {
+        await runSearch('test query', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.answer, null);
+      assert.ok(output.error.includes('AI not configured'));
+      // Should still have results
+      assert.ok(Array.isArray(output.results));
+    });
+  });
+
+  describe('intent derivation', () => {
+    it('passes --intent to QMD when intent is derived', async () => {
+      let capturedArgs: string[] = [];
+
+      const deps = createMockDeps({
+        execFileAsync: async (_file: string, args: string[]) => {
+          capturedArgs = args;
+          return { stdout: '[]', stderr: '' };
+        },
+        ai: {
+          isConfigured: () => true,
+          call: async () => ({ text: 'Synthesized answer' }),
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('what did we decide about the API?', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      // Should include --intent flag
+      const intentIndex = capturedArgs.indexOf('--intent');
+      assert.ok(intentIndex >= 0, 'Should include --intent flag');
+      assert.equal(capturedArgs[intentIndex + 1], 'past decisions and rationale');
+
+      // Should include intent in output
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.intent, 'past decisions and rationale');
+    });
+
+    it('does not pass --intent to QMD when no pattern matches', async () => {
+      let capturedArgs: string[] = [];
+
+      const deps = createMockDeps({
+        execFileAsync: async (_file: string, args: string[]) => {
+          capturedArgs = args;
+          return { stdout: '[]', stderr: '' };
+        },
+        ai: {
+          isConfigured: () => true,
+          call: async () => ({ text: 'Synthesized answer' }),
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('find documents about API', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      // Should NOT include --intent flag
+      assert.ok(!capturedArgs.includes('--intent'), 'Should not include --intent flag');
+
+      // Should not include intent in output
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.intent, undefined);
+    });
+  });
+
+  describe('successful synthesis', () => {
+    it('returns synthesized answer with results', async () => {
+      let capturedPrompt: string | undefined;
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/context/api-design.md',
+              snippet: '# API Design\n\nWe use REST for the main API.',
+              score: 0.95,
+            },
+          ]),
+          stderr: '',
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async (_task: string, prompt: string) => {
+            capturedPrompt = prompt;
+            return { text: 'Based on the search results, we use REST for the main API.' };
+          },
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('what is our API design?', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.answer, 'Based on the search results, we use REST for the main API.');
+      assert.equal(output.results.length, 1);
+      assert.equal(output.error, undefined);
+
+      // Prompt should include the query and results
+      assert.ok(capturedPrompt?.includes('what is our API design?'));
+      assert.ok(capturedPrompt?.includes('API Design'));
+    });
+
+    it('returns null answer when no results', async () => {
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: '[]',
+          stderr: '',
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async () => {
+            throw new Error('Should not be called with no results');
+          },
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('nonexistent topic', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.answer, null);
+      assert.equal(output.results.length, 0);
+    });
+  });
+
+  describe('AI error handling', () => {
+    it('handles AI synthesis failure gracefully', async () => {
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/context/docs.md',
+              snippet: '# Documentation\n\nSome content.',
+              score: 0.9,
+            },
+          ]),
+          stderr: '',
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async () => {
+            throw new Error('API rate limit exceeded');
+          },
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('test query', { answer: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.answer, null);
+      assert.equal(output.error, 'API rate limit exceeded');
+      // Should still have results
+      assert.equal(output.results.length, 1);
+    });
+  });
+
+  describe('scope and person filters', () => {
+    it('combines --answer with --scope filter', async () => {
+      let capturedArgs: string[] = [];
+
+      const deps = createMockDeps({
+        execFileAsync: async (_file: string, args: string[]) => {
+          capturedArgs = args;
+          return {
+            stdout: JSON.stringify([
+              {
+                file: 'qmd://test-memory/memory/decisions.md',
+                snippet: '# Decisions\n\nWe decided to use GraphQL.',
+                score: 0.9,
+              },
+            ]),
+            stderr: '',
+          };
+        },
+        ai: {
+          isConfigured: () => true,
+          call: async () => ({ text: 'We decided to use GraphQL.' }),
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('what did we decide?', { answer: true, scope: 'memory', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      // Should pass scope to QMD
+      assert.ok(capturedArgs.includes('-c'));
+      assert.ok(capturedArgs.includes('test-memory'));
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.scope, 'memory');
+      assert.ok(output.answer);
+    });
+
+    it('combines --answer with --person filter', async () => {
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/meetings/with-jane.md',
+              snippet: '# Meeting with Jane Doe\n\nJane shared the roadmap.',
+              score: 0.95,
+            },
+            {
+              file: 'qmd://test-all/meetings/team-sync.md',
+              snippet: '# Team Sync\n\nBob presented updates.',
+              score: 0.85,
+            },
+          ]),
+          stderr: '',
+        }),
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async () => ({ text: 'Jane shared the roadmap in the meeting.' }),
+        },
+      });
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      try {
+        await runSearch('meetings', { answer: true, person: 'jane', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      // Person filter should be applied before synthesis
+      assert.equal(output.results.length, 1);
+      assert.ok(output.results[0].snippet.includes('Jane'));
+      assert.ok(output.answer);
     });
   });
 });
