@@ -16,6 +16,7 @@ import {
   type SearchOutput,
   type SearchErrorOutput,
   type PersonResolution,
+  type TimelineOutput,
 } from '../../src/commands/search.js';
 
 /** Install a workspace and inject qmd_collections into arete.yaml */
@@ -819,6 +820,300 @@ describe('runSearch', () => {
       assert.equal(output.success, true);
       assert.equal(output.scope, 'meetings');
       assert.equal(output.results.length, 1);
+    });
+  });
+
+  describe('timeline mode', () => {
+    /** Create mock timeline data */
+    function createMockTimeline() {
+      return {
+        query: 'test query',
+        items: [
+          {
+            type: 'decisions' as const,
+            title: 'Decision about API',
+            content: 'We decided to use REST for the API.',
+            date: '2024-01-15',
+            source: 'decisions.md',
+            relevanceScore: 0.9,
+          },
+          {
+            type: 'meeting' as const,
+            title: 'Team Planning Meeting',
+            content: 'Discussed Q1 roadmap.',
+            date: '2024-01-10',
+            source: '2024-01-10-team-planning.md',
+            relevanceScore: 0.85,
+          },
+          {
+            type: 'learnings' as const,
+            title: 'Learning about caching',
+            content: 'Caching improved performance by 50%.',
+            date: '2024-01-05',
+            source: 'learnings.md',
+            relevanceScore: 0.8,
+          },
+        ],
+        themes: ['API design', 'Performance'],
+        dateRange: { start: '2024-01-05', end: '2024-01-15' },
+      };
+    }
+
+    it('returns timeline output with --timeline flag', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => createMockTimeline(),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.query, 'test query');
+      assert.equal(output.scope, 'all');
+      assert.equal(output.items.length, 3);
+      assert.deepEqual(output.themes, ['API design', 'Performance']);
+      assert.ok(output.dateRange);
+      assert.equal(output.dateRange.start, '2024-01-05');
+      assert.equal(output.dateRange.end, '2024-01-15');
+    });
+
+    it('timeline items have correct schema', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => createMockTimeline(),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      const firstItem = output.items[0];
+      
+      // Check required fields exist
+      assert.ok('date' in firstItem);
+      assert.ok('title' in firstItem);
+      assert.ok('source' in firstItem);
+      assert.ok('type' in firstItem);
+      
+      // Check values
+      assert.equal(firstItem.date, '2024-01-15');
+      assert.equal(firstItem.title, 'Decision about API');
+      assert.equal(firstItem.source, 'decisions.md');
+      assert.equal(firstItem.type, 'decisions');
+    });
+
+    it('filters timeline by --days', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      let capturedRange: { start?: string; end?: string } | undefined;
+
+      const deps = createMockDeps({
+        getTimeline: async (_query, _paths, range) => {
+          capturedRange = range;
+          return createMockTimeline();
+        },
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, days: '30', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      // Should have computed a date range
+      assert.ok(capturedRange, 'Date range should be passed');
+      assert.ok(capturedRange.start, 'Start date should be set');
+      assert.ok(capturedRange.end, 'End date should be set');
+      
+      // End date should be today
+      const today = new Date().toISOString().slice(0, 10);
+      assert.equal(capturedRange.end, today);
+      
+      // Start date should be approximately 30 days ago
+      const startDate = new Date(capturedRange.start);
+      const endDate = new Date(capturedRange.end);
+      const daysDiff = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      assert.equal(daysDiff, 30);
+    });
+
+    it('filters timeline by --scope memory', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => createMockTimeline(),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, scope: 'memory', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.scope, 'memory');
+      // Should exclude meeting items
+      assert.equal(output.items.length, 2);
+      for (const item of output.items) {
+        assert.notEqual(item.type, 'meeting');
+      }
+    });
+
+    it('filters timeline by --scope meetings', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => createMockTimeline(),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, scope: 'meetings', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.scope, 'meetings');
+      // Should only include meeting items
+      assert.equal(output.items.length, 1);
+      assert.equal(output.items[0].type, 'meeting');
+    });
+
+    it('filters timeline by --person', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const mockTimeline = {
+        query: 'test query',
+        items: [
+          {
+            type: 'meeting' as const,
+            title: 'Meeting with Jane Doe',
+            content: 'Jane presented the roadmap.',
+            date: '2024-01-15',
+            source: '2024-01-15-meeting.md',
+            relevanceScore: 0.9,
+          },
+          {
+            type: 'meeting' as const,
+            title: 'Team Standup',
+            content: 'Bob shared updates.',
+            date: '2024-01-10',
+            source: '2024-01-10-standup.md',
+            relevanceScore: 0.85,
+          },
+        ],
+        themes: ['Roadmap'],
+        dateRange: { start: '2024-01-10', end: '2024-01-15' },
+      };
+
+      const deps = createMockDeps({
+        getTimeline: async () => mockTimeline,
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, person: 'jane', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      // Should only include items mentioning Jane
+      assert.equal(output.items.length, 1);
+      assert.ok(output.items[0].title.includes('Jane'));
+    });
+
+    it('returns empty items array when no timeline matches', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => ({
+          query: 'test query',
+          items: [],
+          themes: [],
+          dateRange: { start: undefined, end: undefined },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.items.length, 0);
+      assert.deepEqual(output.themes, []);
+    });
+
+    it('combines --scope and --days filters', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      let capturedRange: { start?: string; end?: string } | undefined;
+
+      const deps = createMockDeps({
+        getTimeline: async (_query, _paths, range) => {
+          capturedRange = range;
+          return createMockTimeline();
+        },
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, scope: 'memory', days: '7', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]);
+      assert.equal(output.success, true);
+      assert.equal(output.scope, 'memory');
+      
+      // Should have date range
+      assert.ok(capturedRange, 'Date range should be passed');
+      
+      // Should exclude meetings (scope filter)
+      for (const item of output.items) {
+        assert.notEqual(item.type, 'meeting');
+      }
     });
   });
 });

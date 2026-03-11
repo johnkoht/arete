@@ -16,6 +16,18 @@
  *   total: number;
  * }
  * ```
+ *
+ * TimelineOutput (--timeline flag):
+ * ```typescript
+ * interface TimelineOutput {
+ *   success: boolean;
+ *   query: string;
+ *   scope: QmdScope;
+ *   items: Array<{ date: string; title: string; source: string; type: string }>;
+ *   themes: string[];
+ *   dateRange: { start: string; end: string };
+ * }
+ * ```
  */
 
 import { execFile, spawnSync } from 'node:child_process';
@@ -30,6 +42,8 @@ import type {
   StorageAdapter,
   ResolvedEntity,
   WorkspacePaths,
+  DateRange,
+  MemoryTimeline,
 } from '@arete/core';
 import { header, info, error, listItem, warn } from '../formatters.js';
 
@@ -82,6 +96,27 @@ export interface SearchErrorOutput {
     | 'PERSON_AMBIGUOUS';
   /** Resolution options for PERSON_AMBIGUOUS */
   options?: Array<{ name: string; slug: string; category: string }>;
+}
+
+/** Timeline item in output */
+export interface TimelineOutputItem {
+  date: string;
+  title: string;
+  source: string;
+  type: string;
+}
+
+/** Timeline output schema (--timeline flag) */
+export interface TimelineOutput {
+  success: boolean;
+  query: string;
+  scope: QmdScope;
+  items: TimelineOutputItem[];
+  themes: string[];
+  dateRange: {
+    start: string;
+    end: string;
+  };
 }
 
 /**
@@ -193,6 +228,13 @@ export interface SearchDeps {
     services: Awaited<ReturnType<typeof createServices>>,
     paths: WorkspacePaths,
   ) => Promise<PersonResolution>;
+  /** Get timeline from memory service. Injected for testing. */
+  getTimeline?: (
+    query: string,
+    paths: WorkspacePaths,
+    range?: DateRange,
+    services?: Awaited<ReturnType<typeof createServices>>,
+  ) => Promise<MemoryTimeline>;
 }
 
 /** Default person resolution using EntityService */
@@ -243,6 +285,16 @@ function getDefaultDeps(): SearchDeps {
 }
 
 /**
+ * Compute start date for --days filter.
+ * Returns YYYY-MM-DD string for N days ago.
+ */
+function computeDateRangeStart(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * Run search command logic. Exported for testing.
  */
 export async function runSearch(
@@ -252,6 +304,8 @@ export async function runSearch(
     limit?: string;
     json?: boolean;
     person?: string;
+    timeline?: boolean;
+    days?: string;
   },
   deps: SearchDeps = getDefaultDeps(),
 ): Promise<void> {
@@ -398,6 +452,136 @@ export async function runSearch(
     process.exit(1);
   }
 
+  // Timeline mode — uses MemoryService.getTimeline() instead of QMD
+  if (opts.timeline) {
+    const paths = services.workspace.getPaths(root);
+    
+    // Build date range for --days filter
+    let range: DateRange | undefined;
+    if (opts.days) {
+      const days = parseInt(opts.days, 10);
+      if (!isNaN(days) && days >= 0) {
+        range = {
+          start: computeDateRangeStart(days),
+          end: new Date().toISOString().slice(0, 10),
+        };
+      }
+    }
+
+    // Get timeline from MemoryService
+    const getTimeline = deps.getTimeline ?? (async (q, p, r) => services.memory.getTimeline(q, p, r));
+    const timeline = await getTimeline(query, paths, range, services);
+
+    // Apply person filter if specified
+    let filteredItems = timeline.items;
+    if (personFilter) {
+      const nameLower = personFilter.name.toLowerCase();
+      const slugLower = personFilter.slug.toLowerCase();
+      filteredItems = timeline.items.filter((item) => {
+        const titleLower = item.title.toLowerCase();
+        const contentLower = item.content.toLowerCase();
+        const sourceLower = item.source.toLowerCase();
+        return (
+          titleLower.includes(nameLower) ||
+          titleLower.includes(slugLower) ||
+          contentLower.includes(nameLower) ||
+          contentLower.includes(slugLower) ||
+          sourceLower.includes(nameLower) ||
+          sourceLower.includes(slugLower)
+        );
+      });
+    }
+
+    // Apply scope filter for timeline items (memory/meetings only have real data)
+    if (scope === 'memory') {
+      filteredItems = filteredItems.filter((item) => item.type !== 'meeting');
+    } else if (scope === 'meetings') {
+      filteredItems = filteredItems.filter((item) => item.type === 'meeting');
+    }
+
+    // Map to output schema
+    const outputItems: TimelineOutputItem[] = filteredItems.map((item) => ({
+      date: item.date,
+      title: item.title,
+      source: item.source,
+      type: item.type,
+    }));
+
+    // Calculate effective date range from filtered items
+    const dates = filteredItems.map((i) => i.date).filter((d) => d.length > 0);
+    const effectiveDateRange = {
+      start: dates.length > 0 ? dates[dates.length - 1] : (range?.start ?? ''),
+      end: dates.length > 0 ? dates[0] : (range?.end ?? ''),
+    };
+
+    // JSON output
+    if (opts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            success: true,
+            query,
+            scope,
+            items: outputItems,
+            themes: timeline.themes,
+            dateRange: effectiveDateRange,
+          } satisfies TimelineOutput,
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    // Human-readable output
+    header('Timeline Results');
+    console.log(chalk.dim(`  Query: "${query}"`));
+    console.log(chalk.dim(`  Scope: ${scope}`));
+    if (range?.start) {
+      console.log(chalk.dim(`  Date range: ${effectiveDateRange.start} to ${effectiveDateRange.end}`));
+    }
+    console.log(chalk.dim(`  Found: ${outputItems.length} item(s)`));
+    console.log('');
+
+    // Show recurring themes
+    if (timeline.themes.length > 0) {
+      console.log(chalk.bold('  Recurring Themes:'));
+      for (const theme of timeline.themes) {
+        console.log(chalk.cyan(`    • ${theme}`));
+      }
+      console.log('');
+    }
+
+    if (outputItems.length === 0) {
+      info('No timeline items found');
+      return;
+    }
+
+    // Group items by date for display
+    const itemsByDate = new Map<string, TimelineOutputItem[]>();
+    for (const item of outputItems) {
+      const dateKey = item.date || 'Unknown date';
+      const existing = itemsByDate.get(dateKey) ?? [];
+      existing.push(item);
+      itemsByDate.set(dateKey, existing);
+    }
+
+    // Display items grouped by date (newest first)
+    const sortedDates = Array.from(itemsByDate.keys()).sort((a, b) => b.localeCompare(a));
+    for (const dateKey of sortedDates) {
+      console.log(chalk.bold(`  ${dateKey}`));
+      const items = itemsByDate.get(dateKey) ?? [];
+      for (const item of items) {
+        const typeTag = chalk.dim(`[${item.type}]`);
+        console.log(`    ${typeTag} ${item.title}`);
+        console.log(chalk.dim(`      ${item.source}`));
+      }
+      console.log('');
+    }
+
+    return;
+  }
+
   // Build QMD command
   const limit = opts.limit ? parseInt(opts.limit, 10) : 15;
   const args = ['query', query, '--json', '-n', String(limit)];
@@ -493,11 +677,20 @@ export function registerSearchCommand(program: Command): void {
     )
     .option('--limit <n>', 'Maximum results', '15')
     .option('--person <name>', 'Filter by person (name or slug)')
+    .option('--timeline', 'Show results chronologically with themes')
+    .option('--days <n>', 'Limit to last N days (with --timeline)')
     .option('--json', 'Output JSON')
     .action(
       async (
         query: string,
-        opts: { scope?: string; limit?: string; person?: string; json?: boolean },
+        opts: {
+          scope?: string;
+          limit?: string;
+          person?: string;
+          timeline?: boolean;
+          days?: string;
+          json?: boolean;
+        },
       ) => {
         await runSearch(query, opts);
       },
