@@ -103,12 +103,20 @@ const VALID_PEOPLE_PROCESSING = new Set(['off', 'ask', 'on']);
 /**
  * Normalize a resolved config to clamp any invalid enum values to safe defaults.
  * Guards against invalid values written into arete.yaml (e.g. `peopleProcessing: "sometimes"`).
+ * Also handles migration from old config formats to new ones.
  */
 function normalizeConfig(config: AreteConfig): AreteConfig {
   const pp = config.settings?.conversations?.peopleProcessing;
   if (!VALID_PEOPLE_PROCESSING.has(pp as string)) {
     config.settings.conversations.peopleProcessing = 'off';
   }
+
+  // Migrate old qmd_collection to new qmd_collections format
+  // If old format exists but new doesn't, treat old collection as 'all' scope
+  if (config.qmd_collection && !config.qmd_collections) {
+    config.qmd_collections = { all: config.qmd_collection };
+  }
+
   return config;
 }
 
