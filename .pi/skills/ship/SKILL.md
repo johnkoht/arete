@@ -29,11 +29,11 @@ Automate the complete build workflow from approved plan to PR-ready code. The bu
 This skill uses the following tools:
 
 ```typescript
-// Run existing skills
-subagent({ agent: "developer", task: "<prompt>", skill: "run-pre-mortem" })
-subagent({ agent: "developer", task: "<prompt>", skill: "review-plan" })
-subagent({ agent: "developer", task: "<prompt>", skill: "plan-to-prd" })
-subagent({ agent: "developer", task: "<prompt>", skill: "execute-prd" })
+// Dispatch agents for skill work
+subagent({ agent: "developer", task: "<prompt>", agentScope: "project" })
+subagent({ agent: "reviewer", task: "<prompt>", agentScope: "project" })
+subagent({ agent: "engineering-lead", task: "<prompt>", agentScope: "project" })
+subagent({ agent: "orchestrator", task: "<prompt>", agentScope: "project" })
 
 // Memory and context
 arete memory search "<query>"
@@ -320,8 +320,10 @@ When invoking the skill, include memory synthesis in the task prompt:
 ```typescript
 subagent({
   agent: "developer",
-  skill: "plan-to-prd",
-  task: `Convert the plan at dev/work/plans/${slug}/plan.md to PRD format.
+  agentScope: "project",
+  task: `Load and follow the plan-to-prd skill at .pi/skills/plan-to-prd/SKILL.md.
+
+Convert the plan at dev/work/plans/${slug}/plan.md to PRD format.
 
 ## Memory Context (from Phase 2.1)
 ${memorySynthesis}
@@ -723,6 +725,21 @@ detect_platform() {
 platform=$(detect_platform)
 ```
 
+##### Pre-Flight: Permission Check
+
+Before attempting terminal launch on macOS, verify Automation permissions:
+
+```bash
+# Check Automation permissions by running benign osascript
+if ! osascript -e 'tell application "System Events" to return name of current application' &>/dev/null; then
+  echo "⚠️ Automation permissions not granted for Terminal access"
+  echo "Grant access in: System Settings > Privacy & Security > Automation"
+  # Fall back to manual instructions
+fi
+```
+
+If the permission check fails, skip directly to the fallback message (Step 6) and provide manual instructions.
+
 ##### 2. macOS Terminal Launch (Primary Implementation)
 
 **V1 implements macOS only** per pre-mortem Risk 2 mitigation. Linux/Windows are documented for future implementation.
@@ -1015,6 +1032,28 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 - PRD path: `dev/work/plans/{slug}/prd.md`
 - Execution state path: `dev/executions/{slug}/`
 - Branch: `feature/{slug}`
+
+##### State Handoff (Phase 3 → Phase 4)
+
+When a new pi session starts in the worktree, it needs to know what to execute. Here's what persists and how it transfers:
+
+**What persists on disk**:
+- PRD at `dev/work/plans/{slug}/prd.md` — the full PRD with problem statement, tasks, and acceptance criteria
+- `dev/work/plans/{slug}/prd.json` — machine-readable task list with dependencies and status
+- Execution state at `dev/executions/{slug}/` — progress tracking, created by execute-prd skill
+
+**What the new session needs**:
+- Plan slug — to locate artifacts
+- PRD path — to read task definitions
+- Execution state path — to track/resume progress
+
+**How it's provided**:
+The pi startup message in Phase 3.3 includes the exact command to run:
+```
+Execute the PRD at dev/work/plans/{slug}/prd.md
+```
+
+This triggers the execute-prd skill which reads the PRD, creates execution state if needed, and begins task dispatch. All necessary context is on disk — no session state transfer required.
 
 ---
 
@@ -1662,8 +1701,8 @@ When failures occur, the ship skill is designed for **idempotent recovery**. Eac
 | Phase | Failure Point | State After Failure | Recovery Steps |
 |-------|--------------|---------------------|----------------|
 | 1.1 | Plan save fails | No artifacts | Re-run `/ship` — save is idempotent |
-| 1.2 | Pre-mortem errors | Plan saved, no pre-mortem | Re-run pre-mortem: `subagent skill:run-pre-mortem` |
-| 1.3 | Review errors | Plan + pre-mortem exist | Re-run review: `subagent skill:review-plan` |
+| 1.2 | Pre-mortem errors | Plan saved, no pre-mortem | Re-run pre-mortem skill via subagent |
+| 1.3 | Review errors | Plan + pre-mortem exist | Re-run review-plan skill via subagent |
 | **1.2/1.3** | **GATE PAUSE** | All artifacts present | **Address concerns, then `/ship resume`** |
 | 2.1 | Memory search fails | Pre-build complete | Re-run `/ship` from phase 2 (graceful: proceed without memory) |
 | 2.2 | PRD creation fails | Memory synthesis done | Re-run plan-to-prd skill manually |
@@ -1826,17 +1865,17 @@ cleanup_unmerged() {
   done
   echo "│                                                                 │"
   echo "│  Options:                                                       │"
-  echo "│    1. Type 'yes' to force cleanup (DESTRUCTIVE)                 │"
-  echo "│    2. Type 'no' to cancel                                       │"
+  echo "│    1. Type the branch name to force cleanup (DESTRUCTIVE)       │"
+  echo "│    2. Type anything else to cancel                              │"
   echo "│    3. Merge the PR first, then run cleanup again                │"
   echo "│                                                                 │"
   echo "└─────────────────────────────────────────────────────────────────┘"
   echo ""
   
-  # In an interactive session, prompt for confirmation
-  read -p "Force cleanup? (yes/no): " confirmation
+  # In an interactive session, prompt for confirmation with branch name
+  read -p "Type branch name to confirm force cleanup (${branch}): " confirmation
   
-  if [[ "${confirmation}" == "yes" ]]; then
+  if [[ "${confirmation}" == "${branch}" ]]; then
     force_cleanup "${slug}"
   else
     echo "❌ Cleanup cancelled"
