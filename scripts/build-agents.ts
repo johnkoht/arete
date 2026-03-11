@@ -340,10 +340,10 @@ function compressContent(content: string, filename: string): string {
  */
 function compressIntelligence(content: string): string {
   return `[Intelligence]|context+memory+resolution+briefing+routing
-|high_value:topic/project/person question→brief --for (searches everything); past decisions→memory search (3 files, high signal); person mentioned→resolve then people show --memory; community skill→check requires_briefing, run brief if true; after file edits→arete index
-|scope:memory search=3 files (decisions,learnings,observations); context=all workspace files; brief=context+memory+entities combined; timeline=memory+meetings temporal
-||context:arete context --for "query" → map primitives (Problem/User/Solution/Market/Risk) to workspace files; USE WHEN: general knowledge questions, "what do we know about X"
-||memory:arete memory search "query" → search .arete/memory/ items (decisions, learnings); USE WHEN: past decisions, institutional knowledge
+|high_value:topic/project/person question→brief --for (searches everything); past decisions→search --scope memory (3 files, high signal); person mentioned→resolve then people show --memory; community skill→check requires_briefing, run brief if true; after file edits→arete index
+|scope:search --scope memory=3 files (decisions,learnings,observations); search (default)=all workspace files; brief=context+memory+entities combined; timeline=search --timeline (memory+meetings temporal)
+||search:arete search "query" → unified search across all workspace files, memory, meetings; USE WHEN: general questions, "what do we know about X", finding related content
+||search_scoped:arete search "query" --scope memory → search .arete/memory/ items (decisions, learnings); USE WHEN: past decisions, institutional knowledge
 ||resolution:arete resolve "reference" → fuzzy match people, meetings, projects; FOLLOW WITH: arete people show <slug> --memory for full person context
 ||briefing:arete brief --for "query" → combine context+memory+entities; USE WHEN: substantial topics, task prep, community skills — most comprehensive service
 ||routing:arete route "query" → match skill/tool, suggest tier (fast/balanced/powerful); ALWAYS USE for PM actions

@@ -49,7 +49,7 @@ const GAP_SUGGESTIONS: Record<ProductPrimitive, string> = {
   User: 'Add user/persona details to context/users-personas.md or create people files in people/',
   Solution: 'Add product details to context/products-services.md',
   Market: 'Add competitive landscape to context/competitive-landscape.md',
-  Risk: 'Risks are often scattered across memory and projects — use arete memory search to find past decisions and learnings',
+  Risk: 'Risks are often scattered across memory and projects — use arete search --scope memory to find past decisions and learnings',
 };
 
 // ---------------------------------------------------------------------------
