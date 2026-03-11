@@ -1027,9 +1027,66 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 - CWD verified as worktree (not main repo)
 
 **Actions**:
-1. Verify CWD: `pwd` should match worktree path
-2. Load `execute-prd` skill
-3. Execute all tasks per PRD
+
+**Step 1: Verify CWD (Risk 7 Mitigation)**
+
+Before executing ANY code, verify you're in the worktree, not the main repo:
+
+```bash
+# Get current directory
+pwd
+
+# Should output something like:
+# /Users/john/code/arete.worktrees/{slug}
+# NOT /Users/john/code/arete
+
+# Verify worktree branch
+git branch --show-current
+# Should be: feature/{slug}
+```
+
+⚠️ **If CWD is wrong**: Stop immediately. Do NOT proceed with execute-prd. Report:
+> "CWD verification failed. Expected worktree path but found [current path]. Switch to worktree and restart."
+
+**Step 2: Invoke execute-prd**
+
+The execute-prd skill handles the full task execution loop. Invoke it with the plan slug:
+
+```markdown
+Load and follow the execute-prd skill (`.pi/skills/execute-prd/SKILL.md`).
+
+**PRD Path**: `dev/work/plans/{slug}/prd.md`
+**prd.json Path**: `dev/work/plans/{slug}/prd.json`
+**Execution State**: `dev/executions/{slug}/`
+
+Execute all tasks per the PRD. The skill handles:
+- Pre-mortem analysis
+- Task dispatch to developer subagents
+- Reviewer sanity checks and code reviews
+- Holistic review after completion
+- Progress tracking in execution state
+```
+
+The execute-prd skill will:
+1. Verify subagent tool availability (pre-flight check)
+2. Read and internalize the PRD
+3. Run pre-mortem risk analysis
+4. Execute each task in dependency order:
+   - Craft developer prompt with context
+   - Dispatch reviewer for pre-work sanity check
+   - Dispatch developer subagent
+   - Dispatch reviewer for code review
+   - Iterate until approved
+5. Update `dev/executions/{slug}/prd.json` after each task
+6. Perform holistic review when all tasks complete
+
+**Step 3: Monitor Quality Gates**
+
+During execute-prd, each task must pass quality gates:
+- `npm run typecheck` — TypeScript compilation
+- `npm test` — All tests pass
+
+If a task fails quality gates after 2 attempts, execute-prd will stop.
 
 **Exit Conditions**:
 - All tasks in `prd.json` status: "complete"
@@ -1041,24 +1098,94 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 | Condition | Action |
 |-----------|--------|
 | All tasks pass quality gates | → Proceed to Phase 4.2 |
-| Any task fails typecheck/tests | → **PAUSE** and report |
+| Any task fails typecheck/tests after 2 attempts | → **PAUSE** and report |
 | Task blocked/needs clarification | → **PAUSE** and report |
 
-**Handoff to 4.2**: Execution summary, task completion status
+**Pause Message Template (Build Failure)**:
+```markdown
+## ⏸️ Ship Paused — Build Gate
+
+**Reason**: Task {task-id} failed quality gates
+
+**Details**:
+- Task: {title}
+- Failure: {typecheck/tests}
+- Error: {error details}
+- Attempts: 2/2
+
+**Options**:
+1. **Fix** — Debug the issue and run `/ship resume`
+2. **Abort** — Cancel the ship: `git checkout main && rm -rf ../arete.worktrees/{slug}`
+
+**Execution State**: `dev/executions/{slug}/progress.md`
+```
+
+**Handoff to 4.2**: Execution summary, task completion status, execute-prd final report
 
 ---
 
 ### Phase 4.2: Final Review
 
 **Entry Conditions**:
-- Phase 4.1 complete
-- All tasks passed
+- Phase 4.1 complete (execute-prd finished)
+- All tasks in `prd.json` status: "complete"
 
 **Actions**:
-1. Spawn engineering lead for holistic review
-2. Review: Does implementation satisfy PRD problem statement?
-3. Review: Any gaps, edge cases, or integration issues?
-4. Assess: Ready to merge or needs rework?
+
+**Step 1: Spawn Engineering Lead for Holistic Review**
+
+```typescript
+subagent({
+  agent: "engineering-lead",
+  task: `Holistic review for PRD: {slug}
+
+**PRD**: Read \`dev/work/plans/{slug}/prd.md\` — focus on Problem Statement and Success Criteria
+**Execution State**: \`dev/executions/{slug}/\`
+**Progress Log**: \`dev/executions/{slug}/progress.md\`
+
+Perform a holistic review:
+
+1. **Problem Satisfaction**: Does the implementation solve the problem statement in the PRD?
+2. **Acceptance Criteria**: Are all ACs from each task verified as met?
+3. **Integration**: Do the parts work together? Any gaps between tasks?
+4. **Edge Cases**: Any obvious edge cases not covered?
+5. **Regressions**: Any signs of broken existing functionality?
+6. **Code Quality**: Consistent patterns, no obvious duplication?
+
+**Return your verdict in this format:**
+
+## Holistic Review: {slug}
+
+**Verdict**: READY | NEEDS_REWORK
+
+**Problem Satisfaction**: [Does implementation solve the stated problem?]
+
+**Task Verification**:
+| Task | AC Met | Notes |
+|------|--------|-------|
+| {id} | ✓/✗ | [any gaps] |
+...
+
+**Integration Assessment**: [How well do parts work together?]
+
+**Issues Found** (if NEEDS_REWORK):
+1. [Specific issue with fix recommendation]
+2. [Specific issue with fix recommendation]
+
+**Minor Improvements** (not blocking):
+- [Optional improvement]
+
+**Recommendation**: [READY: proceed to wrap | NEEDS_REWORK: address issues first]`,
+  agentScope: "project"
+})
+```
+
+**Step 2: Parse Review Verdict**
+
+Parse the engineering lead's response for:
+- **Verdict**: READY or NEEDS_REWORK
+- **Issues Found**: Specific blockers if NEEDS_REWORK
+- **Minor Improvements**: Note for ship report (non-blocking)
 
 **Exit Conditions**:
 - Final review complete
@@ -1068,10 +1195,30 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 
 | Condition | Action |
 |-----------|--------|
-| READY - implementation satisfies PRD | → Proceed to Phase 5.1 |
-| NEEDS_REWORK - significant issues | → **PAUSE** and report |
+| READY — implementation satisfies PRD | → Proceed to Phase 5.1 |
+| NEEDS_REWORK — significant issues | → **PAUSE** and report |
+| MINOR_ISSUES — small gaps, not blocking | → **PROCEED** (note in ship report) |
 
-**Handoff to 5.1**: Review verdict and notes
+**Pause Message Template (Needs Rework)**:
+```markdown
+## ⏸️ Ship Paused — Final Review Gate
+
+**Reason**: Engineering lead review found significant issues
+
+**Verdict**: NEEDS_REWORK
+
+**Issues**:
+{issues from eng lead review}
+
+**Options**:
+1. **Address** — Fix the issues and run `/ship resume`
+2. **Override** — Proceed anyway (issues become tech debt)
+3. **Abort** — Cancel the ship
+
+**Review Details**: `dev/executions/{slug}/final-review.md`
+```
+
+**Handoff to 5.1**: Review verdict, notes, any minor improvements to note in ship report
 
 ---
 
@@ -1083,15 +1230,116 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 - Phase 4.2 complete with READY verdict
 
 **Actions**:
-1. Create `memory/entries/YYYY-MM-DD_{slug}-learnings.md`
-2. Include: metrics, pre-mortem analysis, learnings, recommendations
-3. Update `memory/MEMORY.md` index
+
+**Step 1: Gather Metrics from Execution**
+
+Collect from `dev/executions/{slug}/`:
+- `prd.json` — task count, status distribution
+- `progress.md` — iterations, blockers, reflections
+- `status.json` — timing, token estimates
+- Pre-mortem risks vs outcomes
+
+**Step 2: Create Memory Entry**
+
+Create `memory/entries/YYYY-MM-DD_{slug}-learnings.md`:
+
+```markdown
+# {PRD Title} — Learnings
+
+**PRD**: `dev/work/plans/{slug}/prd.md`
+**Executed**: {date}
+**Duration**: {start to end time}
+
+## Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tasks | {completed}/{total} |
+| First-Attempt Success | {percentage}% |
+| Iterations | {count} |
+| Tests Added | +{count} |
+| Token Usage | ~{estimate} |
+
+## Pre-Mortem Analysis
+
+| Risk | Materialized? | Mitigation Applied? | Effective? |
+|------|--------------|---------------------|-----------|
+| {risk 1} | Yes/No | Yes/No | Yes/Partial/No |
+| {risk 2} | Yes/No | Yes/No | Yes/Partial/No |
+...
+
+**Surprises** (not in pre-mortem):
+- {positive or negative surprise}
+
+## What Worked Well
+
+- {Pattern that worked, be specific}
+- {Another pattern}
+
+## What Didn't Work
+
+- {Pattern that caused issues}
+- {Approach that needed iteration}
+
+## Subagent Reflections
+
+Synthesized from developer completion reports:
+- {Common theme from reflections}
+- {Suggestion that appeared multiple times}
+
+## Collaboration Patterns
+
+- {How did builder respond during gates?}
+- {Any corrections or preferences noted?}
+
+## Recommendations
+
+**Continue** (patterns to repeat):
+- {Pattern 1}
+- {Pattern 2}
+
+**Stop** (patterns to avoid):
+- {Pattern 1}
+
+**Start** (new practices to adopt):
+- {Practice 1}
+- {Practice 2}
+
+## Documentation Gaps
+
+- [ ] {File that needs update} — {what to add}
+
+## Refactor Items (if any)
+
+- `dev/work/plans/refactor-{name}/plan.md` — {one-line summary}
+```
+
+**Step 3: Update MEMORY.md Index**
+
+Add entry at the TOP of the Index section in `memory/MEMORY.md`:
+
+```markdown
+<!-- Add new entries at the top -->
+- YYYY-MM-DD: [{slug}-learnings](entries/YYYY-MM-DD_{slug}-learnings.md) — {one-line summary of what was built}. {N}/{N} tasks, {N} iterations, +{N} tests. Key: {one key insight}.
+```
+
+**Format Convention**:
+- Date prefix with colon
+- Link in brackets with relative path
+- Em dash (—) before summary
+- Summary: what was built, metrics, key insight
+- One line only, ~100-150 chars
+
+**Example**:
+```markdown
+- 2026-03-11: [ship-it-learnings](entries/2026-03-11_ship-it-learnings.md) — Ship skill build/wrap phases. 8/8 tasks, 0 iterations, +24 tests. Key: CWD verification before execute-prd essential.
+```
 
 **Exit Conditions**:
-- Memory entry created
-- MEMORY.md index updated
+- Memory entry created at `memory/entries/YYYY-MM-DD_{slug}-learnings.md`
+- MEMORY.md index updated with new line at top
 
-**Handoff to 5.2**: Entry path
+**Handoff to 5.2**: Entry path, execution summary
 
 ---
 
@@ -1099,18 +1347,103 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 
 **Entry Conditions**:
 - Phase 5.1 complete
-- Gotchas or invariants discovered during build
+- Execution state with progress and reflections
 
 **Actions**:
-1. Identify directories with new gotchas from build
-2. Create or update LEARNINGS.md files
-3. Add gotchas, invariants, or pre-edit checklist items
+
+**Step 1: Identify Gotchas from Build**
+
+Scan these sources for gotchas, invariants, and patterns:
+
+1. **Developer Reflections** (`dev/executions/{slug}/progress.md`):
+   - Did any task require iteration? Why?
+   - Did developers report unexpected complexity?
+   - Were there "This was harder because..." notes?
+
+2. **Reviewer Feedback** (from execute-prd logs):
+   - Were there ITERATE cycles? What was caught?
+   - Any patterns of issues across tasks?
+
+3. **Quality Gate Failures**:
+   - Did any task fail typecheck/tests initially?
+   - What was the root cause?
+
+4. **Pre-mortem Surprises**:
+   - Did risks materialize despite mitigations?
+   - Were there issues NOT in the pre-mortem?
+
+**Gotcha Categories to Look For**:
+- **Regression fixes** — What broke and why?
+- **First use of API/pattern** — Something new to this codebase
+- **Non-obvious design decisions** — "We chose X over Y because Z"
+- **Invariants discovered** — Constraints that must be preserved
+
+**Step 2: Map Gotchas to Directories**
+
+For each gotcha, identify the nearest appropriate LEARNINGS.md:
+
+```bash
+# Find existing LEARNINGS.md files
+find packages .pi -name "LEARNINGS.md" -type f
+
+# If no LEARNINGS.md in component dir, create one
+```
+
+**Directory Selection**:
+- Gotcha about `packages/core/src/services/` → `packages/core/src/services/LEARNINGS.md`
+- Gotcha about a skill → `.pi/skills/{skill}/LEARNINGS.md`
+- Cross-cutting gotcha → `.pi/standards/LEARNINGS.md` or `packages/core/LEARNINGS.md`
+
+**Step 3: Update LEARNINGS.md Files**
+
+For each LEARNINGS.md to update, add entries following the 7-section template:
+
+```markdown
+# {Component Name} — Learnings
+
+## Gotchas
+
+- **{Gotcha title}** ({date}): {What went wrong or could go wrong}. Fix: {How to avoid it}. Source: {PRD name or ticket}.
+
+## Invariants
+
+- **{Invariant}**: {What must always be true}. Violating this causes: {consequence}.
+
+## Pre-Edit Checklist
+
+Before editing files in this directory:
+- [ ] {Check item 1}
+- [ ] {Check item 2}
+
+## Patterns
+
+- **{Pattern name}**: {Description}. Example: `{file path}`.
+
+## Anti-Patterns
+
+- **{Anti-pattern}**: {What not to do}. Instead: {what to do}.
+
+## Test Considerations
+
+- {Testing notes for this component}
+
+## References
+
+- {Related LEARNINGS.md files}
+- {Relevant memory entries}
+```
+
+**Step 4: Handle "No New Learnings"**
+
+If no gotchas were discovered:
+- Verify by reviewing progress.md one more time
+- If genuinely none: Note in ship report: "No new LEARNINGS.md updates — all tasks passed first attempt, no new patterns discovered"
 
 **Exit Conditions**:
 - LEARNINGS.md files updated (if applicable)
-- OR noted that no new learnings found
+- OR noted that no new learnings found (and verified)
 
-**Handoff to 5.3**: Files updated list
+**Handoff to 5.3**: List of LEARNINGS.md files updated (or "None — verified")
 
 ---
 
@@ -1118,17 +1451,77 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 
 **Entry Conditions**:
 - Phases 5.1-5.2 complete
+- Memory entry created
+- LEARNINGS.md updated (if applicable)
 
 **Actions**:
-1. `git add -A`
-2. `git commit -m "feat: {slug} - implementation"`
-3. Optionally push branch: `git push -u origin feature/{slug}`
+
+**Step 1: Stage All Wrap Artifacts**
+
+```bash
+# Stage memory entry
+git add memory/entries/YYYY-MM-DD_{slug}-learnings.md
+
+# Stage MEMORY.md index update
+git add memory/MEMORY.md
+
+# Stage LEARNINGS.md updates (if any)
+git add -A "*.LEARNINGS.md" 2>/dev/null || true
+
+# Stage any execution state updates
+git add dev/executions/{slug}/
+
+# Verify what's staged
+git status
+```
+
+**Step 2: Commit with Standard Message**
+
+```bash
+git commit -m "feat: {slug} - implementation
+
+Executed via /ship skill.
+
+Tasks: {N}/{N} complete
+Tests: +{N} added
+Memory: entries/YYYY-MM-DD_{slug}-learnings.md
+
+PRD: dev/work/plans/{slug}/prd.md"
+```
+
+**Commit Message Format**:
+- Type: `feat` (new feature from PRD)
+- Scope: `{slug}` (matches plan slug)
+- Subject: `- implementation`
+- Body: execution summary, metrics, PRD reference
+
+**Step 3: Push Branch (Optional)**
+
+```bash
+# Push and set upstream
+git push -u origin feature/{slug}
+
+# Output shows PR creation URL
+```
+
+**Step 4: Record Final State**
+
+```bash
+# Get final commit SHA
+COMMIT_SHA=$(git rev-parse --short HEAD)
+echo "Implementation commit: $COMMIT_SHA"
+
+# Get branch name
+BRANCH=$(git branch --show-current)
+echo "Branch: $BRANCH"
+```
 
 **Exit Conditions**:
-- Implementation committed
-- Branch ready for PR
+- Implementation committed with standard message
+- Branch pushed (or ready to push)
+- Commit SHA and branch recorded
 
-**Handoff to 5.4**: Final commit SHA, branch name
+**Handoff to 5.4**: Final commit SHA, branch name, push status
 
 ---
 
@@ -1136,16 +1529,124 @@ The execute-prd skill will create its own execution state at `dev/executions/{sl
 
 **Entry Conditions**:
 - Phase 5.3 complete
+- All artifacts created
 
 **Actions**:
-1. Generate report using [templates/ship-report.md](./templates/ship-report.md)
-2. Include: phases completed, time, artifacts, branch/PR info
+
+**Step 1: Collect All Report Data**
+
+Gather from execution state and artifacts:
+
+```typescript
+const reportData = {
+  // Identity
+  slug: "{slug}",
+  startedAt: "{ISO timestamp from ship start}",
+  completedAt: "{current ISO timestamp}",
+  duration: "{calculated duration}",
+  
+  // Phases
+  completedPhases: 5,
+  
+  // Tasks (from prd.json)
+  tasksCompleted: N,
+  tasksTotal: N,
+  
+  // Quality
+  successRate: "{percentage of first-attempt success}",
+  testsAdded: N,
+  
+  // Gates
+  pauseCount: N,
+  pauseDetails: "{gate names if any paused}",
+  gates: {
+    premortem: "Passed",
+    review: "Passed", 
+    build: "Passed",
+    finalReview: "Passed"
+  },
+  
+  // Commits
+  commitCount: N,
+  artifactCommitSha: "{Phase 2.3 commit}",
+  implCommitSha: "{Phase 5.3 commit}",
+  
+  // Artifacts
+  planPath: "dev/work/plans/{slug}/plan.md",
+  premortermPath: "dev/work/plans/{slug}/pre-mortem.md",
+  reviewPath: "dev/work/plans/{slug}/review.md",
+  prdPath: "dev/work/plans/{slug}/prd.md",
+  prdJsonPath: "dev/work/plans/{slug}/prd.json",
+  executionStatePath: "dev/executions/{slug}/",
+  memoryEntryPath: "memory/entries/YYYY-MM-DD_{slug}-learnings.md",
+  
+  // Worktree
+  worktreePath: "/path/to/worktree",
+  branchName: "feature/{slug}",
+  
+  // Learnings
+  learningsUpdated: "{N files updated}" or "No updates needed",
+  learningsList: ["Key learning 1", "Key learning 2"],
+  continueList: ["Pattern to continue"],
+  stopList: ["Pattern to stop"],
+  startList: ["Practice to start"]
+}
+```
+
+**Step 2: Generate Report from Template**
+
+Use [templates/ship-report.md](./templates/ship-report.md) to generate the final report.
+
+Fill in all template fields from `reportData`. The template includes:
+- Summary table with metrics
+- Phase-by-phase completion status
+- Artifacts table with paths
+- Branch and PR information
+- Gate decisions table
+- Key learnings and recommendations
+
+**Step 3: Present Report**
+
+Present the completed ship report to the builder:
+
+```markdown
+# 🚢 Ship Complete: {slug}
+
+**Started**: {startedAt}
+**Completed**: {completedAt}  
+**Duration**: {duration}
+
+---
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Phases Completed | 5/5 |
+| Tasks Executed | {tasksCompleted}/{tasksTotal} |
+| Quality Gates | ✓ All passed |
+| Gate Pauses | {pauseCount} |
+| Commits | {commitCount} |
+
+---
+
+## Next Steps
+
+1. Review changes in worktree
+2. Create PR: `gh pr create --title "feat: {slug}" --body "PRD: dev/work/plans/{slug}/prd.md"`
+3. After merge: `/ship cleanup {slug}`
+
+---
+
+*Full report: See [templates/ship-report.md](./templates/ship-report.md) for complete format*
+```
 
 **Exit Conditions**:
-- Ship report presented to builder
+- Ship report generated
+- Report presented to builder
 - Skill complete
 
-**Final Output**: Ship report (see template)
+**Final Output**: Ship report with all metrics, artifacts, and next steps
 
 ---
 
