@@ -15,8 +15,8 @@ import { maskApiKey } from '../../src/commands/credentials.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Test fixtures
-const TEST_TMPDIR = join(tmpdir(), 'arete-credentials-test');
+// Test fixtures - use unique dir per test run to avoid parallel test interference
+const TEST_TMPDIR = join(tmpdir(), `arete-credentials-test-${process.pid}-${Date.now()}`);
 const ORIGINAL_HOME = process.env.HOME;
 
 // Helper to run CLI commands
@@ -32,6 +32,7 @@ function runCli(args: string, options: { env?: Record<string, string> } = {}): {
     ANTHROPIC_API_KEY: '',
     GOOGLE_API_KEY: '',
     OPENAI_API_KEY: '',
+    GROQ_API_KEY: '',
     ...options.env,
     // Redirect HOME to temp dir for isolated credential storage
     HOME: TEST_TMPDIR,
