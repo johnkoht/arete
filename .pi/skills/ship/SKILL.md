@@ -300,18 +300,115 @@ Produce **exactly 3-5 bullets** (per pre-mortem mitigation — avoid noise). Eac
 
 **Entry Conditions**:
 - Phase 2.1 complete
-- Memory synthesis available
+- Memory synthesis available (3-5 bullets from Phase 2.1)
 
 **Actions**:
 1. Load `plan-to-prd` skill
 2. Include memory synthesis in context
 3. Generate `prd.md` and `prd.json`
+4. Validate `prd.json` against schema
+
+#### Implementation Details
+
+##### 1. Invoke plan-to-prd with Memory Context
+
+When invoking the skill, include memory synthesis in the task prompt:
+
+```typescript
+subagent({
+  agent: "developer",
+  skill: "plan-to-prd",
+  task: `Convert the plan at dev/work/plans/${slug}/plan.md to PRD format.
+
+## Memory Context (from Phase 2.1)
+${memorySynthesis}
+
+## Instructions
+- Use memory insights to inform task acceptance criteria
+- Reference relevant LEARNINGS.md gotchas in task descriptions
+- Apply builder preferences from collaboration.md
+- Ensure tasks avoid documented anti-patterns from corrections
+
+Output prd.md and prd.json to dev/work/plans/${slug}/`
+})
+```
+
+##### 2. prd.json Validation
+
+After generation, validate the JSON against the schema. The schema is at `dev/autonomous/schema.ts` and provides `validatePRD()`:
+
+```bash
+# Quick structural validation (orchestrator can run)
+node -e "
+const prd = JSON.parse(require('fs').readFileSync('dev/work/plans/${slug}/prd.json', 'utf-8'));
+
+const errors = [];
+
+// Required fields
+if (!prd.name) errors.push('Missing: name');
+if (!prd.branchName) errors.push('Missing: branchName');
+if (!prd.goal) errors.push('Missing: goal');
+if (!prd.userStories?.length) errors.push('Missing: userStories (need at least 1)');
+
+// Task validation
+prd.userStories?.forEach((task, i) => {
+  if (!task.id) errors.push(\`Task \${i}: missing id\`);
+  if (!task.title) errors.push(\`Task \${i}: missing title\`);
+  if (!task.acceptanceCriteria?.length) errors.push(\`Task \${i}: missing acceptance criteria\`);
+  if (task.status !== 'pending') errors.push(\`Task \${i}: status should be 'pending'\`);
+});
+
+// Metadata validation
+if (prd.metadata?.totalTasks !== prd.userStories?.length) {
+  errors.push(\`metadata.totalTasks (\${prd.metadata?.totalTasks}) != actual (\${prd.userStories?.length})\`);
+}
+
+if (errors.length > 0) {
+  console.error('❌ Validation failed:');
+  errors.forEach(e => console.error('  - ' + e));
+  process.exit(1);
+} else {
+  console.log('✅ prd.json validation passed');
+  console.log(\`   - \${prd.userStories.length} tasks\`);
+  console.log(\`   - Branch: \${prd.branchName}\`);
+}
+"
+```
+
+##### 3. Error Handling
+
+| Error | Recovery |
+|-------|----------|
+| plan-to-prd skill fails | Log error, retry once. If retry fails, pause and report to builder. |
+| prd.md not created | Check skill output for errors. Common: plan structure unclear → ask builder to clarify. |
+| prd.json validation fails | Report specific validation errors. Fix in-place if obvious (e.g., missing status field). |
+| prd.json not created | prd-to-json step may have failed. Check if prd.md exists and re-run prd-to-json. |
+
+##### 4. Idempotent Behavior (Safe to Re-run)
+
+- **If prd.md exists**: Skip regeneration unless `--force` flag
+- **If prd.json exists**: Skip regeneration unless `--force` flag
+- **If validation fails**: Always regenerate (existing artifacts are incomplete)
+- **Re-run detection**: Check file timestamps vs plan.md mtime
+
+```bash
+# Check if PRD is newer than plan (no regeneration needed)
+plan_mtime=$(stat -f %m "dev/work/plans/${slug}/plan.md" 2>/dev/null || stat -c %Y "dev/work/plans/${slug}/plan.md")
+prd_mtime=$(stat -f %m "dev/work/plans/${slug}/prd.md" 2>/dev/null || stat -c %Y "dev/work/plans/${slug}/prd.md")
+
+if [[ -f "dev/work/plans/${slug}/prd.md" && "$prd_mtime" -ge "$plan_mtime" ]]; then
+  echo "ℹ️ prd.md is up-to-date (skip regeneration)"
+else
+  echo "📝 Generating prd.md..."
+fi
+```
 
 **Exit Conditions**:
 - `prd.md` created in plan directory
-- `prd.json` created with task breakdown
+- `prd.json` created and passes validation
+- Memory insights incorporated into task descriptions/criteria
 
-**Handoff to 2.3**: Artifact paths for commit
+**Handoff to 2.3**: Artifact paths for commit, validation status
 
 ---
 
@@ -319,17 +416,149 @@ Produce **exactly 3-5 bullets** (per pre-mortem mitigation — avoid noise). Eac
 
 **Entry Conditions**:
 - Phase 2.2 complete
+- prd.json validation passed
 - All plan artifacts exist
 
 **Actions**:
-1. `git add dev/work/plans/{slug}/`
-2. `git commit -m "plan: {slug} - PRD and artifacts"`
+1. Pre-flight artifact check
+2. Stage artifacts with `git add`
+3. Commit with conventional message
+4. Record commit SHA
+
+#### Implementation Details
+
+##### 1. Pre-Flight Artifact Check
+
+Before committing, verify all required artifacts exist:
+
+```bash
+slug="your-plan-slug"
+plan_dir="dev/work/plans/${slug}"
+
+required_files=(
+  "${plan_dir}/plan.md"
+  "${plan_dir}/pre-mortem.md"
+  "${plan_dir}/review.md"
+  "${plan_dir}/prd.md"
+  "${plan_dir}/prd.json"
+)
+
+missing=()
+for f in "${required_files[@]}"; do
+  if [[ ! -f "$f" ]]; then
+    missing+=("$f")
+  fi
+done
+
+if [[ ${#missing[@]} -gt 0 ]]; then
+  echo "❌ Missing artifacts:"
+  printf "   - %s\n" "${missing[@]}"
+  exit 1
+else
+  echo "✅ All artifacts present"
+fi
+```
+
+##### 2. Git Add with Verification
+
+```bash
+# Stage the plan directory
+git add "dev/work/plans/${slug}/"
+
+# Verify files are staged
+staged=$(git diff --cached --name-only | grep "^dev/work/plans/${slug}/" | wc -l)
+if [[ $staged -eq 0 ]]; then
+  echo "⚠️ No files staged — artifacts may already be committed"
+  # Check if already committed (idempotent)
+  if git log -1 --oneline --grep="plan: ${slug}" > /dev/null 2>&1; then
+    echo "ℹ️ Plan already committed (idempotent: skip)"
+    exit 0
+  else
+    echo "❌ No files to commit and no previous commit found"
+    exit 1
+  fi
+fi
+echo "✅ Staged ${staged} files"
+```
+
+##### 3. Commit with Error Handling
+
+```bash
+# Commit with conventional message
+commit_msg="plan: ${slug} - PRD and artifacts"
+
+if git commit -m "$commit_msg"; then
+  commit_sha=$(git rev-parse HEAD)
+  echo "✅ Committed: ${commit_sha:0:7}"
+  echo "   Message: $commit_msg"
+else
+  # Check if nothing to commit (already clean)
+  if git diff --cached --quiet; then
+    echo "ℹ️ Nothing to commit — working tree clean"
+    # Retrieve existing commit SHA if already committed
+    existing_sha=$(git log -1 --format="%H" --grep="plan: ${slug}")
+    if [[ -n "$existing_sha" ]]; then
+      commit_sha="$existing_sha"
+      echo "   Using existing commit: ${commit_sha:0:7}"
+    fi
+  else
+    echo "❌ Commit failed unexpectedly"
+    exit 1
+  fi
+fi
+```
+
+##### 4. Record Commit SHA
+
+Store the commit SHA for handoff to Phase 3:
+
+```bash
+# Export for subsequent phases
+echo "$commit_sha" > "dev/work/plans/${slug}/.commit-sha"
+
+# Or store in execution state
+echo "plan_commit_sha=${commit_sha}" >> "dev/executions/${slug}/state.env"
+```
+
+##### 5. Idempotent Behavior (Safe to Re-run)
+
+| Scenario | Behavior |
+|----------|----------|
+| Artifacts not yet committed | Normal commit flow |
+| Artifacts already committed (no changes) | Skip commit, retrieve existing SHA |
+| Artifacts modified since last commit | Commit with same message (creates new SHA) |
+| Partial commit (some files missing) | Fail pre-flight check, report missing files |
+
+```bash
+# Idempotent commit check
+if git diff --quiet "dev/work/plans/${slug}/" && \
+   git diff --cached --quiet "dev/work/plans/${slug}/"; then
+  # Check if files are tracked and committed
+  if git ls-files --error-unmatch "dev/work/plans/${slug}/prd.json" > /dev/null 2>&1; then
+    echo "ℹ️ All artifacts already committed (no changes)"
+    commit_sha=$(git log -1 --format="%H" -- "dev/work/plans/${slug}/")
+  else
+    echo "❌ Files exist but are not tracked by git"
+    exit 1
+  fi
+fi
+```
+
+##### 6. Error Recovery
+
+| Error | Recovery |
+|-------|----------|
+| Pre-flight check fails | Report missing artifacts. Return to Phase 2.2 if prd.md/prd.json missing; return to Phase 1.2/1.3 if pre-mortem/review missing. |
+| `git add` fails | Check file permissions. Ensure plan directory is inside repo. |
+| `git commit` fails | Check for git hooks that may block. Ensure valid git state (not mid-merge/rebase). |
+| Commit SHA retrieval fails | Use `git rev-parse HEAD` after successful commit. |
 
 **Exit Conditions**:
 - All artifacts committed (plan.md, pre-mortem.md, review.md, prd.md, prd.json)
-- Commit SHA recorded
+- Commit SHA recorded and available for handoff
+- No uncommitted changes in plan directory
 
-**Handoff to 3.1**: Plan slug and commit SHA
+**Handoff to 3.1**: Plan slug and commit SHA (stored in `.commit-sha` or `state.env`)
 
 ---
 
