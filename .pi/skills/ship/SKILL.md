@@ -74,6 +74,9 @@ git status, git add, git commit, git branch
 ├── 5.2 Update LEARNINGS.md
 ├── 5.3 Commit Implementation
 └── 5.4 Generate Ship Report
+
+[PHASE 6] Cleanup (after PR merged)
+└── 6.1 Remove Worktree & Branch ← `/ship cleanup <slug>`
 ```
 
 ---
@@ -1674,6 +1677,9 @@ When failures occur, the ship skill is designed for **idempotent recovery**. Eac
 | 5.2 | LEARNINGS update fails | Entry created | Manual: update LEARNINGS.md files |
 | 5.3 | Commit fails | Wrap complete | Manual: `git add -A && git commit` |
 | 5.4 | Report generation fails | Everything committed | Manual: review `dev/executions/{slug}/` |
+| 6.1 | Worktree remove fails | Branch may exist | Check for processes using worktree; `git worktree remove --force` |
+| 6.1 | Branch delete fails | Worktree removed | Check if branch checked out elsewhere; `git branch -D` |
+| 6.1 | Remote delete fails | Local cleanup done | Check permissions; `git push origin --delete feature/{slug}` |
 
 ### Resume Command (V2)
 
@@ -1710,18 +1716,201 @@ When a gate pauses execution:
 
 ---
 
-## Cleanup Command
+## Phase 6: Cleanup
 
-After PR is merged, clean up the worktree:
+> **Trigger**: Run `/ship cleanup <slug>` after PR is merged to main.
 
-```
-/ship cleanup {slug}
-```
+### Phase 6.1: Remove Worktree & Branch
+
+**Entry Conditions**:
+- PR merged to main (normal case), OR
+- Builder decides to abandon the branch (force case)
 
 **Actions**:
-1. Check if `feature/{slug}` is merged to main
-2. If merged: Remove worktree, delete branch
-3. If not merged: Warn and require confirmation
+
+**Step 1: Check Merge Status**
+
+```bash
+check_merge_status() {
+  local slug="$1"
+  local branch="feature/${slug}"
+  
+  # Ensure we're on main and have latest
+  git fetch origin main
+  
+  # Check if branch exists
+  if ! git show-ref --verify --quiet "refs/heads/${branch}"; then
+    echo "❌ Branch '${branch}' does not exist"
+    return 2
+  fi
+  
+  # Check if branch is merged to main
+  # git branch --merged lists branches whose tips are reachable from the specified commit
+  if git branch --merged origin/main | grep -q "^\s*${branch}$"; then
+    echo "✅ Branch '${branch}' is merged to main"
+    return 0
+  else
+    echo "⚠️  Branch '${branch}' is NOT merged to main"
+    return 1
+  fi
+}
+```
+
+**Step 2a: If Merged — Clean Removal**
+
+When the branch is merged, proceed with cleanup without confirmation:
+
+```bash
+cleanup_merged() {
+  local slug="$1"
+  local branch="feature/${slug}"
+  
+  echo "🧹 Cleaning up merged branch: ${branch}"
+  
+  # Step 1: Remove worktree (if exists)
+  local repo_name=$(basename "$(git rev-parse --show-toplevel)")
+  local worktree_path="../${repo_name}.worktrees/${slug}"
+  
+  if [[ -d "${worktree_path}" ]]; then
+    echo "📁 Removing worktree: ${worktree_path}"
+    # Use pi-worktrees extension for clean removal
+    # /worktree remove {slug}
+    # OR manual removal:
+    git worktree remove "${worktree_path}" --force
+    echo "✅ Worktree removed"
+  else
+    echo "ℹ️  Worktree already removed (not found at ${worktree_path})"
+  fi
+  
+  # Step 2: Delete local branch
+  echo "🌿 Deleting local branch: ${branch}"
+  git branch -d "${branch}"
+  echo "✅ Local branch deleted"
+  
+  # Step 3: Delete remote branch (if exists)
+  if git ls-remote --heads origin "${branch}" | grep -q "${branch}"; then
+    echo "🌐 Deleting remote branch: origin/${branch}"
+    git push origin --delete "${branch}"
+    echo "✅ Remote branch deleted"
+  else
+    echo "ℹ️  Remote branch already deleted or never pushed"
+  fi
+  
+  # Step 4: Prune stale worktree refs
+  git worktree prune
+  
+  echo ""
+  echo "✅ Cleanup complete for: ${slug}"
+}
+```
+
+**Step 2b: If Not Merged — Warn and Confirm**
+
+When the branch is NOT merged, show a warning and require explicit confirmation:
+
+```bash
+cleanup_unmerged() {
+  local slug="$1"
+  local branch="feature/${slug}"
+  
+  echo ""
+  echo "┌─────────────────────────────────────────────────────────────────┐"
+  echo "│  ⚠️  WARNING: Branch '${branch}' is NOT merged to main         │"
+  echo "├─────────────────────────────────────────────────────────────────┤"
+  echo "│                                                                 │"
+  echo "│  This branch contains unmerged commits that will be LOST.      │"
+  echo "│                                                                 │"
+  echo "│  Unmerged commits:                                              │"
+  git log origin/main..${branch} --oneline | head -10 | while read line; do
+    printf "│    • %-57s │\n" "$line"
+  done
+  echo "│                                                                 │"
+  echo "│  Options:                                                       │"
+  echo "│    1. Type 'yes' to force cleanup (DESTRUCTIVE)                 │"
+  echo "│    2. Type 'no' to cancel                                       │"
+  echo "│    3. Merge the PR first, then run cleanup again                │"
+  echo "│                                                                 │"
+  echo "└─────────────────────────────────────────────────────────────────┘"
+  echo ""
+  
+  # In an interactive session, prompt for confirmation
+  read -p "Force cleanup? (yes/no): " confirmation
+  
+  if [[ "${confirmation}" == "yes" ]]; then
+    force_cleanup "${slug}"
+  else
+    echo "❌ Cleanup cancelled"
+    return 1
+  fi
+}
+```
+
+**Step 3: Force Cleanup (Confirmed)**
+
+When user confirms force cleanup of an unmerged branch:
+
+```bash
+force_cleanup() {
+  local slug="$1"
+  local branch="feature/${slug}"
+  
+  echo "🗑️  Force cleaning unmerged branch: ${branch}"
+  
+  # Step 1: Remove worktree (force)
+  local repo_name=$(basename "$(git rev-parse --show-toplevel)")
+  local worktree_path="../${repo_name}.worktrees/${slug}"
+  
+  if [[ -d "${worktree_path}" ]]; then
+    echo "📁 Force removing worktree: ${worktree_path}"
+    git worktree remove "${worktree_path}" --force
+    echo "✅ Worktree removed"
+  fi
+  
+  # Step 2: Force delete local branch (-D instead of -d)
+  echo "🌿 Force deleting local branch: ${branch}"
+  git branch -D "${branch}"
+  echo "✅ Local branch force deleted"
+  
+  # Step 3: Delete remote branch (if exists)
+  if git ls-remote --heads origin "${branch}" | grep -q "${branch}"; then
+    echo "🌐 Deleting remote branch: origin/${branch}"
+    git push origin --delete "${branch}"
+    echo "✅ Remote branch deleted"
+  fi
+  
+  # Step 4: Prune stale refs
+  git worktree prune
+  
+  echo ""
+  echo "✅ Force cleanup complete for: ${slug}"
+  echo "⚠️  Unmerged commits have been discarded"
+}
+```
+
+**Exit Conditions**:
+- Worktree directory removed
+- Local branch deleted (`-d` for merged, `-D` for force)
+- Remote branch deleted (if exists)
+- Stale worktree refs pruned
+
+**Command Summary**:
+
+| Command | Description |
+|---------|-------------|
+| `/ship cleanup <slug>` | Check merge status, clean if merged, warn if not |
+| Merged branch | Auto-cleanup: worktree remove + `git branch -d` |
+| Unmerged branch | Warning + confirmation required |
+| Force cleanup | After confirmation: worktree remove + `git branch -D` |
+
+**Error Recovery**:
+
+| Error | Recovery |
+|-------|----------|
+| Branch doesn't exist | Nothing to clean — report and exit |
+| Worktree doesn't exist | Skip worktree removal, continue with branch deletion |
+| Branch delete fails | Check if branch is checked out elsewhere; use `git branch -D` |
+| Remote delete fails | May need `git push origin --delete` with force; check permissions |
+| Worktree locked | Check for running processes in worktree; `git worktree remove --force` |
 
 ---
 
