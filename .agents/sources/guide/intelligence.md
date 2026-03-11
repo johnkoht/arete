@@ -10,20 +10,20 @@ Intelligence services provide context, search, and resolution capabilities that 
 |-------------|-------------|-----|
 | Asks about a topic, project, or person | `arete brief --for "<topic>"` | Searches everything — context, memory, meetings, people, projects — and combines results into one briefing |
 | Wants to prep for a meeting or task | `arete brief --for "<task>" --skill <name>` | Full briefing with skill-aware primitive mapping |
-| Asks what was decided about something | `arete memory search "<topic>"` | Searches explicit institutional memory only (decisions, learnings, observations) — 3 files, high signal |
+| Asks what was decided about something | `arete search "<topic>" --scope memory` | Searches explicit institutional memory only (decisions, learnings, observations) — 3 files, high signal |
 | Mentions a person by name | `arete resolve "<name>"` then `arete people show <slug> --memory` | Resolves the name, then gets full profile with relationship health, recurring topics, stances, and open items |
 | Starting a community/installed skill | Check frontmatter for `requires_briefing: true` → run `arete brief` | Community skills don't have built-in context gathering — briefing gives them workspace awareness |
 | After creating or editing workspace files | `arete index` | Keeps search current so context/brief/memory find the new content |
-| Wants to understand topic history | `arete memory timeline "<topic>" --days 30` | Shows how a topic evolved across memory and meetings over time |
+| Wants to understand topic history | `arete search "<topic>" --timeline --days 30` | Shows how a topic evolved across memory and meetings over time |
 | Needs to find open action items with someone | `arete commitments list --person <slug>` | Returns what you owe them and what they owe you |
 
-**Key scope distinction**: `memory search` is narrow and high-signal (3 memory files only). `context` is broad (all workspace files). `brief` is comprehensive (context + memory + entities combined). Choose based on what the user needs.
+**Key scope distinction**: `arete search --scope memory` is narrow and high-signal (3 memory files only). `arete search` (or `--scope context`) is broad (all workspace files). `brief` is comprehensive (context + memory + entities combined). Choose based on what the user needs.
 
 ## Context Injection
 
 > **Proactively use when**: The user asks a general knowledge question ("what do we know about X"), or you need broad workspace files for a task. This is the broadest search — it covers context/, goals/, projects/, people/, meetings, and conversations.
 
-**Command**: `arete context --for "query"`
+**Command**: `arete search "query"` (or `arete search "query" --scope context`)
 
 **Purpose**: Map product primitives (Problem, User, Solution, Market, Risk) to workspace files and assemble a context bundle.
 
@@ -35,7 +35,7 @@ Intelligence services provide context, search, and resolution capabilities that 
 
 **Example**:
 ```bash
-arete context --for "user onboarding improvements"
+arete search "user onboarding improvements"
 ```
 
 **Returns**:
@@ -54,9 +54,9 @@ arete context --for "user onboarding improvements"
 
 ## Memory Retrieval
 
-> **Proactively use when**: The user asks about past decisions ("what did we decide about X"), learnings, or institutional knowledge. This is a narrow, high-signal search — only 3 files (decisions.md, learnings.md, agent-observations.md). For broader search, use context or brief.
+> **Proactively use when**: The user asks about past decisions ("what did we decide about X"), learnings, or institutional knowledge. This is a narrow, high-signal search — only 3 files (decisions.md, learnings.md, agent-observations.md). For broader search, use `arete search` without scope or brief.
 
-**Command**: `arete memory search "query"`
+**Command**: `arete search "query" --scope memory`
 
 **Purpose**: Search across `.arete/memory/` items (decisions, learnings) using token-based or semantic search (if QMD installed).
 
@@ -67,7 +67,7 @@ arete context --for "user onboarding improvements"
 
 **Example**:
 ```bash
-arete memory search "pricing model"
+arete search "pricing model" --scope memory
 ```
 
 **Returns**:
@@ -289,8 +289,10 @@ Skills that use memory retrieval will automatically leverage QMD when available.
 
 ```bash
 # Intelligence Services
-arete context --for "query"           # Inject context
-arete memory search "query"           # Search memory
+arete search "query"                  # Search across workspace (default: all scopes)
+arete search "query" --scope memory   # Search decisions and learnings only
+arete search "query" --scope context  # Search context files only
+arete search "query" --timeline       # Show temporal view with themes
 arete resolve "reference"             # Resolve entity
 arete brief --for "query"             # Assemble briefing
 arete route "query" [--json]          # Route to skill/tool
