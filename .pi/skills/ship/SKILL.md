@@ -171,6 +171,123 @@ See [orchestrator.md](./orchestrator.md) for blocker classification.
 4. Review `memory/collaboration.md` for builder preferences
 5. Synthesize into 3-5 bullet insights
 
+#### Implementation Details
+
+##### 1. Recent Entries (14-Day Filter)
+
+Entry filenames follow `YYYY-MM-DD_slug.md` format. Calculate recency:
+
+```bash
+# List entries from last 14 days
+cutoff=$(date -v-14d +%Y-%m-%d 2>/dev/null || date -d "14 days ago" +%Y-%m-%d)
+ls memory/entries/ | while read f; do
+  entry_date="${f:0:10}"  # Extract YYYY-MM-DD
+  [[ "$entry_date" > "$cutoff" || "$entry_date" == "$cutoff" ]] && echo "$f"
+done
+```
+
+For each recent entry, extract:
+- **Title** (first `# ` heading)
+- **Status** (Complete/In Progress)
+- **Key learnings** (from "What Worked Well", "What Didn't Work Well", "Recommendations" sections)
+
+##### 2. Keyword Search (Plan-Relevant Entries)
+
+Extract keywords from the plan:
+- **Section headings**: Lines starting with `#` or `##`
+- **Package references**: `packages/{name}` or `@arete/{name}` patterns
+- **Component names**: PascalCase terms (e.g., `CommitmentsService`, `ReviewItems`)
+- **File paths**: Paths mentioned in plan (e.g., `.pi/skills/`, `src/services/`)
+
+Search entries using `grep -l`:
+
+```bash
+# Cap at 5 most relevant matches (per pre-mortem mitigation)
+grep -l -i "keyword1\|keyword2\|keyword3" memory/entries/*.md | head -5
+```
+
+For matched entries (even if outside 14-day window), extract the same sections as recent entries.
+
+##### 3. LEARNINGS.md Identification
+
+Map plan content to directories:
+- Parse **file paths** mentioned in plan → extract parent directories
+- Parse **package references** (`packages/core`, `packages/cli`, etc.) → map to known LEARNINGS.md locations
+- Check for **skill references** (`.pi/skills/{name}`) → check for LEARNINGS.md in skill directory
+
+Known LEARNINGS.md locations (from AGENTS.md `[Memory]` section):
+```
+.pi/extensions/plan-mode/LEARNINGS.md
+.pi/skills/execute-prd/LEARNINGS.md
+.pi/skills/LEARNINGS.md
+packages/core/src/search/LEARNINGS.md
+packages/core/src/services/LEARNINGS.md
+packages/core/src/integrations/LEARNINGS.md
+packages/core/src/adapters/LEARNINGS.md
+packages/cli/src/commands/LEARNINGS.md
+packages/runtime/rules/LEARNINGS.md
+packages/runtime/skills/LEARNINGS.md
+packages/runtime/tools/LEARNINGS.md
+packages/apps/backend/LEARNINGS.md
+packages/apps/web/LEARNINGS.md
+```
+
+For each matched LEARNINGS.md, extract:
+- **Gotchas**: Common pitfalls to avoid
+- **Invariants**: Rules that must be maintained
+- **Pre-Edit Checklist**: Steps required before changes
+
+##### 4. Collaboration Profile Extraction
+
+From `memory/collaboration.md`, extract:
+- **Working Patterns**: How to collaborate effectively
+- **Process Preferences**: Workflow expectations
+- **Corrections**: Past mistakes to avoid (CRITICAL — these are explicit "don't repeat this")
+- **Design Philosophy**: Architectural preferences
+
+Focus on entries most relevant to the plan's scope (e.g., if plan touches CLI, prioritize CLI-related preferences).
+
+##### 5. Synthesis Format
+
+Produce **exactly 3-5 bullets** (per pre-mortem mitigation — avoid noise). Each bullet must be:
+- **Actionable**: States what to DO or AVOID, not just what happened
+- **Sourced**: References the entry/file it came from
+- **Relevant**: Directly applies to the current plan
+
+**Output Format**:
+
+```markdown
+## Memory Synthesis
+
+**Recent Context** (last 14 days):
+- [Entry title](entries/YYYY-MM-DD_slug.md): Key insight relevant to this work
+
+**Past Learnings**:
+- [LEARNINGS.md location]: Gotcha or invariant that applies
+
+**Builder Preferences**:
+- From collaboration.md: Specific preference that affects this work
+
+**Risks to Avoid**:
+- From corrections/entries: Past mistake not to repeat
+```
+
+**Example Synthesis**:
+
+```markdown
+## Memory Synthesis
+
+1. **Use Jaccard similarity for dedup** — Reusable pattern from `meeting-extraction.ts`; don't reinvent. (Source: 2026-03-09_intelligence-tuning-learnings.md)
+
+2. **Backend has separate extraction flow** — `agent.ts` has its own schema/prompt distinct from core; check both when changing extraction. (Source: intelligence-tuning-learnings, LEARNINGS.md)
+
+3. **Builder prefers fast models for structured tasks** — Use cheaper model tier for subagents when tasks are well-defined. (Source: collaboration.md → Working Patterns)
+
+4. **Pre-work sanity checks are mandatory** — Reviewer must verify task clarity before developer starts. (Source: multiple entries, 100% effectiveness rate)
+
+5. **Don't put backlog items in entries** — Entries = what happened; backlog = future work → `dev/work/backlog/`. (Source: collaboration.md → Corrections)
+```
+
 **Exit Conditions**:
 - Memory synthesis complete (3-5 bullets)
 - Synthesis stored for PRD handoff
