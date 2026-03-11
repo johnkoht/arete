@@ -99,6 +99,9 @@ GUIDE.md
 !packages/runtime/skills/*/templates/**
 !packages/runtime/tools/*/templates/
 !packages/runtime/tools/*/templates/**
+# Exception: .pi/skills templates (project-specific skills)
+!.pi/skills/*/templates/
+!.pi/skills/*/templates/**
 # Exception: packages/runtime/GUIDE.md is the source (shipped with CLI)
 !packages/runtime/GUIDE.md
 

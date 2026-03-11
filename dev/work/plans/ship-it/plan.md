@@ -1,17 +1,17 @@
 ---
 title: Ship It
 slug: ship-it
-status: idea
-size: unknown
-tags: []
+status: complete
+size: large
+tags: [skill, automation, build]
 created: 2026-03-11T04:26:36.778Z
-updated: 2026-03-11T04:31:51.925Z
-completed: null
-execution: null
-has_review: false
-has_pre_mortem: false
+updated: 2026-03-11T06:50:00.000Z
+completed: 2026-03-11T06:50:00.000Z
+execution: dev/executions/ship-it/
+has_review: true
+has_pre_mortem: true
 has_prd: true
-steps: 3
+steps: 8
 ---
 
 Saved to `dev/work/plans/ship-it/notes.md`.

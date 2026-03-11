@@ -75,6 +75,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |arete config set <path> <value>:Set AI config value (ai.tiers.<tier>, ai.tasks.<task>)
 
 [Skills]|root:.pi/skills
+|ship:{triggers:"/ship; ship this plan; build this autonomously; after plan approval when builder wants to walk away",does:"Mega-build skill automating plan-to-PR workflow: pre-mortem, review, memory scan, PRD creation, worktree setup, execute-prd, final wrap. Pauses only at intelligent gates."}
 |hotfix:{triggers:"bug; fix; broken; not working; issue; fix this; yes fix it; please fix; regression; User reports a bug and asks to fix it",does:"Structured bug fix process: diagnose (as eng lead), implement, spawn reviewer, close with LEARNINGS.md update. Lighter than PRD but ensures quality."}
 |execute-prd:{triggers:"User says Execute this PRD or Build everything in prd.json; multi-task PRDs with dependencies (3+ tasks); want autonomous execution with quality review",does:"Autonomous PRD execution with Orchestrator (Sr. Eng Manager) and Reviewer (Sr. Engineer). Includes pre-mortem, structured feedback, and holistic review."}
 |plan-to-prd:{triggers:"User chose Convert to PRD when offered the PRD path in Plan Mode; after plan-pre-mortem rule offers the choice and user selects the PRD path",does:"Convert an approved plan into a PRD, prd.json, and handoff prompt for autonomous execution via execute-prd."}
@@ -106,7 +107,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |before_work:scan MEMORY.md + collaboration.md
 |after_work:add entry to memory/entries/, update index
 |synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion
-|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/, packages/apps/backend/, packages/apps/web/
+|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/skills/, .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/, packages/apps/backend/, packages/apps/web/
 |expertise:domain maps in .pi/expertise/{domain}/PROFILE.md — read before working on a package; available: cli, core, backend, web
 
 [Personas]|council:Harvester + Architect + Preparer — three GUIDE MODE behavioral archetypes for BUILD MODE planning
