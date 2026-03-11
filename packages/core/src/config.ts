@@ -111,8 +111,13 @@ function normalizeConfig(config: AreteConfig): AreteConfig {
     config.settings.conversations.peopleProcessing = 'off';
   }
 
-  // Migrate old qmd_collection to new qmd_collections format
-  // If old format exists but new doesn't, treat old collection as 'all' scope
+  /**
+   * Migration: qmd_collection (singular) → qmd_collections (map)
+   *
+   * This migration happens at load time (in memory only). The migrated config
+   * is NOT written back to arete.yaml automatically. Users should run `arete update`
+   * to persist the new multi-collection format.
+   */
   if (config.qmd_collection && !config.qmd_collections) {
     config.qmd_collections = { all: config.qmd_collection };
   }

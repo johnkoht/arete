@@ -15,6 +15,7 @@ import type { QmdScope, QmdCollections } from '../models/workspace.js';
 
 const execFileAsync = promisify(execFile);
 
+/** Timeout for QMD index updates (30s) - updates can be slow for large workspaces */
 const QMD_UPDATE_TIMEOUT_MS = 30_000;
 const QMD_COLLECTION_ADD_TIMEOUT_MS = 10_000;
 const QMD_EMBED_TIMEOUT_MS = 60_000; // Generous for first-run model download (~328MB)

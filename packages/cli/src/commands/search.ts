@@ -49,6 +49,7 @@ import { header, info, error, listItem, warn } from '../formatters.js';
 
 const execFileAsync = promisify(execFile);
 
+/** Timeout for QMD queries (10s) - queries are typically fast */
 const QMD_QUERY_TIMEOUT_MS = 10_000;
 
 /** Valid scope values for --scope flag */
@@ -107,7 +108,13 @@ export interface TimelineOutputItem {
   type: string;
 }
 
-/** Timeline output schema (--timeline flag) */
+/**
+ * Timeline output schema (--timeline flag)
+ *
+ * dateRange reflects actual data bounds:
+ * - start/end are empty strings when no items match
+ * - when items exist, start is the earliest date and end is the latest
+ */
 export interface TimelineOutput {
   success: boolean;
   query: string;
@@ -149,7 +156,11 @@ interface QmdResultRow {
   title?: string;
 }
 
-/** Strip `qmd://collection-name/` prefix from QMD file paths. */
+/**
+ * Strip QMD URL prefix to get workspace-relative path.
+ * Assumes QMD returns URLs in format: qmd://<collection>/<path>
+ * If format changes, this regex will need updating.
+ */
 function stripQmdPrefix(qmdPath: string): string {
   const match = qmdPath.match(/^qmd:\/\/[^/]+\/(.+)$/);
   return match ? match[1] : qmdPath;
@@ -387,23 +398,6 @@ export async function runSearch(
     process.exit(1);
   }
 
-  // Check QMD availability
-  if (!deps.isQmdAvailable()) {
-    if (opts.json) {
-      console.log(
-        JSON.stringify({
-          success: false,
-          error: 'qmd not installed. Install with: cargo install qmd',
-          code: 'QMD_NOT_AVAILABLE',
-        } satisfies SearchErrorOutput),
-      );
-    } else {
-      error('qmd not installed');
-      info('Install with: cargo install qmd');
-    }
-    process.exit(1);
-  }
-
   // Resolve person filter if provided
   let personFilter: { name: string; slug: string } | undefined;
   if (opts.person) {
@@ -509,6 +503,11 @@ export async function runSearch(
     process.exit(1);
   }
 
+  // Warn if --days is used without --timeline (it has no effect)
+  if (opts.days && !opts.timeline) {
+    warn('--days has no effect without --timeline');
+  }
+
   // Timeline mode — uses MemoryService.getTimeline() instead of QMD
   if (opts.timeline) {
     const paths = services.workspace.getPaths(root);
@@ -565,10 +564,11 @@ export async function runSearch(
     }));
 
     // Calculate effective date range from filtered items
+    // Returns empty strings when no items match (reflects actual data bounds, not query range)
     const dates = filteredItems.map((i) => i.date).filter((d) => d.length > 0);
     const effectiveDateRange = {
-      start: dates.length > 0 ? dates[dates.length - 1] : (range?.start ?? ''),
-      end: dates.length > 0 ? dates[0] : (range?.end ?? ''),
+      start: dates.length > 0 ? dates[dates.length - 1] : '',
+      end: dates.length > 0 ? dates[0] : '',
     };
 
     // JSON output
@@ -637,6 +637,23 @@ export async function runSearch(
     }
 
     return;
+  }
+
+  // Check QMD availability (only needed for non-timeline mode)
+  if (!deps.isQmdAvailable()) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: 'qmd not installed. Install with: cargo install qmd',
+          code: 'QMD_NOT_AVAILABLE',
+        } satisfies SearchErrorOutput),
+      );
+    } else {
+      error('qmd not installed');
+      info('Install with: cargo install qmd');
+    }
+    process.exit(1);
   }
 
   // Build QMD command
@@ -862,7 +879,7 @@ export function registerSearchCommand(program: Command): void {
       'all',
     )
     .option('--limit <n>', 'Maximum results', '15')
-    .option('--person <name>', 'Filter by person (name or slug)')
+    .option('--person <name>', 'Filter by person (name or slug) (Note: filtering happens after limit, so fewer results may be returned)')
     .option('--timeline', 'Show results chronologically with themes')
     .option('--days <n>', 'Limit to last N days (with --timeline)')
     .option('--answer', 'Synthesize AI-powered answer from results')
