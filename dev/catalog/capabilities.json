@@ -316,6 +316,43 @@
       "lastVerified": "2026-03-08"
     },
     {
+      "id": "unified-search",
+      "name": "Unified Workspace Search",
+      "type": "cli-command",
+      "description": "Consolidated search command replacing context --for, memory search, and memory timeline. Provides semantic search across all workspace areas with scope filtering, timeline mode, person filtering, and AI synthesis.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/cli/src/commands/search.ts",
+        "packages/core/src/search/qmd-setup.ts"
+      ],
+      "entrypoints": [
+        "arete search <query>",
+        "arete search <query> --scope memory|meetings|context|projects|people",
+        "arete search <query> --timeline",
+        "arete search <query> --answer"
+      ],
+      "readBeforeChange": [
+        "packages/cli/src/commands/search.ts",
+        "packages/cli/src/commands/LEARNINGS.md",
+        "packages/core/src/search/LEARNINGS.md",
+        "dev/work/plans/consolidate-search-command/design-notes.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Multi-collection QMD indexing: 6 scoped collections (all, memory, meetings, context, projects, people)",
+        "Deprecates: context --for, memory search, memory timeline (still work with warnings)",
+        "Person filter is post-QMD (--limit applies before filter)",
+        "Timeline mode uses MemoryService.getTimeline(), not QMD",
+        "--answer requires AI configuration"
+      ],
+      "lastVerified": "2026-03-11"
+    },
+    {
       "id": "web-dashboard",
       "name": "Product Intelligence Dashboard",
       "type": "application",

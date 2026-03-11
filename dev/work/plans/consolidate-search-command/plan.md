@@ -1,13 +1,14 @@
 ---
 title: "Consolidate Intelligence Commands into `search`"
-status: building
+status: complete
 size: large
 created: 2026-03-10
 reviewed: 2026-03-10
+completed: 2026-03-11
 notes: "Global semantic search with QMD multi-collection support, --intent, and AI synthesis"
 tags: []
 has_prd: true
-updated: 2026-03-11T04:30:37.055Z
+updated: 2026-03-11T22:30:00.000Z
 ---
 
 # Consolidate Intelligence Commands into `search`
