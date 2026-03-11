@@ -12,10 +12,10 @@ Areté provides intelligence services that your skill can call via CLI commands.
 
 | Service | Command | What It Searches | Best For |
 |---------|---------|-----------------|----------|
-| **Context** | `arete context --for "query"` | context/, goals/, projects/, people/, meetings, conversations | Finding relevant workspace files for a topic |
-| **Briefing** | `arete brief --for "query"` | All of the above + memory + entity resolution | Comprehensive pre-task context gathering |
-| **Memory** | `arete memory search "query"` | .arete/memory/items/ (decisions, learnings, observations) | Finding past decisions and institutional knowledge |
-| **Timeline** | `arete memory timeline "query"` | Memory items + meeting files | Understanding how a topic evolved over time |
+| **Search** | `arete search "query"` | All workspace content (default) | Unified search across everything |
+| **Search (scoped)** | `arete search "query" --scope <scope>` | Specific scope: memory, meetings, context, projects, people | Targeted search within one area |
+| **Timeline** | `arete search "query" --timeline` | Chronological view with themes | Understanding how a topic evolved over time |
+| **Briefing** | `arete brief --for "query"` | All of the above + entity resolution | Comprehensive pre-task context gathering |
 | **Resolve** | `arete resolve "reference"` | people/, meetings/, projects/ | Disambiguating names ("Jane" → jane-smith) |
 | **People** | `arete people show <slug> --memory` | Person file + auto-generated memory highlights | Getting full person context with relationship health |
 | **Commitments** | `arete commitments list --person <slug>` | Extracted commitments from meetings | Finding open action items with a person |
@@ -33,15 +33,15 @@ Use when your skill needs relevant workspace files but doesn't need full briefin
 ```markdown
 ### Gather Context
 
-Run `arete context --for "<describe the user's task>" --json` to find relevant workspace files.
+Run `arete search "<describe the user's task>" --scope context --json` to find relevant workspace files.
 
-This searches context/, goals/, projects/, people/, meetings, and conversations. Use the returned file paths to read relevant background before proceeding.
+This searches context/ and goals/. Use the returned file paths to read relevant background before proceeding.
 
-If the user's task maps to specific product primitives, filter with:
-`arete context --for "<task>" --primitives Problem,User,Solution --json`
+For broader search across the entire workspace (projects, people, meetings, etc.):
+`arete search "<task>" --json`
 ```
 
-**What it returns**: File paths with relevance scores, organized by product primitive (Problem, User, Solution, Market, Risk), plus identified gaps.
+**What it returns**: File paths with relevance scores and context snippets.
 
 ---
 
@@ -95,7 +95,7 @@ Use when your skill needs to know what's been decided or learned about a topic.
 ```markdown
 ### Search Memory
 
-Run `arete memory search "<topic>" --json` to find past decisions and learnings.
+Run `arete search "<topic>" --scope memory --json` to find past decisions and learnings.
 
 This searches .arete/memory/items/ — the workspace's institutional memory:
 - **Decisions**: What was decided, when, why, and by whom
@@ -105,7 +105,7 @@ This searches .arete/memory/items/ — the workspace's institutional memory:
 Use memory results to avoid re-litigating past decisions and to build on existing knowledge.
 ```
 
-**What it returns**: Matching memory items with scores. Memory is a narrow, high-signal search (3 files only) — for broader search, use `arete context` or `arete brief`.
+**What it returns**: Matching memory items with scores. Memory is a narrow, high-signal search (3 files only) — for broader search, use `arete search` (without scope) or `arete brief`.
 
 ---
 
@@ -142,7 +142,7 @@ For a key person or project:
 1. **Resolve**: `arete resolve "<name>" --json` → get slug and type
 2. **Details**: `arete people show <slug> --memory --json` → full profile with memory highlights
 3. **Commitments**: `arete commitments list --person <slug> --json` → open action items
-4. **Timeline**: `arete memory timeline "<name>" --days 30 --json` → recent history and recurring themes
+4. **Timeline**: `arete search "<name>" --timeline --days 30 --json` → recent history and recurring themes
 
 Combine these into a relationship brief that informs the rest of the workflow.
 ```
@@ -237,13 +237,13 @@ For each stakeholder mentioned:
 
 ### 3. Gather Project Context
 
-Run `arete context --for "<project name> status and progress" --json`
+Run `arete search "<project name> status and progress" --scope projects --json`
 
 Read the returned project files to understand current state, goals, and recent activity.
 
 ### 4. Search Memory for Decisions
 
-Run `arete memory search "<project name>" --json`
+Run `arete search "<project name>" --scope memory --json`
 
 Find recent decisions and learnings related to this project.
 
