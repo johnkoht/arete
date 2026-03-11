@@ -39,6 +39,7 @@ import { registerDailyCommand } from './commands/daily.js';
 import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
+import { registerSearchCommand } from './commands/search.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,6 +62,8 @@ ${chalk.bold('Setup & Workspace')}
   status                           Check workspace health
 
 ${chalk.bold('Intelligence')}
+  search "query"                   Search across workspace (semantic)
+  search "query" --scope <scope>   Limit to scope (memory|meetings|context|projects|people)
   daily                            Morning intelligence brief
   momentum [--person <slug>]       Commitment and relationship momentum
   context --for "query"            Get relevant workspace files
@@ -142,5 +145,6 @@ registerDailyCommand(program);
 registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
+registerSearchCommand(program);
 
 program.parse();
