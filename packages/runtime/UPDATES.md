@@ -97,7 +97,7 @@ A lot of calendar and integration work landed this week.
 
 **Google Calendar support.** If you prefer Google Calendar over the macOS Calendar app, run `arete integration configure google-calendar` to connect. Once configured, `arete pull calendar` works the same as before.
 
-**Notion integration.** You can now pull pages from Notion into your workspace as searchable markdown. Run `arete integration configure notion` once, then `arete pull notion` to sync. Pages land in your context and are indexed automatically — so `arete context --for "product strategy"` will find your Notion docs alongside your meeting notes and project files.
+**Notion integration.** You can now pull pages from Notion into your workspace as searchable markdown. Run `arete integration configure notion` once, then `arete pull notion` to sync. Pages land in your context and are indexed automatically — so `arete search "product strategy"` will find your Notion docs alongside your meeting notes and project files.
 
 **Project updates skill.** When you ask Areté to help you update a project or stakeholder doc, it now follows a consistent pattern: gather context first, then update. Less hallucination, more grounded updates from your actual meeting content.
 
@@ -133,7 +133,7 @@ The refresh is stale-aware: pass `--if-stale-days 3` and Areté skips anyone ref
 
 ## Earlier (January–February 2026)
 
-**Intelligence layer.** The core intelligence services — context gathering, briefing assembly, entity resolution, memory search — all stabilized during this period. These are the foundation that makes `arete brief`, `arete context`, and `arete memory search` work. Skills use them automatically.
+**Intelligence layer.** The core intelligence services — context gathering, briefing assembly, entity resolution, search — all stabilized during this period. These are the foundation that makes `arete brief`, `arete search`, and `arete route` work. Skills use them automatically.
 
 **Plan mode.** The `/plan` system in pi (plan lifecycle, pre-mortem, PRD flow) was built and refined through this period. If you're using Areté for your own product development, this is the system that manages plans from idea → building → complete.
 
