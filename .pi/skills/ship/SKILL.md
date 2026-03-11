@@ -576,17 +576,126 @@ fi
 2. Verify branch name available: `git branch --list feature/{slug}`
 3. Verify parent directory writable
 
-**Actions**:
-1. Execute `/worktree create {slug}`
-2. Wait for onCreate hook (npm install)
-3. Verify worktree created at expected path
+##### 1. Pre-Flight Check Script
+
+```bash
+# 1. Check for uncommitted changes
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "❌ Uncommitted changes detected. Commit or stash before proceeding."
+  exit 1
+fi
+
+# 2. Check branch name availability
+if git show-ref --verify --quiet "refs/heads/feature/${slug}"; then
+  echo "❌ Branch 'feature/${slug}' already exists. Choose a different slug or delete the branch."
+  exit 1
+fi
+
+# 3. Check parent directory is writable
+repo_name=$(basename "$(git rev-parse --show-toplevel)")
+parent_dir="../${repo_name}.worktrees"
+mkdir -p "${parent_dir}" 2>/dev/null || {
+  echo "❌ Cannot create worktree parent directory: ${parent_dir}"
+  exit 1
+}
+
+echo "✅ Pre-flight checks passed"
+```
+
+##### 2. pi-worktrees Configuration
+
+The extension is configured at `~/.pi/agent/pi-worktrees-settings.json`:
+
+```json
+{
+  "parentDir": "../arete.worktrees",
+  "onCreate": "npm install"
+}
+```
+
+**Template variables available**: `{{path}}`, `{{name}}`, `{{branch}}`, `{{project}}`
+
+##### 3. Create Worktree
+
+Execute via pi slash command (not bash):
+
+```
+/worktree create {slug}
+```
+
+This command:
+1. Creates worktree at `../{repo}.worktrees/{slug}`
+2. Creates branch `feature/{slug}` pointing to current HEAD
+3. Runs `onCreate` hook (`npm install`) in the new worktree directory
+
+> **Note**: The `onCreate` hook runs asynchronously and failure is non-blocking. Verify completion explicitly.
+
+##### 4. Verify Worktree and Branch
+
+```bash
+# Get expected paths
+repo_name=$(basename "$(git rev-parse --show-toplevel)")
+worktree_path=$(cd .. && pwd)/${repo_name}.worktrees/${slug}
+worktree_path_abs=$(cd "${worktree_path}" && pwd)
+
+# Verify worktree exists
+if [[ ! -d "${worktree_path}" ]]; then
+  echo "❌ Worktree not created at expected path: ${worktree_path}"
+  exit 1
+fi
+
+# Verify it's a valid git worktree
+if ! git -C "${worktree_path}" rev-parse --git-dir > /dev/null 2>&1; then
+  echo "❌ Directory exists but is not a valid git worktree"
+  exit 1
+fi
+
+# Verify branch exists and is checked out in worktree
+current_branch=$(git -C "${worktree_path}" branch --show-current)
+if [[ "${current_branch}" != "feature/${slug}" ]]; then
+  echo "❌ Expected branch 'feature/${slug}', found '${current_branch}'"
+  exit 1
+fi
+
+echo "✅ Worktree created at: ${worktree_path_abs}"
+echo "✅ Branch: feature/${slug}"
+```
+
+##### 5. Verify npm install Completed
+
+```bash
+# Check node_modules exists and has content
+if [[ ! -d "${worktree_path}/node_modules" ]] || \
+   [[ -z "$(ls -A "${worktree_path}/node_modules" 2>/dev/null)" ]]; then
+  echo "⚠️  node_modules missing or empty. Running npm install..."
+  (cd "${worktree_path}" && npm install)
+fi
+
+# Verify package-lock.json is consistent
+if ! (cd "${worktree_path}" && npm ls --depth=0 > /dev/null 2>&1); then
+  echo "⚠️  Dependency tree inconsistent. Running npm install..."
+  (cd "${worktree_path}" && npm install)
+fi
+
+echo "✅ Dependencies installed"
+```
+
+##### 6. Error Recovery
+
+| Error | Recovery |
+|-------|----------|
+| Uncommitted changes | Commit or stash changes, then retry |
+| Branch already exists | Choose different slug, or `git branch -D feature/{slug}` if safe |
+| Parent directory not writable | Check permissions, create manually if needed |
+| Worktree creation fails | Check disk space, verify git version >= 2.5, check for existing worktree |
+| npm install fails | Run manually in worktree: `cd {path} && npm install` |
 
 **Exit Conditions**:
 - Worktree exists at `../{repo}.worktrees/{slug}`
 - Branch `feature/{slug}` created
 - npm install complete
 
-**Handoff to 3.2**: Worktree absolute path
+**Handoff to 3.2**: Worktree absolute path (stored in `$worktree_path_abs`)
 
 ---
 
@@ -594,45 +703,315 @@ fi
 
 **Entry Conditions**:
 - Phase 3.1 complete
-- Worktree path known
+- Worktree path known (from `$worktree_path_abs`)
 
-**Actions**:
-1. Detect platform (macOS/Linux/Windows)
-2. Execute platform-appropriate terminal command:
-   - macOS: `osascript` → iTerm or Terminal.app
-   - Linux: `gnome-terminal` or `xterm`
-   - Windows: `wt` (Windows Terminal)
-3. Verify terminal opened (best effort)
+##### 1. Platform Detection
+
+```bash
+detect_platform() {
+  case "$(uname -s)" in
+    Darwin)  echo "macos" ;;
+    Linux)   echo "linux" ;;
+    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+    *)       echo "unknown" ;;
+  esac
+}
+
+platform=$(detect_platform)
+```
+
+##### 2. macOS Terminal Launch (Primary Implementation)
+
+**V1 implements macOS only** per pre-mortem Risk 2 mitigation. Linux/Windows are documented for future implementation.
+
+**iTerm2 (preferred)**:
+
+```bash
+launch_iterm() {
+  local worktree_path="$1"
+  local slug="$2"
+  local prd_path="dev/work/plans/${slug}/prd.md"
+  
+  osascript <<EOF
+tell application "iTerm"
+    activate
+    set newWindow to (create window with default profile)
+    tell current session of newWindow
+        write text "cd '${worktree_path}' && clear"
+        write text "echo '🚀 Ship It — Worktree Ready'"
+        write text "echo 'Branch: feature/${slug}'"
+        write text "echo 'PRD: ${prd_path}'"
+        write text "echo ''"
+        write text "echo 'Starting pi...'"
+        write text "pi"
+    end tell
+end tell
+EOF
+}
+```
+
+**Terminal.app (fallback)**:
+
+```bash
+launch_terminal_app() {
+  local worktree_path="$1"
+  local slug="$2"
+  local prd_path="dev/work/plans/${slug}/prd.md"
+  
+  osascript <<EOF
+tell application "Terminal"
+    activate
+    set newTab to do script "cd '${worktree_path}' && clear && echo '🚀 Ship It — Worktree Ready' && echo 'Branch: feature/${slug}' && echo 'PRD: ${prd_path}' && echo '' && echo 'Starting pi...' && pi"
+end tell
+EOF
+}
+```
+
+**macOS Launch Sequence**:
+
+```bash
+launch_terminal_macos() {
+  local worktree_path="$1"
+  local slug="$2"
+  
+  # Try iTerm first (preferred)
+  if osascript -e 'tell application "System Events" to (name of processes) contains "iTerm2"' 2>/dev/null | grep -q "true"; then
+    echo "📺 Launching iTerm2..."
+    launch_iterm "${worktree_path}" "${slug}" && return 0
+  fi
+  
+  # Check if iTerm is installed but not running
+  if [[ -d "/Applications/iTerm.app" ]]; then
+    echo "📺 Opening iTerm2..."
+    launch_iterm "${worktree_path}" "${slug}" && return 0
+  fi
+  
+  # Fall back to Terminal.app
+  echo "📺 Launching Terminal.app..."
+  launch_terminal_app "${worktree_path}" "${slug}" && return 0
+  
+  return 1
+}
+```
+
+##### 3. Linux Terminal Launch (V2 — Documented Only)
+
+```bash
+# gnome-terminal (GNOME/Ubuntu)
+gnome-terminal --working-directory="${worktree_path}" -- bash -c "echo 'Ship It — Worktree Ready'; pi; exec bash"
+
+# xterm (fallback)
+xterm -e "cd '${worktree_path}' && echo 'Ship It — Worktree Ready' && pi"
+
+# konsole (KDE)
+konsole --workdir "${worktree_path}" -e "bash -c 'pi'"
+```
+
+##### 4. Windows Terminal Launch (V2 — Documented Only)
+
+```powershell
+# Windows Terminal
+wt -d "${worktree_path}" pi
+
+# PowerShell fallback
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '${worktree_path}'; pi"
+```
+
+##### 5. Launch with Verification
+
+```bash
+launch_terminal() {
+  local worktree_path="$1"
+  local slug="$2"
+  local platform=$(detect_platform)
+  
+  case "${platform}" in
+    macos)
+      if launch_terminal_macos "${worktree_path}" "${slug}"; then
+        # Brief pause to let terminal initialize
+        sleep 2
+        echo "✅ Terminal launched"
+        return 0
+      fi
+      ;;
+    linux)
+      echo "⚠️  Linux terminal launch not implemented in V1"
+      echo "    See SKILL.md Phase 3.2 § Linux Terminal Launch for manual steps"
+      return 1
+      ;;
+    windows)
+      echo "⚠️  Windows terminal launch not implemented in V1"
+      echo "    See SKILL.md Phase 3.2 § Windows Terminal Launch for manual steps"
+      return 1
+      ;;
+    *)
+      echo "❌ Unknown platform: ${platform}"
+      return 1
+      ;;
+  esac
+  
+  return 1
+}
+```
+
+##### 6. Fallback Message
+
+If terminal launch fails, display this message:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚠️  Terminal Launch Failed — Manual Steps Required             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. Open a new terminal window                                  │
+│                                                                 │
+│  2. Navigate to the worktree:                                   │
+│     cd {worktree_path}                                          │
+│                                                                 │
+│  3. Start pi:                                                   │
+│     pi                                                          │
+│                                                                 │
+│  4. Execute the PRD:                                            │
+│     Execute the PRD at dev/work/plans/{slug}/prd.md             │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  💡 Or copy-paste this one-liner:                               │
+│                                                                 │
+│     cd '{worktree_path}' && pi                                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+##### 7. Error Recovery
+
+| Error | Recovery |
+|-------|----------|
+| osascript fails | Check System Preferences > Security > Automation permissions |
+| iTerm not found | Install iTerm2 or use Terminal.app fallback |
+| Terminal doesn't open | Check if another app is blocking; try manual launch |
+| Wrong directory in terminal | Verify `worktree_path` is absolute, not relative |
 
 **Exit Conditions**:
 - Terminal window opened in worktree directory
-- OR fallback message provided if launch failed
+- OR fallback message provided with manual instructions
 
-**Fallback**: If terminal launch fails, print:
-> Terminal launch failed. Please manually:
-> 1. Open a terminal
-> 2. `cd {worktree-path}`
-> 3. Run `pi`
-> 4. Say: `Execute the PRD at dev/work/plans/{slug}/prd.md`
-
-**Handoff to 3.3**: Terminal status (launched or manual instructions)
+**Handoff to 3.3**: Terminal launch status (`launched` or `manual`)
 
 ---
 
 ### Phase 3.3: Start Pi Session
 
 **Entry Conditions**:
-- Terminal opened in worktree (Phase 3.2)
+- Terminal opened in worktree (Phase 3.2 `launched`)
+- OR user has opened terminal manually (Phase 3.2 `manual`)
 
-**Actions**:
-1. Start pi in terminal
-2. Provide execute-prd invocation command
+##### 1. CWD Verification (Run in Worktree Terminal)
+
+Before executing the PRD, verify the pi session is running from the correct directory:
+
+```bash
+# This runs in the NEW terminal, not the original session
+verify_cwd() {
+  local expected_worktree="$1"
+  local slug="$2"
+  local current_dir=$(pwd)
+  
+  # Check we're in the worktree
+  if [[ "${current_dir}" != "${expected_worktree}" ]]; then
+    echo "❌ Wrong directory!"
+    echo "   Expected: ${expected_worktree}"
+    echo "   Current:  ${current_dir}"
+    echo ""
+    echo "   Run: cd '${expected_worktree}'"
+    return 1
+  fi
+  
+  # Verify this is the worktree (not main repo)
+  local git_dir=$(git rev-parse --git-dir 2>/dev/null)
+  if [[ "${git_dir}" == ".git" ]]; then
+    echo "❌ This appears to be the main repository, not a worktree"
+    echo "   Worktrees have .git as a file, not a directory"
+    return 1
+  fi
+  
+  # Verify correct branch
+  local current_branch=$(git branch --show-current)
+  if [[ "${current_branch}" != "feature/${slug}" ]]; then
+    echo "⚠️  Unexpected branch: ${current_branch}"
+    echo "   Expected: feature/${slug}"
+  fi
+  
+  echo "✅ CWD verified: ${current_dir}"
+  echo "✅ Branch: ${current_branch}"
+  return 0
+}
+```
+
+##### 2. Pi Startup Message
+
+When pi starts in the worktree terminal, it should display:
+
+```
+🚀 Ship It — Worktree Session
+
+📁 Directory: {worktree_path}
+🌿 Branch:    feature/{slug}
+📋 PRD:       dev/work/plans/{slug}/prd.md
+
+Ready to execute. Say:
+  "Execute the PRD at dev/work/plans/{slug}/prd.md"
+```
+
+##### 3. Execute-PRD Invocation
+
+The user (or automated script) says to pi:
+
+```
+Execute the PRD at dev/work/plans/{slug}/prd.md
+```
+
+This triggers the `execute-prd` skill which:
+1. Reads the PRD and prd.json
+2. Spawns the Orchestrator (Sr. Eng Manager) persona
+3. Executes tasks sequentially with quality gates
+4. Runs the Reviewer (Sr. Engineer) between tasks
+
+##### 4. PRD Path Resolution
+
+```bash
+# From within worktree
+prd_path="dev/work/plans/${slug}/prd.md"
+prd_json="dev/work/plans/${slug}/prd.json"
+
+# Verify PRD files exist
+if [[ ! -f "${prd_path}" ]]; then
+  echo "❌ PRD not found: ${prd_path}"
+  echo "   The PRD should have been committed in Phase 2.3"
+  exit 1
+fi
+
+if [[ ! -f "${prd_json}" ]]; then
+  echo "❌ prd.json not found: ${prd_json}"
+  exit 1
+fi
+
+echo "✅ PRD ready: ${prd_path}"
+```
+
+##### 5. Execution State Setup
+
+The execute-prd skill will create its own execution state at `dev/executions/{slug}/`. This is handled by the execute-prd skill, not Phase 3.
 
 **Exit Conditions**:
 - Pi session started in worktree
-- Ready to execute PRD
+- CWD verified as worktree directory
+- PRD path validated and accessible
+- Ready to execute PRD via execute-prd skill
 
-**Handoff to 4.1**: PRD path, execution context
+**Handoff to 4.1**: 
+- PRD path: `dev/work/plans/{slug}/prd.md`
+- Execution state path: `dev/executions/{slug}/`
+- Branch: `feature/{slug}`
 
 ---
 
