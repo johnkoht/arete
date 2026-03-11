@@ -86,11 +86,22 @@ const VALID_PEOPLE_PROCESSING = new Set(['off', 'ask', 'on']);
 /**
  * Normalize a resolved config to clamp any invalid enum values to safe defaults.
  * Guards against invalid values written into arete.yaml (e.g. `peopleProcessing: "sometimes"`).
+ * Also handles migration from old config formats to new ones.
  */
 function normalizeConfig(config) {
     const pp = config.settings?.conversations?.peopleProcessing;
     if (!VALID_PEOPLE_PROCESSING.has(pp)) {
         config.settings.conversations.peopleProcessing = 'off';
+    }
+    /**
+     * Migration: qmd_collection (singular) → qmd_collections (map)
+     *
+     * This migration happens at load time (in memory only). The migrated config
+     * is NOT written back to arete.yaml automatically. Users should run `arete update`
+     * to persist the new multi-collection format.
+     */
+    if (config.qmd_collection && !config.qmd_collections) {
+        config.qmd_collections = { all: config.qmd_collection };
     }
     return config;
 }
