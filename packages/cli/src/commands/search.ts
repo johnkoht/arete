@@ -95,7 +95,8 @@ export interface SearchErrorOutput {
     | 'COLLECTION_NOT_FOUND'
     | 'PERSON_NOT_FOUND'
     | 'PERSON_AMBIGUOUS'
-    | 'INVALID_FLAGS';
+    | 'INVALID_FLAGS'
+    | 'TIMELINE_ERROR';
   /** Resolution options for PERSON_AMBIGUOUS */
   options?: Array<{ name: string; slug: string; category: string }>;
 }
@@ -472,17 +473,20 @@ export async function runSearch(
   }
 
   if (!collectionName) {
+    const scopeMsg =
+      scope === 'all'
+        ? `No QMD collection configured. Run \`arete update\` to create collections.`
+        : `Collection not found for scope '${scope}'. Run \`arete update\` to create scoped collections, or use --scope all.`;
     if (opts.json) {
       console.log(
         JSON.stringify({
           success: false,
-          error: `No QMD collection configured for scope: ${scope}. Run 'arete update' to create collections.`,
+          error: scopeMsg,
           code: 'COLLECTION_NOT_FOUND',
         } satisfies SearchErrorOutput),
       );
     } else {
-      error(`No QMD collection configured for scope: ${scope}`);
-      info("Run 'arete update' to create collections.");
+      error(scopeMsg);
     }
     process.exit(1);
   }
@@ -501,6 +505,25 @@ export async function runSearch(
       error('--timeline and --answer are mutually exclusive');
     }
     process.exit(1);
+  }
+
+  // Validate --days flag
+  if (opts.days) {
+    const parsedDays = parseInt(opts.days, 10);
+    if (isNaN(parsedDays) || parsedDays < 0) {
+      if (opts.json) {
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: `Invalid --days value: ${opts.days}. Must be a non-negative integer.`,
+            code: 'INVALID_FLAGS',
+          } satisfies SearchErrorOutput),
+        );
+      } else {
+        error(`Invalid --days value: ${opts.days}. Must be a non-negative integer.`);
+      }
+      process.exit(1);
+    }
   }
 
   // Warn if --days is used without --timeline (it has no effect)
@@ -525,8 +548,25 @@ export async function runSearch(
     }
 
     // Get timeline from MemoryService
-    const getTimeline = deps.getTimeline ?? (async (q, p, r) => services.memory.getTimeline(q, p, r));
-    const timeline = await getTimeline(query, paths, range, services);
+    let timeline: MemoryTimeline;
+    try {
+      const getTimeline = deps.getTimeline ?? (async (q, p, r) => services.memory.getTimeline(q, p, r));
+      timeline = await getTimeline(query, paths, range, services);
+    } catch (err) {
+      const message = `Timeline failed: ${err instanceof Error ? err.message : String(err)}`;
+      if (opts.json) {
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: message,
+            code: 'TIMELINE_ERROR',
+          } satisfies SearchErrorOutput),
+        );
+      } else {
+        error(message);
+      }
+      process.exit(1);
+    }
 
     // Apply person filter if specified
     let filteredItems = timeline.items;
@@ -656,8 +696,25 @@ export async function runSearch(
     process.exit(1);
   }
 
+  // Validate and parse --limit
+  const parsedLimit = opts.limit ? parseInt(opts.limit, 10) : 15;
+  if (isNaN(parsedLimit) || parsedLimit <= 0) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: `Invalid --limit value: ${opts.limit}. Must be a positive integer.`,
+          code: 'INVALID_FLAGS',
+        } satisfies SearchErrorOutput),
+      );
+    } else {
+      error(`Invalid --limit value: ${opts.limit}. Must be a positive integer.`);
+    }
+    process.exit(1);
+  }
+  const limit = parsedLimit;
+
   // Build QMD command
-  const limit = opts.limit ? parseInt(opts.limit, 10) : 15;
   const args = ['query', query, '--json', '-n', String(limit)];
   if (scope !== 'all') {
     args.push('-c', collectionName);

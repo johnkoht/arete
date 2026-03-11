@@ -405,6 +405,60 @@ describe('runSearch', () => {
       const output = JSON.parse(logs[0]) as SearchErrorOutput;
       assert.equal(output.success, false);
       assert.equal(output.code, 'COLLECTION_NOT_FOUND');
+      assert.ok(
+        output.error.includes("scope 'memory'"),
+        'Should mention the requested scope',
+      );
+      assert.ok(
+        output.error.includes('arete update'),
+        'Should suggest running arete update',
+      );
+      assert.ok(
+        output.error.includes('--scope all'),
+        'Should suggest --scope all as fallback',
+      );
+    });
+
+    it('shows generic message when no collection for all scope', async () => {
+      let exitCode: number | undefined;
+      const originalExit = process.exit;
+      process.exit = ((code: number) => {
+        exitCode = code;
+        throw new Error('process.exit');
+      }) as never;
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        loadConfig: async () =>
+          ({
+            // no qmd_collections and no qmd_collection
+          }) as import('@arete/core').AreteConfig,
+      });
+
+      try {
+        await runSearch('test query', { scope: 'all', json: true }, deps);
+      } catch (e) {
+        // Expected
+      } finally {
+        process.exit = originalExit;
+        console.log = originalLog;
+      }
+
+      assert.equal(exitCode, 1);
+      const output = JSON.parse(logs[0]) as SearchErrorOutput;
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'COLLECTION_NOT_FOUND');
+      assert.ok(
+        output.error.includes('arete update'),
+        'Should suggest running arete update',
+      );
+      assert.ok(
+        !output.error.includes('--scope all'),
+        'Should not suggest --scope all when already using all scope',
+      );
     });
 
     it('falls back to qmd_collection for all scope', async () => {
@@ -1885,6 +1939,149 @@ describe('search command integration', () => {
       const output = JSON.parse(stdout) as SearchErrorOutput;
       assert.equal(output.success, false);
       assert.equal(output.code, 'INVALID_SCOPE');
+    });
+  });
+});
+
+describe('input validation', () => {
+  /** Create mock timeline for timeline tests */
+  function createMockTimelineData() {
+    return {
+      query: 'test query',
+      items: [
+        {
+          type: 'decisions' as const,
+          title: 'Decision about API',
+          content: 'We decided to use REST.',
+          date: '2024-01-15',
+          source: 'decisions.md',
+          relevanceScore: 0.9,
+        },
+      ],
+      themes: ['API'],
+      dateRange: { start: '2024-01-15', end: '2024-01-15' },
+    };
+  }
+
+  /** Helper to run runSearch expecting process.exit(1) and capture JSON output */
+  async function runExpectingExit(
+    opts: Parameters<typeof runSearch>[1],
+    deps?: SearchDeps,
+  ): Promise<{ exitCode: number | undefined; output: SearchErrorOutput }> {
+    let exitCode: number | undefined;
+    const originalExit = process.exit;
+    process.exit = ((code: number) => {
+      exitCode = code;
+      throw new Error('process.exit');
+    }) as never;
+
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (msg: string) => logs.push(msg);
+
+    try {
+      await runSearch('test query', { json: true, ...opts }, deps ?? createMockDeps());
+    } catch {
+      // Expected — process.exit throws
+    } finally {
+      process.exit = originalExit;
+      console.log = originalLog;
+    }
+
+    const output = JSON.parse(logs[0]) as SearchErrorOutput;
+    return { exitCode, output };
+  }
+
+  describe('--limit validation', () => {
+    it('rejects --limit 0', async () => {
+      const { exitCode, output } = await runExpectingExit({ limit: '0' });
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('--limit'));
+    });
+
+    it('rejects negative --limit', async () => {
+      const { exitCode, output } = await runExpectingExit({ limit: '-5' });
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('--limit'));
+    });
+
+    it('rejects non-numeric --limit', async () => {
+      const { exitCode, output } = await runExpectingExit({ limit: 'abc' });
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('--limit'));
+    });
+  });
+
+  describe('--days validation', () => {
+    it('rejects negative --days', async () => {
+      const { exitCode, output } = await runExpectingExit({ days: '-1' });
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('--days'));
+    });
+
+    it('rejects non-numeric --days', async () => {
+      const { exitCode, output } = await runExpectingExit({ days: 'abc' });
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'INVALID_FLAGS');
+      assert.ok(output.error.includes('--days'));
+    });
+
+    it('accepts --days 0', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        getTimeline: async () => createMockTimelineData(),
+      });
+
+      try {
+        await runSearch('test query', { days: '0', timeline: true, json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]) as TimelineOutput;
+      assert.equal(output.success, true);
+    });
+  });
+
+  describe('getTimeline error handling', () => {
+    it('catches getTimeline errors and returns TIMELINE_ERROR in JSON mode', async () => {
+      const deps = createMockDeps({
+        getTimeline: async () => {
+          throw new Error('Memory service unavailable');
+        },
+      });
+
+      const { exitCode, output } = await runExpectingExit({ timeline: true }, deps);
+      assert.equal(exitCode, 1);
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'TIMELINE_ERROR');
+      assert.ok(output.error.includes('Timeline failed'));
+      assert.ok(output.error.includes('Memory service unavailable'));
+    });
+
+    it('catches non-Error throws from getTimeline', async () => {
+      const deps = createMockDeps({
+        getTimeline: async () => {
+          throw 'string error';
+        },
+      });
+
+      const { exitCode, output } = await runExpectingExit({ timeline: true }, deps);
+      assert.equal(exitCode, 1);
+      assert.equal(output.code, 'TIMELINE_ERROR');
+      assert.ok(output.error.includes('string error'));
     });
   });
 });
