@@ -241,8 +241,8 @@ function compressCLICommands(content: string): string {
   // Add tool selection guidance before command list
   const compressed: string[] = [
     '[CLI]',
-    '|tool_selection:"What do you know about X?"→brief --for (searches everything); "What decisions about X?"→memory search (3 files, high signal); "Who is X?"→resolve then people show --memory; "History of X?"→memory timeline; "Prep for X"→brief --for --skill',
-    '|scope:memory search=3 files (decisions,learnings,observations); context=all workspace files; brief=context+memory+entities combined; people show --memory=full person profile with relationship health, stances, open items',
+    '|tool_selection:"What do you know about X?"→search (searches everything); "What decisions about X?"→search --scope memory (high signal); "Who is X?"→resolve then people show --memory; "History of X?"→search --timeline; "Prep for X"→brief --for --skill',
+    '|scope:search (default --scope all)=all workspace files; search --scope memory=3 files (decisions,learnings,observations); brief=context+memory+entities combined; people show --memory=full person profile with relationship health, stances, open items',
     '|proactive:person mentioned→resolve+people show --memory; community skill→check requires_briefing, brief if true; after file edits→arete index; substantial topic→brief --for',
   ];
   
