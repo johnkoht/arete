@@ -274,4 +274,4 @@ Stakeholders:
 
 - This skill handles the **conversational flow** (paste → review → save). The parsing and extraction are provided by `@arete/core` modules.
 - Source-agnostic: works with Slack, Teams, email, or any text. No platform-specific behavior.
-- The saved artifact is automatically discoverable by `arete context --for "query"` because conversations are stored in `resources/conversations/`.
+- The saved artifact is automatically discoverable by `arete search "query"` because conversations are stored in `resources/conversations/`.

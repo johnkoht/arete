@@ -144,7 +144,7 @@ Community skills can ship their own templates in a `templates/` subfolder. Users
 
 ## Indexing
 
-Set `index: true` when the skill's output should be findable by `arete context`, `arete brief`, or other skills.
+Set `index: true` when the skill's output should be findable by `arete search`, `arete brief`, or other skills.
 
 | Output type | Use `index: true`? |
 |-------------|-------------------|
