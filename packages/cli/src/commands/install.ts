@@ -9,7 +9,7 @@ import {
   getSourcePaths,
   getPackageRoot,
   getAdapter,
-  ensureQmdCollection,
+  ensureQmdCollections,
 } from '@arete/core';
 import { join, resolve } from 'path';
 import type { Command } from 'commander';
@@ -118,24 +118,35 @@ export function registerInstallCommand(program: Command): void {
           sourcePaths,
         });
 
-        // Auto-setup qmd collection if available
+        // Auto-setup qmd collections if available (6 scoped collections)
         let qmdResult;
         if (!opts.skipQmd) {
           if (!opts.json) {
             console.log(chalk.dim('  Setting up search index...'));
           }
-          qmdResult = await ensureQmdCollection(targetDir);
-          if (qmdResult.collectionName && qmdResult.created) {
-            // Persist collection name to arete.yaml
+          qmdResult = await ensureQmdCollections(targetDir);
+          // Persist collections to arete.yaml
+          if (!qmdResult.skipped && Object.keys(qmdResult.collections).length > 0) {
+            // Write qmd_collections (new, scoped)
             await services.workspace.updateManifestField(
               targetDir,
-              'qmd_collection',
-              qmdResult.collectionName,
+              'qmd_collections',
+              qmdResult.collections,
             );
+            // Backward compat: write qmd_collection (singular) as the 'all' collection
+            if (qmdResult.collections.all) {
+              await services.workspace.updateManifestField(
+                targetDir,
+                'qmd_collection',
+                qmdResult.collections.all,
+              );
+            }
           }
         }
 
         if (opts.json) {
+          // Compute backward-compat 'created' field: true if any scope was created
+          const createdAny = qmdResult?.scopes?.some((s) => s.created) ?? false;
           console.log(
             JSON.stringify(
               {
@@ -143,7 +154,9 @@ export function registerInstallCommand(program: Command): void {
                 path: targetDir,
                 source: sourceInfo,
                 results: result,
-                qmd: qmdResult ?? { skipped: true, available: false, created: false, indexed: false },
+                qmd: qmdResult
+                  ? { ...qmdResult, created: createdAny }
+                  : { skipped: true, available: false, collections: {}, indexed: false, created: false },
               },
               null,
               2,
@@ -162,10 +175,15 @@ export function registerInstallCommand(program: Command): void {
         listItem('Rules installed', result.rules.length.toString());
 
         if (qmdResult && !qmdResult.skipped) {
-          if (qmdResult.created) {
-            listItem('Search index', `qmd collection "${qmdResult.collectionName}" created`);
-          } else if (qmdResult.indexed) {
-            listItem('Search index', `qmd collection "${qmdResult.collectionName}" updated`);
+          const createdCount = qmdResult.scopes.filter((s) => s.created).length;
+          const totalCount = Object.keys(qmdResult.collections).length;
+          if (createdCount > 0) {
+            listItem(
+              'Search index',
+              `${createdCount} qmd collection${createdCount > 1 ? 's' : ''} created (${totalCount} total)`,
+            );
+          } else if (qmdResult.indexed && totalCount > 0) {
+            listItem('Search index', `${totalCount} qmd collection${totalCount > 1 ? 's' : ''} updated`);
           }
           if (qmdResult.warning) {
             warn(qmdResult.warning);
