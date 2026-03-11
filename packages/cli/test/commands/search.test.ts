@@ -77,7 +77,7 @@ function createMockDeps(overrides: Partial<SearchDeps> = {}): SearchDeps {
         entity: {
           resolveAll: async () => [],
         },
-      }) as ReturnType<typeof import('@arete/core').createServices>,
+      }) as unknown as Awaited<ReturnType<typeof import('@arete/core').createServices>>,
     loadConfig: async () =>
       ({
         qmd_collections: mockCollections,
@@ -235,7 +235,7 @@ describe('runSearch', () => {
           ({
             workspace: { findRoot: async () => null },
             storage: {},
-          }) as ReturnType<typeof import('@arete/core').createServices>,
+          }) as unknown as Awaited<ReturnType<typeof import('@arete/core').createServices>>,
       });
 
       try {
