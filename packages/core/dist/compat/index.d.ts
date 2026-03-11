@@ -1,0 +1,12 @@
+/**
+ * Compatibility shims for legacy function APIs.
+ * These delegate to the new service classes.
+ */
+export { isAreteWorkspace, findWorkspaceRoot, getWorkspacePaths, parseSourceType, getSourcePaths, } from './workspace.js';
+export { getRelevantContext } from './context.js';
+export { searchMemory } from './memory.js';
+export { assembleBriefing, routeToSkill } from './intelligence.js';
+export type { BriefingOptions } from './intelligence.js';
+export { resolveEntity, resolveEntities, listPeople, getPersonBySlug, getPersonByEmail, updatePeopleIndex, slugifyPersonName, PEOPLE_CATEGORIES, } from './entity.js';
+export type { ListPeopleOptions } from './entity.js';
+//# sourceMappingURL=index.d.ts.map
