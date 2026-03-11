@@ -214,6 +214,59 @@ describe('parseQmdResults', () => {
 
     assert.equal(results[0].title, 'Explicit Title');
   });
+
+  it('handles NaN score gracefully', () => {
+    // NaN becomes null in JSON, which is not a number, so defaults to 1
+    const stdout = JSON.stringify([
+      { file: 'qmd://col/test.md', snippet: 'test content', score: NaN },
+    ]);
+    const results = parseQmdResults(stdout);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].score, 1); // Defaults to 1 when not a valid number
+  });
+
+  it('handles string score gracefully', () => {
+    // String score is not a number type, so defaults to 1
+    const stdout = JSON.stringify([
+      { file: 'qmd://col/test.md', snippet: 'test content', score: 'high' },
+    ]);
+    const results = parseQmdResults(stdout);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].score, 1); // Defaults to 1 when not a number
+  });
+
+  it('handles Infinity score gracefully', () => {
+    // Infinity becomes null in JSON, which is not a number, so defaults to 1
+    const stdout = JSON.stringify([
+      { file: 'qmd://col/test.md', snippet: 'test content', score: Infinity },
+    ]);
+    const results = parseQmdResults(stdout);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].score, 1); // Defaults to 1 when not a valid number
+  });
+
+  it('handles null score gracefully', () => {
+    const stdout = JSON.stringify([
+      { file: 'qmd://col/test.md', snippet: 'test content', score: null },
+    ]);
+    const results = parseQmdResults(stdout);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].score, 1); // Defaults to 1 when null
+  });
+
+  it('handles undefined score gracefully', () => {
+    const stdout = JSON.stringify([
+      { file: 'qmd://col/test.md', snippet: 'test content' },
+    ]);
+    const results = parseQmdResults(stdout);
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].score, 1); // Defaults to 1 when undefined
+  });
 });
 
 describe('runSearch', () => {
@@ -1495,6 +1548,279 @@ describe('runSearch --answer mode', () => {
       assert.equal(output.results.length, 1);
       assert.ok(output.results[0].snippet.includes('Jane'));
       assert.ok(output.answer);
+    });
+  });
+});
+
+describe('human-readable output', () => {
+  describe('standard search output', () => {
+    it('formats search results with headers and snippets', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/context/profile.md',
+              snippet: '# My Profile\n\nThis is a detailed profile description.',
+              score: 0.95,
+            },
+            {
+              file: 'qmd://test-all/projects/roadmap.md',
+              snippet: '## Q1 Roadmap\n\nKey initiatives for the quarter.',
+              score: 0.82,
+            },
+          ]),
+          stderr: '',
+        }),
+      });
+
+      try {
+        await runSearch('test query', { json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+
+      // Should include header
+      assert.ok(output.includes('Search Results'), 'Should include header');
+      // Should include query
+      assert.ok(output.includes('test query'), 'Should include query');
+      // Should include scope
+      assert.ok(output.includes('all'), 'Should include scope');
+      // Should include result count
+      assert.ok(output.includes('2'), 'Should include result count');
+      // Should include titles
+      assert.ok(output.includes('My Profile'), 'Should include first title');
+      assert.ok(output.includes('Q1 Roadmap'), 'Should include second title');
+      // Should include paths
+      assert.ok(output.includes('context/profile.md'), 'Should include first path');
+      assert.ok(output.includes('projects/roadmap.md'), 'Should include second path');
+      // Should include score percentages
+      assert.ok(output.includes('95%'), 'Should include first score');
+      assert.ok(output.includes('82%'), 'Should include second score');
+      // Should include snippet preview
+      assert.ok(output.includes('This is a detailed'), 'Should include snippet preview');
+    });
+
+    it('shows message when no results found', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: '[]',
+          stderr: '',
+        }),
+      });
+
+      try {
+        await runSearch('nonexistent query', { json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+      assert.ok(output.includes('No matching results found'), 'Should show no results message');
+    });
+  });
+
+  describe('timeline output', () => {
+    it('formats timeline results with dates and themes', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        getTimeline: async () => ({
+          query: 'test query',
+          items: [
+            {
+              type: 'decisions' as const,
+              title: 'API Design Decision',
+              content: 'We chose REST over GraphQL.',
+              date: '2024-01-15',
+              source: 'decisions.md',
+              relevanceScore: 0.9,
+            },
+            {
+              type: 'meeting' as const,
+              title: 'Team Planning',
+              content: 'Discussed roadmap.',
+              date: '2024-01-10',
+              source: '2024-01-10-planning.md',
+              relevanceScore: 0.85,
+            },
+          ],
+          themes: ['API design', 'Planning'],
+          dateRange: { start: '2024-01-10', end: '2024-01-15' },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { timeline: true, json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+
+      // Should include header
+      assert.ok(output.includes('Timeline Results'), 'Should include timeline header');
+      // Should include query
+      assert.ok(output.includes('test query'), 'Should include query');
+      // Should include themes section
+      assert.ok(output.includes('Recurring Themes'), 'Should include themes header');
+      assert.ok(output.includes('API design'), 'Should include first theme');
+      assert.ok(output.includes('Planning'), 'Should include second theme');
+      // Should include dates as group headers
+      assert.ok(output.includes('2024-01-15'), 'Should include first date');
+      assert.ok(output.includes('2024-01-10'), 'Should include second date');
+      // Should include item titles
+      assert.ok(output.includes('API Design Decision'), 'Should include first item title');
+      assert.ok(output.includes('Team Planning'), 'Should include second item title');
+      // Should include type tags
+      assert.ok(output.includes('[decisions]'), 'Should include decisions type tag');
+      assert.ok(output.includes('[meeting]'), 'Should include meeting type tag');
+    });
+
+    it('shows message when no timeline items found', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        getTimeline: async () => ({
+          query: 'test query',
+          items: [],
+          themes: [],
+          dateRange: { start: '', end: '' },
+        }),
+      });
+
+      try {
+        await runSearch('nonexistent query', { timeline: true, json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+      assert.ok(output.includes('No timeline items found'), 'Should show no items message');
+    });
+  });
+
+  describe('answer output', () => {
+    it('formats answer results with synthesis and citations', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/context/api-design.md',
+              snippet: '# API Design\n\nWe use REST for the main API.',
+              score: 0.95,
+            },
+          ]),
+          stderr: '',
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async () => ({
+            text: 'Based on the documents, we use REST for the main API [1].',
+          }),
+        },
+      });
+
+      try {
+        await runSearch('what is our API design?', { answer: true, json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+
+      // Should include header
+      assert.ok(output.includes('Search Results'), 'Should include header');
+      // Should include answer section
+      assert.ok(output.includes('Answer'), 'Should include answer label');
+      // Should include the synthesized answer
+      assert.ok(output.includes('Based on the documents'), 'Should include synthesized answer');
+      assert.ok(output.includes('REST'), 'Should include answer content');
+      // Should include the source results below
+      assert.ok(output.includes('API Design'), 'Should include result title');
+      assert.ok(output.includes('api-design.md'), 'Should include result path');
+    });
+
+    it('shows warning when AI not configured', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        ai: {
+          isConfigured: () => false,
+          call: async () => {
+            throw new Error('Should not be called');
+          },
+        },
+      });
+
+      try {
+        await runSearch('test query', { answer: true, json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+      // Should show warning about AI not configured
+      assert.ok(output.includes('AI not configured'), 'Should show AI not configured warning');
+      // Should still show results
+      assert.ok(output.includes('Search Results'), 'Should still show results header');
+    });
+
+    it('shows warning when AI synthesis fails', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => logs.push(args.join(' '));
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/docs.md',
+              snippet: '# Documentation\n\nContent here.',
+              score: 0.9,
+            },
+          ]),
+          stderr: '',
+        }),
+        ai: {
+          isConfigured: () => true,
+          call: async () => {
+            throw new Error('Rate limit exceeded');
+          },
+        },
+      });
+
+      try {
+        await runSearch('test query', { answer: true, json: false }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = logs.join('\n');
+      // Should show synthesis failure warning
+      assert.ok(output.includes('AI synthesis failed'), 'Should show AI synthesis failed warning');
+      assert.ok(output.includes('Rate limit'), 'Should include error details');
+      // Should still show results
+      assert.ok(output.includes('Documentation'), 'Should still show results');
     });
   });
 });
