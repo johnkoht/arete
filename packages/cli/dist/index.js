@@ -1,26 +1,18 @@
 #!/usr/bin/env node
-
 /**
  * @arete/cli — thin CLI over @arete/core services
  * Product Management Workspace
  */
-
 import { program } from 'commander';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-
 import { registerInstallCommand } from './commands/install.js';
 import { registerUpdateCommand } from './commands/update.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerRouteCommand } from './commands/route.js';
-import {
-  registerContextCommand,
-  registerMemoryCommand,
-  registerResolveCommand,
-  registerBriefCommand,
-} from './commands/intelligence.js';
+import { registerContextCommand, registerMemoryCommand, registerResolveCommand, registerBriefCommand, } from './commands/intelligence.js';
 import { registerPeopleCommands } from './commands/people.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerToolCommands } from './commands/tool.js';
@@ -40,20 +32,14 @@ import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerSearchCommand } from './commands/search.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
-);
-
+const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
 program
-  .name('arete')
-  .description('Areté - Product Management Workspace CLI')
-  .version(packageJson.version, '-v, --version', 'Show version number')
-  .addHelpText(
-    'after',
-    `
+    .name('arete')
+    .description('Areté - Product Management Workspace CLI')
+    .version(packageJson.version, '-v, --version', 'Show version number')
+    .addHelpText('after', `
 ${chalk.bold('Setup & Workspace')}
   install [directory]              Initialize workspace
   onboard                          Quick identity setup (name, email, company)
@@ -117,9 +103,7 @@ ${chalk.bold('AI Configuration')}
   credentials test                 Test provider connections
   config show ai                   Show AI tier/task configuration
   config set <path> <value>        Set AI config (ai.tiers.<tier>, ai.tasks.<task>)
-`,
-  );
-
+`);
 // Register commands
 registerInstallCommand(program);
 registerOnboardCommand(program);
@@ -148,5 +132,5 @@ registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
 registerSearchCommand(program);
-
 program.parse();
+//# sourceMappingURL=index.js.map
