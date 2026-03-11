@@ -46,6 +46,8 @@ export type {
   AITask,
   AITier,
   AIConfig,
+  QmdScope,
+  QmdCollections,
   AreteConfig,
   WorkspacePaths,
   WorkspaceStatus,

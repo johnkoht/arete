@@ -45,6 +45,12 @@ export type IntelligenceConfig = {
   };
 };
 
+/** QMD collection scope identifiers */
+export type QmdScope = 'all' | 'memory' | 'meetings' | 'context' | 'projects' | 'people';
+
+/** Map of scope to collection name. Partial because some scopes may be skipped if path doesn't exist. */
+export type QmdCollections = Partial<Record<QmdScope, string>>;
+
 /** Shape of the resolved config object */
 export type AreteConfig = {
   schema: number;
@@ -59,6 +65,8 @@ export type AreteConfig = {
   internal_email_domain?: string;
   /** QMD collection name for this workspace (auto-generated on install) */
   qmd_collection?: string;
+  /** QMD collections for scoped search (scope → collection name) */
+  qmd_collections?: QmdCollections;
   /** AI configuration for model routing and tiers */
   ai?: AIConfig;
   /** Intelligence extraction configuration */
