@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-11: [consolidate-search-command-learnings](entries/2026-03-11_consolidate-search-command-learnings.md) — Unified `arete search` command replacing context --for, memory search, memory timeline. 16/16 tasks, 94% first-attempt. Key: flaky test fix unblocked execution, reviewer sanity check caught phantom task.
 - 2026-03-11: [ship-it-learnings](entries/2026-03-11_ship-it-learnings.md) — Ship skill: mega-build automation from plan-to-PR. 8/8 tasks, 0 iterations, 0/8 pre-mortem risks. Created `.pi/skills/ship/` with 6 phases, intelligent gates, recovery matrix. New pattern: complex skill structure (orchestrator.md + templates/).
 - 2026-03-10: [web-pagination-learnings](entries/2026-03-10_web-pagination-learnings.md) — Pagination for Meetings, People, Commitments: backend `{ items, total, offset, limit }`, frontend URL-based page state, filter reset to page 1. 5 commits, +1700 lines.
 - 2026-03-10: [person-detail-redesign-learnings](entries/2026-03-10_person-detail-redesign-learnings.md) — PersonDetailPage Edit button relocation: pre-mortem revealed ~80% of "medium" plan already done, scoped to 1 task. 100% first-attempt, 0 iterations. Key: risk-first scoping prevented ~8 hours wasted work.
