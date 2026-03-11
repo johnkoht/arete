@@ -15,6 +15,7 @@ import {
   type SearchDeps,
   type SearchOutput,
   type SearchErrorOutput,
+  type PersonResolution,
 } from '../../src/commands/search.js';
 
 /** Install a workspace and inject qmd_collections into arete.yaml */
@@ -50,13 +51,29 @@ function createMockDeps(overrides: Partial<SearchDeps> = {}): SearchDeps {
     people: 'test-people',
   };
 
+  const mockPaths = {
+    root: '/mock/workspace',
+    context: '/mock/workspace/context',
+    goals: '/mock/workspace/goals',
+    projects: '/mock/workspace/projects',
+    resources: '/mock/workspace/resources',
+    people: '/mock/workspace/people',
+    memory: '/mock/workspace/.arete/memory',
+    arete: '/mock/workspace/.arete',
+    tools: '/mock/workspace/.arete/tools',
+  };
+
   return {
     createServices: async () =>
       ({
         workspace: {
           findRoot: async () => '/mock/workspace',
+          getPaths: () => mockPaths,
         },
         storage: {},
+        entity: {
+          resolveAll: async () => [],
+        },
       }) as ReturnType<typeof import('@arete/core').createServices>,
     loadConfig: async () =>
       ({
@@ -521,6 +538,287 @@ describe('runSearch', () => {
       assert.equal(output.success, true);
       assert.equal(output.results.length, 0);
       assert.equal(output.total, 0);
+    });
+  });
+
+  describe('person filtering', () => {
+    it('filters results by resolved person name', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/resources/meetings/2024-01-15-meeting.md',
+              snippet: '# Team Meeting\n\nAttendees: Jane Doe, Bob Smith\n\nDiscussion about project.',
+              score: 0.95,
+            },
+            {
+              file: 'qmd://test-all/resources/meetings/2024-01-10-standup.md',
+              snippet: '# Standup\n\nJust Bob Smith today.',
+              score: 0.85,
+            },
+          ]),
+          stderr: '',
+        }),
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'jane', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]) as SearchOutput;
+      assert.equal(output.success, true);
+      // Only the first result should remain (mentions Jane Doe)
+      assert.equal(output.results.length, 1);
+      assert.ok(output.results[0].snippet.includes('Jane Doe'));
+    });
+
+    it('filters results by person slug in path', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/people/internal/jane-doe.md',
+              snippet: '# Jane Doe\n\nProfile content.',
+              score: 0.95,
+            },
+            {
+              file: 'qmd://test-all/people/internal/bob-smith.md',
+              snippet: '# Bob Smith\n\nAnother profile.',
+              score: 0.85,
+            },
+          ]),
+          stderr: '',
+        }),
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'jane-doe', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]) as SearchOutput;
+      assert.equal(output.success, true);
+      assert.equal(output.results.length, 1);
+      assert.ok(output.results[0].path.includes('jane-doe'));
+    });
+
+    it('exits with PERSON_NOT_FOUND for unknown person', async () => {
+      let exitCode: number | undefined;
+      const originalExit = process.exit;
+      process.exit = ((code: number) => {
+        exitCode = code;
+        throw new Error('process.exit');
+      }) as never;
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'none',
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'unknown', json: true }, deps);
+      } catch (e) {
+        // Expected
+      } finally {
+        process.exit = originalExit;
+        console.log = originalLog;
+      }
+
+      assert.equal(exitCode, 1);
+      const output = JSON.parse(logs[0]) as SearchErrorOutput;
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'PERSON_NOT_FOUND');
+      assert.ok(output.error.includes('unknown'));
+    });
+
+    it('exits with PERSON_AMBIGUOUS for ambiguous name with options', async () => {
+      let exitCode: number | undefined;
+      const originalExit = process.exit;
+      process.exit = ((code: number) => {
+        exitCode = code;
+        throw new Error('process.exit');
+      }) as never;
+
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'multiple',
+          matches: [
+            {
+              type: 'person',
+              name: 'John Smith',
+              slug: 'john-smith',
+              path: '/mock/workspace/people/internal/john-smith.md',
+              metadata: { category: 'internal' },
+              score: 70,
+            },
+            {
+              type: 'person',
+              name: 'John Doe',
+              slug: 'john-doe',
+              path: '/mock/workspace/people/customers/john-doe.md',
+              metadata: { category: 'customers' },
+              score: 65,
+            },
+          ],
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'john', json: true }, deps);
+      } catch (e) {
+        // Expected
+      } finally {
+        process.exit = originalExit;
+        console.log = originalLog;
+      }
+
+      assert.equal(exitCode, 1);
+      const output = JSON.parse(logs[0]) as SearchErrorOutput;
+      assert.equal(output.success, false);
+      assert.equal(output.code, 'PERSON_AMBIGUOUS');
+      assert.ok(output.error.includes('john'));
+      // Should include options for disambiguation
+      assert.ok(output.options);
+      assert.equal(output.options?.length, 2);
+      assert.equal(output.options?.[0].name, 'John Smith');
+      assert.equal(output.options?.[0].slug, 'john-smith');
+      assert.equal(output.options?.[0].category, 'internal');
+      assert.equal(output.options?.[1].name, 'John Doe');
+      assert.equal(output.options?.[1].slug, 'john-doe');
+      assert.equal(output.options?.[1].category, 'customers');
+    });
+
+    it('is case-insensitive for person name matching', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      const deps = createMockDeps({
+        execFileAsync: async () => ({
+          stdout: JSON.stringify([
+            {
+              file: 'qmd://test-all/resources/meetings/meeting.md',
+              snippet: '# Meeting\n\nJANE DOE presented the roadmap.',
+              score: 0.95,
+            },
+          ]),
+          stderr: '',
+        }),
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'JANE', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      const output = JSON.parse(logs[0]) as SearchOutput;
+      assert.equal(output.success, true);
+      // Should match despite case difference
+      assert.equal(output.results.length, 1);
+    });
+
+    it('combines --person with --scope filter', async () => {
+      const logs: string[] = [];
+      const originalLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+
+      let capturedArgs: string[] = [];
+
+      const deps = createMockDeps({
+        execFileAsync: async (_file: string, args: string[]) => {
+          capturedArgs = args;
+          return {
+            stdout: JSON.stringify([
+              {
+                file: 'qmd://test-meetings/resources/meetings/team-sync.md',
+                snippet: '# Team Sync\n\nJane Doe shared updates.',
+                score: 0.95,
+              },
+            ]),
+            stderr: '',
+          };
+        },
+        resolvePerson: async (): Promise<PersonResolution> => ({
+          type: 'single',
+          match: {
+            type: 'person',
+            name: 'Jane Doe',
+            slug: 'jane-doe',
+            path: '/mock/workspace/people/internal/jane-doe.md',
+            metadata: { category: 'internal' },
+            score: 100,
+          },
+        }),
+      });
+
+      try {
+        await runSearch('test query', { person: 'jane', scope: 'meetings', json: true }, deps);
+      } finally {
+        console.log = originalLog;
+      }
+
+      // Should pass scope to QMD
+      assert.ok(capturedArgs.includes('-c'));
+      assert.ok(capturedArgs.includes('test-meetings'));
+
+      const output = JSON.parse(logs[0]) as SearchOutput;
+      assert.equal(output.success, true);
+      assert.equal(output.scope, 'meetings');
+      assert.equal(output.results.length, 1);
     });
   });
 });

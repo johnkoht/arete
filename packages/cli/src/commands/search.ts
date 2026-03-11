@@ -24,8 +24,14 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 
 import { createServices, loadConfig } from '@arete/core';
-import type { QmdScope, AreteConfig, StorageAdapter } from '@arete/core';
-import { header, info, error, listItem } from '../formatters.js';
+import type {
+  QmdScope,
+  AreteConfig,
+  StorageAdapter,
+  ResolvedEntity,
+  WorkspacePaths,
+} from '@arete/core';
+import { header, info, error, listItem, warn } from '../formatters.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -71,7 +77,11 @@ export interface SearchErrorOutput {
     | 'QMD_NOT_AVAILABLE'
     | 'WORKSPACE_NOT_FOUND'
     | 'INVALID_SCOPE'
-    | 'COLLECTION_NOT_FOUND';
+    | 'COLLECTION_NOT_FOUND'
+    | 'PERSON_NOT_FOUND'
+    | 'PERSON_AMBIGUOUS';
+  /** Resolution options for PERSON_AMBIGUOUS */
+  options?: Array<{ name: string; slug: string; category: string }>;
 }
 
 /**
@@ -157,6 +167,13 @@ export function parseQmdResults(stdout: string): SearchResultItem[] {
   }
 }
 
+/** Person resolution result for dependency injection */
+export interface PersonResolution {
+  type: 'single' | 'multiple' | 'none';
+  match?: ResolvedEntity;
+  matches?: ResolvedEntity[];
+}
+
 /** Injectable test dependencies */
 export interface SearchDeps {
   createServices: typeof createServices;
@@ -170,6 +187,38 @@ export interface SearchDeps {
     opts: { timeout: number; cwd: string; maxBuffer?: number },
   ) => Promise<{ stdout: string; stderr: string }>;
   isQmdAvailable: () => boolean;
+  /** Resolve person by name/email. Injected for testing. */
+  resolvePerson?: (
+    name: string,
+    services: Awaited<ReturnType<typeof createServices>>,
+    paths: WorkspacePaths,
+  ) => Promise<PersonResolution>;
+}
+
+/** Default person resolution using EntityService */
+async function defaultResolvePerson(
+  name: string,
+  services: Awaited<ReturnType<typeof createServices>>,
+  paths: WorkspacePaths,
+): Promise<PersonResolution> {
+  const candidates = await services.entity.resolveAll(name, 'person', paths, 10);
+
+  if (candidates.length === 0) {
+    return { type: 'none' };
+  }
+
+  // Check if there's a clear winner (score > 50 points above runner-up)
+  // or if the top score is very high (exact match)
+  const topScore = candidates[0].score;
+  const runnerUpScore = candidates.length > 1 ? candidates[1].score : 0;
+
+  // Exact match (score >= 90) or clear winner (50+ point lead)
+  if (topScore >= 90 || (candidates.length === 1) || (topScore - runnerUpScore >= 50)) {
+    return { type: 'single', match: candidates[0] };
+  }
+
+  // Multiple close matches — ambiguous
+  return { type: 'multiple', matches: candidates };
 }
 
 /** Default dependencies */
@@ -189,6 +238,7 @@ function getDefaultDeps(): SearchDeps {
         return false;
       }
     },
+    resolvePerson: defaultResolvePerson,
   };
 }
 
@@ -201,6 +251,7 @@ export async function runSearch(
     scope?: string;
     limit?: string;
     json?: boolean;
+    person?: string;
   },
   deps: SearchDeps = getDefaultDeps(),
 ): Promise<void> {
@@ -258,6 +309,65 @@ export async function runSearch(
     process.exit(1);
   }
 
+  // Resolve person filter if provided
+  let personFilter: { name: string; slug: string } | undefined;
+  if (opts.person) {
+    const paths = services.workspace.getPaths(root);
+    const resolvePerson = deps.resolvePerson ?? defaultResolvePerson;
+    const resolution = await resolvePerson(opts.person, services, paths);
+
+    if (resolution.type === 'none') {
+      if (opts.json) {
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: `Person not found: ${opts.person}`,
+            code: 'PERSON_NOT_FOUND',
+          } satisfies SearchErrorOutput),
+        );
+      } else {
+        error(`Person not found: ${opts.person}`);
+        info('Use `arete people list` to see available people.');
+      }
+      process.exit(1);
+    }
+
+    if (resolution.type === 'multiple' && resolution.matches) {
+      const options = resolution.matches.map((m) => ({
+        name: m.name,
+        slug: m.slug ?? m.name.toLowerCase().replace(/\s+/g, '-'),
+        category: (m.metadata?.category as string) || 'unknown',
+      }));
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify({
+            success: false,
+            error: `Ambiguous person reference: "${opts.person}" matches multiple people`,
+            code: 'PERSON_AMBIGUOUS',
+            options,
+          } satisfies SearchErrorOutput),
+        );
+      } else {
+        error(`Ambiguous person reference: "${opts.person}"`);
+        info('Multiple matches found:');
+        for (const opt of options) {
+          listItem(`${opt.name} (${opt.slug}) — ${opt.category}`);
+        }
+        info('Use a more specific name or the slug directly.');
+      }
+      process.exit(1);
+    }
+
+    // Single match
+    if (resolution.match) {
+      personFilter = {
+        name: resolution.match.name,
+        slug: resolution.match.slug ?? resolution.match.name.toLowerCase().replace(/\s+/g, '-'),
+      };
+    }
+  }
+
   // Load config to get collection name
   const config = await deps.loadConfig(services.storage, root);
   const collections = config.qmd_collections;
@@ -308,6 +418,25 @@ export async function runSearch(
     // QMD query failed — return empty results rather than failing
     // (consistent with qmd.ts provider behavior)
     results = [];
+  }
+
+  // Filter results by person if specified
+  if (personFilter) {
+    const nameLower = personFilter.name.toLowerCase();
+    const slugLower = personFilter.slug.toLowerCase();
+
+    results = results.filter((item) => {
+      // Check if path or snippet contains person name/slug
+      const pathLower = item.path.toLowerCase();
+      const snippetLower = item.snippet.toLowerCase();
+
+      return (
+        pathLower.includes(nameLower) ||
+        pathLower.includes(slugLower) ||
+        snippetLower.includes(nameLower) ||
+        snippetLower.includes(slugLower)
+      );
+    });
   }
 
   // Output
@@ -363,11 +492,12 @@ export function registerSearchCommand(program: Command): void {
       'all',
     )
     .option('--limit <n>', 'Maximum results', '15')
+    .option('--person <name>', 'Filter by person (name or slug)')
     .option('--json', 'Output JSON')
     .action(
       async (
         query: string,
-        opts: { scope?: string; limit?: string; json?: boolean },
+        opts: { scope?: string; limit?: string; person?: string; json?: boolean },
       ) => {
         await runSearch(query, opts);
       },
