@@ -35,12 +35,6 @@ function makeMockJobs() {
 // Mock dependencies factory
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Extraction item with confidence score (legacy callStructured format) */
-interface ExtractionItem {
-  text: string;
-  confidence: number;
-}
-
 /** Direction of an action item relative to the owner (core extraction format) */
 type ActionItemDirection = 'i_owe_them' | 'they_owe_me';
 
@@ -68,20 +62,9 @@ interface MockDepsOptions {
   fileContent?: string;
   readError?: Error;
   writeError?: Error;
-  aiResponse?: {
-    summary: string;
-    actionItems: ExtractionItem[];
-    decisions: ExtractionItem[];
-    learnings: ExtractionItem[];
-  };
-  /** Core extraction response for call() method (Task 3+ format) */
+  /** Core extraction response for call() method */
   coreResponse?: MeetingIntelligence;
   aiError?: Error;
-}
-
-/** Helper to create extraction items with default high confidence (legacy format) */
-function item(text: string, confidence = 0.9): ExtractionItem {
-  return { text, confidence };
 }
 
 /** Create ActionItem for core extraction format */
@@ -158,21 +141,6 @@ Bob: Sounds good. We've decided to postpone the refactor.
       writtenFiles.push({ path, content });
     },
     aiService: {
-      callStructured: async () => {
-        if (options.aiError) throw options.aiError;
-        return {
-          data: options.aiResponse ?? {
-            summary: 'Alice and Bob discussed the Q2 roadmap priorities. They agreed to focus on Q2 and postpone the refactor.',
-            actionItems: [item('Bob will draft the Q2 plan by Friday')],
-            decisions: [item('Postpone the refactor to focus on Q2')],
-            learnings: [],
-          },
-          text: '{}',
-          usage: { input: 100, output: 50, total: 150 },
-          model: 'claude-3-haiku-20240307',
-          provider: 'anthropic',
-        };
-      },
       call: async () => {
         if (options.aiError) throw options.aiError;
         const response = options.coreResponse ?? mockCoreExtractionResponse();

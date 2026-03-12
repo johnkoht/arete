@@ -8,7 +8,7 @@
  * (Jaccard > 0.7) are marked source: 'dedup' for auto-approval.
  */
 
-import { Type, type Static } from '@sinclair/typebox';
+
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
@@ -42,22 +42,7 @@ type JobsService = {
   setJobStatus: (id: string, status: 'running' | 'done' | 'error') => void;
 };
 
-/**
- * TypeBox schema for meeting extraction response with confidence scores.
- */
-const ExtractionItemSchema = Type.Object({
-  text: Type.String({ description: 'The extracted item text' }),
-  confidence: Type.Number({ description: 'Confidence score 0-1' }),
-});
 
-const MeetingExtractionSchema = Type.Object({
-  summary: Type.String({ description: '2-4 sentence summary of the meeting' }),
-  actionItems: Type.Array(ExtractionItemSchema, { description: 'Action items extracted with confidence' }),
-  decisions: Type.Array(ExtractionItemSchema, { description: 'Decisions made in the meeting with confidence' }),
-  learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
-});
-
-type MeetingExtractionLegacy = Static<typeof MeetingExtractionSchema>;
 
 /**
  * Extended ExtractionItem with optional owner/direction metadata from core extraction.
@@ -332,99 +317,8 @@ export interface ProcessingDeps {
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, content: string) => Promise<void>;
   aiService: {
-    callStructured: (
-      task: 'extraction',
-      prompt: string,
-      schema: typeof MeetingExtractionSchema,
-    ) => Promise<AIStructuredResult<MeetingExtraction>>;
     call: (task: AITask, prompt: string) => Promise<{ text: string }>;
   };
-}
-
-/**
- * Build extraction prompt from meeting content.
- */
-/**
- * Extract just the raw transcript portion from meeting content.
- * The raw transcript has speaker names with timestamps like "**John Koht | 00:14**"
- * We want to skip pre-processed sections like "## Action Items", "## Key Points", etc.
- */
-function extractRawTranscript(content: string): string {
-  const lines = content.split('\n');
-  const transcriptLines: string[] = [];
-  let inTranscript = false;
-  let skipUntilNextHeader = false;
-
-  for (const line of lines) {
-    // Check for transcript section headers
-    if (line.match(/^##\s*Transcript\s*\d*\s*$/i)) {
-      inTranscript = true;
-      skipUntilNextHeader = false;
-      continue;
-    }
-
-    // Check for non-transcript headers to skip
-    if (line.match(/^##\s*(Action Items|Key Points|Summary|Decisions|Learnings|Recorder Notes)/i)) {
-      skipUntilNextHeader = true;
-      inTranscript = false;
-      continue;
-    }
-
-    // Any other ## header ends skip mode
-    if (line.startsWith('## ')) {
-      skipUntilNextHeader = false;
-      inTranscript = false;
-    }
-
-    // Collect transcript lines (look for speaker pattern: **Name | timestamp**)
-    if (inTranscript && !skipUntilNextHeader) {
-      transcriptLines.push(line);
-    } else if (line.match(/^\*\*[^|]+\|\s*\d{2}:\d{2}\*\*$/)) {
-      // Speaker line outside explicit transcript section - start collecting
-      inTranscript = true;
-      transcriptLines.push(line);
-    } else if (inTranscript && !line.startsWith('## ')) {
-      transcriptLines.push(line);
-    }
-  }
-
-  return transcriptLines.join('\n').trim();
-}
-
-function buildExtractionPrompt(content: string): string {
-  // Extract only the raw transcript, not pre-processed sections
-  const rawTranscript = extractRawTranscript(content);
-  
-  // Fall back to full content if no transcript found
-  const textToAnalyze = rawTranscript || content;
-
-  return `Analyze this meeting transcript and extract the following:
-
-1. A 2-4 sentence summary of the meeting highlighting key topics and outcomes.
-2. Action items - specific tasks that were assigned or committed to (things people said they would do).
-3. Decisions - choices or conclusions that were explicitly made during the meeting.
-4. Learnings - insights, lessons learned, or important information shared.
-
-For each action item, decision, and learning, provide a confidence score from 0 to 1:
-- 0.9-1.0: Explicitly stated, very clear
-- 0.7-0.9: Clearly implied or strongly suggested
-- 0.5-0.7: Somewhat implied, moderate confidence
-- 0.3-0.5: Weakly implied, low confidence
-- 0.0-0.3: Very uncertain, possibly misinterpreted
-
-IMPORTANT INSTRUCTIONS:
-- Read the actual conversation carefully and identify action items from what people SAY they will do.
-- Action items should be specific tasks assigned to or committed to by a person.
-- Do not include timestamp references in your output.
-- Each item should be a separate entry - do not combine multiple items.
-- Write clean, standalone text for each item.
-
-Meeting content:
----
-${textToAnalyze}
----
-
-Extract the above information. For action items, decisions, and learnings, only include items that are clearly stated or implied in the meeting. If a category has no items, return an empty array. Include confidence scores for each extracted item.`;
 }
 
 /**
@@ -670,8 +564,6 @@ function createDefaultDeps(aiService: AIService): ProcessingDeps {
     readFile: (path: string) => fs.readFile(path, 'utf8'),
     writeFile: (path: string, content: string) => fs.writeFile(path, content, 'utf8'),
     aiService: {
-      callStructured: (task, prompt, schema) =>
-        aiService.callStructured(task, prompt, schema),
       call: async (task, prompt) => {
         const result = await aiService.call(task, prompt);
         return { text: result.text };
