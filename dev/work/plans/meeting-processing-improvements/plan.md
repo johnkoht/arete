@@ -2,21 +2,21 @@
 title: Meeting Processing Improvements
 slug: meeting-processing-improvements
 status: draft
-size: tiny
+size: small
 tags: [meetings, extraction, intelligence]
 created: 2026-03-10T00:00:00.000Z
 updated: 2026-03-11T00:00:00.000Z
 completed: null
 execution: null
-has_review: false
+has_review: true
 has_pre_mortem: false
 has_prd: false
-steps: 1
+steps: 2
 ---
 
 # Meeting Processing Improvements
 
-> **Plan Updated**: 2026-03-11 (v3) — Commit 38be75e completed Step 2 (section headers) and added post-approval automation. Only Step 1 remains.
+> **Plan Updated**: 2026-03-11 (v4) — Addressed review concerns: type mismatch, frontend display, mapping task.
 
 ## Problem Statement (Final)
 
@@ -43,6 +43,7 @@ When this plan is complete:
 | No confidence scores in Web UI | Each item shows confidence (0.0-1.0) |
 | Garbage items slip through | Validation filters remove non-actionable items |
 | Web UI quality << CLI quality | **Parity** — same extraction everywhere |
+| Owner/direction not visible in review UI | **Owner badge shown** on action items |
 
 ---
 
@@ -70,24 +71,76 @@ When this plan is complete:
 
 ---
 
+## Technical Context: Type Mismatch (from review)
+
+The extraction service returns `ActionItem`, but the backend/frontend use `StagedItem`:
+
+| Field | `ActionItem` (extraction) | `StagedItem` (current) | Action |
+|-------|---------------------------|------------------------|--------|
+| text | `description` | `text` | Map |
+| owner | `owner`, `ownerSlug` | ❌ Missing | **Add** |
+| direction | `direction` | ❌ Missing | **Add** |
+| counterparty | `counterpartySlug` | ❌ Missing | **Add** |
+| confidence | `confidence` | `confidence` | ✅ Exists |
+
+**Solution**: Extend `StagedItem` type, add mapping function, update frontend.
+
+---
+
 ## What Remains
 
-### Step 1: Wire Backend to Use Extraction Service
-**Goal**: Web UI processing uses the same extraction logic as CLI
+### Step 1: Extend Types + Create Mapping
+**Goal**: `StagedItem` can carry owner/direction data from extraction
 
 **Tasks**:
-- In `packages/apps/backend/src/services/agent.ts`, replace inline prompting with call to `extractMeetingIntelligence()` from `@arete/core`
-- Pass configurable thresholds from arete.yaml config (already defined in schema)
-- Ensure staged items include owner, direction, confidence fields
-- Update any frontend components that consume these fields (if needed)
+1. In `packages/core/src/models/integrations.ts`, extend `StagedItem`:
+   ```typescript
+   type StagedItem = {
+     id: string;
+     text: string;
+     type: 'ai' | 'de' | 'le';
+     source?: 'ai' | 'dedup';
+     confidence?: number;
+     // NEW fields:
+     ownerSlug?: string;
+     direction?: 'i_owe_them' | 'they_owe_me';
+     counterpartySlug?: string;
+   };
+   ```
+2. In `packages/apps/web/src/api/types.ts`, mirror the type extension
+3. Create `ActionItem → StagedItem` mapping utility (in agent.ts or shared module)
+
+**Acceptance Criteria**:
+- [ ] `StagedItem` type includes owner/direction/counterparty fields
+- [ ] Web types match core types
+- [ ] Mapping function converts `ActionItem[]` → `StagedItem[]` without data loss
+
+**Estimate**: 0.5 day
+
+---
+
+### Step 2: Wire Backend + Update Frontend
+**Goal**: Web UI processing uses extraction service and displays owner info
+
+**Tasks**:
+1. In `packages/apps/backend/src/services/agent.ts`:
+   - Import `extractMeetingIntelligence` from `@arete/core`
+   - Replace inline prompting with extraction service call
+   - Use mapping function to convert results to `StagedItem[]`
+   - Pass configurable thresholds from workspace config
+2. In `packages/apps/web/src/components/ReviewItems.tsx`:
+   - Display owner badge on action items (e.g., `@sarah-chen →` prefix)
+   - Show confidence as visual indicator (optional: color/icon based on score)
+3. Add parity test comparing Web UI output to CLI output
 
 **Acceptance Criteria**:
 - [ ] Web UI extraction produces same quality as CLI
+- [ ] Owner/direction appears in staged items API response
+- [ ] ReviewItems.tsx displays owner attribution for action items
 - [ ] Confidence thresholds from config are respected
-- [ ] Owner attribution appears in staged items
-- [ ] Existing tests pass, new test added for parity
+- [ ] Existing tests pass, new parity test added
 
-**Estimate**: 0.5-1 day
+**Estimate**: 1 day
 
 ---
 
@@ -97,7 +150,8 @@ When this plan is complete:
 |------|--------------|
 | Context injection (attendee profiles) | Enhancement; extraction quality already improved |
 | Multi-step pipeline with validation | Overkill; single-pass with filters is sufficient |
-| End-to-end integration test | Nice-to-have; 38be75e added parser test, approval flow works |
+| Confidence visual indicator in UI | Nice-to-have; can add later based on feedback |
+| Full integration test (process→approve→commit) | 38be75e added parser test; approval flow validated |
 
 ---
 
@@ -105,15 +159,17 @@ When this plan is complete:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Backend refactor breaks existing flow | Low | High | Existing tests + new parity test |
-| Frontend doesn't handle new fields | Low | Medium | Check ReviewItems.tsx for field usage |
+| Type extension breaks existing code | Low | Medium | Fields are optional; backward compatible |
+| Frontend changes require design review | Low | Low | Simple badge/prefix; no major UX change |
+| Mapping function loses data | Low | High | Test mapping explicitly; compare field counts |
 
 ---
 
 ## Success Metrics
 
 - **Parity**: Web UI extraction matches CLI extraction quality
-- **Owner attribution**: 100% of Web UI action items have owner/counterparty
+- **Owner attribution**: 100% of Web UI action items have owner visible
+- **Type safety**: No `any` types; all fields typed
 - **No regressions**: Existing approval→commitments flow continues working
 
 ---
@@ -122,28 +178,45 @@ When this plan is complete:
 
 | Step | Effort |
 |------|--------|
-| Step 1: Wire backend | 0.5-1 day |
-| **Total** | **0.5-1 day** |
+| Step 1: Extend types + mapping | 0.5 day |
+| Step 2: Wire backend + frontend | 1 day |
+| **Total** | **1.5 days** |
 
-**Size**: Tiny (1 step)
+**Size**: Small (2 steps)
 
 ---
 
 ## Plan:
 
-1. **Wire backend agent.ts to use extractMeetingIntelligence()**
-   - Import `extractMeetingIntelligence` from `@arete/core`
-   - Replace inline prompting in meeting processing with extraction service call
-   - Pass configurable thresholds from workspace config
-   - Ensure staged items include owner, direction, confidence
-   - Add parity test comparing Web UI output to CLI output
-   - Verify frontend (ReviewItems.tsx) handles new fields gracefully
+1. **Extend StagedItem type + create mapping**
+   - Add `ownerSlug?`, `direction?`, `counterpartySlug?` to `StagedItem` in core
+   - Mirror type in web/src/api/types.ts
+   - Create `ActionItem → StagedItem` mapping function
+   - Test: verify mapping preserves all fields
+
+2. **Wire backend to extraction service + update frontend**
+   - Import and call `extractMeetingIntelligence()` in agent.ts
+   - Use mapping to convert results
+   - Pass configurable thresholds from config
+   - Update ReviewItems.tsx to display owner badge on action items
+   - Add parity test (Web UI vs CLI output quality)
+
+---
+
+## Review Feedback Addressed
+
+| Concern | Resolution |
+|---------|------------|
+| Type mismatch | Step 1 explicitly extends types |
+| Frontend not addressed | Step 2 includes ReviewItems.tsx update |
+| Missing mapping task | Step 1 includes mapping function |
 
 ---
 
 ## Next Steps
 
 1. ~~Engineering audit~~ ✅ Done
-2. ~~Review commit 38be75e~~ ✅ Done  
-3. `/approve` this plan
-4. Execute directly (tiny scope, no PRD needed)
+2. ~~Review (38be75e)~~ ✅ Done
+3. ~~Address review feedback~~ ✅ Done
+4. `/approve` this plan
+5. Execute directly (small scope, no PRD needed)
