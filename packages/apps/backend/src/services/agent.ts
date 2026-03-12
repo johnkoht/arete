@@ -22,6 +22,7 @@ import {
 import type {
   AIService,
   AIStructuredResult,
+  AITask,
   AreteConfig,
   ActionItem,
   StagedItem,
@@ -294,6 +295,7 @@ export interface ProcessingDeps {
       prompt: string,
       schema: typeof MeetingExtractionSchema,
     ) => Promise<AIStructuredResult<MeetingExtraction>>;
+    call: (task: AITask, prompt: string) => Promise<{ text: string }>;
   };
 }
 
@@ -601,6 +603,10 @@ function createDefaultDeps(aiService: AIService): ProcessingDeps {
     aiService: {
       callStructured: (task, prompt, schema) =>
         aiService.callStructured(task, prompt, schema),
+      call: async (task, prompt) => {
+        const result = await aiService.call(task, prompt);
+        return { text: result.text };
+      },
     },
   };
 }

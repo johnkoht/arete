@@ -103,6 +103,10 @@ Bob: Sounds good. We've decided to postpone the refactor.
           provider: 'anthropic',
         };
       },
+      call: async () => {
+        if (options.aiError) throw options.aiError;
+        return { text: 'mock response' };
+      },
     },
   };
 }
