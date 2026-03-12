@@ -1,10 +1,10 @@
-# Meeting Processing Improvements Plan
-
-**Created**: 2026-03-10
-**Status**: Draft
-**Owner**: Builder
-
 ---
+status: draft
+created: 2026-03-10
+owner: Builder
+---
+
+# Meeting Processing Improvements Plan
 
 ## Problem Statement
 
