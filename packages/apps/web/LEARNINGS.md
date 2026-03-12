@@ -29,6 +29,32 @@ const esRef = useRef<EventSource | null>(null);
 useEffect(() => { return () => { esRef.current?.close(); }; }, []);
 // On modal close: esRef.current?.close(); esRef.current = null;
 ```
+
+### SSE Callbacks + Modal Close — Stale Closure Pattern (2026-03-12)
+
+**What broke**: After reprocess meeting completed, the UI didn't update until page refresh.
+
+**Why**: The SSE `onmessage` handler sets `streamDone` state and calls `invalidateQueries`. But when the
+user later clicks "Close" on the modal, `handleProcessModalClose` checks `streamDone` — except it's using
+a stale closure reference from the previous render, not the current state value.
+
+**Fix**: Use refs alongside state to track processing completion:
+```tsx
+const [streamDone, setStreamDone] = useState(false);
+const streamDoneRef = useRef(false);
+
+// In SSE handler:
+setStreamDone(true);
+streamDoneRef.current = true;
+
+// In modal close handler — use ref, not state:
+if (streamDoneRef.current && !streamErrorRef.current) {
+  void queryClient.refetchQueries({ queryKey: ["meeting", slug] });
+}
+```
+
+**Also**: Use `refetchQueries` instead of `invalidateQueries` when you need data immediately fresh
+(invalidate marks stale but doesn't block; refetch forces immediate fetch).
 Do NOT store EventSource in useState — causes extra re-renders and stale closure issues.
 
 ---
