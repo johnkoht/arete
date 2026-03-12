@@ -5,7 +5,7 @@ status: building
 size: medium
 tags: [meetings, extraction, backend, refactor]
 created: 2026-03-12T00:00:00.000Z
-updated: 2026-03-12T04:28:35.917Z
+updated: 2026-03-12T14:24:05.461Z
 completed: null
 execution: null
 has_review: true
