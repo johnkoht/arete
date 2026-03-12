@@ -1,79 +1,107 @@
 {
-  "name": "INT-0 Service Normalization",
-  "slug": "int-0-service-normalization",
-  "description": "Normalize meeting extraction: Core owns extraction and formatting. CLI and Backend orchestrate.",
-  "tasks": [
+  "name": "intelligence-tuning",
+  "branchName": "feature/intelligence-tuning",
+  "goal": "Improve meeting extraction quality: reduce volume while maintaining signal, auto-approve user-documented items, confidence-based pre-selection, commitment prioritization and reconciliation",
+  "userStories": [
     {
-      "id": "int-0.1",
-      "title": "Move Formatting Functions to Core",
-      "description": "Move formatStagedSections() and updateMeetingContent() from backend to core's meeting-extraction.ts. Adapt to work with MeetingIntelligence type (structured ActionItem[]).",
+      "id": "task-0",
+      "title": "Schema Extension & Baseline Capture",
+      "description": "Add required schema fields (source, confidence) to ReviewItem and capture baseline metrics before changes. Also add rawExtraction storage for debugging.",
       "acceptanceCriteria": [
-        "formatStagedSections(result: MeetingExtractionResult) exported from core",
-        "updateMeetingContent(content: string, stagedSections: string) exported from core",
-        "Both functions work with MeetingIntelligence type",
-        "Test: complete intelligence → all sections with correct IDs (ai_001, de_001, le_001)",
-        "Test: empty sections omitted",
-        "Test: ActionItem formatting includes owner, direction, description",
-        "Test: ID zero-padding (001, 010, 100)",
-        "Test: no existing summary → appends at end",
-        "Test: existing summary → replaces in place",
-        "Test: preserves content after staged sections",
-        "Test: idempotent (running twice = same result)"
+        "ReviewItem type has optional source and confidence fields",
+        "Backend returns items with source: 'ai' by default",
+        "Baseline metrics documented: avg items per meeting before changes",
+        "Raw extraction stored before filtering applied"
       ],
-      "dependencies": [],
-      "status": "pending"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
-      "id": "int-0.2",
-      "title": "Create CLI Extraction Command",
-      "description": "Add `arete meeting extract` command using core extraction via AIService. Supports --json, --stage, --dry-run flags.",
+      "id": "task-1",
+      "title": "Extraction Quality Tuning (INT-1)",
+      "description": "Reduce extraction volume through prompt engineering and post-processing filters. This is the quality gate - filter garbage. Update buildMeetingExtractionPrompt() with selectivity instructions, add post-processing filters for deduplication, trivial patterns, and category limits.",
       "acceptanceCriteria": [
-        "arete meeting extract <file> outputs human-readable extraction",
-        "--json outputs structured JSON",
-        "--stage writes staged sections to meeting file",
-        "--dry-run shows what would be written without writing",
-        "--skip-qmd skips search index refresh",
-        "Early check: if aiService.isConfigured() === false, error with clear message",
-        "Uses extractMeetingIntelligence() from core",
-        "Uses formatStagedSections() from core",
-        "Uses updateMeetingContent() for --stage",
-        "Test: happy path with mock AIService",
-        "Test: no AI configured → clear error",
-        "Test: invalid file → graceful error",
-        "Test: --json produces valid JSON",
-        "Test: --stage modifies file correctly",
-        "Test: --dry-run doesn't write"
+        "Prompt includes selectivity instructions and negative examples",
+        "Prompt requests confidence (0-1) per item",
+        "Near-duplicate items filtered (Jaccard > 0.8)",
+        "Trivial pattern filtering implemented",
+        "Category limits enforced (7/5/5 for actions/decisions/learnings)",
+        "Raw extraction preserved before filtering",
+        "Tests: extraction on sample transcript produces fewer items than before",
+        "Tests: no false negatives for items with explicit owner + deadline"
       ],
-      "dependencies": ["int-0.1"],
-      "status": "pending"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
-      "id": "int-0.3",
-      "title": "Backend Uses Core Functions",
-      "description": "Backend imports formatStagedSections and updateMeetingContent from core. Create type adapter to bridge MeetingExtraction → MeetingIntelligence.",
+      "id": "task-2",
+      "title": "User Notes Deduplication (INT-2)",
+      "description": "If user already documented something in meeting notes, don't extract a duplicate. Compare extracted items against meeting body text using fuzzy matching. Items closely matching user content are marked source: 'dedup' and auto-approved.",
       "acceptanceCriteria": [
-        "Backend imports formatStagedSections from @arete/core",
-        "Backend imports updateMeetingContent from @arete/core",
-        "Type adapter bridges MeetingExtraction → MeetingIntelligence",
-        "Backend's duplicate formatStagedSections() deleted",
-        "POST /api/meetings/:slug/process output unchanged (snapshot test)",
-        "All existing backend tests pass"
+        "Extracted items compared against meeting body text",
+        "Items matching user notes (Jaccard > 0.7) marked source: 'dedup'",
+        "Deduplicated items auto-approved",
+        "Frontend shows 'from your notes' badge for source: 'dedup' items",
+        "Tests: item matching user text is auto-approved with correct source"
       ],
-      "dependencies": ["int-0.1"],
-      "status": "pending"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     },
     {
-      "id": "int-0.4",
-      "title": "Update Skill with CLI-First Path",
-      "description": "Update process-meetings skill to document CLI command as primary path with agent fallback for no-API-key case.",
+      "id": "task-3",
+      "title": "Confidence-Based Pre-Selection (INT-3)",
+      "description": "LLM returns confidence scores; high-confidence items pre-approved, medium reviewed, low filtered. Parse confidence from LLM response, apply threshold-based selection, and remove frontend auto-approve transform since backend now drives status.",
       "acceptanceCriteria": [
-        "Skill documents arete meeting extract as primary path",
-        "Skill shows how to check for AI config",
-        "Skill provides full agent fallback for no-API-key case",
-        "Files this skill reads/writes section updated"
+        "Confidence score parsed from LLM response and stored in ReviewItem",
+        "Items pre-selected based on confidence thresholds (>0.8 approved, 0.5-0.8 pending, <0.5 filtered)",
+        "Frontend respects backend-provided status (remove pending→approved transform)",
+        "User review focuses on medium-confidence items (pending)",
+        "Tests: high-confidence items have status approved, low-confidence filtered"
       ],
-      "dependencies": ["int-0.2"],
-      "status": "pending"
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Commitment Priority Scoring (INT-4)",
+      "description": "Score commitments by urgency/importance. Add priority scoring function using deadline proximity, person health (via computeRelationshipHealth), staleness, and specificity. Update CommitmentsPage with priority badge, sort, and filter.",
+      "acceptanceCriteria": [
+        "Priority score computed for each commitment",
+        "Score factors: deadline, person health, staleness, specificity",
+        "Priority badge displayed (High ≥50, Medium 25-49, Low <25)",
+        "Commitments sortable by priority",
+        "Commitments filterable by priority",
+        "Tests: commitment scoring produces expected priority levels"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Commitment Reconciliation (INT-5)",
+      "description": "Detect likely-completed commitments from recent meetings and suggest resolution. Expose existing CommitmentsService.reconcile() via API endpoint; build UI with Reconcile button and confirmation modal.",
+      "acceptanceCriteria": [
+        "POST /api/commitments/reconcile endpoint implemented",
+        "Endpoint uses existing CommitmentsService.reconcile() (no new service)",
+        "Reconcile button visible on CommitmentsPage",
+        "Candidates displayed with evidence (source meeting, confidence)",
+        "User can confirm (resolves commitment) or dismiss",
+        "Tests: reconciliation returns expected candidates for matching text"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     }
-  ]
+  ],
+  "metadata": {
+    "createdAt": "2026-03-08T23:00:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
 }

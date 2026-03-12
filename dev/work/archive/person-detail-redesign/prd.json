@@ -1,0 +1,29 @@
+{
+  "name": "person-detail-redesign",
+  "branchName": "feature/person-detail-redesign",
+  "goal": "Improve PersonDetailPage UX by relocating the Edit button from the Notes card to the page header for better discoverability and consistency with common design patterns.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Relocate Edit Button to Header",
+      "description": "Move the Edit button from inside the Notes card header to the main page header bar. The button should appear on the right side of the header, after the CategoryBadge. This change improves discoverability and follows common patterns (Linear, Notion).",
+      "acceptanceCriteria": [
+        "Edit button appears in header row, positioned right of CategoryBadge",
+        "Edit button uses appropriate styling (ghost or outline variant)",
+        "Clicking Edit opens EditNotesSheet (existing functionality preserved)",
+        "Edit button removed from Notes card CardTitle",
+        "No regressions: save and cancel flows work correctly",
+        "Tests pass: npm run typecheck && npm test"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-10T06:02:00.000Z",
+    "totalTasks": 1,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

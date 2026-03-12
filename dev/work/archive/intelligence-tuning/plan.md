@@ -1,42 +1,27 @@
 ---
-title: "Areté Intelligence Tuning (INT-0 Only)"
-slug: intelligence-tuning-int0
+title: "Intelligence Tuning (INT-1 through INT-5)"
+slug: intelligence-tuning
 status: complete
 size: medium
 tags: [ai, intelligence, backend]
 created: "2026-03-07"
-updated: "2026-03-08"
-completed: "2026-03-08"
-execution: null
-has_review: false
+updated: 2026-03-09T22:55:00.000Z
+completed: 2026-03-09T22:55:00.000Z
+notes: "INT-0 (Service Normalization) completed separately. This covers the remaining quality improvements."
+has_review: true
 has_pre_mortem: true
-has_prd: true
-steps: 4
-notes: "This archive contains INT-0 (Service Normalization) only. INT-1 through INT-5 moved to dev/work/plans/intelligence-tuning/"
 ---
 
-# Areté Intelligence Tuning Plan
+# Intelligence Tuning Plan (INT-1 through INT-5)
 
 ## Overview
 
-This plan addresses **AI extraction quality** issues reported by users:
+This plan addresses **AI extraction quality** issues:
 - Meeting insights/learnings/decisions are overwhelming
 - AI captures too much, lots of cleanup required
 - User-documented notes should be auto-merged, not require approval
 
-This is **backend/prompt work**, separate from V3 frontend improvements.
-
----
-
-## Problem Statement
-
-The current meeting processing extracts items with high recall but low precision:
-- Too many items extracted (overwhelming)
-- Low-signal items mixed with high-signal
-- User's own notes treated same as AI extractions
-- No confidence scoring or prioritization
-
-**User Impact**: Review workflow feels like work, not assistance.
+**Prerequisite**: INT-0 (Service Normalization) ✅ Complete
 
 ---
 
@@ -239,26 +224,3 @@ INT-1 (Quality Tuning) ──► INT-2 (Notes Merge) ──► INT-3 (Confidence
    - Important enough to track
    - Accurately captured
    ```
-
-### Integration Points
-
-- **INT-1/INT-2/INT-3**: Modify extraction prompts and processing
-- **INT-4/INT-5**: New features, can be built after core tuning
-
----
-
-## Dependencies on web-v3 Plan
-
-- INT-4 (Commitment Priority) → V3-4 (Commitments UI enhancement)
-- INT-5 (Reconciliation) → V3-4 (Commitments UI for reconcile button)
-
-These can be built in either order, but UI should support the intelligence.
-
----
-
-## Open Questions
-
-1. **Confidence calibration**: How to validate confidence scores are accurate?
-2. **User notes format**: How to reliably detect user-written vs AI content?
-3. **Reconciliation frequency**: On-demand only, or scheduled?
-4. **Override persistence**: If user changes priority, persist forever or recompute?

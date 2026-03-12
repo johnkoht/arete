@@ -1,119 +1,148 @@
-# Pre-Mortem: INT-0 Service Normalization
+# Pre-Mortem: Intelligence Tuning (INT-1 through INT-5)
 
 **Date**: 2026-03-08
-**Plan**: Intelligence Tuning — INT-0 (Foundation)
-**Size**: Medium (4 subtasks)
+**Work Type**: New feature (intelligence quality improvements)
+**Size**: Medium-Large (5 components)
 
 ---
 
-## Risk Analysis
+## Risk 1: INT-1 ↔ INT-3 Interaction Confusion
 
-### Category 1: Dependency Risks
+**Problem**: Both INT-1 (filtering heuristics) and INT-3 (confidence-based pre-selection) reduce items. Without clear boundaries, implementers may:
+- Over-filter in INT-1, leaving nothing for INT-3 to score
+- Under-filter in INT-1, making INT-3 do redundant work
+- Introduce conflicting thresholds that confuse the pipeline
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| AI Config plan not complete | Medium | Critical | INT-0.2 requires AIService. If not ready, skip CLI command and do INT-0.1/0.3/0.4 only. |
-| AIService API changes | Low | High | Check AI Config plan for finalized API before INT-0.2. |
+**Mitigation**: Define explicit roles before implementation:
+- **INT-1**: Filter garbage (transcript artifacts, vague statements, >150 char) — quality gate
+- **INT-3**: Rank remaining items by confidence — prioritization layer
+- Document this split in PRD task descriptions and acceptance criteria
 
-### Category 2: Type Compatibility Risks
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Type mismatch core vs backend | Confirmed | Medium | Create explicit adapter `adaptBackendExtractionToCore()`. Don't try to unify types in INT-0. |
-| ActionItem structure changes | Low | Medium | Core's `ActionItem` is stable. Document any changes in LEARNINGS.md. |
-
-### Category 3: Regression Risks
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Backend output format changes | Medium | High | Test before/after with same meeting file. Compare staged section format. |
-| Existing meeting files break | Low | Medium | Preserve backward compat in `updateMeetingContent()` — existing `## Summary` detection. |
-| CLI LEARNINGS.md conflict | Low | Low | Update LEARNINGS.md explicitly to note architecture change. |
-
-### Category 4: Test Coverage Risks
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Insufficient formatter tests | Medium | Medium | Eng lead specified 8 test cases. Enforce as AC. |
-| CLI extract tests missing | Medium | Medium | Require 12+ test cases per eng lead. |
-| Integration test gaps | Medium | High | Add end-to-end test: CLI extract → check file content. |
-
-### Category 5: Architecture Risks
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Skill-CLI fallback complexity | Medium | Medium | Keep skill simple: try CLI, if fails → agent does it. Don't over-engineer. |
-| Prompt drift (core vs backend) | Confirmed | Low | Acceptable for INT-0. Will consolidate in INT-1. |
-
-### Category 6: UX Risks
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| "No AI configured" error confusing | Low | Medium | Clear actionable error: "Run `arete onboard` to configure AI providers." |
-| `--stage` flag unclear | Low | Low | Add help text: "Write staged sections to meeting file for review". |
+**Verification**: Check that INT-1 ACs focus on "remove bad" and INT-3 ACs focus on "rank good"
 
 ---
 
-## Highest Risks (Top 3)
+## Risk 2: INT-2 Schema Dependency Not Surfaced
 
-1. **AI Config dependency** — If not complete, INT-0.2 is blocked.
-   - **Mitigation**: Verify AIService is available before starting INT-0.2. If not, reorder to do INT-0.1/0.3/0.4 first.
+**Problem**: INT-2 requires distinguishing "user notes" from "AI-extracted" items. Current `ReviewItem` type has no `source` field. If this isn't addressed first, INT-2 implementation will stall.
 
-2. **Backend output format regression** — Users rely on staged section format.
-   - **Mitigation**: Snapshot test with real meeting file. Compare output before/after.
+**Mitigation**: 
+1. Add schema dependency as explicit pre-task in PRD: "Add `source: 'user' | 'ai' | 'dedup'` field to ReviewItem"
+2. Scope down INT-2 to deduplication-only if schema change is too disruptive
+3. Alternative: Use fuzzy matching against meeting body text (no schema change needed)
 
-3. **Type adapter complexity** — Bridging backend's flat strings to core's structured ActionItems.
-   - **Mitigation**: Keep adapter minimal. Don't try to change backend's extraction logic — just format output.
-
----
-
-## Assumptions
-
-1. **AI Config plan delivers `AIService` with `call()` and `isConfigured()`** — This is the interface we'll use.
-2. **Core's `MeetingIntelligence` type is stable** — We're building on it, not changing it.
-3. **Backend's extraction logic doesn't need to change** — Just formatting moves to core.
-4. **Cursor agents can run CLI commands** — Skill assumes `arete meeting extract` is callable.
+**Verification**: Check PRD tasks include schema work before INT-2 implementation
 
 ---
 
-## Go/No-Go Criteria
+## Risk 3: Frontend Auto-Approve Conflicts with INT-3
 
-Before starting INT-0.2 (CLI command):
-- [ ] Verify `AIService` exists in `@arete/core`
-- [ ] Verify `AIService.call()` and `AIService.isConfigured()` APIs match plan
-- [ ] Verify AI credentials can be loaded from `~/.arete/credentials.yaml`
+**Problem**: MeetingDetail.tsx already transforms `pending` → `approved` on load:
+```tsx
+const transformedItems = meeting.reviewItems.map((item) =>
+  item.status === "pending" ? { ...item, status: "approved" as const } : item
+);
+```
+INT-3 introduces backend-driven pre-selection. If frontend still overrides, INT-3's confidence logic is invisible to users.
 
-Before starting INT-0.3 (Backend):
-- [ ] INT-0.1 complete and exported from core
-- [ ] Type adapter design finalized
+**Mitigation**:
+1. INT-3 must include task: "Remove frontend pending→approved transform"
+2. Backend returns items with correct status based on confidence threshold
+3. Test: verify frontend displays backend-provided status unchanged
 
----
-
-## Rollback Plan
-
-If INT-0 causes issues:
-1. Backend can revert to its own `formatStagedSections()` (git revert)
-2. CLI `extract` command can be feature-flagged or removed
-3. Skill can revert to agent-only extraction
-
-None of INT-0 changes are destructive to user data. All changes are to code, not data.
+**Verification**: After INT-3, check MeetingDetail.tsx no longer has pending→approved transform
 
 ---
 
-## Recommended Execution Order
+## Risk 4: INT-5 "New Service" Duplicates Existing Code
 
-Given the risks:
+**Problem**: `CommitmentsService.reconcile()` already implements Jaccard-based fuzzy matching. Plan describes "new reconciliation service" which would duplicate this.
 
-1. **INT-0.1** first (lowest risk, enables others)
-2. **Verify AI Config** before INT-0.2
-3. **INT-0.2** (CLI) — test thoroughly
-4. **INT-0.3** (Backend) — snapshot test before/after
-5. **INT-0.4** (Skill) — documentation only, lowest risk
+**Mitigation**:
+1. Update INT-5 scope: "Expose existing reconcile() via API endpoint + build UI"
+2. Read `packages/core/src/services/commitments.ts` before starting
+3. Extend reconcile() if needed, don't rebuild
+
+**Verification**: INT-5 implementation imports existing CommitmentsService.reconcile()
 
 ---
 
-## Sign-off
+## Risk 5: LLM Prompt Tuning Overshoots (Signal Loss)
 
-- [ ] Risks reviewed and mitigations acceptable
-- [ ] Dependencies verified (AI Config status)
-- [ ] Ready to proceed
+**Problem**: INT-1's prompt changes ("be selective") might filter too aggressively. Important action items could be lost, and users won't notice until commitments are missed weeks later.
+
+**Mitigation**:
+1. **Preserve raw extractions**: Store original LLM response before filtering for N days
+2. **Staged rollout**: Test on 5-10 existing meetings, manually verify no signal loss
+3. **A/B capability**: Add feature flag for new vs old prompts (optional, if time permits)
+4. **Negative test cases**: Include test cases for "items that MUST be extracted"
+
+**Verification**: Check that raw extractions are logged/stored before filtering applied
+
+---
+
+## Risk 6: Context Gaps for Subagents
+
+**Problem**: Subagents implementing individual INT-* tasks need to understand:
+- Current extraction flow (meeting-extraction.ts)
+- ReviewItem schema and status flow
+- Frontend/backend contract
+- Existing test patterns
+
+Without this, they'll make incompatible changes.
+
+**Mitigation**: Before each subagent task, provide explicit context:
+- "Read these files first: meeting-extraction.ts, types.ts, MeetingDetail.tsx"
+- Include mini-summary: "Extraction returns MeetingIntelligence, which becomes ReviewItem[] in API"
+- Reference testDeps pattern from existing tests
+
+**Verification**: Check prompts include file reading lists and architectural context
+
+---
+
+## Risk 7: Test Coverage Gaps
+
+**Problem**: INT-1 changes prompts, INT-2 adds schema fields, INT-3 adds confidence logic, INT-4/5 modify commitments. Each needs tests, but test patterns may not be obvious for prompt-based code.
+
+**Mitigation**:
+1. **Prompt tests**: Test parseMeetingExtractionResponse() with varied inputs (existing pattern in meeting-extraction.test.ts)
+2. **Schema tests**: Test ReviewItem serialization/deserialization with new fields
+3. **Integration tests**: Test full flow from extraction → review → approval
+4. Follow testDeps injection pattern from commitments.test.ts for LLM mocking
+
+**Verification**: Each task's ACs include specific test requirements
+
+---
+
+## Risk 8: Acceptance Criteria Unmeasurable
+
+**Problem**: Current ACs include:
+- "No loss of genuinely important items" — how verified?
+- "Signal-to-noise ratio improved" — how measured?
+- "User approval rate > 80%" — no baseline captured
+
+**Mitigation**:
+1. Add baseline capture task: "Run current extraction on 10 test meetings, record counts"
+2. Replace unmeasurable ACs with testable ones:
+   - "Extraction test suite passes with expected item counts"
+   - "Manual review of 5 meetings shows 0 false negatives for action items with owners"
+3. Define approval rate formula: (approved / (approved + skipped)) × 100
+
+**Verification**: PRD acceptance criteria can be evaluated with automated or documented tests
+
+---
+
+## Summary
+
+**Total risks identified**: 8
+**Categories covered**: Context Gaps, Integration, Scope Creep, Code Quality, Dependencies, Platform Issues, State Tracking, Test Patterns
+
+**Critical mitigations**:
+1. Define INT-1 vs INT-3 roles explicitly (filter vs rank)
+2. Add schema dependency for INT-2
+3. Remove frontend auto-approve in INT-3
+4. Reuse existing reconcile() for INT-5
+5. Preserve raw extractions for rollback
+6. Include file-reading context for all subagent tasks
+
+**Ready to proceed with these mitigations incorporated into PRD.**
