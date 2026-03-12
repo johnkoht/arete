@@ -107,6 +107,28 @@ function mockCoreExtractionResponse(opts?: Partial<MeetingIntelligence>): Meetin
   };
 }
 
+/**
+ * Convert MeetingIntelligence to raw LLM JSON format (snake_case).
+ * The core parser expects snake_case field names from the LLM.
+ */
+function toRawLLMJson(intelligence: MeetingIntelligence): object {
+  return {
+    summary: intelligence.summary,
+    action_items: intelligence.actionItems.map((ai) => ({
+      owner: ai.owner,
+      owner_slug: ai.ownerSlug,
+      description: ai.description,
+      direction: ai.direction,
+      counterparty_slug: ai.counterpartySlug,
+      due: ai.due,
+      confidence: ai.confidence,
+    })),
+    next_steps: intelligence.nextSteps,
+    decisions: intelligence.decisions,
+    learnings: intelligence.learnings,
+  };
+}
+
 function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
   writtenFiles: Array<{ path: string; content: string }>;
 } {
@@ -154,7 +176,8 @@ Bob: Sounds good. We've decided to postpone the refactor.
       call: async () => {
         if (options.aiError) throw options.aiError;
         const response = options.coreResponse ?? mockCoreExtractionResponse();
-        return { text: JSON.stringify(response) };
+        // Convert to snake_case JSON that the core parser expects
+        return { text: JSON.stringify(toRawLLMJson(response)) };
       },
     },
   };
@@ -210,12 +233,12 @@ describe('runProcessingSession', () => {
     it('includes Summary section with AI-generated summary', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Test summary of the meeting.',
           actionItems: [],
           decisions: [],
           learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -228,12 +251,10 @@ describe('runProcessingSession', () => {
     it('formats action items with ai_XXX IDs', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('First action'), item('Second action')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('First action'), mockActionItem('Second action')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -247,12 +268,11 @@ describe('runProcessingSession', () => {
     it('formats decisions with de_XXX IDs', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [],
-          decisions: [item('First decision'), item('Second decision')],
-          learnings: [],
-        },
+          decisions: ['First decision', 'Second decision'],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -266,12 +286,12 @@ describe('runProcessingSession', () => {
     it('formats learnings with le_XXX IDs', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [],
           decisions: [],
-          learnings: [item('First learning'), item('Second learning')],
-        },
+          learnings: ['First learning', 'Second learning'],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -285,12 +305,10 @@ describe('runProcessingSession', () => {
     it('omits empty sections', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('One action')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('One action')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -314,21 +332,20 @@ describe('runProcessingSession', () => {
 
     it('uses zero-padded 3-digit IDs', async () => {
       const jobs = makeMockJobs();
+      // Core extraction limits action items to 7, so we test with that limit
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: Array.from({ length: 12 }, (_, i) => item(`Action ${i + 1}`)),
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: Array.from({ length: 7 }, (_, i) => mockActionItem(`Action ${i + 1}`)),
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
       const content = deps.writtenFiles[0]!.content;
       assert.ok(content.includes('- ai_001: Action 1'));
-      assert.ok(content.includes('- ai_010: Action 10'));
-      assert.ok(content.includes('- ai_012: Action 12'));
+      assert.ok(content.includes('- ai_005: Action 5'));
+      assert.ok(content.includes('- ai_007: Action 7'));
     });
   });
 
@@ -412,12 +429,10 @@ Old summary to replace.
 ## Transcript
 The actual transcript content.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'New AI summary.',
-          actionItems: [item('Action item')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Action item')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -445,12 +460,10 @@ Bob will draft the Q2 plan by Friday.
 Alice: Let's discuss the roadmap.
 Bob: I'll draft the Q2 plan by Friday.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will draft the Q2 plan by Friday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will draft the Q2 plan by Friday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -475,12 +488,10 @@ Bob will draft the Q2 plan by Friday.
 ## Transcript
 Alice: Let's discuss the roadmap.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will draft the Q2 plan by Friday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will draft the Q2 plan by Friday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -510,12 +521,10 @@ Bob will draft the Q2 plan by Friday.
 ## Transcript
 Discussion transcript here.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will draft the Q2 plan by Friday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will draft the Q2 plan by Friday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -540,12 +549,10 @@ Some completely different notes here.
 Alice: Bob will send the report by Monday.
 Bob: Yes, I will send the report by Monday.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will send the report by Monday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will send the report by Monday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -573,12 +580,10 @@ Different content here.
 ## Transcript
 Some transcript content.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will send the report by Monday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will send the report by Monday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -604,12 +609,10 @@ Bob needs to draft the quarterly plan before Friday.
 ## Transcript
 Transcript here.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Bob will draft the Q2 plan by Friday')],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Bob will draft the Q2 plan by Friday')],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -627,15 +630,13 @@ Transcript here.
     it('filters out items with confidence < 0.5', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [
-            item('High confidence action', 0.9),
-            item('Low confidence action', 0.3),
+            mockActionItem('High confidence action', { confidence: 0.9 }),
+            mockActionItem('Low confidence action', { confidence: 0.3 }),
           ],
-          decisions: [],
-          learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -648,12 +649,10 @@ Transcript here.
     it('auto-approves items with confidence > 0.8', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Very confident action', 0.95)],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Very confident action', { confidence: 0.95 })],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -666,12 +665,10 @@ Transcript here.
     it('sets pending status for items with confidence 0.5-0.8', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Medium confidence action', 0.65)],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Medium confidence action', { confidence: 0.65 })],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -684,12 +681,13 @@ Transcript here.
     it('stores confidence scores in staged_item_confidence frontmatter', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        // Note: decisions in core format are strings without confidence.
+        // Backend adapter assigns 0.9 to all decisions.
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('First action', 0.85)],
-          decisions: [item('First decision', 0.72)],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('First action', { confidence: 0.85 })],
+          decisions: ['First decision'],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -697,22 +695,21 @@ Transcript here.
       const content = deps.writtenFiles[0]!.content;
       assert.ok(content.includes('staged_item_confidence:'));
       assert.ok(content.includes('ai_001: 0.85'));
-      assert.ok(content.includes('de_001: 0.72'));
+      // Decisions from core get default 0.9 confidence via adapter
+      assert.ok(content.includes('de_001: 0.9'));
     });
 
     it('reports filtered out count in job events', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [
-            item('High', 0.9),
-            item('Low1', 0.3),
-            item('Low2', 0.2),
+            mockActionItem('High', { confidence: 0.9 }),
+            mockActionItem('Low1', { confidence: 0.3 }),
+            mockActionItem('Low2', { confidence: 0.2 }),
           ],
-          decisions: [],
-          learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -724,16 +721,14 @@ Transcript here.
     it('reports high-confidence auto-approved count in job events', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [
-            item('High1', 0.95),
-            item('High2', 0.85),
-            item('Medium', 0.65),
+            mockActionItem('High1', { confidence: 0.95 }),
+            mockActionItem('High2', { confidence: 0.85 }),
+            mockActionItem('Medium', { confidence: 0.65 }),
           ],
-          decisions: [],
-          learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -745,15 +740,13 @@ Transcript here.
     it('uses re-indexed IDs after filtering', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [
-            item('Low confidence', 0.3),    // filtered out
-            item('High confidence', 0.9),   // becomes ai_001
+            mockActionItem('Low confidence', { confidence: 0.3 }),  // filtered out
+            mockActionItem('High confidence', { confidence: 0.9 }), // becomes ai_001
           ],
-          decisions: [],
-          learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -779,12 +772,10 @@ Medium confidence but matches notes.
 ## Transcript
 Some transcript.
 `,
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Medium confidence but matches notes.', 0.6)],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Medium confidence but matches notes.', { confidence: 0.6 })],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -799,12 +790,10 @@ Some transcript.
     it('handles boundary case: exactly 0.5 confidence is included as pending', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          actionItems: [item('Boundary case', 0.5)],
-          decisions: [],
-          learnings: [],
-        },
+          actionItems: [mockActionItem('Boundary case', { confidence: 0.5 })],
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
@@ -817,15 +806,13 @@ Some transcript.
     it('handles boundary case: exactly 0.8 confidence is pending, 0.81 is approved', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
-        aiResponse: {
+        coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
           actionItems: [
-            item('At threshold', 0.8),
-            item('Above threshold', 0.81),
+            mockActionItem('At threshold', { confidence: 0.8 }),
+            mockActionItem('Above threshold', { confidence: 0.81 }),
           ],
-          decisions: [],
-          learnings: [],
-        },
+        }),
       });
 
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);

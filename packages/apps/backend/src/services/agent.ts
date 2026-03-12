@@ -57,8 +57,50 @@ const MeetingExtractionSchema = Type.Object({
   learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
 });
 
-type MeetingExtraction = Static<typeof MeetingExtractionSchema>;
-type ExtractionItem = Static<typeof ExtractionItemSchema>;
+type MeetingExtractionLegacy = Static<typeof MeetingExtractionSchema>;
+
+/**
+ * Extended ExtractionItem with optional owner/direction metadata from core extraction.
+ * Maps ActionItem.description → text for backward compatibility.
+ */
+interface ExtractionItem {
+  text: string;
+  confidence: number;
+  /** Action item owner name (from core extraction) */
+  owner?: string;
+  /** Action item owner slug (from core extraction) */
+  ownerSlug?: string;
+  /** Action item direction: 'i_owe_them' | 'they_owe_me' (from core extraction) */
+  direction?: string;
+}
+
+/** Backend format after adapting core extraction result */
+interface MeetingExtraction {
+  summary: string;
+  actionItems: ExtractionItem[];
+  decisions: ExtractionItem[];
+  learnings: ExtractionItem[];
+}
+
+/**
+ * Transform core MeetingIntelligence to backend MeetingExtraction format.
+ * Maps ActionItem.description → ExtractionItem.text for dedup compatibility.
+ */
+function adaptCoreToBackend(intelligence: MeetingIntelligence): MeetingExtraction {
+  return {
+    summary: intelligence.summary,
+    actionItems: intelligence.actionItems.map((ai) => ({
+      text: ai.description,
+      confidence: ai.confidence ?? 0.9,
+      // Preserve owner/direction for downstream use
+      owner: ai.owner,
+      ownerSlug: ai.ownerSlug,
+      direction: ai.direction,
+    })),
+    decisions: intelligence.decisions.map((d) => ({ text: d, confidence: 0.9 })),
+    learnings: intelligence.learnings.map((l) => ({ text: l, confidence: 0.9 })),
+  };
+}
 
 /** Item source type: 'ai' (LLM extracted) or 'dedup' (matched user notes) */
 type ItemSource = 'ai' | 'dedup';
@@ -507,16 +549,43 @@ export async function runProcessingSessionTestable(
       delete fm['approved_at'];
     }
 
-    // 3. Call AI for extraction
+    // 3. Call AI for extraction using core extraction service
     jobs.appendEvent(jobId, 'Extracting content with AI...');
     let extraction: MeetingExtraction;
     try {
-      const result = await deps.aiService.callStructured(
-        'extraction',
-        buildExtractionPrompt(content),
-        MeetingExtractionSchema,
-      );
-      extraction = result.data;
+      // Track LLM errors separately since extractMeetingIntelligence catches them
+      let llmError: Error | null = null;
+
+      // Create LLM adapter to bridge AIService to core LLMCallFn signature
+      const callLLM = async (prompt: string): Promise<string> => {
+        try {
+          const result = await deps.aiService.call('extraction', prompt);
+          return result.text;
+        } catch (err) {
+          // Capture error for later re-throw after core extraction returns empty
+          llmError = err instanceof Error ? err : new Error(String(err));
+          throw llmError;
+        }
+      };
+
+      // Get attendees from frontmatter (extract names from {name, email} objects)
+      const attendeeNames = (
+        (fm['attendees'] as Array<{ name: string; email: string }>) || []
+      ).map((a) => a.name);
+
+      // Call core extraction service
+      const coreResult = await extractMeetingIntelligence(content, callLLM, {
+        attendees: attendeeNames,
+      });
+
+      // If LLM failed and we got empty results, propagate the original error
+      // (core extraction catches errors and returns empty results)
+      if (llmError && coreResult.intelligence.summary === '') {
+        throw llmError;
+      }
+
+      // Transform core result to backend format
+      extraction = adaptCoreToBackend(coreResult.intelligence);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Check for API key error
