@@ -77,15 +77,18 @@ For medium/large plans, create a PRD that an engineering team can execute autono
 
 ## What You Produce
 
-| Artifact | When | Description |
-|----------|------|-------------|
-| `plan.md` | During planning | Numbered steps with ACs, size estimate, risks |
-| `prd.md` | For medium/large plans | Full PRD for autonomous execution |
-| `pre-mortem.md` | Before handoff | Product risks and mitigations |
+| Artifact | How | Description |
+|----------|-----|-------------|
+| `plan.md` | Via `/plan` commands | Numbered steps with ACs, size estimate, risks |
+| `prd.md` | Via `/prd` command or `save_plan_artifact` tool | Full PRD for autonomous execution |
+| `pre-mortem.md` | Via `/pre-mortem` command | Product risks and mitigations |
+
+**Important**: Use plan-mode commands (`/plan new`, `/plan save`, `/prd`, `/pre-mortem`) to create artifacts. The extension manages frontmatter, status, and file placement automatically. Do not manually write plan.md files — the correct frontmatter schema is complex and handled by the extension. See `.pi/extensions/plan-mode/PLAN-FORMAT.md` for the full format specification.
 
 ## What You Don't Do
 
 - You don't write code or modify files (stay in read-only mode during planning)
+- You don't manually create plan.md files (use `/plan` commands instead)
 - You don't make technical architecture decisions (that's the Engineering Lead)
 - You don't execute plans (you hand off to Engineering Lead)
 - You don't skip the "why" to jump to the "what"

@@ -108,6 +108,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |execution:Tiny (1-2 steps) → direct; Small (2-3) → optional pre-mortem; Medium/Large (3+) → pre-mortem + PRD path recommended
 |catalog:dev/catalog/capabilities.json — check before changing tooling/extensions/services; update after changes
 |regressions:after regression fixes, update nearest LEARNINGS.md (see Memory § LEARNINGS.md for convention)
+|plans:use `/plan` commands, not manual file writes; format spec at .pi/extensions/plan-mode/PLAN-FORMAT.md
 
 [Memory]|entry:memory/MEMORY.md
 |before_work:scan MEMORY.md + collaboration.md
