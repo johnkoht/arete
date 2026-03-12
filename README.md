@@ -251,10 +251,10 @@ Areté provides intelligence that powers any workflow:
 These services run automatically during skills, or manually via CLI:
 
 ```bash
-arete context --for "mobile app redesign"
-arete context --for "mobile app redesign" --inventory   # freshness dashboard
-arete memory search "pricing decisions"
-arete memory timeline "onboarding" --days 90            # temporal view
+arete search "mobile app redesign"
+arete search "mobile app redesign" --inventory          # freshness dashboard
+arete search "pricing decisions" --scope memory
+arete search "onboarding" --timeline --days 90           # temporal view
 arete resolve "Jane"
 arete brief --for "competitive analysis"
 arete index                                              # re-index search after manual edits

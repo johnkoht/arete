@@ -2,7 +2,7 @@
  * arete update — pull latest skills/tools/integrations
  */
 
-import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollection, loadConfig } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig } from '@arete/core';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -49,29 +49,43 @@ export function registerUpdateCommand(program: Command): void {
 
       const result = await services.workspace.update(root, { sourcePaths });
 
-      // Auto-update qmd index (skip for --check and --skip-qmd)
+      // Auto-update qmd collections (skip for --check and --skip-qmd)
       let qmdResult;
       if (!opts.check && !opts.skipQmd) {
-        const existingCollection = config.qmd_collection;
-        qmdResult = await ensureQmdCollection(root, existingCollection);
-        if (qmdResult.collectionName && qmdResult.created) {
-          // New collection created — persist to arete.yaml
+        // Prefer new qmd_collections; fall back to creating from scratch if only qmd_collection exists
+        const existingCollections = config.qmd_collections;
+        qmdResult = await ensureQmdCollections(root, existingCollections);
+        // Persist collections to arete.yaml if any were created
+        if (!qmdResult.skipped && Object.keys(qmdResult.collections).length > 0) {
+          // Write qmd_collections (new, scoped)
           await services.workspace.updateManifestField(
             root,
-            'qmd_collection',
-            qmdResult.collectionName,
+            'qmd_collections',
+            qmdResult.collections,
           );
+          // Backward compat: write qmd_collection (singular) as the 'all' collection
+          if (qmdResult.collections.all) {
+            await services.workspace.updateManifestField(
+              root,
+              'qmd_collection',
+              qmdResult.collections.all,
+            );
+          }
         }
       }
 
       if (opts.json) {
+        // Compute backward-compat 'created' field: true if any scope was created
+        const createdAny = qmdResult?.scopes?.some((s) => s.created) ?? false;
         console.log(
           JSON.stringify(
             {
               success: true,
               mode: opts.check ? 'check' : 'update',
               result,
-              qmd: qmdResult ?? { skipped: true, available: false, created: false, indexed: false },
+              qmd: qmdResult
+                ? { ...qmdResult, created: createdAny }
+                : { skipped: true, available: false, collections: {}, indexed: false, created: false },
             },
             null,
             2,
@@ -87,10 +101,15 @@ export function registerUpdateCommand(program: Command): void {
         listItem('Preserved', result.preserved.length.toString());
 
         if (qmdResult && !qmdResult.skipped) {
-          if (qmdResult.created) {
-            listItem('Search index', `qmd collection "${qmdResult.collectionName}" created`);
-          } else if (qmdResult.indexed) {
-            listItem('Search index', 'qmd index updated');
+          const createdCount = qmdResult.scopes.filter((s) => s.created).length;
+          const totalCount = Object.keys(qmdResult.collections).length;
+          if (createdCount > 0) {
+            listItem(
+              'Search index',
+              `${createdCount} qmd collection${createdCount > 1 ? 's' : ''} created (${totalCount} total)`,
+            );
+          } else if (qmdResult.indexed && totalCount > 0) {
+            listItem('Search index', `${totalCount} qmd collection${totalCount > 1 ? 's' : ''} updated`);
           }
           if (qmdResult.warning) {
             warn(qmdResult.warning);

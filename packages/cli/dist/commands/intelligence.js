@@ -3,7 +3,7 @@
  */
 import { createServices, PRODUCT_PRIMITIVES } from '@arete/core';
 import chalk from 'chalk';
-import { header, info, success, warn, error, listItem, } from '../formatters.js';
+import { header, info, success, warn, error, listItem, deprecated, } from '../formatters.js';
 function parsePrimitives(raw) {
     if (!raw)
         return undefined;
@@ -134,9 +134,12 @@ export function registerContextCommand(program) {
             paths,
             primitives,
         });
+        // Deprecation warning (to stderr)
+        deprecated('`arete context --for` is deprecated. Use `arete search "query"` instead.');
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
+                deprecated: true,
                 query,
                 confidence: result.confidence,
                 filesCount: result.files.length,
@@ -234,8 +237,10 @@ export function registerMemoryCommand(program) {
             types,
             limit,
         });
+        // Deprecation warning (to stderr)
+        deprecated('`arete memory search` is deprecated. Use `arete search "query" --scope memory` instead.');
         if (opts.json) {
-            console.log(JSON.stringify({ success: true, query, total: result.total, results: result.results }, null, 2));
+            console.log(JSON.stringify({ success: true, deprecated: true, query, total: result.total, results: result.results }, null, 2));
             return;
         }
         header('Memory Search');
@@ -308,9 +313,12 @@ export function registerMemoryCommand(program) {
         }
         const range = (start || end) ? { start, end } : undefined;
         const timeline = await services.memory.getTimeline(query, paths, range);
+        // Deprecation warning (to stderr)
+        deprecated('`arete memory timeline` is deprecated. Use `arete search "query" --timeline` instead.');
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
+                deprecated: true,
                 query: timeline.query,
                 dateRange: timeline.dateRange,
                 themes: timeline.themes,

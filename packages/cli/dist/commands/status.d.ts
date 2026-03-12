@@ -1,6 +1,0 @@
-/**
- * arete status — workspace health and intelligence overview
- */
-import type { Command } from 'commander';
-export declare function registerStatusCommand(program: Command): void;
-//# sourceMappingURL=status.d.ts.map

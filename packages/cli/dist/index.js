@@ -31,6 +31,7 @@ import { registerDailyCommand } from './commands/daily.js';
 import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
+import { registerSearchCommand } from './commands/search.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -47,15 +48,19 @@ ${chalk.bold('Setup & Workspace')}
   status                           Check workspace health
 
 ${chalk.bold('Intelligence')}
+  search "query"                   Search across workspace (semantic)
+  search "query" --scope <scope>   Limit to scope (memory|meetings|context|projects|people)
+  search "query" --timeline        Show temporal view with themes
+  search "query" --answer          AI synthesis of results
   daily                            Morning intelligence brief
   momentum [--person <slug>]       Commitment and relationship momentum
-  context --for "query"            Get relevant workspace files
+  context --for "query"            ${chalk.dim('[DEPRECATED]')} Use: search "query"
   context --inventory              Show freshness dashboard & coverage gaps
-  memory search "query"           Search decisions, learnings
-  memory timeline "query"         Show temporal view for topic
-  resolve "reference"             Resolve person, meeting, project
-  brief --for "query" [--skill]   Assemble briefing (context + memory + entities + relationships + temporal)
-  route "query"                   Route to skill + model suggestion
+  memory search "query"            ${chalk.dim('[DEPRECATED]')} Use: search --scope memory
+  memory timeline "query"          ${chalk.dim('[DEPRECATED]')} Use: search --timeline
+  resolve "reference"              Resolve person, meeting, project
+  brief --for "query" [--skill]    Assemble briefing (context + memory + entities + relationships + temporal)
+  route "query"                    Route to skill + model suggestion
 
 ${chalk.bold('Skills & Tools')}
   skill list                       List skills
@@ -126,5 +131,6 @@ registerDailyCommand(program);
 registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
+registerSearchCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

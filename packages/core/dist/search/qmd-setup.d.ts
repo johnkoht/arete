@@ -5,6 +5,7 @@
  * Collection name is stored in arete.yaml to avoid parsing qmd output
  * and to support multiple workspaces with the same directory name.
  */
+import type { QmdScope, QmdCollections } from '../models/workspace.js';
 /** Result of qmd setup attempt */
 export type QmdSetupResult = {
     /** Whether qmd was detected on the system */
@@ -118,4 +119,84 @@ export declare function refreshQmdIndex(workspaceRoot: string, existingCollectio
  * @returns Result with status and optional collection name to persist
  */
 export declare function ensureQmdCollection(workspaceRoot: string, existingCollectionName?: string, deps?: QmdSetupDeps): Promise<QmdSetupResult>;
+/**
+ * Scope → relative path mapping for multi-collection setup.
+ * - `all` indexes the entire workspace root
+ * - Other scopes index specific directories
+ */
+export declare const SCOPE_PATHS: Record<QmdScope, string>;
+/** All scopes in order of creation */
+export declare const ALL_SCOPES: readonly QmdScope[];
+/** Result for a single scope's collection setup */
+export type QmdScopeResult = {
+    /** The scope (all, memory, meetings, etc.) */
+    scope: QmdScope;
+    /** Whether the collection was created */
+    created: boolean;
+    /** Collection name (if created) */
+    collectionName?: string;
+    /** Whether this scope was skipped (path doesn't exist) */
+    skipped: boolean;
+    /** Warning message if something went wrong */
+    warning?: string;
+};
+/** Result of multi-collection setup */
+export type QmdCollectionsResult = {
+    /** Whether qmd was detected on the system */
+    available: boolean;
+    /** Whether setup was skipped entirely (qmd not available or fallback mode) */
+    skipped: boolean;
+    /** Results for each scope */
+    scopes: QmdScopeResult[];
+    /** Map of scope → collection name for scopes that were created */
+    collections: QmdCollections;
+    /** Whether the global update was run */
+    indexed: boolean;
+    /** Warning from the global update if it failed */
+    warning?: string;
+    /** Whether qmd embed succeeded */
+    embedded?: boolean;
+    /** Warning from qmd embed if it failed */
+    embedWarning?: string;
+};
+/** Injectable test dependencies for multi-collection setup */
+export type QmdCollectionsDeps = QmdSetupDeps & {
+    /** Check if a path exists. Defaults to fs.existsSync. */
+    pathExists?: (path: string) => boolean;
+};
+/**
+ * Generate a unique scoped collection name from workspace path and scope.
+ * Format: `arete-<4-char-hash>-<scope>` e.g. `arete-a3f2-memory`
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param scope - The scope identifier (all, memory, meetings, etc.)
+ * @returns Collection name
+ */
+export declare function generateScopedCollectionName(workspaceRoot: string, scope: QmdScope): string;
+/**
+ * Ensure QMD collections exist for all scopes where the path exists.
+ *
+ * Creates 6 scope-based collections:
+ * - "all" → workspace root (entire workspace)
+ * - "memory" → .arete/memory/items/
+ * - "meetings" → resources/meetings/
+ * - "context" → context/
+ * - "projects" → projects/
+ * - "people" → people/
+ *
+ * Scopes with non-existent paths are skipped (expected for fresh workspaces).
+ *
+ * - If ARETE_SEARCH_FALLBACK env var is set, returns skipped: true.
+ * - If qmd is not on PATH, returns skipped: true.
+ * - Creates each collection with: qmd collection add [path] --name [name] --mask "**\/*.md"
+ * - Runs "qmd update" once after all collections are created.
+ * - All failures are non-fatal (returns warnings, never throws).
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param existingCollections - Existing collections from config (scope to collection name).
+ *   Collections that already exist in config are verified and re-created if missing from qmd.
+ * @param deps - Injectable dependencies for testing
+ * @returns Result with collections map suitable for storing in arete.yaml
+ */
+export declare function ensureQmdCollections(workspaceRoot: string, existingCollections?: QmdCollections, deps?: QmdCollectionsDeps): Promise<QmdCollectionsResult>;
 //# sourceMappingURL=qmd-setup.d.ts.map

@@ -3,10 +3,15 @@ import assert from 'node:assert/strict';
 import {
   embedQmdIndex,
   ensureQmdCollection,
+  ensureQmdCollections,
   generateCollectionName,
+  generateScopedCollectionName,
   refreshQmdIndex,
+  ALL_SCOPES,
+  SCOPE_PATHS,
 } from '../../src/search/qmd-setup.js';
-import type { QmdSetupDeps } from '../../src/search/qmd-setup.js';
+import type { QmdSetupDeps, QmdCollectionsDeps } from '../../src/search/qmd-setup.js';
+import type { QmdScope, QmdCollections } from '../../src/models/workspace.js';
 
 /**
  * Create mock deps with qmd available and all commands succeeding.
@@ -509,6 +514,520 @@ describe('embedQmdIndex', () => {
       assert.equal(result.skipped, false);
       assert.equal(result.embedded, false);
       assert.ok(result.warning?.includes('model download failed'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+});
+
+// ============================================================================
+// Multi-collection support tests
+// ============================================================================
+
+describe('generateScopedCollectionName', () => {
+  it('produces format arete-<hash>-<scope>', () => {
+    const name = generateScopedCollectionName('/Users/john/projects/acme', 'memory');
+    assert.match(name, /^arete-[a-f0-9]{4}-memory$/);
+  });
+
+  it('produces different names for different scopes', () => {
+    const root = '/Users/john/projects/acme';
+    const memory = generateScopedCollectionName(root, 'memory');
+    const all = generateScopedCollectionName(root, 'all');
+    const meetings = generateScopedCollectionName(root, 'meetings');
+
+    assert.notEqual(memory, all);
+    assert.notEqual(memory, meetings);
+    assert.notEqual(all, meetings);
+
+    // But same hash prefix
+    const memoryHash = memory.split('-')[1];
+    const allHash = all.split('-')[1];
+    assert.equal(memoryHash, allHash);
+  });
+
+  it('produces different names for same scope in different workspaces', () => {
+    const a = generateScopedCollectionName('/foo/acme', 'memory');
+    const b = generateScopedCollectionName('/bar/acme', 'memory');
+    assert.notEqual(a, b);
+  });
+
+  it('is deterministic for the same workspace and scope', () => {
+    const a = generateScopedCollectionName('/Users/john/projects/test', 'memory');
+    const b = generateScopedCollectionName('/Users/john/projects/test', 'memory');
+    assert.equal(a, b);
+  });
+});
+
+describe('SCOPE_PATHS', () => {
+  it('has 6 scopes', () => {
+    assert.equal(Object.keys(SCOPE_PATHS).length, 6);
+  });
+
+  it('has all expected scopes', () => {
+    assert.equal(SCOPE_PATHS.all, '.');
+    assert.equal(SCOPE_PATHS.memory, '.arete/memory/items');
+    assert.equal(SCOPE_PATHS.meetings, 'resources/meetings');
+    assert.equal(SCOPE_PATHS.context, 'context');
+    assert.equal(SCOPE_PATHS.projects, 'projects');
+    assert.equal(SCOPE_PATHS.people, 'people');
+  });
+});
+
+describe('ALL_SCOPES', () => {
+  it('has 6 scopes', () => {
+    assert.equal(ALL_SCOPES.length, 6);
+  });
+
+  it('includes all expected scopes', () => {
+    assert.ok(ALL_SCOPES.includes('all'));
+    assert.ok(ALL_SCOPES.includes('memory'));
+    assert.ok(ALL_SCOPES.includes('meetings'));
+    assert.ok(ALL_SCOPES.includes('context'));
+    assert.ok(ALL_SCOPES.includes('projects'));
+    assert.ok(ALL_SCOPES.includes('people'));
+  });
+});
+
+/**
+ * Create mock deps for multi-collection tests.
+ */
+function makeCollectionsDeps(overrides?: {
+  whichStatus?: number;
+  addFailScopes?: Set<QmdScope>;
+  updateFail?: boolean;
+  updateError?: string;
+  embedFail?: boolean;
+  embedError?: string;
+  listOutput?: string;
+  existingPaths?: Set<string>;
+  calls?: Array<{ file: string; args: string[]; cwd: string }>;
+}): QmdCollectionsDeps {
+  const calls: Array<{ file: string; args: string[]; cwd: string }> = overrides?.calls ?? [];
+  return {
+    whichSync: () => ({
+      status: overrides?.whichStatus ?? 0,
+      stdout: '/usr/local/bin/qmd\n',
+    }),
+    execFileAsync: async (
+      file: string,
+      args: string[],
+      opts: { timeout: number; cwd: string },
+    ) => {
+      calls.push({ file, args, cwd: opts.cwd });
+      if (args.includes('collection') && args.includes('add')) {
+        // Check if this scope should fail
+        if (overrides?.addFailScopes) {
+          // Extract scope from collection name (format: arete-xxxx-<scope>)
+          const nameIndex = args.indexOf('--name');
+          if (nameIndex >= 0) {
+            const name = args[nameIndex + 1];
+            const scope = name.split('-').pop() as QmdScope;
+            if (overrides.addFailScopes.has(scope)) {
+              throw new Error(`collection add failed for ${scope}`);
+            }
+          }
+        }
+        return { stdout: '', stderr: '' };
+      }
+      if (overrides?.updateFail && args[0] === 'update') {
+        throw new Error(overrides.updateError ?? 'update timed out');
+      }
+      if (overrides?.embedFail && args[0] === 'embed') {
+        throw new Error(overrides.embedError ?? 'embed failed');
+      }
+      if (args.includes('collection') && args.includes('list')) {
+        return { stdout: overrides?.listOutput ?? '', stderr: '' };
+      }
+      return { stdout: '', stderr: '' };
+    },
+    pathExists: (path: string) => {
+      if (overrides?.existingPaths) {
+        return overrides.existingPaths.has(path);
+      }
+      // Default: all paths exist
+      return true;
+    },
+  };
+}
+
+describe('ensureQmdCollections', () => {
+  it('skips when qmd is not installed', async () => {
+    const deps = makeCollectionsDeps({ whichStatus: 1 });
+    const result = await ensureQmdCollections('/workspace', undefined, deps);
+    assert.equal(result.skipped, true);
+    assert.equal(result.available, false);
+    assert.equal(result.indexed, false);
+    assert.deepEqual(result.collections, {});
+  });
+
+  it('skips when ARETE_SEARCH_FALLBACK is set', async () => {
+    const deps = makeCollectionsDeps();
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      process.env.ARETE_SEARCH_FALLBACK = '1';
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+      assert.equal(result.skipped, true);
+      assert.equal(result.available, false);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('creates collections for all existing paths', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set([
+      '/workspace',  // all (join('/workspace', '.') returns '/workspace')
+      '/workspace/.arete/memory/items',  // memory
+      '/workspace/context',  // context
+      '/workspace/projects',  // projects
+      '/workspace/people',  // people
+      // Note: meetings (resources/meetings) is missing
+    ]);
+    const deps = makeCollectionsDeps({ calls, existingPaths });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      assert.equal(result.skipped, false);
+      assert.equal(result.available, true);
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, true);
+
+      // Should have 5 collections (meetings skipped)
+      assert.equal(Object.keys(result.collections).length, 5);
+      assert.ok(result.collections.all);
+      assert.ok(result.collections.memory);
+      assert.ok(result.collections.context);
+      assert.ok(result.collections.projects);
+      assert.ok(result.collections.people);
+      assert.equal(result.collections.meetings, undefined);
+
+      // Verify meetings was skipped in scope results
+      const meetingsScope = result.scopes.find(s => s.scope === 'meetings');
+      assert.ok(meetingsScope);
+      assert.equal(meetingsScope.skipped, true);
+      assert.equal(meetingsScope.created, false);
+
+      // Should have: 1 list + 5 adds + 1 update + 1 embed = 8 calls
+      assert.equal(calls.length, 8);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('creates all 6 collections when all paths exist', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set([
+      '/workspace',  // all
+      '/workspace/.arete/memory/items',
+      '/workspace/resources/meetings',
+      '/workspace/context',
+      '/workspace/projects',
+      '/workspace/people',
+    ]);
+    const deps = makeCollectionsDeps({ calls, existingPaths });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      assert.equal(Object.keys(result.collections).length, 6);
+      assert.ok(result.collections.all);
+      assert.ok(result.collections.memory);
+      assert.ok(result.collections.meetings);
+      assert.ok(result.collections.context);
+      assert.ok(result.collections.projects);
+      assert.ok(result.collections.people);
+
+      // All scopes should not be skipped
+      for (const scope of result.scopes) {
+        assert.equal(scope.skipped, false);
+      }
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('skips collections that already exist in qmd', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set([
+      '/workspace',
+      '/workspace/.arete/memory/items',
+      '/workspace/context',
+    ]);
+    // Simulate that 'all' collection already exists
+    const existingCollections: QmdCollections = { all: 'arete-a1b2-all' };
+    const deps = makeCollectionsDeps({
+      calls,
+      existingPaths,
+      listOutput: 'arete-a1b2-all (qmd://arete-a1b2-all/)\n',
+    });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', existingCollections, deps);
+
+      assert.equal(result.skipped, false);
+      assert.equal(Object.keys(result.collections).length, 3);
+
+      // 'all' should not be created (already exists)
+      const allScope = result.scopes.find(s => s.scope === 'all');
+      assert.ok(allScope);
+      assert.equal(allScope.created, false);
+      assert.equal(allScope.skipped, false);
+
+      // memory and context should be created
+      const memoryScope = result.scopes.find(s => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, true);
+
+      // Should have: 1 list + 2 adds (not 3, 'all' skipped) + 1 update + 1 embed = 5 calls
+      assert.equal(calls.length, 5);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('records warning when collection add fails for a scope', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set([
+      '/workspace',
+      '/workspace/.arete/memory/items',
+    ]);
+    const deps = makeCollectionsDeps({
+      calls,
+      existingPaths,
+      addFailScopes: new Set(['memory'] as QmdScope[]),
+    });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      // 'all' should succeed
+      const allScope = result.scopes.find(s => s.scope === 'all');
+      assert.ok(allScope);
+      assert.equal(allScope.created, true);
+      assert.equal(allScope.warning, undefined);
+
+      // 'memory' should fail with warning
+      const memoryScope = result.scopes.find(s => s.scope === 'memory');
+      assert.ok(memoryScope);
+      assert.equal(memoryScope.created, false);
+      assert.ok(memoryScope.warning?.includes('memory'));
+
+      // Should still have 'all' in collections
+      assert.ok(result.collections.all);
+      assert.equal(result.collections.memory, undefined);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns warning when no paths exist', async () => {
+    const deps = makeCollectionsDeps({ existingPaths: new Set() });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      assert.equal(result.skipped, false);
+      assert.equal(result.available, true);
+      assert.equal(result.indexed, false);
+      assert.deepEqual(result.collections, {});
+      assert.ok(result.warning?.includes('No collections created'));
+
+      // All scopes should be skipped
+      for (const scope of result.scopes) {
+        assert.equal(scope.skipped, true);
+      }
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns update warning when qmd update fails', async () => {
+    const existingPaths = new Set(['/workspace']);
+    const deps = makeCollectionsDeps({
+      existingPaths,
+      updateFail: true,
+      updateError: 'disk full',
+    });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      assert.equal(result.indexed, false);
+      assert.ok(result.warning?.includes('disk full'));
+      // Collections should still be recorded
+      assert.ok(result.collections.all);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('returns embedWarning when embed fails', async () => {
+    const existingPaths = new Set(['/workspace']);
+    const deps = makeCollectionsDeps({
+      existingPaths,
+      embedFail: true,
+      embedError: 'model download failed',
+    });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      assert.equal(result.indexed, true);
+      assert.equal(result.embedded, false);
+      assert.ok(result.embedWarning?.includes('model download failed'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('uses correct paths for each scope', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set([
+      '/workspace',
+      '/workspace/.arete/memory/items',
+      '/workspace/resources/meetings',
+      '/workspace/context',
+      '/workspace/projects',
+      '/workspace/people',
+    ]);
+    const deps = makeCollectionsDeps({ calls, existingPaths });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      await ensureQmdCollections('/workspace', undefined, deps);
+
+      // Find all collection add calls
+      const addCalls = calls.filter(
+        c => c.args.includes('collection') && c.args.includes('add'),
+      );
+
+      // Should have 6 add calls
+      assert.equal(addCalls.length, 6);
+
+      // Verify paths - they come right after 'add'
+      const paths = addCalls.map(c => {
+        const addIndex = c.args.indexOf('add');
+        return c.args[addIndex + 1];
+      });
+
+      assert.ok(paths.includes('/workspace'));
+      assert.ok(paths.includes('/workspace/.arete/memory/items'));
+      assert.ok(paths.includes('/workspace/resources/meetings'));
+      assert.ok(paths.includes('/workspace/context'));
+      assert.ok(paths.includes('/workspace/projects'));
+      assert.ok(paths.includes('/workspace/people'));
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('uses arete-<hash>-<scope> naming format', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set(['/workspace', '/workspace/context']);
+    const deps = makeCollectionsDeps({ calls, existingPaths });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', undefined, deps);
+
+      // Check naming format
+      const allName = result.collections.all;
+      const contextName = result.collections.context;
+
+      assert.ok(allName);
+      assert.ok(contextName);
+      assert.match(allName, /^arete-[a-f0-9]{4}-all$/);
+      assert.match(contextName, /^arete-[a-f0-9]{4}-context$/);
+
+      // Same hash for both
+      const allHash = allName.split('-')[1];
+      const contextHash = contextName.split('-')[1];
+      assert.equal(allHash, contextHash);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.ARETE_SEARCH_FALLBACK;
+      } else {
+        process.env.ARETE_SEARCH_FALLBACK = prev;
+      }
+    }
+  });
+
+  it('reuses existing collection names from config', async () => {
+    const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
+    const existingPaths = new Set(['/workspace', '/workspace/context']);
+    const existingCollections: QmdCollections = {
+      all: 'custom-all-name',
+      context: 'custom-context-name',
+    };
+    const deps = makeCollectionsDeps({ calls, existingPaths });
+    const prev = process.env.ARETE_SEARCH_FALLBACK;
+    try {
+      delete process.env.ARETE_SEARCH_FALLBACK;
+      const result = await ensureQmdCollections('/workspace', existingCollections, deps);
+
+      // Should use the custom names
+      assert.equal(result.collections.all, 'custom-all-name');
+      assert.equal(result.collections.context, 'custom-context-name');
+
+      // Verify the names were used in qmd collection add
+      const addCalls = calls.filter(
+        c => c.args.includes('collection') && c.args.includes('add'),
+      );
+      const names = addCalls.map(c => {
+        const nameIndex = c.args.indexOf('--name');
+        return c.args[nameIndex + 1];
+      });
+      assert.ok(names.includes('custom-all-name'));
+      assert.ok(names.includes('custom-context-name'));
     } finally {
       if (prev === undefined) {
         delete process.env.ARETE_SEARCH_FALLBACK;

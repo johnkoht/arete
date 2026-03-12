@@ -8,27 +8,46 @@
 
 | User Says / You Need | Run This | What It Searches |
 |----------------------|----------|-----------------|
-| "What do we know about X?" | `arete brief --for "X"` | **Everything** — context, memory, meetings, people, projects |
-| "What was decided about X?" | `arete memory search "X"` | **3 files only** — decisions.md, learnings.md, observations.md (high signal) |
+| "What do we know about X?" | `arete search "X"` | **Everything** — context, memory, meetings, people, projects |
+| "What was decided about X?" | `arete search "X" --scope memory` | **Memory only** — decisions.md, learnings.md, observations.md (high signal) |
+| "What's the history of X?" | `arete search "X" --timeline` | Memory items + meetings (temporal view with themes) |
 | "Who is X?" / person mentioned | `arete resolve "X"` then `arete people show <slug> --memory` | Person file + memory highlights (recurring topics, stances, open items) |
-| "What's the history of X?" | `arete memory timeline "X" --days 30` | Memory items + meetings (temporal view) |
+| Filter results by person | `arete search "X" --person "Jane"` | Results mentioning that person |
 | Prepping for a task or skill | `arete brief --for "task" --skill <name>` | Context + memory + entities + relationships combined |
 | Starting a community skill | Check `requires_briefing` → `arete brief` if true | Full context for skills without built-in gathering |
 | After editing workspace files | `arete index` | Rebuilds search so new content is findable |
 
-**Key scope distinction**: `memory search` = narrow, 3 files, fast. `context` = broad, all workspace files. `brief` = comprehensive, combines everything. `people show --memory` = full person profile with relationship health, stances, and commitments.
+**Key scope distinction**: `search` (default `--scope all`) = broad, all workspace files. `search --scope memory` = narrow, memory files only. `brief` = comprehensive, combines everything with entity relationships.
 
 ### Commands
+
+#### Search (Primary)
+
+- `arete search "<query>"` - Unified semantic search across workspace
+  - `--scope <scope>` - Limit to scope (all|memory|meetings|context|projects|people), default: all
+  - `--timeline` - Show results chronologically with recurring themes
+  - `--days <n>` - Limit to last N days (with --timeline)
+  - `--person <name>` - Filter by person (name or slug)
+  - `--answer` - Synthesize AI-powered answer from results
+  - `--limit <n>` - Maximum results (default: 15)
+  - `--json` - Output JSON
+
+#### Other Intelligence Commands
 
 - `arete route "<query>"` - Route user message to best skill and suggest model tier
 - `arete skill route "<query>"` - Route to skill only (for agents before loading skill)
 - `arete brief --for "task" --skill <name>` - Assemble primitive briefing (context + memory + entities + relationships)
-- `arete context --for "query"` - Get relevant workspace files for a task (includes meetings, conversations, projects)
-- `arete context --for "query" --inventory` - Show context freshness dashboard with coverage gaps
-- `arete memory search "query"` - Search explicit decisions, learnings, and observations only
-- `arete memory timeline "query" [--days N] [--json]` - Temporal view of a topic with recurring themes
 - `arete resolve "reference"` - Resolve ambiguous names (people, meetings, projects)
 - `arete people show <slug|email> --memory` - Full person profile with auto-generated memory highlights (recurring topics, stances, open items, relationship health)
+
+#### DEPRECATED Commands (use `arete search` instead)
+
+> These commands still work but show deprecation warnings. They will be removed in a future version.
+
+- `arete context --for "query"` - DEPRECATED: Use `arete search "query"` instead
+- `arete context --for "query" --inventory` - Show context freshness dashboard with coverage gaps (not deprecated)
+- `arete memory search "query"` - DEPRECATED: Use `arete search "query" --scope memory` instead
+- `arete memory timeline "query" [--days N]` - DEPRECATED: Use `arete search "query" --timeline [--days N]` instead
 
 ## People & Entities
 
@@ -132,5 +151,3 @@ Environment variables > OAuth (login) > API keys (file)
   - `ai.tiers.<tier>` - Set model for tier (fast|standard|frontier)
   - `ai.tasks.<task>` - Set tier for task
   - `--json` - Output as JSON
-
-

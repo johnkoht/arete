@@ -1,0 +1,239 @@
+{
+  "name": "consolidate-search-command",
+  "branchName": "feature/consolidate-search-command",
+  "goal": "Create a single `arete search` command that provides global semantic search across the workspace, replacing the fragmented `context --for`, `memory search`, and `memory timeline` commands.",
+  "userStories": [
+    {
+      "id": "task-0-1",
+      "title": "Document output schemas and test matrix",
+      "description": "Define the 3 output schemas (default, timeline, answer) in code comments. Create test coverage matrix covering all flag combinations. Define scope-to-collection mapping constant.",
+      "acceptanceCriteria": [
+        "Output schemas documented in task or code",
+        "Test matrix covers all scopes (memory|meetings|context|projects|people|all)",
+        "Test matrix covers person filtering (resolved, ambiguous, not-found)",
+        "Test matrix covers timeline with/without --days",
+        "Test matrix covers --answer (configured, not configured, error)",
+        "Test matrix covers flag combinations (--scope memory --timeline, etc.)",
+        "Scope-to-collection mapping defined as constant"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-1-1",
+      "title": "Update qmd-setup.ts for multi-collection",
+      "description": "Modify `ensureQmdCollection()` to create 6 scope-based collections during install. Update `refreshQmdIndex()` to update all collections. Store collection names in `arete.yaml` under `qmd_collections`.",
+      "acceptanceCriteria": [
+        "`arete install` creates 6 QMD collections (all, memory, meetings, context, projects, people)",
+        "`arete update` maintains all collections",
+        "Collection names stored in `arete.yaml` under `qmd_collections`",
+        "`qmd status` shows all collections when run in workspace"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-1-2",
+      "title": "Config migration for backward compatibility",
+      "description": "Support both `qmd_collection` (old) and `qmd_collections` (new) in `loadConfig()`. If old format exists, treat as `all` collection only for seamless migration.",
+      "acceptanceCriteria": [
+        "Old `qmd_collection` config still works (treated as `all` collection)",
+        "New `qmd_collections` config works with all 6 collections",
+        "Migration path is seamless (no user action required for existing workspaces)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-1",
+      "title": "Create search.ts with core functionality",
+      "description": "Create `packages/cli/src/commands/search.ts` with core search functionality. Implement `--scope` flag with `-c collection` pass-through to QMD. Implement `--limit` flag. Implement `--json` output with documented schema. Wire into CLI index.",
+      "acceptanceCriteria": [
+        "`arete search \"query\"` returns results from all collections",
+        "`--scope memory` uses `-c` flag to search memory collection only",
+        "`--scope meetings` uses `-c` flag to search meetings collection only",
+        "`--scope context` uses `-c` flag to search context collection only",
+        "`--scope projects` uses `-c` flag to search projects collection only",
+        "`--scope people` uses `-c` flag to search people collection only",
+        "`--limit 5` returns only 5 results",
+        "`--json` outputs documented default schema"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-2",
+      "title": "Add person filtering to search command",
+      "description": "Implement `--person <name>` filter via EntityService.resolve(). Handle ambiguous matches (warn + show options). Handle not found (error message).",
+      "acceptanceCriteria": [
+        "`--person \"jane\"` resolves and filters results by person",
+        "`--person \"ambiguous\"` shows clear error with resolution options",
+        "`--person \"unknown\"` shows not found error message"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-1",
+      "title": "Implement timeline mode",
+      "description": "Add `--timeline` flag to search command. Add `--days N` filter for date range. Reuse `MemoryService.getTimeline()` for theme extraction. Output chronological results with dates and recurring themes. Use timeline output schema in JSON mode.",
+      "acceptanceCriteria": [
+        "`--timeline` shows results chronologically with dates",
+        "`--days 30` limits results to last 30 days",
+        "Recurring themes extracted and displayed",
+        "Works with `--scope` flag (e.g. `--scope memory --timeline`)",
+        "Works with `--json` flag",
+        "JSON output uses documented timeline schema"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-1",
+      "title": "Implement --answer flag with intent derivation",
+      "description": "Add `--answer` flag for AI synthesis. Check `services.ai.isConfigured()`. Implement `deriveIntent()` function from query patterns. Pass `--intent` to QMD CLI call when intent derived. Pass results + question to AIService for synthesis. Return both results and synthesized answer using answer schema.",
+      "acceptanceCriteria": [
+        "`--answer` synthesizes response when AI configured",
+        "`--answer` warns gracefully when AI not configured (still shows results)",
+        "Intent derived from query patterns (what did we decide, who should I talk to, why did we, when did we, what is)",
+        "Intent passed to QMD via `--intent` flag when derived",
+        "JSON output includes both `results` and `answer` fields",
+        "AI errors handled gracefully (show results, warn about synthesis failure)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-1",
+      "title": "Update foundation files (PATTERNS.md and authoring guide)",
+      "description": "Update `PATTERNS.md` — `context_bundle_assembly` pattern to use new search command. Update `_authoring-guide.md`. Ensure consistency between files. These are foundation files that 11 skills inherit from.",
+      "acceptanceCriteria": [
+        "PATTERNS.md updated (context_bundle_assembly pattern uses search command)",
+        "_authoring-guide.md updated with new search command references",
+        "Pattern and guide are consistent with each other"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-2",
+      "title": "Update week-review skill",
+      "description": "Read full skill, understand purpose. Update to appropriate `search` command usage.",
+      "acceptanceCriteria": [
+        "week-review/SKILL.md uses new search command",
+        "Functionality preserved (skill still works as intended)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-3",
+      "title": "Update process-meetings skill",
+      "description": "Read full skill, understand purpose. Update to appropriate `search` command usage.",
+      "acceptanceCriteria": [
+        "process-meetings/SKILL.md uses new search command",
+        "Functionality preserved (skill still works as intended)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-4",
+      "title": "Update documentation files",
+      "description": "Update informational references in documentation files: `capture-conversation/SKILL.md`, `_integration-guide.md`, `README.md`.",
+      "acceptanceCriteria": [
+        "capture-conversation/SKILL.md updated with new search command references",
+        "_integration-guide.md updated with new search command references",
+        "README.md updated with new search command references",
+        "No stale command references remain in these files"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-5",
+      "title": "Update rules files",
+      "description": "Update `pm-workspace.mdc` rules files for both cursor and claude-code versions. Keep them in sync.",
+      "acceptanceCriteria": [
+        "pm-workspace.mdc (cursor version) updated",
+        "pm-workspace.mdc (claude-code version) updated",
+        "Both rule files are in sync",
+        "No deprecated command references remain"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-6",
+      "title": "Verify skill migration complete",
+      "description": "Run grep to verify no remaining references to deprecated commands in packages/runtime. Fix any stragglers before proceeding to deprecation phase.",
+      "acceptanceCriteria": [
+        "`grep -r \"context --for\\|memory search\\|memory timeline\" packages/runtime` returns 0 results",
+        "All skills and rules updated consistently"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-1",
+      "title": "Add deprecation warnings to deprecated commands",
+      "description": "Add deprecation warning to `context --for`, `memory search`, and `memory timeline` commands (STDERR). Add `deprecated: true` field to JSON output. Include migration guidance in warning message.",
+      "acceptanceCriteria": [
+        "`context --for` shows deprecation warning on STDERR",
+        "`memory search` shows deprecation warning on STDERR",
+        "`memory timeline` shows deprecation warning on STDERR",
+        "JSON output includes `deprecated: true` field",
+        "Warnings include specific migration command (e.g. 'Use `arete search` instead')"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-1",
+      "title": "Update AGENTS.md sources and regenerate",
+      "description": "Update `.agents/sources/shared/cli-commands.md` with new search commands. Mark deprecated commands in documentation. Update tool_selection heuristics to point to search. Run `npm run build:agents` to regenerate AGENTS.md.",
+      "acceptanceCriteria": [
+        "cli-commands.md includes all search command variants",
+        "tool_selection heuristics guide agents to use `search` command",
+        "Deprecated commands documented with migration path",
+        "AGENTS.md regenerated with `npm run build:agents`"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-2",
+      "title": "Update GUIDE.md",
+      "description": "Add `search` command documentation to GUIDE.md. Document all flags and use cases.",
+      "acceptanceCriteria": [
+        "GUIDE.md includes search command documentation",
+        "All flags documented (--scope, --timeline, --days, --person, --answer, --limit, --json)",
+        "Use cases and examples provided"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-10T21:31:15.000Z",
+    "totalTasks": 16,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

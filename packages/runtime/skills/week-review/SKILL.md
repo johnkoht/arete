@@ -64,8 +64,8 @@ Apply the `significance_analyst` expert pattern to assess what actually mattered
 
 **Assemble a context bundle** using the `context_bundle_assembly` pattern — **limited to two sections only**:
 
-1. **Strategy & goals** — Run `arete context --for "<topic>"` where topic is derived from the week's focus areas (key themes from the week file's outcomes and notes, e.g. "API launch progress, customer onboarding, Q2 planning"). Take top 3 results, max 300 words each.
-2. **Existing memory** — Run `arete memory search "<topic>"`. Take top 5 results, max 200 words each.
+1. **Strategy & goals** — Run `arete search "<topic>"` where topic is derived from the week's focus areas (key themes from the week file's outcomes and notes, e.g. "API launch progress, customer onboarding, Q2 planning"). Take top 3 results, max 300 words each.
+2. **Existing memory** — Run `arete search "<topic>" --scope memory`. Take top 5 results, max 200 words each.
 
 > **Do NOT** add `arete people show` calls. Week-review does not resolve attendees.
 

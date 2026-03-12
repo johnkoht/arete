@@ -17,6 +17,14 @@ export function warn(msg: string): void {
   console.log(chalk.yellow('⚠'), msg);
 }
 
+/**
+ * Output a deprecation warning to stderr.
+ * Format: "⚠️ DEPRECATED: <message>"
+ */
+export function deprecated(msg: string): void {
+  console.error(chalk.yellow('⚠️ DEPRECATED:'), msg);
+}
+
 export function info(msg: string): void {
   console.log(chalk.blue('ℹ'), msg);
 }

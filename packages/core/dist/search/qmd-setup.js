@@ -7,9 +7,11 @@
  */
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { basename, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 const execFileAsync = promisify(execFile);
+/** Timeout for QMD index updates (30s) - updates can be slow for large workspaces */
 const QMD_UPDATE_TIMEOUT_MS = 30_000;
 const QMD_COLLECTION_ADD_TIMEOUT_MS = 10_000;
 const QMD_EMBED_TIMEOUT_MS = 60_000; // Generous for first-run model download (~328MB)
@@ -279,5 +281,217 @@ export async function ensureQmdCollection(workspaceRoot, existingCollectionName,
             warning: `Collection created but qmd update failed: ${err.message}`,
         };
     }
+}
+// ============================================================================
+// Multi-collection support for scoped search
+// ============================================================================
+/**
+ * Scope → relative path mapping for multi-collection setup.
+ * - `all` indexes the entire workspace root
+ * - Other scopes index specific directories
+ */
+export const SCOPE_PATHS = {
+    all: '.', // workspace root
+    memory: '.arete/memory/items',
+    meetings: 'resources/meetings',
+    context: 'context',
+    projects: 'projects',
+    people: 'people',
+};
+/** All scopes in order of creation */
+export const ALL_SCOPES = [
+    'all',
+    'memory',
+    'meetings',
+    'context',
+    'projects',
+    'people',
+];
+/**
+ * Generate a unique scoped collection name from workspace path and scope.
+ * Format: `arete-<4-char-hash>-<scope>` e.g. `arete-a3f2-memory`
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param scope - The scope identifier (all, memory, meetings, etc.)
+ * @returns Collection name
+ */
+export function generateScopedCollectionName(workspaceRoot, scope) {
+    const absPath = resolve(workspaceRoot);
+    const hash = createHash('sha256').update(absPath).digest('hex').slice(0, 4);
+    return `arete-${hash}-${scope}`;
+}
+/**
+ * Ensure QMD collections exist for all scopes where the path exists.
+ *
+ * Creates 6 scope-based collections:
+ * - "all" → workspace root (entire workspace)
+ * - "memory" → .arete/memory/items/
+ * - "meetings" → resources/meetings/
+ * - "context" → context/
+ * - "projects" → projects/
+ * - "people" → people/
+ *
+ * Scopes with non-existent paths are skipped (expected for fresh workspaces).
+ *
+ * - If ARETE_SEARCH_FALLBACK env var is set, returns skipped: true.
+ * - If qmd is not on PATH, returns skipped: true.
+ * - Creates each collection with: qmd collection add [path] --name [name] --mask "**\/*.md"
+ * - Runs "qmd update" once after all collections are created.
+ * - All failures are non-fatal (returns warnings, never throws).
+ *
+ * @param workspaceRoot - Absolute path to the workspace
+ * @param existingCollections - Existing collections from config (scope to collection name).
+ *   Collections that already exist in config are verified and re-created if missing from qmd.
+ * @param deps - Injectable dependencies for testing
+ * @returns Result with collections map suitable for storing in arete.yaml
+ */
+export async function ensureQmdCollections(workspaceRoot, existingCollections, deps) {
+    const skippedResult = {
+        available: false,
+        skipped: true,
+        scopes: [],
+        collections: {},
+        indexed: false,
+    };
+    if (process.env.ARETE_SEARCH_FALLBACK) {
+        return skippedResult;
+    }
+    if (!isQmdAvailable(deps)) {
+        return skippedResult;
+    }
+    const execImpl = deps?.execFileAsync ??
+        (async (file, args, opts) => {
+            const result = await execFileAsync(file, args, opts);
+            return { stdout: result.stdout, stderr: result.stderr };
+        });
+    const pathExistsImpl = deps?.pathExists ?? existsSync;
+    // Get list of existing qmd collections
+    let existingQmdCollections = new Set();
+    try {
+        const listResult = await execImpl('qmd', ['collection', 'list'], {
+            timeout: QMD_UPDATE_TIMEOUT_MS,
+            cwd: workspaceRoot,
+        });
+        // qmd collection list outputs lines like: "reserv-121f (qmd://reserv-121f/)"
+        // Extract collection names
+        for (const line of (listResult.stdout ?? '').split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed) {
+                // Extract name before first space or parenthesis
+                const match = trimmed.match(/^([a-z0-9-]+)/);
+                if (match) {
+                    existingQmdCollections.add(match[1]);
+                }
+            }
+        }
+    }
+    catch {
+        // If list fails, continue and let individual adds handle errors
+    }
+    const scopeResults = [];
+    const collections = {};
+    for (const scope of ALL_SCOPES) {
+        const relativePath = SCOPE_PATHS[scope];
+        const absolutePath = join(workspaceRoot, relativePath);
+        // Check if path exists
+        if (!pathExistsImpl(absolutePath)) {
+            scopeResults.push({
+                scope,
+                created: false,
+                skipped: true,
+            });
+            continue;
+        }
+        // Determine collection name
+        const collectionName = existingCollections?.[scope] ?? generateScopedCollectionName(workspaceRoot, scope);
+        // Check if collection already exists in qmd
+        if (existingQmdCollections.has(collectionName)) {
+            // Collection exists, no need to create
+            scopeResults.push({
+                scope,
+                created: false,
+                collectionName,
+                skipped: false,
+            });
+            collections[scope] = collectionName;
+            continue;
+        }
+        // Create the collection
+        try {
+            await execImpl('qmd', [
+                'collection',
+                'add',
+                absolutePath,
+                '--name',
+                collectionName,
+                '--mask',
+                '**/*.md',
+            ], {
+                timeout: QMD_COLLECTION_ADD_TIMEOUT_MS,
+                cwd: workspaceRoot,
+            });
+            scopeResults.push({
+                scope,
+                created: true,
+                collectionName,
+                skipped: false,
+            });
+            collections[scope] = collectionName;
+        }
+        catch (err) {
+            scopeResults.push({
+                scope,
+                created: false,
+                collectionName,
+                skipped: false,
+                warning: `qmd collection add failed for ${scope}: ${err.message}`,
+            });
+        }
+    }
+    // If no collections were created or exist, skip the update
+    const hasCollections = Object.keys(collections).length > 0;
+    if (!hasCollections) {
+        return {
+            available: true,
+            skipped: false,
+            scopes: scopeResults,
+            collections,
+            indexed: false,
+            warning: 'No collections created (no paths exist)',
+        };
+    }
+    // Run global update once (updates ALL collections)
+    let indexed = false;
+    let updateWarning;
+    try {
+        await execImpl('qmd', ['update'], {
+            timeout: QMD_UPDATE_TIMEOUT_MS,
+            cwd: workspaceRoot,
+        });
+        indexed = true;
+    }
+    catch (err) {
+        updateWarning = `qmd update failed: ${err.message}`;
+    }
+    // Run embed if update succeeded
+    let embedded;
+    let embedWarning;
+    if (indexed) {
+        // Use any collection name as a gate (we know at least one exists)
+        const anyCollectionName = Object.values(collections)[0];
+        const embedResult = await embedQmdIndex(workspaceRoot, anyCollectionName, deps);
+        embedded = embedResult.embedded;
+        embedWarning = embedResult.warning;
+    }
+    return {
+        available: true,
+        skipped: false,
+        scopes: scopeResults,
+        collections,
+        indexed,
+        warning: updateWarning,
+        embedded,
+        embedWarning,
+    };
 }
 //# sourceMappingURL=qmd-setup.js.map

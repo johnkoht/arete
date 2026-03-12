@@ -415,9 +415,9 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 1. **Derive topic string** — Use meeting title + first 100 characters of summary or key points. For week-review, use the week's focus areas. Do not use raw filenames as topics.
 
-2. **Gather strategy & goals** — Run `arete context --for "<topic>"`. Take the top 3 results, max 300 words each. If results are empty, note: `context_quality: sparse-strategy`.
+2. **Gather strategy & goals** — Run `arete search "<topic>" --scope context`. Take the top 3 results, max 300 words each. If results are empty, note: `context_quality: sparse-strategy`.
 
-3. **Gather existing memory** — Run `arete memory search "<topic>"`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`.
+3. **Gather existing memory** — Run `arete search "<topic>" --scope memory`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`.
 
 4. **Gather people context** (when person slugs are available) — For each person: `arete people show <slug> --memory`. Extract ONLY: stances, open items, and relationship health sections. Skip full profile body. Max ~200 words per person. **If you've already run `get_meeting_context` upstream, reuse its people context — do not re-run `arete people show`.** For attendees still in `unknown_queue` (unresolved from process-meetings Step 2), skip person context and add to the bundle header: "Unresolved attendees (no person context): [names]".
 

@@ -467,7 +467,8 @@ Intelligence services provide context, search, and resolution capabilities that 
 
 #### Temporal Intelligence
 Query what Areté knows about any topic over time.
-- `arete memory timeline "onboarding"` — See when a topic was discussed and themes over time
+- `arete search "onboarding" --timeline` — See when a topic was discussed and themes over time
+- `arete search "API" --timeline --days 30` — Limit to recent history
 - Briefings automatically include recency signals: "last discussed 3 days ago in [meeting]"
 
 #### Person Memory Highlights
@@ -543,7 +544,26 @@ Areté tracks relationships between people, projects, and meetings:
 - Who attended which meetings (from meeting notes)
 - Where entities are mentioned across your workspace
 
-### Context Injection
+### Search
+
+**Command**: `arete search "query"` (unified search)
+
+**Purpose**: Semantic search across your entire workspace — context files, memory, meetings, projects, and people — with optional scope filtering, timeline view, and AI synthesis.
+
+**Examples**:
+```bash
+arete search "user onboarding"                    # Search everywhere
+arete search "pricing" --scope memory             # Search decisions/learnings only
+arete search "API" --timeline --days 30           # Recent timeline of API discussions
+arete search "jane" --person jane-doe             # Results about Jane
+arete search "roadmap" --answer                   # AI synthesis of roadmap context
+```
+
+See [CLI Reference > Search](#search) for all flags and options.
+
+### Context Injection (Deprecated)
+
+> **Deprecated**: Use `arete search "query" --scope context` instead.
 
 **Command**: `arete context --for "query"`
 
@@ -551,12 +571,18 @@ Areté tracks relationships between people, projects, and meetings:
 
 **Example**:
 ```bash
+# Deprecated:
 arete context --for "user onboarding improvements"
+
+# Use instead:
+arete search "user onboarding improvements" --scope context
 ```
 
 Returns relevant files from `context/`, `goals/`, `projects/`, and gaps.
 
-### Memory Retrieval
+### Memory Retrieval (Deprecated)
+
+> **Deprecated**: Use `arete search "query" --scope memory` instead.
 
 **Command**: `arete memory search "query"`
 
@@ -564,7 +590,11 @@ Returns relevant files from `context/`, `goals/`, `projects/`, and gaps.
 
 **Example**:
 ```bash
+# Deprecated:
 arete memory search "pricing model"
+
+# Use instead:
+arete search "pricing model" --scope memory
 ```
 
 Returns matching decisions and learnings with scores.
@@ -704,13 +734,70 @@ arete status                                      # Check workspace health
 arete index                                       # Re-index search collection (after manual file edits)
 ```
 
-### Intelligence Services
+### Search
+
+The unified search command provides semantic search across your entire workspace.
 
 ```bash
-arete context --for "query"           # Inject context for query
-arete context --inventory             # Freshness dashboard & coverage gaps
-arete memory search "query"           # Search memory
-arete memory timeline "query"         # Temporal view for topic
+arete search "query"                              # Search everywhere
+arete search "query" --scope memory               # Search only decisions/learnings
+arete search "query" --scope meetings             # Search only meeting transcripts
+arete search "query" --scope context              # Search only context files
+arete search "query" --scope projects             # Search only project files
+arete search "query" --scope people               # Search only people profiles
+arete search "query" --timeline                   # Show results chronologically with themes
+arete search "query" --timeline --days 30         # Limit timeline to last 30 days
+arete search "query" --person "jane"              # Filter results by person
+arete search "query" --answer                     # AI synthesis of results (requires AI config)
+arete search "query" --limit 10                   # Limit number of results (default: 15)
+arete search "query" --json                       # Output as JSON
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--scope <scope>` | Limit to scope: `all` (default), `memory`, `meetings`, `context`, `projects`, `people` |
+| `--timeline` | Show results chronologically with recurring themes |
+| `--days <n>` | With `--timeline`, limit to last N days |
+| `--person <name>` | Filter results by person (name or slug) |
+| `--answer` | Synthesize AI-powered answer from results (requires AI configuration) |
+| `--limit <n>` | Maximum results to return (default: 15) |
+| `--json` | Output in JSON format |
+
+**Examples:**
+
+```bash
+# General workspace search
+arete search "user onboarding"
+
+# Search only your decisions and learnings
+arete search "pricing" --scope memory
+
+# Recent timeline of a topic
+arete search "API" --timeline --days 30
+
+# Find everything related to a person
+arete search "roadmap" --person jane-doe
+
+# Get an AI-synthesized answer
+arete search "what did we decide about auth?" --answer
+
+# Combine flags
+arete search "Q1 goals" --scope context --json
+```
+
+### Intelligence Services
+
+> **Note**: `context --for`, `memory search`, and `memory timeline` are deprecated. Use `arete search` instead.
+
+```bash
+# DEPRECATED — use `arete search` instead:
+# arete context --for "query"        → arete search "query" --scope context
+# arete memory search "query"        → arete search "query" --scope memory
+# arete memory timeline "query"      → arete search "query" --timeline
+
+arete context --inventory             # Freshness dashboard & coverage gaps (still supported)
 arete resolve "reference"             # Resolve entity
 arete brief --for "query"             # Assemble briefing (context + memory + entities + relationships + temporal)
 arete route "query" [--json]          # Route to skill/tool with model suggestion

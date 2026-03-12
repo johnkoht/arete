@@ -127,4 +127,56 @@ describe('loadConfig', () => {
     assert.equal(config.settings.conversations.peopleProcessing, 'off');
     rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  // ---------------------------------------------------------------------------
+  // qmd_collection → qmd_collections migration
+  // ---------------------------------------------------------------------------
+
+  it('migrates qmd_collection to qmd_collections.all when only old format exists', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'qmd_collection: "ws-abc"\n', 'utf8');
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.qmd_collection, 'ws-abc');
+    assert.deepEqual(config.qmd_collections, { all: 'ws-abc' });
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('does not override qmd_collections when both old and new formats exist', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(
+      join(tmpDir, 'arete.yaml'),
+      'qmd_collection: "ws-old"\nqmd_collections:\n  all: "ws-all"\n  memory: "ws-memory"\n',
+      'utf8'
+    );
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.qmd_collection, 'ws-old');
+    assert.deepEqual(config.qmd_collections, { all: 'ws-all', memory: 'ws-memory' });
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('preserves qmd_collections when only new format exists', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(
+      join(tmpDir, 'arete.yaml'),
+      'qmd_collections:\n  all: "ws-all"\n  context: "ws-context"\n',
+      'utf8'
+    );
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.qmd_collection, undefined);
+    assert.deepEqual(config.qmd_collections, { all: 'ws-all', context: 'ws-context' });
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('leaves qmd_collections undefined when neither format exists', async () => {
+    tmpDir = createTmpDir();
+    storage = new FileStorageAdapter();
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\n', 'utf8');
+    const config = await loadConfig(storage, tmpDir);
+    assert.equal(config.qmd_collection, undefined);
+    assert.equal(config.qmd_collections, undefined);
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
 });

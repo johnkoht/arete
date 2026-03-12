@@ -35,16 +35,22 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .agents/skills/ = build skills (BUILD) vs product skills (USER)
 
 [CLI]
-|tool_selection:"What do you know about X?"→context --for; "What decisions about X?"→memory search; "Who is X?"→resolve; "History of X?"→memory timeline; "Prep for X"→brief --for
-|context_scope:context/, goals/, projects/, people/, meetings, conversations (broad search)
+|tool_selection:"What do you know about X?"→search; "What decisions about X?"→search --scope memory; "Who is X?"→resolve; "History of X?"→search --timeline; "Prep for X"→brief --for
+|search_scope:all (default), memory, meetings, context, projects, people
 |memory_scope:.arete/memory/items/ only: decisions.md, learnings.md, observations.md (explicit institutional memory)
+|arete search "<query>":Unified semantic search across workspace (replaces context --for, memory search, memory timeline)
+|arete search "<query>" --scope <scope>:Limit to scope (all|memory|meetings|context|projects|people)
+|arete search "<query>" --timeline:Show results chronologically with recurring themes
+|arete search "<query>" --timeline --days N:Limit timeline to last N days
+|arete search "<query>" --person <name>:Filter results by person (name or slug)
+|arete search "<query>" --answer:Synthesize AI-powered answer from results
 |arete route "<query>":Route user message to best skill and suggest model tier
 |arete skill route "<query>":Route to skill only (for agents before loading skill)
 |arete brief --for "task" --skill <name>:Assemble primitive briefing (context + memory + entities + relationships)
-|arete context --for "query":Get relevant workspace files for a task (includes meetings, conversations, projects)
+|DEPRECATED arete context --for "query":Use `arete search "query"` instead
 |arete context --for "query" --inventory:Show context freshness dashboard with coverage gaps
-|arete memory search "query":Search explicit decisions, learnings, and observations only
-|arete memory timeline "query" [--days N] [--json]:Temporal view of a topic with recurring themes
+|DEPRECATED arete memory search "query":Use `arete search "query" --scope memory` instead
+|DEPRECATED arete memory timeline "query" [--days N]:Use `arete search "query" --timeline [--days N]` instead
 |arete resolve "reference":Resolve ambiguous names (people, meetings, projects)
 |arete people list:List people (optional `--category internal|customers|users`)
 |arete people show <slug|email>:Show person details

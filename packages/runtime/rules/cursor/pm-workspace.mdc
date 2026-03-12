@@ -258,25 +258,29 @@ This is **not optional** — it combines context injection, memory retrieval, an
 
 **Default skills** (meeting-prep, create-prd, etc.) have their own context-gathering steps and set `requires_briefing: false`. Briefing is optional for these but recommended for complex tasks.
 
-### Context Injection
+### Search
 
-Get relevant workspace files for a task:
-
-```bash
-arete context --for "create a PRD for search feature" --json
-```
-
-Optionally filter by primitives: `--primitives Problem,User,Solution`
-
-### Memory Search
-
-Search decisions, learnings, and observations:
+Search across the entire workspace (context, memory, meetings, projects, people):
 
 ```bash
-arete memory search "onboarding" --json
+arete search "create a PRD for search feature" --json
 ```
 
-Optionally filter by type: `--types decisions,learnings`
+Scope to specific areas: `--scope memory`, `--scope meetings`, `--scope context`, `--scope projects`, `--scope people`
+
+```bash
+arete search "onboarding decisions" --scope memory --json
+```
+
+Timeline view with recurring themes: `--timeline` (optionally `--days N`)
+
+```bash
+arete search "onboarding" --timeline --days 30 --json
+```
+
+Filter by person: `--person "Jane"`
+
+AI-synthesized answer: `--answer`
 
 ### Entity Resolution
 
@@ -294,10 +298,10 @@ arete resolve "search project" --type project --all --json
 |-----------|---------|-----|
 | **MUST**: Skill has `requires_briefing: true` | `arete brief --for --skill` | Mandatory — skill depends on workspace context |
 | **SHOULD**: Community/third-party skill (complex tasks) | `arete brief` | Community skills lack built-in context gathering |
-| User asks about a topic/project/person | `arete brief --for` | Searches everything — most comprehensive |
-| User asks what was decided | `arete memory search` | High-signal, searches 3 memory files only |
-| User mentions a person by name | `arete resolve` + `arete people show --memory` | Full person profile with relationship health |
-| User asks about topic history | `arete memory timeline --days 30` | Temporal view across memory + meetings |
+| User asks about a topic/project/person | `arete search "topic"` or `arete brief --for` | Search everything; brief for structured output |
+| User asks what was decided | `arete search "topic" --scope memory` | High-signal, searches memory collection only |
+| User mentions a person by name | `arete search "topic" --person "name"` + `arete people show --memory` | Person-filtered search + full profile |
+| User asks about topic history | `arete search "topic" --timeline --days 30` | Temporal view with recurring themes |
 | After creating/editing workspace files | `arete index` | Keeps search current |
 
 ## Intelligence Patterns (Inlined for Reference)
@@ -374,15 +378,15 @@ arete skill route "<user message>"
 
 1. **Check active projects**: Look in `projects/active/` for existing work
 2. **Check current plans**: For planning work, see `goals/quarter.md` and `now/week.md` and use **quarter-plan**, **goals-alignment**, **week-plan**, or **week-review** as needed
-3. **Read relevant context**: Use `arete context --for "[topic]" --json` to assemble relevant files, or check `context/` files directly
-4. **Search memory**: Run `arete memory search "[topic]" --json` to surface past decisions and learnings
+3. **Search workspace**: Use `arete search "[topic]" --json` to search across all workspace content, or scope to specific areas with `--scope context`, `--scope memory`, etc.
+4. **Search memory specifically**: Run `arete search "[topic]" --scope memory --json` to surface past decisions and learnings
 5. **Search with QMD**: Optionally run `qmd query "[topic]"` via shell for semantic search
 6. **Check scratchpad**: Review `now/scratchpad.md` for relevant notes
 
 **Important**: When using intelligence services, execute the shell commands - don't just mention them. For example:
 ```bash
-arete context --for "user onboarding" --json
-arete memory search "onboarding" --json
+arete search "user onboarding" --json
+arete search "onboarding" --scope memory --json
 ```
 Then reference the results in your response.
 

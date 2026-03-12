@@ -13,6 +13,7 @@ import {
   warn,
   error,
   listItem,
+  deprecated,
 } from '../formatters.js';
 
 function parsePrimitives(raw?: string): ProductPrimitive[] | undefined {
@@ -166,11 +167,15 @@ export function registerContextCommand(program: Command): void {
         primitives,
       });
 
+      // Deprecation warning (to stderr)
+      deprecated('`arete context --for` is deprecated. Use `arete search "query"` instead.');
+
       if (opts.json) {
         console.log(
           JSON.stringify(
             {
               success: true,
+              deprecated: true,
               query,
               confidence: result.confidence,
               filesCount: result.files.length,
@@ -285,10 +290,13 @@ export function registerMemoryCommand(program: Command): void {
           limit,
         });
 
+        // Deprecation warning (to stderr)
+        deprecated('`arete memory search` is deprecated. Use `arete search "query" --scope memory` instead.');
+
         if (opts.json) {
           console.log(
             JSON.stringify(
-              { success: true, query, total: result.total, results: result.results },
+              { success: true, deprecated: true, query, total: result.total, results: result.results },
               null,
               2,
             ),
@@ -384,11 +392,15 @@ export function registerMemoryCommand(program: Command): void {
 
         const timeline = await services.memory.getTimeline(query, paths, range);
 
+        // Deprecation warning (to stderr)
+        deprecated('`arete memory timeline` is deprecated. Use `arete search "query" --timeline` instead.');
+
         if (opts.json) {
           console.log(
             JSON.stringify(
               {
                 success: true,
+                deprecated: true,
                 query: timeline.query,
                 dateRange: timeline.dateRange,
                 themes: timeline.themes,

@@ -36,8 +36,9 @@ Use \`arete route "<message>"\` to route to the right skill.
 
 - \`arete route "<query>"\` — Route to skill and suggest model tier
 - \`arete skill list\` — List available skills
-- \`arete context --for "query"\` — Get relevant workspace files
-- \`arete memory search "query"\` — Search decisions and learnings
+- \`arete search "query"\` — Search across workspace (use --scope for specific areas)
+- \`arete search "query" --scope memory\` — Search decisions and learnings
+- \`arete search "query" --timeline\` — Show temporal view with themes
 - \`arete brief --for "task"\` — Assemble briefing for a task
 
 ## Workspace Structure
