@@ -4,6 +4,7 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 ## Key References
 
+- `PLAN-FORMAT.md` — **Canonical plan file format documentation**. Frontmatter schema, valid values, content structure, commands reference. Read this before manually creating plans.
 - `index.ts` — extension entry, Pi event hooks, `PlanModeState`, `autoSavePlan()`, `handleExecutionComplete()` (shared completion handler for both todo and PRD paths)
 - `commands.ts` — `PlanModeState`, `createDefaultState()`, all command handlers, `checkPrdExecutionComplete()`, `CommandContext`/`CommandPi` interfaces
 - `persistence.ts` — `savePlan()`, `loadPlan()`, `parseFrontmatter()`, `serializeFrontmatter()`, `slugify()`, `migrateStatus()`
