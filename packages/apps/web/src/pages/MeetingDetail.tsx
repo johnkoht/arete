@@ -85,6 +85,9 @@ export default function MeetingDetail() {
   const [streamDone, setStreamDone] = useState(false);
   const [streamError, setStreamError] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+  // Refs to avoid stale closures in modal close handler
+  const streamDoneRef = useRef(false);
+  const streamErrorRef = useRef(false);
 
   // Nav confirmation dialog
   const [navConfirmOpen, setNavConfirmOpen] = useState(false);
@@ -247,6 +250,9 @@ export default function MeetingDetail() {
         setStreamOutput("");
         setStreamDone(false);
         setStreamError(false);
+        // Reset refs for new processing session
+        streamDoneRef.current = false;
+        streamErrorRef.current = false;
         setProcessModalOpen(true);
 
         // Open SSE stream
@@ -268,8 +274,10 @@ export default function MeetingDetail() {
             es.close();
             esRef.current = null;
             setStreamDone(true);
+            streamDoneRef.current = true;
             if (payload.status === "error") {
               setStreamError(true);
+              streamErrorRef.current = true;
               toast.error("Processing failed");
             } else {
               toast.success("Processing complete");
@@ -284,7 +292,9 @@ export default function MeetingDetail() {
           es.close();
           esRef.current = null;
           setStreamDone(true);
+          streamDoneRef.current = true;
           setStreamError(true);
+          streamErrorRef.current = true;
           toast.error("Processing stream disconnected");
         };
       },
@@ -302,10 +312,11 @@ export default function MeetingDetail() {
       esRef.current?.close();
       esRef.current = null;
       setProcessModalOpen(false);
-      if (streamDone && !streamError) {
-        // Invalidate queries to refetch meeting data after successful processing
-        void queryClient.invalidateQueries({ queryKey: ["meeting", safeSlug] });
-        void queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      // Use refs to avoid stale closure issue with state
+      if (streamDoneRef.current && !streamErrorRef.current) {
+        // Force refetch (not just invalidate) to ensure data is immediately fresh
+        void queryClient.refetchQueries({ queryKey: ["meeting", safeSlug] });
+        void queryClient.refetchQueries({ queryKey: ["meetings"] });
       }
     }
   };

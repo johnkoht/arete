@@ -301,6 +301,39 @@ function parseStagedItemConfidence(content: string): Record<string, number> {
   }
 }
 
+/** Owner metadata for an action item */
+interface ItemOwnerMeta {
+  ownerSlug?: string;
+  direction?: string;
+  counterpartySlug?: string;
+}
+
+/** Parse `staged_item_owner` from meeting file frontmatter. */
+function parseStagedItemOwner(content: string): Record<string, ItemOwnerMeta> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  try {
+    const fm = matter(content).data as Record<string, unknown>;
+    const raw = fm['staged_item_owner'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    // Validate structure
+    const result: Record<string, ItemOwnerMeta> = {};
+    for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        const meta = val as Record<string, unknown>;
+        result[key] = {
+          ownerSlug: typeof meta['ownerSlug'] === 'string' ? meta['ownerSlug'] : undefined,
+          direction: typeof meta['direction'] === 'string' ? meta['direction'] : undefined,
+          counterpartySlug: typeof meta['counterpartySlug'] === 'string' ? meta['counterpartySlug'] : undefined,
+        };
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export async function getMeeting(
   workspaceRoot: string,
   slug: string
@@ -320,11 +353,19 @@ export async function getMeeting(
   const stagedItemEdits = parseStagedItemEdits(raw);
   const stagedItemSource = parseStagedItemSource(raw);
   const stagedItemConfidence = parseStagedItemConfidence(raw);
+  const stagedItemOwner = parseStagedItemOwner(raw);
 
-  // Apply sources and confidence to staged items
+  // Apply sources, confidence, and owner metadata to staged items
   for (const item of stagedSections.actionItems) {
     item.source = stagedItemSource[item.id] ?? 'ai';
     item.confidence = stagedItemConfidence[item.id];
+    // Apply owner metadata if available
+    const ownerMeta = stagedItemOwner[item.id];
+    if (ownerMeta) {
+      item.ownerSlug = ownerMeta.ownerSlug;
+      item.direction = ownerMeta.direction as 'i_owe_them' | 'they_owe_me' | undefined;
+      item.counterpartySlug = ownerMeta.counterpartySlug;
+    }
   }
   for (const item of stagedSections.decisions) {
     item.source = stagedItemSource[item.id] ?? 'ai';

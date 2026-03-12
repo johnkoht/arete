@@ -57,6 +57,8 @@ interface ExtractionItem {
   ownerSlug?: string;
   /** Action item direction: 'i_owe_them' | 'they_owe_me' (from core extraction) */
   direction?: string;
+  /** Counterparty slug for action items (from core extraction) */
+  counterpartySlug?: string;
 }
 
 /** Backend format after adapting core extraction result */
@@ -81,6 +83,7 @@ function adaptCoreToBackend(intelligence: MeetingIntelligence): MeetingExtractio
       owner: ai.owner,
       ownerSlug: ai.ownerSlug,
       direction: ai.direction,
+      counterpartySlug: ai.counterpartySlug,
     })),
     decisions: intelligence.decisions.map((d) => ({ text: d, confidence: 0.9 })),
     learnings: intelligence.learnings.map((l) => ({ text: l, confidence: 0.9 })),
@@ -281,6 +284,40 @@ function buildConfidenceMap(filtered: FilteredExtraction): ItemConfidences {
   });
 
   return confidences;
+}
+
+/** Owner metadata for an action item */
+interface ItemOwnerMeta {
+  ownerSlug?: string;
+  direction?: string;
+  counterpartySlug?: string;
+}
+
+/** Map of item ID to owner metadata */
+type ItemOwners = Record<string, ItemOwnerMeta>;
+
+/**
+ * Build owner metadata map for action items.
+ * Only action items have owner/direction/counterparty metadata.
+ * Only includes defined values (YAML can't serialize undefined).
+ */
+function buildOwnerMap(filtered: FilteredExtraction): ItemOwners {
+  const owners: ItemOwners = {};
+
+  filtered.actionItems.forEach((item, index) => {
+    const id = `ai_${String(index + 1).padStart(3, '0')}`;
+    // Only add entry if there's actual owner metadata
+    if (item.ownerSlug || item.direction || item.counterpartySlug) {
+      const meta: ItemOwnerMeta = {};
+      // Only include defined values (YAML can't serialize undefined)
+      if (item.ownerSlug) meta.ownerSlug = item.ownerSlug;
+      if (item.direction) meta.direction = item.direction;
+      if (item.counterpartySlug) meta.counterpartySlug = item.counterpartySlug;
+      owners[id] = meta;
+    }
+  });
+
+  return owners;
 }
 
 /**
@@ -517,8 +554,9 @@ export async function runProcessingSessionTestable(
       jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
     }
 
-    // 6. Build confidence map and determine item status
+    // 6. Build confidence map, owner map, and determine item status
     const confidences = buildConfidenceMap(filtered);
+    const owners = buildOwnerMap(filtered);
     const itemStatus = determineItemStatus(itemSources, confidences);
     
     // Count high-confidence auto-approved items (excluding dedup)
@@ -535,12 +573,16 @@ export async function runProcessingSessionTestable(
     // 8. Update content with staged sections
     const updatedContent = updateMeetingContent(content, stagedSections);
 
-    // 9. Update frontmatter with status, sources, confidence, and item status
+    // 9. Update frontmatter with status, sources, confidence, owner, and item status
     fm['status'] = 'processed';
     fm['processed_at'] = new Date().toISOString();
     fm['staged_item_source'] = itemSources;
     fm['staged_item_confidence'] = confidences;
     fm['staged_item_status'] = itemStatus;
+    // Only write owner map if there's actual owner metadata
+    if (Object.keys(owners).length > 0) {
+      fm['staged_item_owner'] = owners;
+    }
 
     // 10. Write updated file
     jobs.appendEvent(jobId, 'Writing staged sections...');
