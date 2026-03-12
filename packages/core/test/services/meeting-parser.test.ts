@@ -119,6 +119,36 @@ Some steps.`;
 
       assert.deepEqual(items, []);
     });
+
+    it('extracts action items from ## Approved Action Items section', () => {
+      // This header is created by the meeting approval flow in the web UI
+      const content = `---
+title: "Weekly Sync"
+date: "2026-03-04"
+status: approved
+---
+
+## Summary
+
+Meeting summary here.
+
+## Approved Action Items
+
+- [ ] Follow up with Sarah on pricing (@john-smith → @sarah-chen)
+- [ ] Review the Q1 roadmap (@sarah-chen → @john-smith)
+
+## Transcript
+
+Some transcript content.`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+
+      assert.equal(items.length, 2);
+      assert.equal(items[0].text, 'Follow up with Sarah on pricing');
+      assert.equal(items[0].direction, 'i_owe_them');
+      assert.equal(items[1].text, 'Review the Q1 roadmap');
+      assert.equal(items[1].direction, 'they_owe_me');
+    });
   });
 
   // ---------------------------------------------------------------------------

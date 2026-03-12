@@ -15,6 +15,7 @@ import {
   commitApprovedItems,
   loadConfig,
   refreshQmdIndex,
+  createServices,
 } from '@arete/core';
 import type { WriteItemStatusOptions } from '@arete/core';
 import type { MeetingSummary, FullMeeting } from '../types.js';
@@ -419,14 +420,84 @@ export async function updateItemStatus(
   await writeItemStatusToFile(storage, filePath, itemId, options);
 }
 
+/**
+ * Result of post-approval automation.
+ */
+export type ApprovalAutomationResult = {
+  qmdRefreshed: boolean;
+  personMemoryRefreshed: string[];
+  commitmentsUpdated: boolean;
+};
+
+/**
+ * Approve meeting and run post-approval automation.
+ * 
+ * Post-approval steps:
+ * 1. Commit approved items to memory (decisions, learnings)
+ * 2. Refresh QMD index
+ * 3. Refresh person memory for each attendee (syncs commitments)
+ */
 export async function approveMeeting(
   workspaceRoot: string,
   slug: string
-): Promise<FullMeeting> {
+): Promise<FullMeeting & { automation?: ApprovalAutomationResult }> {
   const filePath = slugToPath(workspaceRoot, slug);
   const memoryDir = join(workspaceRoot, '.arete', 'memory', 'items');
+  
+  // Step 1: Commit approved items
   await commitApprovedItems(storage, filePath, memoryDir);
+  
+  // Get meeting to extract attendee_ids
   const meeting = await getMeeting(workspaceRoot, slug);
   if (!meeting) throw new Error(`Meeting not found after approve: ${slug}`);
-  return meeting;
+  
+  // Step 2: Refresh QMD index
+  const config = await loadConfig(storage, workspaceRoot);
+  let qmdRefreshed = false;
+  try {
+    await refreshQmdIndex(workspaceRoot, config.qmd_collection);
+    qmdRefreshed = true;
+  } catch (err) {
+    // Non-fatal — log but continue
+    console.error('[approveMeeting] QMD refresh failed:', err);
+  }
+  
+  // Step 3: Refresh person memory for attendees (syncs commitments)
+  const personMemoryRefreshed: string[] = [];
+  // Extract attendee_ids from frontmatter (array of person slugs)
+  const attendeeIds: string[] = Array.isArray(meeting.frontmatter['attendee_ids'])
+    ? meeting.frontmatter['attendee_ids'].filter((id): id is string => typeof id === 'string')
+    : [];
+  
+  if (attendeeIds.length > 0) {
+    try {
+      const services = await createServices(workspaceRoot);
+      const paths = services.workspace.getPaths(workspaceRoot);
+      
+      for (const personSlug of attendeeIds) {
+        try {
+          await services.entity.refreshPersonMemory(paths, {
+            personSlug,
+            commitments: services.commitments,
+          });
+          personMemoryRefreshed.push(personSlug);
+        } catch (err) {
+          // Non-fatal per person — log and continue
+          console.error(`[approveMeeting] Person memory refresh failed for ${personSlug}:`, err);
+        }
+      }
+    } catch (err) {
+      // Non-fatal — log but continue
+      console.error('[approveMeeting] Services creation failed:', err);
+    }
+  }
+  
+  return {
+    ...meeting,
+    automation: {
+      qmdRefreshed,
+      personMemoryRefreshed,
+      commitmentsUpdated: personMemoryRefreshed.length > 0,
+    },
+  };
 }

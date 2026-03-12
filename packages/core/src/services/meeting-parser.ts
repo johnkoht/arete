@@ -47,10 +47,14 @@ export type ParsedActionItem = {
 const ARROW_VARIANTS = ['-->', '=>', '->', '→'] as const;
 
 /**
- * Regex to match the ## Action Items section header.
- * Case-insensitive, allows for variations like "## action items" or "## Action items"
+ * Regex to match the ## Action Items or ## Approved Action Items section header.
+ * Case-insensitive, allows for variations like "## action items" or "## Approved Action Items"
+ * 
+ * Note: "Approved" prefix is optional — matches both:
+ * - ## Action Items (from manual entry or Krisp import)
+ * - ## Approved Action Items (from meeting processing approval flow)
  */
-const ACTION_ITEMS_HEADER = /^##\s*Action\s+Items\s*$/im;
+const ACTION_ITEMS_HEADER = /^##\s*(?:Approved\s+)?Action\s+Items\s*$/im;
 
 /**
  * Regex to detect the next section header (## Something Else).
