@@ -17,6 +17,7 @@ import {
   normalizeForJaccard,
   jaccardSimilarity,
   extractMeetingIntelligence,
+  formatStagedSections as formatStagedSectionsCore,
 } from '@arete/core';
 import type {
   AIService,
@@ -24,6 +25,8 @@ import type {
   AreteConfig,
   ActionItem,
   StagedItem,
+  MeetingExtractionResult,
+  MeetingIntelligence,
 } from '@arete/core';
 import * as jobsService from './jobs.js';
 

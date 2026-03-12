@@ -134,8 +134,8 @@ describe('parseStagedSections', () => {
     assert.equal(result.decisions.length, 1, 'should have 1 decision');
     assert.equal(result.learnings.length, 1, 'should have 1 learning');
 
-    assert.deepEqual(result.actionItems[0], { id: 'ai_001', text: 'Follow up on pricing model', type: 'ai', source: 'ai' });
-    assert.deepEqual(result.actionItems[1], { id: 'ai_002', text: 'Share Q1 roadmap deck', type: 'ai', source: 'ai' });
+    assert.deepEqual(result.actionItems[0], { id: 'ai_001', text: 'Follow up on pricing model', type: 'ai', source: 'ai', ownerSlug: undefined, direction: undefined, counterpartySlug: undefined });
+    assert.deepEqual(result.actionItems[1], { id: 'ai_002', text: 'Share Q1 roadmap deck', type: 'ai', source: 'ai', ownerSlug: undefined, direction: undefined, counterpartySlug: undefined });
     assert.deepEqual(result.decisions[0], { id: 'de_001', text: 'Prioritize enterprise tier', type: 'de', source: 'ai' });
     assert.deepEqual(result.learnings[0], { id: 'le_001', text: 'Enterprise customers care about audit logs', type: 'le', source: 'ai' });
   });
@@ -168,6 +168,34 @@ describe('parseStagedSections', () => {
     const result = parseStagedSections(body);
 
     assert.equal(result.decisions[0].text, 'Lots of whitespace');
+  });
+
+  it('(5b) parses owner/direction from action item text', () => {
+    const body = `## Staged Action Items
+- ai_001: [@john-smith → @sarah-chen] Send the report
+- ai_002: [@sarah-chen ←] Review proposal
+- ai_003: Regular action without owner
+`;
+    const result = parseStagedSections(body);
+
+    assert.equal(result.actionItems.length, 3);
+    
+    // First item: owner → counterparty (i_owe_them)
+    assert.equal(result.actionItems[0].ownerSlug, 'john-smith');
+    assert.equal(result.actionItems[0].direction, 'i_owe_them');
+    assert.equal(result.actionItems[0].counterpartySlug, 'sarah-chen');
+    assert.equal(result.actionItems[0].text, 'Send the report');
+    
+    // Second item: owner ← (they_owe_me), no counterparty
+    assert.equal(result.actionItems[1].ownerSlug, 'sarah-chen');
+    assert.equal(result.actionItems[1].direction, 'they_owe_me');
+    assert.equal(result.actionItems[1].counterpartySlug, undefined);
+    assert.equal(result.actionItems[1].text, 'Review proposal');
+    
+    // Third item: no owner notation
+    assert.equal(result.actionItems[2].ownerSlug, undefined);
+    assert.equal(result.actionItems[2].direction, undefined);
+    assert.equal(result.actionItems[2].text, 'Regular action without owner');
   });
 });
 

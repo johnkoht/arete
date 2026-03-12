@@ -50,6 +50,31 @@ const SECTION_HEADERS = {
 };
 const ITEM_PATTERN = /^-\s+((?:ai|de|le)_\d+):\s+(.+)$/;
 /**
+ * Pattern to extract owner/direction/counterparty from action item text.
+ * Matches: [@owner-slug → @counterparty-slug] description
+ * Or: [@owner-slug →] description (no counterparty)
+ * Direction: → means i_owe_them, ← means they_owe_me
+ */
+const OWNER_PATTERN = /^\[@([a-z0-9-]+)\s*([→←])\s*(?:@([a-z0-9-]+))?\]\s*(.+)$/i;
+/**
+ * Parse owner/direction/counterparty from action item text.
+ * Returns the extracted fields and the cleaned description.
+ */
+function parseOwnerFromText(text) {
+    const match = text.match(OWNER_PATTERN);
+    if (!match) {
+        return { description: text };
+    }
+    const [, ownerSlug, arrow, counterpartySlug, description] = match;
+    const direction = arrow === '→' ? 'i_owe_them' : 'they_owe_me';
+    return {
+        ownerSlug,
+        direction,
+        counterpartySlug: counterpartySlug || undefined,
+        description: description.trim(),
+    };
+}
+/**
  * Parse `## Staged Action Items`, `## Staged Decisions`, and
  * `## Staged Learnings` sections from meeting body markdown.
  *
@@ -85,16 +110,30 @@ export function parseStagedSections(body) {
         if (!itemMatch)
             continue;
         const id = itemMatch[1];
-        const text = itemMatch[2].trim();
-        const item = { id, text, type: currentType, source: 'ai' };
+        const rawText = itemMatch[2].trim();
+        // For action items, try to parse owner/direction from the text
         if (currentType === 'ai') {
+            const { ownerSlug, direction, counterpartySlug, description } = parseOwnerFromText(rawText);
+            const item = {
+                id,
+                text: description, // Use cleaned description without owner prefix
+                type: currentType,
+                source: 'ai',
+                ownerSlug,
+                direction,
+                counterpartySlug,
+            };
             result.actionItems.push(item);
         }
-        else if (currentType === 'de') {
-            result.decisions.push(item);
-        }
         else {
-            result.learnings.push(item);
+            // Decisions and learnings don't have owner notation
+            const item = { id, text: rawText, type: currentType, source: 'ai' };
+            if (currentType === 'de') {
+                result.decisions.push(item);
+            }
+            else {
+                result.learnings.push(item);
+            }
         }
     }
     return result;
