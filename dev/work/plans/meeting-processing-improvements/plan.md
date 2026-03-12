@@ -1,11 +1,11 @@
 ---
 title: Meeting Processing Improvements
 slug: meeting-processing-improvements
-status: draft
+status: building
 size: small
 tags: [meetings, extraction, intelligence]
 created: 2026-03-10T00:00:00.000Z
-updated: 2026-03-11T00:00:00.000Z
+updated: 2026-03-12T03:28:10.858Z
 completed: null
 execution: null
 has_review: true
