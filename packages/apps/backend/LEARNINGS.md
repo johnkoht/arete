@@ -155,6 +155,58 @@ only the internal AI call mechanism changed.
 
 ---
 
+## Core Extraction Service Integration (2026-03-12)
+
+Backend meeting processing now uses `extractMeetingIntelligence()` from `@arete/core` instead of
+direct `callStructured()`. Key integration patterns:
+
+### LLM Error Propagation Workaround
+
+`extractMeetingIntelligence` catches LLM errors internally and returns empty results (see
+`packages/core/src/services/meeting-extraction.ts` L634-635). To propagate LLM errors for
+proper job status reporting, capture errors in the callLLM adapter:
+
+```typescript
+let llmError: Error | null = null;
+const callLLM = async (prompt: string): Promise<string> => {
+  try {
+    const result = await deps.aiService.call('extraction', prompt);
+    return result.text;
+  } catch (err) {
+    llmError = err instanceof Error ? err : new Error(String(err));
+    throw llmError;
+  }
+};
+// After extraction:
+if (llmError && coreResult.intelligence.summary === '') {
+  throw llmError;  // Re-propagate for proper error reporting
+}
+```
+
+### Core Limits Action Items to 7
+
+`extractMeetingIntelligence` caps action items at 7 (`MAX_ITEMS.actionItems = 7` in
+meeting-extraction.ts L119). Tests should not expect more than 7 action items.
+
+### Test Mocks Must Use snake_case JSON
+
+The core extraction parser expects snake_case field names from the LLM. Test mocks
+must convert to snake_case via `toRawLLMJson()`:
+
+```typescript
+function toRawLLMJson(intelligence: MeetingIntelligence): object {
+  return {
+    action_items: intelligence.actionItems.map((ai) => ({
+      owner_slug: ai.ownerSlug,  // camelCase → snake_case
+      // ...
+    })),
+    // ...
+  };
+}
+```
+
+---
+
 ## Pi SDK Integration (SUPERSEDED 2026-03-08)
 
 > **Note**: This section is historical. The backend now uses `AIService` from `@arete/core`
