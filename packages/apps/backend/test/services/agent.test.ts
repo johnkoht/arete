@@ -35,10 +35,33 @@ function makeMockJobs() {
 // Mock dependencies factory
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Extraction item with confidence score */
+/** Extraction item with confidence score (legacy callStructured format) */
 interface ExtractionItem {
   text: string;
   confidence: number;
+}
+
+/** Direction of an action item relative to the owner (core extraction format) */
+type ActionItemDirection = 'i_owe_them' | 'they_owe_me';
+
+/** A structured action item from core extraction (matches @arete/core MeetingIntelligence) */
+interface ActionItem {
+  owner: string;
+  ownerSlug: string;
+  description: string;
+  direction: ActionItemDirection;
+  counterpartySlug?: string;
+  due?: string;
+  confidence?: number;
+}
+
+/** Full meeting intelligence from core extraction (matches @arete/core MeetingIntelligence) */
+interface MeetingIntelligence {
+  summary: string;
+  actionItems: ActionItem[];
+  nextSteps: string[];
+  decisions: string[];
+  learnings: string[];
 }
 
 interface MockDepsOptions {
@@ -51,12 +74,37 @@ interface MockDepsOptions {
     decisions: ExtractionItem[];
     learnings: ExtractionItem[];
   };
+  /** Core extraction response for call() method (Task 3+ format) */
+  coreResponse?: MeetingIntelligence;
   aiError?: Error;
 }
 
-/** Helper to create extraction items with default high confidence */
+/** Helper to create extraction items with default high confidence (legacy format) */
 function item(text: string, confidence = 0.9): ExtractionItem {
   return { text, confidence };
+}
+
+/** Create ActionItem for core extraction format */
+function mockActionItem(description: string, opts?: Partial<ActionItem>): ActionItem {
+  return {
+    owner: opts?.owner ?? 'me',
+    ownerSlug: opts?.ownerSlug ?? 'me',
+    description,
+    direction: opts?.direction ?? 'i_owe_them',
+    confidence: opts?.confidence ?? 0.9,
+    ...opts,
+  };
+}
+
+/** Create full MeetingIntelligence response for core extraction */
+function mockCoreExtractionResponse(opts?: Partial<MeetingIntelligence>): MeetingIntelligence {
+  return {
+    summary: opts?.summary ?? 'Meeting summary.',
+    actionItems: opts?.actionItems ?? [mockActionItem('Default action item')],
+    nextSteps: opts?.nextSteps ?? [],
+    decisions: opts?.decisions ?? [],
+    learnings: opts?.learnings ?? [],
+  };
 }
 
 function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
@@ -105,7 +153,8 @@ Bob: Sounds good. We've decided to postpone the refactor.
       },
       call: async () => {
         if (options.aiError) throw options.aiError;
-        return { text: 'mock response' };
+        const response = options.coreResponse ?? mockCoreExtractionResponse();
+        return { text: JSON.stringify(response) };
       },
     },
   };
