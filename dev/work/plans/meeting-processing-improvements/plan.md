@@ -1,10 +1,20 @@
 ---
+title: Meeting Processing Improvements
+slug: meeting-processing-improvements
 status: draft
-created: 2026-03-10
-owner: Builder
+size: large
+tags: [meetings, extraction, intelligence]
+created: 2026-03-10T00:00:00.000Z
+updated: 2026-03-10T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 4
 ---
 
-# Meeting Processing Improvements Plan
+# Meeting Processing Improvements
 
 ## Problem Statement
 
