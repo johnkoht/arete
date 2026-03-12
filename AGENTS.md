@@ -113,7 +113,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |before_work:scan MEMORY.md + collaboration.md
 |after_work:add entry to memory/entries/, update index
 |synthesis:synthesize-collaboration-profile skill after 5+ entries or PRD completion
-|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/skills/, .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/, packages/apps/backend/, packages/apps/web/
+|learnings:LEARNINGS.md = component-local gotchas/invariants next to code; check before editing; update after regressions; seeded: .pi/extensions/plan-mode/, .pi/ (LEARNINGS-skills.md), .pi/skills/execute-prd/, packages/core/src/search/, packages/core/src/services/, packages/core/src/integrations/, packages/core/src/integrations/krisp/, packages/core/src/integrations/notion/, packages/core/src/adapters/, packages/cli/src/commands/, packages/runtime/rules/, packages/runtime/skills/, packages/runtime/skills/schedule-meeting/, packages/runtime/tools/, packages/apps/backend/, packages/apps/web/
 |expertise:domain maps in .pi/expertise/{domain}/PROFILE.md — read before working on a package; available: cli, core, backend, web
 
 [Personas]|council:Harvester + Architect + Preparer — three GUIDE MODE behavioral archetypes for BUILD MODE planning
