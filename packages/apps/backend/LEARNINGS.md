@@ -270,3 +270,29 @@ The GET /quarter tests in `test/routes/goals.test.ts` were failing **before** it
 
 These are parser mismatches — the test data uses `### Q1-1` format but `parseQuarterOutcomes` expects `## Goal N:` format.
 Do not fix these tests as part of other bug fixes (out of scope). The `parses commitments with done status` test now passes.
+
+### Memory File Format — Support Both Standard and Legacy Formats (2026-03-11)
+
+The memory parser (`routes/memory.ts`) now supports two formats:
+
+1. **Standard format** (PATTERNS.md spec, MemoryService.create output):
+   ```markdown
+   ### 2026-02-24: Decision Title
+   **Source**: Meeting Name
+   Content here...
+   ```
+
+2. **Legacy format** (agent-generated entries):
+   ```markdown
+   ## Decision Title
+   - **Date**: 2026-02-24
+   - **Source**: Meeting Name
+   - Content here...
+   ```
+
+**Root cause**: Some agents wrote memory entries using `## Title` with separate `- **Date**:` metadata
+lines instead of following the `### YYYY-MM-DD: Title` format in PATTERNS.md. The parser was only
+matching the standard format, causing all legacy entries to be invisible in the Memory dashboard.
+
+**Fix**: The parser now splits on both `## ` and `### ` headings and tries both format patterns.
+Tests added in `test/routes/memory.test.ts` verify both formats and mixed-format files.

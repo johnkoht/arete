@@ -20,34 +20,69 @@ export type MemoryItem = {
 
 /**
  * Parse a memory markdown file (decisions.md or learnings.md).
- * Entries are separated by `### YYYY-MM-DD: Title` headers.
+ * 
+ * Supports two formats:
+ * 1. Standard: `### YYYY-MM-DD: Title` (date inline with heading)
+ * 2. Legacy: `## Title` followed by `- **Date**: YYYY-MM-DD` on a separate line
  */
 function parseMemoryFile(raw: string, type: MemoryItemType): MemoryItem[] {
   const items: MemoryItem[] = [];
 
-  // Split on `### YYYY-MM-DD` headers
-  const sections = raw.split(/^(?=###\s+\d{4}-\d{2}-\d{2})/m);
+  // Split on ## or ### headings (but not # which is the file title)
+  // Match: ## followed by space, or ### followed by space/digit
+  const sections = raw.split(/^(?=##\s|###\s)/m);
 
   for (const section of sections) {
-    const headerMatch = /^###\s+(\d{4}-\d{2}-\d{2})(?:[:\s]+(.+))?$/m.exec(section);
-    if (!headerMatch) continue;
+    // Try standard format first: ### YYYY-MM-DD: Title
+    const standardMatch = /^###\s+(\d{4}-\d{2}-\d{2})(?:[:\s]+(.+))?$/m.exec(section);
+    if (standardMatch) {
+      const date = standardMatch[1] ?? '';
+      const title = (standardMatch[2] ?? '').trim();
+      const content = section.replace(/^###.*\n/, '').trim();
 
-    const date = headerMatch[1] ?? '';
-    const title = (headerMatch[2] ?? '').trim();
-    const content = section.replace(/^###.*\n/, '').trim();
+      const sourceMatch = /\*\*Source\*\*:\s*(.+)$/m.exec(content);
+      const source = sourceMatch ? sourceMatch[1].trim() : undefined;
 
-    // Extract source if present
-    const sourceMatch = /\*\*Source\*\*:\s*(.+)$/m.exec(content);
-    const source = sourceMatch ? sourceMatch[1].trim() : undefined;
+      items.push({
+        id: `${type}-${date}-${title.toLowerCase().replace(/\s+/g, '-').slice(0, 40)}`,
+        type,
+        date,
+        title: title || `${type} from ${date}`,
+        content,
+        source,
+      });
+      continue;
+    }
 
-    items.push({
-      id: `${type}-${date}-${title.toLowerCase().replace(/\s+/g, '-').slice(0, 40)}`,
-      type,
-      date,
-      title: title || `${type} from ${date}`,
-      content,
-      source,
-    });
+    // Try legacy format: ## Title followed by - **Date**: YYYY-MM-DD
+    const legacyHeaderMatch = /^##\s+(.+)$/m.exec(section);
+    if (legacyHeaderMatch) {
+      const title = legacyHeaderMatch[1].trim();
+      const body = section.replace(/^##.*\n/, '').trim();
+
+      // Extract date from body (- **Date**: YYYY-MM-DD)
+      const dateMatch = /-?\s*\*\*Date\*\*:\s*(\d{4}-\d{2}-\d{2})/.exec(body);
+      const date = dateMatch ? dateMatch[1] : '';
+
+      // Extract source from body (- **Source**: ...)
+      const sourceMatch = /-?\s*\*\*Source\*\*:\s*(.+)$/m.exec(body);
+      const source = sourceMatch ? sourceMatch[1].trim() : undefined;
+
+      // Content is the body minus the metadata lines
+      const content = body
+        .replace(/^-?\s*\*\*Date\*\*:.*$/m, '')
+        .replace(/^-?\s*\*\*Source\*\*:.*$/m, '')
+        .trim();
+
+      items.push({
+        id: `${type}-${date}-${title.toLowerCase().replace(/\s+/g, '-').slice(0, 40)}`,
+        type,
+        date,
+        title: title || `${type} from ${date}`,
+        content,
+        source,
+      });
+    }
   }
 
   return items;
