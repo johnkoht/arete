@@ -2,249 +2,170 @@
 title: Meeting Processing Improvements
 slug: meeting-processing-improvements
 status: draft
-size: large
+size: small
 tags: [meetings, extraction, intelligence]
 created: 2026-03-10T00:00:00.000Z
-updated: 2026-03-10T00:00:00.000Z
+updated: 2026-03-11T00:00:00.000Z
 completed: null
 execution: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-steps: 4
+steps: 3
 ---
 
 # Meeting Processing Improvements
 
-## Problem Statement
+> **Plan Updated**: 2026-03-11 — Engineering audit revealed most extraction capabilities were built Mar 4-9. Plan rescoped to integration work only.
 
-Meeting processing currently scores ~5-6/10. Key issues:
+## Problem Statement (Revised)
 
-1. **No context injection** — LLM extracts without knowing who attendees are, what projects are relevant, or user's role
-2. **Architecture mismatch** — UI creates `## Approved Action Items` but commitments system looks for `## Action Items`
-3. **Generic prompting** — No few-shot examples, single-pass extraction, no validation
-4. **Action items lack structure** — No owner attribution, no entity linking
+The **extraction engine** (meeting-extraction.ts) is now feature-complete with:
+- ✅ Owner attribution with slugs and direction
+- ✅ Confidence scoring with calibration guidance
+- ✅ Validation filters (garbage, length, dedup)
+- ✅ Few-shot examples (positive and negative)
+- ✅ Arrow notation parsing
 
-### Example Failure
+**What's broken**: The Web UI doesn't use it. Two disconnected systems exist:
+1. **CLI** (`arete meeting extract --stage`) → uses meeting-extraction.ts → works correctly
+2. **Web UI** (`/api/meetings/:slug/process`) → uses agent.ts with basic prompting → missing all the above
 
-> "John will take over communications work from Jamie, focusing on getting email with POP out the door"
-
-This was extracted as an action item, but it's describing John's existing role (what he was hired for), not a new commitment. The LLM had no context about John's responsibilities.
-
----
-
-## Architecture Discovery
-
-### Two Disconnected Systems
-
-**System 1: UI Meeting Processing** (`packages/apps/backend/src/services/agent.ts`)
-- Uses `AIService.callStructured()` with a generic extraction prompt
-- Creates `## Staged Action Items` → after approval → `## Approved Action Items`
-- Format: `- [ ] Bob will draft Q2 plan` (no owner notation)
-
-**System 2: Person Memory / Commitments** (`packages/core/src/services/entity.ts`)
-- Looks for `## Action Items` section (different name!)
-- Uses `parseActionItemsFromMeeting()` expecting arrow notation
-- Format: `- [ ] Text here (@john-smith → @sarah-chen)`
-- Syncs to `.arete/commitments.json`
-
-**Result**: Approved action items never flow into commitments because:
-1. Section name mismatch (`Approved Action Items` vs `Action Items`)
-2. Format mismatch (no arrow notation)
-
-### Better Extraction Exists
-
-`packages/core/src/services/meeting-extraction.ts` has a more sophisticated extraction:
-- Owner attribution with slugs
-- Direction classification (`i_owe_them` / `they_owe_me`)
-- Counterparty tracking
-- Confidence scoring
-- Validation filters (garbage detection, dedup, limits)
-
-But the **backend UI doesn't use it**.
+**Result**: Users processing meetings via the web app get worse extractions than CLI users.
 
 ---
 
-## Phased Approach
+## User Value
 
-### Phase 1: Foundation — Unify Extraction Pipeline
-**Goal**: Single extraction path, commitments flow works
+When this plan is complete, users will see:
+
+| Before | After |
+|--------|-------|
+| Action items have no owner attribution | "Send report" becomes "@sarah-chen → @john-doe: Send report" |
+| No confidence scores | Each item shows confidence (0.0-1.0) for informed review |
+| Garbage items slip through | Validation filters remove non-actionable items |
+| Approved items don't sync to commitments | Approved items flow into `.arete/commitments.json` automatically |
+| Section name mismatch breaks flow | Consistent naming enables people intelligence features |
+
+**Bottom line**: Meeting processing goes from ~60% useful to ~85%+ useful. Action items become trackable commitments tied to real people.
+
+---
+
+## What's Already Built (Mar 4-9, 2026)
+
+| Capability | Location | Status |
+|------------|----------|--------|
+| Owner/direction/counterparty extraction | meeting-extraction.ts | ✅ Done |
+| Confidence scoring | meeting-extraction.ts | ✅ Done |
+| Few-shot examples (positive + negative) | meeting-extraction.ts | ✅ Done |
+| Validation filters (garbage, length, dedup) | meeting-extraction.ts | ✅ Done |
+| Arrow notation parsing | meeting-extraction.ts | ✅ Done |
+| Staged sections formatting | meeting-extraction.ts | ✅ Done |
+| CLI integration | arete meeting extract | ✅ Done |
+| Configurable thresholds (config schema) | workspace.ts | ✅ Done |
+
+---
+
+## What Remains (Integration Work)
+
+### Step 1: Wire Backend to Use Extraction Service
+**Goal**: Web UI processing uses the same extraction logic as CLI
 
 **Tasks**:
-1. Replace `agent.ts` extraction with `meeting-extraction.ts` logic
-2. Unify section naming:
-   - Processing creates `## Staged Action Items`
-   - Approval creates `## Action Items` (not "Approved Action Items")
-3. Update `meeting-parser.ts` if needed to handle both formats
-4. Add attendee context to extraction prompt (names from frontmatter)
-5. Test end-to-end: process → approve → commitments.json
+- Import and call `extractMeetingIntelligence()` from agent.ts instead of inline prompting
+- Pass configurable thresholds from arete.yaml config
+- Ensure staged items include owner, direction, confidence fields
 
 **Acceptance Criteria**:
-- [ ] Approved action items appear in commitments
-- [ ] Action items have owner attribution (`@slug → @slug`)
-- [ ] Single extraction code path for UI and CLI
+- [ ] Web UI extraction produces same quality as CLI
+- [ ] Confidence thresholds from config are respected
+- [ ] Owner attribution appears in staged items
+
+**Estimate**: 0.5-1 day
 
 ---
 
-### Phase 2: Context Injection
-**Goal**: Extraction has full context about people, projects, and user
+### Step 2: Fix Section Header Naming
+**Goal**: Approved items flow correctly to commitments
 
 **Tasks**:
-1. Resolve attendees → fetch `people/*.md` profiles
-2. Inject attendee context into prompt:
-   - Role, company, relationship
-   - Recent meeting history with them
-3. Inject user profile (workspace owner):
-   - Role, responsibilities
-   - What they were "hired for"
-4. Check for linked agenda → inject if exists
-5. Pull relevant project context (from `projects/` if attendees are linked)
+- Audit section header naming across staged-items.ts, meeting-parser.ts
+- Ensure approval creates `## Action Items` (not `## Approved Action Items`)
+- Update meeting-parser.ts to accept both formats for backward compatibility
 
 **Acceptance Criteria**:
-- [ ] Extraction prompt includes attendee profiles
-- [ ] User's role/responsibilities are in context
-- [ ] "John taking over communications" case is handled correctly
+- [ ] Approved action items appear in `.arete/commitments.json`
+- [ ] Person memory refresh picks up new commitments
+- [ ] Existing meetings with old format still work
+
+**Estimate**: 0.5 day
 
 ---
 
-### Phase 3: Improved Prompting
-**Goal**: Higher quality extractions with better accuracy
+### Step 3: Integration Testing & Validation
+**Goal**: End-to-end flow is verified and documented
 
 **Tasks**:
-1. Add few-shot examples:
-   - Good action item extractions (with confidence scores)
-   - NOT action items (role descriptions, past decisions, vague intentions)
-   - Good decision extractions
-   - Good learning extractions
-2. Leverage Krisp summaries as input (if available)
-   - Use as additional signal, not replacement
-3. Improve confidence calibration
-4. Add extraction reasoning (why this is/isn't an action item)
-
-**Few-Shot Example Structure**:
-```markdown
-### Example: Action Item (INCLUDE)
-Transcript: "Sarah, can you send me the API docs by Friday?"
-✅ Extract: "Send API docs" | Owner: @sarah | Due: Friday | Confidence: 0.95
-
-### Example: NOT an Action Item (EXCLUDE)
-Transcript: "John's been handling all customer comms since he joined"
-❌ Do NOT extract — describes existing responsibility, not new commitment
-```
+- Add integration test: process → stage → approve → commitments → person memory
+- Verify confidence scoring is always present (not optional)
+- Test with real meeting transcript to validate quality improvement
 
 **Acceptance Criteria**:
-- [ ] Few-shot examples in prompt
-- [ ] Krisp summaries used as input signal
-- [ ] Confidence scores are well-calibrated (high = real commitments)
+- [ ] Integration test covers full flow
+- [ ] Documented improvement in extraction quality (before/after comparison)
+- [ ] No regressions in existing CLI workflow
+
+**Estimate**: 1 day
 
 ---
 
-### Phase 4: Multi-Step Pipeline (Enhancement)
-**Goal**: Production-grade extraction with validation
+## Out of Scope (Deferred)
 
-**Pipeline**:
-```
-Step 1: Context Assembly
-  - Resolve attendees → fetch profiles
-  - Find linked agenda
-  - Search recent meetings with same people
-  - Pull project context
+These were in the original plan but are **not needed** now:
 
-Step 2: Transcript Understanding
-  - Who said what (speaker attribution)
-  - Topics discussed
-  - Key moments identified
-
-Step 3: Extraction with Context
-  - Given: transcript + context + understanding
-  - Extract: action items, decisions, learnings
-  - Attribute: owner, counterparty, project
-
-Step 4: Validation & Enrichment
-  - Check: Is this new or describing existing state?
-  - Link: @person-slug, [[project-slug]]
-  - Score: Confidence with reasoning
-```
-
-**Acceptance Criteria**:
-- [ ] Multi-step pipeline implemented
-- [ ] Validation catches "existing role" false positives
-- [ ] Entity linking works
+| Item | Why Deferred |
+|------|--------------|
+| Context injection (attendee profiles, user role) | Nice-to-have enhancement; extraction quality is already improved |
+| Multi-step pipeline with validation | Overkill for current needs; single-pass with filters is sufficient |
+| Krisp summary integration | Krisp already provides transcripts; summaries are bonus |
+| Confidence calibration tuning | Current calibration is good enough; tune based on user feedback |
 
 ---
 
-## Design Decisions
+## Risks
 
-### Section Naming
-**Decision**: After approval, section becomes `## Action Items` (not `## Approved Action Items`)
-**Rationale**: Matches what `meeting-parser.ts` expects for commitments flow
-
-### Action Item Format
-**Decision**: Use inline arrow notation `(@owner → @counterparty)`
-**Rationale**: 
-- Human-readable in markdown
-- Already implemented in `meeting-extraction.ts`
-- Parser already supports it
-
-### Context Injection Strategy
-**Decision**: Pre-fetch and inject (not agentic)
-**Rationale**: Predictable, testable, no tool-calling complexity
-
-### Krisp Summaries
-**Decision**: Use as additional input signal, not ignored
-**Rationale**: Free information that might catch things our extraction misses
-
----
-
-## Files to Modify
-
-### Phase 1
-- `packages/apps/backend/src/services/agent.ts` — replace extraction logic
-- `packages/core/src/integrations/staged-items.ts` — change "Approved Action Items" to "Action Items"
-- `packages/core/src/services/meeting-parser.ts` — verify compatibility
-- Tests for all above
-
-### Phase 2
-- `packages/apps/backend/src/services/agent.ts` — add context assembly
-- `packages/core/src/services/entity.ts` — expose profile fetching for reuse
-- New: context injection utilities
-
-### Phase 3
-- `packages/core/src/services/meeting-extraction.ts` — add few-shot examples
-- Prompt templates (could externalize to file)
-
-### Phase 4
-- New: multi-step pipeline orchestration
-- New: validation service
-
----
-
-## Open Questions
-
-1. **Phase 1 scope**: Should we also fix the CLI `arete meeting extract` to use the same unified path, or defer?
-
-2. **Backward compatibility**: Existing meetings have `## Approved Action Items`. Should we:
-   - Add migration to rename sections?
-   - Have parser check both section names?
-
-3. **Performance**: Context injection adds latency. Should we:
-   - Cache person profiles?
-   - Parallelize fetches?
-   - Make context depth configurable?
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Backend refactor breaks existing flow | Medium | High | Feature flag, integration tests first |
+| Section header changes break existing meetings | Low | Medium | Parser accepts both old and new formats |
+| Extraction quality doesn't improve | Low | High | CLI already validates the extraction logic works |
 
 ---
 
 ## Success Metrics
 
-- **Accuracy**: Action item extraction precision improves from ~60% to ~85%+
-- **Commitments flow**: 100% of approved action items appear in commitments
-- **False positive reduction**: "Existing role" descriptions no longer extracted
-- **User satisfaction**: Meeting processing feels "actually useful" (qualitative)
+- **Commitments flow**: 100% of approved action items sync to commitments (currently 0%)
+- **Owner attribution**: 100% of action items have owner/counterparty (currently 0%)
+- **Quality**: Reduction in garbage/non-actionable items (measure before/after)
+- **Parity**: Web UI extraction matches CLI extraction quality
+
+---
+
+## Effort Estimate
+
+| Step | Effort |
+|------|--------|
+| Step 1: Wire backend | 0.5-1 day |
+| Step 2: Section headers | 0.5 day |
+| Step 3: Integration testing | 1 day |
+| **Total** | **2-2.5 days** |
+
+**Size**: Small (3 steps, 2-2.5 days)
 
 ---
 
 ## Next Steps
 
-1. Review and refine this plan
-2. Run pre-mortem (Phase 1 is foundational — identify risks)
-3. Convert to PRD for execution
+1. ~~Review and refine this plan~~ ✅ Done (EM audit complete)
+2. Approve plan
+3. Execute (direct or PRD)
