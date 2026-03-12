@@ -112,6 +112,7 @@ export type {
 
 // Integrations domain
 export type {
+  StagedItemDirection,
   StagedItemStatus,
   StagedItemEdits,
   StagedItem,

@@ -14,6 +14,9 @@ export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'
 /** Map of itemId → edited text (only present when the user edits the default text) */
 export type StagedItemEdits = Record<string, string>;
 
+/** Direction of an action item relative to the user. */
+export type StagedItemDirection = 'i_owe_them' | 'they_owe_me';
+
 /** A single staged item extracted from a meeting file */
 export type StagedItem = {
   id: string;   // e.g. "ai_001"
@@ -23,6 +26,12 @@ export type StagedItem = {
   source?: 'ai' | 'dedup';
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
+  /** Owner slug for action items (who is responsible) */
+  ownerSlug?: string;
+  /** Direction: does the user owe them, or do they owe the user? */
+  direction?: StagedItemDirection;
+  /** Counterparty slug for action items (who is the other party) */
+  counterpartySlug?: string;
 };
 
 /** All three staged sections for a meeting */

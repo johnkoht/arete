@@ -245,6 +245,9 @@ export type Attendee = {
   email?: string;
 };
 
+/** Direction of an action item relative to the user. */
+export type ItemDirection = 'i_owe_them' | 'they_owe_me';
+
 export type ReviewItem = {
   id: string;
   type: ItemType;
@@ -256,6 +259,12 @@ export type ReviewItem = {
   source?: 'ai' | 'dedup';
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
+  /** Owner slug for action items (who is responsible) */
+  ownerSlug?: string;
+  /** Direction: does the user owe them, or do they owe the user? */
+  direction?: ItemDirection;
+  /** Counterparty slug for action items (who is the other party) */
+  counterpartySlug?: string;
 };
 
 export type ApprovedItems = {

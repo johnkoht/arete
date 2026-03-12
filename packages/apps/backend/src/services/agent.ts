@@ -12,8 +12,19 @@ import { Type, type Static } from '@sinclair/typebox';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity } from '@arete/core';
-import type { AIService, AIStructuredResult, AreteConfig } from '@arete/core';
+import {
+  updateMeetingContent,
+  normalizeForJaccard,
+  jaccardSimilarity,
+  extractMeetingIntelligence,
+} from '@arete/core';
+import type {
+  AIService,
+  AIStructuredResult,
+  AreteConfig,
+  ActionItem,
+  StagedItem,
+} from '@arete/core';
 import * as jobsService from './jobs.js';
 
 export type { JobsService };
@@ -77,6 +88,45 @@ let moduleThresholds: ExtractionThresholds = {
   confidenceInclude: DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
   dedupJaccard: DEFAULT_DEDUP_JACCARD_THRESHOLD,
 };
+
+// ---------------------------------------------------------------------------
+// ActionItem → StagedItem mapping
+// ---------------------------------------------------------------------------
+
+/** Counter for generating unique staged item IDs */
+let stagedItemCounter = 0;
+
+/**
+ * Maps an ActionItem from the extraction service to a StagedItem for the UI.
+ *
+ * ActionItem (from extractMeetingIntelligence):
+ *   - owner, ownerSlug, description, direction, counterpartySlug, confidence
+ *
+ * StagedItem (for backend/frontend):
+ *   - id, text, type, source, confidence, ownerSlug, direction, counterpartySlug
+ */
+export function mapActionItemToStagedItem(
+  item: ActionItem,
+  index: number,
+): StagedItem {
+  return {
+    id: `ai_${String(index).padStart(3, '0')}`,
+    text: item.description,
+    type: 'ai',
+    source: 'ai',
+    confidence: item.confidence,
+    ownerSlug: item.ownerSlug,
+    direction: item.direction,
+    counterpartySlug: item.counterpartySlug,
+  };
+}
+
+/**
+ * Maps an array of ActionItems to StagedItems.
+ */
+export function mapActionItemsToStagedItems(items: ActionItem[]): StagedItem[] {
+  return items.map((item, index) => mapActionItemToStagedItem(item, index));
+}
 
 /**
  * Extract user-written notes from meeting body.

@@ -43,6 +43,9 @@ type RawStagedItem = {
   type: 'ai' | 'de' | 'le';
   source?: 'ai' | 'dedup';
   confidence?: number;
+  ownerSlug?: string;
+  direction?: 'i_owe_them' | 'they_owe_me';
+  counterpartySlug?: string;
 };
 
 type RawStagedSections = {
@@ -118,6 +121,9 @@ function flattenStagedItems(raw: RawFullMeeting): ReviewItem[] {
     status: raw.stagedItemStatus[item.id] ?? 'pending',
     source: item.source,
     confidence: item.confidence,
+    ownerSlug: item.ownerSlug,
+    direction: item.direction,
+    counterpartySlug: item.counterpartySlug,
   }));
 }
 
