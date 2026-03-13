@@ -88,6 +88,8 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 - **`parseStagedSections` stops at any `##` non-staged header** — The parser resets `currentType` to `null` whenever it encounters a `##` header that is not a staged section. This prevents content from unrelated sections (e.g., `## Transcript`) from being parsed as item lines.
 
+- **Owner metadata must be read from `staged_item_owner` frontmatter during commit** (2026-03-12): The `commitApprovedItems()` function must read `staged_item_owner` from frontmatter and merge it onto `StagedItem` objects before writing to `## Approved Action Items`. The owner metadata is NOT stored inline in the staged section text — it's only in frontmatter. Failing to read it causes action items to lose their owner annotation, breaking downstream commitment sync in `parseActionItemsFromMeeting()`. Added `parseStagedItemOwner()` and `formatActionItemWithOwner()` for this purpose.
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new calendar config field: check every consumer in `pull.ts`, `integration.ts`, `status.ts` for alignment

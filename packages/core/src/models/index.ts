@@ -115,6 +115,8 @@ export type {
   StagedItemDirection,
   StagedItemStatus,
   StagedItemEdits,
+  StagedItemOwnerMeta,
+  StagedItemOwner,
   StagedItem,
   StagedSections,
   FathomTranscript,

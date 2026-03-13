@@ -39,6 +39,7 @@ import {
   parseStagedSections,
   parseStagedItemStatus,
   parseStagedItemEdits,
+  parseStagedItemOwner,
   writeItemStatusToFile,
   commitApprovedItems,
 } from '../../src/integrations/staged-items.js';
@@ -257,6 +258,77 @@ describe('parseStagedItemEdits', () => {
     assert.deepEqual(result, {
       ai_001: 'Edited action item text',
       de_001: 'Edited decision text',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStagedItemOwner
+// ---------------------------------------------------------------------------
+
+const FRONTMATTER_WITH_OWNER = `---
+title: Meeting
+status: processed
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: i_owe_them
+    counterpartySlug: sarah-chen
+  ai_002:
+    ownerSlug: sarah-chen
+    direction: they_owe_me
+  ai_003:
+    ownerSlug: mike-jones
+---
+
+Body content.
+`;
+
+describe('parseStagedItemOwner', () => {
+  it('returns {} when content has no frontmatter', () => {
+    const result = parseStagedItemOwner('# Just a heading\nNo frontmatter here.');
+    assert.deepEqual(result, {});
+  });
+
+  it('returns {} when frontmatter has no staged_item_owner field', () => {
+    const content = `---\ntitle: "Meeting"\nstatus: synced\n---\n\nBody text.`;
+    const result = parseStagedItemOwner(content);
+    assert.deepEqual(result, {});
+  });
+
+  it('reads staged_item_owner map correctly', () => {
+    const result = parseStagedItemOwner(FRONTMATTER_WITH_OWNER);
+    assert.deepEqual(result, {
+      ai_001: {
+        ownerSlug: 'john-koht',
+        direction: 'i_owe_them',
+        counterpartySlug: 'sarah-chen',
+      },
+      ai_002: {
+        ownerSlug: 'sarah-chen',
+        direction: 'they_owe_me',
+      },
+      ai_003: {
+        ownerSlug: 'mike-jones',
+      },
+    });
+  });
+
+  it('skips invalid direction values', () => {
+    const content = `---
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: invalid_direction
+---
+
+Body.`;
+    const result = parseStagedItemOwner(content);
+    // Should still have the item, just without direction
+    assert.deepEqual(result, {
+      ai_001: {
+        ownerSlug: 'john-koht',
+      },
     });
   });
 });
@@ -514,6 +586,132 @@ Content here.
     assert.ok(updated.includes('## Approved Decisions'), 'should have Approved Decisions section');
     assert.ok(!updated.includes('## Approved Action Items'), 'should NOT have Approved Action Items section (no items)');
     assert.ok(!updated.includes('## Approved Learnings'), 'should NOT have Approved Learnings section (no items)');
+  });
+
+  it('(25) includes owner arrow notation from staged_item_owner in approved action items', async () => {
+    const meetingWithOwner = `---
+title: "Meeting with Owner"
+date: "2026-03-01"
+status: processed
+staged_item_status:
+  ai_001: approved
+  ai_002: approved
+  ai_003: approved
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: i_owe_them
+    counterpartySlug: lindsay-gray
+  ai_002:
+    ownerSlug: jamie-burk
+    direction: they_owe_me
+---
+
+## Staged Action Items
+- ai_001: Send the Q1 report
+- ai_002: Review proposal draft
+- ai_003: Action without owner
+
+## Transcript
+Content here.
+`;
+    storage.files.set(MEETING_FILE, meetingWithOwner);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    
+    // Should include arrow notation for items with owner metadata
+    assert.ok(
+      updated.includes('- [ ] Send the Q1 report (@john-koht → @lindsay-gray)'),
+      'should include owner and counterparty notation'
+    );
+    assert.ok(
+      updated.includes('- [ ] Review proposal draft (@jamie-burk)'),
+      'should include owner-only notation when no counterparty'
+    );
+    assert.ok(
+      updated.includes('- [ ] Action without owner'),
+      'should include plain text for items without owner'
+    );
+    assert.ok(
+      !updated.includes('- [ ] Action without owner ('),
+      'should NOT have parentheses for items without owner'
+    );
+  });
+
+  it('(26) stores owner notation in approved_items frontmatter', async () => {
+    const meetingWithOwner = `---
+title: "Meeting with Owner"
+date: "2026-03-01"
+status: processed
+staged_item_status:
+  ai_001: approved
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+    direction: i_owe_them
+    counterpartySlug: lindsay-gray
+---
+
+## Staged Action Items
+- ai_001: Send the Q1 report
+
+## Transcript
+Content here.
+`;
+    storage.files.set(MEETING_FILE, meetingWithOwner);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
+    const approvedItems = frontmatter['approved_items'] as { actionItems: string[] };
+    
+    assert.ok(
+      approvedItems.actionItems[0].includes('(@john-koht → @lindsay-gray)'),
+      'approved_items should include owner notation'
+    );
+  });
+
+  it('(27) cleans up all staged metadata from frontmatter', async () => {
+    const meetingWithAllMetadata = `---
+title: "Full Meeting"
+date: "2026-03-01"
+status: processed
+staged_item_status:
+  ai_001: approved
+staged_item_edits:
+  ai_001: "Edited text"
+staged_item_owner:
+  ai_001:
+    ownerSlug: john-koht
+staged_item_source:
+  ai_001: ai
+staged_item_confidence:
+  ai_001: 0.9
+---
+
+## Staged Action Items
+- ai_001: Original text
+
+## Transcript
+Content here.
+`;
+    storage.files.set(MEETING_FILE, meetingWithAllMetadata);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const updated = storage.files.get(MEETING_FILE)!;
+    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
+    
+    assert.ok(!('staged_item_status' in frontmatter), 'staged_item_status should be removed');
+    assert.ok(!('staged_item_edits' in frontmatter), 'staged_item_edits should be removed');
+    assert.ok(!('staged_item_owner' in frontmatter), 'staged_item_owner should be removed');
+    assert.ok(!('staged_item_source' in frontmatter), 'staged_item_source should be removed');
+    assert.ok(!('staged_item_confidence' in frontmatter), 'staged_item_confidence should be removed');
   });
 });
 

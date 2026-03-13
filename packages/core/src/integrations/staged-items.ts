@@ -11,6 +11,8 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type {
   StagedItem,
   StagedItemEdits,
+  StagedItemOwner,
+  StagedItemOwnerMeta,
   StagedItemStatus,
   StagedSections,
 } from '../models/index.js';
@@ -18,7 +20,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Re-export types for convenience
 // ---------------------------------------------------------------------------
-export type { StagedItem, StagedItemEdits, StagedItemStatus, StagedSections };
+export type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemStatus, StagedSections };
 
 // ---------------------------------------------------------------------------
 // Frontmatter helpers
@@ -209,6 +211,41 @@ export function parseStagedItemEdits(content: string): StagedItemEdits {
   return raw as StagedItemEdits;
 }
 
+/**
+ * Parse the `staged_item_owner` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to owner metadata (ownerSlug, direction, counterpartySlug).
+ */
+export function parseStagedItemOwner(content: string): StagedItemOwner {
+  const { data } = parseFrontmatter(content);
+  const raw = data['staged_item_owner'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  
+  // Validate and normalize the structure
+  const result: StagedItemOwner = {};
+  for (const [id, meta] of Object.entries(raw as Record<string, unknown>)) {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) continue;
+    const m = meta as Record<string, unknown>;
+    const ownerMeta: StagedItemOwnerMeta = {};
+    
+    if (typeof m['ownerSlug'] === 'string') {
+      ownerMeta.ownerSlug = m['ownerSlug'];
+    }
+    if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me') {
+      ownerMeta.direction = m['direction'];
+    }
+    if (typeof m['counterpartySlug'] === 'string') {
+      ownerMeta.counterpartySlug = m['counterpartySlug'];
+    }
+    
+    // Only include if we have at least one valid field
+    if (ownerMeta.ownerSlug || ownerMeta.direction || ownerMeta.counterpartySlug) {
+      result[id] = ownerMeta;
+    }
+  }
+  
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // writeItemStatusToFile
 // ---------------------------------------------------------------------------
@@ -255,6 +292,30 @@ export async function writeItemStatusToFile(
 }
 
 // ---------------------------------------------------------------------------
+// Action item formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Format an action item with owner arrow notation for the approved section.
+ * 
+ * Output formats:
+ * - With owner and counterparty: "Text here (@owner-slug → @counterparty-slug)"
+ * - With owner only: "Text here (@owner-slug)"
+ * - Without owner info: "Text here"
+ */
+function formatActionItemWithOwner(item: StagedItem): string {
+  if (!item.ownerSlug) {
+    return item.text;
+  }
+  
+  if (item.counterpartySlug) {
+    return `${item.text} (@${item.ownerSlug} → @${item.counterpartySlug})`;
+  }
+  
+  return `${item.text} (@${item.ownerSlug})`;
+}
+
+// ---------------------------------------------------------------------------
 // commitApprovedItems
 // ---------------------------------------------------------------------------
 
@@ -284,6 +345,7 @@ export async function commitApprovedItems(
   // ── 1. Collect approved IDs ──────────────────────────────────────────────
   const statusMap = (data['staged_item_status'] as StagedItemStatus | undefined) ?? {};
   const editsMap = (data['staged_item_edits'] as StagedItemEdits | undefined) ?? {};
+  const ownerMap = parseStagedItemOwner(raw);
 
   const approvedIds = new Set(
     Object.entries(statusMap)
@@ -306,7 +368,18 @@ export async function commitApprovedItems(
   for (const item of allItems) {
     if (!approvedIds.has(item.id)) continue;
     const text = editsMap[item.id] ?? item.text;
-    const resolvedItem: StagedItem = { ...item, text };
+    
+    // Apply owner metadata from frontmatter (for action items)
+    const ownerMeta = ownerMap[item.id];
+    const resolvedItem: StagedItem = {
+      ...item,
+      text,
+      // Owner metadata from frontmatter takes precedence over text-parsed values
+      ownerSlug: ownerMeta?.ownerSlug ?? item.ownerSlug,
+      direction: ownerMeta?.direction ?? item.direction,
+      counterpartySlug: ownerMeta?.counterpartySlug ?? item.counterpartySlug,
+    };
+    
     if (item.type === 'ai') approvedActionItems.push(resolvedItem);
     else if (item.type === 'de') approvedDecisions.push(resolvedItem);
     else if (item.type === 'le') approvedLearnings.push(resolvedItem);
@@ -322,11 +395,12 @@ export async function commitApprovedItems(
 
   // ── 4.5 Write approved items to markdown sections ──
   // Build all approved sections (action items, decisions, learnings)
+  // Action items include owner arrow notation for commitment tracking
   let approvedSections = '';
   
   if (approvedActionItems.length > 0) {
     approvedSections += '\n## Approved Action Items\n' +
-      approvedActionItems.map(item => `- [ ] ${item.text}`).join('\n') + '\n';
+      approvedActionItems.map(item => `- [ ] ${formatActionItemWithOwner(item)}`).join('\n') + '\n';
   }
   
   if (approvedDecisions.length > 0) {
@@ -350,8 +424,9 @@ export async function commitApprovedItems(
   }
 
   // ── 4.6 Store approved items in frontmatter for UI display ───────────────
+  // Action items include owner notation for commitment tracking consistency
   data['approved_items'] = {
-    actionItems: approvedActionItems.map(i => i.text),
+    actionItems: approvedActionItems.map(i => formatActionItemWithOwner(i)),
     decisions: approvedDecisions.map(i => i.text),
     learnings: approvedLearnings.map(i => i.text),
   };
@@ -359,6 +434,9 @@ export async function commitApprovedItems(
   // ── 5-6. Update frontmatter ───────────────────────────────────────────────
   delete data['staged_item_status'];
   delete data['staged_item_edits'];
+  delete data['staged_item_owner'];
+  delete data['staged_item_source'];
+  delete data['staged_item_confidence'];
   data['status'] = 'approved';
   data['approved_at'] = new Date().toISOString();
 

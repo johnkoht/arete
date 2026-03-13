@@ -14,6 +14,16 @@ export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'
 /** Map of itemId → edited text (only present when the user edits the default text) */
 export type StagedItemEdits = Record<string, string>;
 
+/** Owner metadata for a single action item */
+export type StagedItemOwnerMeta = {
+  ownerSlug?: string;
+  direction?: StagedItemDirection;
+  counterpartySlug?: string;
+};
+
+/** Map of itemId → owner metadata (for action items) */
+export type StagedItemOwner = Record<string, StagedItemOwnerMeta>;
+
 /** Direction of an action item relative to the user. */
 export type StagedItemDirection = 'i_owe_them' | 'they_owe_me';
 
