@@ -432,6 +432,7 @@ describe('WorkspaceService', () => {
           rules: join(sourceRoot, 'rules'),
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
         },
       });
 
@@ -488,6 +489,7 @@ describe('WorkspaceService', () => {
           rules: join(sourceRoot, 'rules'),
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
         },
       });
 
@@ -527,6 +529,7 @@ describe('WorkspaceService', () => {
           rules: join(sourceRoot, 'rules'),
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
         },
       });
 
@@ -767,8 +770,9 @@ describe('WorkspaceService', () => {
       return { sourceRoot, sourceSkills };
     }
 
-    it('create() excludes documentation files (PATTERNS.md, README.md, LEARNINGS.md, etc.) from .agents/skills/', async () => {
-      // Documentation files in skills/ root cause pi skill parsing errors — they're not skills
+    it('create() excludes documentation files (README.md, LEARNINGS.md, etc.) but copies PATTERNS.md from .agents/skills/', async () => {
+      // Documentation files in skills/ root that are internal-only should not be copied
+      // But PATTERNS.md is referenced by skills and must be present in user workspaces
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
       writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Skill Patterns\n', 'utf8');
       writeFileSync(join(sourceSkills, 'README.md'), '# Skills README\n', 'utf8');
@@ -792,12 +796,13 @@ describe('WorkspaceService', () => {
         },
       });
 
-      // Documentation files should NOT be copied
+      // PATTERNS.md SHOULD be copied (skills reference it)
       assert.equal(
         existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
-        false,
-        'PATTERNS.md should NOT be copied (doc file)',
+        true,
+        'PATTERNS.md should be copied (skills reference it)',
       );
+      // Other documentation files should NOT be copied
       assert.equal(
         existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
         false,
@@ -816,9 +821,10 @@ describe('WorkspaceService', () => {
       );
     });
 
-    it('syncCoreSkills via update() excludes documentation files', async () => {
+    it('syncCoreSkills via update() copies PATTERNS.md and excludes other documentation files', async () => {
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
       writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Updated PATTERNS\n', 'utf8');
+      writeFileSync(join(sourceSkills, 'README.md'), '# README\n', 'utf8');
       writeFileSync(join(sourceSkills, 'custom-file.md'), '# Custom Updated\n', 'utf8');
 
       // Pre-plant files in the workspace
@@ -834,14 +840,21 @@ describe('WorkspaceService', () => {
           rules: join(sourceRoot, 'rules'),
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
         },
       });
 
-      // PATTERNS.md should NOT be copied (doc file)
+      // PATTERNS.md SHOULD be copied (skills reference it)
       assert.equal(
         existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
+        true,
+        'PATTERNS.md should be copied by update (skills reference it)',
+      );
+      // README.md should NOT be copied (doc file)
+      assert.equal(
+        existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
         false,
-        'PATTERNS.md should NOT be copied by update (doc file)',
+        'README.md should NOT be copied by update (doc file)',
       );
       // Non-doc files should be updated
       const content = readFileSync(join(tmpDir, '.agents', 'skills', 'custom-file.md'), 'utf8');
@@ -863,6 +876,7 @@ describe('WorkspaceService', () => {
           rules: join(sourceRoot, 'rules'),
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
         },
       });
 
