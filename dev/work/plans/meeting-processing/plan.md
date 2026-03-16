@@ -1,7 +1,7 @@
 ---
 title: "Meeting Processing CLI Parity"
 slug: meeting-processing
-status: planned
+status: complete
 size: medium
 tags: [meetings, cli, parity, refactor]
 created: "2026-03-12T02:30:00.000Z"
