@@ -4,6 +4,30 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 16, 2026
+
+**CLI and UI meeting workflows are now fully interchangeable.** You can process meetings from either the CLI or web dashboard and switch seamlessly between them:
+
+- **`arete meeting extract --stage`** now writes the same metadata as the web UI — confidence scores, auto-approval status, and owner attribution all appear in the meeting file
+- **`arete meeting approve`** lets you commit reviewed items to memory from the CLI — works just like clicking "Approve" in the web dashboard
+- **Reprocessing support** — Use `--clear-approved` flag to clear previous approvals and reprocess a meeting fresh
+
+This is especially useful if you use an agent skill (like daily-winddown) to bulk-process meetings. Items approved via CLI now show up correctly in the web dashboard, and vice versa.
+
+**Example workflow:**
+```bash
+# Extract intelligence and stage for review
+arete meeting extract resources/meetings/2026-03-15-standup.md --stage
+
+# Approve specific items (or --all for everything)
+arete meeting approve 2026-03-15-standup --items ai_001,de_002 --skip le_001
+
+# Later, reprocess with fresh extraction
+arete meeting extract resources/meetings/2026-03-15-standup.md --stage --clear-approved
+```
+
+---
+
 ## Week of March 9, 2026
 
 **Smarter meeting intelligence with less noise.** Meeting extraction now produces fewer, higher-quality items:

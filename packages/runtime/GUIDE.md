@@ -878,7 +878,11 @@ arete availability find --with <name|email>              # Find mutual availabil
 arete meeting add --file <path>                 # Add meeting from JSON
 arete meeting process --latest [--json]         # Process latest meeting with people intelligence
 arete meeting process --file <path> [--json]    # Process a specific meeting file
-arete meeting extract <file>                    # Extract intelligence from meeting transcript (requires AI config)
+arete meeting extract <file> --stage            # Extract intelligence and stage for review (writes full metadata)
+arete meeting extract <file> --stage --clear-approved  # Reprocess: clear previous approvals first
+arete meeting approve <slug> --all              # Approve all pending items → commit to memory
+arete meeting approve <slug> --items ai_001,de_002     # Approve specific items
+arete meeting approve <slug> --skip le_001      # Skip specific items
 ```
 
 ### Integrations
