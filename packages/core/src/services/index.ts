@@ -49,6 +49,17 @@ export type {
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
 
+// Meeting processing
+export { processMeetingExtraction, extractUserNotes } from './meeting-processing.js';
+export type {
+  ProcessedMeetingResult,
+  ProcessingOptions,
+  FilteredItem,
+  ItemSource,
+  ItemStatus,
+  ItemOwnerMeta,
+} from './meeting-processing.js';
+
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
