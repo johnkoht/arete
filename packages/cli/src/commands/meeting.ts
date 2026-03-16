@@ -362,13 +362,28 @@ export function registerMeetingCommands(program: Command): void {
     .option('--stage', 'Write staged sections to the meeting file')
     .option('--dry-run', 'Show what would be written without writing')
     .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
     .action(async (file: string, opts: {
       json?: boolean;
       stage?: boolean;
       dryRun?: boolean;
       skipQmd?: boolean;
+      clearApproved?: boolean;
     }) => {
       const services = await createServices(process.cwd());
+
+      // Early check: --clear-approved requires --stage
+      if (opts.clearApproved && !opts.stage) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: '--clear-approved requires --stage',
+          }));
+        } else {
+          error('--clear-approved requires --stage');
+        }
+        process.exit(1);
+      }
 
       // Early check: is AI configured?
       if (!services.ai.isConfigured()) {
@@ -411,7 +426,23 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       // Extract transcript/body for analysis
-      const { frontmatter, body } = extractFrontmatter(content);
+      let { frontmatter, body } = extractFrontmatter(content);
+
+      // Handle --clear-approved: clear approved sections and metadata before re-extraction
+      if (opts.clearApproved && opts.stage) {
+        // Clear approved sections from body (using backend's pattern)
+        body = clearApprovedSections(body);
+
+        // Delete approved metadata from frontmatter
+        delete frontmatter['approved_items'];
+        delete frontmatter['approved_at'];
+        delete frontmatter['status'];
+
+        // Write the cleared file
+        const clearedFile = `---\n${stringifyYaml(frontmatter)}---\n\n${body}`;
+        await services.storage.write(meetingPath, clearedFile);
+      }
+
       const transcript = body.trim();
 
       if (!transcript) {
@@ -830,6 +861,34 @@ function extractFrontmatter(content: string): { frontmatter: Record<string, unkn
   } catch {
     return { frontmatter: {}, body: content };
   }
+}
+
+/**
+ * Clear approved sections from meeting body.
+ * Removes `## Approved Action Items`, `## Approved Decisions`, `## Approved Learnings` and their content.
+ * Uses the same pattern as backend's clearApprovedSections().
+ */
+function clearApprovedSections(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    // Check for approved section headers
+    if (line.match(/^## Approved (Action Items|Decisions|Learnings)\s*$/)) {
+      skipping = true;
+      continue;
+    }
+    // Stop skipping at next header
+    if (skipping && line.startsWith('## ')) {
+      skipping = false;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
 }
 
 /**

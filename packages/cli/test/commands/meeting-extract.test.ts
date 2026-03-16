@@ -249,6 +249,212 @@ describe('meeting extract command - integration with mocked AI', () => {
   });
 });
 
+describe('--clear-approved flag', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  const APPROVED_MEETING_CONTENT = `---
+title: Sprint Planning
+date: "2026-03-01"
+attendees:
+  - Alice Smith
+  - Bob Jones
+status: approved
+approved_at: "2026-03-10T12:00:00.000Z"
+approved_items:
+  ai_001: approved
+  de_001: approved
+  le_001: approved
+---
+
+# Sprint Planning
+
+## Summary
+
+Team discussed sprint priorities.
+
+## Approved Action Items
+
+- [ai_001] @alice-smith Update documentation
+
+## Approved Decisions
+
+- [de_001] Use TypeScript for new services
+
+## Approved Learnings
+
+- [le_001] Daily standups improve coordination
+
+## Transcript
+
+**Alice Smith**: Let's discuss the sprint.
+`;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-clear-approved');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, APPROVED_MEETING_CONTENT, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('errors when --clear-approved is used without --stage (JSON mode)', () => {
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('--clear-approved requires --stage'));
+  });
+
+  it('errors when --clear-approved is used without --stage (non-JSON mode)', () => {
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    const { stderr, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    assert.ok(stderr.includes('--clear-approved requires --stage'));
+  });
+
+  it('clears approved sections and frontmatter when --clear-approved --stage is used', () => {
+    // Verify the file has approved content before clearing
+    const beforeContent = readFileSync(meetingFile, 'utf8');
+    assert.ok(beforeContent.includes('## Approved Action Items'));
+    assert.ok(beforeContent.includes('## Approved Decisions'));
+    assert.ok(beforeContent.includes('## Approved Learnings'));
+    assert.ok(beforeContent.includes('approved_items:'));
+    assert.ok(beforeContent.includes('approved_at:'));
+    assert.ok(beforeContent.includes('status: approved'));
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    // Run with --clear-approved --stage
+    // The extraction will fail due to no real AI, but clearing should happen first
+    runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--stage', '--skip-qmd', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Check file was modified — approved sections and frontmatter should be cleared
+    const afterContent = readFileSync(meetingFile, 'utf8');
+
+    // Approved sections should be removed
+    assert.ok(!afterContent.includes('## Approved Action Items'), 'Should not have Approved Action Items section');
+    assert.ok(!afterContent.includes('## Approved Decisions'), 'Should not have Approved Decisions section');
+    assert.ok(!afterContent.includes('## Approved Learnings'), 'Should not have Approved Learnings section');
+
+    // Approved frontmatter keys should be removed
+    assert.ok(!afterContent.includes('approved_items:'), 'Should not have approved_items in frontmatter');
+    assert.ok(!afterContent.includes('approved_at:'), 'Should not have approved_at in frontmatter');
+    // status: approved should be removed, but status could be re-added by extraction
+    // So we check that 'status: approved' is gone
+    const fmMatch = afterContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (fmMatch) {
+      const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
+      assert.ok(!('approved_items' in fm), 'approved_items should be deleted from frontmatter');
+      assert.ok(!('approved_at' in fm), 'approved_at should be deleted from frontmatter');
+      // status may be re-added as 'processed' by extraction, but shouldn't be 'approved'
+      if ('status' in fm) {
+        assert.notEqual(fm['status'], 'approved', 'status should not be approved anymore');
+      }
+    }
+
+    // Non-approved content should be preserved
+    assert.ok(afterContent.includes('## Summary'), 'Should preserve Summary section');
+    assert.ok(afterContent.includes('## Transcript'), 'Should preserve Transcript section');
+    assert.ok(afterContent.includes('title: Sprint Planning'), 'Should preserve title in frontmatter');
+    assert.ok(afterContent.includes('date:'), 'Should preserve date in frontmatter');
+    assert.ok(afterContent.includes('attendees:'), 'Should preserve attendees in frontmatter');
+  });
+
+  it('proceeds silently when file has nothing to clear', () => {
+    // Create a file without approved content
+    const freshContent = `---
+title: Fresh Meeting
+date: "2026-03-15"
+attendees:
+  - Alice Smith
+---
+
+# Fresh Meeting
+
+## Summary
+
+No approved content here.
+
+## Transcript
+
+**Alice Smith**: Just a regular meeting.
+`;
+    writeFileSync(meetingFile, freshContent, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    // Run with --clear-approved --stage — should not error even though there's nothing to clear
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--stage', '--skip-qmd', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Should proceed with extraction (which may fail at LLM call, but clearing shouldn't error)
+    // The result will either be success (if mocked) or error at LLM call
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should NOT error with "nothing to clear" — should proceed silently
+    if (!result.success) {
+      assert.ok(!result.error?.includes('nothing to clear'), 'Should not error about nothing to clear');
+      assert.ok(!result.error?.includes('no approved'), 'Should not error about no approved content');
+    }
+  });
+});
+
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { processMeetingExtraction, extractUserNotes } from '@arete/core';
 import type { MeetingExtractionResult, FilteredItem } from '@arete/core';
