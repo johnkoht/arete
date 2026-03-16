@@ -13,6 +13,8 @@ import {
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  processMeetingExtraction,
+  extractUserNotes,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -20,6 +22,7 @@ import type {
   QmdRefreshResult,
   MeetingLLMCallFn,
   MeetingExtractionResult,
+  FilteredItem,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -448,22 +451,53 @@ export function registerMeetingCommands(program: Command): void {
         process.exit(1);
       }
 
-      // Format staged sections
-      const stagedSections = formatStagedSections(extractionResult);
-
-      // Handle --stage (write to file)
+      // Handle --stage (write to file with full metadata)
       let qmdResult: QmdRefreshResult | undefined;
       const dryRun = Boolean(opts.dryRun);
       const shouldStage = Boolean(opts.stage);
 
-      if (shouldStage && !dryRun) {
-        const updatedContent = updateMeetingContent(content, stagedSections);
-        await services.storage.write(meetingPath, updatedContent);
+      // For --stage: process extraction to get filtered items and metadata
+      let stagedSections: string;
+      if (shouldStage) {
+        // Extract user notes and process extraction (filtering, dedup, metadata)
+        const userNotes = extractUserNotes(body);
+        const processed = processMeetingExtraction(extractionResult, userNotes);
 
-        // Refresh qmd index unless --skip-qmd
-        if (!opts.skipQmd) {
-          qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        // Format body sections from filtered items (IDs in body match IDs in metadata)
+        stagedSections = formatStagedSectionsFromFiltered(
+          processed.filteredItems,
+          extractionResult.intelligence.summary,
+        );
+
+        if (!dryRun) {
+          // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
+          const fm = { ...frontmatter };
+
+          // Write full metadata (snake_case keys)
+          fm['status'] = 'processed';
+          fm['processed_at'] = new Date().toISOString();
+          fm['staged_item_source'] = processed.stagedItemSource;
+          fm['staged_item_confidence'] = processed.stagedItemConfidence;
+          fm['staged_item_status'] = processed.stagedItemStatus;
+          if (Object.keys(processed.stagedItemOwner).length > 0) {
+            fm['staged_item_owner'] = processed.stagedItemOwner;
+          }
+
+          // Update body with staged sections
+          const updatedBody = updateMeetingContent(body, stagedSections);
+
+          // Reconstruct file: frontmatter + body
+          const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${updatedBody}`;
+          await services.storage.write(meetingPath, updatedFile);
+
+          // Refresh qmd index unless --skip-qmd
+          if (!opts.skipQmd) {
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+          }
         }
+      } else {
+        // Non-stage mode: just format for display (uses raw extraction, no metadata)
+        stagedSections = formatStagedSections(extractionResult);
       }
 
       // Build response
@@ -570,6 +604,52 @@ function extractFrontmatter(content: string): { frontmatter: Record<string, unkn
   } catch {
     return { frontmatter: {}, body: content };
   }
+}
+
+/**
+ * Format filtered items as markdown sections.
+ * Uses pre-generated IDs from FilteredItem (e.g., ai_001, de_001, le_001).
+ * Mirrors backend's formatStagedSections() but takes FilteredItem[] + summary.
+ */
+function formatStagedSectionsFromFiltered(filteredItems: FilteredItem[], summary: string): string {
+  const lines: string[] = [];
+
+  // Summary section
+  lines.push('## Summary');
+  lines.push(summary);
+  lines.push('');
+
+  // Staged Action Items
+  const actionItems = filteredItems.filter((i) => i.type === 'action');
+  if (actionItems.length > 0) {
+    lines.push('## Staged Action Items');
+    for (const item of actionItems) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  // Staged Decisions
+  const decisions = filteredItems.filter((i) => i.type === 'decision');
+  if (decisions.length > 0) {
+    lines.push('## Staged Decisions');
+    for (const item of decisions) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  // Staged Learnings
+  const learnings = filteredItems.filter((i) => i.type === 'learning');
+  if (learnings.length > 0) {
+    lines.push('## Staged Learnings');
+    for (const item of learnings) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 function parseAttendeeToken(token: string): { name?: string; email?: string | null } {

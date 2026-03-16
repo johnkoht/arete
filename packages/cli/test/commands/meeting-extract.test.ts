@@ -248,3 +248,158 @@ describe('meeting extract command - integration with mocked AI', () => {
     }
   });
 });
+
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { processMeetingExtraction, extractUserNotes } from '@arete/core';
+import type { MeetingExtractionResult, FilteredItem } from '@arete/core';
+
+describe('extract --stage frontmatter preservation', () => {
+  // Test the frontmatter merge pattern used in --stage:
+  // Clone frontmatter → add staged_item_* fields → preserve existing fields
+
+  it('preserves non-staged frontmatter fields when adding staged metadata', () => {
+    // Simulate existing frontmatter from a meeting file
+    const existingFrontmatter = {
+      title: 'Sprint Planning',
+      date: '2026-03-01',
+      attendees: [
+        { name: 'Alice Smith', email: 'alice@acme.com' },
+        { name: 'Bob Jones', email: 'bob@acme.com' },
+      ],
+      duration_minutes: 60,
+      source: 'fathom',
+      custom_field: 'user-added-value',
+    };
+
+    // Clone frontmatter before mutating (same pattern as CLI extract --stage)
+    const fm = { ...existingFrontmatter } as Record<string, unknown>;
+
+    // Add staged metadata (snake_case keys, matching CLI implementation)
+    fm['status'] = 'processed';
+    fm['processed_at'] = '2026-03-15T10:00:00.000Z';
+    fm['staged_item_source'] = { ai_001: 'ai', de_001: 'dedup' };
+    fm['staged_item_confidence'] = { ai_001: 0.95, de_001: 0.9 };
+    fm['staged_item_status'] = { ai_001: 'approved', de_001: 'approved' };
+    fm['staged_item_owner'] = { ai_001: { ownerSlug: 'alice-smith', direction: 'i_owe_them' } };
+
+    // Verify original fields are preserved
+    assert.equal(fm['title'], 'Sprint Planning');
+    assert.equal(fm['date'], '2026-03-01');
+    assert.deepEqual(fm['attendees'], existingFrontmatter.attendees);
+    assert.equal(fm['duration_minutes'], 60);
+    assert.equal(fm['source'], 'fathom');
+    assert.equal(fm['custom_field'], 'user-added-value');
+
+    // Verify new fields are added
+    assert.equal(fm['status'], 'processed');
+    assert.ok(fm['processed_at']);
+    assert.deepEqual(fm['staged_item_source'], { ai_001: 'ai', de_001: 'dedup' });
+    assert.deepEqual(fm['staged_item_status'], { ai_001: 'approved', de_001: 'approved' });
+  });
+
+  it('YAML roundtrip preserves all fields', () => {
+    const existingContent = `---
+title: Sprint Planning
+date: "2026-03-01"
+attendees:
+  - name: Alice Smith
+    email: alice@acme.com
+  - Bob Jones
+duration_minutes: 60
+custom_field: user-added-value
+---
+
+# Meeting Content
+`;
+
+    // Parse frontmatter (same regex pattern as CLI extractFrontmatter)
+    const match = existingContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+    assert.ok(match, 'Should parse frontmatter');
+
+    const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+    const body = match[2];
+
+    // Clone and add staged fields
+    const fm = { ...frontmatter };
+    fm['status'] = 'processed';
+    fm['processed_at'] = '2026-03-15T10:00:00.000Z';
+    fm['staged_item_status'] = { ai_001: 'pending' };
+
+    // Reconstruct file
+    const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${body}`;
+
+    // Re-parse to verify roundtrip
+    const reparsed = parseYaml(updatedFile.match(/^---\r?\n([\s\S]*?)\r?\n---/)![1]) as Record<string, unknown>;
+
+    // Verify all original fields survived roundtrip
+    assert.equal(reparsed['title'], 'Sprint Planning');
+    assert.equal(reparsed['date'], '2026-03-01');
+    assert.equal(reparsed['duration_minutes'], 60);
+    assert.equal(reparsed['custom_field'], 'user-added-value');
+    assert.ok(Array.isArray(reparsed['attendees']));
+    assert.equal((reparsed['attendees'] as unknown[]).length, 2);
+
+    // Verify new fields present
+    assert.equal(reparsed['status'], 'processed');
+    assert.deepEqual(reparsed['staged_item_status'], { ai_001: 'pending' });
+  });
+
+  it('processMeetingExtraction produces correct metadata structure', () => {
+    // Mock extraction result (what extractMeetingIntelligence returns)
+    const extractionResult: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Team discussed sprint priorities.',
+        actionItems: [
+          {
+            owner: 'Alice Smith',
+            ownerSlug: 'alice-smith',
+            description: 'Update documentation',
+            direction: 'i_owe_them',
+            confidence: 0.95,
+          },
+          {
+            owner: 'Bob Jones',
+            ownerSlug: 'bob-jones',
+            description: 'Handle authentication module',
+            direction: 'i_owe_them',
+            counterpartySlug: 'alice-smith',
+            confidence: 0.85,
+          },
+        ],
+        nextSteps: [],
+        decisions: ['Use TypeScript for new services'],
+        learnings: ['Daily standups improve coordination'],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const userNotes = ''; // No user notes for this test
+
+    // Process extraction (same function used in CLI)
+    const processed = processMeetingExtraction(extractionResult, userNotes);
+
+    // Verify filtered items have correct structure
+    assert.ok(processed.filteredItems.length > 0);
+
+    // Verify action items
+    const actionItems = processed.filteredItems.filter(i => i.type === 'action');
+    assert.equal(actionItems.length, 2);
+    assert.equal(actionItems[0].id, 'ai_001');
+    assert.equal(actionItems[0].text, 'Update documentation');
+
+    // Verify decisions
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0].id, 'de_001');
+
+    // Verify metadata maps
+    assert.ok(processed.stagedItemStatus['ai_001']);
+    assert.ok(processed.stagedItemConfidence['ai_001']);
+    assert.ok(processed.stagedItemSource['ai_001']);
+
+    // Verify owner metadata for action items
+    assert.ok(processed.stagedItemOwner['ai_001']);
+    assert.equal(processed.stagedItemOwner['ai_001'].ownerSlug, 'alice-smith');
+  });
+});
