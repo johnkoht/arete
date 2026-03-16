@@ -81,7 +81,8 @@ Four commands registered from one file. The intelligence hub.
 ### meeting.ts — Meeting Import & Processing
 - **`meeting add`** → normalizes JSON input → `saveMeetingFile()` → `refreshQmdIndex()`
 - **`meeting process`** → extracts attendees → `services.entity.suggestPeopleIntelligence()` → writes person files → `refreshQmdIndex()`
-- **`meeting extract <file>`** (2026-03-08) → `services.ai.isConfigured()` guard → `extractMeetingIntelligence()` → `updateMeetingContent()` — requires AI configuration
+- **`meeting extract <file>`** (2026-03-08, enhanced 2026-03-15) → `services.ai.isConfigured()` guard → `extractMeetingIntelligence()` → `processMeetingExtraction()` → write file with full metadata. Flags: `--stage` writes staged sections + frontmatter metadata; `--clear-approved` clears prior approved sections before re-extraction (requires `--stage`)
+- **`meeting approve <slug>`** (2026-03-15) → `parseStagedSections()` → `writeItemStatusToFile()` → `commitApprovedItems()` → `refreshQmdIndex()`. Commits staged items to memory files (`.arete/memory/items/decisions.md`, `learnings.md`). Flags: `--all` approves all pending, `--items <ids>` approves specific items, `--skip <ids>` marks items as skipped
 - Template-based meeting file generation with frontmatter
 
 ### pull.ts — Integration Data Fetch

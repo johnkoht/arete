@@ -18,6 +18,8 @@ export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMe
 export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, } from './meeting-extraction.js';
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
+export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from './meeting-processing.js';
+export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, } from './meeting-processing.js';
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
 export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
