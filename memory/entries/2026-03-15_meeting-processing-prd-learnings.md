@@ -10,15 +10,17 @@
 
 Executed PRD to achieve CLI/UI interchangeability for meeting processing. All 5 tasks completed successfully with 100% first-attempt success rate (no iterations required).
 
-**Commits**: 6 (5 implementation + 1 docs)
+**Commits**: 8 (5 implementation + 1 docs + 2 review fixes)
 - `4e3cdf9` — feat(core): add processMeetingExtraction and extractUserNotes
 - `3bb60a2` — refactor(backend): use processMeetingExtraction from core
 - `fc88c3b` — feat(cli): add full metadata to meeting extract --stage
 - `70384ec` — feat(cli): add meeting approve command
 - `5ca735d` — feat(cli): add --clear-approved flag to meeting extract
 - `49ca9fa` — docs: add meeting approve command to CLI docs
+- `3ac6b66` — refactor: extract duplicated functions to core (review fix)
+- `e335a96` — docs: update LEARNINGS.md and PROFILE.md (review fix)
 
-**Tests Added**: 55 new tests (39 + 3 + 9 + 4)
+**Tests Added**: 67 new tests (39 + 3 + 9 + 4 + 12)
 **Code Impact**: +~400 lines core, +~250 lines CLI, -282 lines backend (net: ~370)
 
 ---
@@ -97,6 +99,26 @@ Explicit line number references in prompts (e.g., "backend's agent.ts lines 100-
 
 - `.agents/sources/shared/cli-commands.md` — Added `arete meeting approve` command and `--clear-approved` flag
 - AGENTS.md rebuild pending (run `npm run build:agents:prod` before merge)
+
+---
+
+## Post-PRD Engineering Lead Review
+
+Engineering lead review identified issues that developers missed:
+
+**Code Duplication Found**:
+- `clearApprovedSections()` — duplicated identically in backend and CLI
+- `formatStagedSectionsFromFiltered()` — similar implementations in backend/CLI
+
+**Documentation Gaps Found** (developers reported "None" but these were missing):
+- `packages/core/src/services/LEARNINGS.md` — no mention of new meeting-processing.ts module
+- `.pi/expertise/core/PROFILE.md` — Component Map missing meeting-processing.ts entry
+- `.pi/expertise/cli/PROFILE.md` — missing approve command and --clear-approved flag
+- Gotcha about decisions/learnings defaulting to 0.9 confidence
+
+**All issues fixed** in commits `3ac6b66` and `e335a96`.
+
+**Lesson**: Developer "Documentation Updated: None" responses should be skeptically reviewed when PRDs add new modules or commands. Significant functionality additions almost always need documentation.
 
 ---
 
