@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {
   processMeetingExtraction,
   extractUserNotes,
+  clearApprovedSections,
+  formatFilteredStagedSections,
 } from '../../src/services/meeting-processing.js';
+import type { FilteredItem } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
 import type { MeetingExtractionResult, ActionItem, MeetingIntelligence } from '../../src/services/meeting-extraction.js';
 
@@ -631,5 +634,186 @@ describe('processMeetingExtraction - edge cases', () => {
     assert.equal(processed.filteredItems[0].type, 'action');
     assert.equal(processed.filteredItems[1].type, 'decision');
     assert.equal(processed.filteredItems[2].type, 'learning');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clearApprovedSections
+// ---------------------------------------------------------------------------
+
+describe('clearApprovedSections', () => {
+  it('removes Approved Action Items section', () => {
+    const content = `# Meeting
+
+## Notes
+Some notes here.
+
+## Approved Action Items
+- ai_001: Do something
+- ai_002: Do another thing
+
+## Summary
+A summary.`;
+
+    const result = clearApprovedSections(content);
+    assert.ok(!result.includes('## Approved Action Items'));
+    assert.ok(!result.includes('ai_001:'));
+    assert.ok(result.includes('## Notes'));
+    assert.ok(result.includes('## Summary'));
+  });
+
+  it('removes Approved Decisions section', () => {
+    const content = `## Content
+
+## Approved Decisions
+- de_001: We decided X
+
+## Next`;
+
+    const result = clearApprovedSections(content);
+    assert.ok(!result.includes('## Approved Decisions'));
+    assert.ok(!result.includes('de_001:'));
+    assert.ok(result.includes('## Content'));
+    assert.ok(result.includes('## Next'));
+  });
+
+  it('removes Approved Learnings section', () => {
+    const content = `## Intro
+
+## Approved Learnings
+- le_001: We learned Y
+
+## Outro`;
+
+    const result = clearApprovedSections(content);
+    assert.ok(!result.includes('## Approved Learnings'));
+    assert.ok(!result.includes('le_001:'));
+    assert.ok(result.includes('## Intro'));
+    assert.ok(result.includes('## Outro'));
+  });
+
+  it('removes all three approved sections', () => {
+    const content = `# Meeting
+
+## Approved Action Items
+- ai_001: Action
+
+## Approved Decisions
+- de_001: Decision
+
+## Approved Learnings
+- le_001: Learning
+
+## Footer`;
+
+    const result = clearApprovedSections(content);
+    assert.ok(!result.includes('## Approved Action Items'));
+    assert.ok(!result.includes('## Approved Decisions'));
+    assert.ok(!result.includes('## Approved Learnings'));
+    assert.ok(result.includes('# Meeting'));
+    assert.ok(result.includes('## Footer'));
+  });
+
+  it('preserves content with no approved sections', () => {
+    const content = `# Meeting
+
+## Notes
+Some notes.
+
+## Summary
+A summary.`;
+
+    const result = clearApprovedSections(content);
+    assert.equal(result, content);
+  });
+
+  it('handles empty content', () => {
+    const result = clearApprovedSections('');
+    assert.equal(result, '');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatFilteredStagedSections
+// ---------------------------------------------------------------------------
+
+describe('formatFilteredStagedSections', () => {
+  it('formats action items section', () => {
+    const items: FilteredItem[] = [
+      { id: 'ai_001', text: 'Do task A', type: 'action', confidence: 0.9 },
+      { id: 'ai_002', text: 'Do task B', type: 'action', confidence: 0.8 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Meeting summary');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('Meeting summary'));
+    assert.ok(result.includes('## Staged Action Items'));
+    assert.ok(result.includes('- ai_001: Do task A'));
+    assert.ok(result.includes('- ai_002: Do task B'));
+  });
+
+  it('formats decisions section', () => {
+    const items: FilteredItem[] = [
+      { id: 'de_001', text: 'Decision one', type: 'decision', confidence: 0.9 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Summary');
+
+    assert.ok(result.includes('## Staged Decisions'));
+    assert.ok(result.includes('- de_001: Decision one'));
+  });
+
+  it('formats learnings section', () => {
+    const items: FilteredItem[] = [
+      { id: 'le_001', text: 'Learning one', type: 'learning', confidence: 0.9 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Summary');
+
+    assert.ok(result.includes('## Staged Learnings'));
+    assert.ok(result.includes('- le_001: Learning one'));
+  });
+
+  it('formats all sections together', () => {
+    const items: FilteredItem[] = [
+      { id: 'ai_001', text: 'Action', type: 'action', confidence: 0.9 },
+      { id: 'de_001', text: 'Decision', type: 'decision', confidence: 0.9 },
+      { id: 'le_001', text: 'Learning', type: 'learning', confidence: 0.9 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Test summary');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('Test summary'));
+    assert.ok(result.includes('## Staged Action Items'));
+    assert.ok(result.includes('- ai_001: Action'));
+    assert.ok(result.includes('## Staged Decisions'));
+    assert.ok(result.includes('- de_001: Decision'));
+    assert.ok(result.includes('## Staged Learnings'));
+    assert.ok(result.includes('- le_001: Learning'));
+  });
+
+  it('omits empty sections', () => {
+    const items: FilteredItem[] = [
+      { id: 'ai_001', text: 'Just action', type: 'action', confidence: 0.9 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Summary');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('## Staged Action Items'));
+    assert.ok(!result.includes('## Staged Decisions'));
+    assert.ok(!result.includes('## Staged Learnings'));
+  });
+
+  it('handles empty items array', () => {
+    const result = formatFilteredStagedSections([], 'No items summary');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('No items summary'));
+    assert.ok(!result.includes('## Staged Action Items'));
+    assert.ok(!result.includes('## Staged Decisions'));
+    assert.ok(!result.includes('## Staged Learnings'));
   });
 });

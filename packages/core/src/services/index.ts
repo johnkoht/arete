@@ -50,7 +50,12 @@ export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
 
 // Meeting processing
-export { processMeetingExtraction, extractUserNotes } from './meeting-processing.js';
+export {
+  processMeetingExtraction,
+  extractUserNotes,
+  clearApprovedSections,
+  formatFilteredStagedSections,
+} from './meeting-processing.js';
 export type {
   ProcessedMeetingResult,
   ProcessingOptions,

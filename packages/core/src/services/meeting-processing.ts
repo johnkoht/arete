@@ -305,3 +305,91 @@ export function processMeetingExtraction(
     stagedItemOwner,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Content Manipulation Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove approved sections from meeting content.
+ * Removes: `## Approved Action Items`, `## Approved Decisions`, `## Approved Learnings`
+ * and all content until the next `## ` header.
+ *
+ * @param content - The meeting file content (markdown)
+ * @returns Content with approved sections removed
+ */
+export function clearApprovedSections(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    // Check for approved section headers
+    if (line.match(/^## Approved (Action Items|Decisions|Learnings)\s*$/)) {
+      skipping = true;
+      continue;
+    }
+    // Stop skipping at next header
+    if (skipping && line.startsWith('## ')) {
+      skipping = false;
+    }
+    if (!skipping) {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
+}
+
+/**
+ * Format filtered items as markdown sections.
+ * Uses pre-generated IDs from FilteredItem (e.g., ai_001, de_001, le_001).
+ * Takes FilteredItem[] from processMeetingExtraction() and original summary.
+ *
+ * @param filteredItems - Items from processMeetingExtraction()
+ * @param summary - The meeting summary text
+ * @returns Markdown string with Summary and Staged sections
+ */
+export function formatFilteredStagedSections(
+  filteredItems: FilteredItem[],
+  summary: string,
+): string {
+  const lines: string[] = [];
+
+  // Summary section
+  lines.push('## Summary');
+  lines.push(summary);
+  lines.push('');
+
+  // Staged Action Items
+  const actionItems = filteredItems.filter((i) => i.type === 'action');
+  if (actionItems.length > 0) {
+    lines.push('## Staged Action Items');
+    for (const item of actionItems) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  // Staged Decisions
+  const decisions = filteredItems.filter((i) => i.type === 'decision');
+  if (decisions.length > 0) {
+    lines.push('## Staged Decisions');
+    for (const item of decisions) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  // Staged Learnings
+  const learnings = filteredItems.filter((i) => i.type === 'learning');
+  if (learnings.length > 0) {
+    lines.push('## Staged Learnings');
+    for (const item of learnings) {
+      lines.push(`- ${item.id}: ${item.text}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
