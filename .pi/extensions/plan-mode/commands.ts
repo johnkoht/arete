@@ -1640,6 +1640,64 @@ export async function handleBuild(
 	});
 }
 
+// ────────────────────────────────────────────────────────────
+// /ship command handler
+// ────────────────────────────────────────────────────────────
+
+export async function handleShip(
+	args: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	if (!state.currentSlug) {
+		ctx.ui.notify("No active plan. Save and approve a plan first.", "warning");
+		return;
+	}
+
+	const plan = loadPlan(state.currentSlug);
+	if (!plan) {
+		ctx.ui.notify(`Plan not found: ${state.currentSlug}`, "error");
+		return;
+	}
+
+	// Check plan status
+	if (plan.frontmatter.status === "complete") {
+		ctx.ui.notify("This plan is already complete.", "info");
+		return;
+	}
+
+	if (plan.frontmatter.status === "building") {
+		ctx.ui.notify("This plan is already being built. Use /build status to check progress.", "info");
+		return;
+	}
+
+	// Offer to approve if not yet ready
+	if (plan.frontmatter.status === "draft" || plan.frontmatter.status === "idea") {
+		const proceed = await ctx.ui.confirm(
+			"Plan Not Ready",
+			`This plan is still '${plan.frontmatter.status}'. Mark it ready and start shipping?`,
+		);
+		if (!proceed) return;
+		updatePlanFrontmatter(state.currentSlug, { status: "planned" });
+	}
+
+	ctx.ui.notify("🚀 Starting ship workflow...", "info");
+
+	// Invoke the ship skill
+	pi.sendUserMessage(
+		`Ship this plan. Load .pi/skills/ship/SKILL.md and follow its workflow.\n\n` +
+			`Plan: ${plan.frontmatter.title}\n` +
+			`Slug: ${state.currentSlug}\n` +
+			`Size: ${plan.frontmatter.size}\n` +
+			`Steps: ${plan.frontmatter.steps}\n` +
+			`Has PRD: ${plan.frontmatter.has_prd ? "yes" : "no"}\n` +
+			`Has Pre-mortem: ${plan.frontmatter.has_pre_mortem ? "yes" : "no"}\n` +
+			`Has Review: ${plan.frontmatter.has_review ? "yes" : "no"}\n\n` +
+			plan.content,
+	);
+}
+
 function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 	if (!state.executionMode && !state.currentSlug) {
 		ctx.ui.notify("No active build.", "info");

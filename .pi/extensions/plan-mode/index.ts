@@ -33,6 +33,7 @@ import {
 	handleWrap,
 	handlePrd,
 	handleBuild,
+	handleShip,
 	handlePlanSave,
 	resolvePrdFeatureSlug,
 	hasUnsavedPlanChanges,
@@ -366,6 +367,15 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		description: "Start building the ready plan, or check build status", 
 		handler: async (args, ctx) => {
 			await handleBuild(args, ctx, pi, state);
+			updateStatus(ctx);
+			persistState();
+		},
+	});
+
+	pi.registerCommand("ship", {
+		description: "Ship the plan — automated workflow from plan to PR",
+		handler: async (args, ctx) => {
+			await handleShip(args, ctx, pi, state);
 			updateStatus(ctx);
 			persistState();
 		},

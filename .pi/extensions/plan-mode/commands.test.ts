@@ -14,6 +14,7 @@ import {
 	handlePlanClose,
 	handlePlanRename,
 	handlePlanStatus,
+	handleShip,
 	handleWrap,
 	parsePlanListFilter,
 	preparePlanListItems,
@@ -2010,6 +2011,181 @@ describe("formatCloseoutChecklist — UPDATES.md check", () => {
 			output.includes("1 item needs attention") || output.includes("items need attention"),
 			`Should increment needsAttention. Got: ${output}`,
 		);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// handleShip tests
+// ────────────────────────────────────────────────────────────
+
+describe("handleShip", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("shows warning when no active plan", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No active plan"), "Should warn about no active plan");
+		assert.equal(notifyType, "warning");
+	});
+
+	it("shows error when plan not found", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "nonexistent-plan" });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("not found"), "Should show error for missing plan");
+		assert.equal(notifyType, "error");
+	});
+
+	it("shows info when plan is already complete", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const slug = "complete-plan";
+		const planDir = join(TEST_PLANS_DIR, slug);
+		mkdirSync(planDir, { recursive: true });
+		writeFileSync(
+			join(planDir, "plan.md"),
+			`---
+title: Complete Plan
+slug: ${slug}
+status: complete
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: 2026-01-02T00:00:00.000Z
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+# Complete Plan
+1. Done`,
+		);
+		const state = createTestState({ currentSlug: slug });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("already complete"), "Should note plan is complete");
+		assert.equal(notifyType, "info");
+	});
+
+	it("shows info when plan is already building", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const slug = "building-plan";
+		const planDir = join(TEST_PLANS_DIR, slug);
+		mkdirSync(planDir, { recursive: true });
+		writeFileSync(
+			join(planDir, "plan.md"),
+			`---
+title: Building Plan
+slug: ${slug}
+status: building
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+# Building Plan
+1. Step`,
+		);
+		const state = createTestState({ currentSlug: slug });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("already being built"), "Should note plan is building");
+		assert.equal(notifyType, "info");
+	});
+
+	it("sends user message with ship skill instructions for ready plan", async () => {
+		let notifyMessage = "";
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi({
+			sendUserMessage: (content) => {
+				sentMessage = content;
+			},
+		});
+		const slug = "ready-plan";
+		const planDir = join(TEST_PLANS_DIR, slug);
+		mkdirSync(planDir, { recursive: true });
+		writeFileSync(
+			join(planDir, "plan.md"),
+			`---
+title: Ready Plan
+slug: ${slug}
+status: planned
+size: medium
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+execution: null
+has_review: true
+has_pre_mortem: true
+has_prd: false
+steps: 3
+---
+# Ready Plan
+1. First step
+2. Second step
+3. Third step`,
+		);
+		const state = createTestState({ currentSlug: slug });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("Starting ship workflow"), "Should notify about starting");
+		assert.ok(sentMessage.includes(".pi/skills/ship/SKILL.md"), "Should reference ship skill");
+		assert.ok(sentMessage.includes("Ready Plan"), "Should include plan title");
+		assert.ok(sentMessage.includes(slug), "Should include plan slug");
 	});
 });
 
