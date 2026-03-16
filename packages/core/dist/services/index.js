@@ -16,6 +16,8 @@ export { AIService, parseModelSpec } from './ai.js';
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, } from './meeting-extraction.js';
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
+// Meeting processing
+export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from './meeting-processing.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis

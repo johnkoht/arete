@@ -248,3 +248,364 @@ describe('meeting extract command - integration with mocked AI', () => {
     }
   });
 });
+
+describe('--clear-approved flag', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  const APPROVED_MEETING_CONTENT = `---
+title: Sprint Planning
+date: "2026-03-01"
+attendees:
+  - Alice Smith
+  - Bob Jones
+status: approved
+approved_at: "2026-03-10T12:00:00.000Z"
+approved_items:
+  ai_001: approved
+  de_001: approved
+  le_001: approved
+---
+
+# Sprint Planning
+
+## Summary
+
+Team discussed sprint priorities.
+
+## Approved Action Items
+
+- [ai_001] @alice-smith Update documentation
+
+## Approved Decisions
+
+- [de_001] Use TypeScript for new services
+
+## Approved Learnings
+
+- [le_001] Daily standups improve coordination
+
+## Transcript
+
+**Alice Smith**: Let's discuss the sprint.
+`;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-clear-approved');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, APPROVED_MEETING_CONTENT, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('errors when --clear-approved is used without --stage (JSON mode)', () => {
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('--clear-approved requires --stage'));
+  });
+
+  it('errors when --clear-approved is used without --stage (non-JSON mode)', () => {
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    const { stderr, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    assert.ok(stderr.includes('--clear-approved requires --stage'));
+  });
+
+  it('clears approved sections and frontmatter when --clear-approved --stage is used', () => {
+    // Verify the file has approved content before clearing
+    const beforeContent = readFileSync(meetingFile, 'utf8');
+    assert.ok(beforeContent.includes('## Approved Action Items'));
+    assert.ok(beforeContent.includes('## Approved Decisions'));
+    assert.ok(beforeContent.includes('## Approved Learnings'));
+    assert.ok(beforeContent.includes('approved_items:'));
+    assert.ok(beforeContent.includes('approved_at:'));
+    assert.ok(beforeContent.includes('status: approved'));
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    // Run with --clear-approved --stage
+    // The extraction will fail due to no real AI, but clearing should happen first
+    runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--stage', '--skip-qmd', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Check file was modified — approved sections and frontmatter should be cleared
+    const afterContent = readFileSync(meetingFile, 'utf8');
+
+    // Approved sections should be removed
+    assert.ok(!afterContent.includes('## Approved Action Items'), 'Should not have Approved Action Items section');
+    assert.ok(!afterContent.includes('## Approved Decisions'), 'Should not have Approved Decisions section');
+    assert.ok(!afterContent.includes('## Approved Learnings'), 'Should not have Approved Learnings section');
+
+    // Approved frontmatter keys should be removed
+    assert.ok(!afterContent.includes('approved_items:'), 'Should not have approved_items in frontmatter');
+    assert.ok(!afterContent.includes('approved_at:'), 'Should not have approved_at in frontmatter');
+    // status: approved should be removed, but status could be re-added by extraction
+    // So we check that 'status: approved' is gone
+    const fmMatch = afterContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (fmMatch) {
+      const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
+      assert.ok(!('approved_items' in fm), 'approved_items should be deleted from frontmatter');
+      assert.ok(!('approved_at' in fm), 'approved_at should be deleted from frontmatter');
+      // status may be re-added as 'processed' by extraction, but shouldn't be 'approved'
+      if ('status' in fm) {
+        assert.notEqual(fm['status'], 'approved', 'status should not be approved anymore');
+      }
+    }
+
+    // Non-approved content should be preserved
+    assert.ok(afterContent.includes('## Summary'), 'Should preserve Summary section');
+    assert.ok(afterContent.includes('## Transcript'), 'Should preserve Transcript section');
+    assert.ok(afterContent.includes('title: Sprint Planning'), 'Should preserve title in frontmatter');
+    assert.ok(afterContent.includes('date:'), 'Should preserve date in frontmatter');
+    assert.ok(afterContent.includes('attendees:'), 'Should preserve attendees in frontmatter');
+  });
+
+  it('proceeds silently when file has nothing to clear', () => {
+    // Create a file without approved content
+    const freshContent = `---
+title: Fresh Meeting
+date: "2026-03-15"
+attendees:
+  - Alice Smith
+---
+
+# Fresh Meeting
+
+## Summary
+
+No approved content here.
+
+## Transcript
+
+**Alice Smith**: Just a regular meeting.
+`;
+    writeFileSync(meetingFile, freshContent, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    // Run with --clear-approved --stage — should not error even though there's nothing to clear
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear-approved', '--stage', '--skip-qmd', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Should proceed with extraction (which may fail at LLM call, but clearing shouldn't error)
+    // The result will either be success (if mocked) or error at LLM call
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should NOT error with "nothing to clear" — should proceed silently
+    if (!result.success) {
+      assert.ok(!result.error?.includes('nothing to clear'), 'Should not error about nothing to clear');
+      assert.ok(!result.error?.includes('no approved'), 'Should not error about no approved content');
+    }
+  });
+});
+
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { processMeetingExtraction, extractUserNotes } from '@arete/core';
+import type { MeetingExtractionResult, FilteredItem } from '@arete/core';
+
+describe('extract --stage frontmatter preservation', () => {
+  // Test the frontmatter merge pattern used in --stage:
+  // Clone frontmatter → add staged_item_* fields → preserve existing fields
+
+  it('preserves non-staged frontmatter fields when adding staged metadata', () => {
+    // Simulate existing frontmatter from a meeting file
+    const existingFrontmatter = {
+      title: 'Sprint Planning',
+      date: '2026-03-01',
+      attendees: [
+        { name: 'Alice Smith', email: 'alice@acme.com' },
+        { name: 'Bob Jones', email: 'bob@acme.com' },
+      ],
+      duration_minutes: 60,
+      source: 'fathom',
+      custom_field: 'user-added-value',
+    };
+
+    // Clone frontmatter before mutating (same pattern as CLI extract --stage)
+    const fm = { ...existingFrontmatter } as Record<string, unknown>;
+
+    // Add staged metadata (snake_case keys, matching CLI implementation)
+    fm['status'] = 'processed';
+    fm['processed_at'] = '2026-03-15T10:00:00.000Z';
+    fm['staged_item_source'] = { ai_001: 'ai', de_001: 'dedup' };
+    fm['staged_item_confidence'] = { ai_001: 0.95, de_001: 0.9 };
+    fm['staged_item_status'] = { ai_001: 'approved', de_001: 'approved' };
+    fm['staged_item_owner'] = { ai_001: { ownerSlug: 'alice-smith', direction: 'i_owe_them' } };
+
+    // Verify original fields are preserved
+    assert.equal(fm['title'], 'Sprint Planning');
+    assert.equal(fm['date'], '2026-03-01');
+    assert.deepEqual(fm['attendees'], existingFrontmatter.attendees);
+    assert.equal(fm['duration_minutes'], 60);
+    assert.equal(fm['source'], 'fathom');
+    assert.equal(fm['custom_field'], 'user-added-value');
+
+    // Verify new fields are added
+    assert.equal(fm['status'], 'processed');
+    assert.ok(fm['processed_at']);
+    assert.deepEqual(fm['staged_item_source'], { ai_001: 'ai', de_001: 'dedup' });
+    assert.deepEqual(fm['staged_item_status'], { ai_001: 'approved', de_001: 'approved' });
+  });
+
+  it('YAML roundtrip preserves all fields', () => {
+    const existingContent = `---
+title: Sprint Planning
+date: "2026-03-01"
+attendees:
+  - name: Alice Smith
+    email: alice@acme.com
+  - Bob Jones
+duration_minutes: 60
+custom_field: user-added-value
+---
+
+# Meeting Content
+`;
+
+    // Parse frontmatter (same regex pattern as CLI extractFrontmatter)
+    const match = existingContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+    assert.ok(match, 'Should parse frontmatter');
+
+    const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+    const body = match[2];
+
+    // Clone and add staged fields
+    const fm = { ...frontmatter };
+    fm['status'] = 'processed';
+    fm['processed_at'] = '2026-03-15T10:00:00.000Z';
+    fm['staged_item_status'] = { ai_001: 'pending' };
+
+    // Reconstruct file
+    const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${body}`;
+
+    // Re-parse to verify roundtrip
+    const reparsed = parseYaml(updatedFile.match(/^---\r?\n([\s\S]*?)\r?\n---/)![1]) as Record<string, unknown>;
+
+    // Verify all original fields survived roundtrip
+    assert.equal(reparsed['title'], 'Sprint Planning');
+    assert.equal(reparsed['date'], '2026-03-01');
+    assert.equal(reparsed['duration_minutes'], 60);
+    assert.equal(reparsed['custom_field'], 'user-added-value');
+    assert.ok(Array.isArray(reparsed['attendees']));
+    assert.equal((reparsed['attendees'] as unknown[]).length, 2);
+
+    // Verify new fields present
+    assert.equal(reparsed['status'], 'processed');
+    assert.deepEqual(reparsed['staged_item_status'], { ai_001: 'pending' });
+  });
+
+  it('processMeetingExtraction produces correct metadata structure', () => {
+    // Mock extraction result (what extractMeetingIntelligence returns)
+    const extractionResult: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Team discussed sprint priorities.',
+        actionItems: [
+          {
+            owner: 'Alice Smith',
+            ownerSlug: 'alice-smith',
+            description: 'Update documentation',
+            direction: 'i_owe_them',
+            confidence: 0.95,
+          },
+          {
+            owner: 'Bob Jones',
+            ownerSlug: 'bob-jones',
+            description: 'Handle authentication module',
+            direction: 'i_owe_them',
+            counterpartySlug: 'alice-smith',
+            confidence: 0.85,
+          },
+        ],
+        nextSteps: [],
+        decisions: ['Use TypeScript for new services'],
+        learnings: ['Daily standups improve coordination'],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const userNotes = ''; // No user notes for this test
+
+    // Process extraction (same function used in CLI)
+    const processed = processMeetingExtraction(extractionResult, userNotes);
+
+    // Verify filtered items have correct structure
+    assert.ok(processed.filteredItems.length > 0);
+
+    // Verify action items
+    const actionItems = processed.filteredItems.filter(i => i.type === 'action');
+    assert.equal(actionItems.length, 2);
+    assert.equal(actionItems[0].id, 'ai_001');
+    assert.equal(actionItems[0].text, 'Update documentation');
+
+    // Verify decisions
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0].id, 'de_001');
+
+    // Verify metadata maps
+    assert.ok(processed.stagedItemStatus['ai_001']);
+    assert.ok(processed.stagedItemConfidence['ai_001']);
+    assert.ok(processed.stagedItemSource['ai_001']);
+
+    // Verify owner metadata for action items
+    assert.ok(processed.stagedItemOwner['ai_001']);
+    assert.equal(processed.stagedItemOwner['ai_001'].ownerSlug, 'alice-smith');
+  });
+});

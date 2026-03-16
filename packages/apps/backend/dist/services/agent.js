@@ -4,54 +4,19 @@
  * Reads meeting files, extracts content via AI, and writes staged sections.
  * Replaces the previous pi-coding-agent implementation with direct AI calls.
  *
- * Includes user notes deduplication: items matching user-written notes
- * (Jaccard > 0.7) are marked source: 'dedup' for auto-approval.
+ * Uses core processMeetingExtraction() for post-processing:
+ * - Confidence filtering (exclude items below threshold)
+ * - User notes deduplication (Jaccard > 0.7 → source: 'dedup')
+ * - Auto-approval (high confidence or dedup → approved)
  */
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity, extractMeetingIntelligence, } from '@arete/core';
+import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from '@arete/core';
 import * as jobsService from './jobs.js';
-/**
- * Transform core MeetingIntelligence to backend MeetingExtraction format.
- * Maps ActionItem.description → ExtractionItem.text for dedup compatibility.
- */
-function adaptCoreToBackend(intelligence) {
-    return {
-        summary: intelligence.summary,
-        actionItems: intelligence.actionItems.map((ai) => ({
-            text: ai.description,
-            confidence: ai.confidence ?? 0.9,
-            // Preserve owner/direction for downstream use
-            owner: ai.owner,
-            ownerSlug: ai.ownerSlug,
-            direction: ai.direction,
-            counterpartySlug: ai.counterpartySlug,
-        })),
-        decisions: intelligence.decisions.map((d) => ({ text: d, confidence: 0.9 })),
-        learnings: intelligence.learnings.map((l) => ({ text: l, confidence: 0.9 })),
-    };
-}
-// ---------------------------------------------------------------------------
-// Configurable thresholds (defaults, overridable via arete.yaml)
-// ---------------------------------------------------------------------------
-/** Default: items above this confidence are auto-approved */
-const DEFAULT_CONFIDENCE_THRESHOLD_APPROVED = 0.8;
-/** Default: items below this confidence are filtered out */
-const DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE = 0.5;
-/** Default: Jaccard similarity threshold for user notes deduplication */
-const DEFAULT_DEDUP_JACCARD_THRESHOLD = 0.7;
-/** Module-level thresholds, set at initialization */
-let moduleThresholds = {
-    confidenceApproved: DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
-    confidenceInclude: DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
-    dedupJaccard: DEFAULT_DEDUP_JACCARD_THRESHOLD,
-};
 // ---------------------------------------------------------------------------
 // ActionItem → StagedItem mapping
 // ---------------------------------------------------------------------------
-/** Counter for generating unique staged item IDs */
-let stagedItemCounter = 0;
 /**
  * Maps an ActionItem from the extraction service to a StagedItem for the UI.
  *
@@ -78,210 +43,6 @@ export function mapActionItemToStagedItem(item, index) {
  */
 export function mapActionItemsToStagedItems(items) {
     return items.map((item, index) => mapActionItemToStagedItem(item, index));
-}
-/**
- * Extract user-written notes from meeting body.
- * Excludes: ## Transcript, ## Staged Action Items, ## Staged Decisions, ## Staged Learnings
- */
-function extractUserNotes(body) {
-    const lines = body.split('\n');
-    const output = [];
-    let inExcludedSection = false;
-    const excludedHeaders = new Set([
-        'transcript',
-        'staged action items',
-        'staged decisions',
-        'staged learnings',
-    ]);
-    for (const line of lines) {
-        const headerMatch = line.match(/^##\s+(.+)$/);
-        if (headerMatch) {
-            const normalized = headerMatch[1].trim().toLowerCase();
-            inExcludedSection = excludedHeaders.has(normalized);
-            if (!inExcludedSection) {
-                output.push(line);
-            }
-            continue;
-        }
-        if (!inExcludedSection) {
-            output.push(line);
-        }
-    }
-    return output.join('\n');
-}
-/**
- * Check if an extracted item matches user notes.
- * Returns true if Jaccard similarity > threshold.
- */
-function itemMatchesUserNotes(itemText, userNotesNormalized) {
-    const itemNormalized = normalizeForJaccard(itemText);
-    const similarity = jaccardSimilarity(itemNormalized, userNotesNormalized);
-    return similarity > moduleThresholds.dedupJaccard;
-}
-/**
- * Filter extraction items by confidence threshold.
- * Items with confidence below the include threshold are filtered out.
- */
-function filterByConfidence(extraction) {
-    const threshold = moduleThresholds.confidenceInclude;
-    return {
-        actionItems: extraction.actionItems.filter(item => item.confidence >= threshold),
-        decisions: extraction.decisions.filter(item => item.confidence >= threshold),
-        learnings: extraction.learnings.filter(item => item.confidence >= threshold),
-    };
-}
-/**
- * Determine sources for extracted items by comparing against user notes.
- * Items matching user notes (Jaccard > 0.7) get source: 'dedup'.
- */
-function determineItemSources(filtered, userNotes) {
-    const sources = {};
-    const userNotesNormalized = normalizeForJaccard(userNotes);
-    // Check action items
-    filtered.actionItems.forEach((item, index) => {
-        const id = `ai_${String(index + 1).padStart(3, '0')}`;
-        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
-    });
-    // Check decisions
-    filtered.decisions.forEach((item, index) => {
-        const id = `de_${String(index + 1).padStart(3, '0')}`;
-        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
-    });
-    // Check learnings
-    filtered.learnings.forEach((item, index) => {
-        const id = `le_${String(index + 1).padStart(3, '0')}`;
-        sources[id] = itemMatchesUserNotes(item.text, userNotesNormalized) ? 'dedup' : 'ai';
-    });
-    return sources;
-}
-/**
- * Build confidence map for all items.
- */
-function buildConfidenceMap(filtered) {
-    const confidences = {};
-    filtered.actionItems.forEach((item, index) => {
-        const id = `ai_${String(index + 1).padStart(3, '0')}`;
-        confidences[id] = item.confidence;
-    });
-    filtered.decisions.forEach((item, index) => {
-        const id = `de_${String(index + 1).padStart(3, '0')}`;
-        confidences[id] = item.confidence;
-    });
-    filtered.learnings.forEach((item, index) => {
-        const id = `le_${String(index + 1).padStart(3, '0')}`;
-        confidences[id] = item.confidence;
-    });
-    return confidences;
-}
-/**
- * Build owner metadata map for action items.
- * Only action items have owner/direction/counterparty metadata.
- * Only includes defined values (YAML can't serialize undefined).
- */
-function buildOwnerMap(filtered) {
-    const owners = {};
-    filtered.actionItems.forEach((item, index) => {
-        const id = `ai_${String(index + 1).padStart(3, '0')}`;
-        // Only add entry if there's actual owner metadata
-        if (item.ownerSlug || item.direction || item.counterpartySlug) {
-            const meta = {};
-            // Only include defined values (YAML can't serialize undefined)
-            if (item.ownerSlug)
-                meta.ownerSlug = item.ownerSlug;
-            if (item.direction)
-                meta.direction = item.direction;
-            if (item.counterpartySlug)
-                meta.counterpartySlug = item.counterpartySlug;
-            owners[id] = meta;
-        }
-    });
-    return owners;
-}
-/**
- * Determine item status based on confidence and dedup source.
- * - dedup items → 'approved' (user notes match)
- * - confidence > 0.8 → 'approved' (high confidence)
- * - confidence 0.5-0.8 → 'pending' (needs review)
- */
-function determineItemStatus(itemSources, confidences) {
-    const statuses = {};
-    const threshold = moduleThresholds.confidenceApproved;
-    for (const [id, source] of Object.entries(itemSources)) {
-        if (source === 'dedup') {
-            // Dedup items are always approved
-            statuses[id] = 'approved';
-        }
-        else {
-            // Use confidence threshold for AI-extracted items
-            const confidence = confidences[id] ?? 0;
-            statuses[id] = confidence > threshold ? 'approved' : 'pending';
-        }
-    }
-    return statuses;
-}
-/**
- * Format extraction result as markdown sections.
- * IDs are zero-padded 3 digits (ai_001, de_001, le_001).
- * Takes FilteredExtraction (post-confidence filtering) and original summary.
- */
-function formatStagedSections(filtered, summary) {
-    const lines = [];
-    // Summary section
-    lines.push('## Summary');
-    lines.push(summary);
-    lines.push('');
-    // Staged Action Items
-    if (filtered.actionItems.length > 0) {
-        lines.push('## Staged Action Items');
-        filtered.actionItems.forEach((item, index) => {
-            const id = `ai_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item.text}`);
-        });
-        lines.push('');
-    }
-    // Staged Decisions
-    if (filtered.decisions.length > 0) {
-        lines.push('## Staged Decisions');
-        filtered.decisions.forEach((item, index) => {
-            const id = `de_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item.text}`);
-        });
-        lines.push('');
-    }
-    // Staged Learnings
-    if (filtered.learnings.length > 0) {
-        lines.push('## Staged Learnings');
-        filtered.learnings.forEach((item, index) => {
-            const id = `le_${String(index + 1).padStart(3, '0')}`;
-            lines.push(`- ${id}: ${item.text}`);
-        });
-        lines.push('');
-    }
-    return lines.join('\n');
-}
-/**
- * Remove approved sections from meeting content.
- * Removes: ## Approved Action Items, ## Approved Decisions, ## Approved Learnings
- */
-function clearApprovedSections(content) {
-    const lines = content.split('\n');
-    const result = [];
-    let skipping = false;
-    for (const line of lines) {
-        // Check for approved section headers
-        if (line.match(/^## Approved (Action Items|Decisions|Learnings)\s*$/)) {
-            skipping = true;
-            continue;
-        }
-        // Stop skipping at next header
-        if (skipping && line.startsWith('## ')) {
-            skipping = false;
-        }
-        if (!skipping) {
-            result.push(line);
-        }
-    }
-    return result.join('\n');
 }
 /**
  * Testable version of runProcessingSession with injected dependencies.
@@ -316,7 +77,7 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         }
         // 3. Call AI for extraction using core extraction service
         jobs.appendEvent(jobId, 'Extracting content with AI...');
-        let extraction;
+        let coreResult;
         try {
             // Track LLM errors separately since extractMeetingIntelligence catches them
             let llmError = null;
@@ -335,7 +96,7 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             // Get attendees from frontmatter (extract names from {name, email} objects)
             const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
             // Call core extraction service
-            const coreResult = await extractMeetingIntelligence(content, callLLM, {
+            coreResult = await extractMeetingIntelligence(content, callLLM, {
                 attendees: attendeeNames,
             });
             // If LLM failed and we got empty results, propagate the original error
@@ -343,8 +104,6 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             if (llmError && coreResult.intelligence.summary === '') {
                 throw llmError;
             }
-            // Transform core result to backend format
-            extraction = adaptCoreToBackend(coreResult.intelligence);
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -358,49 +117,43 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             jobs.appendEvent(jobId, `Error: AI extraction failed: ${message}`);
             throw new Error(`AI extraction failed: ${message}`);
         }
-        // 4. Filter items by confidence threshold (exclude confidence < 0.5)
+        // 4. Process extraction with filtering, dedup, and metadata using core function
         jobs.appendEvent(jobId, 'Applying confidence thresholds...');
-        const filtered = filterByConfidence(extraction);
-        // Log filtered counts
-        const filteredOutCount = (extraction.actionItems.length - filtered.actionItems.length) +
-            (extraction.decisions.length - filtered.decisions.length) +
-            (extraction.learnings.length - filtered.learnings.length);
+        const userNotes = extractUserNotes(content);
+        const processed = processMeetingExtraction(coreResult, userNotes);
+        // Log filtered counts (compare raw vs filtered items)
+        const rawItemCount = coreResult.intelligence.actionItems.length +
+            coreResult.intelligence.decisions.length +
+            coreResult.intelligence.learnings.length;
+        const filteredOutCount = rawItemCount - processed.filteredItems.length;
         if (filteredOutCount > 0) {
             jobs.appendEvent(jobId, `Filtered out ${filteredOutCount} low-confidence items.`);
         }
-        // 5. Extract user notes and determine item sources
+        // 5. Log user notes matches
         jobs.appendEvent(jobId, 'Checking for user notes...');
-        const userNotes = extractUserNotes(content);
-        const itemSources = determineItemSources(filtered, userNotes);
-        // Count dedup items for logging
-        const dedupCount = Object.values(itemSources).filter(s => s === 'dedup').length;
+        const dedupCount = Object.values(processed.stagedItemSource).filter((s) => s === 'dedup').length;
         if (dedupCount > 0) {
             jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
         }
-        // 6. Build confidence map, owner map, and determine item status
-        const confidences = buildConfidenceMap(filtered);
-        const owners = buildOwnerMap(filtered);
-        const itemStatus = determineItemStatus(itemSources, confidences);
-        // Count high-confidence auto-approved items (excluding dedup)
-        const highConfidenceApproved = Object.entries(itemStatus)
-            .filter(([id, status]) => status === 'approved' && itemSources[id] !== 'dedup')
-            .length;
+        // 6. Log high-confidence auto-approvals (excluding dedup)
+        const highConfidenceApproved = Object.entries(processed.stagedItemStatus).filter(([id, status]) => status === 'approved' && processed.stagedItemSource[id] !== 'dedup').length;
         if (highConfidenceApproved > 0) {
             jobs.appendEvent(jobId, `Auto-approved ${highConfidenceApproved} high-confidence items.`);
         }
         // 7. Format staged sections
-        const stagedSections = formatStagedSections(filtered, extraction.summary);
+        const stagedSections = formatFilteredStagedSections(processed.filteredItems, coreResult.intelligence.summary);
         // 8. Update content with staged sections
         const updatedContent = updateMeetingContent(content, stagedSections);
         // 9. Update frontmatter with status, sources, confidence, owner, and item status
+        // Note: Core returns camelCase; backend frontmatter uses snake_case
         fm['status'] = 'processed';
         fm['processed_at'] = new Date().toISOString();
-        fm['staged_item_source'] = itemSources;
-        fm['staged_item_confidence'] = confidences;
-        fm['staged_item_status'] = itemStatus;
+        fm['staged_item_source'] = processed.stagedItemSource;
+        fm['staged_item_confidence'] = processed.stagedItemConfidence;
+        fm['staged_item_status'] = processed.stagedItemStatus;
         // Only write owner map if there's actual owner metadata
-        if (Object.keys(owners).length > 0) {
-            fm['staged_item_owner'] = owners;
+        if (Object.keys(processed.stagedItemOwner).length > 0) {
+            fm['staged_item_owner'] = processed.stagedItemOwner;
         }
         // 10. Write updated file
         jobs.appendEvent(jobId, 'Writing staged sections...');
@@ -433,20 +186,14 @@ function createDefaultDeps(aiService) {
 // Module-level AIService reference, set by initializeAIService()
 let moduleAiService = null;
 /**
- * Initialize the AIService and extraction thresholds for meeting processing.
+ * Initialize the AIService for meeting processing.
  * Call this at server startup after loading config.
+ *
+ * Note: Extraction thresholds (confidence, dedup) are now configured in
+ * core processMeetingExtraction() via ProcessingOptions.
  */
-export function initializeAIService(aiService, config) {
+export function initializeAIService(aiService, _config) {
     moduleAiService = aiService;
-    // Apply config thresholds if provided, otherwise use defaults
-    if (config?.intelligence?.extraction) {
-        const extraction = config.intelligence.extraction;
-        moduleThresholds = {
-            confidenceApproved: extraction.confidence_threshold_approved ?? DEFAULT_CONFIDENCE_THRESHOLD_APPROVED,
-            confidenceInclude: extraction.confidence_threshold_include ?? DEFAULT_CONFIDENCE_THRESHOLD_INCLUDE,
-            dedupJaccard: extraction.dedup_jaccard_threshold ?? DEFAULT_DEDUP_JACCARD_THRESHOLD,
-        };
-    }
 }
 /**
  * Run a processing session to extract content from a meeting.

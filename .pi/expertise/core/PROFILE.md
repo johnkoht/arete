@@ -148,6 +148,25 @@ These modules implement the People Intelligence feature and are called by `Entit
 
 **Important**: This is the second service (after `IntegrationService`) to receive `AreteConfig` directly. AIService needs config at construction for tier mappings.
 
+### Meeting Processing (2026-03-15)
+`services/meeting-processing.ts`
+
+**What it does**: Post-extraction processing that both CLI and backend use for meeting intelligence. Applies confidence filtering, user notes deduplication (Jaccard similarity), and auto-approval logic. Produces metadata maps for staged items.
+
+**Key exports**:
+- `processMeetingExtraction(result, userNotes, options?)` — Main processing function. Returns `ProcessedMeetingResult` with filtered items and metadata maps
+- `extractUserNotes(body)` — Extracts user-written notes, excluding Transcript/Staged sections
+- `clearApprovedSections(content)` — Removes `## Approved *` sections for reprocessing
+- `formatFilteredStagedSections(items, summary)` — Formats filtered items as markdown
+
+**Dependencies**: `meeting-extraction.js` (imports `normalizeForJaccard`, `jaccardSimilarity`)
+
+**Thresholds**: `confidenceInclude = 0.5`, `confidenceApproved = 0.8`, `dedupJaccard = 0.7`
+
+**Used by**: Backend `agent.ts` (`runProcessingSession`), CLI `meeting.ts` (`extract --stage`, `approve`)
+
+**Gotcha**: Decisions and learnings default to 0.9 confidence (no confidence from extraction), so they auto-approve unless deduped against user notes.
+
 ### Credentials
 `credentials.ts` (module, not service)
 
