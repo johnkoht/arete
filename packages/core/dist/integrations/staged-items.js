@@ -164,6 +164,38 @@ export function parseStagedItemEdits(content) {
     return raw;
 }
 /**
+ * Parse the `staged_item_owner` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to owner metadata (ownerSlug, direction, counterpartySlug).
+ */
+export function parseStagedItemOwner(content) {
+    const { data } = parseFrontmatter(content);
+    const raw = data['staged_item_owner'];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+        return {};
+    // Validate and normalize the structure
+    const result = {};
+    for (const [id, meta] of Object.entries(raw)) {
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta))
+            continue;
+        const m = meta;
+        const ownerMeta = {};
+        if (typeof m['ownerSlug'] === 'string') {
+            ownerMeta.ownerSlug = m['ownerSlug'];
+        }
+        if (m['direction'] === 'i_owe_them' || m['direction'] === 'they_owe_me') {
+            ownerMeta.direction = m['direction'];
+        }
+        if (typeof m['counterpartySlug'] === 'string') {
+            ownerMeta.counterpartySlug = m['counterpartySlug'];
+        }
+        // Only include if we have at least one valid field
+        if (ownerMeta.ownerSlug || ownerMeta.direction || ownerMeta.counterpartySlug) {
+            result[id] = ownerMeta;
+        }
+    }
+    return result;
+}
+/**
  * Update `staged_item_status` (and optionally `staged_item_edits`) for a
  * single item in a meeting file's frontmatter.
  *
@@ -186,6 +218,26 @@ export async function writeItemStatusToFile(storage, filePath, itemId, options) 
         data['staged_item_edits'][itemId] = options.editedText;
     }
     await storage.write(filePath, serializeFrontmatter(data, body));
+}
+// ---------------------------------------------------------------------------
+// Action item formatting
+// ---------------------------------------------------------------------------
+/**
+ * Format an action item with owner arrow notation for the approved section.
+ *
+ * Output formats:
+ * - With owner and counterparty: "Text here (@owner-slug → @counterparty-slug)"
+ * - With owner only: "Text here (@owner-slug)"
+ * - Without owner info: "Text here"
+ */
+function formatActionItemWithOwner(item) {
+    if (!item.ownerSlug) {
+        return item.text;
+    }
+    if (item.counterpartySlug) {
+        return `${item.text} (@${item.ownerSlug} → @${item.counterpartySlug})`;
+    }
+    return `${item.text} (@${item.ownerSlug})`;
 }
 // ---------------------------------------------------------------------------
 // commitApprovedItems
@@ -211,6 +263,7 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     // ── 1. Collect approved IDs ──────────────────────────────────────────────
     const statusMap = data['staged_item_status'] ?? {};
     const editsMap = data['staged_item_edits'] ?? {};
+    const ownerMap = parseStagedItemOwner(raw);
     const approvedIds = new Set(Object.entries(statusMap)
         .filter(([, v]) => v === 'approved')
         .map(([k]) => k));
@@ -228,7 +281,16 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
         if (!approvedIds.has(item.id))
             continue;
         const text = editsMap[item.id] ?? item.text;
-        const resolvedItem = { ...item, text };
+        // Apply owner metadata from frontmatter (for action items)
+        const ownerMeta = ownerMap[item.id];
+        const resolvedItem = {
+            ...item,
+            text,
+            // Owner metadata from frontmatter takes precedence over text-parsed values
+            ownerSlug: ownerMeta?.ownerSlug ?? item.ownerSlug,
+            direction: ownerMeta?.direction ?? item.direction,
+            counterpartySlug: ownerMeta?.counterpartySlug ?? item.counterpartySlug,
+        };
         if (item.type === 'ai')
             approvedActionItems.push(resolvedItem);
         else if (item.type === 'de')
@@ -244,10 +306,11 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     let cleanedBody = removeStagedSections(body);
     // ── 4.5 Write approved items to markdown sections ──
     // Build all approved sections (action items, decisions, learnings)
+    // Action items include owner arrow notation for commitment tracking
     let approvedSections = '';
     if (approvedActionItems.length > 0) {
         approvedSections += '\n## Approved Action Items\n' +
-            approvedActionItems.map(item => `- [ ] ${item.text}`).join('\n') + '\n';
+            approvedActionItems.map(item => `- [ ] ${formatActionItemWithOwner(item)}`).join('\n') + '\n';
     }
     if (approvedDecisions.length > 0) {
         approvedSections += '\n## Approved Decisions\n' +
@@ -268,14 +331,18 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
         }
     }
     // ── 4.6 Store approved items in frontmatter for UI display ───────────────
+    // Action items include owner notation for commitment tracking consistency
     data['approved_items'] = {
-        actionItems: approvedActionItems.map(i => i.text),
+        actionItems: approvedActionItems.map(i => formatActionItemWithOwner(i)),
         decisions: approvedDecisions.map(i => i.text),
         learnings: approvedLearnings.map(i => i.text),
     };
     // ── 5-6. Update frontmatter ───────────────────────────────────────────────
     delete data['staged_item_status'];
     delete data['staged_item_edits'];
+    delete data['staged_item_owner'];
+    delete data['staged_item_source'];
+    delete data['staged_item_confidence'];
     data['status'] = 'approved';
     data['approved_at'] = new Date().toISOString();
     // ── 7. Write cleaned file ─────────────────────────────────────────────────

@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-12: [unify-meeting-extraction-learnings](entries/2026-03-12_unify-meeting-extraction-learnings.md) — Backend uses extractMeetingIntelligence from core, eliminating duplicate extraction. 4/4 tasks, 1 iteration, ~110 lines removed. Key: core catches errors internally, limits to 7 items, expects snake_case JSON.
 - 2026-03-11: [consolidate-search-command-learnings](entries/2026-03-11_consolidate-search-command-learnings.md) — Unified `arete search` command replacing context --for, memory search, memory timeline. 16/16 tasks, 94% first-attempt. Key: flaky test fix unblocked execution, reviewer sanity check caught phantom task.
 - 2026-03-11: [ship-it-learnings](entries/2026-03-11_ship-it-learnings.md) — Ship skill: mega-build automation from plan-to-PR. 8/8 tasks, 0 iterations, 0/8 pre-mortem risks. Created `.pi/skills/ship/` with 6 phases, intelligent gates, recovery matrix. New pattern: complex skill structure (orchestrator.md + templates/).
 - 2026-03-10: [web-pagination-learnings](entries/2026-03-10_web-pagination-learnings.md) — Pagination for Meetings, People, Commitments: backend `{ items, total, offset, limit }`, frontend URL-based page state, filter reset to page 1. 5 commits, +1700 lines.

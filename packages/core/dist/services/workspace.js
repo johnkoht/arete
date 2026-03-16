@@ -13,7 +13,6 @@ import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST, } from '.
  */
 const SKILLS_DOC_FILES = new Set([
     'LEARNINGS.md',
-    'PATTERNS.md',
     'README.md',
     '_authoring-guide.md',
     '_integration-guide.md',

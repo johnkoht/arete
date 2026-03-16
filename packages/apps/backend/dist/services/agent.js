@@ -7,25 +7,31 @@
  * Includes user notes deduplication: items matching user-written notes
  * (Jaccard > 0.7) are marked source: 'dedup' for auto-approval.
  */
-import { Type } from '@sinclair/typebox';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity, } from '@arete/core';
+import { updateMeetingContent, normalizeForJaccard, jaccardSimilarity, extractMeetingIntelligence, } from '@arete/core';
 import * as jobsService from './jobs.js';
 /**
- * TypeBox schema for meeting extraction response with confidence scores.
+ * Transform core MeetingIntelligence to backend MeetingExtraction format.
+ * Maps ActionItem.description → ExtractionItem.text for dedup compatibility.
  */
-const ExtractionItemSchema = Type.Object({
-    text: Type.String({ description: 'The extracted item text' }),
-    confidence: Type.Number({ description: 'Confidence score 0-1' }),
-});
-const MeetingExtractionSchema = Type.Object({
-    summary: Type.String({ description: '2-4 sentence summary of the meeting' }),
-    actionItems: Type.Array(ExtractionItemSchema, { description: 'Action items extracted with confidence' }),
-    decisions: Type.Array(ExtractionItemSchema, { description: 'Decisions made in the meeting with confidence' }),
-    learnings: Type.Array(ExtractionItemSchema, { description: 'Learnings or insights with confidence' }),
-});
+function adaptCoreToBackend(intelligence) {
+    return {
+        summary: intelligence.summary,
+        actionItems: intelligence.actionItems.map((ai) => ({
+            text: ai.description,
+            confidence: ai.confidence ?? 0.9,
+            // Preserve owner/direction for downstream use
+            owner: ai.owner,
+            ownerSlug: ai.ownerSlug,
+            direction: ai.direction,
+            counterpartySlug: ai.counterpartySlug,
+        })),
+        decisions: intelligence.decisions.map((d) => ({ text: d, confidence: 0.9 })),
+        learnings: intelligence.learnings.map((l) => ({ text: l, confidence: 0.9 })),
+    };
+}
 // ---------------------------------------------------------------------------
 // Configurable thresholds (defaults, overridable via arete.yaml)
 // ---------------------------------------------------------------------------
@@ -168,6 +174,30 @@ function buildConfidenceMap(filtered) {
     return confidences;
 }
 /**
+ * Build owner metadata map for action items.
+ * Only action items have owner/direction/counterparty metadata.
+ * Only includes defined values (YAML can't serialize undefined).
+ */
+function buildOwnerMap(filtered) {
+    const owners = {};
+    filtered.actionItems.forEach((item, index) => {
+        const id = `ai_${String(index + 1).padStart(3, '0')}`;
+        // Only add entry if there's actual owner metadata
+        if (item.ownerSlug || item.direction || item.counterpartySlug) {
+            const meta = {};
+            // Only include defined values (YAML can't serialize undefined)
+            if (item.ownerSlug)
+                meta.ownerSlug = item.ownerSlug;
+            if (item.direction)
+                meta.direction = item.direction;
+            if (item.counterpartySlug)
+                meta.counterpartySlug = item.counterpartySlug;
+            owners[id] = meta;
+        }
+    });
+    return owners;
+}
+/**
  * Determine item status based on confidence and dedup source.
  * - dedup items → 'approved' (user notes match)
  * - confidence > 0.8 → 'approved' (high confidence)
@@ -188,85 +218,6 @@ function determineItemStatus(itemSources, confidences) {
         }
     }
     return statuses;
-}
-/**
- * Build extraction prompt from meeting content.
- */
-/**
- * Extract just the raw transcript portion from meeting content.
- * The raw transcript has speaker names with timestamps like "**John Koht | 00:14**"
- * We want to skip pre-processed sections like "## Action Items", "## Key Points", etc.
- */
-function extractRawTranscript(content) {
-    const lines = content.split('\n');
-    const transcriptLines = [];
-    let inTranscript = false;
-    let skipUntilNextHeader = false;
-    for (const line of lines) {
-        // Check for transcript section headers
-        if (line.match(/^##\s*Transcript\s*\d*\s*$/i)) {
-            inTranscript = true;
-            skipUntilNextHeader = false;
-            continue;
-        }
-        // Check for non-transcript headers to skip
-        if (line.match(/^##\s*(Action Items|Key Points|Summary|Decisions|Learnings|Recorder Notes)/i)) {
-            skipUntilNextHeader = true;
-            inTranscript = false;
-            continue;
-        }
-        // Any other ## header ends skip mode
-        if (line.startsWith('## ')) {
-            skipUntilNextHeader = false;
-            inTranscript = false;
-        }
-        // Collect transcript lines (look for speaker pattern: **Name | timestamp**)
-        if (inTranscript && !skipUntilNextHeader) {
-            transcriptLines.push(line);
-        }
-        else if (line.match(/^\*\*[^|]+\|\s*\d{2}:\d{2}\*\*$/)) {
-            // Speaker line outside explicit transcript section - start collecting
-            inTranscript = true;
-            transcriptLines.push(line);
-        }
-        else if (inTranscript && !line.startsWith('## ')) {
-            transcriptLines.push(line);
-        }
-    }
-    return transcriptLines.join('\n').trim();
-}
-function buildExtractionPrompt(content) {
-    // Extract only the raw transcript, not pre-processed sections
-    const rawTranscript = extractRawTranscript(content);
-    // Fall back to full content if no transcript found
-    const textToAnalyze = rawTranscript || content;
-    return `Analyze this meeting transcript and extract the following:
-
-1. A 2-4 sentence summary of the meeting highlighting key topics and outcomes.
-2. Action items - specific tasks that were assigned or committed to (things people said they would do).
-3. Decisions - choices or conclusions that were explicitly made during the meeting.
-4. Learnings - insights, lessons learned, or important information shared.
-
-For each action item, decision, and learning, provide a confidence score from 0 to 1:
-- 0.9-1.0: Explicitly stated, very clear
-- 0.7-0.9: Clearly implied or strongly suggested
-- 0.5-0.7: Somewhat implied, moderate confidence
-- 0.3-0.5: Weakly implied, low confidence
-- 0.0-0.3: Very uncertain, possibly misinterpreted
-
-IMPORTANT INSTRUCTIONS:
-- Read the actual conversation carefully and identify action items from what people SAY they will do.
-- Action items should be specific tasks assigned to or committed to by a person.
-- Do not include timestamp references in your output.
-- Each item should be a separate entry - do not combine multiple items.
-- Write clean, standalone text for each item.
-
-Meeting content:
----
-${textToAnalyze}
----
-
-Extract the above information. For action items, decisions, and learnings, only include items that are clearly stated or implied in the meeting. If a category has no items, return an empty array. Include confidence scores for each extracted item.`;
 }
 /**
  * Format extraction result as markdown sections.
@@ -363,12 +314,37 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             delete fm['approved_items'];
             delete fm['approved_at'];
         }
-        // 3. Call AI for extraction
+        // 3. Call AI for extraction using core extraction service
         jobs.appendEvent(jobId, 'Extracting content with AI...');
         let extraction;
         try {
-            const result = await deps.aiService.callStructured('extraction', buildExtractionPrompt(content), MeetingExtractionSchema);
-            extraction = result.data;
+            // Track LLM errors separately since extractMeetingIntelligence catches them
+            let llmError = null;
+            // Create LLM adapter to bridge AIService to core LLMCallFn signature
+            const callLLM = async (prompt) => {
+                try {
+                    const result = await deps.aiService.call('extraction', prompt);
+                    return result.text;
+                }
+                catch (err) {
+                    // Capture error for later re-throw after core extraction returns empty
+                    llmError = err instanceof Error ? err : new Error(String(err));
+                    throw llmError;
+                }
+            };
+            // Get attendees from frontmatter (extract names from {name, email} objects)
+            const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
+            // Call core extraction service
+            const coreResult = await extractMeetingIntelligence(content, callLLM, {
+                attendees: attendeeNames,
+            });
+            // If LLM failed and we got empty results, propagate the original error
+            // (core extraction catches errors and returns empty results)
+            if (llmError && coreResult.intelligence.summary === '') {
+                throw llmError;
+            }
+            // Transform core result to backend format
+            extraction = adaptCoreToBackend(coreResult.intelligence);
         }
         catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -401,8 +377,9 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         if (dedupCount > 0) {
             jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
         }
-        // 6. Build confidence map and determine item status
+        // 6. Build confidence map, owner map, and determine item status
         const confidences = buildConfidenceMap(filtered);
+        const owners = buildOwnerMap(filtered);
         const itemStatus = determineItemStatus(itemSources, confidences);
         // Count high-confidence auto-approved items (excluding dedup)
         const highConfidenceApproved = Object.entries(itemStatus)
@@ -415,12 +392,16 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         const stagedSections = formatStagedSections(filtered, extraction.summary);
         // 8. Update content with staged sections
         const updatedContent = updateMeetingContent(content, stagedSections);
-        // 9. Update frontmatter with status, sources, confidence, and item status
+        // 9. Update frontmatter with status, sources, confidence, owner, and item status
         fm['status'] = 'processed';
         fm['processed_at'] = new Date().toISOString();
         fm['staged_item_source'] = itemSources;
         fm['staged_item_confidence'] = confidences;
         fm['staged_item_status'] = itemStatus;
+        // Only write owner map if there's actual owner metadata
+        if (Object.keys(owners).length > 0) {
+            fm['staged_item_owner'] = owners;
+        }
         // 10. Write updated file
         jobs.appendEvent(jobId, 'Writing staged sections...');
         const updatedFile = matter.stringify(updatedContent, fm);
@@ -442,7 +423,10 @@ function createDefaultDeps(aiService) {
         readFile: (path) => fs.readFile(path, 'utf8'),
         writeFile: (path, content) => fs.writeFile(path, content, 'utf8'),
         aiService: {
-            callStructured: (task, prompt, schema) => aiService.callStructured(task, prompt, schema),
+            call: async (task, prompt) => {
+                const result = await aiService.call(task, prompt);
+                return { text: result.text };
+            },
         },
     };
 }

@@ -11,7 +11,7 @@ export type { IDETarget, AITask, AITier, AIConfig, QmdScope, QmdCollections, Are
 export type { SkillIntegrationOutputType, SkillIntegrationOutput, SkillIntegration, SkillDefinition, SkillMetadata, SkillCandidate, RoutedSkill, InstallSkillOptions, InstallSkillResult, ToolDefinition, } from './skills.js';
 export type { PersonCategory, PersonAffiliation, PersonRoleLens, TrackingIntent, Person, Meeting, Project, PeopleIntelligenceCandidate, PeopleIntelligenceEvidence, PeopleIntelligenceFeatureToggles, PeopleIntelligencePolicy, PeopleIntelligenceSuggestion, PeopleIntelligenceMetrics, PeopleIntelligenceDigest, PeopleIntelligenceSnapshot, ResolvedEntity, MentionSourceType, EntityMention, RelationshipType, EntityRelationship, CommitmentStatus, CommitmentDirection, Commitment, CommitmentsFile, } from './entities.js';
 export type { BriefingRequest, Briefing, PrimitiveBriefing, SkillContext, Suggestion, } from './intelligence.js';
-export type { StagedItemDirection, StagedItemStatus, StagedItemEdits, StagedItem, StagedSections, FathomTranscript, IntegrationConfig, IntegrationAuth, IntegrationDefinition, IntegrationListEntry, ScriptableIntegration, ScriptResult, PullOptions, PullResult, IntegrationStatus, } from './integrations.js';
+export type { StagedItemDirection, StagedItemStatus, StagedItemEdits, StagedItemOwnerMeta, StagedItemOwner, StagedItem, StagedSections, FathomTranscript, IntegrationConfig, IntegrationAuth, IntegrationDefinition, IntegrationListEntry, ScriptableIntegration, ScriptResult, PullOptions, PullResult, IntegrationStatus, } from './integrations.js';
 export type { TaskStatus, Task, PRD, } from './prd.js';
 export { validateTask, validatePRD } from './prd.js';
 //# sourceMappingURL=index.d.ts.map

@@ -5,8 +5,8 @@
  * in meeting markdown files. All file I/O uses StorageAdapter.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { StagedItem, StagedItemEdits, StagedItemStatus, StagedSections } from '../models/index.js';
-export type { StagedItem, StagedItemEdits, StagedItemStatus, StagedSections };
+import type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemStatus, StagedSections } from '../models/index.js';
+export type { StagedItem, StagedItemEdits, StagedItemOwner, StagedItemOwnerMeta, StagedItemStatus, StagedSections };
 /**
  * Generate a staged item ID.
  *
@@ -33,6 +33,11 @@ export declare function parseStagedItemStatus(content: string): StagedItemStatus
  * Returns a map of item IDs to edited text strings.
  */
 export declare function parseStagedItemEdits(content: string): StagedItemEdits;
+/**
+ * Parse the `staged_item_owner` frontmatter field from raw markdown content.
+ * Returns a map of item IDs to owner metadata (ownerSlug, direction, counterpartySlug).
+ */
+export declare function parseStagedItemOwner(content: string): StagedItemOwner;
 export type WriteItemStatusOptions = {
     /** New status to set on the item */
     status: 'approved' | 'skipped' | 'pending';
