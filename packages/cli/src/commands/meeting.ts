@@ -15,6 +15,10 @@ import {
   updateMeetingContent,
   processMeetingExtraction,
   extractUserNotes,
+  parseStagedSections,
+  parseStagedItemStatus,
+  writeItemStatusToFile,
+  commitApprovedItems,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -23,6 +27,7 @@ import type {
   MeetingLLMCallFn,
   MeetingExtractionResult,
   FilteredItem,
+  StagedItemStatus,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -572,6 +577,227 @@ export function registerMeetingCommands(program: Command): void {
       if (extractionResult.validationWarnings.length > 0) {
         warn(`${extractionResult.validationWarnings.length} items rejected during validation`);
       }
+    });
+
+  // Approve subcommand - commit staged items to memory
+  meetingCmd
+    .command('approve <slug>')
+    .description('Commit approved staged items to memory files')
+    .option('--all', 'Mark all pending items as approved before committing')
+    .option('--items <ids>', 'Comma-separated item IDs to mark as approved (e.g., ai_001,de_001)')
+    .option('--skip <ids>', 'Comma-separated item IDs to mark as skipped (won\'t be committed)')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--json', 'Output as JSON')
+    .action(async (slug: string, opts: {
+      all?: boolean;
+      items?: string;
+      skip?: string;
+      skipQmd?: boolean;
+      json?: boolean;
+    }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const config = await loadConfig(services.storage, root);
+      const paths = services.workspace.getPaths(root);
+
+      // Resolve meeting file path from slug
+      const meetingPath = join(paths.resources, 'meetings', `${slug}.md`);
+      const content = await services.storage.read(meetingPath);
+
+      if (!content) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: `Meeting not found: ${slug}` }));
+        } else {
+          error(`Meeting not found: ${slug}`);
+        }
+        process.exit(1);
+      }
+
+      // Parse frontmatter to check status
+      const { frontmatter, body } = extractFrontmatter(content);
+      const status = frontmatter['status'] as string | undefined;
+
+      // Error if already approved
+      if (status === 'approved') {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'Meeting already approved',
+            hint: 'This meeting has already been approved. Use `arete meeting extract --stage` to reprocess if needed.',
+          }));
+        } else {
+          error('Meeting already approved');
+          info('This meeting has already been approved. Use `arete meeting extract --stage` to reprocess if needed.');
+        }
+        process.exit(1);
+      }
+
+      // Error if not processed (no staged items)
+      if (status !== 'processed') {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'Meeting not processed',
+            hint: 'Run `arete meeting extract <file> --stage` to process this meeting first.',
+          }));
+        } else {
+          error('Meeting not processed');
+          info('Run `arete meeting extract <file> --stage` to process this meeting first.');
+        }
+        process.exit(1);
+      }
+
+      // Parse staged sections and current status
+      const stagedSections = parseStagedSections(body);
+      const currentStatus = parseStagedItemStatus(content);
+      const allItems = [
+        ...stagedSections.actionItems,
+        ...stagedSections.decisions,
+        ...stagedSections.learnings,
+      ];
+
+      // Parse --items and --skip flags
+      const itemsToApprove = opts.items ? opts.items.split(',').map((id) => id.trim()) : [];
+      const itemsToSkip = opts.skip ? opts.skip.split(',').map((id) => id.trim()) : [];
+
+      // Handle --all: mark all pending items as approved
+      if (opts.all) {
+        for (const item of allItems) {
+          const existingStatus = currentStatus[item.id];
+          if (!existingStatus || existingStatus === 'pending') {
+            await writeItemStatusToFile(services.storage, meetingPath, item.id, { status: 'approved' });
+          }
+        }
+      }
+
+      // Handle --items: mark specific IDs as approved
+      for (const itemId of itemsToApprove) {
+        const exists = allItems.some((item) => item.id === itemId);
+        if (!exists) {
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: `Item not found: ${itemId}` }));
+          } else {
+            error(`Item not found: ${itemId}`);
+          }
+          process.exit(1);
+        }
+        await writeItemStatusToFile(services.storage, meetingPath, itemId, { status: 'approved' });
+      }
+
+      // Handle --skip: mark specific IDs as skipped
+      for (const itemId of itemsToSkip) {
+        const exists = allItems.some((item) => item.id === itemId);
+        if (!exists) {
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: `Item not found: ${itemId}` }));
+          } else {
+            error(`Item not found: ${itemId}`);
+          }
+          process.exit(1);
+        }
+        await writeItemStatusToFile(services.storage, meetingPath, itemId, { status: 'skipped' });
+      }
+
+      // Re-read to get updated status after flag processing
+      const updatedContent = await services.storage.read(meetingPath);
+      if (!updatedContent) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Failed to read updated meeting file' }));
+        } else {
+          error('Failed to read updated meeting file');
+        }
+        process.exit(1);
+      }
+      const finalStatus = parseStagedItemStatus(updatedContent);
+
+      // Count approved items
+      const approvedIds = Object.entries(finalStatus)
+        .filter(([, s]) => s === 'approved')
+        .map(([id]) => id);
+
+      // Error if no approved items (and not using --all or --items)
+      if (approvedIds.length === 0) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'No items approved',
+            hint: 'Use --all to approve all items, or --items <id1,id2,...> to approve specific items.',
+          }));
+        } else {
+          error('No items approved');
+          info('Use --all to approve all items, or --items <id1,id2,...> to approve specific items.');
+        }
+        process.exit(1);
+      }
+
+      // Commit approved items
+      const memoryDir = join(root, '.arete', 'memory', 'items');
+      await commitApprovedItems(services.storage, meetingPath, memoryDir);
+
+      // Refresh QMD index unless --skip-qmd
+      let qmdResult: QmdRefreshResult | undefined;
+      if (!opts.skipQmd) {
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
+      // Read final meeting state for response
+      const finalContent = await services.storage.read(meetingPath);
+      const { frontmatter: finalFm } = extractFrontmatter(finalContent ?? '');
+
+      // Build response
+      const approvedItems = finalFm['approved_items'] as {
+        actionItems?: string[];
+        decisions?: string[];
+        learnings?: string[];
+      } | undefined;
+
+      const response = {
+        success: true,
+        slug,
+        approvedItems: {
+          actionItems: approvedItems?.actionItems ?? [],
+          decisions: approvedItems?.decisions ?? [],
+          learnings: approvedItems?.learnings ?? [],
+        },
+        memoryUpdated: {
+          decisions: (approvedItems?.decisions?.length ?? 0) > 0,
+          learnings: (approvedItems?.learnings?.length ?? 0) > 0,
+        },
+        qmd: qmdResult ?? { indexed: false, skipped: true },
+      };
+
+      if (opts.json) {
+        console.log(JSON.stringify(response, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      success(`Meeting approved: ${slug}`);
+
+      const actionCount = approvedItems?.actionItems?.length ?? 0;
+      const decisionCount = approvedItems?.decisions?.length ?? 0;
+      const learningCount = approvedItems?.learnings?.length ?? 0;
+
+      if (actionCount > 0) {
+        listItem('Action items', `${actionCount}`);
+      }
+      if (decisionCount > 0) {
+        listItem('Decisions', `${decisionCount} (written to memory)`);
+      }
+      if (learningCount > 0) {
+        listItem('Learnings', `${learningCount} (written to memory)`);
+      }
+
+      displayQmdResult(qmdResult);
     });
 }
 
