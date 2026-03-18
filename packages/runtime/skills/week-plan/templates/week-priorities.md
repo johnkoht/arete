@@ -23,6 +23,18 @@
 
 -
 
+## Today's Plan
+<!-- This section is auto-updated by daily-plan. User notes in ### Notes subsection are preserved. -->
+
+### Focus
+- [Today's top priorities from week outcomes]
+
+### Meetings
+- [Meeting list with brief context]
+
+### Notes
+- [User notes — preserved across updates]
+
 ## End of week review (fill during week-review)
 
 -

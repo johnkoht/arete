@@ -83,7 +83,10 @@ Also capture:
   - Top 3–5 outcomes with quarter goal links
   - Commitments due this week
   - Carried over from last week
+  - **Today's Plan** — auto-updated by **daily-plan** (see below)
   - Optional "End of week review" section (filled during **week-review**).
+
+  **About Today's Plan**: This section is a placeholder for **daily-plan** to populate. When daily-plan runs, it updates `### Focus` and `### Meetings` with today's context. The `### Notes` subsection is preserved across daily-plan updates, so users can add notes that won't be overwritten.
 
 ### 5. Stakeholder Watchouts (Summary)
 
