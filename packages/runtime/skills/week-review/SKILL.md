@@ -24,6 +24,9 @@ Read the current week file and quarter file, then guide the PM to mark prioritie
 
 - **Read** the current week file: `now/week.md`.
 - **Read** the quarter file: `goals/quarter.md` (for progress against goals).
+- **Check for Today's Plan section**: Look for `## Today's Plan` in the week file.
+  - If present with real content (not just placeholders like `- [placeholder]` or empty subsections), note that daily planning was active this week.
+  - If absent or placeholder-only, proceed normally — this is backward compatible with older week files.
 
 ### 2. Review Each Priority
 
@@ -71,7 +74,9 @@ Apply the `significance_analyst` expert pattern to assess what actually mattered
 
 If both sections return empty results, note: `⚠️ Sparse context — significance assessment based primarily on week content.`
 
-**Apply `significance_analyst`** to the assembled bundle and the week's raw content (accomplishments, outcomes, notes from the week file):
+**Apply `significance_analyst`** to the assembled bundle and the week's raw content (accomplishments, outcomes, notes from the week file).
+
+> **Exclude Today's Plan**: When extracting the week's raw content, skip the `## Today's Plan` section entirely. This section contains ephemeral daily content that shouldn't influence weekly significance analysis. Focus on: Top outcomes, Commitments, Carried over, and End of week review sections.
 
 - Ask: *"Given everything that happened this week and current goals/strategy, what was actually significant?"*
 - Separate signal from noise — not everything that happened matters equally.
@@ -95,7 +100,12 @@ If both sections return empty results, note: `⚠️ Sparse context — signific
 ### Strategic Connections
 - [How this week advances or hinders quarter goals]
 - ...
+
+<!-- If daily planning was active, include: -->
+📅 Daily planning was active this week.
 ```
+
+> **Daily planning note**: Only include the "📅 Daily planning was active" line if `## Today's Plan` contained real content (not just placeholders). Omit if section was absent or empty.
 
 > **Sparse-context behavior**: If the context bundle is sparse, weight the week's raw content more heavily and note: "Limited context — significance based primarily on week content analysis."
 
