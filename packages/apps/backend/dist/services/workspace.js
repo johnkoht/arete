@@ -5,7 +5,7 @@
 import { join } from 'path';
 import fs from 'fs/promises';
 import matter from 'gray-matter';
-import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, } from '@arete/core';
+import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, extractAttendeeSlugs, } from '@arete/core';
 const storage = new FileStorageAdapter();
 function meetingsDir(workspaceRoot) {
     return join(workspaceRoot, 'resources', 'meetings');
@@ -411,8 +411,9 @@ export async function updateItemStatus(workspaceRoot, slug, itemId, options) {
  *
  * Post-approval steps:
  * 1. Commit approved items to memory (decisions, learnings)
- * 2. Refresh QMD index
- * 3. Refresh person memory for each attendee (syncs commitments)
+ * 2. Resolve attendees to slugs (if attendee_ids missing)
+ * 3. Refresh QMD index
+ * 4. Refresh person memory for each attendee (syncs commitments)
  */
 export async function approveMeeting(workspaceRoot, slug) {
     const filePath = slugToPath(workspaceRoot, slug);
@@ -420,10 +421,32 @@ export async function approveMeeting(workspaceRoot, slug) {
     // Step 1: Commit approved items
     await commitApprovedItems(storage, filePath, memoryDir);
     // Get meeting to extract attendee_ids
-    const meeting = await getMeeting(workspaceRoot, slug);
+    let meeting = await getMeeting(workspaceRoot, slug);
     if (!meeting)
         throw new Error(`Meeting not found after approve: ${slug}`);
-    // Step 2: Refresh QMD index
+    // Step 2: Resolve attendees to slugs if attendee_ids is missing
+    // This ensures action items can be synced to CommitmentsService
+    let attendeeIds = Array.isArray(meeting.frontmatter['attendee_ids'])
+        ? meeting.frontmatter['attendee_ids'].filter((id) => typeof id === 'string')
+        : [];
+    if (attendeeIds.length === 0) {
+        // Compute attendee_ids from attendees field using extractAttendeeSlugs
+        attendeeIds = extractAttendeeSlugs(meeting.frontmatter);
+        if (attendeeIds.length > 0) {
+            // Write attendee_ids back to meeting frontmatter
+            const raw = await fs.readFile(filePath, 'utf8');
+            const parsed = matter(raw);
+            const fm = parsed.data;
+            fm['attendee_ids'] = attendeeIds;
+            const updated = matter.stringify(parsed.content, fm);
+            await fs.writeFile(filePath, updated, 'utf8');
+            // Re-fetch meeting with updated frontmatter
+            meeting = await getMeeting(workspaceRoot, slug);
+            if (!meeting)
+                throw new Error(`Meeting not found after attendee resolution: ${slug}`);
+        }
+    }
+    // Step 3: Refresh QMD index
     const config = await loadConfig(storage, workspaceRoot);
     let qmdRefreshed = false;
     try {
@@ -434,12 +457,8 @@ export async function approveMeeting(workspaceRoot, slug) {
         // Non-fatal — log but continue
         console.error('[approveMeeting] QMD refresh failed:', err);
     }
-    // Step 3: Refresh person memory for attendees (syncs commitments)
+    // Step 4: Refresh person memory for attendees (syncs commitments)
     const personMemoryRefreshed = [];
-    // Extract attendee_ids from frontmatter (array of person slugs)
-    const attendeeIds = Array.isArray(meeting.frontmatter['attendee_ids'])
-        ? meeting.frontmatter['attendee_ids'].filter((id) => typeof id === 'string')
-        : [];
     if (attendeeIds.length > 0) {
         try {
             const services = await createServices(workspaceRoot);

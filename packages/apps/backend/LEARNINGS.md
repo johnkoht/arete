@@ -313,6 +313,21 @@ pure helpers for unit testability) is worth following for other route files with
 The `readActivityEvents` return order is therefore newest-first without any sorting. Don't reverse
 or sort the array when reading — the insert order is the display order.
 
+### Attendee Resolution Required for Commitments Sync (2026-03-17)
+
+The `approveMeeting()` workflow has a dependency chain:
+1. `attendee_ids` must exist in meeting frontmatter
+2. Person memory refresh runs for each attendee in `attendee_ids`
+3. Person memory refresh syncs action items to CommitmentsService
+
+If `attendee_ids` is missing/empty, Step 2 is skipped entirely, and action items never appear in `arete commitments list`.
+
+**Root cause**: The web app's processing flow (`POST /api/meetings/:slug/process`) only does AI extraction — it never resolves attendees or writes `attendee_ids`. The CLI's `arete meeting process` does write `attendee_ids`, which is why CLI-processed meetings worked correctly.
+
+**Fix (2026-03-17)**: `approveMeeting()` now auto-resolves attendees to slugs using `extractAttendeeSlugs()` from `@arete/core` if `attendee_ids` is missing. The resolved slugs are written back to frontmatter before person memory refresh runs.
+
+When modifying the approval workflow, ensure this resolution step runs before person memory refresh. Test with the new `approval-integration.test.ts` suite.
+
 ### Pre-Existing Test Failures in goals.test.ts (2026-03-06, updated 2026-03-07)
 
 The GET /quarter tests in `test/routes/goals.test.ts` were failing **before** iteration 3:
