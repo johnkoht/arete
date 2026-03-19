@@ -1,0 +1,187 @@
+{
+  "name": "goals-refactor",
+  "branchName": "feature/goals-refactor",
+  "goal": "Migrate goals from single quarter.md to individual files with frontmatter. Update parser, backend, context service, and all 6 skills.",
+  "userStories": [
+    {
+      "id": "task-0",
+      "title": "Create Migration Script",
+      "description": "Add migration to `arete update` that converts `quarter.md` → individual goal files. Detect all 3 legacy formats, create individual files with frontmatter, rename original to backup.",
+      "acceptanceCriteria": [
+        "Migration detects all 3 legacy formats: `## Goal N: Title`, `### [Qn-N] Title`, `### Qn-N Title`",
+        "Creates individual files: `goals/YYYY-Qn-N-title-slug.md` with frontmatter",
+        "Frontmatter includes: id, title, status: active, quarter, type: outcome, orgAlignment, successCriteria",
+        "Renames `quarter.md` to `.quarter.md.backup`",
+        "Outputs: 'Migrated N goals to individual files. Backup saved to .quarter.md.backup'",
+        "Idempotent: If individual files exist, skips migration",
+        "Test: Migration fixture for each format variant"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-1a",
+      "title": "Add Goal Type",
+      "description": "Add `Goal` type to entities.ts for individual goal files.",
+      "acceptanceCriteria": [
+        "`Goal` type in `packages/core/src/models/entities.ts`",
+        "Fields: id (string), slug (string), title (string), status ('active' | 'complete' | 'deferred'), quarter (string), type ('outcome' | 'milestone'), orgAlignment (string), successCriteria (string), filePath (string)",
+        "Exported via `packages/core/src/models/index.ts`"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-1b",
+      "title": "Create Goal Parser Service",
+      "description": "Create goal parser that reads individual files and falls back to legacy format.",
+      "acceptanceCriteria": [
+        "Create `packages/core/src/services/goal-parser.ts`",
+        "`parseGoals(goalsDir: string, storage: StorageAdapter): Promise<Goal[]>` — main entry point",
+        "`parseIndividualGoals()`: Glob `goals/*.md` (excluding `strategy.md`), parse frontmatter",
+        "`parseLegacyQuarterFile()`: Handle all 3 legacy formats, return Goal[]",
+        "Fallback: If no individual files found, try legacy format",
+        "Unit tests for: new format, each legacy format, empty dir, malformed files",
+        "Export via `packages/core/src/services/index.ts`"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Update Backend Goals Route",
+      "description": "Use goal-parser service instead of inline parsing. Maintain API response shape.",
+      "acceptanceCriteria": [
+        "Import `parseGoals` from `@arete/core`",
+        "Replace inline `parseQuarterOutcomes` with service call",
+        "`/api/goals/quarter` returns exact same shape: `{ outcomes: QuarterOutcome[], quarter: string, found: boolean }`",
+        "Add `/api/goals/list` endpoint returning `Goal[]` with full metadata",
+        "Fix existing test failures (format mismatch documented in LEARNINGS.md)",
+        "Add integration test with real filesystem (temp dir)",
+        "Test: Response shape assertion for backward compat"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2.5",
+      "title": "Update CLI Seed",
+      "description": "Scaffold new goal structure for new workspaces.",
+      "acceptanceCriteria": [
+        "Modify `packages/cli/src/commands/seed.ts`",
+        "Create individual goal files instead of `quarter.md`",
+        "Example goal: `goals/YYYY-Q1-1-example-outcome.md` with frontmatter",
+        "If `quarter.md` exists, don't overwrite (backward compat)",
+        "Seed fixture updated"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "9c5b1b5"
+    },
+    {
+      "id": "task-3",
+      "title": "Update Context Service",
+      "description": "Include individual goal files in context injection.",
+      "acceptanceCriteria": [
+        "Modify `packages/core/src/services/context.ts`",
+        "Glob `goals/*.md` for goal files (excluding `strategy.md`)",
+        "Fallback: Include `goals/quarter.md` if no individual files found",
+        "Category: `goals` for all goal files",
+        "Test: 'Only quarter.md exists' scenario",
+        "Test: 'Individual files only' scenario",
+        "Test: 'Mixed format' scenario"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Update Quarter-Plan Skill",
+      "description": "Write individual goal files instead of single quarter.md.",
+      "acceptanceCriteria": [
+        "Modify `packages/runtime/skills/quarter-plan/SKILL.md`",
+        "Step 3 writes individual files: `goals/YYYY-Qn-N-title-slug.md`",
+        "Frontmatter structure matches `Goal` type",
+        "Update template for individual file format",
+        "Remove `quarter.md` writing (migration creates it)",
+        "Document: 'Individual files created for each outcome'"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Update Goals-Alignment Skill",
+      "description": "Read individual goal files for alignment view.",
+      "acceptanceCriteria": [
+        "Modify `packages/runtime/skills/goals-alignment/SKILL.md`",
+        "Step 1 reads individual files: `goals/*.md` (excluding strategy.md)",
+        "Build alignment from frontmatter `orgAlignment` field",
+        "Maintain same output format (alignment table)",
+        "Graceful fallback: If no individual files, read `quarter.md`"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "c326147"
+    },
+    {
+      "id": "task-6",
+      "title": "Update Week-Plan and Daily-Plan Skills",
+      "description": "Read goals from individual files for context.",
+      "acceptanceCriteria": [
+        "Modify `packages/runtime/skills/week-plan/SKILL.md`",
+        "Modify `packages/runtime/skills/daily-plan/SKILL.md`",
+        "Step 1 reads individual goal files: `goals/*.md`",
+        "Link priorities to goal slugs (e.g., `Advances: Q1-2`)",
+        "Graceful fallback: If no individual files, read `quarter.md`",
+        "Update references section"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Update Week-Review and Prepare-Meeting-Agenda Skills",
+      "description": "Read goals from individual files.",
+      "acceptanceCriteria": [
+        "Modify `packages/runtime/skills/week-review/SKILL.md`",
+        "Modify `packages/runtime/skills/prepare-meeting-agenda/SKILL.md`",
+        "Read individual goal files for context",
+        "Graceful fallback to `quarter.md`",
+        "Update references section"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Migration Guide and Changelog",
+      "description": "Document the migration for users.",
+      "acceptanceCriteria": [
+        "Update `arete update` output to show migration status",
+        "Add migration instructions to user workspace (if applicable)",
+        "Update AGENTS.md if skill triggers change",
+        "Add memory entry for goals refactor"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-17T23:30:00Z",
+    "totalTasks": 11,
+    "completedTasks": 2,
+    "failedTasks": 0
+  }
+}

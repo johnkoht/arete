@@ -111,7 +111,7 @@ Build the best product OS for PM teams.
 
 // ── GET /quarter ──────────────────────────────────────────────────────────────
 
-describe('GET /quarter — file not found', () => {
+describe('GET /quarter — no goals directory', () => {
   let tmpDir: string;
 
   before(async () => {
@@ -123,7 +123,7 @@ describe('GET /quarter — file not found', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('returns found=false when quarter.md does not exist', async () => {
+  it('returns found=false when no goals exist', async () => {
     const router = createGoalsRouter(tmpDir);
     const { status, json } = await req(router, 'GET', '/quarter');
     assert.equal(status, 200);
@@ -134,31 +134,42 @@ describe('GET /quarter — file not found', () => {
   });
 });
 
-describe('GET /quarter — file with outcomes', () => {
+describe('GET /quarter — individual goal files (new format)', () => {
   let tmpDir: string;
 
-  const QUARTER_MD = `# Q1 2026 Goals
+  // New format: individual goal files with frontmatter
+  // Note: YAML values containing colons must be quoted
+  const GOAL_1 = `---
+id: Q1-1
+title: Ship onboarding v2
+quarter: 2026-Q1
+status: active
+type: outcome
+successCriteria: "Drop-off reduced by 50%"
+orgAlignment: "Pillar 1: User Growth"
+---
 
-**Quarter**: 2026-Q1
+This is the goal body with details.
+`;
 
-## Outcomes
+  const GOAL_2 = `---
+id: Q1-2
+title: Launch API v3
+quarter: 2026-Q1
+status: active
+type: outcome
+successCriteria: "200 API customers activated"
+orgAlignment: "Pillar 2: Platform"
+---
 
-### Q1-1 Ship onboarding v2
-
-**Success criteria**: Drop-off reduced by 50%
-**Org alignment**: Pillar 1: User Growth
-
-### Q1-2 Launch API v3
-
-**Success criteria**: 200 API customers activated
-**Org alignment**: Pillar 2: Platform
-
+API v3 launch details.
 `;
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-quarter-'));
     await mkdir(join(tmpDir, 'goals'), { recursive: true });
-    await writeFile(join(tmpDir, 'goals', 'quarter.md'), QUARTER_MD, 'utf8');
+    await writeFile(join(tmpDir, 'goals', 'ship-onboarding-v2.md'), GOAL_1, 'utf8');
+    await writeFile(join(tmpDir, 'goals', 'launch-api-v3.md'), GOAL_2, 'utf8');
   });
 
   after(async () => {
@@ -184,18 +195,22 @@ describe('GET /quarter — file with outcomes', () => {
     const { status, json } = await req(router, 'GET', '/quarter');
     assert.equal(status, 200);
     const body = json as { outcomes: Array<{ id: string; title: string }> };
-    assert.equal(body.outcomes[0]?.id, 'Q1-1');
-    assert.equal(body.outcomes[0]?.title, 'Ship onboarding v2');
-    assert.equal(body.outcomes[1]?.id, 'Q1-2');
-    assert.equal(body.outcomes[1]?.title, 'Launch API v3');
+    // Goals may be in any order, so find by id
+    const goal1 = body.outcomes.find(o => o.id === 'Q1-1');
+    const goal2 = body.outcomes.find(o => o.id === 'Q1-2');
+    assert.ok(goal1, 'Q1-1 should exist');
+    assert.equal(goal1?.title, 'Ship onboarding v2');
+    assert.ok(goal2, 'Q1-2 should exist');
+    assert.equal(goal2?.title, 'Launch API v3');
   });
 
   it('parses success criteria', async () => {
     const router = createGoalsRouter(tmpDir);
     const { status, json } = await req(router, 'GET', '/quarter');
     assert.equal(status, 200);
-    const body = json as { outcomes: Array<{ successCriteria: string }> };
-    assert.equal(body.outcomes[0]?.successCriteria, 'Drop-off reduced by 50%');
+    const body = json as { outcomes: Array<{ id: string; successCriteria: string }> };
+    const goal1 = body.outcomes.find(o => o.id === 'Q1-1');
+    assert.equal(goal1?.successCriteria, 'Drop-off reduced by 50%');
   });
 
   it('extracts quarter label', async () => {
@@ -204,6 +219,160 @@ describe('GET /quarter — file with outcomes', () => {
     assert.equal(status, 200);
     const body = json as { quarter: string };
     assert.equal(body.quarter, '2026-Q1');
+  });
+
+  it('response shape matches QuarterOutcome contract', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/quarter');
+    assert.equal(status, 200);
+    const body = json as {
+      outcomes: unknown[];
+      quarter: string;
+      found: boolean;
+    };
+    // Verify response shape has exactly the expected properties
+    assert.deepEqual(Object.keys(body).sort(), ['found', 'outcomes', 'quarter']);
+    
+    // Verify each outcome has exactly the expected properties
+    for (const outcome of body.outcomes) {
+      const outcomeKeys = Object.keys(outcome as Record<string, unknown>).sort();
+      assert.deepEqual(outcomeKeys, ['id', 'orgAlignment', 'successCriteria', 'title']);
+    }
+  });
+});
+
+describe('GET /quarter — legacy quarter.md format', () => {
+  let tmpDir: string;
+
+  // Legacy Format B: ### Qn-N Title with **Success criteria**: and **Org alignment**:
+  const QUARTER_MD = `# Q1 2026 Goals
+
+**Quarter**: 2026-Q1
+
+## Outcomes
+
+### Q1-1 Ship onboarding v2
+
+**Success criteria**: Drop-off reduced by 50%
+**Org alignment**: Pillar 1: User Growth
+
+### Q1-2 Launch API v3
+
+**Success criteria**: 200 API customers activated
+**Org alignment**: Pillar 2: Platform
+
+`;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-legacy-quarter-'));
+    await mkdir(join(tmpDir, 'goals'), { recursive: true });
+    await writeFile(join(tmpDir, 'goals', 'quarter.md'), QUARTER_MD, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('parses legacy quarter.md format', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/quarter');
+    assert.equal(status, 200);
+    const body = json as {
+      found: boolean;
+      outcomes: Array<{ id: string; title: string; successCriteria: string; orgAlignment: string }>;
+      quarter: string;
+    };
+    assert.equal(body.found, true);
+    assert.equal(body.outcomes.length, 2);
+    assert.equal(body.quarter, '2026-Q1');
+    
+    // Verify parsing of legacy format fields
+    const goal1 = body.outcomes.find(o => o.id === 'Q1-1');
+    assert.ok(goal1);
+    assert.equal(goal1?.title, 'Ship onboarding v2');
+    assert.equal(goal1?.successCriteria, 'Drop-off reduced by 50%');
+    assert.equal(goal1?.orgAlignment, 'Pillar 1: User Growth');
+  });
+});
+
+// ── GET /list ─────────────────────────────────────────────────────────────────
+
+describe('GET /list — returns full Goal metadata', () => {
+  let tmpDir: string;
+
+  // Note: YAML values containing colons must be quoted
+  const GOAL = `---
+id: Q1-1
+title: Ship onboarding v2
+quarter: 2026-Q1
+status: active
+type: outcome
+successCriteria: "Drop-off reduced by 50%"
+orgAlignment: "Pillar 1: User Growth"
+---
+
+Goal body content.
+`;
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-list-'));
+    await mkdir(join(tmpDir, 'goals'), { recursive: true });
+    await writeFile(join(tmpDir, 'goals', 'ship-onboarding-v2.md'), GOAL, 'utf8');
+  });
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns full Goal[] with all metadata', async () => {
+    const router = createGoalsRouter(tmpDir);
+    const { status, json } = await req(router, 'GET', '/list');
+    assert.equal(status, 200);
+    const body = json as {
+      found: boolean;
+      goals: Array<{
+        id: string;
+        slug: string;
+        title: string;
+        status: string;
+        quarter: string;
+        type: string;
+        orgAlignment: string;
+        successCriteria: string;
+        filePath: string;
+        body?: string;
+      }>;
+    };
+    assert.equal(body.found, true);
+    assert.equal(body.goals.length, 1);
+    
+    const goal = body.goals[0];
+    assert.ok(goal);
+    assert.equal(goal.id, 'Q1-1');
+    assert.equal(goal.slug, 'ship-onboarding-v2');
+    assert.equal(goal.title, 'Ship onboarding v2');
+    assert.equal(goal.status, 'active');
+    assert.equal(goal.quarter, '2026-Q1');
+    assert.equal(goal.type, 'outcome');
+    assert.equal(goal.orgAlignment, 'Pillar 1: User Growth');
+    assert.equal(goal.successCriteria, 'Drop-off reduced by 50%');
+    assert.ok(goal.filePath.endsWith('ship-onboarding-v2.md'));
+    assert.equal(goal.body, 'Goal body content.');
+  });
+
+  it('returns found=false when no goals exist', async () => {
+    const emptyDir = await mkdtemp(join(tmpdir(), 'arete-goals-test-list-empty-'));
+    await mkdir(join(emptyDir, 'goals'), { recursive: true });
+    
+    const router = createGoalsRouter(emptyDir);
+    const { status, json } = await req(router, 'GET', '/list');
+    assert.equal(status, 200);
+    const body = json as { found: boolean; goals: unknown[] };
+    assert.equal(body.found, false);
+    assert.ok(Array.isArray(body.goals));
+    assert.equal(body.goals.length, 0);
+    
+    await rm(emptyDir, { recursive: true, force: true });
   });
 });
 

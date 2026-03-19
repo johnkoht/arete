@@ -26,4 +26,7 @@ export { computeCommitmentMomentum, computeRelationshipMomentum } from './moment
 export type { CommitmentBucket, CommitmentMomentumItem, CommitmentMomentum, RelationshipBucket, RelationshipMomentumItem, RelationshipMomentum, } from './momentum.js';
 export { computeRelationshipHealth } from './person-health.js';
 export type { HealthIndicator, RelationshipHealth } from './person-health.js';
+export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
+export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
+export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
 //# sourceMappingURL=index.d.ts.map

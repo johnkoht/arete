@@ -24,4 +24,8 @@ export { detectCrossPersonPatterns } from './patterns.js';
 export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
 // Person health
 export { computeRelationshipHealth } from './person-health.js';
+// Goal migration
+export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
+// Goal parsing
+export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
 //# sourceMappingURL=index.js.map

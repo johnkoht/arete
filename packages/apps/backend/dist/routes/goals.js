@@ -1,50 +1,35 @@
 /**
  * Goals routes — /api/goals endpoints.
  * Reads goals/strategy.md, goals/quarter.md, now/week.md.
+ *
+ * Uses parseGoals service from @arete/core for goal parsing,
+ * which supports both individual goal files (with frontmatter)
+ * and legacy quarter.md formats.
  */
 import { Hono } from 'hono';
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
+import { parseGoals, FileStorageAdapter } from '@arete/core';
 /**
- * Parse quarter.md — extract goals from `## Goal N: Title` sections.
- * Looks for ### Key Outcomes subsections with checkbox items.
+ * Convert a Goal entity to the QuarterOutcome type used by the web UI.
+ * Maintains backward compatibility with the existing API response shape.
  */
-function parseQuarterOutcomes(content) {
-    const outcomes = [];
-    // Match ## Goal N: Title sections
-    const goalPattern = /^##\s+Goal\s+(\d+):\s*(.+)$/gm;
-    let match;
-    while ((match = goalPattern.exec(content)) !== null) {
-        const goalNum = match[1] ?? '';
-        const title = (match[2] ?? '').trim();
-        // Extract the content for this goal (until next ## Goal or end)
-        const startIdx = match.index + match[0].length;
-        const restContent = content.slice(startIdx);
-        const nextGoal = /^##\s+Goal\s+\d+:/m.exec(restContent);
-        const endIdx = nextGoal ? startIdx + nextGoal.index : content.length;
-        const body = content.slice(startIdx, endIdx);
-        // Parse Strategic Pillar
-        const pillarMatch = /\*\*Strategic Pillar\*\*:\s*(.+)$/im.exec(body);
-        const orgAlignment = pillarMatch ? (pillarMatch[1] ?? '').trim() : '';
-        // Extract key outcomes (checkbox items under ### Key Outcomes)
-        const keyOutcomesMatch = /###\s+Key Outcomes\s*\n([\s\S]*?)(?=\n###|\n##|$)/i.exec(body);
-        let successCriteria = '';
-        if (keyOutcomesMatch) {
-            const outcomeLines = keyOutcomesMatch[1]
-                .split('\n')
-                .filter(line => /^[-*]\s+\[.\]/.test(line.trim()))
-                .map(line => line.replace(/^[-*]\s+\[.\]\s*/, '').trim())
-                .filter(Boolean);
-            successCriteria = outcomeLines.join('; ');
-        }
-        outcomes.push({
-            id: `Goal ${goalNum}`,
-            title,
-            successCriteria,
-            orgAlignment,
-        });
-    }
-    return outcomes;
+function goalToOutcome(goal) {
+    return {
+        id: goal.id,
+        title: goal.title,
+        successCriteria: goal.successCriteria,
+        orgAlignment: goal.orgAlignment,
+    };
+}
+/**
+ * Extract quarter label from goals array.
+ * Uses the quarter from the first goal, or returns empty string.
+ */
+function extractQuarterFromGoals(goals) {
+    if (goals.length === 0)
+        return '';
+    return goals[0]?.quarter ?? '';
 }
 /**
  * Parse week.md — extract priorities (checklist-style or numbered headings).
@@ -130,19 +115,30 @@ export function createGoalsRouter(workspaceRoot) {
             return c.json({ title: 'Strategy', content: '', preview: '', found: false });
         }
     });
-    // GET /api/goals/quarter — read goals/quarter.md, parse outcomes
+    // GET /api/goals/quarter — parse goals from goals/ directory, return as outcomes
     app.get('/quarter', async (c) => {
-        const filePath = join(workspaceRoot, 'goals', 'quarter.md');
+        const goalsDir = join(workspaceRoot, 'goals');
+        const storage = new FileStorageAdapter();
         try {
-            const content = await fs.readFile(filePath, 'utf8');
-            const outcomes = parseQuarterOutcomes(content);
-            // Extract quarter label
-            const quarterMatch = /\*\*Quarter\*\*:\s*(.+)$/im.exec(content);
-            const quarter = quarterMatch ? (quarterMatch[1] ?? '').trim() : '';
-            return c.json({ outcomes, quarter, found: true });
+            const goals = await parseGoals(goalsDir, storage);
+            const outcomes = goals.map(goalToOutcome);
+            const quarter = extractQuarterFromGoals(goals);
+            return c.json({ outcomes, quarter, found: goals.length > 0 });
         }
         catch {
             return c.json({ outcomes: [], quarter: '', found: false });
+        }
+    });
+    // GET /api/goals/list — return full Goal[] with all metadata
+    app.get('/list', async (c) => {
+        const goalsDir = join(workspaceRoot, 'goals');
+        const storage = new FileStorageAdapter();
+        try {
+            const goals = await parseGoals(goalsDir, storage);
+            return c.json({ goals, found: goals.length > 0 });
+        }
+        catch {
+            return c.json({ goals: [], found: false });
         }
     });
     // GET /api/goals/week — read now/week.md, parse priorities

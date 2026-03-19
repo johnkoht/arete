@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, } from '@arete/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -637,9 +637,111 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
+        // --------------------------------------------------------------------------
+        // Goal linking: prompt user to link action items to goals
+        // --------------------------------------------------------------------------
+        let selectedGoalSlug;
+        const approvedActionItemIds = approvedIds.filter((id) => id.startsWith('ai_'));
+        if (approvedActionItemIds.length > 0 && !opts.json) {
+            // Load active goals
+            const goalsDir = join(root, 'goals');
+            const allGoals = await parseGoals(goalsDir, services.storage);
+            const activeGoals = allGoals.filter((g) => g.status === 'active');
+            if (activeGoals.length === 0) {
+                info('No active goals found, skipping goal linking');
+            }
+            else if (activeGoals.length <= 2) {
+                // Inline prompt for 1-2 goals
+                const { confirm } = await import('@inquirer/prompts');
+                for (const goal of activeGoals) {
+                    const confirmed = await confirm({
+                        message: `Link action items to ${goal.id} "${goal.title}"?`,
+                        default: false,
+                    });
+                    if (confirmed) {
+                        selectedGoalSlug = goal.slug;
+                        break;
+                    }
+                }
+            }
+            else {
+                // Numbered list for 3+ goals
+                const { select } = await import('@inquirer/prompts');
+                const choices = [
+                    ...activeGoals.map((g) => ({
+                        name: `${g.id} ${g.title}`,
+                        value: g.slug,
+                    })),
+                    { name: 'None', value: '__none__' },
+                ];
+                const result = await select({
+                    message: 'Link action items to a goal:',
+                    choices,
+                });
+                if (result !== '__none__') {
+                    selectedGoalSlug = result;
+                }
+            }
+        }
         // Commit approved items
         const memoryDir = join(root, '.arete', 'memory', 'items');
         await commitApprovedItems(services.storage, meetingPath, memoryDir);
+        // --------------------------------------------------------------------------
+        // Sync commitments with goal linking
+        // --------------------------------------------------------------------------
+        if (approvedActionItemIds.length > 0) {
+            // Re-read meeting to get approved items with owner info
+            const approvedContent = await services.storage.read(meetingPath);
+            const { frontmatter: approvedFm } = extractFrontmatter(approvedContent ?? '');
+            // Get attendee slugs from frontmatter
+            const attendeeSlugs = extractAttendeeSlugs(approvedFm);
+            // Get owner metadata from original staged sections
+            const ownerMap = parseStagedItemOwner(updatedContent);
+            const stagedItemEdits = (frontmatter['staged_item_edits'] ?? {});
+            // Build PersonActionItem array for each person
+            const personItemsMap = new Map();
+            // Get meeting date for action items
+            const meetingDate = typeof approvedFm['date'] === 'string'
+                ? approvedFm['date'].slice(0, 10)
+                : new Date().toISOString().slice(0, 10);
+            for (const itemId of approvedActionItemIds) {
+                const item = stagedSections.actionItems.find((ai) => ai.id === itemId);
+                if (!item)
+                    continue;
+                const ownerMeta = ownerMap[itemId];
+                const text = stagedItemEdits[itemId] ?? item.text;
+                const ownerSlug = ownerMeta?.ownerSlug ?? item.ownerSlug;
+                const direction = ownerMeta?.direction ?? item.direction ?? 'i_owe_them';
+                const counterpartySlug = ownerMeta?.counterpartySlug ?? item.counterpartySlug;
+                // Determine the person slug for this commitment (the other party)
+                // If I owe them, the person is the counterparty. If they owe me, the person is the owner.
+                const personSlug = direction === 'i_owe_them' ? counterpartySlug : ownerSlug;
+                if (!personSlug)
+                    continue;
+                // Compute hash for dedup (matches CommitmentsService)
+                const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
+                const { createHash } = await import('node:crypto');
+                const hash = createHash('sha256')
+                    .update(`${normalized}${personSlug}${direction}`)
+                    .digest('hex');
+                const actionItem = {
+                    text,
+                    direction,
+                    source: `${slug}.md`,
+                    date: meetingDate,
+                    hash,
+                    stale: false,
+                    ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
+                };
+                const existing = personItemsMap.get(personSlug) ?? [];
+                existing.push(actionItem);
+                personItemsMap.set(personSlug, existing);
+            }
+            // Sync to commitments service
+            if (personItemsMap.size > 0) {
+                await services.commitments.sync(personItemsMap);
+            }
+        }
         // Refresh QMD index unless --skip-qmd
         let qmdResult;
         if (!opts.skipQmd) {
@@ -662,6 +764,7 @@ export function registerMeetingCommands(program) {
                 decisions: (approvedItems?.decisions?.length ?? 0) > 0,
                 learnings: (approvedItems?.learnings?.length ?? 0) > 0,
             },
+            ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         if (opts.json) {
@@ -674,7 +777,8 @@ export function registerMeetingCommands(program) {
         const decisionCount = approvedItems?.decisions?.length ?? 0;
         const learningCount = approvedItems?.learnings?.length ?? 0;
         if (actionCount > 0) {
-            listItem('Action items', `${actionCount}`);
+            const goalNote = selectedGoalSlug ? ` (linked to ${selectedGoalSlug})` : '';
+            listItem('Action items', `${actionCount}${goalNote}`);
         }
         if (decisionCount > 0) {
             listItem('Decisions', `${decisionCount} (written to memory)`);

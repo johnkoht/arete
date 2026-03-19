@@ -26,7 +26,7 @@ export { getPackageRoot } from './package-root.js';
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export { getCalendarProvider, } from './integrations/calendar/index.js';
 export { saveMeetingFile, meetingFilename, } from './integrations/meetings.js';
-export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
+export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 // Service container factory
 export { createServices } from './factory.js';
