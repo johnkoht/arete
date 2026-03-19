@@ -272,6 +272,99 @@ date: "2026-03-04"
   });
 
   // ---------------------------------------------------------------------------
+  // Owner-only notation (no counterparty)
+  // ---------------------------------------------------------------------------
+
+  describe('owner-only notation', () => {
+    it('extracts item when person is the owner', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Complete the quarterly report (@john-smith)`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].text, 'Complete the quarterly report');
+      assert.equal(items[0].direction, 'i_owe_them');
+    });
+
+    it('strips owner-only notation from text', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Review proposal (@sarah-chen)`;
+
+      const items = parseActionItemsFromMeeting(content, 'sarah-chen', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].text, 'Review proposal');
+      assert.ok(!items[0].text.includes('@'));
+      assert.ok(!items[0].text.includes('('));
+    });
+
+    it('returns empty for person not in owner-only notation', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Complete the quarterly report (@john-smith)`;
+
+      // sarah-chen is not the owner, and there's no counterparty
+      const items = parseActionItemsFromMeeting(content, 'sarah-chen', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 0);
+    });
+
+    it('handles owner-only without @ prefix', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Action Items
+
+- [ ] Send the report (john-smith)`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].direction, 'i_owe_them');
+    });
+
+    it('handles multiple items with mixed notation', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Approved Action Items
+
+- [ ] Review proposal (@john-smith)
+- [ ] Send feedback (@sarah-chen → @john-smith)
+- [ ] Complete report (@sarah-chen)`;
+
+      // For john-smith: should get 2 items (owner of first, counterparty of second)
+      const johnItems = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(johnItems.length, 2);
+      
+      const reviewItem = johnItems.find(i => i.text.includes('Review'));
+      assert.ok(reviewItem);
+      assert.equal(reviewItem.direction, 'i_owe_them');
+      
+      const feedbackItem = johnItems.find(i => i.text.includes('feedback'));
+      assert.ok(feedbackItem);
+      assert.equal(feedbackItem.direction, 'they_owe_me');
+
+      // For sarah-chen: should get 2 items (owner of second and third)
+      const sarahItems = parseActionItemsFromMeeting(content, 'sarah-chen', 'john-smith', 'meeting.md');
+      assert.equal(sarahItems.length, 2);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Direction determination
   // ---------------------------------------------------------------------------
 

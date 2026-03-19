@@ -128,6 +128,13 @@ function buildArrowPattern(): RegExp {
 const ARROW_PATTERN = buildArrowPattern();
 
 /**
+ * Owner-only notation pattern: (@slug) without arrow or counterparty.
+ * Used when an action item has an owner but no explicit counterparty.
+ * Example: "Review the proposal (@john-koht)"
+ */
+const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*\)$/i;
+
+/**
  * Parse a single action item line.
  *
  * Expected format:
@@ -152,7 +159,7 @@ function parseActionItemLine(line: string): ParsedLine {
   const completed = checkboxMatch[1].toLowerCase() === 'x';
   let itemText = checkboxMatch[2].trim();
 
-  // Try to extract arrow notation
+  // Try to extract arrow notation (owner → counterparty)
   const arrowMatch = itemText.match(ARROW_PATTERN);
 
   let ownerSlug: string | null = null;
@@ -165,6 +172,16 @@ function parseActionItemLine(line: string): ParsedLine {
     itemText = itemText.replace(ARROW_PATTERN, '').trim();
     // Clean up any trailing/leading punctuation artifacts
     itemText = itemText.replace(/\s*,?\s*$/, '').trim();
+  } else {
+    // Try owner-only notation (@slug) without counterparty
+    const ownerOnlyMatch = itemText.match(OWNER_ONLY_PATTERN);
+    if (ownerOnlyMatch) {
+      ownerSlug = ownerOnlyMatch[1].toLowerCase();
+      // Strip the notation from text for cleaner display
+      itemText = itemText.replace(OWNER_ONLY_PATTERN, '').trim();
+      // Clean up any trailing/leading punctuation artifacts
+      itemText = itemText.replace(/\s*,?\s*$/, '').trim();
+    }
   }
 
   if (!itemText) return null;
@@ -334,6 +351,16 @@ export function parseActionItemsFromMeeting(
         direction = 'they_owe_me';
         relevant = true;
       }
+    } else if (parsed.ownerSlug) {
+      // Owner-only notation (@owner) without counterparty
+      if (parsed.ownerSlug === personSlug) {
+        // Person is the owner → they own this action item
+        // From person's perspective: i_owe_them
+        direction = 'i_owe_them';
+        relevant = true;
+      }
+      // If person is not the owner, item is not relevant to them
+      // (no counterparty means no one else is explicitly involved)
     } else {
       // No arrow notation — use owner-name heuristics
       const inferred = inferDirectionFromText(parsed.text, personSlug, ownerSlug);

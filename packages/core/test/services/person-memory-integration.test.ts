@@ -76,9 +76,9 @@ describe('refreshPersonMemory — stance and action item integration', () => {
 
   it('returns zero counts for stances/actionItems when callLLM not provided', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -98,9 +98,9 @@ Jane Doe asked about deployment timing.
 
   it('extracts stances when callLLM is provided', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -128,9 +128,9 @@ Jane Doe: I think we should use Kubernetes for deployment.
 
   it('caches LLM calls — same meeting+person not called twice for stances', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -157,9 +157,9 @@ Jane Doe discussed the roadmap.
 
   it('deduplicates stances by topic+direction across meetings', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync 1"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -197,9 +197,9 @@ Jane Doe mentioned Kubernetes again.
 
   it('deduplicates stances case-insensitively — "React" and "react" are the same topic', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync 1"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -242,9 +242,9 @@ Jane Doe really likes react for front-end.
   it('extracts action items with direction classification from ## Action Items section', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -290,9 +290,9 @@ attendee_ids:
   it('reads owner slug from profile.md for action item direction', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -310,9 +310,9 @@ attendee_ids:
 
   it('returns new count fields in result alongside existing fields', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -346,9 +346,9 @@ Jane Doe asked about deployment timing.
   it('handles missing profile.md gracefully — no action items extracted', async () => {
     // No profile.md written — ownerSlug is undefined, so no action items extracted
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -365,9 +365,9 @@ attendee_ids:
 
   it('handles LLM errors gracefully — returns empty stances', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -389,9 +389,9 @@ Jane Doe discussed plans.
   it('uses separate stance cache keys for different people on same meeting', async () => {
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
     writePerson(tmpDir, 'internal', 'bob-smith', 'Bob Smith');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
   - bob-smith
@@ -445,9 +445,9 @@ Bob Smith opposes the migration plan.
   it('parses action items from ## Action Items section into commitments', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -508,9 +508,9 @@ Existing note.
     );
 
     // Write a meeting that does NOT have ## Action Items section
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -537,9 +537,9 @@ Jane Doe asked about timeline.
   it('parsing-based extraction does not require callLLM', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -558,9 +558,9 @@ attendee_ids:
   it('handles arrow notation variants correctly', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
@@ -581,9 +581,9 @@ attendee_ids:
   it('infers direction from text when no arrow notation present', async () => {
     writeProfile(tmpDir, 'John Owner');
     writePerson(tmpDir, 'customers', 'jane-doe', 'Jane Doe');
-    writeMeeting(tmpDir, '2026-02-10-sync.md', `---
+    writeMeeting(tmpDir, '2026-03-15-sync.md', `---
 title: "Sync"
-date: "2026-02-10"
+date: "2026-03-15"
 attendee_ids:
   - jane-doe
 ---
