@@ -12,7 +12,7 @@ intelligence:
 
 # Quarter Plan Skill
 
-Guide the PM through defining 3–5 quarter outcomes, success criteria, and alignment to org strategy. Output is `goals/quarter.md`.
+Guide the PM through defining 3–5 quarter outcomes, success criteria, and alignment to org strategy. Individual goal files are created for each outcome.
 
 ## When to Use
 
@@ -27,7 +27,7 @@ Guide the PM through defining 3–5 quarter outcomes, success criteria, and alig
 ### 1. Gather Context
 
 - **Read** `goals/strategy.md` — org pillars, OKRs, and strategic direction.
-- **Read** `goals/quarter.md` if it exists (may have prior quarter content) to carry forward themes or unfinished outcomes.
+- **Read** existing goal files in `goals/` if any exist (e.g., `goals/2026-Q1-*.md`) to carry forward themes or unfinished outcomes.
 
 ### 2. Guide to 3–5 Outcomes
 
@@ -36,29 +36,35 @@ If your org has a vision, treat it as a *picture of a better place*. Check that 
 Ask the PM to define **3–5 outcomes** for the quarter. For each outcome capture:
 
 - **Title** — Short, outcome-oriented (e.g. "Ship onboarding v2", "Complete discovery for X").
-- **Success criteria** — 1–2 sentences: how we know it’s done.
+- **Success criteria** — 1–2 sentences: how we know it's done.
 - **Org alignment** — Which pillar or OKR from `goals/strategy.md` this supports (e.g. "Pillar 2: Retention", "O1-KR2").
 
-### 3. Write Quarter File
+### 3. Write Individual Goal Files
 
 #### Quick Pre-Mortem
 
 Use the `light_pre_mortem` pattern before locking outcomes.
 
-- **File**: `goals/quarter.md`.
-- **Structure**: Run this command and use its output as the quarter file structure. Do not add sections from elsewhere:
-  ```
-  arete template resolve --skill quarter-plan --variant quarter-goals
-  ```
+#### File Creation
 
-  Template sections:
-  - Quarter dates
-  - 3–5 outcomes with success criteria and org pillar/OKR link
-  - **Alignment table**: My goal → Org pillar/OKR (so roll-up and review are easy).
+Create one file per outcome in `goals/`. Individual files are created for each outcome.
+
+**Filename format**: `goals/YYYY-Qn-N-title-slug.md`
+- Example: `goals/2026-Q1-1-ship-onboarding-v2.md`
+
+**File structure**: Run this command and use its output as the individual file structure:
+```
+arete template resolve --skill quarter-plan --variant quarter-goals
+```
+
+Each file has:
+- YAML frontmatter with `id`, `title`, `status`, `quarter`, `type`, `orgAlignment`, `successCriteria`
+- Markdown body for notes, progress, and details
 
 ### 4. Confirm and Close
 
 - Summarize the quarter outcomes and alignment.
+- Show the list of created files.
 - Suggest next steps: **goals-alignment** to view the alignment view, **week-plan** when ready to plan the first week.
 
 ## Frameworks
@@ -91,10 +97,14 @@ Common mistakes to avoid:
 ## References
 
 - **Org strategy**: `goals/strategy.md`
-- **Output**: `goals/quarter.md`
-- **Template**: `templates/plans/quarter-goals.md` (override) or `.agents/skills/quarter-plan/templates/quarter-goals.md` (default)
+- **Output**: Individual files in `goals/` (e.g., `goals/2026-Q1-1-ship-onboarding-v2.md`)
+- **Template**: `templates/plans/quarter-goals.md` (override) or skill default
+
+## Migration
+
+Existing workspaces with `goals/quarter.md` can continue using it. The migration tool (`arete update`) will convert existing quarter files to individual goal files. New quarter planning sessions create individual files directly.
 
 ## Error Handling
 
-- If `goals/strategy.md` is missing or sparse, still create the quarter file; note "Org alignment TBD" and suggest the user fill in context later.
+- If `goals/strategy.md` is missing or sparse, still create goal files; note "Org alignment TBD" and suggest the user fill in context later.
 - If the PM has more than 5 outcomes, suggest grouping or moving lower-priority items to "stretch" or next quarter.

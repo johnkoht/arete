@@ -1,26 +1,24 @@
-# Quarter Goals — [YYYY-Qn]
+---
+id: "Q1-1"
+title: "Ship onboarding v2"
+status: active
+quarter: "2026-Q1"
+type: outcome
+orgAlignment: "Pillar 2: Retention"
+successCriteria: "90% completion rate"
+---
 
-**Quarter**: [Start date] – [End date]
+# Ship onboarding v2
 
-## Outcomes (3–5)
+## Notes
 
-### [Qn-1] [Outcome title]
-- **Success criteria**: [1–2 sentences]
-- **Org alignment**: [Pillar / OKR from context/goals-strategy.md]
+- Key context or background for this goal
 
-### [Qn-2] [Outcome title]
-- **Success criteria**:
-- **Org alignment**:
+## Progress
 
-(Add more as needed.)
+- [ ] Milestone or checkpoint
+- [ ] Another milestone
 
-## Alignment table
+## Dependencies
 
-| My goal | Org pillar / OKR |
-|--------|------------------|
-| [Qn-1] | |
-| [Qn-2] | |
-
-## Notes / milestones
-
--
+- Related goals, blockers, or external dependencies
