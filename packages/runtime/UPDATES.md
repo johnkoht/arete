@@ -52,6 +52,8 @@ Run `arete update` to migrate existing `quarter.md` to individual files. Your or
 
 **Goals show in commitments list.** `arete commitments list` now shows goal associations: `[Q1-2] Send proposal to Acme`
 
+**Web UI uses goals too.** In `arete view`, the meeting review screen now shows a goal picker (instead of project picker) for action items. Select which goal each action item supports.
+
 ---
 
 ## Week of March 16, 2026
