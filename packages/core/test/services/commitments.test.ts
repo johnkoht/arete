@@ -629,6 +629,96 @@ describe('CommitmentsService pruning', () => {
 // goalSlug serialization
 // ---------------------------------------------------------------------------
 
+describe('CommitmentsService.sync() — goalSlug', () => {
+  it('copies goalSlug from PersonActionItem to Commitment', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const hash = computeHash('Deliver Q1 roadmap', 'alice', 'i_owe_them');
+    const item: PersonActionItem = {
+      text: 'Deliver Q1 roadmap',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash,
+      stale: false,
+      goalSlug: 'q1-roadmap',
+    };
+
+    await svc.sync(new Map([['alice', [item]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 1);
+    assert.equal(parsed.commitments[0].goalSlug, 'q1-roadmap', 'goalSlug should be copied from PersonActionItem');
+  });
+
+  it('omits goalSlug when not provided in PersonActionItem', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const hash = computeHash('Send report', 'alice', 'i_owe_them');
+    const item: PersonActionItem = {
+      text: 'Send report',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash,
+      stale: false,
+      // No goalSlug
+    };
+
+    await svc.sync(new Map([['alice', [item]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].goalSlug, undefined, 'goalSlug should be undefined when not provided');
+  });
+
+  it('different action items can have different goalSlugs', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const item1: PersonActionItem = {
+      text: 'Deliver Q1 roadmap',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash: computeHash('Deliver Q1 roadmap', 'alice', 'i_owe_them'),
+      stale: false,
+      goalSlug: 'q1-roadmap',
+    };
+
+    const item2: PersonActionItem = {
+      text: 'Fix customer issue',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash: computeHash('Fix customer issue', 'alice', 'i_owe_them'),
+      stale: false,
+      goalSlug: 'q1-customer-retention',
+    };
+
+    await svc.sync(new Map([['alice', [item1, item2]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 2);
+    
+    const roadmapCommitment = parsed.commitments.find(c => c.text === 'Deliver Q1 roadmap');
+    const customerCommitment = parsed.commitments.find(c => c.text === 'Fix customer issue');
+    
+    assert.equal(roadmapCommitment?.goalSlug, 'q1-roadmap');
+    assert.equal(customerCommitment?.goalSlug, 'q1-customer-retention');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
 describe('CommitmentsService goalSlug serialization', () => {
   it('persists and retrieves goalSlug correctly', async () => {
     const commitmentWithGoal = makeCommitment({

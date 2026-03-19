@@ -469,6 +469,15 @@ export type ApprovalAutomationResult = {
   qmdRefreshed: boolean;
   personMemoryRefreshed: string[];
   commitmentsUpdated: boolean;
+  goalSlug?: string;
+};
+
+/**
+ * Options for approving a meeting.
+ */
+export type ApproveMeetingOptions = {
+  /** Optional goal to link action items to */
+  goalSlug?: string;
 };
 
 /**
@@ -482,7 +491,8 @@ export type ApprovalAutomationResult = {
  */
 export async function approveMeeting(
   workspaceRoot: string,
-  slug: string
+  slug: string,
+  options: ApproveMeetingOptions = {}
 ): Promise<FullMeeting & { automation?: ApprovalAutomationResult }> {
   const filePath = slugToPath(workspaceRoot, slug);
   const memoryDir = join(workspaceRoot, '.arete', 'memory', 'items');
@@ -530,7 +540,9 @@ export async function approveMeeting(
     console.error('[approveMeeting] QMD refresh failed:', err);
   }
   
-  // Step 4: Refresh person memory for attendees (syncs commitments)
+  // Step 4: Sync action items to commitments with goalSlug (if provided)
+  // This runs before refreshPersonMemory so items with goalSlug are added first;
+  // refreshPersonMemory will skip them due to hash-based dedup.
   const personMemoryRefreshed: string[] = [];
   
   if (attendeeIds.length > 0) {
@@ -538,6 +550,69 @@ export async function approveMeeting(
       const services = await createServices(workspaceRoot);
       const paths = services.workspace.getPaths(workspaceRoot);
       
+      // If goalSlug provided, sync action items directly with goalSlug
+      if (options.goalSlug && meeting.approvedItems.actionItems.length > 0) {
+        const { createHash } = await import('node:crypto');
+        const meetingDate = typeof meeting.frontmatter['date'] === 'string'
+          ? meeting.frontmatter['date'].slice(0, 10)
+          : new Date().toISOString().slice(0, 10);
+        
+        // Build PersonActionItems with goalSlug for each attendee
+        const personItemsMap = new Map<string, Array<{
+          text: string;
+          direction: 'i_owe_them' | 'they_owe_me';
+          source: string;
+          date: string;
+          hash: string;
+          stale: boolean;
+          goalSlug?: string;
+        }>>();
+        
+        // Parse action items from approved list to extract owner info
+        for (const actionItemText of meeting.approvedItems.actionItems) {
+          // Parse owner notation: "Text (@owner-slug → @counterparty-slug)"
+          const ownerMatch = actionItemText.match(/\(@([a-z0-9-]+)(?:\s*→\s*@([a-z0-9-]+))?\)$/i);
+          const text = ownerMatch 
+            ? actionItemText.slice(0, actionItemText.lastIndexOf('(')).trim()
+            : actionItemText;
+          const ownerSlug = ownerMatch?.[1];
+          const counterpartySlug = ownerMatch?.[2];
+          
+          // Default direction is i_owe_them (→)
+          const direction: 'i_owe_them' | 'they_owe_me' = 'i_owe_them';
+          
+          // Determine person slug (the other party in the commitment)
+          const personSlug = direction === 'i_owe_them' ? counterpartySlug : ownerSlug;
+          if (!personSlug) continue;
+          
+          // Compute hash for dedup
+          const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
+          const hash = createHash('sha256')
+            .update(`${normalized}${personSlug}${direction}`)
+            .digest('hex');
+          
+          const actionItem = {
+            text,
+            direction,
+            source: `${slug}.md`,
+            date: meetingDate,
+            hash,
+            stale: false,
+            goalSlug: options.goalSlug,
+          };
+          
+          const existing = personItemsMap.get(personSlug) ?? [];
+          existing.push(actionItem);
+          personItemsMap.set(personSlug, existing);
+        }
+        
+        // Sync to commitments service
+        if (personItemsMap.size > 0) {
+          await services.commitments.sync(personItemsMap);
+        }
+      }
+      
+      // Step 5: Refresh person memory for attendees
       for (const personSlug of attendeeIds) {
         try {
           await services.entity.refreshPersonMemory(paths, {
@@ -562,6 +637,7 @@ export async function approveMeeting(
       qmdRefreshed,
       personMemoryRefreshed,
       commitmentsUpdated: personMemoryRefreshed.length > 0,
+      ...(options.goalSlug ? { goalSlug: options.goalSlug } : {}),
     },
   };
 }

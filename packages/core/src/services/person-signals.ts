@@ -194,6 +194,8 @@ export type PersonActionItem = {
   date: string;
   hash: string;
   stale: boolean;
+  /** Optional goal association — links action item to a quarterly goal */
+  goalSlug?: string;
 };
 
 // ---------------------------------------------------------------------------

@@ -387,6 +387,8 @@ export class CommitmentsService {
           date: item.date,
           status: 'open',
           resolvedAt: null,
+          // Copy goalSlug if present on the action item
+          ...(item.goalSlug ? { goalSlug: item.goalSlug } : {}),
         };
         toAdd.push(commitment);
         existingById.set(hash, commitment);
