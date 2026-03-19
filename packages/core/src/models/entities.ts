@@ -226,6 +226,8 @@ export type Commitment = {
   resolvedAt: string | null;
   /** Optional project association — inherited from meeting's projectSlug */
   projectSlug?: string;
+  /** Optional goal association — links commitment to a quarterly goal */
+  goalSlug?: string;
 };
 
 /** Persisted commitments file structure */

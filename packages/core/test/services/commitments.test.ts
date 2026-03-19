@@ -626,6 +626,73 @@ describe('CommitmentsService pruning', () => {
 });
 
 // ---------------------------------------------------------------------------
+// goalSlug serialization
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService goalSlug serialization', () => {
+  it('persists and retrieves goalSlug correctly', async () => {
+    const commitmentWithGoal = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Deliver Q1 roadmap',
+      goalSlug: 'q1-roadmap',
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([commitmentWithGoal])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Read it back
+    const result = await svc.listOpen();
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].goalSlug, 'q1-roadmap', 'goalSlug should be preserved');
+  });
+
+  it('handles commitments without goalSlug (backward compatibility)', async () => {
+    // Simulate an existing commitment without goalSlug field
+    const legacyCommitment = {
+      id: 'b'.repeat(64),
+      text: 'Send slides',
+      direction: 'i_owe_them',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      source: 'meeting-2026-01-15.md',
+      date: '2026-01-15',
+      status: 'open',
+      resolvedAt: null,
+      // Note: no goalSlug field
+    };
+    const store = new Map([[COMMITMENTS_PATH, JSON.stringify({ commitments: [legacyCommitment] })]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Should load without error
+    const result = await svc.listOpen();
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].goalSlug, undefined, 'goalSlug should be undefined for legacy commitments');
+  });
+
+  it('preserves goalSlug through sync operations', async () => {
+    const commitmentWithGoal = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Deliver Q1 roadmap',
+      goalSlug: 'q1-roadmap',
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([commitmentWithGoal])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Sync with empty items (triggers write without adding new items)
+    await svc.sync(new Map());
+
+    // Verify goalSlug is still there
+    const written = store.get(COMMITMENTS_PATH)!;
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].goalSlug, 'q1-roadmap', 'goalSlug should be preserved after sync');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // reconcile()
 // ---------------------------------------------------------------------------
 
