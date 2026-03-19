@@ -87,3 +87,10 @@ export type { HealthIndicator, RelationshipHealth } from './person-health.js';
 // Goal migration
 export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
 export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
+
+// Goal parsing
+export {
+  parseGoals,
+  parseIndividualGoals,
+  parseLegacyQuarterFile,
+} from './goal-parser.js';
