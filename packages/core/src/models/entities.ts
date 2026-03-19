@@ -50,6 +50,36 @@ export type Project = {
   updated?: string;
 };
 
+/** Goal status for tracking progress */
+export type GoalStatus = 'active' | 'complete' | 'deferred';
+
+/** Goal type — outcomes are measurable results, milestones are discrete achievements */
+export type GoalType = 'outcome' | 'milestone';
+
+/** Goal record (individual goal file) */
+export type Goal = {
+  /** Unique identifier (e.g., "Q1-1") */
+  id: string;
+  /** Filename-safe version of the goal */
+  slug: string;
+  /** Goal title */
+  title: string;
+  /** Current status */
+  status: GoalStatus;
+  /** Quarter this goal belongs to (e.g., "2026-Q1") */
+  quarter: string;
+  /** Type of goal */
+  type: GoalType;
+  /** How this goal aligns with org strategy */
+  orgAlignment: string;
+  /** Criteria for measuring success */
+  successCriteria: string;
+  /** Path to the goal file */
+  filePath: string;
+  /** Optional freeform content */
+  body?: string;
+};
+
 /** Candidate input for people intelligence classification */
 export type PeopleIntelligenceCandidate = {
   name?: string;
