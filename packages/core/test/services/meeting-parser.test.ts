@@ -641,6 +641,68 @@ date: 2026-03-04
       const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
       assert.equal(items[0].date, '2026-03-04');
     });
+
+    it('handles ISO 8601 date with time (e.g., from Krisp)', () => {
+      const content = `---
+date: 2026-03-18T19:30:00.000Z
+---
+
+## Action Items
+
+- [ ] Item (@john-smith → @sarah-chen)`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].date, '2026-03-18');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Section header priority
+  // ---------------------------------------------------------------------------
+
+  describe('section header priority', () => {
+    it('prefers ## Approved Action Items over ## Action Items', () => {
+      // Simulates a meeting file with both an empty ## Action Items and populated ## Approved Action Items
+      const content = `---
+date: "2026-03-18"
+---
+
+## Summary
+
+Meeting summary.
+
+## Action Items
+
+No action items captured.
+
+## Approved Action Items
+
+- [ ] Send report (@john-smith → @sarah-chen)
+- [ ] Review docs (@sarah-chen → @john-smith)
+
+## Transcript
+
+Transcript content.`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 2);
+      assert.ok(items[0].text.includes('Send report'));
+    });
+
+    it('falls back to ## Action Items when no ## Approved Action Items exists', () => {
+      const content = `---
+date: "2026-03-18"
+---
+
+## Action Items
+
+- [ ] Send report (@john-smith → @sarah-chen)`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.ok(items[0].text.includes('Send report'));
+    });
   });
 
   // ---------------------------------------------------------------------------

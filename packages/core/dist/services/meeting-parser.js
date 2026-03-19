@@ -28,14 +28,16 @@ import { createHash } from 'node:crypto';
  */
 const ARROW_VARIANTS = ['-->', '=>', '->', '→'];
 /**
- * Regex to match the ## Action Items or ## Approved Action Items section header.
- * Case-insensitive, allows for variations like "## action items" or "## Approved Action Items"
- *
- * Note: "Approved" prefix is optional — matches both:
- * - ## Action Items (from manual entry or Krisp import)
- * - ## Approved Action Items (from meeting processing approval flow)
+ * Regex to match ## Approved Action Items section header specifically.
+ * This is tried FIRST because meetings may have both an empty "## Action Items"
+ * and a populated "## Approved Action Items" section.
  */
-const ACTION_ITEMS_HEADER = /^##\s*(?:Approved\s+)?Action\s+Items\s*$/im;
+const APPROVED_ACTION_ITEMS_HEADER = /^##\s*Approved\s+Action\s+Items\s*$/im;
+/**
+ * Regex to match ## Action Items section header (without "Approved" prefix).
+ * This is tried as a FALLBACK if no ## Approved Action Items section is found.
+ */
+const ACTION_ITEMS_HEADER = /^##\s*Action\s+Items\s*$/im;
 /**
  * Regex to detect the next section header (## Something Else).
  */
@@ -61,6 +63,11 @@ function computeHash(text, personSlug, direction) {
 /**
  * Extract date from YAML frontmatter.
  * Returns null if no frontmatter or no date field found.
+ *
+ * Handles multiple date formats:
+ * - date: "2026-03-18" (quoted YYYY-MM-DD)
+ * - date: 2026-03-18 (unquoted YYYY-MM-DD)
+ * - date: 2026-03-18T19:30:00.000Z (ISO 8601 with time)
  */
 function extractDateFromFrontmatter(content) {
     // Match YAML frontmatter block: starts with ---, ends with ---
@@ -68,8 +75,9 @@ function extractDateFromFrontmatter(content) {
     if (!frontmatterMatch)
         return null;
     const frontmatter = frontmatterMatch[1];
-    // Match date field: date: "YYYY-MM-DD" or date: YYYY-MM-DD
-    const dateMatch = frontmatter.match(/^date:\s*["']?(\d{4}-\d{2}-\d{2})["']?\s*$/m);
+    // Match date field and capture the YYYY-MM-DD portion
+    // Handles: date: "2026-03-18", date: 2026-03-18, date: 2026-03-18T19:30:00.000Z
+    const dateMatch = frontmatter.match(/^date:\s*["']?(\d{4}-\d{2}-\d{2})/m);
     if (!dateMatch)
         return null;
     return dateMatch[1];
@@ -205,7 +213,13 @@ function inferDirectionFromText(text, personSlug, ownerSlug) {
  * Returns null if no section found.
  */
 function extractActionItemsSection(content) {
-    const headerMatch = content.match(ACTION_ITEMS_HEADER);
+    // Try ## Approved Action Items first — meetings may have both an empty
+    // "## Action Items" and a populated "## Approved Action Items" section
+    let headerMatch = content.match(APPROVED_ACTION_ITEMS_HEADER);
+    // Fall back to ## Action Items if no approved section found
+    if (!headerMatch || headerMatch.index === undefined) {
+        headerMatch = content.match(ACTION_ITEMS_HEADER);
+    }
     if (!headerMatch || headerMatch.index === undefined)
         return null;
     // Start after the header
