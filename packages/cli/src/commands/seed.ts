@@ -12,6 +12,7 @@ import { header, section, listItem, success, error, warn, info } from '../format
 type SeedStats = {
   meetings: number;
   people: number;
+  goals: number;
   plans: number;
   projects: number;
   memory: number;
@@ -95,6 +96,7 @@ async function seedFromFixtures(
   const stats: SeedStats = {
     meetings: 0,
     people: 0,
+    goals: 0,
     plans: 0,
     projects: 0,
     memory: 0,
@@ -125,22 +127,31 @@ async function seedFromFixtures(
     stats.people += copyDirectoryEntries(sourceDir, destinationDir, force);
   }
 
-  const plansSource = join(fixtureRoot, 'plans');
-  if (existsSync(plansSource)) {
-    const planFiles = readdirSync(plansSource).filter((name) => name.endsWith('.md'));
-    const quarter = planFiles.filter((name) => name.startsWith('quarter-')).sort().reverse()[0];
-    const week = planFiles.filter((name) => name.startsWith('week-')).sort().reverse()[0];
+  // Seed individual goal files (new structure)
+  const goalsSource = join(fixtureRoot, 'goals');
+  const quarterMdPath = join(paths.goals, 'quarter.md');
+  const hasLegacyQuarter = existsSync(quarterMdPath);
 
-    if (quarter) {
+  // Only seed individual goals if quarter.md doesn't exist (backward compat)
+  if (!hasLegacyQuarter && existsSync(goalsSource)) {
+    const goalFiles = readdirSync(goalsSource).filter((name) => name.endsWith('.md'));
+    for (const file of goalFiles) {
       const copied = copyFileIfNeeded(
-        join(plansSource, quarter),
-        join(paths.goals, 'quarter.md'),
+        join(goalsSource, file),
+        join(paths.goals, file),
         force,
       );
       if (copied) {
-        stats.plans += 1;
+        stats.goals += 1;
       }
     }
+  }
+
+  // Seed week.md from plans (still used)
+  const plansSource = join(fixtureRoot, 'plans');
+  if (existsSync(plansSource)) {
+    const planFiles = readdirSync(plansSource).filter((name) => name.endsWith('.md'));
+    const week = planFiles.filter((name) => name.startsWith('week-')).sort().reverse()[0];
 
     if (week) {
       const copied = copyFileIfNeeded(
@@ -255,6 +266,7 @@ async function seedFromFixtures(
   section('Seed Complete');
   listItem('Meetings', String(stats.meetings));
   listItem('People', String(stats.people));
+  listItem('Goals', String(stats.goals));
   listItem('Plans', String(stats.plans));
   listItem('Projects', String(stats.projects));
   listItem('Memory items', String(stats.memory));
