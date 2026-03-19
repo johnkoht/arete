@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchStrategy, fetchQuarterGoals, fetchWeekGoals, patchWeekPriority } from '@/api/goals.js';
+import { fetchStrategy, fetchQuarterGoals, fetchWeekGoals, patchWeekPriority, fetchGoalsList, type GoalSummary } from '@/api/goals.js';
 import { toast } from 'sonner';
 
 export function useStrategy() {
@@ -41,5 +41,14 @@ export function useToggleWeekPriority() {
     onError: () => {
       toast.error("Couldn't save — check if file is writable");
     },
+  });
+}
+
+/** Hook for loading active goals list (for action item linking) */
+export function useGoalsList() {
+  return useQuery<GoalSummary[]>({
+    queryKey: ['goals', 'list'],
+    queryFn: fetchGoalsList,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

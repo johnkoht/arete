@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ReviewItem, ItemStatus, ItemType, ApprovedItems } from "@/api/types.js";
-import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck, Folder, FileText, ArrowRight, ArrowLeft, User } from "lucide-react";
+import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck, Target, FileText, ArrowRight, ArrowLeft, User } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchableSelect, type SearchableSelectItem } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
-import { useProjects } from "@/hooks/projects.js";
+import { useGoalsList } from "@/hooks/goals.js";
 
 const TYPE_LABELS: Record<ItemType, string> = {
   action: "Action Item",
@@ -45,12 +45,12 @@ interface ItemCardProps {
   item: ReviewItem;
   onStatusChange: (id: string, status: ItemStatus) => void;
   onTextChange: (id: string, text: string) => void;
-  onProjectChange?: (id: string, projectSlug: string | null) => void;
-  projects?: SearchableSelectItem[];
+  onGoalChange?: (id: string, goalSlug: string | null) => void;
+  goals?: SearchableSelectItem[];
   readOnly?: boolean;
 }
 
-function ItemCard({ item, onStatusChange, onTextChange, onProjectChange, projects, readOnly }: ItemCardProps) {
+function ItemCard({ item, onStatusChange, onTextChange, onGoalChange, goals, readOnly }: ItemCardProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(item.text);
   const typeLabel = TYPE_LABELS[item.type];
@@ -126,17 +126,17 @@ function ItemCard({ item, onStatusChange, onTextChange, onProjectChange, project
           </p>
         )}
       </div>
-      {/* Project picker for action items */}
-      {!readOnly && isAction && projects && onProjectChange && (
+      {/* Goal picker for action items */}
+      {!readOnly && isAction && goals && onGoalChange && (
         <div className="flex-shrink-0">
           <SearchableSelect
-            items={projects}
-            selected={item.projectSlug ?? null}
-            onSelect={(id) => onProjectChange(item.id, id)}
-            placeholder="Project"
-            searchPlaceholder="Search projects..."
+            items={goals}
+            selected={item.goalSlug ?? null}
+            onSelect={(id) => onGoalChange(item.id, id)}
+            placeholder="Goal"
+            searchPlaceholder="Search goals..."
             allowClear
-            muted={!item.projectSlug}
+            muted={!item.goalSlug}
             className="h-7 text-xs w-[140px]"
           />
         </div>
@@ -221,12 +221,12 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
   const approved = items.filter((i) => i.status === "approved").length;
   const skipped = items.filter((i) => i.status === "skipped").length;
 
-  // Load projects for action item project picker
-  const { data: projectsData } = useProjects();
-  const projectItems: SearchableSelectItem[] = (projectsData ?? []).map((p) => ({
-    id: p.slug,
-    label: p.name,
-    icon: <Folder className="h-3.5 w-3.5 text-muted-foreground" />,
+  // Load goals for action item goal picker
+  const { data: goalsData } = useGoalsList();
+  const goalItems: SearchableSelectItem[] = (goalsData ?? []).map((g) => ({
+    id: g.id,
+    label: `${g.id} ${g.title}`,
+    icon: <Target className="h-3.5 w-3.5 text-muted-foreground" />,
   }));
 
   const handleStatusChange = useCallback((id: string, status: ItemStatus) => {
@@ -237,8 +237,8 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
     onItemsChange(items.map((i) => (i.id === id ? { ...i, text } : i)));
   }, [items, onItemsChange]);
 
-  const handleProjectChange = useCallback((id: string, projectSlug: string | null) => {
-    onItemsChange(items.map((i) => (i.id === id ? { ...i, projectSlug: projectSlug ?? undefined } : i)));
+  const handleGoalChange = useCallback((id: string, goalSlug: string | null) => {
+    onItemsChange(items.map((i) => (i.id === id ? { ...i, goalSlug: goalSlug ?? undefined } : i)));
   }, [items, onItemsChange]);
 
   const groups = [
@@ -342,8 +342,8 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
                       item={item}
                       onStatusChange={handleStatusChange}
                       onTextChange={handleTextChange}
-                      onProjectChange={handleProjectChange}
-                      projects={projectItems}
+                      onGoalChange={handleGoalChange}
+                      goals={goalItems}
                     />
                   ))}
                 </div>

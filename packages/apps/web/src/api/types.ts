@@ -253,8 +253,8 @@ export type ReviewItem = {
   type: ItemType;
   text: string;
   status: ItemStatus;
-  /** Optional project association for action items */
-  projectSlug?: string;
+  /** Optional goal association for action items */
+  goalSlug?: string;
   /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
   source?: 'ai' | 'dedup';
   /** LLM confidence score (0-1) for extracted items */
