@@ -83,3 +83,7 @@ export type {
 // Person health
 export { computeRelationshipHealth } from './person-health.js';
 export type { HealthIndicator, RelationshipHealth } from './person-health.js';
+
+// Goal migration
+export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
+export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';

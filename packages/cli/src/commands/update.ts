@@ -2,7 +2,7 @@
  * arete update — pull latest skills/tools/integrations
  */
 
-import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig, GoalMigrationService } from '@arete/core';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -49,6 +49,13 @@ export function registerUpdateCommand(program: Command): void {
 
       const result = await services.workspace.update(root, { sourcePaths });
 
+      // Run goal migration (converts quarter.md to individual goal files)
+      let migrationResult;
+      if (!opts.check) {
+        const migrationService = new GoalMigrationService(services.storage);
+        migrationResult = await migrationService.migrate(root);
+      }
+
       // Auto-update qmd collections (skip for --check and --skip-qmd)
       let qmdResult;
       if (!opts.check && !opts.skipQmd) {
@@ -83,6 +90,7 @@ export function registerUpdateCommand(program: Command): void {
               success: true,
               mode: opts.check ? 'check' : 'update',
               result,
+              migration: migrationResult ?? { skipped: true },
               qmd: qmdResult
                 ? { ...qmdResult, created: createdAny }
                 : { skipped: true, available: false, collections: {}, indexed: false, created: false },
@@ -99,6 +107,11 @@ export function registerUpdateCommand(program: Command): void {
         listItem('Added', result.added.length.toString());
         listItem('Updated', result.updated.length.toString());
         listItem('Preserved', result.preserved.length.toString());
+
+        // Show goal migration result
+        if (migrationResult?.migrated) {
+          info(`Migrated ${migrationResult.goalsCount} goals to individual files. Backup saved to ${migrationResult.backupPath}`);
+        }
 
         if (qmdResult && !qmdResult.skipped) {
           const createdCount = qmdResult.scopes.filter((s) => s.created).length;
