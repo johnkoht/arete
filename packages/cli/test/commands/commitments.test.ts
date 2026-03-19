@@ -215,6 +215,72 @@ describe('commitments list command', () => {
     assert.equal(parsed.count, 1);
     assert.equal(parsed.commitments[0].text, 'Open action');
   });
+
+  it('includes goalSlug in JSON output when present', () => {
+    const withGoal = makeCommitment({
+      id: computeHash('Send proposal', 'alice', 'i_owe_them'),
+      text: 'Send proposal',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      direction: 'i_owe_them',
+      goalSlug: 'Q1-2',
+    });
+    const withoutGoal = makeCommitment({
+      id: computeHash('Follow up on email', 'bob', 'i_owe_them'),
+      text: 'Follow up on email',
+      personSlug: 'bob',
+      personName: 'Bob Jones',
+      direction: 'i_owe_them',
+    });
+    writeCommitments(tmpDir, [withGoal, withoutGoal]);
+
+    const raw = runCli(['commitments', 'list', '--json'], { cwd: tmpDir });
+    const parsed = JSON.parse(raw) as {
+      success: boolean;
+      commitments: Array<{ text: string; goalSlug?: string }>;
+      count: number;
+    };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.count, 2);
+
+    const proposalCommitment = parsed.commitments.find((c) => c.text === 'Send proposal');
+    const emailCommitment = parsed.commitments.find((c) => c.text === 'Follow up on email');
+
+    assert.equal(proposalCommitment?.goalSlug, 'Q1-2', 'Expected goalSlug for commitment with goal');
+    assert.equal(emailCommitment?.goalSlug, undefined, 'Expected no goalSlug for commitment without goal');
+  });
+
+  it('shows goalSlug prefix in human output when present', () => {
+    const withGoal = makeCommitment({
+      id: computeHash('Send proposal to Acme', 'jane', 'i_owe_them'),
+      text: 'Send proposal to Acme',
+      personSlug: 'jane',
+      personName: 'Jane Doe',
+      direction: 'i_owe_them',
+      goalSlug: 'Q1-2',
+      date: '2026-03-01',
+    });
+    const withoutGoal = makeCommitment({
+      id: computeHash('Review slides', 'jane', 'they_owe_me'),
+      text: 'Review slides',
+      personSlug: 'jane',
+      personName: 'Jane Doe',
+      direction: 'they_owe_me',
+      date: '2026-03-01',
+    });
+    writeCommitments(tmpDir, [withGoal, withoutGoal]);
+
+    const stdout = runCli(['commitments', 'list'], { cwd: tmpDir });
+
+    // Commitment with goalSlug should show [Q1-2] prefix
+    assert.ok(stdout.includes('[Q1-2]'), `Expected [Q1-2] goal prefix in output: ${stdout}`);
+    assert.ok(stdout.includes('Send proposal to Acme'), `Expected commitment text: ${stdout}`);
+
+    // Commitment without goalSlug should NOT have empty brackets
+    assert.ok(stdout.includes('Review slides'), `Expected commitment text without goal: ${stdout}`);
+    // Verify no empty brackets appear (would show as "[]" if buggy)
+    assert.ok(!stdout.includes('[] Review slides'), `Should not have empty brackets: ${stdout}`);
+  });
 });
 
 describe('commitments resolve command', () => {

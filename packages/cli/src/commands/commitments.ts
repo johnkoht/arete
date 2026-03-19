@@ -94,6 +94,7 @@ export function registerCommitmentsCommand(program: Command): void {
             text: c.text,
             date: c.date,
             resolvedAt: c.resolvedAt,
+            ...(c.goalSlug ? { goalSlug: c.goalSlug } : {}),
           }));
           console.log(
             JSON.stringify({ success: true, commitments: out, count: out.length }, null, 2),
@@ -116,8 +117,9 @@ export function registerCommitmentsCommand(program: Command): void {
           for (const c of iOweThem) {
             const shortId = c.id.slice(0, 8);
             const personName = c.personName.padEnd(20).slice(0, 20);
+            const goalPrefix = c.goalSlug ? chalk.cyan(`[${c.goalSlug}] `) : '';
             const date = c.date ? chalk.dim(`(${c.date})`) : '';
-            console.log(`  ${chalk.dim(shortId)}  ${personName}  ${c.text}  ${date}`);
+            console.log(`  ${chalk.dim(shortId)}  ${personName}  ${goalPrefix}${c.text}  ${date}`);
           }
           console.log('');
         }
@@ -126,8 +128,9 @@ export function registerCommitmentsCommand(program: Command): void {
           for (const c of theyOweMe) {
             const shortId = c.id.slice(0, 8);
             const personName = c.personName.padEnd(20).slice(0, 20);
+            const goalPrefix = c.goalSlug ? chalk.cyan(`[${c.goalSlug}] `) : '';
             const date = c.date ? chalk.dim(`(${c.date})`) : '';
-            console.log(`  ${chalk.dim(shortId)}  ${personName}  ${c.text}  ${date}`);
+            console.log(`  ${chalk.dim(shortId)}  ${personName}  ${goalPrefix}${c.text}  ${date}`);
           }
           console.log('');
         }
