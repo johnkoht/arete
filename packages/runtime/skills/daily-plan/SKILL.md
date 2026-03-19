@@ -62,7 +62,37 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
 - Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
 - Add one concise stakeholder watchout when available from person memory highlights.
 
-### 5. Check for User Content (Merge-Aware Update)
+### 5. Offer Agenda Creation
+
+After gathering meeting context, identify **prep-worthy meetings** and offer to create agendas inline.
+
+**Prep-worthy title patterns** (case-insensitive match):
+- `QBR`, `customer`, `leadership`, `review`, `partner`, `1:1`, `planning`, `standup`, `sync`
+
+**For each prep-worthy meeting**:
+
+1. **Check existence**: Look for existing agendas matching `now/agendas/YYYY-MM-DD-*` where `YYYY-MM-DD` is today's date (or tomorrow if planning for tomorrow). Fuzzy match the title slug against filenames — if an agenda exists that contains the meeting title (slugified), skip offering.
+
+2. **Offer prompt** (only if no existing agenda):
+   ```
+   Create agenda for [Meeting Title]? [y/N]
+   ```
+
+3. **If user says yes**: Create the agenda inline using the **prepare-meeting-agenda** workflow:
+   - Infer meeting type from title patterns (see prepare-meeting-agenda Step 2)
+   - Load template: `arete template resolve --skill prepare-meeting-agenda --variant {type}`
+   - Pre-fill context: date, title, attendees (already resolved from Step 4)
+   - Build agenda with suggested items from the meeting context already gathered
+   - Save to `now/agendas/YYYY-MM-DD-{title-slug}.md`
+   - Track the created agenda path for display in Step 7
+
+4. **Track agenda links**: For each meeting (prep-worthy or not), note if an agenda exists (pre-existing or just created) so it can be shown in the meeting list.
+
+**Skip this step entirely if**:
+- No meetings are prep-worthy (none match title patterns), OR
+- All prep-worthy meetings already have agendas
+
+### 6. Check for User Content (Merge-Aware Update)
 
 Before writing, check if `## Today's Plan` section already exists in `now/week.md`:
 
@@ -84,7 +114,7 @@ You have content in Today's Plan. Options:
 
 **Critical**: `### Notes` subsection is ALWAYS preserved regardless of choice.
 
-### 6. Write to Week.md
+### 7. Write to Week.md
 
 Write the daily plan to `## Today's Plan` section in `now/week.md`.
 
@@ -103,7 +133,8 @@ Write the daily plan to `## Today's Plan` section in `now/week.md`.
 
 ### Meetings
 - **9:00** Team standup
-- **2:00** Customer call → [prep: review Q1 metrics]
+- **2:00** Customer call → [agenda](now/agendas/2026-03-18-customer-call.md)
+- **3:30** 1:1 with Jane → [prep: discuss promotion timeline]
 
 ### Notes
 - [User notes preserved here]
@@ -112,9 +143,10 @@ Write the daily plan to `## Today's Plan` section in `now/week.md`.
 **Format guidelines**:
 - `### Focus`: Top 1-3 outcomes from week priorities or scratchpad. Concise bullets.
 - `### Meetings`: Time + title + brief context/prep. One line per meeting. Include source at top: "Pulled from Calendar (calendar-names)" or "User provided".
+  - **Agenda links**: If an agenda exists (pre-existing or created in Step 5), show `→ [agenda](path)` instead of prep notes. Format: `- **9:00** Meeting title → [agenda](now/agendas/YYYY-MM-DD-title-slug.md)`
 - `### Notes`: Always preserve existing content. If no prior notes, add placeholder `- [Add notes here]`.
 
-### 7. Confirm Update
+### 8. Confirm Update
 
 After writing, confirm to user:
 - What was updated (focus/meetings/both)
@@ -125,7 +157,8 @@ After writing, confirm to user:
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
 - **Week file**: `now/week.md`
+- **Agendas**: `now/agendas/` — meeting agenda documents (created in Step 5)
 - **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter
 - **Legacy quarter goals**: `goals/quarter.md` (fallback for older workspaces)
 - **Scratchpad**: `now/scratchpad.md`
-- **Related**: meeting-prep, week-plan, week-review
+- **Related**: meeting-prep, prepare-meeting-agenda, week-plan, week-review
