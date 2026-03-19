@@ -41,8 +41,13 @@ const PRIMITIVE_FILE_MAP: Record<ProductPrimitive, { files: string[]; category: 
 
 const ALWAYS_INCLUDE: { file: string; category: ContextFile['category'] }[] = [
   { file: 'goals/strategy.md', category: 'goals' },
-  { file: 'goals/quarter.md', category: 'goals' },
 ];
+
+// Files to exclude when globbing goals/*.md
+const GOALS_EXCLUDE = new Set(['strategy.md']);
+
+// Fallback goal file if no individual goal files are found
+const GOALS_FALLBACK = 'goals/quarter.md';
 
 const GAP_SUGGESTIONS: Record<ProductPrimitive, string> = {
   Problem: 'Add problem context to context/business-overview.md or start a discovery project',
@@ -184,7 +189,28 @@ export class ContextService {
       await addFile(fullPath, entry.category, undefined, staticScore);
     }
 
-    // 2. Primitive-mapped files
+    // 2. Dynamic goal files (glob goals/*.md, excluding strategy.md)
+    const goalsDir = join(paths.root, 'goals');
+    const goalsDirExists = await this.storage.exists(goalsDir);
+    let individualGoalFilesFound = false;
+    if (goalsDirExists) {
+      const goalFiles = await this.storage.list(goalsDir, { extensions: ['.md'] });
+      for (const goalPath of goalFiles) {
+        const baseName = goalPath.split(/[/\\]/).pop() || '';
+        if (GOALS_EXCLUDE.has(baseName)) continue;
+        // Skip the fallback file - we'll add it only if no individual files found
+        if (baseName === 'quarter.md') continue;
+        await addFile(goalPath, 'goals', undefined, staticScore);
+        individualGoalFilesFound = true;
+      }
+    }
+    // Fallback: include quarter.md if no individual goal files found
+    if (!individualGoalFilesFound) {
+      const fallbackPath = join(paths.root, GOALS_FALLBACK);
+      await addFile(fallbackPath, 'goals', undefined, staticScore);
+    }
+
+    // 3. Primitive-mapped files
     for (const prim of primitives) {
       const mappings = PRIMITIVE_FILE_MAP[prim];
       let foundForPrimitive = false;
@@ -207,7 +233,7 @@ export class ContextService {
       }
     }
 
-    // 3. People files (User primitive)
+    // 4. People files (User primitive)
     if (primitives.includes('User')) {
       const peopleCategories = ['internal', 'customers', 'users'];
       for (const cat of peopleCategories) {
@@ -226,7 +252,7 @@ export class ContextService {
       }
     }
 
-    // 4. Active projects
+    // 5. Active projects
     const activeDir = join(paths.projects, 'active');
     const activeSubdirs = await this.storage.listSubdirectories(activeDir);
     for (const projPath of activeSubdirs) {
@@ -240,7 +266,7 @@ export class ContextService {
       }
     }
 
-    // 5. Memory items
+    // 6. Memory items
     const memoryItemsDir = join(paths.memory, 'items');
     const memoryExists = await this.storage.exists(memoryItemsDir);
     if (memoryExists) {
@@ -254,7 +280,7 @@ export class ContextService {
       }
     }
 
-    // 6. SearchProvider discovery
+    // 7. SearchProvider discovery
     try {
       const searchResults = await this.searchProvider.semanticSearch(query, {
         limit: maxFiles * 2,
@@ -279,7 +305,7 @@ export class ContextService {
       // SearchProvider failure: continue with static files only
     }
 
-    // 7. Sort and cap
+    // 8. Sort and cap
     files.sort((a, b) => {
       const scoreA = a.relevanceScore ?? 0;
       const scoreB = b.relevanceScore ?? 0;
@@ -287,7 +313,7 @@ export class ContextService {
     });
     const cappedFiles = files.slice(0, maxFiles);
 
-    // 8. Confidence
+    // 9. Confidence
     const totalPrimitives = primitives.length;
     const coveredPrimitives = totalPrimitives - gaps.length;
     const contextFileCount = cappedFiles.filter(f => f.category === 'context').length;
@@ -300,7 +326,7 @@ export class ContextService {
       confidence = 'Low';
     }
 
-    // 9. Temporal signals — search memory for recent mentions of the topic
+    // 10. Temporal signals — search memory for recent mentions of the topic
     const temporalSignals: string[] = [];
     try {
       const temporalMatches: TemporalMatch[] = [];

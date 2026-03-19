@@ -86,4 +86,44 @@ describe('ContextService (via compat)', () => {
     );
     assert.ok(fileResult, 'conversation file should be found by context query');
   });
+
+  describe('goal files globbing', () => {
+    it('falls back to quarter.md when only quarter.md exists', async () => {
+      writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
+      const result = await getRelevantContext('plan the quarter', paths);
+      const quarterFile = result.files.find((f) => f.relativePath === 'goals/quarter.md');
+      assert.ok(quarterFile, 'quarter.md should be included as fallback');
+      assert.equal(quarterFile?.category, 'goals');
+    });
+
+    it('includes individual goal files and excludes quarter.md', async () => {
+      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition.');
+      writeFixtureFile('goals/retention.md', '# Retention Goal\n\nImprove user engagement.');
+      writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
+      const result = await getRelevantContext('plan the quarter', paths);
+      const goalFiles = result.files.filter((f) => f.relativePath?.startsWith('goals/'));
+      const growthFile = goalFiles.find((f) => f.relativePath === 'goals/growth.md');
+      const retentionFile = goalFiles.find((f) => f.relativePath === 'goals/retention.md');
+      const quarterFile = goalFiles.find((f) => f.relativePath === 'goals/quarter.md');
+      assert.ok(growthFile, 'growth.md should be included');
+      assert.ok(retentionFile, 'retention.md should be included');
+      assert.ok(!quarterFile, 'quarter.md should NOT be included when individual files exist');
+    });
+
+    it('mixed format: includes strategy.md plus individual goal files', async () => {
+      writeFixtureFile('goals/strategy.md', '# Strategy\n\nOur strategic pillars.');
+      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition.');
+      writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
+      const result = await getRelevantContext('plan the quarter', paths);
+      const goalFiles = result.files.filter((f) => f.relativePath?.startsWith('goals/'));
+      const strategyFile = goalFiles.find((f) => f.relativePath === 'goals/strategy.md');
+      const growthFile = goalFiles.find((f) => f.relativePath === 'goals/growth.md');
+      const quarterFile = goalFiles.find((f) => f.relativePath === 'goals/quarter.md');
+      assert.ok(strategyFile, 'strategy.md should always be included');
+      assert.ok(growthFile, 'individual goal file should be included');
+      assert.ok(!quarterFile, 'quarter.md should NOT be included when individual files exist');
+      assert.equal(strategyFile?.category, 'goals');
+      assert.equal(growthFile?.category, 'goals');
+    });
+  });
 });
