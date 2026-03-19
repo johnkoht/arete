@@ -4,6 +4,56 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 17-19, 2026
+
+**Core Refactor: Simplified planning, individual goals, and commitment-goal linking.**
+
+### Planning Flow Improvements
+
+**Interactive week planning.** The `week-plan` skill now asks for your priorities in your own words before generating structure:
+- Two-phase priority capture: tell us your priorities first, then we add structure (success criteria, goal links)
+- Timing-aware: Friday 4pm+ or weekend automatically plans next week
+- Stakeholder watchouts are now opt-in (skip unless you want them)
+- Target: ≤5 exchanges before your week file is written
+
+**Daily plan writes to week.md.** Instead of a separate `now/today.md`, your daily plan now writes directly to your week file:
+- Compact `## Today's Plan` section with Focus, Meetings, Notes subsections
+- Merge-aware updates: preserves your notes, prompts before overwriting
+- Evening timing: after 6pm, plans for tomorrow with confirmation
+
+### Individual Goal Files
+
+**Goals are now individual files.** Instead of one `goals/quarter.md`, each goal gets its own file with frontmatter:
+```yaml
+---
+id: "Q1-2"
+title: "Ship enterprise features"
+status: active
+quarter: "2026-Q1"
+type: outcome
+orgAlignment: "Pillar 1: Growth"
+successCriteria: "3 enterprise customers onboarded"
+---
+```
+
+Run `arete update` to migrate existing `quarter.md` to individual files. Your original is backed up as `.quarter.md.backup`.
+
+### Agenda Lifecycle
+
+**Daily plan offers agenda creation.** When you run daily-plan, prep-worthy meetings (QBR, customer, leadership, 1:1) now prompt you to create an agenda inline.
+
+**Agendas are archived after processing.** When you run `process-meetings`, linked agendas get `status: processed` in their frontmatter — no manual cleanup needed.
+
+### Commitments + Goals
+
+**Link commitments to goals.** During `arete meeting approve`, you can now link action items to your quarter goals:
+- For 1-2 goals: inline prompt ("Link to Q1-2? [y/N]")
+- For 3+ goals: numbered selection list
+
+**Goals show in commitments list.** `arete commitments list` now shows goal associations: `[Q1-2] Send proposal to Acme`
+
+---
+
 ## Week of March 16, 2026
 
 **CLI and UI meeting workflows are now fully interchangeable.** You can process meetings from either the CLI or web dashboard and switch seamlessly between them:

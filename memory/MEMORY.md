@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-19: [core-refactor-learnings](entries/2026-03-19_core-refactor-learnings.md) — Core Refactor (Phases 1-4): Planning flow simplification, individual goal files, agenda lifecycle, commitments+goals. 19/19 tasks, 100% first-attempt, 69+ tests. Key: multi-stage PM/Eng reviews reduced scope ~40% while maintaining user value.
 - 2026-03-19: [commitments-goals-learnings](entries/2026-03-19_commitments-goals-learnings.md) — Commitments + Goals Phase 4: goalSlug on Commitment type, CLI display with goal prefix, manual goal linking during meeting approve. 3/3 tasks, 100% first-attempt, 8 new tests. Key: scope reduced from 6→3 tasks via review (cut heuristic inference, deferred transcripts).
 - 2026-03-19: [agenda-lifecycle-learnings](entries/2026-03-19_agenda-lifecycle-learnings.md) — Agenda Lifecycle Phase 3: daily-plan offers agenda creation for prep-worthy meetings, process-meetings archives agendas via frontmatter. 2/2 tasks, 100% first-attempt. Key: scope reduced from 7→2 tasks via review (found existing implementation).
 - 2026-03-19: [goals-refactor-learnings](entries/2026-03-19_goals-refactor-learnings.md) — Goals Refactor: migrate from single quarter.md to individual goal files with frontmatter. 10/10 tasks, 100% first-attempt, 0 iterations, 61+ tests. New GoalMigrationService and GoalParser in core; all 6 planning skills updated with fallback support. Key: fallback-first design ensures backward compatibility.
