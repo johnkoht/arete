@@ -1,0 +1,61 @@
+{
+  "name": "commitments-goals",
+  "branchName": "feature/commitments-goals",
+  "goal": "Add goalSlug to commitments, show in CLI, allow manual linking during extraction.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add goalSlug to Commitment type",
+      "description": "Add optional goalSlug field to Commitment type and ensure persistence.",
+      "acceptanceCriteria": [
+        "Add `goalSlug?: string` field to `Commitment` type in entities.ts",
+        "Update `CommitmentsFile` type to include goalSlug in serialization",
+        "CommitmentsService persists and retrieves goalSlug",
+        "Existing commitments.json files remain valid (field is optional)",
+        "Unit test: goalSlug serializes/deserializes correctly"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Update CLI commitments list",
+      "description": "Show goalSlug in CLI output when present.",
+      "acceptanceCriteria": [
+        "Update `arete commitments list` output format",
+        "When goalSlug present: `[Q1-2] Send proposal to Acme (@jane, i_owe_them, 3d)`",
+        "When goalSlug absent: output unchanged (no empty brackets)",
+        "Update table/list formatting for both modes",
+        "Unit test: output format with and without goalSlug"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Manual goal linking during extraction",
+      "description": "Allow users to link action items to goals during staged extraction approval.",
+      "acceptanceCriteria": [
+        "During `arete meeting approve`, after showing action items, offer goal selection",
+        "Show available goals from `goals/*.md` (active status only)",
+        "Selection UI: numbered list [1] Q1-2 ... [n] None",
+        "If no goals exist, skip with message: 'No active goals found'",
+        "Store selected goalSlug on committed commitments",
+        "For 1-2 goals, use inline prompt: 'Link to Q1-2? [y/N]'",
+        "Update backend approval workflow to pass goalSlug through"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "c717400edbf33cb9b293208b79f434771a674869"
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-19T03:30:00Z",
+    "totalTasks": 3,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
