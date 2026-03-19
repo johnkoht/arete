@@ -41,7 +41,10 @@ This helps set expectations but doesn't change calendar range.
 
 **Gather silently** (no user interaction needed for this step):
 
-- **Read** current quarter goals: `goals/quarter.md`.
+- **Read** current quarter goals from individual files: `goals/*.md` (excluding `strategy.md`).
+  - Parse frontmatter from each file to extract: `id`, `title`, `status`.
+  - Filter to `status: active` goals.
+- **Fallback**: If no individual goal files exist, read `goals/quarter.md` (legacy format).
 - **Read** last week file: `now/week.md` for carry-over and continuity.
 - **Read** `projects/active/` (README or key files) for commitments tied to projects.
 - **Read** `now/scratchpad.md` for ad-hoc commitments or "due this week" items.
@@ -79,7 +82,7 @@ Wait for the user's response. **Capture their exact wording** - don't paraphrase
 For each priority the user stated, help add structure:
 
 - **Outcome** - Preserve user's wording, clarify "what done looks like" if needed.
-- **Advances quarter goal** - Link to a quarter outcome (e.g. "Q1-2", "Q1 outcome 2"). Suggest based on context; user confirms.
+- **Advances quarter goal** - Link to a goal ID from frontmatter (e.g. `Q1-2`). Suggest based on context; user confirms.
 - **Success criteria** (optional) - How we know it's done.
 - **Effort** (optional) - deep / medium / quick.
 
@@ -134,7 +137,8 @@ After writing the week file, offer:
 
 ## References
 
-- **Quarter goals**: `goals/quarter.md`
+- **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter
+- **Legacy quarter goals**: `goals/quarter.md` (fallback for older workspaces)
 - **Last week**: `now/week.md`
 - **Output**: `now/week.md`
 - **Template**: `templates/plans/week-priorities.md` (override) or `.agents/skills/week-plan/templates/week-priorities.md` (default)

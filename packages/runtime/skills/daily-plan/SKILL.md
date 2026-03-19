@@ -46,7 +46,10 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
 ### 3. Gather Context
 
 - **Read** `now/week.md` (current week priorities).
-- **Read** `goals/quarter.md` if needed for goal context.
+- **Read** quarter goals from individual files: `goals/*.md` (excluding `strategy.md`) if needed for goal context.
+  - Parse frontmatter to extract: `id`, `title`, `status`.
+  - Filter to `status: active` goals.
+- **Fallback**: If no individual goal files exist, read `goals/quarter.md` (legacy format).
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Try Calendar (if configured)**: Run `arete pull calendar --today --json` (or `--tomorrow` if planning for tomorrow). If the command succeeds and returns events (check `success: true` and non-empty `events` array), use those as the meeting list and note the calendar names. If the command fails, returns no events, or is not configured, fall back to asking the user.
 - **Ask** user for meetings (fallback if calendar unavailable): "List today's meetings (title + attendees) or say 'none'."
@@ -121,5 +124,8 @@ After writing, confirm to user:
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
-- **Week file**: `now/week.md` | **Quarter**: `goals/quarter.md` | **Scratchpad**: `now/scratchpad.md`
+- **Week file**: `now/week.md`
+- **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter
+- **Legacy quarter goals**: `goals/quarter.md` (fallback for older workspaces)
+- **Scratchpad**: `now/scratchpad.md`
 - **Related**: meeting-prep, week-plan, week-review
