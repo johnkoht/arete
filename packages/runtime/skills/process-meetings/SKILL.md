@@ -283,9 +283,36 @@ This updates the enriched intelligence sections that meeting-prep and other skil
 
 **CommitmentsService producer path**: `arete people memory refresh` is also the path that syncs extracted commitments (action items) to CommitmentsService. Running this command after processing meetings ensures that any commitments found in meeting notes are available via `arete commitments list`. This is the canonical producer path — CommitmentsService is populated through `process-meetings` → `arete people memory refresh --person <slug>`.
 
+### 6.7. Archive Linked Agendas
+
+After processing is complete, check if the meeting has a linked agenda and mark it as processed.
+
+**For each processed meeting**:
+
+1. Check meeting frontmatter for `agenda: <path>` field
+2. If no agenda field, skip this meeting
+3. If agenda file doesn't exist at the path:
+   - Log: `Warning: Agenda file not found at [path]`
+   - Continue to next meeting (don't fail)
+4. Read the agenda file and check its frontmatter
+5. If agenda already has `status: processed`, skip (idempotent)
+6. Update agenda file frontmatter:
+   ```yaml
+   ---
+   status: processed
+   processed_at: 2026-03-19
+   ---
+   ```
+
+**Date format**: Use `YYYY-MM-DD` (date only, no timestamp).
+
+**File location**: Agenda stays in `now/agendas/` — no file movement.
+
+**Track count**: Count newly archived agendas for the report (don't count skipped or already-processed).
+
 ### 7. Report
 
-Report: meetings processed, people created/updated, staged sections written (or decisions/learnings committed to memory in `--commit` mode), person memory highlights refreshed.
+Report: meetings processed, people created/updated, staged sections written (or decisions/learnings committed to memory in `--commit` mode), person memory highlights refreshed, agendas archived.
 
 Include per-attendee intelligence summary:
 
@@ -299,6 +326,14 @@ In staged mode, also report counts:
 ```
 Staged: 3 action items (ai_001–ai_003), 1 decision (de_001), 2 learnings (le_001–le_002)
 ```
+
+If any linked agendas were archived, include:
+
+```
+Archived 2 agendas
+```
+
+Only report archived count if N > 0. If agendas were skipped (already processed) or had warnings (file not found), those don't count toward N.
 
 ## References
 
