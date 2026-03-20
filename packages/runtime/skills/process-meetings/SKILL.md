@@ -19,9 +19,9 @@ integration:
 
 # Process Meetings Skill
 
-Read meeting files from `resources/meetings/`, create or update person files from attendees (entity resolution), write `attendee_ids` to meeting frontmatter, and extract action items, decisions, and learnings.
+Read meeting files from `resources/meetings/`, extract intelligence using CLI primitives, and stage items for review.
 
-**Default behavior (staged mode)**: Writes extracted action items, decisions, and learnings as staged sections directly into the meeting file for review. Does NOT write to memory.
+**Default behavior (staged mode)**: Writes extracted action items, decisions, and learnings as staged sections directly into the meeting file for review. Does NOT write to memory until approved.
 
 **With `--commit`**: Writes extracted items directly to `.arete/memory/items/` (legacy behavior). Use only for CLI-only workflows without the arete view web app.
 
@@ -70,291 +70,273 @@ Optional policy file:
 
 ## Workflow
 
-### 1. Gather Context
+### 1. Gather Meetings
 
-- List meeting files in `resources/meetings/`: default last 7 days (by filename `YYYY-MM-DD-*.md`). Support: `today`, `"search term"`, `--days-back=N`.
-- Build attendee candidate JSON from selected meeting(s): name/email/text/source.
-- Run People Intelligence digest:
-  - `arete people intelligence digest --input inputs/people-candidates.json --json`
-  - Optionally use `--feature-extraction-tuning` and `--feature-enrichment`.
-- Use legacy `internal_email_domain` only as a fallback signal (not as forced default).
+List meeting files in `resources/meetings/`: default last 7 days (by filename `YYYY-MM-DD-*.md`).
+
+Filtering options:
+- `today` — only today's meetings
+- `"search term"` — filter by title or attendee
+- `--days-back=N` — last N days
 
 **Legacy meetings** (no YAML frontmatter): Parse title from first `#` heading, date from filename, attendees from body ("**Attendees**: ..." or "Attendees: ...").
 
-### 2. For Each Meeting — People (Entity Resolution)
+### 2. For Each Meeting — Build Context
 
-Parse frontmatter and body (title, date, attendees, company, summary).
+Run the context primitive to assemble meeting context:
 
-**For each attendee** (from frontmatter `attendees` or body):
-
-- Resolve slug: lowercase, replace spaces with hyphens, strip non-alphanumeric.
-- Use People Intelligence digest recommendation as primary category decision:
-  - `internal` → `people/internal/`
-  - `customers` → `people/customers/`
-  - `users` → `people/users/`
-  - `unknown_queue` → do not auto-file as customer; ask user to confirm or defer
-- Create `people/<category>/<slug>.md` only for confirmed categories.
-- For `unknown_queue`, present a review batch (name, confidence, rationale, evidence).
-- Update existing people: append "Last met: YYYY-MM-DD" or add to "Recent meetings".
-
-### 3. Write attendee_ids to Meeting Frontmatter
-
-After resolving people, add or update meeting frontmatter with `attendee_ids: [slug1, slug2]`. For legacy files, prepend YAML frontmatter and preserve body.
-
-### 4. Generate Summary
-
-Generate a concise 2-4 sentence summary of the meeting based on the transcript and any existing key points or highlights.
-
-**Summary guidelines**:
-- Focus on the main topics discussed and outcomes
-- Mention key decisions made (if any)
-- Note important action items or next steps
-- Keep it scannable — someone should understand the meeting's value in 10 seconds
-
-**Output**: Replace the `## Summary` section content in the meeting body. If the section contains placeholder text like "No summary available." or is empty, replace it entirely.
-
-Example:
-```markdown
-## Summary
-
-Discussed Q1 roadmap priorities with the product team. Agreed to prioritize enterprise tier features before SMB expansion. Key blocker identified: audit logging needs to ship first. Sarah will share updated timeline by Friday.
+```bash
+arete meeting context <file> --json
 ```
 
-### 5. Extract Action Items, Decisions, and Learnings
+This assembles:
+- Meeting metadata (title, date, attendees, transcript)
+- Linked agenda (if exists via frontmatter `agenda:` field)
+- Attendee profiles with stances, open items, relationship health
+- Related workspace context (goals, projects, recent decisions)
 
-Behavior depends on whether `--commit` is passed.
+**Output**: JSON context bundle with `meeting`, `agenda`, `attendees`, `unknownAttendees`, `relatedContext`, and `warnings` fields.
 
----
+**Flags**:
+- `--json` — output as JSON (required for piping)
+- `--skip-agenda` — don't look for linked agenda
+- `--skip-people` — don't resolve attendee context
 
-#### Extraction Path Decision
+### 3. For Each Meeting — Extract Intelligence
 
-The primary extraction path uses the CLI command, which delegates to core's unified extraction logic:
+Pipe the context bundle into extraction:
 
-1. **Try CLI extraction**: `arete meeting extract <file> --stage --json`
-2. **If success** → staged sections written to meeting file, proceed to Step 6
-3. **If error** (no AI configured) → agent fallback: extract inline using agent's LLM
-
-**CLI errors clearly when AI is not configured**:
-```json
-{
-  "success": false,
-  "error": "No AI provider configured. Run `arete credentials configure` or set up via arete.yaml."
-}
+```bash
+arete meeting context <file> --json | arete meeting extract <file> --context - --json
 ```
 
-When this error occurs, the agent has LLM access (it's running in an AI context) and should perform extraction inline using the rules below.
+Or as separate steps:
 
----
-
-#### Staged Output Mode (Default — no `--commit`)
-
-Extract action items, decisions, and learnings from the meeting body and write them as staged sections directly into the meeting file. Do **not** write to `.arete/memory/items/`.
-
-**CLI Path (preferred)**: Run `arete meeting extract <file> --stage` — handles extraction and formatting via core.
-
-**Agent Fallback Path**: If CLI errors (no AI configured), extract inline following the rules below. You must write both the staged sections to the body AND the metadata to frontmatter (status, confidence, source, item status).
-
-**What to extract**:
-
-- **Action items** (`ai_NNN`): Scan for `- [ ]` checkboxes, phrases like "will follow up", "action:", "next steps:", "will send", "to do:", items explicitly assigned to a person. These become `ai_NNN` items.
-- **Decisions** (`de_NNN`): Choices made during the meeting that affect direction, priority, or scope. "We decided...", "The team agreed...", "Priority is X." These become `de_NNN` items.
-- **Learnings** (`le_NNN`): Insights, realizations, and new understanding gained. "We learned...", "Turns out...", "Key insight:". These become `le_NNN` items.
-
-**ID format**: Sequential within the meeting, zero-padded to 3 digits. Count each type independently: action items start at `ai_001`, decisions start at `de_001`, learnings start at `le_001`.
-
-**Output format** (append to meeting file — the parser requires this exact format):
-
-```
-## Staged Action Items
-- ai_001: Follow up with Sarah on the pricing model
-- ai_002: Share Q1 roadmap with stakeholders by Friday
-
-## Staged Decisions
-- de_001: Prioritize enterprise tier before SMB in Q1
-
-## Staged Learnings
-- le_001: Enterprise customers care more about audit logs than anticipated
+```bash
+arete meeting context <file> --json > /tmp/context.json
+arete meeting extract <file> --context /tmp/context.json --json
 ```
 
-Section headers must be exactly:
-- `## Staged Action Items`
-- `## Staged Decisions`
-- `## Staged Learnings`
+**What gets extracted**:
+- **Summary** — 2-4 sentence overview of the meeting
+- **Action Items** — Commitments with owner and deliverable
+- **Decisions** — Key choices made during the meeting
+- **Learnings** — Insights worth remembering
+- **Next Steps** — Non-commitment follow-ups
 
-Omit a section entirely if no items were extracted for that type (do not write an empty section).
+The extract command uses the context bundle for smarter extraction:
+- Priority ranking based on goals/projects
+- Better owner resolution (knows internal vs external)
+- Agenda item merging (unchecked items become action items)
+- Dedup against existing commitments
 
-**Frontmatter updates** (write to the meeting file's frontmatter after staged sections are written):
+**Flags**:
+- `--context <file>` — context bundle JSON (use `-` for stdin)
+- `--json` — output as JSON
+- `--stage` — write staged sections directly to meeting file
 
-```yaml
-status: processed
-processed_at: "2026-03-04T18:30:00Z"
-staged_item_status:
-  ai_001: approved
-  ai_002: approved
-  de_001: approved
-  le_001: approved
-staged_item_source:
-  ai_001: ai
-  ai_002: ai
-  de_001: ai
-  le_001: ai
-staged_item_confidence:
-  ai_001: 0.9
-  ai_002: 0.9
-  de_001: 0.9
-  le_001: 0.9
+### 4. For Each Meeting — Apply Intelligence
+
+Write the extracted intelligence to the meeting file:
+
+```bash
+arete meeting context <file> --json \
+  | arete meeting extract <file> --context - --json \
+  | arete meeting apply <file> --intelligence -
 ```
 
-**Important**: The `staged_item_status` field controls which items are pre-selected in the UI review screen. Set all items to `approved` by default when using the agent fallback path (since we don't have confidence scores from LLM extraction). Users can then unselect items they don't want to keep.
+**What gets written**:
+- Staged sections in meeting body (`## Staged Action Items`, `## Staged Decisions`, `## Staged Learnings`)
+- Meeting frontmatter updates (`status: processed`, `processed_at`)
+- Linked agenda archived (`status: processed` in agenda frontmatter)
 
----
+**What does NOT happen yet**:
+- No updates to person files (happens after approval)
+- No commitments synced (happens after approval)
+- No memory writes (happens after approval)
 
-#### Commit Mode (`--commit`)
+**Flags**:
+- `--intelligence <file>` — intelligence JSON (use `-` for stdin)
+- `--skip-agenda` — don't archive linked agenda
+- `--clear` — clear existing staged sections before writing
 
-Read the meeting file and extract intelligence **directly** (you have LLM access):
+### 5. User Review
 
-**If meeting has linked agenda** (check frontmatter for `agenda: <path>`):
-1. Read the agenda file
-2. Extract unchecked items using the agenda utility
-3. These will be merged into Action Items with `*(from agenda)*` suffix
+User reviews staged sections in one of two ways:
 
-**Extract these sections from the transcript:**
+**Option A: Web App (recommended)**
 
-1. **Action Items** — Commitments with clear owner and deliverable
-2. **Next Steps** — Non-commitment follow-ups (e.g., "reconvene Thursday")
-3. **Decisions** — Key decisions made, with timestamps if available
-4. **Learnings** — Insights worth remembering
-
-**Action item extraction rules:**
-- Must have a clear owner and specific deliverable
-- Reject vague statements ("look into that thing")
-- Reject descriptions of systems/architecture
-- Keep under 150 characters
-- Include timestamp reference if available (e.g., `{{12:34}}`)
-
-**Agenda item merge rules:**
-- Add unchecked agenda items to Action Items section
-- Mark with `*(from agenda)*` suffix
-- If no clear owner in agenda text, use generic format without @ mentions
-
-**Example good action items:**
-- "John to send API docs to Sarah by Friday"
-- "Sarah to review the pricing proposal and provide feedback"
-- "Review Q2 roadmap *(from agenda)*"
-
-**Example bad (reject):**
-- "Me: Yeah, I'll look into that thing we talked about..."
-- "So the way the system works is you first click on..."
-
-Do **not** write staged sections to the meeting file in this mode.
-
-**User Review (commit mode)**: Present each extracted section using the Approve / Edit / Skip pattern (see [PATTERNS.md](../PATTERNS.md) § extract_decisions_learnings for UX reference):
-
-1. **Action Items** — Present list → Approve all / Edit / Skip
-2. **Next Steps** — Present list → Approve all / Edit / Skip
-3. **Decisions** — Present list → Approve all / Edit / Skip
-4. **Learnings** — Present list → Approve all / Edit / Skip
-
-**Save to Meeting File (commit mode)**: Update the meeting file with approved sections. Preserve the collapsed recorder notes structure. Action Items include both extracted items AND merged agenda items. Action item format (REQUIRED for parsing):
-
-```
-- [ ] {Description} (@{owner-slug} → @{counterparty-slug})
+```bash
+arete view
 ```
 
-**Assemble Context Bundle**: Use the **context_bundle_assembly** pattern — see [PATTERNS.md](../PATTERNS.md) — to assemble the structured context bundle for the Significance Analyst.
+The web app provides a review UI where users can:
+- See all staged items across meetings
+- Approve / edit / skip individual items
+- Batch approve meetings
 
-**Topic derivation**: Combine the meeting title with the first 100 characters of the approved Summary from Step 4. Example: `"Product Review — Discussed API-first priorities and JWT auth decision for Q2..."`.
+**Option B: CLI Review**
 
-**Gather these context sections**:
-1. **Strategy & goals** — `arete search "<topic>" --scope context` (top 3 results, max 300 words each)
-2. **Existing memory** — `arete search "<topic>" --scope memory` (top 5 results, max 200 words each)
-3. **People context** — For each attendee: stances, open items, and relationship health only (from `arete people show <slug> --memory`)
+User opens the meeting file directly and reviews the `## Staged Action Items`, `## Staged Decisions`, and `## Staged Learnings` sections.
 
-**Reuse rule**: If `arete people show <slug> --memory` was already run for attendees earlier in this skill run, reuse that output — do **not** re-run `arete people show`.
+### 6. After Approval — Commit to Memory
 
-If 2 or more context sections return empty results, prepend a sparse-context warning:
-> ⚠️ Sparse context — weight raw meeting content more heavily. Available context: [list non-empty sections].
+When user approves items (via web app or CLI):
 
-**Extract Decisions and Learnings (to Memory)**: Use the **significance_analyst** pattern — see [PATTERNS.md](../PATTERNS.md) — with the context bundle as input. Identify what is significant enough to persist in workspace memory. Present ranked candidates for approval; write approved items to `.arete/memory/items/decisions.md` or `.arete/memory/items/learnings.md`. Never write to memory without user approval.
+```bash
+arete meeting approve <slug>
+```
 
----
+This commits approved decisions and learnings to `.arete/memory/items/`.
 
-### 6. Refresh Person Memory Highlights
+### 7. Refresh Person Memory
 
-Use the **refresh_person_memory** pattern — see [PATTERNS.md](../PATTERNS.md). Refresh recurring asks/concerns for attendees so person files include quick-access memory highlights.
-
-### 6.5. Refresh Person Intelligence Memory
-
-**Ordering dependency** — this step MUST run after steps 2–3 complete:
-1. Create/update person files (step 2)
-2. Write `attendee_ids` to meeting frontmatter (step 3)
-3. **Then** refresh person intelligence memory
-
-For each attendee processed, refresh their auto-memory (stances, open items, relationship health):
+For each attendee processed:
 
 ```bash
 arete people memory refresh --person <slug>
 ```
 
-This updates the enriched intelligence sections that meeting-prep and other skills consume via `arete people show <slug> --memory`.
+This updates:
+- Person file with enriched intelligence (stances, open items, relationship health)
+- Commitments service with extracted action items
 
-**CommitmentsService producer path**: `arete people memory refresh` is also the path that syncs extracted commitments (action items) to CommitmentsService. Running this command after processing meetings ensures that any commitments found in meeting notes are available via `arete commitments list`. This is the canonical producer path — CommitmentsService is populated through `process-meetings` → `arete people memory refresh --person <slug>`.
+**Ordering dependency**: This step MUST run after meeting approval completes. The `people memory refresh` command is the canonical path for syncing commitments — running it after processing ensures action items from meetings are available via `arete commitments list`.
 
-### 6.7. Archive Linked Agendas
+### 8. Archive Linked Agendas
 
-After processing is complete, check if the meeting has a linked agenda and mark it as processed.
+The `arete meeting apply` command automatically archives linked agendas:
 
-**For each processed meeting**:
+1. Checks meeting frontmatter for `agenda: <path>` field
+2. If agenda exists, updates its frontmatter: `status: processed`, `processed_at: YYYY-MM-DD`
+3. Agenda stays in `now/agendas/` — no file movement
 
-1. Check meeting frontmatter for `agenda: <path>` field
-2. If no agenda field, skip this meeting
-3. If agenda file doesn't exist at the path:
-   - Log: `Warning: Agenda file not found at [path]`
-   - Continue to next meeting (don't fail)
-4. Read the agenda file and check its frontmatter
-5. If agenda already has `status: processed`, skip (idempotent)
-6. Update agenda file frontmatter:
-   ```yaml
-   ---
-   status: processed
-   processed_at: 2026-03-19
-   ---
-   ```
+If the agenda file doesn't exist or is already processed, it logs a warning and continues.
 
-**Date format**: Use `YYYY-MM-DD` (date only, no timestamp).
+### 9. Report Results
 
-**File location**: Agenda stays in `now/agendas/` — no file movement.
+Report: meetings processed, items staged, and status.
 
-**Track count**: Count newly archived agendas for the report (don't count skipped or already-processed).
-
-### 7. Report
-
-Report: meetings processed, people created/updated, staged sections written (or decisions/learnings committed to memory in `--commit` mode), person memory highlights refreshed, agendas archived.
-
-Include per-attendee intelligence summary:
+**Example output**:
 
 ```
-Sarah: 2 stances, 1 action item
-Mike: 1 stance, 0 action items
+Processed 2 meetings:
+- 2026-03-19-product-sync.md: 3 action items, 1 decision, 2 learnings
+- 2026-03-19-customer-call.md: 2 action items, 0 decisions, 1 learning
+
+Per-attendee summary:
+- Sarah: 2 stances, 1 action item
+- Mike: 1 stance, 0 action items
+
+Staged: 5 action items (ai_001–ai_005), 1 decision (de_001), 3 learnings (le_001–le_003)
+Archived 1 agenda
 ```
 
-In staged mode, also report counts:
+After approval, report memory updates:
 
 ```
-Staged: 3 action items (ai_001–ai_003), 1 decision (de_001), 2 learnings (le_001–le_002)
+Approved: 1 decision, 2 learnings committed to memory
+Refreshed person memory: sarah-smith, mike-jones
 ```
 
-If any linked agendas were archived, include:
+### 10. Handle Unknown Attendees
+
+After processing completes, check if any attendees couldn't be resolved.
+
+The context bundle includes an `unknownAttendees` array:
+
+```json
+{
+  "unknownAttendees": [
+    { "email": "jane.doe@external.com", "name": "Jane Doe" },
+    { "email": "bob@vendor.co", "name": "Bob Smith" }
+  ]
+}
+```
+
+**If unknown attendees exist**, offer to add them conversationally:
 
 ```
-Archived 2 agendas
+I found 2 attendees that aren't tracked yet:
+
+1. Jane Doe (jane.doe@external.com)
+2. Bob Smith (bob@vendor.co)
+
+Would you like me to add any of them? I can create person files in:
+- people/customers/ — for customer contacts
+- people/users/ — for user community members
+- people/internal/ — for team members
+
+Just tell me which category for each, or "skip" to ignore.
 ```
 
-Only report archived count if N > 0. If agendas were skipped (already processed) or had warnings (file not found), those don't count toward N.
+**Do not auto-file unknown attendees** — always ask the user to confirm the category. This prevents incorrectly categorizing people based on assumptions.
+
+---
+
+## Complete Pipeline Example
+
+For processing a single meeting with full pipeline:
+
+```bash
+# 1. Build context
+arete meeting context resources/meetings/2026-03-19-product-sync.md --json > /tmp/context.json
+
+# 2. Extract intelligence with context
+arete meeting extract resources/meetings/2026-03-19-product-sync.md \
+  --context /tmp/context.json --json > /tmp/intelligence.json
+
+# 3. Apply to meeting file (writes staged sections + archives agenda)
+arete meeting apply resources/meetings/2026-03-19-product-sync.md \
+  --intelligence /tmp/intelligence.json
+
+# 4. User reviews in web app
+arete view
+
+# 5. After approval — commit to memory
+arete meeting approve 2026-03-19-product-sync
+
+# 6. Refresh person memory for attendees
+arete people memory refresh --person sarah-smith
+arete people memory refresh --person mike-jones
+```
+
+Or as a single piped command (steps 1-3):
+
+```bash
+arete meeting context <file> --json \
+  | arete meeting extract <file> --context - --json \
+  | arete meeting apply <file> --intelligence -
+```
+
+---
+
+## Legacy Mode (`--commit`)
+
+When `--commit` is passed, skip staged mode and write directly to memory.
+
+**Workflow differences**:
+1. Extract intelligence as normal (steps 2-3)
+2. Skip staged sections — write directly to meeting file
+3. Present each extracted section for user approval using Approve / Edit / Skip pattern
+4. Write approved items directly to `.arete/memory/items/decisions.md` and `.arete/memory/items/learnings.md`
+5. Refresh person memory immediately
+
+Use `--commit` only when:
+- Running from CLI without web app
+- Immediate memory write is needed
+- User prefers inline approval over staged review
+
+---
 
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
-- **Extraction**: `arete meeting extract <file> --stage` — primary extraction path (uses core via AIService)
+- **CLI Primitives**:
+  - `arete meeting context <file> --json` — assemble context bundle
+  - `arete meeting extract <file> --context - --json` — extract intelligence
+  - `arete meeting apply <file> --intelligence -` — write staged sections
+  - `arete meeting approve <slug>` — commit to memory
+  - `arete people memory refresh --person <slug>` — refresh person highlights
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `status`, `processed_at`, `company`, `pillar`)
