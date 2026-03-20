@@ -35,11 +35,12 @@ describe('ContextService (via compat)', () => {
     assert.ok(result.gaps.length > 0);
   });
 
-  it('includes goals/strategy.md when present', async () => {
-    writeFixtureFile('goals/strategy.md', '# Strategy\n\nOur strategic pillars.');
+  it('includes goals/strategy.md when present and relevant to query', async () => {
+    // Strategy file must contain query-relevant tokens to be included
+    writeFixtureFile('goals/strategy.md', '# Strategy\n\nOur strategic pillars for the quarter.');
     const result = await getRelevantContext('plan the quarter', paths);
     const fileResult = result.files.find((file) => file.relativePath === 'goals/strategy.md');
-    assert.ok(fileResult);
+    assert.ok(fileResult, 'strategy.md should be included when content matches query');
     assert.equal(fileResult?.category, 'goals');
     assert.equal(fileResult?.relevanceScore, 0.5);
   });
@@ -88,42 +89,99 @@ describe('ContextService (via compat)', () => {
   });
 
   describe('goal files globbing', () => {
-    it('falls back to quarter.md when only quarter.md exists', async () => {
-      writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
+    it('falls back to quarter.md when only quarter.md exists and is relevant', async () => {
+      // Content must match query tokens to be included
+      writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention for the quarter.');
       const result = await getRelevantContext('plan the quarter', paths);
       const quarterFile = result.files.find((f) => f.relativePath === 'goals/quarter.md');
-      assert.ok(quarterFile, 'quarter.md should be included as fallback');
+      assert.ok(quarterFile, 'quarter.md should be included when content matches query');
       assert.equal(quarterFile?.category, 'goals');
     });
 
-    it('includes individual goal files and excludes quarter.md', async () => {
-      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition.');
-      writeFixtureFile('goals/retention.md', '# Retention Goal\n\nImprove user engagement.');
+    it('includes individual goal files when relevant and excludes quarter.md', async () => {
+      // Files must contain query-relevant tokens
+      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition for the quarter.');
+      writeFixtureFile('goals/retention.md', '# Retention Goal\n\nImprove user engagement quarterly.');
       writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
       const result = await getRelevantContext('plan the quarter', paths);
       const goalFiles = result.files.filter((f) => f.relativePath?.startsWith('goals/'));
       const growthFile = goalFiles.find((f) => f.relativePath === 'goals/growth.md');
       const retentionFile = goalFiles.find((f) => f.relativePath === 'goals/retention.md');
       const quarterFile = goalFiles.find((f) => f.relativePath === 'goals/quarter.md');
-      assert.ok(growthFile, 'growth.md should be included');
-      assert.ok(retentionFile, 'retention.md should be included');
+      assert.ok(growthFile, 'growth.md should be included when content matches query');
+      assert.ok(retentionFile, 'retention.md should be included when content matches query');
       assert.ok(!quarterFile, 'quarter.md should NOT be included when individual files exist');
     });
 
-    it('mixed format: includes strategy.md plus individual goal files', async () => {
-      writeFixtureFile('goals/strategy.md', '# Strategy\n\nOur strategic pillars.');
-      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition.');
+    it('mixed format: includes relevant strategy.md plus individual goal files', async () => {
+      // Files must contain query-relevant tokens
+      writeFixtureFile('goals/strategy.md', '# Strategy\n\nOur strategic pillars for the quarter.');
+      writeFixtureFile('goals/growth.md', '# Growth Goal\n\nIncrease user acquisition quarterly.');
       writeFixtureFile('goals/quarter.md', '# Q1 2026 Goals\n\nFocus on growth and retention.');
       const result = await getRelevantContext('plan the quarter', paths);
       const goalFiles = result.files.filter((f) => f.relativePath?.startsWith('goals/'));
       const strategyFile = goalFiles.find((f) => f.relativePath === 'goals/strategy.md');
       const growthFile = goalFiles.find((f) => f.relativePath === 'goals/growth.md');
       const quarterFile = goalFiles.find((f) => f.relativePath === 'goals/quarter.md');
-      assert.ok(strategyFile, 'strategy.md should always be included');
-      assert.ok(growthFile, 'individual goal file should be included');
+      assert.ok(strategyFile, 'strategy.md should be included when content matches query');
+      assert.ok(growthFile, 'individual goal file should be included when content matches query');
       assert.ok(!quarterFile, 'quarter.md should NOT be included when individual files exist');
       assert.equal(strategyFile?.category, 'goals');
       assert.equal(growthFile?.category, 'goals');
+    });
+  });
+
+  describe('summary extraction', () => {
+    it('strips HTML comments from summary extraction', async () => {
+      // Regression test: HTML comments at the top of files should not appear in summaries
+      writeFixtureFile(
+        'context/business-overview.md',
+        `<!--
+[DRAFT] Generated by rapid-context-dump
+Source: website (example.com), internal docs
+Status: PENDING REVIEW - Do not use until promoted
+-->
+
+# Business Overview
+
+**Acme Corp** is a leading provider of widgets.`,
+      );
+      const result = await getRelevantContext('business overview', paths, {
+        primitives: ['Problem'],
+      });
+      const businessFile = result.files.find(
+        (f) => f.relativePath === 'context/business-overview.md',
+      );
+      assert.ok(businessFile, 'business-overview.md should be found');
+      assert.ok(
+        !businessFile?.summary?.includes('<!--'),
+        'summary should not contain HTML comment opening',
+      );
+      assert.ok(
+        !businessFile?.summary?.includes('DRAFT'),
+        'summary should not contain comment content',
+      );
+      assert.ok(
+        businessFile?.summary?.includes('Acme Corp'),
+        'summary should contain actual content',
+      );
+    });
+
+    it('handles files with only HTML comments followed by content', async () => {
+      writeFixtureFile(
+        'goals/strategy.md',
+        `<!-- Source: internal -->
+# Strategy
+
+Our vision is to dominate the market.`,
+      );
+      const result = await getRelevantContext('strategy', paths);
+      const strategyFile = result.files.find((f) => f.relativePath === 'goals/strategy.md');
+      assert.ok(strategyFile, 'strategy.md should be found');
+      assert.ok(
+        strategyFile?.summary?.includes('dominate'),
+        'summary should contain actual content after comment',
+      );
     });
   });
 });

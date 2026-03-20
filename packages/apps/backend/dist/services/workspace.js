@@ -415,7 +415,7 @@ export async function updateItemStatus(workspaceRoot, slug, itemId, options) {
  * 3. Refresh QMD index
  * 4. Refresh person memory for each attendee (syncs commitments)
  */
-export async function approveMeeting(workspaceRoot, slug) {
+export async function approveMeeting(workspaceRoot, slug, options = {}) {
     const filePath = slugToPath(workspaceRoot, slug);
     const memoryDir = join(workspaceRoot, '.arete', 'memory', 'items');
     // Step 1: Commit approved items
@@ -457,12 +457,61 @@ export async function approveMeeting(workspaceRoot, slug) {
         // Non-fatal — log but continue
         console.error('[approveMeeting] QMD refresh failed:', err);
     }
-    // Step 4: Refresh person memory for attendees (syncs commitments)
+    // Step 4: Sync action items to commitments with goalSlug (if provided)
+    // This runs before refreshPersonMemory so items with goalSlug are added first;
+    // refreshPersonMemory will skip them due to hash-based dedup.
     const personMemoryRefreshed = [];
     if (attendeeIds.length > 0) {
         try {
             const services = await createServices(workspaceRoot);
             const paths = services.workspace.getPaths(workspaceRoot);
+            // If goalSlug provided, sync action items directly with goalSlug
+            if (options.goalSlug && meeting.approvedItems.actionItems.length > 0) {
+                const { createHash } = await import('node:crypto');
+                const meetingDate = typeof meeting.frontmatter['date'] === 'string'
+                    ? meeting.frontmatter['date'].slice(0, 10)
+                    : new Date().toISOString().slice(0, 10);
+                // Build PersonActionItems with goalSlug for each attendee
+                const personItemsMap = new Map();
+                // Parse action items from approved list to extract owner info
+                for (const actionItemText of meeting.approvedItems.actionItems) {
+                    // Parse owner notation: "Text (@owner-slug → @counterparty-slug)"
+                    const ownerMatch = actionItemText.match(/\(@([a-z0-9-]+)(?:\s*→\s*@([a-z0-9-]+))?\)$/i);
+                    const text = ownerMatch
+                        ? actionItemText.slice(0, actionItemText.lastIndexOf('(')).trim()
+                        : actionItemText;
+                    const ownerSlug = ownerMatch?.[1];
+                    const counterpartySlug = ownerMatch?.[2];
+                    // Default direction is i_owe_them (→)
+                    const direction = 'i_owe_them';
+                    // Determine person slug (the other party in the commitment)
+                    const personSlug = direction === 'i_owe_them' ? counterpartySlug : ownerSlug;
+                    if (!personSlug)
+                        continue;
+                    // Compute hash for dedup
+                    const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
+                    const hash = createHash('sha256')
+                        .update(`${normalized}${personSlug}${direction}`)
+                        .digest('hex');
+                    const actionItem = {
+                        text,
+                        direction,
+                        source: `${slug}.md`,
+                        date: meetingDate,
+                        hash,
+                        stale: false,
+                        goalSlug: options.goalSlug,
+                    };
+                    const existing = personItemsMap.get(personSlug) ?? [];
+                    existing.push(actionItem);
+                    personItemsMap.set(personSlug, existing);
+                }
+                // Sync to commitments service
+                if (personItemsMap.size > 0) {
+                    await services.commitments.sync(personItemsMap);
+                }
+            }
+            // Step 5: Refresh person memory for attendees
             for (const personSlug of attendeeIds) {
                 try {
                     await services.entity.refreshPersonMemory(paths, {
@@ -488,6 +537,7 @@ export async function approveMeeting(workspaceRoot, slug) {
             qmdRefreshed,
             personMemoryRefreshed,
             commitmentsUpdated: personMemoryRefreshed.length > 0,
+            ...(options.goalSlug ? { goalSlug: options.goalSlug } : {}),
         },
     };
 }

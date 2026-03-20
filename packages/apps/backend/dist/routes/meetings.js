@@ -144,10 +144,20 @@ export function createMeetingsRouter(workspaceRoot) {
         }
     });
     // POST /api/meetings/:slug/approve — commit approved items
+    // Body: { goalSlug?: string } - optional goal to link action items to
     app.post('/:slug/approve', async (c) => {
         const slug = c.req.param('slug');
+        // Parse optional body for goalSlug
+        let goalSlug;
         try {
-            const meeting = await withSlugLock(slug, () => workspaceService.approveMeeting(workspaceRoot, slug));
+            const body = await c.req.json();
+            goalSlug = body.goalSlug;
+        }
+        catch {
+            // No body or invalid JSON — use defaults
+        }
+        try {
+            const meeting = await withSlugLock(slug, () => workspaceService.approveMeeting(workspaceRoot, slug, { goalSlug }));
             return c.json(meeting);
         }
         catch (err) {

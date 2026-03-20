@@ -62,14 +62,17 @@ const GAP_SUGGESTIONS: Record<ProductPrimitive, string> = {
 // ---------------------------------------------------------------------------
 
 function extractSummary(content: string): string {
-  const lines = content.split('\n');
+  // Strip HTML comments before processing (common in context files for metadata)
+  let cleaned = content.replace(/<!--[\s\S]*?-->/g, '').trim();
+
+  const lines = cleaned.split('\n');
   const paras: string[] = [];
   let buf = '';
   for (const line of lines) {
     if (line.startsWith('---') && paras.length === 0 && buf === '') {
-      const fmEnd = content.indexOf('\n---', content.indexOf('---') + 3);
+      const fmEnd = cleaned.indexOf('\n---', cleaned.indexOf('---') + 3);
       if (fmEnd >= 0) {
-        const afterFm = content.slice(fmEnd + 4).trim();
+        const afterFm = cleaned.slice(fmEnd + 4).trim();
         return extractSummary(afterFm);
       }
     }
@@ -183,13 +186,17 @@ export class ContextService {
       });
     };
 
-    // 1. Always-include files
+    // 1. Always-include files (only if relevant to query)
     for (const entry of ALWAYS_INCLUDE) {
       const fullPath = join(paths.root, entry.file);
-      await addFile(fullPath, entry.category, undefined, staticScore);
+      const content = await safeRead(fullPath);
+      if (content && hasTokenOverlap(content, queryTokens)) {
+        await addFile(fullPath, entry.category, undefined, staticScore);
+      }
     }
 
     // 2. Dynamic goal files (glob goals/*.md, excluding strategy.md)
+    // Only include if relevant to query
     const goalsDir = join(paths.root, 'goals');
     const goalsDirExists = await this.storage.exists(goalsDir);
     let individualGoalFilesFound = false;
@@ -200,17 +207,26 @@ export class ContextService {
         if (GOALS_EXCLUDE.has(baseName)) continue;
         // Skip the fallback file - we'll add it only if no individual files found
         if (baseName === 'quarter.md') continue;
-        await addFile(goalPath, 'goals', undefined, staticScore);
-        individualGoalFilesFound = true;
+        // Only include goals relevant to the query
+        const content = await safeRead(goalPath);
+        if (content && hasTokenOverlap(content, queryTokens)) {
+          await addFile(goalPath, 'goals', undefined, staticScore);
+          individualGoalFilesFound = true;
+        }
       }
     }
-    // Fallback: include quarter.md if no individual goal files found
+    // Fallback: include quarter.md if no relevant individual goal files found
     if (!individualGoalFilesFound) {
       const fallbackPath = join(paths.root, GOALS_FALLBACK);
-      await addFile(fallbackPath, 'goals', undefined, staticScore);
+      const fallbackContent = await safeRead(fallbackPath);
+      if (fallbackContent && hasTokenOverlap(fallbackContent, queryTokens)) {
+        await addFile(fallbackPath, 'goals', undefined, staticScore);
+      }
     }
 
     // 3. Primitive-mapped files
+    // Only include primitive files if they're relevant to the query (have token overlap)
+    // This prevents generic business context from polluting entity-specific queries
     for (const prim of primitives) {
       const mappings = PRIMITIVE_FILE_MAP[prim];
       let foundForPrimitive = false;
@@ -218,7 +234,7 @@ export class ContextService {
         for (const file of mapping.files) {
           const fullPath = join(paths.root, file);
           const content = await safeRead(fullPath);
-          if (content !== null && !isPlaceholder(content)) {
+          if (content !== null && !isPlaceholder(content) && hasTokenOverlap(content, queryTokens)) {
             await addFile(fullPath, mapping.category, prim, staticScore);
             foundForPrimitive = true;
           }
@@ -281,6 +297,7 @@ export class ContextService {
     }
 
     // 7. SearchProvider discovery
+    // Semantic search can upgrade scores for files already added with static scores
     try {
       const searchResults = await this.searchProvider.semanticSearch(query, {
         limit: maxFiles * 2,
@@ -290,8 +307,17 @@ export class ContextService {
         // QMD returns relative paths (e.g., "resources/meetings/foo.md")
         // Resolve to absolute before processing
         const absolutePath = resolve(paths.root, result.path);
-        if (seenPaths.has(absolutePath)) continue;
         if (result.score < minScore) continue;
+
+        // If file was already added (e.g., via static scan), upgrade its score if search score is higher
+        if (seenPaths.has(absolutePath)) {
+          const existingFile = files.find(f => f.path === absolutePath);
+          if (existingFile && result.score > (existingFile.relevanceScore ?? 0)) {
+            existingFile.relevanceScore = result.score;
+          }
+          continue;
+        }
+
         const relPath = relative(paths.root, absolutePath);
         let category: ContextFile['category'] = 'resources';
         if (relPath.startsWith('context/')) category = 'context';

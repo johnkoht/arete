@@ -155,29 +155,31 @@ function formatBriefingMarkdown(task, skill, confidence, context, memory, entiti
             untagged.push(file);
         }
     }
+    // Only show primitive sections that have high-relevance content (> 0.5)
+    // This prevents generic context files from polluting entity-specific queries
+    const HIGH_RELEVANCE_THRESHOLD = 0.55;
+    const shownPrimitives = new Set();
     for (const prim of context.primitives) {
         const files = byPrimitive.get(prim) || [];
-        const gap = context.gaps.find(g => g.primitive === prim);
-        lines.push(`### ${prim}`);
-        if (files.length > 0) {
-            const sortedFiles = [...files].sort((a, b) => {
-                const scoreA = a.relevanceScore ?? 0;
-                const scoreB = b.relevanceScore ?? 0;
-                return scoreB - scoreA;
-            });
-            for (const f of sortedFiles) {
-                const summary = f.summary || '(no summary)';
-                const scoreStr = f.relevanceScore !== undefined
-                    ? ` (relevance: ${f.relevanceScore.toFixed(2)})`
-                    : '';
-                lines.push(`- ${summary} — Source: \`${f.relativePath}\`${scoreStr}`);
-            }
+        // Filter to high-relevance files for this primitive
+        const highRelevanceFiles = files.filter(f => (f.relevanceScore ?? 0) > HIGH_RELEVANCE_THRESHOLD);
+        // Skip primitive section entirely if no high-relevance content
+        if (highRelevanceFiles.length === 0) {
+            continue;
         }
-        if (gap) {
-            lines.push('');
-            lines.push('**Gap**: ' + gap.description);
-            if (gap.suggestion)
-                lines.push(`  - Suggestion: ${gap.suggestion}`);
+        shownPrimitives.add(prim);
+        lines.push(`### ${prim}`);
+        const sortedFiles = [...highRelevanceFiles].sort((a, b) => {
+            const scoreA = a.relevanceScore ?? 0;
+            const scoreB = b.relevanceScore ?? 0;
+            return scoreB - scoreA;
+        });
+        for (const f of sortedFiles) {
+            const summary = f.summary || '(no summary)';
+            const scoreStr = f.relevanceScore !== undefined
+                ? ` (relevance: ${f.relevanceScore.toFixed(2)})`
+                : '';
+            lines.push(`- ${summary} — Source: \`${f.relativePath}\`${scoreStr}`);
         }
         lines.push('');
     }
@@ -245,10 +247,13 @@ function formatBriefingMarkdown(task, skill, confidence, context, memory, entiti
         }
         lines.push('');
     }
-    if (context.gaps.length > 0) {
+    // Only show gaps for primitives that were actually shown
+    // This prevents noise for entity queries where primitive framework doesn't apply
+    const relevantGaps = context.gaps.filter(g => g.primitive && shownPrimitives.has(g.primitive));
+    if (relevantGaps.length > 0) {
         lines.push('### Gaps');
         lines.push('**What\'s missing that this task might need:**');
-        for (const gap of context.gaps) {
+        for (const gap of relevantGaps) {
             const suggestion = gap.suggestion ? ` — Suggestion: ${gap.suggestion}` : '';
             lines.push(`- ${gap.description}${suggestion}`);
         }
