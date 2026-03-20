@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ReviewItem, ItemStatus, ItemType, ApprovedItems } from "@/api/types.js";
 import { Circle, CheckCircle2, XCircle, Check, X, Lightbulb, Bookmark, ListTodo, ChevronDown, CheckCheck, Target, FileText, ArrowRight, ArrowLeft, User } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -221,6 +221,13 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
   const approved = items.filter((i) => i.status === "approved").length;
   const skipped = items.filter((i) => i.status === "skipped").length;
 
+  // Ref to always have latest items — avoids stale closure issues when user
+  // makes rapid changes (e.g., set goal then immediately click approve)
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
   // Load goals for action item goal picker
   const { data: goalsData } = useGoalsList();
   const goalItems: SearchableSelectItem[] = (goalsData ?? []).map((g) => ({
@@ -230,16 +237,16 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
   }));
 
   const handleStatusChange = useCallback((id: string, status: ItemStatus) => {
-    onItemsChange(items.map((i) => (i.id === id ? { ...i, status } : i)));
-  }, [items, onItemsChange]);
+    onItemsChange(itemsRef.current.map((i) => (i.id === id ? { ...i, status } : i)));
+  }, [onItemsChange]);
 
   const handleTextChange = useCallback((id: string, text: string) => {
-    onItemsChange(items.map((i) => (i.id === id ? { ...i, text } : i)));
-  }, [items, onItemsChange]);
+    onItemsChange(itemsRef.current.map((i) => (i.id === id ? { ...i, text } : i)));
+  }, [onItemsChange]);
 
   const handleGoalChange = useCallback((id: string, goalSlug: string | null) => {
-    onItemsChange(items.map((i) => (i.id === id ? { ...i, goalSlug: goalSlug ?? undefined } : i)));
-  }, [items, onItemsChange]);
+    onItemsChange(itemsRef.current.map((i) => (i.id === id ? { ...i, goalSlug: goalSlug ?? undefined } : i)));
+  }, [onItemsChange]);
 
   const groups = [
     { label: "Action Items", icon: ListTodo, items: actions },
@@ -268,7 +275,7 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
 
     // Update all items in the section to approved
     const idsToApprove = new Set(itemsToApprove.map((i) => i.id));
-    const newItems = items.map((i) =>
+    const newItems = itemsRef.current.map((i) =>
       idsToApprove.has(i.id) ? { ...i, status: "approved" as ItemStatus } : i
     );
     onItemsChange(newItems);
@@ -277,7 +284,7 @@ export function ReviewItemsSection({ items, onItemsChange, onSaveApprove, onBulk
     if (onBulkApprove) {
       onBulkApprove(itemsToApprove.map((i) => i.id));
     }
-  }, [items, onItemsChange, onBulkApprove]);
+  }, [onItemsChange, onBulkApprove]);
 
   return (
     <div>

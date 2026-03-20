@@ -442,6 +442,35 @@ for (const [key, data] of context.previousData) {
 
 ---
 
+## useCallback Stale Closure with Rapid User Interactions (2026-03-20)
+
+**What broke**: When user selected a goal on an action item, then quickly clicked "approve" on another item, the goal selection was lost.
+
+**Why**: Classic React stale closure bug. The `handleStatusChange` callback used `items` from its closure:
+```tsx
+const handleStatusChange = useCallback((id: string, status: ItemStatus) => {
+  onItemsChange(items.map((i) => (i.id === id ? { ...i, status } : i)));
+}, [items, onItemsChange]);
+```
+
+When user sets a goal, state updates to `items_v2`. React schedules a re-render, but before it happens, user clicks approve. The callback still references `items_v1` (without the goal), so the status change overwrites the goal change.
+
+**Fix**: Use a ref that's always synchronized with the latest items:
+```tsx
+const itemsRef = useRef(items);
+useEffect(() => {
+  itemsRef.current = items;
+}, [items]);
+
+const handleStatusChange = useCallback((id: string, status: ItemStatus) => {
+  onItemsChange(itemsRef.current.map((i) => (i.id === id ? { ...i, status } : i)));
+}, [onItemsChange]); // Note: no items dependency needed
+```
+
+**Prevention**: When callbacks modify state arrays and users can trigger multiple changes rapidly, use a ref pattern instead of depending on the prop/state directly in useCallback.
+
+---
+
 ## Pre-Edit Checklist
 - [ ] Type changes in `src/api/types.ts` need corresponding changes in `src/api/meetings.ts` (mapping layer) and possibly component props
 - [ ] New API endpoints → add to `src/api/meetings.ts` + a hook in `src/hooks/meetings.ts`
