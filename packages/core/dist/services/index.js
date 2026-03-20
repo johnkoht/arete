@@ -31,4 +31,6 @@ export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goa
 // Meeting context assembly
 export { buildMeetingContext } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
+// Meeting apply service
+export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 //# sourceMappingURL=index.js.map

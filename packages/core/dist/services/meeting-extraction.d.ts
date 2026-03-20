@@ -11,7 +11,14 @@
  *   - Action items > 150 chars
  *   - Items starting with "Me:", "Them:", "Yeah", "I'm not sure"
  *   - Items with multiple sentences (more than one period)
+ *
+ * Context-enhanced extraction (T2):
+ *   When a MeetingContextBundle is provided, the prompt is enhanced with:
+ *   - Resolved attendee info (stances, open items) for better owner resolution
+ *   - Related goals for context-aware extraction
+ *   - Unchecked agenda items that become action item candidates
  */
+import type { MeetingContextBundle } from './meeting-context.js';
 /**
  * Function signature for the LLM call.
  * Accepts a prompt string and returns the LLM's text response.
@@ -74,8 +81,9 @@ export declare function jaccardSimilarity(a: string[], b: string[]): number;
  * @param transcript - Meeting transcript text
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
+ * @param context - Optional MeetingContextBundle for enhanced extraction
  */
-export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string): string;
+export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle): string;
 /**
  * Parse the LLM response into a MeetingExtractionResult.
  * Handles various response formats gracefully — never throws.
@@ -87,12 +95,13 @@ export declare function parseMeetingExtractionResponse(response: string): Meetin
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees and ownerSlug for better context
+ * @param options - Optional attendees, ownerSlug, and context for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export declare function extractMeetingIntelligence(transcript: string, callLLM: LLMCallFn, options?: {
     attendees?: string[];
     ownerSlug?: string;
+    context?: MeetingContextBundle;
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.

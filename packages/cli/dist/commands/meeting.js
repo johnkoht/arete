@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, } from '@arete/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -277,6 +277,7 @@ export function registerMeetingCommands(program) {
         .option('--dry-run', 'Show what would be written without writing')
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
+        .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
         .action(async (file, opts) => {
         const services = await createServices(process.cwd());
         // Early check: --clear-approved requires --stage
@@ -365,6 +366,62 @@ export function registerMeetingCommands(program) {
                 }
             }
         }
+        // Parse context bundle if provided
+        let contextBundle;
+        if (opts.context) {
+            try {
+                let contextJson;
+                if (opts.context === '-') {
+                    // Read from stdin
+                    const chunks = [];
+                    for await (const chunk of process.stdin) {
+                        chunks.push(chunk);
+                    }
+                    contextJson = Buffer.concat(chunks).toString('utf8');
+                }
+                else {
+                    // Read from file
+                    contextJson = readFileSync(opts.context, 'utf8');
+                }
+                const parsed = JSON.parse(contextJson);
+                // Handle wrapped format (success: true, ...) from `arete meeting context --json`
+                if (parsed.success === true && parsed.meeting) {
+                    // Extract the bundle fields from the response
+                    contextBundle = {
+                        meeting: parsed.meeting,
+                        agenda: (parsed.agenda ?? null),
+                        attendees: (parsed.attendees ?? []),
+                        unknownAttendees: (parsed.unknownAttendees ?? []),
+                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
+                        warnings: (parsed.warnings ?? []),
+                    };
+                }
+                else if (parsed.meeting && typeof parsed.meeting === 'object') {
+                    // Direct bundle format with required fields
+                    contextBundle = {
+                        meeting: parsed.meeting,
+                        agenda: (parsed.agenda ?? null),
+                        attendees: (parsed.attendees ?? []),
+                        unknownAttendees: (parsed.unknownAttendees ?? []),
+                        relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }),
+                        warnings: (parsed.warnings ?? []),
+                    };
+                }
+                else {
+                    throw new Error('Invalid context format: missing required "meeting" field');
+                }
+            }
+            catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: false, error: `Failed to parse context: ${msg}` }));
+                }
+                else {
+                    error(`Failed to parse context: ${msg}`);
+                }
+                process.exit(1);
+            }
+        }
         // Create LLM call wrapper using AIService
         const callLLM = async (prompt) => {
             const result = await services.ai.call('extraction', prompt);
@@ -375,6 +432,7 @@ export function registerMeetingCommands(program) {
         try {
             extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
                 attendees: attendees.length > 0 ? attendees : undefined,
+                context: contextBundle,
             });
         }
         catch (err) {
@@ -434,6 +492,7 @@ export function registerMeetingCommands(program) {
             validationWarnings: extractionResult.validationWarnings,
             staged: shouldStage,
             dryRun,
+            contextUsed: !!contextBundle,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         if (opts.json) {
@@ -914,6 +973,127 @@ export function registerMeetingCommands(program) {
             console.log('');
         }
         success('Context bundle assembled');
+    });
+    // Apply subcommand - apply extracted intelligence to a meeting file
+    meetingCmd
+        .command('apply <file>')
+        .description('Apply extracted intelligence to a meeting file')
+        .option('--intelligence <json>', 'Intelligence JSON (or - for stdin)')
+        .option('--skip-agenda', 'Skip agenda archival')
+        .option('--clear', 'Clear existing staged sections before writing')
+        .option('--skip-qmd', 'Skip automatic qmd index update')
+        .option('--json', 'Output as JSON')
+        .action(async (file, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const config = await loadConfig(services.storage, root);
+        // Parse intelligence from --intelligence flag or stdin
+        if (!opts.intelligence) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Provide --intelligence <json> or --intelligence -' }));
+            }
+            else {
+                error('Provide --intelligence <json> or --intelligence -');
+                info('Example: arete meeting apply meeting.md --intelligence \'{"summary":"..."}\'');
+                info('Example: arete meeting extract meeting.md --json | arete meeting apply meeting.md --intelligence -');
+            }
+            process.exit(1);
+        }
+        let intelligenceJson;
+        if (opts.intelligence === '-') {
+            // Read from stdin
+            const chunks = [];
+            for await (const chunk of process.stdin) {
+                chunks.push(chunk);
+            }
+            intelligenceJson = Buffer.concat(chunks).toString('utf8');
+        }
+        else {
+            intelligenceJson = opts.intelligence;
+        }
+        // Parse intelligence JSON
+        let intelligence;
+        try {
+            const parsed = JSON.parse(intelligenceJson);
+            // Handle both wrapped (success: true, intelligence: {...}) and unwrapped formats
+            if (parsed.intelligence && typeof parsed.intelligence === 'object') {
+                intelligence = parsed.intelligence;
+            }
+            else {
+                intelligence = parsed;
+            }
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Invalid intelligence JSON: ${msg}` }));
+            }
+            else {
+                error(`Invalid intelligence JSON: ${msg}`);
+            }
+            process.exit(1);
+        }
+        // Resolve file path
+        const meetingPath = file.startsWith('/') ? file : join(root, file);
+        // Apply intelligence using the core service
+        let result;
+        try {
+            result = await applyMeetingIntelligence(meetingPath, intelligence, {
+                storage: services.storage,
+                workspaceRoot: root,
+            }, {
+                skipAgenda: opts.skipAgenda,
+                clear: opts.clear,
+            });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        // Refresh QMD index unless --skip-qmd
+        let qmdResult;
+        if (!opts.skipQmd) {
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        }
+        // Build response
+        const response = {
+            success: true,
+            ...result,
+            qmd: qmdResult ?? { indexed: false, skipped: true },
+        };
+        if (opts.json) {
+            console.log(JSON.stringify(response, null, 2));
+            return;
+        }
+        // Human-readable output
+        success(`Applied intelligence to: ${file}`);
+        listItem('Action items staged', `${result.actionItemsStaged}`);
+        listItem('Decisions staged', `${result.decisionsStaged}`);
+        listItem('Learnings staged', `${result.learningsStaged}`);
+        if (result.agendaArchived) {
+            info(`Agenda archived: ${result.agendaArchived}`);
+        }
+        if (result.warnings.length > 0) {
+            for (const warning of result.warnings) {
+                warn(warning);
+            }
+        }
+        displayQmdResult(qmdResult);
     });
 }
 async function resolveMeetingPath(services, resourcesPath, root, file, latest) {

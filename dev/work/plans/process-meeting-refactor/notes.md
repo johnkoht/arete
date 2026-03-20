@@ -284,17 +284,73 @@ arete memory add --from-json today.json --type learning --require-approval
 
 ---
 
-## Open Questions (Resolved)
+## Decisions (Resolved)
 
-1. **Context bundle schema** — Use `brief` output as starting point. Add note to revisit if it's not helpful enough (separate problem).
+1. **Context bundle schema** — Finalized (see schema below). Use `arete brief` for related context.
 
-2. **Goal/project inference** — Match against `goals/*.md` files by title/keywords. If ambiguous, ask user. Simple approach.
+2. **Brief query** — Use meeting title only (not attendees) to avoid noise. `arete brief --for "<meeting title>"`
 
-3. **Priority in extraction** — Focus on action item QUALITY over priority. Detect commitment language ("I'll get that today" vs. vague). Priority is secondary. See future work item about analyzing staged vs. approved patterns.
+3. **Goal/project inference** — Handled by brief service. No custom goal matching needed.
 
-4. **Error handling** — Skip + warn. If person lookup fails, continue without that context. Partial context is better than failure. Example: "No profile found for jane.smith@acme.com, continuing without context." The skill/agent can ask at the end: "Jane Smith wasn't a tracked person, do you want to add them?" — handle conversationally for now, solve programmatically later.
+4. **Priority in extraction** — Focus on action item QUALITY over priority. Detect commitment language ("I'll get that today" vs. vague). Priority is secondary.
 
-5. **Incremental rollout** — All at once.
+5. **Error handling** — Skip + warn. If person lookup fails, continue without that context. Agent can ask at end: "Jane Smith wasn't a tracked person, do you want to add them?"
+
+6. **Agenda marker** — Dropped. No `*(from agenda)*` suffix needed.
+
+7. **Web app** — Add Task 5 to update backend to use new primitives.
+
+8. **Backward compatibility** — `meeting extract` without `--context` works exactly as before.
+
+---
+
+## Context Bundle Schema (Finalized)
+
+```typescript
+interface MeetingContextBundle {
+  meeting: {
+    path: string;           // "resources/meetings/2026-03-19-product-sync.md"
+    title: string;          // "Product Sync"
+    date: string;           // "2026-03-19"
+    attendees: string[];    // ["jane.smith@acme.com", "john@company.com"]
+    transcript: string;     // Full transcript text
+  };
+  
+  agenda: {
+    path: string;           // "now/agendas/2026-03-19-product-sync.md"
+    items: AgendaItem[];    // All items with checked status
+    unchecked: string[];    // Just unchecked item texts (for merging)
+  } | null;                 // null if no agenda found
+  
+  attendees: Array<{
+    slug: string;           // "jane-smith"
+    email: string;          // "jane.smith@acme.com"
+    name: string;           // "Jane Smith"
+    category: string;       // "internal" | "customers" | "users"
+    profile: string;        // Profile summary
+    stances: string[];      // Key stances
+    openItems: string[];    // Open items with this person
+    recentMeetings: string[]; // Recent meeting titles
+  }>;
+  
+  // Unknown attendees (no person file found)
+  unknownAttendees: Array<{
+    email: string;
+    name: string;
+  }>;
+  
+  // From arete brief --for "<meeting title>"
+  relatedContext: {
+    goals: Array<{ slug: string; title: string; summary: string }>;
+    projects: Array<{ slug: string; title: string; summary: string }>;
+    recentDecisions: string[];
+    recentLearnings: string[];
+  };
+  
+  // Warnings/diagnostics
+  warnings: string[];       // ["No profile found for jane.smith@acme.com"]
+}
+```
 
 ---
 
