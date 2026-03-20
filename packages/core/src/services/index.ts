@@ -106,3 +106,11 @@ export type {
   MeetingContextDeps,
 } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
+
+// Meeting apply service
+export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
+export type {
+  ApplyMeetingOptions,
+  ApplyMeetingResult,
+  ApplyMeetingDeps,
+} from './meeting-apply.js';

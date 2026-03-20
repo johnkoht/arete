@@ -25,6 +25,7 @@ import {
   parseGoals,
   extractAttendeeSlugs,
   buildMeetingContext,
+  applyMeetingIntelligence,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -35,6 +36,8 @@ import type {
   FilteredItem,
   StagedItemStatus,
   MeetingContextBundle,
+  MeetingIntelligence,
+  ApplyMeetingResult,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -1100,6 +1103,139 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       success('Context bundle assembled');
+    });
+
+  // Apply subcommand - apply extracted intelligence to a meeting file
+  meetingCmd
+    .command('apply <file>')
+    .description('Apply extracted intelligence to a meeting file')
+    .option('--intelligence <json>', 'Intelligence JSON (or - for stdin)')
+    .option('--skip-agenda', 'Skip agenda archival')
+    .option('--clear', 'Clear existing staged sections before writing')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--json', 'Output as JSON')
+    .action(async (file: string, opts: {
+      intelligence?: string;
+      skipAgenda?: boolean;
+      clear?: boolean;
+      skipQmd?: boolean;
+      json?: boolean;
+    }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const config = await loadConfig(services.storage, root);
+
+      // Parse intelligence from --intelligence flag or stdin
+      if (!opts.intelligence) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Provide --intelligence <json> or --intelligence -' }));
+        } else {
+          error('Provide --intelligence <json> or --intelligence -');
+          info('Example: arete meeting apply meeting.md --intelligence \'{"summary":"..."}\'');
+          info('Example: arete meeting extract meeting.md --json | arete meeting apply meeting.md --intelligence -');
+        }
+        process.exit(1);
+      }
+
+      let intelligenceJson: string;
+      if (opts.intelligence === '-') {
+        // Read from stdin
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+          chunks.push(chunk as Buffer);
+        }
+        intelligenceJson = Buffer.concat(chunks).toString('utf8');
+      } else {
+        intelligenceJson = opts.intelligence;
+      }
+
+      // Parse intelligence JSON
+      let intelligence: MeetingIntelligence;
+      try {
+        const parsed = JSON.parse(intelligenceJson) as Record<string, unknown>;
+        // Handle both wrapped (success: true, intelligence: {...}) and unwrapped formats
+        if (parsed.intelligence && typeof parsed.intelligence === 'object') {
+          intelligence = parsed.intelligence as MeetingIntelligence;
+        } else {
+          intelligence = parsed as MeetingIntelligence;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: `Invalid intelligence JSON: ${msg}` }));
+        } else {
+          error(`Invalid intelligence JSON: ${msg}`);
+        }
+        process.exit(1);
+      }
+
+      // Resolve file path
+      const meetingPath = file.startsWith('/') ? file : join(root, file);
+
+      // Apply intelligence using the core service
+      let result: ApplyMeetingResult;
+      try {
+        result = await applyMeetingIntelligence(meetingPath, intelligence, {
+          storage: services.storage,
+          workspaceRoot: root,
+        }, {
+          skipAgenda: opts.skipAgenda,
+          clear: opts.clear,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      // Refresh QMD index unless --skip-qmd
+      let qmdResult: QmdRefreshResult | undefined;
+      if (!opts.skipQmd) {
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
+      // Build response
+      const response = {
+        success: true,
+        ...result,
+        qmd: qmdResult ?? { indexed: false, skipped: true },
+      };
+
+      if (opts.json) {
+        console.log(JSON.stringify(response, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      success(`Applied intelligence to: ${file}`);
+      listItem('Action items staged', `${result.actionItemsStaged}`);
+      listItem('Decisions staged', `${result.decisionsStaged}`);
+      listItem('Learnings staged', `${result.learningsStaged}`);
+
+      if (result.agendaArchived) {
+        info(`Agenda archived: ${result.agendaArchived}`);
+      }
+
+      if (result.warnings.length > 0) {
+        for (const warning of result.warnings) {
+          warn(warning);
+        }
+      }
+
+      displayQmdResult(qmdResult);
     });
 }
 
