@@ -28,3 +28,21 @@ Simplify prepare-meeting-agenda output; avoid over-engineered or overly detailed
 
 ### Skills discovery on no-match
 When the router returns no match, Areté could run `npx skills find <query>` and suggest installable skills from skills.sh. Explore: integrate into the "no match" path or add a "suggest skills" step in GUIDE mode.
+
+### [2026-03-19] Brief feature needs better summaries
+Currently `arete brief --for "topic"` returns relevance-ranked file pointers, but summaries are often just filenames or titles (e.g., "Project doc: account-rollout-analysis.md"). The agent still has to read files to understand them.
+
+**Issues identified:**
+- `extractSummary()` pulls first paragraph, but many files have minimal/unhelpful openings
+- Project docs often show as just "Project doc: filename.md"
+- Meetings show date/source metadata instead of what was discussed
+- People files show role/company but not relationship context
+
+**Improvement candidates:**
+1. **Smarter extraction** — Pull first substantive paragraph (skip metadata, headers, HTML comments) + key bullet points
+2. **Structured frontmatter** — Add optional `summary:` field that gets prioritized
+3. **Pre-computed summaries** — Generate AI summaries at index time (cost vs. quality tradeoff)
+4. **Entity-aware formatting** — Format people/meetings/projects differently with relevant fields
+5. **Configurable depth** — `--brief` (pointers only) vs `--detailed` (include content snippets)
+
+The value of good summaries: agent can answer simple questions without file reads, faster context assembly.
