@@ -57,3 +57,25 @@ Follow the significance_analyst pattern. Do not follow keyword-scanning steps be
 **What broke**: When splitting the sync skill into fathom/krisp, a developer incorrectly added fathom and krisp as consumers of `extract_decisions_learnings`. Pull-only skills don't do extraction — only process-meetings does. An agent reading the wrong consumer list would try to run extraction during a fathom pull.
 
 **How to avoid**: When updating "Used by" lists in PATTERNS.md, verify each listed skill actually invokes the pattern in its workflow. `grep -r "pattern_name" packages/runtime/skills/` to confirm.
+
+---
+
+## 2026-03-20: Agent fallback paths must include all frontmatter metadata
+
+**What broke**: process-meetings skill's agent fallback path (used when CLI `arete meeting extract` isn't available) instructed agents to write `status: processed` and `processed_at` to frontmatter, but omitted `staged_item_status`. This caused all extracted items to show as "pending" in the UI instead of pre-selected for approval.
+
+**Why it matters**: The `staged_item_status` frontmatter field controls which items are pre-selected in the arete view UI. The CLI path uses `processMeetingExtraction()` from core which computes this automatically. The agent fallback path relies on skill documentation to tell the agent what to write — any omission means missing functionality.
+
+**Fix**: Updated the skill's "Frontmatter updates" section to include the full metadata:
+```yaml
+staged_item_status:
+  ai_001: approved
+  de_001: approved
+  le_001: approved
+staged_item_source:
+  ai_001: ai
+staged_item_confidence:
+  ai_001: 0.9
+```
+
+**Prevention**: When a skill has multiple execution paths (CLI vs agent fallback), ensure both paths produce equivalent output. The CLI path's output is the reference — the agent fallback documentation must match it.

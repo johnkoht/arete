@@ -152,7 +152,7 @@ Extract action items, decisions, and learnings from the meeting body and write t
 
 **CLI Path (preferred)**: Run `arete meeting extract <file> --stage` — handles extraction and formatting via core.
 
-**Agent Fallback Path**: If CLI errors (no AI configured), extract inline following the rules below.
+**Agent Fallback Path**: If CLI errors (no AI configured), extract inline following the rules below. You must write both the staged sections to the body AND the metadata to frontmatter (status, confidence, source, item status).
 
 **What to extract**:
 
@@ -188,7 +188,24 @@ Omit a section entirely if no items were extracted for that type (do not write a
 ```yaml
 status: processed
 processed_at: "2026-03-04T18:30:00Z"
+staged_item_status:
+  ai_001: approved
+  ai_002: approved
+  de_001: approved
+  le_001: approved
+staged_item_source:
+  ai_001: ai
+  ai_002: ai
+  de_001: ai
+  le_001: ai
+staged_item_confidence:
+  ai_001: 0.9
+  ai_002: 0.9
+  de_001: 0.9
+  le_001: 0.9
 ```
+
+**Important**: The `staged_item_status` field controls which items are pre-selected in the UI review screen. Set all items to `approved` by default when using the agent fallback path (since we don't have confidence scores from LLM extraction). Users can then unselect items they don't want to keep.
 
 ---
 
