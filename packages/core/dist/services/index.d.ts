@@ -29,4 +29,6 @@ export type { HealthIndicator, RelationshipHealth } from './person-health.js';
 export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
 export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
 export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
+export { buildMeetingContext } from './meeting-context.js';
+export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, } from './meeting-context.js';
 //# sourceMappingURL=index.d.ts.map

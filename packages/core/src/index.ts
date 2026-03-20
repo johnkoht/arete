@@ -83,6 +83,7 @@ export {
 export {
   saveMeetingFile,
   meetingFilename,
+  findMatchingAgenda,
 } from './integrations/meetings.js';
 export type { MeetingForSave } from './integrations/meetings.js';
 export {

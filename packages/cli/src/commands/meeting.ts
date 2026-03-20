@@ -24,6 +24,7 @@ import {
   formatFilteredStagedSections,
   parseGoals,
   extractAttendeeSlugs,
+  buildMeetingContext,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -33,6 +34,7 @@ import type {
   MeetingExtractionResult,
   FilteredItem,
   StagedItemStatus,
+  MeetingContextBundle,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -958,6 +960,146 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       displayQmdResult(qmdResult);
+    });
+
+  // Context subcommand - assemble context bundle for a meeting
+  meetingCmd
+    .command('context <file>')
+    .description('Assemble a context bundle for a meeting file')
+    .option('--json', 'Output as JSON (required for piping)')
+    .option('--skip-agenda', 'Skip agenda lookup')
+    .option('--skip-people', 'Skip attendee resolution')
+    .action(async (file: string, opts: {
+      json?: boolean;
+      skipAgenda?: boolean;
+      skipPeople?: boolean;
+    }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+
+      // Resolve file path
+      const meetingPath = file.startsWith('/') ? file : join(root, file);
+
+      // Build context bundle
+      let bundle: MeetingContextBundle;
+      try {
+        bundle = await buildMeetingContext(meetingPath, {
+          storage: services.storage,
+          intelligence: services.intelligence,
+          entity: services.entity,
+          paths,
+        }, {
+          skipAgenda: opts.skipAgenda,
+          skipPeople: opts.skipPeople,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
+      // Output
+      if (opts.json) {
+        console.log(JSON.stringify({
+          success: true,
+          ...bundle,
+        }, null, 2));
+        return;
+      }
+
+      // Human-readable output
+      console.log('');
+      console.log(chalk.bold('Meeting Context Bundle'));
+      console.log(chalk.dim('─'.repeat(50)));
+      console.log('');
+
+      // Meeting info
+      console.log(chalk.bold('Meeting'));
+      console.log(`  Title: ${bundle.meeting.title}`);
+      console.log(`  Date: ${bundle.meeting.date}`);
+      console.log(`  Attendees: ${bundle.meeting.attendees.length}`);
+      console.log(`  Transcript length: ${bundle.meeting.transcript.length} chars`);
+      console.log('');
+
+      // Agenda
+      if (bundle.agenda) {
+        console.log(chalk.bold('Agenda'));
+        console.log(`  Path: ${bundle.agenda.path}`);
+        console.log(`  Items: ${bundle.agenda.items.length}`);
+        console.log(`  Unchecked: ${bundle.agenda.unchecked.length}`);
+        console.log('');
+      } else {
+        console.log(chalk.dim('No agenda found'));
+        console.log('');
+      }
+
+      // Resolved attendees
+      if (bundle.attendees.length > 0) {
+        console.log(chalk.bold('Resolved Attendees'));
+        for (const attendee of bundle.attendees) {
+          console.log(`  • ${attendee.name} (@${attendee.slug}) — ${attendee.category}`);
+          if (attendee.stances.length > 0) {
+            console.log(`    Stances: ${attendee.stances.length}`);
+          }
+          if (attendee.openItems.length > 0) {
+            console.log(`    Open items: ${attendee.openItems.length}`);
+          }
+        }
+        console.log('');
+      }
+
+      // Unknown attendees
+      if (bundle.unknownAttendees.length > 0) {
+        console.log(chalk.yellow('Unknown Attendees'));
+        for (const unknown of bundle.unknownAttendees) {
+          console.log(`  • ${unknown.name || unknown.email}`);
+        }
+        console.log('');
+      }
+
+      // Related context
+      const rc = bundle.relatedContext;
+      if (rc.goals.length > 0 || rc.projects.length > 0 || rc.recentDecisions.length > 0 || rc.recentLearnings.length > 0) {
+        console.log(chalk.bold('Related Context'));
+        if (rc.goals.length > 0) {
+          console.log(`  Goals: ${rc.goals.map(g => g.title).join(', ')}`);
+        }
+        if (rc.projects.length > 0) {
+          console.log(`  Projects: ${rc.projects.map(p => p.title).join(', ')}`);
+        }
+        if (rc.recentDecisions.length > 0) {
+          console.log(`  Recent decisions: ${rc.recentDecisions.length}`);
+        }
+        if (rc.recentLearnings.length > 0) {
+          console.log(`  Recent learnings: ${rc.recentLearnings.length}`);
+        }
+        console.log('');
+      }
+
+      // Warnings
+      if (bundle.warnings.length > 0) {
+        console.log(chalk.yellow('Warnings'));
+        for (const warning of bundle.warnings) {
+          console.log(`  ⚠ ${warning}`);
+        }
+        console.log('');
+      }
+
+      success('Context bundle assembled');
     });
 }
 

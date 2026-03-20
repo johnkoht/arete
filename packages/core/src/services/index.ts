@@ -94,3 +94,15 @@ export {
   parseIndividualGoals,
   parseLegacyQuarterFile,
 } from './goal-parser.js';
+
+// Meeting context assembly
+export { buildMeetingContext } from './meeting-context.js';
+export type {
+  ResolvedAttendee,
+  UnknownAttendee,
+  RelatedContext,
+  MeetingContextBundle,
+  BuildMeetingContextOptions,
+  MeetingContextDeps,
+} from './meeting-context.js';
+// Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
