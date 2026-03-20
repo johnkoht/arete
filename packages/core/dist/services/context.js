@@ -126,7 +126,9 @@ export class ContextService {
             : [...PRODUCT_PRIMITIVES];
         const maxFiles = request.maxFiles ?? 15;
         const minScore = request.minScore ?? 0.3;
-        const staticScore = 0.5;
+        // Lower static score so semantic search can upgrade it
+        // Token overlap just means the word appears; semantic search measures actual relevance
+        const staticScore = 0.35;
         const files = [];
         const gaps = [];
         const seenPaths = new Set();
@@ -277,12 +279,24 @@ export class ContextService {
             for (const result of searchResults) {
                 // QMD returns relative paths (e.g., "resources/meetings/foo.md")
                 // Resolve to absolute before processing
-                const absolutePath = resolve(paths.root, result.path);
+                let absolutePath = resolve(paths.root, result.path);
                 if (result.score < minScore)
                     continue;
+                // Search index may have inconsistent paths (e.g., "internal/david.md" vs "people/internal/david.md")
+                // Try to find matching file in seenPaths with normalized path
+                let matchedPath = absolutePath;
+                if (!seenPaths.has(absolutePath)) {
+                    // Try with people/ prefix if path starts with internal/
+                    if (result.path.startsWith('internal/')) {
+                        const altPath = resolve(paths.root, 'people/' + result.path);
+                        if (seenPaths.has(altPath)) {
+                            matchedPath = altPath;
+                        }
+                    }
+                }
                 // If file was already added (e.g., via static scan), upgrade its score if search score is higher
-                if (seenPaths.has(absolutePath)) {
-                    const existingFile = files.find(f => f.path === absolutePath);
+                if (seenPaths.has(matchedPath)) {
+                    const existingFile = files.find(f => f.path === matchedPath);
                     if (existingFile && result.score > (existingFile.relevanceScore ?? 0)) {
                         existingFile.relevanceScore = result.score;
                     }

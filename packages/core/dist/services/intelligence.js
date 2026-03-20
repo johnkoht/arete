@@ -155,9 +155,10 @@ function formatBriefingMarkdown(task, skill, confidence, context, memory, entiti
             untagged.push(file);
         }
     }
-    // Only show primitive sections that have high-relevance content (> 0.5)
+    // Only show primitive sections that have high-relevance content (>= 0.45)
     // This prevents generic context files from polluting entity-specific queries
-    const HIGH_RELEVANCE_THRESHOLD = 0.55;
+    // while still including relevant people/projects found by semantic search
+    const HIGH_RELEVANCE_THRESHOLD = 0.44;
     const shownPrimitives = new Set();
     for (const prim of context.primitives) {
         const files = byPrimitive.get(prim) || [];
