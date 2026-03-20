@@ -11,7 +11,15 @@
  *   - Action items > 150 chars
  *   - Items starting with "Me:", "Them:", "Yeah", "I'm not sure"
  *   - Items with multiple sentences (more than one period)
+ *
+ * Context-enhanced extraction (T2):
+ *   When a MeetingContextBundle is provided, the prompt is enhanced with:
+ *   - Resolved attendee info (stances, open items) for better owner resolution
+ *   - Related goals for context-aware extraction
+ *   - Unchecked agenda items that become action item candidates
  */
+
+import type { MeetingContextBundle } from './meeting-context.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -259,16 +267,86 @@ function isGarbageItem(text: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Build context section from MeetingContextBundle for enhanced extraction.
+ * Includes attendee stances/open items, goals, and unchecked agenda items.
+ */
+function buildContextSection(context: MeetingContextBundle): string {
+  const sections: string[] = [];
+
+  // Attendee context with stances and open items
+  if (context.attendees.length > 0) {
+    const attendeeLines: string[] = ['### Attendee Context'];
+    for (const attendee of context.attendees) {
+      const parts = [`- **${attendee.name}** (@${attendee.slug})`];
+      if (attendee.category && attendee.category !== 'unknown') {
+        parts[0] += ` — ${attendee.category}`;
+      }
+      attendeeLines.push(parts[0]);
+      
+      if (attendee.stances.length > 0) {
+        attendeeLines.push(`  Known stances: ${attendee.stances.slice(0, 3).join('; ')}`);
+      }
+      if (attendee.openItems.length > 0) {
+        attendeeLines.push(`  Open items: ${attendee.openItems.slice(0, 3).join('; ')}`);
+      }
+    }
+    sections.push(attendeeLines.join('\n'));
+  }
+
+  // Related goals
+  if (context.relatedContext.goals.length > 0) {
+    const goalLines = ['### Related Goals'];
+    for (const goal of context.relatedContext.goals.slice(0, 5)) {
+      goalLines.push(`- ${goal.title}`);
+    }
+    sections.push(goalLines.join('\n'));
+  }
+
+  // Unchecked agenda items (these should become action items)
+  if (context.agenda && context.agenda.unchecked.length > 0) {
+    const agendaLines = ['### Unchecked Agenda Items (should become action items)'];
+    for (const item of context.agenda.unchecked) {
+      agendaLines.push(`- ${item}`);
+    }
+    sections.push(agendaLines.join('\n'));
+  }
+
+  if (sections.length === 0) return '';
+
+  return `\n\n## Meeting Context (use this for better extraction)
+${sections.join('\n\n')}`;
+}
+
+/**
+ * Build attendee slug lookup from context for owner resolution.
+ * Returns a map of lowercase name -> slug.
+ */
+function buildAttendeeSlugLookup(context: MeetingContextBundle): Map<string, string> {
+  const lookup = new Map<string, string>();
+  for (const attendee of context.attendees) {
+    // Map both full name and email (without domain) to slug
+    lookup.set(attendee.name.toLowerCase(), attendee.slug);
+    if (attendee.email) {
+      const emailPrefix = attendee.email.split('@')[0].toLowerCase();
+      lookup.set(emailPrefix, attendee.slug);
+    }
+  }
+  return lookup;
+}
+
+/**
  * Build the LLM prompt for extracting meeting intelligence.
  *
  * @param transcript - Meeting transcript text
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
+ * @param context - Optional MeetingContextBundle for enhanced extraction
  */
 export function buildMeetingExtractionPrompt(
   transcript: string,
   attendees?: string[],
   ownerSlug?: string,
+  context?: MeetingContextBundle,
 ): string {
   const attendeeContext = attendees?.length
     ? `\n\nMeeting attendees: ${attendees.join(', ')}`
@@ -277,6 +355,9 @@ export function buildMeetingExtractionPrompt(
   const ownerContext = ownerSlug
     ? `\nWorkspace owner slug: ${ownerSlug} (use for direction classification)`
     : '';
+
+  // Build enhanced context section if context bundle is provided
+  const enhancedContext = context ? buildContextSection(context) : '';
 
   return `You are analyzing a meeting transcript to extract structured intelligence.
 
@@ -341,7 +422,7 @@ Rules:
 - Omit sections that have no content (return empty arrays, not null)
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
-
+${enhancedContext}
 Transcript:
 ${transcript}`;
 }
@@ -600,13 +681,13 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees and ownerSlug for better context
+ * @param options - Optional attendees, ownerSlug, and context for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export async function extractMeetingIntelligence(
   transcript: string,
   callLLM: LLMCallFn,
-  options?: { attendees?: string[]; ownerSlug?: string },
+  options?: { attendees?: string[]; ownerSlug?: string; context?: MeetingContextBundle },
 ): Promise<MeetingExtractionResult> {
   if (!transcript || transcript.trim() === '') {
     return {
@@ -626,6 +707,7 @@ export async function extractMeetingIntelligence(
     transcript,
     options?.attendees,
     options?.ownerSlug,
+    options?.context,
   );
 
   try {

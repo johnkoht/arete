@@ -373,12 +373,14 @@ export function registerMeetingCommands(program: Command): void {
     .option('--dry-run', 'Show what would be written without writing')
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
+    .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
     .action(async (file: string, opts: {
       json?: boolean;
       stage?: boolean;
       dryRun?: boolean;
       skipQmd?: boolean;
       clearApproved?: boolean;
+      context?: string;
     }) => {
       const services = await createServices(process.cwd());
 
@@ -475,6 +477,58 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // Parse context bundle if provided
+      let contextBundle: MeetingContextBundle | undefined;
+      if (opts.context) {
+        try {
+          let contextJson: string;
+          if (opts.context === '-') {
+            // Read from stdin
+            const chunks: Buffer[] = [];
+            for await (const chunk of process.stdin) {
+              chunks.push(chunk as Buffer);
+            }
+            contextJson = Buffer.concat(chunks).toString('utf8');
+          } else {
+            // Read from file
+            contextJson = readFileSync(opts.context, 'utf8');
+          }
+          const parsed = JSON.parse(contextJson) as Record<string, unknown>;
+          // Handle wrapped format (success: true, ...) from `arete meeting context --json`
+          if (parsed.success === true && parsed.meeting) {
+            // Extract the bundle fields from the response
+            contextBundle = {
+              meeting: parsed.meeting as MeetingContextBundle['meeting'],
+              agenda: (parsed.agenda ?? null) as MeetingContextBundle['agenda'],
+              attendees: (parsed.attendees ?? []) as MeetingContextBundle['attendees'],
+              unknownAttendees: (parsed.unknownAttendees ?? []) as MeetingContextBundle['unknownAttendees'],
+              relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }) as MeetingContextBundle['relatedContext'],
+              warnings: (parsed.warnings ?? []) as MeetingContextBundle['warnings'],
+            };
+          } else if (parsed.meeting && typeof parsed.meeting === 'object') {
+            // Direct bundle format with required fields
+            contextBundle = {
+              meeting: parsed.meeting as MeetingContextBundle['meeting'],
+              agenda: (parsed.agenda ?? null) as MeetingContextBundle['agenda'],
+              attendees: (parsed.attendees ?? []) as MeetingContextBundle['attendees'],
+              unknownAttendees: (parsed.unknownAttendees ?? []) as MeetingContextBundle['unknownAttendees'],
+              relatedContext: (parsed.relatedContext ?? { goals: [], projects: [], recentDecisions: [], recentLearnings: [] }) as MeetingContextBundle['relatedContext'],
+              warnings: (parsed.warnings ?? []) as MeetingContextBundle['warnings'],
+            };
+          } else {
+            throw new Error('Invalid context format: missing required "meeting" field');
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: `Failed to parse context: ${msg}` }));
+          } else {
+            error(`Failed to parse context: ${msg}`);
+          }
+          process.exit(1);
+        }
+      }
+
       // Create LLM call wrapper using AIService
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
         const result = await services.ai.call('extraction', prompt);
@@ -486,6 +540,7 @@ export function registerMeetingCommands(program: Command): void {
       try {
         extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
           attendees: attendees.length > 0 ? attendees : undefined,
+          context: contextBundle,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -554,6 +609,7 @@ export function registerMeetingCommands(program: Command): void {
         validationWarnings: extractionResult.validationWarnings,
         staged: shouldStage,
         dryRun,
+        contextUsed: !!contextBundle,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 

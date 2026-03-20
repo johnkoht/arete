@@ -1698,3 +1698,397 @@ New summary
     // The second Summary should be treated as non-staged content
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - context enhancement (T2)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - context enhancement', () => {
+  // Helper to create a minimal MeetingContextBundle
+  function makeContext(overrides: Partial<{
+    attendees: Array<{
+      slug: string;
+      email: string;
+      name: string;
+      category: string;
+      profile: string;
+      stances: string[];
+      openItems: string[];
+      recentMeetings: string[];
+    }>;
+    goals: Array<{ slug: string; title: string; summary: string }>;
+    unchecked: string[];
+  }> = {}): Parameters<typeof buildMeetingExtractionPrompt>[3] {
+    return {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-19',
+        attendees: ['alice@example.com', 'bob@example.com'],
+        transcript: 'Alice: Hello\nBob: Hi',
+      },
+      agenda: overrides.unchecked ? {
+        path: '/path/to/agenda.md',
+        items: [],
+        unchecked: overrides.unchecked,
+      } : null,
+      attendees: overrides.attendees ?? [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: overrides.goals ?? [],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+    };
+  }
+
+  it('without context: behaves exactly as before (backward compatibility)', () => {
+    const transcript = 'Alice: We should use React.\nBob: Agreed.';
+    
+    // Call without context
+    const promptWithoutContext = buildMeetingExtractionPrompt(transcript, ['Alice', 'Bob'], 'john-smith');
+    
+    // Call with undefined context (explicit)
+    const promptWithUndefined = buildMeetingExtractionPrompt(transcript, ['Alice', 'Bob'], 'john-smith', undefined);
+    
+    // Both should be identical
+    assert.equal(promptWithoutContext, promptWithUndefined);
+    
+    // Should NOT contain context section
+    assert.ok(!promptWithoutContext.includes('## Meeting Context'));
+    assert.ok(!promptWithoutContext.includes('### Attendee Context'));
+  });
+
+  it('includes attendee context with stances', () => {
+    const context = makeContext({
+      attendees: [{
+        slug: 'alice-smith',
+        email: 'alice@example.com',
+        name: 'Alice Smith',
+        category: 'internal',
+        profile: 'Senior PM',
+        stances: ['Prefers async communication', 'Favors TypeScript over JavaScript'],
+        openItems: [],
+        recentMeetings: [],
+      }],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('## Meeting Context'));
+    assert.ok(prompt.includes('### Attendee Context'));
+    assert.ok(prompt.includes('Alice Smith'));
+    assert.ok(prompt.includes('@alice-smith'));
+    assert.ok(prompt.includes('internal'));
+    assert.ok(prompt.includes('Prefers async communication'));
+  });
+
+  it('includes attendee open items', () => {
+    const context = makeContext({
+      attendees: [{
+        slug: 'bob-jones',
+        email: 'bob@example.com',
+        name: 'Bob Jones',
+        category: 'customers',
+        profile: 'Enterprise client',
+        stances: [],
+        openItems: ['Review Q1 proposal', 'Follow up on pricing'],
+        recentMeetings: [],
+      }],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('Open items:'));
+    assert.ok(prompt.includes('Review Q1 proposal'));
+  });
+
+  it('includes related goals', () => {
+    const context = makeContext({
+      goals: [
+        { slug: 'q1-revenue', title: 'Increase Q1 revenue by 20%', summary: 'Revenue target' },
+        { slug: 'ship-v2', title: 'Ship v2.0 by March', summary: 'Product launch' },
+      ],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Related Goals'));
+    assert.ok(prompt.includes('Increase Q1 revenue by 20%'));
+    assert.ok(prompt.includes('Ship v2.0 by March'));
+  });
+
+  it('includes unchecked agenda items with instruction', () => {
+    const context = makeContext({
+      unchecked: [
+        'Discuss API redesign timeline',
+        'Review Q1 metrics',
+        'Assign ownership for mobile app',
+      ],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Unchecked Agenda Items'));
+    assert.ok(prompt.includes('should become action items'));
+    assert.ok(prompt.includes('Discuss API redesign timeline'));
+    assert.ok(prompt.includes('Review Q1 metrics'));
+    assert.ok(prompt.includes('Assign ownership for mobile app'));
+  });
+
+  it('combines multiple context sections', () => {
+    const context = makeContext({
+      attendees: [{
+        slug: 'alice-smith',
+        email: 'alice@example.com',
+        name: 'Alice Smith',
+        category: 'internal',
+        profile: '',
+        stances: ['Prefers detailed specs'],
+        openItems: ['Draft PRD'],
+        recentMeetings: [],
+      }],
+      goals: [{ slug: 'ship-v2', title: 'Ship v2.0', summary: '' }],
+      unchecked: ['Review timeline'],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Attendee Context'));
+    assert.ok(prompt.includes('### Related Goals'));
+    assert.ok(prompt.includes('### Unchecked Agenda Items'));
+  });
+
+  it('limits stances and open items to first 3', () => {
+    const context = makeContext({
+      attendees: [{
+        slug: 'verbose-person',
+        email: 'verbose@example.com',
+        name: 'Verbose Person',
+        category: 'internal',
+        profile: '',
+        stances: ['Stance 1', 'Stance 2', 'Stance 3', 'Stance 4', 'Stance 5'],
+        openItems: ['Item 1', 'Item 2', 'Item 3', 'Item 4', 'Item 5'],
+        recentMeetings: [],
+      }],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include first 3, not all 5
+    assert.ok(prompt.includes('Stance 1'));
+    assert.ok(prompt.includes('Stance 3'));
+    assert.ok(!prompt.includes('Stance 4'));
+    assert.ok(!prompt.includes('Stance 5'));
+    
+    assert.ok(prompt.includes('Item 1'));
+    assert.ok(prompt.includes('Item 3'));
+    assert.ok(!prompt.includes('Item 4'));
+  });
+
+  it('limits goals to first 5', () => {
+    const goals = [];
+    for (let i = 1; i <= 8; i++) {
+      goals.push({ slug: `goal-${i}`, title: `Goal Number ${i}`, summary: '' });
+    }
+
+    const context = makeContext({ goals });
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include first 5
+    assert.ok(prompt.includes('Goal Number 1'));
+    assert.ok(prompt.includes('Goal Number 5'));
+    // Should NOT include 6+
+    assert.ok(!prompt.includes('Goal Number 6'));
+    assert.ok(!prompt.includes('Goal Number 8'));
+  });
+
+  it('omits empty context sections', () => {
+    // Context with no attendees, goals, or agenda
+    const context = makeContext({
+      attendees: [],
+      goals: [],
+      unchecked: undefined,
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should NOT include context section at all (empty)
+    assert.ok(!prompt.includes('## Meeting Context'));
+    assert.ok(!prompt.includes('### Attendee Context'));
+    assert.ok(!prompt.includes('### Related Goals'));
+  });
+
+  it('omits category when unknown', () => {
+    const context = makeContext({
+      attendees: [{
+        slug: 'mystery-person',
+        email: 'mystery@example.com',
+        name: 'Mystery Person',
+        category: 'unknown',
+        profile: '',
+        stances: [],
+        openItems: [],
+        recentMeetings: [],
+      }],
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include name but not "unknown" category
+    assert.ok(prompt.includes('Mystery Person'));
+    assert.ok(!prompt.includes('— unknown'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractMeetingIntelligence - context option (T2)
+// ---------------------------------------------------------------------------
+
+describe('extractMeetingIntelligence - context option', () => {
+  it('passes context to prompt builder', async () => {
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return '{"summary": "Test"}';
+    };
+
+    const context = {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-19',
+        attendees: ['alice@example.com'],
+        transcript: 'content',
+      },
+      agenda: {
+        path: '/path/to/agenda.md',
+        items: [],
+        unchecked: ['Review API design'],
+      },
+      attendees: [{
+        slug: 'alice-smith',
+        email: 'alice@example.com',
+        name: 'Alice Smith',
+        category: 'internal',
+        profile: '',
+        stances: ['Detail-oriented'],
+        openItems: [],
+        recentMeetings: [],
+      }],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [{ slug: 'ship-v2', title: 'Ship v2.0', summary: '' }],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+    };
+
+    await extractMeetingIntelligence('transcript', mockLLM, { context });
+
+    // Verify context appears in prompt
+    assert.ok(capturedPrompt.includes('Alice Smith'));
+    assert.ok(capturedPrompt.includes('Detail-oriented'));
+    assert.ok(capturedPrompt.includes('Ship v2.0'));
+    assert.ok(capturedPrompt.includes('Review API design'));
+  });
+
+  it('without context: prompt matches non-context version (backward compat)', async () => {
+    let promptWithContext = '';
+    let promptWithoutContext = '';
+
+    const mockLLM1: LLMCallFn = async (prompt) => {
+      promptWithContext = prompt;
+      return '{}';
+    };
+    const mockLLM2: LLMCallFn = async (prompt) => {
+      promptWithoutContext = prompt;
+      return '{}';
+    };
+
+    await extractMeetingIntelligence('same transcript', mockLLM1, {
+      attendees: ['Alice'],
+      ownerSlug: 'bob',
+      context: undefined,
+    });
+
+    await extractMeetingIntelligence('same transcript', mockLLM2, {
+      attendees: ['Alice'],
+      ownerSlug: 'bob',
+    });
+
+    // Both prompts should be identical when context is undefined vs omitted
+    assert.equal(promptWithContext, promptWithoutContext);
+  });
+
+  it('context produces richer extraction output', async () => {
+    // Simulate LLM that uses context to produce better results
+    const mockLLM: LLMCallFn = async (prompt) => {
+      // If context is present (check for marker text), return richer output
+      if (prompt.includes('### Unchecked Agenda Items')) {
+        return JSON.stringify({
+          summary: 'Meeting about API design with unchecked items converted to actions',
+          action_items: [
+            {
+              owner: 'Alice Smith',
+              owner_slug: 'alice-smith',
+              description: 'Review API design (from agenda)',
+              direction: 'i_owe_them',
+              confidence: 0.9,
+            },
+          ],
+          decisions: ['Use REST API'],
+          learnings: [],
+        });
+      }
+      // Without context, minimal output
+      return JSON.stringify({
+        summary: 'Meeting about API design',
+        action_items: [],
+        decisions: [],
+        learnings: [],
+      });
+    };
+
+    const context = {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-19',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: {
+        path: '/path/to/agenda.md',
+        items: [],
+        unchecked: ['Review API design'],
+      },
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+    };
+
+    // With context
+    const withContext = await extractMeetingIntelligence('Meeting about API', mockLLM, { context });
+    
+    // Without context
+    const withoutContext = await extractMeetingIntelligence('Meeting about API', mockLLM);
+
+    // Context version should have action items derived from unchecked agenda
+    assert.equal(withContext.intelligence.actionItems.length, 1);
+    assert.ok(withContext.intelligence.actionItems[0].description.includes('from agenda'));
+    
+    // Non-context version should have no action items
+    assert.equal(withoutContext.intelligence.actionItems.length, 0);
+  });
+});
