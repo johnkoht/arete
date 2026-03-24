@@ -1,3 +1,14 @@
+---
+title: Agenda Lifecycle (Phase 3)
+slug: meeting-intelligence-commitments
+status: complete
+archived: 2026-03-23
+size: small
+tags: [meetings, agendas, lifecycle]
+created: 2026-03-18T00:00:00.000Z
+completed: 2026-03-18T00:00:00.000Z
+---
+
 # Phase 3: Agenda Lifecycle (Refined)
 
 ## Problem Statement

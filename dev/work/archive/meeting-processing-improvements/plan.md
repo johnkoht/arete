@@ -2,6 +2,8 @@
 title: Meeting Processing Improvements
 slug: meeting-processing-improvements
 status: complete
+archived: 2026-03-23
+superseded_by: unify-meeting-extraction
 size: small
 tags: [meetings, extraction, intelligence]
 created: 2026-03-10T00:00:00.000Z

@@ -1,7 +1,9 @@
 ---
 title: Meeting Enhancements
 slug: meeting-enhancements
-status: draft
+status: abandoned
+archived: 2026-03-23
+superseded_by: process-meeting-refactor
 size: medium
 tags: [meetings, web-app, reimagine]
 created: 2026-03-07T16:56:06.629Z

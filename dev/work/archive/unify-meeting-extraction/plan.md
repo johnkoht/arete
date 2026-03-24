@@ -2,6 +2,7 @@
 title: Unify Meeting Extraction
 slug: unify-meeting-extraction
 status: complete
+archived: 2026-03-23
 size: medium
 tags: [meetings, extraction, backend, refactor]
 created: 2026-03-12T00:00:00.000Z
