@@ -71,6 +71,57 @@ Run `arete update` to get the new `areas/` directory and templates. Then:
 
 See `GUIDE.md > Areas` for complete documentation.
 
+### Weekly Plan Template Redesign
+
+The weekly plan template (`now/week.md`) has been redesigned to be more action-oriented with automatic daily progress tracking.
+
+**New format:**
+```markdown
+# Week — Mon Mar 24, 2026
+
+## Outcomes
+1. POP ready for 3/31 launch
+2. CoverWhale through compliance
+
+## Today — Tue Mar 25
+**Focus**: CoverWhale transformer sync.
+**Meetings**:
+- 10:00 Anthony 1:1 → [agenda](now/agendas/anthony-1-1.md) ⭐
+- 14:00 Shadow: LaTisha
+
+## Notes
+<!-- Your working scratchpad for the week -->
+
+## Tasks
+### Must complete
+- [ ] Monitor POP ticket velocity
+
+### Should complete
+- [ ] Review UK roadmap draft
+
+### Could complete
+- [ ] Clean up Jira backlog
+
+## Carried from last week
+- [ ] Finalize Q2 OKRs
+
+## Daily Progress
+### Mon Mar 24
+**Focus**: Email compose release day.
+**Meetings**: UK Eng, PM Bi-Weekly, Prod Access
+**Progress**:
+- Email compose shipped!
+```
+
+**Key changes:**
+- **Simpler Outcomes** — Just a numbered list, no verbose success criteria
+- **Today section** — Shows focus and meetings with agenda links
+- **Tasks with prioritization** — Must/Should/Could (MoSCoW style)
+- **Daily Progress** — Rolling history of each day's work
+- **Notes preserved** — Your scratchpad stays in place across updates
+
+**Automatic daily archival:** When you run `daily-plan`, it automatically moves the previous day's Today section to Daily Progress before writing the new day.
+
 ---
 
 ## Week of March 17-19, 2026
