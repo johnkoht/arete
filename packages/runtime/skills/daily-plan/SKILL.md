@@ -11,11 +11,12 @@ intelligence:
   - context_injection
   - entity_resolution
   - memory_retrieval
+  - area_context
 ---
 
 # Daily Plan Skill
 
-Build a daily plan: today's focus from week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, and carry-over. Uses the **get_meeting_context** pattern for each meeting.
+Build a daily plan: today's focus from week priorities, meeting context per meeting (who, what you owe, prep suggestions), commitments due, and carry-over. Uses the **get_meeting_context** and **get_area_context** patterns for each meeting.
 
 > **Deprecated**: `now/today.md` is no longer created. Daily plan now writes directly to `now/week.md`.
 
@@ -27,7 +28,9 @@ Build a daily plan: today's focus from week priorities, meeting context per meet
 
 ## Gather Context for Meetings
 
-For each of today's meetings, run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Use the outputs to summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
+For each of today's meetings:
+1. Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). Use the outputs to summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
+2. Run the **get_area_context** pattern — see [PATTERNS.md](../PATTERNS.md). If the meeting maps to an area via `getAreaForMeeting()`, include area state (Current State section) in the daily focus.
 
 ## Workflow
 
@@ -61,6 +64,15 @@ For each of today's meetings, run the **get_meeting_context** pattern — see [P
   - `arete people memory refresh --person <slug> --if-stale-days 3`
 - Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Summarize per meeting: who, what you owe them, 1–2 line prep suggestion.
 - Add one concise stakeholder watchout when available from person memory highlights.
+
+**Area Context Lookup** (see [PATTERNS.md](../PATTERNS.md) — get_area_context):
+
+For each meeting, check if it maps to an area:
+1. Call `AreaParserService.getAreaForMeeting(meetingTitle)` — uses case-insensitive substring matching against `recurring_meetings[].title` in area files
+2. If match found (non-null `AreaMatch`), call `AreaParserService.getAreaContext(areaSlug)` to retrieve the area's Current State section
+3. Store area matches for display in Step 7
+
+**Example**: Meeting "CoverWhale Sync" → matches area `glance-communications` → include "Partnership progressing well. API integration complete." in daily focus.
 
 ### 5. Offer Agenda Creation
 
@@ -122,7 +134,7 @@ Write the daily plan to `## Today's Plan` section in `now/week.md`.
 - Insert before `## End of week review` if that header exists
 - Otherwise append at end of file
 
-**Output format (≤20 lines)**:
+**Output format (≤25 lines)**:
 
 ```markdown
 ## Today's Plan
@@ -131,10 +143,17 @@ Write the daily plan to `## Today's Plan` section in `now/week.md`.
 ### Focus
 - [Top 1-3 items from week priorities]
 
+### Area Context
+_Include this section only when at least one meeting maps to an area._
+
+- **Glance Communications** (CoverWhale Sync at 2:00): Partnership progressing well. API integration complete.
+- **Product Team** (Sprint Review at 4:00): Feature freeze in effect. Focus on stability.
+
 ### Meetings
 - **9:00** Team standup
-- **2:00** Customer call → [agenda](now/agendas/2026-03-18-customer-call.md)
+- **2:00** CoverWhale Sync → [area: Glance Communications] [prep: review API status]
 - **3:30** 1:1 with Jane → [prep: discuss promotion timeline]
+- **4:00** Sprint Review → [area: Product Team] [agenda](now/agendas/2026-03-18-sprint-review.md)
 
 ### Notes
 - [User notes preserved here]
@@ -142,7 +161,9 @@ Write the daily plan to `## Today's Plan` section in `now/week.md`.
 
 **Format guidelines**:
 - `### Focus`: Top 1-3 outcomes from week priorities or scratchpad. Concise bullets.
+- `### Area Context`: For meetings that map to areas (via `getAreaForMeeting()`), show the area's Current State summary. One line per area — include the meeting time and area name with a brief state summary. Skip this section if no meetings have area associations.
 - `### Meetings`: Time + title + brief context/prep. One line per meeting. Include source at top: "Pulled from Calendar (calendar-names)" or "User provided".
+  - **Area indicator**: For meetings with area associations, show `→ [area: Area Name]` before prep notes
   - **Agenda links**: If an agenda exists (pre-existing or created in Step 5), show `→ [agenda](path)` instead of prep notes. Format: `- **9:00** Meeting title → [agenda](now/agendas/YYYY-MM-DD-title-slug.md)`
 - `### Notes`: Always preserve existing content. If no prior notes, add placeholder `- [Add notes here]`.
 
@@ -156,9 +177,11 @@ After writing, confirm to user:
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context
 - **Week file**: `now/week.md`
 - **Agendas**: `now/agendas/` — meeting agenda documents (created in Step 5)
 - **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter
 - **Legacy quarter goals**: `goals/quarter.md` (fallback for older workspaces)
 - **Scratchpad**: `now/scratchpad.md`
+- **Areas**: `areas/*.md` — area files with recurring meeting mappings and context
 - **Related**: meeting-prep, prepare-meeting-agenda, week-plan, week-review
