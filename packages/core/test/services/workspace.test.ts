@@ -16,6 +16,7 @@ import {
 } from '../../src/compat/workspace.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { WorkspaceService } from '../../src/services/workspace.js';
+import { BASE_WORKSPACE_DIRS, DEFAULT_FILES } from '../../src/workspace-structure.js';
 
 function createTmpDir(): string {
   const dir = join(
@@ -885,6 +886,176 @@ describe('WorkspaceService', () => {
         existsSync(join(tmpDir, '.agents', 'skills', 'SKILL.md')),
         false,
         'nested SKILL.md should not be copied to skills root',
+      );
+    });
+  });
+});
+
+describe('workspace-structure constants', () => {
+  describe('BASE_WORKSPACE_DIRS', () => {
+    it('includes areas directory', () => {
+      assert.ok(
+        BASE_WORKSPACE_DIRS.includes('areas'),
+        'BASE_WORKSPACE_DIRS should include areas directory'
+      );
+    });
+  });
+
+  describe('DEFAULT_FILES', () => {
+    it('includes areas/_template.md', () => {
+      assert.ok(
+        'areas/_template.md' in DEFAULT_FILES,
+        'DEFAULT_FILES should include areas/_template.md'
+      );
+    });
+
+    it('areas template has YAML frontmatter with required fields', () => {
+      const template = DEFAULT_FILES['areas/_template.md'];
+      assert.ok(template.includes('---'), 'Template should have YAML frontmatter delimiters');
+      assert.ok(template.includes('area: {name}'), 'Template should have area field with placeholder');
+      assert.ok(template.includes('status: active'), 'Template should have status field');
+      assert.ok(template.includes('recurring_meetings:'), 'Template should have recurring_meetings field');
+      assert.ok(template.includes('title:'), 'Template should have title in recurring_meetings');
+      assert.ok(template.includes('attendees:'), 'Template should have attendees in recurring_meetings');
+      assert.ok(template.includes('frequency:'), 'Template should have frequency in recurring_meetings');
+    });
+
+    it('areas template has required markdown sections', () => {
+      const template = DEFAULT_FILES['areas/_template.md'];
+      const requiredSections = [
+        '## Active Goals',
+        '## Current State',
+        '## Active Work',
+        '## Key Decisions',
+        '## Open Commitments',
+        '## Backlog',
+        '## Notes',
+      ];
+
+      for (const section of requiredSections) {
+        assert.ok(
+          template.includes(section),
+          `Template should include ${section} section`
+        );
+      }
+    });
+
+    it('areas template uses {variable} placeholder syntax', () => {
+      const template = DEFAULT_FILES['areas/_template.md'];
+      assert.ok(template.includes('{name}'), 'Template should use {name} placeholder');
+      assert.ok(template.includes('{description}'), 'Template should use {description} placeholder');
+      assert.ok(template.includes('{meeting_title}'), 'Template should use {meeting_title} placeholder');
+    });
+  });
+});
+
+describe('WorkspaceService areas integration', () => {
+  let tmpDir: string;
+  let service: WorkspaceService;
+
+  beforeEach(() => {
+    tmpDir = join(
+      tmpdir(),
+      `arete-test-areas-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    mkdirSync(tmpDir, { recursive: true });
+    service = new WorkspaceService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    if (tmpDir && existsSync(tmpDir)) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  describe('create', () => {
+    it('creates areas/ directory in new workspaces', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const areasDir = join(tmpDir, 'areas');
+      assert.equal(existsSync(areasDir), true, 'areas/ directory should exist after install');
+    });
+
+    it('creates areas/_template.md in new workspaces', async () => {
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      const templatePath = join(tmpDir, 'areas', '_template.md');
+      assert.equal(existsSync(templatePath), true, 'areas/_template.md should exist after install');
+
+      const content = readFileSync(templatePath, 'utf8');
+      assert.ok(content.includes('area: {name}'), 'Template should have area placeholder');
+      assert.ok(content.includes('## Key Decisions'), 'Template should have Key Decisions section');
+    });
+  });
+
+  describe('update', () => {
+    it('backfills areas/ directory in existing workspaces', async () => {
+      // Create minimal workspace without areas/
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n',
+        'utf8'
+      );
+      mkdirSync(join(tmpDir, 'context'), { recursive: true });
+      mkdirSync(join(tmpDir, '.arete', 'memory'), { recursive: true });
+
+      // Run update
+      const result = await service.update(tmpDir, {});
+
+      // areas/ should now exist
+      const areasDir = join(tmpDir, 'areas');
+      assert.equal(existsSync(areasDir), true, 'areas/ directory should be backfilled on update');
+    });
+
+    it('backfills areas/_template.md in existing workspaces', async () => {
+      // Create workspace with areas/ but no template
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n',
+        'utf8'
+      );
+      mkdirSync(join(tmpDir, 'areas'), { recursive: true });
+
+      // Run update
+      const result = await service.update(tmpDir, {});
+
+      // Template should now exist
+      const templatePath = join(tmpDir, 'areas', '_template.md');
+      assert.equal(existsSync(templatePath), true, 'areas/_template.md should be backfilled on update');
+      assert.ok(
+        result.added.includes('areas/_template.md'),
+        `Expected areas/_template.md in result.added, got: ${JSON.stringify(result.added)}`
+      );
+    });
+
+    it('does not overwrite existing area files on update', async () => {
+      // Create workspace with custom area file
+      writeFileSync(
+        join(tmpDir, 'arete.yaml'),
+        'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n',
+        'utf8'
+      );
+      mkdirSync(join(tmpDir, 'areas'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, 'areas', '_template.md'),
+        '# Custom Template\nMy customizations here',
+        'utf8'
+      );
+
+      // Run update
+      await service.update(tmpDir, {});
+
+      // Custom content should be preserved
+      const content = readFileSync(join(tmpDir, 'areas', '_template.md'), 'utf8');
+      assert.ok(
+        content.includes('My customizations here'),
+        'Existing template file should not be overwritten'
       );
     });
   });

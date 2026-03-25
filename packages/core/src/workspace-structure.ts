@@ -13,6 +13,7 @@ export const BASE_WORKSPACE_DIRS = [
   'goals/archive',
   'context',
   'context/_history',
+  'areas',
   '.arete',
   '.arete/memory',
   '.arete/memory/items',
@@ -167,6 +168,40 @@ fathom:
   '.gitignore': `# Areté
 .credentials/credentials.yaml
 .agents/
+`,
+  'areas/_template.md': `---
+area: {name}
+status: active
+recurring_meetings:
+  - title: "{meeting_title}"
+    attendees: []
+    frequency: weekly
+---
+
+# {name}
+
+{description}
+
+## Active Goals
+<!-- Link to goals with area: field pointing here -->
+
+## Current State
+<!-- Key status points about this area -->
+
+## Active Work
+<!-- Current projects and initiatives -->
+
+## Key Decisions
+<!-- Date-prefixed decisions: YYYY-MM-DD: Decision description -->
+
+## Open Commitments
+<!-- Auto-filtered from commitments by area -->
+
+## Backlog
+<!-- Future work items for this area -->
+
+## Notes
+<!-- Working observations and context -->
 `,
 };
 
