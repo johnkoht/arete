@@ -13,6 +13,7 @@
 
 - [ ] Complete HR/admin onboarding
 - [ ] Set up all tools and access
+- [ ] **Set up work areas** — identify 2-3 main work domains (e.g., 'Customer: Acme Corp', 'Initiative: Platform Migration') and create with `arete create area <slug>`
 - [ ] Meet with manager to align on expectations
 - [ ] Read company overview docs (wiki, handbook)
 - [ ] Schedule initial 1:1s with immediate team

@@ -470,14 +470,30 @@ When user activates this tool:
    - "Capture questions, wins, and learnings in notes.md"
    - "Dump any files you want me to process into inputs/"
 
-4. **Guide first actions**:
+4. **Set up work areas** (Day 1):
+   - Ask: "**What are your main work domains?**" — these are the persistent areas you'll work in
+   - Present examples to guide thinking:
+     - Customer/Partner: "Customer: Acme Corp", "Partner: AWS"
+     - Initiative/Program: "Initiative: Platform Migration", "Program: Q2 Launch"
+     - Team/Product: "Team: Growth", "Product: Mobile App"
+     - Domain: "Domain: Payments", "Domain: Search"
+   - Scaffold 2-3 areas using `arete create area <slug>` for each:
+     - Run interactively: `arete create area customer-acme` → prompts for name, description, recurring meeting
+     - Or non-interactive: `arete create area customer-acme --name "Customer: Acme Corp" --description "Enterprise customer relationship"`
+   - Each `arete create area` command:
+     - Creates `areas/{slug}.md` with YAML frontmatter for recurring meetings
+     - Creates `context/{slug}/` directory for area-specific context
+     - Auto-updates the search index via `arete index`
+   - After setup, confirm: "I've set up [N] areas. You can add more anytime with `arete create area <slug>`."
+
+5. **Guide first actions**:
    - Schedule **walking 1:1s** (not sitting ones) with manager, key peers, HR in week 1-2
    - Use **"What can I do to make your life easier?"** in every 1:1
    - Ask manager, eng lead, design lead: **"Is there a burning problem I can investigate and diagnose?"** (aim for 2-3)
    - Focus on **breadth over depth** — resist rabbit holes, use fresh eyes window
    - Share curated reading resources: see `resources/reading-list.md` in this tool's directory
 
-5. **Run `arete index`** so project files are immediately searchable
+6. **Run `arete index`** so project files are immediately searchable
 
 ## Progress Tracking
 
