@@ -783,6 +783,289 @@ describe('CommitmentsService goalSlug serialization', () => {
 });
 
 // ---------------------------------------------------------------------------
+// area field — sync and serialization
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.sync() — area', () => {
+  it('copies area from PersonActionItem to Commitment', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const hash = computeHash('Review customer contract', 'alice', 'i_owe_them');
+    const item: PersonActionItem = {
+      text: 'Review customer contract',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash,
+      stale: false,
+      area: 'glance-communications',
+    };
+
+    await svc.sync(new Map([['alice', [item]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 1);
+    assert.equal(parsed.commitments[0].area, 'glance-communications', 'area should be copied from PersonActionItem');
+  });
+
+  it('omits area when not provided in PersonActionItem', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const hash = computeHash('Send report', 'alice', 'i_owe_them');
+    const item: PersonActionItem = {
+      text: 'Send report',
+      direction: 'i_owe_them',
+      source: 'meeting.md',
+      date: '2026-01-15',
+      hash,
+      stale: false,
+      // No area
+    };
+
+    await svc.sync(new Map([['alice', [item]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].area, undefined, 'area should be undefined when not provided');
+  });
+
+  it('CRITICAL: area is NOT included in dedup hash — same text with different areas creates distinct commitments', async () => {
+    // This is the critical test: area is metadata only, NOT part of dedup hash
+    // Two items with same text/person/direction but different areas should be DEDUPLICATED
+    // because the hash only uses text + personSlug + direction
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const text = 'Send report';
+    const hash = computeHash(text, 'alice', 'i_owe_them');
+
+    const item1: PersonActionItem = {
+      text,
+      direction: 'i_owe_them',
+      source: 'meeting1.md',
+      date: '2026-01-15',
+      hash,
+      stale: false,
+      area: 'area-1',
+    };
+
+    const item2: PersonActionItem = {
+      text,
+      direction: 'i_owe_them',
+      source: 'meeting2.md',
+      date: '2026-01-16',
+      hash, // Same hash because area is NOT included
+      stale: false,
+      area: 'area-2', // Different area
+    };
+
+    // Sync both items
+    await svc.sync(new Map([['alice', [item1, item2]]]));
+
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+
+    // CRITICAL: Should have only 1 commitment because area is NOT part of hash
+    assert.equal(
+      parsed.commitments.length,
+      1,
+      'Area must NOT be part of dedup hash — same text/person/direction should create only one commitment',
+    );
+    // First item wins, so area should be from item1
+    assert.equal(parsed.commitments[0].area, 'area-1', 'First synced item should win');
+  });
+});
+
+describe('CommitmentsService area serialization', () => {
+  it('persists and retrieves area correctly', async () => {
+    const commitmentWithArea = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Review contract',
+      area: 'glance-communications',
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([commitmentWithArea])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.listOpen();
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].area, 'glance-communications', 'area should be preserved');
+  });
+
+  it('handles commitments without area (backward compatibility)', async () => {
+    // Simulate an existing commitment without area field
+    const legacyCommitment = {
+      id: 'b'.repeat(64),
+      text: 'Send slides',
+      direction: 'i_owe_them',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      source: 'meeting-2026-01-15.md',
+      date: '2026-01-15',
+      status: 'open',
+      resolvedAt: null,
+      // Note: no area field
+    };
+    const store = new Map([[COMMITMENTS_PATH, JSON.stringify({ commitments: [legacyCommitment] })]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Should load without error
+    const result = await svc.listOpen();
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].area, undefined, 'area should be undefined for legacy commitments');
+  });
+
+  it('preserves area through sync operations', async () => {
+    const commitmentWithArea = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Review contract',
+      area: 'glance-communications',
+    });
+    const store = new Map([[COMMITMENTS_PATH, makeFile([commitmentWithArea])]]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Sync with empty items (triggers write without adding new items)
+    await svc.sync(new Map());
+
+    // Verify area is still there
+    const written = store.get(COMMITMENTS_PATH)!;
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments[0].area, 'glance-communications', 'area should be preserved after sync');
+  });
+});
+
+describe('CommitmentsService.listOpen() — area filtering', () => {
+  it('filters by area when provided', async () => {
+    const c1 = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Action in area 1',
+      personSlug: 'alice',
+      area: 'area-1',
+    });
+    const c2 = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Action in area 2',
+      personSlug: 'alice',
+      area: 'area-2',
+    });
+    const c3 = makeCommitment({
+      id: 'c'.repeat(64),
+      text: 'Action without area',
+      personSlug: 'alice',
+      // No area
+    });
+
+    const svc = new CommitmentsService(makeStorage([c1, c2, c3]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'area-1' });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Action in area 1');
+    assert.equal(result[0].area, 'area-1');
+  });
+
+  it('returns empty array when area filter matches nothing', async () => {
+    const c = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Some action',
+      area: 'existing-area',
+    });
+
+    const svc = new CommitmentsService(makeStorage([c]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'nonexistent-area' });
+    assert.deepEqual(result, []);
+  });
+
+  it('excludes commitments without area when filtering by area', async () => {
+    const withArea = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Has area',
+      area: 'my-area',
+    });
+    const withoutArea = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'No area',
+      // No area field
+    });
+
+    const svc = new CommitmentsService(makeStorage([withArea, withoutArea]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'my-area' });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Has area');
+  });
+
+  it('combines area filter with direction filter', async () => {
+    const c1 = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'I owe in area 1',
+      direction: 'i_owe_them',
+      area: 'area-1',
+    });
+    const c2 = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'They owe in area 1',
+      direction: 'they_owe_me',
+      area: 'area-1',
+    });
+    const c3 = makeCommitment({
+      id: 'c'.repeat(64),
+      text: 'I owe in area 2',
+      direction: 'i_owe_them',
+      area: 'area-2',
+    });
+
+    const svc = new CommitmentsService(makeStorage([c1, c2, c3]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'area-1', direction: 'i_owe_them' });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'I owe in area 1');
+  });
+
+  it('combines area filter with personSlugs filter', async () => {
+    const c1 = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Alice action in area 1',
+      personSlug: 'alice',
+      area: 'area-1',
+    });
+    const c2 = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Bob action in area 1',
+      personSlug: 'bob',
+      area: 'area-1',
+    });
+    const c3 = makeCommitment({
+      id: 'c'.repeat(64),
+      text: 'Alice action in area 2',
+      personSlug: 'alice',
+      area: 'area-2',
+    });
+
+    const svc = new CommitmentsService(makeStorage([c1, c2, c3]), WORKSPACE_ROOT);
+
+    const result = await svc.listOpen({ area: 'area-1', personSlugs: ['alice'] });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].text, 'Alice action in area 1');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // reconcile()
 // ---------------------------------------------------------------------------
 

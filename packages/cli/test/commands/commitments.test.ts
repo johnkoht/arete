@@ -281,6 +281,138 @@ describe('commitments list command', () => {
     // Verify no empty brackets appear (would show as "[]" if buggy)
     assert.ok(!stdout.includes('[] Review slides'), `Should not have empty brackets: ${stdout}`);
   });
+
+  it('includes area in JSON output when present', () => {
+    const withArea = makeCommitment({
+      id: computeHash('Review contract', 'alice', 'i_owe_them'),
+      text: 'Review contract',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      direction: 'i_owe_them',
+      area: 'glance-communications',
+    });
+    const withoutArea = makeCommitment({
+      id: computeHash('Follow up on email', 'bob', 'i_owe_them'),
+      text: 'Follow up on email',
+      personSlug: 'bob',
+      personName: 'Bob Jones',
+      direction: 'i_owe_them',
+    });
+    writeCommitments(tmpDir, [withArea, withoutArea]);
+
+    const raw = runCli(['commitments', 'list', '--json'], { cwd: tmpDir });
+    const parsed = JSON.parse(raw) as {
+      success: boolean;
+      commitments: Array<{ text: string; area?: string }>;
+      count: number;
+    };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.count, 2);
+
+    const contractCommitment = parsed.commitments.find((c) => c.text === 'Review contract');
+    const emailCommitment = parsed.commitments.find((c) => c.text === 'Follow up on email');
+
+    assert.equal(contractCommitment?.area, 'glance-communications', 'Expected area for commitment with area');
+    assert.equal(emailCommitment?.area, undefined, 'Expected no area for commitment without area');
+  });
+
+  it('shows area tag in human output when any commitment has area', () => {
+    const withArea = makeCommitment({
+      id: computeHash('Review Glance contract', 'jane', 'i_owe_them'),
+      text: 'Review Glance contract',
+      personSlug: 'jane',
+      personName: 'Jane Doe',
+      direction: 'i_owe_them',
+      area: 'glance-communications',
+      date: '2026-03-01',
+    });
+    const withoutArea = makeCommitment({
+      id: computeHash('Review slides', 'jane', 'they_owe_me'),
+      text: 'Review slides',
+      personSlug: 'jane',
+      personName: 'Jane Doe',
+      direction: 'they_owe_me',
+      date: '2026-03-01',
+    });
+    writeCommitments(tmpDir, [withArea, withoutArea]);
+
+    const stdout = runCli(['commitments', 'list'], { cwd: tmpDir });
+
+    // Commitment with area should show @area tag
+    assert.ok(stdout.includes('@glance-communications'), `Expected @glance-communications area tag in output: ${stdout}`);
+    assert.ok(stdout.includes('Review Glance contract'), `Expected commitment text: ${stdout}`);
+  });
+
+  it('filters by --area flag', () => {
+    const c1 = makeCommitment({
+      id: computeHash('Action in area 1', 'alice', 'i_owe_them'),
+      text: 'Action in area 1',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      area: 'area-1',
+    });
+    const c2 = makeCommitment({
+      id: computeHash('Action in area 2', 'bob', 'i_owe_them'),
+      text: 'Action in area 2',
+      personSlug: 'bob',
+      personName: 'Bob Jones',
+      area: 'area-2',
+    });
+    writeCommitments(tmpDir, [c1, c2]);
+
+    const raw = runCli(['commitments', 'list', '--area', 'area-1', '--json'], {
+      cwd: tmpDir,
+    });
+    const parsed = JSON.parse(raw) as { success: boolean; commitments: Array<{ area?: string }>; count: number };
+
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.count, 1);
+    assert.equal(parsed.commitments[0].area, 'area-1');
+  });
+
+  it('filters by --area returns empty when no match', () => {
+    const c = makeCommitment({
+      id: computeHash('Some action', 'alice', 'i_owe_them'),
+      text: 'Some action',
+      personSlug: 'alice',
+      personName: 'Alice Smith',
+      area: 'existing-area',
+    });
+    writeCommitments(tmpDir, [c]);
+
+    const raw = runCli(['commitments', 'list', '--area', 'nonexistent-area', '--json'], {
+      cwd: tmpDir,
+    });
+    const parsed = JSON.parse(raw) as { success: boolean; commitments: Array<unknown>; count: number };
+
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.count, 0);
+  });
+
+  it('combines --area with --direction filter', () => {
+    const c1 = makeCommitment({
+      id: computeHash('I owe in area 1', 'alice', 'i_owe_them'),
+      text: 'I owe in area 1',
+      direction: 'i_owe_them',
+      area: 'area-1',
+    });
+    const c2 = makeCommitment({
+      id: computeHash('They owe in area 1', 'alice', 'they_owe_me'),
+      text: 'They owe in area 1',
+      direction: 'they_owe_me',
+      area: 'area-1',
+    });
+    writeCommitments(tmpDir, [c1, c2]);
+
+    const raw = runCli(
+      ['commitments', 'list', '--area', 'area-1', '--direction', 'i_owe_them', '--json'],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as { count: number; commitments: Array<{ text: string }> };
+
+    assert.equal(parsed.count, 1);
+    assert.equal(parsed.commitments[0].text, 'I owe in area 1');
+  });
 });
 
 describe('commitments resolve command', () => {

@@ -196,6 +196,8 @@ export type PersonActionItem = {
   stale: boolean;
   /** Optional goal association — links action item to a quarterly goal */
   goalSlug?: string;
+  /** Optional area association — domain scoping. Metadata only, NOT part of dedup hash. */
+  area?: string;
 };
 
 // ---------------------------------------------------------------------------

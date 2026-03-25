@@ -276,11 +276,12 @@ export class CommitmentsService {
   // -------------------------------------------------------------------------
 
   /**
-   * List open commitments, optionally filtered by direction and/or person slugs.
+   * List open commitments, optionally filtered by direction, person slugs, and/or area.
    */
   async listOpen(opts?: {
     direction?: CommitmentDirection;
     personSlugs?: string[];
+    area?: string;
   }): Promise<Commitment[]> {
     const all = await this.load();
     return all.filter((c) => {
@@ -289,6 +290,7 @@ export class CommitmentsService {
       if (opts?.personSlugs && opts.personSlugs.length > 0) {
         if (!opts.personSlugs.includes(c.personSlug)) return false;
       }
+      if (opts?.area && c.area !== opts.area) return false;
       return true;
     });
   }
@@ -389,6 +391,8 @@ export class CommitmentsService {
           resolvedAt: null,
           // Copy goalSlug if present on the action item
           ...(item.goalSlug ? { goalSlug: item.goalSlug } : {}),
+          // Copy area if present on the action item (metadata only — NOT part of dedup hash)
+          ...(item.area ? { area: item.area } : {}),
         };
         toAdd.push(commitment);
         existingById.set(hash, commitment);

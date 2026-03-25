@@ -228,6 +228,8 @@ export type Commitment = {
   projectSlug?: string;
   /** Optional goal association — links commitment to a quarterly goal */
   goalSlug?: string;
+  /** Optional area association — domain scoping for commitment. Metadata only, NOT part of dedup hash. */
+  area?: string;
 };
 
 /** Persisted commitments file structure */
