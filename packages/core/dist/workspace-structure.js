@@ -138,6 +138,21 @@ Quick capture space for notes and ideas.
 
 Business goals and strategic direction.
 `,
+    'goals/_template.md': `---
+id: "{id}"
+title: "{title}"
+status: active
+quarter: "{quarter}"
+type: outcome
+orgAlignment: ""
+successCriteria: ""
+area: ""
+---
+
+# {title}
+
+{description}
+`,
     'projects/index.md': `# Projects Index
 
 ## Active Projects

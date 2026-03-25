@@ -14,9 +14,10 @@
         "arete update backfills areas/ directory in existing workspaces",
         "Unit tests verify template content and directory creation"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "09d808301acae37b6431e4b1e9f86756151a958a"
     },
     {
       "id": "task-2",
@@ -32,9 +33,10 @@
         "Existing context service tests continue to pass",
         "New tests verify subdirectory scanning and _history exclusion"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "d2d17f0"
     },
     {
       "id": "task-3",
@@ -54,9 +56,10 @@
         "Unit tests: YAML parsing, case-insensitive matching, no-match returns null, multiple-match resolution",
         "Given 'CoverWhale Sync', returns { areaSlug: 'glance-communications', matchType: 'recurring', confidence: 1.0 }"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "3280bfa"
     },
     {
       "id": "task-4",
@@ -72,9 +75,10 @@
         "Error handling: slug already exists, invalid slug format",
         "Unit tests verify file creation, directory creation, and index trigger"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "c94974a"
     },
     {
       "id": "task-5",
@@ -88,9 +92,10 @@
         "Goals without area: field continue to work unchanged",
         "Unit tests: parsing with/without area, list filtering"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "1d52da8"
     },
     {
       "id": "task-6",
@@ -106,9 +111,10 @@
         "Existing commitments without area continue to work",
         "Unit tests: creation with area, dedup ignores area, list filtering"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "4073770"
     },
     {
       "id": "task-7",
@@ -122,9 +128,10 @@
         "Meeting prep for 'CoverWhale Sync' auto-pulls Glance Communications context",
         "Skill file updated with area integration instructions"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "2318120"
     },
     {
       "id": "task-8",
@@ -141,9 +148,10 @@
         "Skill file updated with area integration",
         "Unit tests: area mapping, decision writing, commitment tagging"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "301b40d"
     },
     {
       "id": "task-9",
@@ -156,9 +164,10 @@
         "Weekly plan shows format: 'Glance Communications: 3 open commitments'",
         "Skill file updated with area integration"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "88038ed"
     },
     {
       "id": "task-10",
@@ -171,9 +180,10 @@
         "Daily plan notes area-specific context for today's meetings",
         "Skill file updated with area integration"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "a3d5459"
     },
     {
       "id": "task-11",
@@ -188,9 +198,10 @@
         "Update AGENTS.md with areas system summary",
         "New users can understand area-based workflow from documentation"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "42d99e1"
     },
     {
       "id": "task-12",
@@ -204,15 +215,16 @@
         "New users have areas set up during onboarding flow",
         "Onboarding tool tests verify area creation step"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "2835c87"
     }
   ],
   "metadata": {
     "createdAt": "2026-03-25T06:18:00Z",
     "totalTasks": 12,
-    "completedTasks": 0,
+    "completedTasks": 12,
     "failedTasks": 0
   }
 }

@@ -77,6 +77,10 @@ function parseGoalFile(content, filePath) {
         return null;
     const filename = basename(filePath);
     const slug = slugFromFilename(filename);
+    // Optional area association
+    const area = typeof frontmatter.area === 'string' && frontmatter.area.trim()
+        ? frontmatter.area.trim()
+        : undefined;
     return {
         id: id.trim(),
         slug,
@@ -88,6 +92,7 @@ function parseGoalFile(content, filePath) {
         successCriteria: typeof frontmatter.successCriteria === 'string' ? frontmatter.successCriteria.trim() : '',
         filePath,
         body: body.trim() || undefined,
+        area,
     };
 }
 // ---------------------------------------------------------------------------

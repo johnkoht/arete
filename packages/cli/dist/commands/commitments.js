@@ -17,6 +17,7 @@ export function registerCommitmentsCommand(program) {
         .description('List open commitments')
         .option('--direction <direction>', 'Filter by direction: i_owe_them or they_owe_me')
         .option('--person <slugs...>', 'Filter by person slug(s)')
+        .option('--area <slug>', 'Filter by area slug')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         const services = await createServices(process.cwd());
@@ -52,6 +53,7 @@ export function registerCommitmentsCommand(program) {
             commitments = await services.commitments.listOpen({
                 direction,
                 personSlugs: opts.person,
+                area: opts.area,
             });
         }
         catch (err) {
@@ -75,6 +77,7 @@ export function registerCommitmentsCommand(program) {
                 date: c.date,
                 resolvedAt: c.resolvedAt,
                 ...(c.goalSlug ? { goalSlug: c.goalSlug } : {}),
+                ...(c.area ? { area: c.area } : {}),
             }));
             console.log(JSON.stringify({ success: true, commitments: out, count: out.length }, null, 2));
             return;
@@ -86,6 +89,8 @@ export function registerCommitmentsCommand(program) {
         // Group by direction
         const iOweThem = commitments.filter((c) => c.direction === 'i_owe_them');
         const theyOweMe = commitments.filter((c) => c.direction === 'they_owe_me');
+        // Check if any commitment has an area value (to conditionally show area column)
+        const hasAreas = commitments.some((c) => c.area);
         console.log('');
         if (iOweThem.length > 0) {
             console.log(chalk.bold('I owe them'));
@@ -93,8 +98,9 @@ export function registerCommitmentsCommand(program) {
                 const shortId = c.id.slice(0, 8);
                 const personName = c.personName.padEnd(20).slice(0, 20);
                 const goalPrefix = c.goalSlug ? chalk.cyan(`[${c.goalSlug}] `) : '';
+                const areaTag = hasAreas ? (c.area ? chalk.magenta(`@${c.area} `) : '') : '';
                 const date = c.date ? chalk.dim(`(${c.date})`) : '';
-                console.log(`  ${chalk.dim(shortId)}  ${personName}  ${goalPrefix}${c.text}  ${date}`);
+                console.log(`  ${chalk.dim(shortId)}  ${personName}  ${areaTag}${goalPrefix}${c.text}  ${date}`);
             }
             console.log('');
         }
@@ -104,8 +110,9 @@ export function registerCommitmentsCommand(program) {
                 const shortId = c.id.slice(0, 8);
                 const personName = c.personName.padEnd(20).slice(0, 20);
                 const goalPrefix = c.goalSlug ? chalk.cyan(`[${c.goalSlug}] `) : '';
+                const areaTag = hasAreas ? (c.area ? chalk.magenta(`@${c.area} `) : '') : '';
                 const date = c.date ? chalk.dim(`(${c.date})`) : '';
-                console.log(`  ${chalk.dim(shortId)}  ${personName}  ${goalPrefix}${c.text}  ${date}`);
+                console.log(`  ${chalk.dim(shortId)}  ${personName}  ${areaTag}${goalPrefix}${c.text}  ${date}`);
             }
             console.log('');
         }

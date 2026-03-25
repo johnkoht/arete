@@ -67,6 +67,8 @@ export type Goal = {
     filePath: string;
     /** Optional freeform content */
     body?: string;
+    /** Optional area association — links goal to a persistent work domain */
+    area?: string;
 };
 /** Candidate input for people intelligence classification */
 export type PeopleIntelligenceCandidate = {
@@ -197,9 +199,77 @@ export type Commitment = {
     projectSlug?: string;
     /** Optional goal association — links commitment to a quarterly goal */
     goalSlug?: string;
+    /** Optional area association — domain scoping for commitment. Metadata only, NOT part of dedup hash. */
+    area?: string;
 };
 /** Persisted commitments file structure */
 export type CommitmentsFile = {
     commitments: Commitment[];
+};
+/**
+ * Recurring meeting configuration from area frontmatter.
+ */
+export type RecurringMeeting = {
+    /** Meeting title pattern for matching */
+    title: string;
+    /** Attendee slugs for this recurring meeting */
+    attendees: string[];
+    /** Meeting frequency (e.g., 'weekly', 'biweekly', 'monthly') */
+    frequency?: string;
+};
+/**
+ * Area YAML frontmatter structure.
+ */
+export type AreaFrontmatter = {
+    /** Area display name */
+    area?: string;
+    /** Area status (active, inactive, archived) */
+    status?: string;
+    /** Recurring meetings associated with this area */
+    recurring_meetings?: Array<{
+        title?: string;
+        attendees?: string[];
+        frequency?: string;
+    }>;
+};
+/**
+ * Match result for meeting-to-area lookup.
+ */
+export type AreaMatch = {
+    /** The matched area's slug */
+    areaSlug: string;
+    /** How the match was determined */
+    matchType: 'recurring' | 'inferred';
+    /** Confidence of the match (0.0 - 1.0) */
+    confidence: number;
+};
+/**
+ * Parsed sections from area markdown body.
+ */
+export type AreaSections = {
+    currentState: string | null;
+    keyDecisions: string | null;
+    backlog: string | null;
+    activeGoals: string | null;
+    activeWork: string | null;
+    openCommitments: string | null;
+    notes: string | null;
+};
+/**
+ * Complete parsed context for an area.
+ */
+export type AreaContext = {
+    /** Area slug (filename without .md) */
+    slug: string;
+    /** Area display name from frontmatter */
+    name: string;
+    /** Area status */
+    status: string;
+    /** Recurring meetings associated with this area */
+    recurringMeetings: RecurringMeeting[];
+    /** Path to the area file */
+    filePath: string;
+    /** Parsed markdown sections */
+    sections: AreaSections;
 };
 //# sourceMappingURL=entities.d.ts.map

@@ -32,6 +32,7 @@ import { registerMomentumCommand } from './commands/momentum.js';
 import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerSearchCommand } from './commands/search.js';
+import { registerCreateCommands } from './commands/create.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -45,6 +46,7 @@ ${chalk.bold('Setup & Workspace')}
   onboard                          Quick identity setup (name, email, company)
   update                           Update skills, tools, and integrations
   index                            Re-index the search collection
+  create area <slug>               Create a new area with file and context directory
   status                           Check workspace health
 
 ${chalk.bold('Intelligence')}
@@ -132,5 +134,6 @@ registerMomentumCommand(program);
 registerCredentialsCommand(program);
 registerConfigCommand(program);
 registerSearchCommand(program);
+registerCreateCommands(program);
 program.parse();
 //# sourceMappingURL=index.js.map

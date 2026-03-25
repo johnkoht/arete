@@ -52,11 +52,12 @@ export declare class CommitmentsService {
      */
     private save;
     /**
-     * List open commitments, optionally filtered by direction and/or person slugs.
+     * List open commitments, optionally filtered by direction, person slugs, and/or area.
      */
     listOpen(opts?: {
         direction?: CommitmentDirection;
         personSlugs?: string[];
+        area?: string;
     }): Promise<Commitment[]>;
     /**
      * Convenience: open commitments for a single person.

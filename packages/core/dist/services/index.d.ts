@@ -33,4 +33,5 @@ export { buildMeetingContext } from './meeting-context.js';
 export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
+export { AreaParserService } from './area-parser.js';
 //# sourceMappingURL=index.d.ts.map

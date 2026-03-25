@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-25: [workspace-areas-learnings](entries/2026-03-25_workspace-areas-learnings.md) — Workspace Areas Refactor: persistent work domains with recurring meeting mapping, context hierarchy, area-aware skills. 12/12 tasks, 92% first-attempt, 75+ tests. Key: PATTERNS.md as integration contract, TDD for context service.
 - 2026-03-20: [meeting-processing-primitives-learnings](entries/2026-03-20_meeting-processing-primitives-learnings.md) — Meeting Processing Primitives Phase 1: Composable CLI primitives (meeting context, apply, extract --context), skill refactor, backend integration. 5/5 tasks, 48+ tests, 0/8 pre-mortem risks. Key: design notes with finalized schema before build.
 - 2026-03-19: [core-refactor-learnings](entries/2026-03-19_core-refactor-learnings.md) — Core Refactor (Phases 1-4): Planning flow simplification, individual goal files, agenda lifecycle, commitments+goals. 19/19 tasks, 100% first-attempt, 69+ tests. Key: multi-stage PM/Eng reviews reduced scope ~40% while maintaining user value.
 - 2026-03-19: [commitments-goals-learnings](entries/2026-03-19_commitments-goals-learnings.md) — Commitments + Goals Phase 4: goalSlug on Commitment type, CLI display with goal prefix, manual goal linking during meeting approve. 3/3 tasks, 100% first-attempt, 8 new tests. Key: scope reduced from 6→3 tasks via review (cut heuristic inference, deferred transcripts).

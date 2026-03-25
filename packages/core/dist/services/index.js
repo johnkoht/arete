@@ -33,4 +33,6 @@ export { buildMeetingContext } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
 // Meeting apply service
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
+// Area parsing
+export { AreaParserService } from './area-parser.js';
 //# sourceMappingURL=index.js.map
