@@ -10,6 +10,7 @@ This guide covers everything you need to know to use Areté effectively. For ins
 
 - [Overview](#overview)
 - [Workspace Structure](#workspace-structure)
+- [Areas](#areas)
 - [Getting Started](#getting-started)
 - [Daily Workflows](#daily-workflows)
 - [Skills Reference](#skills-reference)
@@ -129,6 +130,189 @@ Areté supports Cursor and Claude Code. Your IDE choice determines which directo
 | Claude Code | `.claude/` | `.md` |
 
 Skills live in `.agents/skills/` for both IDEs (shared).
+
+---
+
+## Areas
+
+Areas are **persistent work domains** that accumulate intelligence across quarters. Unlike projects (which are time-bound and archived when complete), areas represent ongoing stakeholder relationships, product domains, or strategic initiatives that you continuously invest in.
+
+### Area vs. Project Taxonomy
+
+| Concept | Duration | Purpose | Examples |
+|---------|----------|---------|----------|
+| **Area** | Persistent (months/years) | Accumulate domain intelligence | Customer: Acme Corp, Product: Mobile App, Initiative: Platform Migration |
+| **Project** | Time-bound (days/weeks) | Deliver specific outcome | Discovery: Onboarding, PRD: Checkout Redesign, Analysis: Q1 Competitors |
+
+**Key relationship**: Projects link to areas via the `area:` field. When you finalize a project, its decisions and learnings flow into the linked area, building domain knowledge over time.
+
+### Context Hierarchy
+
+Areté organizes context at three levels:
+
+```
+Company (global)          → context/*.md
+  └── Area (domain)       → context/{slug}/ + areas/{slug}.md
+        └── Project       → projects/active/{name}/
+```
+
+| Level | Location | Purpose |
+|-------|----------|---------|
+| **Company** | `context/*.md` | Business overview, competitive landscape, user personas — applies everywhere |
+| **Area** | `areas/{slug}.md` + `context/{slug}/` | Domain-specific intelligence: current state, decisions, commitments, backlog |
+| **Project** | `projects/active/{name}/` | Time-bound work that may link to an area |
+
+### Dual-Location Design
+
+Areas have content in two places by design:
+
+- **`areas/{slug}.md`** — The area's "profile": frontmatter with recurring meetings, plus sections for goals, state, decisions, commitments, backlog
+- **`context/{slug}/`** — Supporting documents for the area: notes, artifacts, research that don't fit the profile structure
+
+**Why two locations?** The profile (`areas/`) is structured for machine parsing (YAML frontmatter, consistent sections). The context folder (`context/{slug}/`) is flexible for human authoring. Both are searched together by intelligence services.
+
+### Area Lifecycle
+
+```
+Create → Accumulate Intelligence → Archive (optional)
+```
+
+1. **Create** — Run `arete create area <slug>` to scaffold both `areas/{slug}.md` and `context/{slug}/`
+2. **Accumulate** — As you work in the area:
+   - Recurring meetings map to the area (via frontmatter)
+   - Decisions extracted from meetings are written to `## Key Decisions`
+   - Commitments are tagged with the area
+   - Projects link via `area:` field
+3. **Archive** — When an area becomes inactive (partnership ends, initiative completes), set `status: archived` in frontmatter
+
+### Recurring Meeting Mapping
+
+Areas define recurring meetings in YAML frontmatter. When you prep for or process a meeting, Areté auto-matches the meeting title to its area:
+
+```yaml
+---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "CoverWhale Sync"
+    attendees:
+      - john-doe
+      - jane-smith
+    frequency: weekly
+  - title: "Glance Quarterly Review"
+    attendees:
+      - sarah-chen
+    frequency: quarterly
+---
+```
+
+**Matching behavior**:
+- Case-insensitive substring match: "CoverWhale Sync" matches "coverwhale sync", "Weekly CoverWhale Sync", etc.
+- First match wins when multiple areas could match
+- Returns `null` for unmatched meetings (skills prompt you to create/select an area)
+
+**Benefits**:
+- `meeting-prep` auto-injects area context (current state, decisions, commitments)
+- `process-meetings` routes extracted decisions to the correct area
+- `daily-plan` shows area context for today's meetings
+
+### Creating an Area
+
+**Interactive**:
+```bash
+arete create area glance-communications
+```
+Prompts for: area name, description, first recurring meeting (optional).
+
+**Non-interactive**:
+```bash
+arete create area glance-communications \
+  --name "Glance Communications" \
+  --description "Partnership with Glance for embedded communications" \
+  --meeting-title "CoverWhale Sync"
+```
+
+**What it creates**:
+- `areas/glance-communications.md` — Area profile from template
+- `context/glance-communications/` — Directory for supporting documents
+- Runs `arete index` to make the new files searchable
+
+### Area File Structure
+
+```markdown
+---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "CoverWhale Sync"
+    attendees:
+      - john-doe
+    frequency: weekly
+---
+
+# Glance Communications
+
+Partnership with Glance for embedded communications features.
+
+## Active Goals
+<!-- Link to goals with area: field pointing here -->
+
+## Current State
+<!-- Key status points about this area -->
+API integration complete. Partnership progressing to Phase 2.
+
+## Active Work
+<!-- Current projects and initiatives -->
+
+## Key Decisions
+<!-- Date-prefixed decisions: YYYY-MM-DD: Decision description -->
+- 2026-03-01: Use REST API instead of GraphQL for initial integration
+- 2026-02-15: Monthly partner reviews instead of weekly
+
+## Open Commitments
+<!-- Auto-filtered from commitments by area -->
+
+## Backlog
+<!-- Future work items for this area -->
+- Add webhook support
+- Performance optimization for high-volume sync
+
+## Notes
+<!-- Working observations and context -->
+```
+
+### Linking Goals and Commitments
+
+**Goals** can link to areas via frontmatter:
+```yaml
+---
+id: goal-001
+title: Complete Glance Phase 2 integration
+area: glance-communications
+---
+```
+
+**Commitments** are tagged with area during extraction:
+```bash
+# View commitments for a specific area
+arete commitments list --area glance-communications
+```
+
+### Skills That Use Areas
+
+| Skill | How it uses areas |
+|-------|-------------------|
+| `meeting-prep` | Injects area context (current state, decisions, commitments) into prep brief |
+| `process-meetings` | Routes extracted decisions to area files, tags commitments with area |
+| `daily-plan` | Shows area context for today's scheduled meetings |
+| `week-plan` | Aggregates area states for weekly planning |
+
+### Tips for Effective Areas
+
+- **Start with 2-3 areas** — Don't over-categorize. Create areas for relationships or domains you actively invest in.
+- **Use slug naming** — `acme-corp`, `mobile-app`, `platform-migration` — lowercase with hyphens.
+- **Review area backlog** — During week planning, scan area backlogs for items to pull into this week's priorities.
+- **Archive when done** — Set `status: archived` when a partnership ends or initiative completes. Archived areas remain searchable but won't appear in active intelligence.
 
 ---
 
@@ -732,6 +916,15 @@ arete install [directory] [--ide cursor|claude]  # Install workspace
 arete update                                      # Update structure and rules
 arete status                                      # Check workspace health
 arete index                                       # Re-index search collection (after manual file edits)
+```
+
+### Areas
+
+```bash
+arete create area <slug>                          # Create area (interactive prompts for name, description, meeting)
+arete create area <slug> --name "Name" --description "Desc"  # Create with flags (non-interactive)
+arete create area <slug> --meeting-title "Sync"   # Include recurring meeting
+arete create area <slug> --json                   # JSON output for scripting
 ```
 
 ### Search

@@ -7,6 +7,8 @@ your-workspace/
 ├── now/                     # Current focus (scratchpad, week, today, agendas)
 ├── goals/                   # Strategy and goals (strategy, quarter, initiatives)
 ├── context/                 # Core context (business, users, products, competitive)
+│   └── {area-slug}/         # Area-specific context (nested under context/)
+├── areas/                   # Area profiles (persistent domains with recurring meetings)
 ├── projects/                # Project workspaces (active/, archive/)
 ├── resources/               # Raw inputs (meetings/, notes/)
 ├── .arete/                  # System-managed (memory/, activity/)
