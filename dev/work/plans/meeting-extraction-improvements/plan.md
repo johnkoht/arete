@@ -9,8 +9,8 @@ updated: 2026-03-25T23:55:00.000Z
 completed: null
 execution: null
 has_review: true
-has_pre_mortem: false
-has_prd: false
+has_pre_mortem: true
+has_prd: true
 steps: 13
 ---
 
