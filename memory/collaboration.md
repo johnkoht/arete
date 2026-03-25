@@ -81,6 +81,10 @@ Things the builder has corrected — important context for avoiding repeat mista
 - **Documentation timing** (2026-02-10): For large architectural changes, update AGENTS.md mid-execution (after core phase) rather than post-execution.
 - **Entries and learnings after meaningful fixes** (2026-02-11): Calendar integration was fixed (icalBuddy binary, list parsing, checkbox UX) but no entry or learnings were added. When you fix a meaningful gap—especially after the user reports it—add a dated entry and a Learnings section. Otherwise the same kind of miss (subpar UX, no institutional memory) can repeat.
 
+- **Always inject expertise profiles for reviews** (2026-03-25): When running `/review` or spawning subagent reviewers for code that touches `packages/core/`, `packages/cli/`, `packages/apps/backend/`, or `packages/apps/web/`, ALWAYS read the corresponding `.pi/expertise/{domain}/PROFILE.md` and inject the relevant sections (invariants, DI patterns, anti-patterns, key abstractions) into the review task. Generic reviewers miss project-specific patterns. The 4-layer context stack (Layer 4 = domain expertise) exists for this reason. Check which packages the plan touches → load those profiles → include in review prompt.
+
+- **Actively reference collaboration.md for process decisions** (2026-03-25): Don't assume injected context is internalized. When making workflow decisions (spawning subagents, running reviews, choosing execution paths), explicitly re-read the relevant sections of `collaboration.md` and `AGENTS.md` to check for established patterns before proceeding. Having context in the system prompt ≠ actually using it.
+
 ---
 
 ## Last Synthesized
