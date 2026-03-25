@@ -165,5 +165,7 @@ export type SourcePaths = {
     templates: string;
     /** Path to GUIDE.md file in the runtime/dist package */
     guide: string;
+    /** Path to UPDATES.md file in the runtime/dist package (release notes) */
+    updates: string;
 };
 //# sourceMappingURL=workspace.d.ts.map

@@ -8,11 +8,16 @@
  * - Confidence filtering (exclude items below threshold)
  * - User notes deduplication (Jaccard > 0.7 → source: 'dedup')
  * - Auto-approval (high confidence or dedup → approved)
+ *
+ * Context-enhanced extraction (T5):
+ * - Uses buildMeetingContext to assemble attendee context, related goals, agenda
+ * - Passes context to extractMeetingIntelligence for better owner resolution
+ * - Context building is optional — skipped on failure without blocking extraction
  */
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from '@arete/core';
+import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, buildMeetingContext, createServices, getWorkspacePaths, } from '@arete/core';
 import * as jobsService from './jobs.js';
 // ---------------------------------------------------------------------------
 // ActionItem → StagedItem mapping
@@ -95,9 +100,10 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             };
             // Get attendees from frontmatter (extract names from {name, email} objects)
             const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
-            // Call core extraction service
+            // Call core extraction service with optional context
             coreResult = await extractMeetingIntelligence(content, callLLM, {
                 attendees: attendeeNames,
+                context: options.context,
             });
             // If LLM failed and we got empty results, propagate the original error
             // (core extraction catches errors and returns empty results)
@@ -198,10 +204,13 @@ export function initializeAIService(aiService, _config) {
 /**
  * Run a processing session to extract content from a meeting.
  *
+ * - Builds meeting context (attendees, goals, agenda) for enhanced extraction
  * - Reads the meeting file
  * - Calls AI for extraction (summary, action items, decisions, learnings)
  * - Writes staged sections back to the file
  * - Updates frontmatter (status: 'processed', processed_at: timestamp)
+ *
+ * Context building is optional — if it fails, extraction continues without context.
  *
  * @param workspaceRoot  Absolute path to the Areté workspace
  * @param meetingSlug    Meeting file slug (no .md extension)
@@ -222,6 +231,39 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
         jobs.appendEvent(jobId, 'Error: No AI provider configured. Set up API keys via arete credentials set anthropic.');
         throw new Error('No AI provider configured. Set up API keys via arete credentials set anthropic.');
     }
+    // Build context for enhanced extraction (optional — skip on failure)
+    let context;
+    if (!options.context) {
+        try {
+            jobs.appendEvent(jobId, 'Building meeting context...');
+            const services = await createServices(workspaceRoot);
+            const paths = getWorkspacePaths(workspaceRoot);
+            const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${meetingSlug}.md`);
+            context = await buildMeetingContext(meetingPath, {
+                storage: services.storage,
+                intelligence: services.intelligence,
+                entity: services.entity,
+                paths,
+            });
+            // Log context stats
+            const attendeeCount = context.attendees.length;
+            const agendaItems = context.agenda?.items.length ?? 0;
+            if (attendeeCount > 0 || agendaItems > 0) {
+                jobs.appendEvent(jobId, `Context built: ${attendeeCount} attendees, ${agendaItems} agenda items.`);
+            }
+        }
+        catch (err) {
+            // Context building is optional — log warning and continue
+            const message = err instanceof Error ? err.message : String(err);
+            jobs.appendEvent(jobId, `Warning: Could not build context: ${message}`);
+            // Continue without context
+        }
+    }
+    else {
+        // Use provided context
+        context = options.context;
+    }
     const deps = createDefaultDeps(moduleAiService);
-    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options);
+    const optionsWithContext = { ...options, context };
+    return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, optionsWithContext);
 }

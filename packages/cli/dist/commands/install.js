@@ -76,6 +76,7 @@ export function registerInstallCommand(program) {
             integrations: basePaths.integrations,
             templates: basePaths.templates,
             guide: basePaths.guide,
+            updates: basePaths.updates,
         };
         const result = await services.workspace.create(targetDir, {
             ideTarget: ide,

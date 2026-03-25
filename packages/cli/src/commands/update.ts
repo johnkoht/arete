@@ -45,6 +45,7 @@ export function registerUpdateCommand(program: Command): void {
         integrations: basePaths.integrations,
         templates: basePaths.templates,
         guide: basePaths.guide,
+        updates: basePaths.updates,
       };
 
       const result = await services.workspace.update(root, { sourcePaths });

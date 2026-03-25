@@ -327,6 +327,28 @@ export class WorkspaceService {
       }
     }
 
+    // Copy UPDATES.md to workspace root (skip if already exists)
+    if (sourcePaths?.updates) {
+      const updatesSrc = sourcePaths.updates;
+      const updatesDest = join(targetDir, 'UPDATES.md');
+      const updatesDestExists = await this.storage.exists(updatesDest);
+      if (!updatesDestExists) {
+        try {
+          const content = await this.storage.read(updatesSrc);
+          if (content !== null) {
+            await this.storage.write(updatesDest, content);
+            result.files.push('UPDATES.md');
+          }
+        } catch (err) {
+          result.errors.push({
+            type: 'file',
+            path: 'UPDATES.md',
+            error: (err as Error).message,
+          });
+        }
+      }
+    }
+
     const manifest: AreteConfig = {
       schema: 1,
       version: '0.1.0',
@@ -474,6 +496,29 @@ export class WorkspaceService {
           }
         } catch {
           // Non-fatal: skip GUIDE.md refresh on error
+        }
+      }
+    }
+
+    // Always refresh UPDATES.md (release notes, not user content)
+    if (options.sourcePaths?.updates) {
+      const updatesSrc = options.sourcePaths.updates;
+      const updatesDest = join(workspaceRoot, 'UPDATES.md');
+      const updatesSrcExists = await this.storage.exists(updatesSrc);
+      if (updatesSrcExists) {
+        try {
+          const content = await this.storage.read(updatesSrc);
+          if (content != null) {
+            const updatesExisted = await this.storage.exists(updatesDest);
+            await this.storage.write(updatesDest, content);
+            if (updatesExisted) {
+              result.updated.push('UPDATES.md');
+            } else {
+              result.added.push('UPDATES.md');
+            }
+          }
+        } catch {
+          // Non-fatal: skip UPDATES.md refresh on error
         }
       }
     }

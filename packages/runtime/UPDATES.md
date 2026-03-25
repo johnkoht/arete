@@ -4,6 +4,75 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 24, 2026
+
+**Workspace Areas: Persistent work domains that accumulate intelligence.**
+
+### Areas Overview
+
+**Areas** are persistent work domains that accumulate intelligence across quarters. Unlike projects (time-bound and archived when complete), areas represent ongoing relationships, initiatives, or product domains.
+
+Examples:
+- **Customer: Acme Corp** — ongoing customer relationship
+- **Initiative: Platform Migration** — long-running strategic initiative
+- **Product: Mobile App** — product domain you own
+
+### How It Works
+
+**Create an area:**
+```bash
+arete create area customer-acme --name "Customer: Acme Corp" --description "Enterprise customer relationship"
+```
+
+This creates:
+- `areas/customer-acme.md` — Area profile with YAML frontmatter
+- `context/customer-acme/` — Directory for area-specific context
+
+**Configure recurring meetings** in the area file's YAML frontmatter:
+```yaml
+---
+area: Customer: Acme Corp
+status: active
+recurring_meetings:
+  - title: "Acme Weekly Sync"
+    attendees: [john-smith, jane-doe]
+    frequency: weekly
+---
+```
+
+**Area context flows automatically:**
+- **Meeting prep** auto-pulls area context for recurring meetings
+- **Process meetings** routes decisions and commitments to the correct area
+- **Weekly/daily planning** shows area-organized view of your work
+
+### Area-Linked Goals and Commitments
+
+Goals and commitments can now link to areas:
+```yaml
+---
+title: Expand Acme contract
+area: customer-acme  # Links to area
+---
+```
+
+### Context Hierarchy
+
+Areté now organizes context at three levels:
+- **Company** (`context/*.md`) — Global context applies everywhere
+- **Area** (`areas/` + `context/{slug}/`) — Domain-specific intelligence
+- **Project** (`projects/active/`) — Time-bound work that links to areas
+
+### Upgrading Existing Workspaces
+
+Run `arete update` to get the new `areas/` directory and templates. Then:
+1. Create your first area: `arete create area <slug>`
+2. Configure recurring meetings in the area file
+3. Optionally link existing goals with `area: <slug>` in frontmatter
+
+See `GUIDE.md > Areas` for complete documentation.
+
+---
+
 ## Week of March 17-19, 2026
 
 **Core Refactor: Simplified planning, individual goals, and commitment-goal linking.**

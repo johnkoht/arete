@@ -37,6 +37,7 @@ export function registerUpdateCommand(program) {
             integrations: basePaths.integrations,
             templates: basePaths.templates,
             guide: basePaths.guide,
+            updates: basePaths.updates,
         };
         const result = await services.workspace.update(root, { sourcePaths });
         // Run goal migration (converts quarter.md to individual goal files)
