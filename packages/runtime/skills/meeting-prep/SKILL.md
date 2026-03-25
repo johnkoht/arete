@@ -16,19 +16,21 @@ intelligence:
   - context_injection
   - entity_resolution
   - memory_retrieval
+  - area_context
 ---
 
 # Meeting Prep Skill
 
-Build a prep brief for a meeting: attendee details, recent meetings, related projects, open action items, and suggested talking points. Uses the **get_meeting_context** intelligence pattern.
+Build a prep brief for a meeting: attendee details, recent meetings, related projects, open action items, and suggested talking points. Uses the **get_meeting_context**, **get_area_context**, and **relationship_intelligence** patterns.
 
 ## Agent Instructions
 
 **When the user asks for meeting prep** (e.g. "prep me for my meeting with Jane", "call with Acme"):
 
-1. **Use this skill** — Execute this workflow. Do not substitute ad-hoc grep/read only; use the get_meeting_context pattern.
+1. **Use this skill** — Execute this workflow. Do not substitute ad-hoc grep/read only; use the get_meeting_context and get_area_context patterns.
 2. **Use QMD when available** — Run `qmd query "..."` to find related decisions/learnings; incorporate into the brief (step 6 of the pattern).
-3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context pattern), person/meeting/project reads, and QMD for related context."
+3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context + get_area_context patterns), person/meeting/project reads, and QMD for related context."
+4. **Area context enrichment** — For recurring meetings like "CoverWhale Sync", automatically look up and include area context (Current State, Key Decisions, Open Commitments) from the matched area file.
 
 ## When to Use
 
@@ -54,7 +56,30 @@ Run the **get_meeting_context** pattern — see [PATTERNS.md](../PATTERNS.md). I
   - Ask user to pick one meeting to prep.
 - If no calendar data or calendar is unavailable, ask: "Which meeting? Please share the title and/or attendee names."
 
-### 2. Lazy Refresh Person Memory (stale-aware)
+### 2. Area Context Lookup
+
+Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to identify if this meeting belongs to a persistent work area:
+
+1. **Match meeting to area** — Call `AreaParserService.getAreaForMeeting(meetingTitle)`:
+   - Uses case-insensitive substring matching against `recurring_meetings[].title` in area files
+   - Returns `AreaMatch | null`: `{ areaSlug: string; matchType: 'recurring' | 'inferred'; confidence: number }`
+
+2. **When area found** — Call `AreaParserService.getAreaContext(areaSlug)` to retrieve:
+   - `currentState` — Current status and key points about the area
+   - `keyDecisions` — Date-prefixed decisions relevant to this area
+   - `openCommitments` — Commitments scoped to this area
+   - Store these for inclusion in the brief (Step 6)
+
+3. **When area not found** — For recurring meetings (detected by title pattern or user indication):
+   - Prompt user: "This appears to be a recurring meeting. Would you like to associate it with an area?"
+   - If yes, offer to either:
+     - Select from existing areas: list `areas/*.md` files
+     - Create a new area: `arete create area <slug>`
+   - For one-off meetings, proceed without area context (no prompt needed)
+
+**Example**: Meeting title "CoverWhale Sync" → matches `areas/glance-communications.md` → auto-pulls Glance Communications context (Current State, Key Decisions, Open Commitments).
+
+### 3. Lazy Refresh Person Memory (stale-aware)
 
 After attendee slugs are resolved, refresh only if stale/missing:
 
@@ -63,11 +88,11 @@ After attendee slugs are resolved, refresh only if stale/missing:
 - If many attendees (e.g. 5+), ask before refreshing all: "Refresh person memory highlights now?"
 - If refresh fails, continue prep with existing person context (fail-open).
 
-### 3. Gather Context
+### 4. Gather Context
 
-Run **get_meeting_context** (see PATTERNS.md). Use the outputs to build the brief.
+Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Use the outputs to build the brief.
 
-### 4. Relationship Intelligence Analysis
+### 5. Relationship Intelligence Analysis
 
 Using the person profiles and context already gathered by **get_meeting_context** (do NOT re-run `arete people show`), apply the **relationship_intelligence** pattern from PATTERNS.md for each attendee who has a person profile:
 
@@ -78,12 +103,29 @@ Using the person profiles and context already gathered by **get_meeting_context*
 
 Collect the resulting intelligence insights; they populate the **Intelligence Insights** section of the brief.
 
-### 5. Build Prep Brief
+### 6. Build Prep Brief
 
 Output markdown:
 
 ```markdown
 ## Prep: [Meeting Title]
+
+### Area Context
+_Include this section only when an area was matched in Step 2._
+
+**Area**: [Area Name] (areas/[slug].md)
+
+**Current State**:
+[Summary from area's Current State section — 2-3 key points about where things stand]
+
+**Key Decisions**:
+- YYYY-MM-DD: [Decision relevant to this meeting]
+- YYYY-MM-DD: [Another relevant decision]
+_(Show 3-5 most recent decisions from the area)_
+
+**Open Commitments** (area-scoped):
+- [ ] [Commitment description] — _Due: YYYY-MM-DD_
+_(Show commitments tagged with this area)_
 
 ### Attendees
 - **Name** — Role, Company | Last met: YYYY-MM-DD (or "No prior meetings")
@@ -142,16 +184,19 @@ Example:
 
 Keep it concise and prep-focused.
 
-### 6. Close
+### 7. Close
 
 - Offer to save the brief to a note or scratchpad if useful.
 - Suggest **process-meetings** after the meeting to propagate attendees and extract decisions.
+- If an area was associated, remind user that decisions/learnings from this meeting can be routed to the area via process-meetings.
 
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — relationship_intelligence
 - **People**: `people/` (internal, customers, users)
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `attendees`)
 - **Projects**: `projects/active/` READMEs (`stakeholders`)
+- **Areas**: `areas/*.md` (recurring meeting mappings, area context)
 - **Related**: process-meetings, daily-plan
