@@ -114,3 +114,6 @@ export type {
   ApplyMeetingResult,
   ApplyMeetingDeps,
 } from './meeting-apply.js';
+
+// Area parsing
+export { AreaParserService } from './area-parser.js';

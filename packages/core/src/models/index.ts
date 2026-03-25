@@ -102,6 +102,12 @@ export type {
   CommitmentDirection,
   Commitment,
   CommitmentsFile,
+  // Areas domain
+  RecurringMeeting,
+  AreaFrontmatter,
+  AreaMatch,
+  AreaSections,
+  AreaContext,
 } from './entities.js';
 
 // Intelligence domain

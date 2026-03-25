@@ -104,6 +104,106 @@ templates/outputs/{skill-id}/default.md
 
 ---
 
+## get_area_context
+
+**Purpose**: Given a meeting title OR area slug, retrieve the relevant area's context — recurring meeting mappings, current state, key decisions, and backlog. Use this to enrich meeting prep, route extracted intelligence, and maintain area-specific knowledge.
+
+**Used by**: meeting-prep, process-meetings, daily-plan, week-plan
+
+**Inputs**: Meeting title (for auto-lookup) OR area slug (for direct access).
+
+**Steps**:
+
+1. **From meeting title** — Call `AreaParserService.getAreaForMeeting(meetingTitle)`:
+   - Uses case-insensitive substring matching against `recurring_meetings[].title` in area files
+   - Returns `AreaMatch | null`: `{ areaSlug: string; matchType: 'recurring' | 'inferred'; confidence: number }`
+   - Returns `null` when no match (not `{ confidence: 0 }`)
+   - For multiple matches, returns highest confidence (first match wins for equal confidence)
+
+2. **Handle null result** — If no area matches:
+   - For recurring meetings: prompt user to select or create area association
+   - For one-off meetings: infer from attendees + content, confirm if confidence < 0.7
+   - For skills that don't require area context: proceed without area enrichment
+
+3. **From area slug** — Call `AreaParserService.getAreaContext(areaSlug)`:
+   - Returns `AreaContext | null` with full parsed content
+   - Includes: `slug`, `name`, `status`, `recurringMeetings[]`, `filePath`, and `sections`
+
+4. **Inject sections** — Use relevant sections from `AreaContext.sections`:
+   - `currentState` — Current status and key points about the area
+   - `keyDecisions` — Date-prefixed decisions (e.g., "2026-03-01: Use REST API")
+   - `backlog` — Future work items for this area
+   - `activeGoals` — Goals with `area:` field pointing to this area
+   - `activeWork` — Current projects and initiatives
+   - `openCommitments` — Auto-filtered commitments by area
+
+**Outputs**:
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `AreaMatch` | `{ areaSlug, matchType, confidence }` | Meeting-to-area lookup result |
+| `AreaContext` | Full parsed area | All area frontmatter and sections |
+
+**Example usage**:
+
+```typescript
+import { AreaParserService } from '@arete/core';
+
+// In a skill or CLI command
+const parser = new AreaParserService(storage, workspaceRoot);
+
+// From meeting title (e.g., meeting-prep)
+const match = await parser.getAreaForMeeting('CoverWhale Sync');
+if (match) {
+  // match: { areaSlug: 'glance-communications', matchType: 'recurring', confidence: 1.0 }
+  const context = await parser.getAreaContext(match.areaSlug);
+  // Inject context.sections.currentState, context.sections.keyDecisions, etc.
+}
+
+// Direct by slug (e.g., when area is already known)
+const context = await parser.getAreaContext('glance-communications');
+if (context) {
+  console.log(context.sections.currentState); // "Partnership progressing well..."
+  console.log(context.sections.keyDecisions); // "- 2026-03-01: Use REST API..."
+}
+```
+
+**Area file format** (areas/{slug}.md):
+
+```yaml
+---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "CoverWhale Sync"
+    attendees:
+      - john-doe
+      - jane-smith
+    frequency: weekly
+---
+
+# Glance Communications
+
+## Current State
+Partnership is progressing well. API integration complete.
+
+## Key Decisions
+- 2026-03-01: Use REST API instead of GraphQL
+- 2026-02-15: Monthly partner reviews
+
+## Backlog
+- Add webhook support
+- Performance optimization
+```
+
+**Integration with other patterns**:
+- **meeting-prep**: Use `get_area_context` after attendee resolution to inject area-specific context
+- **process-meetings**: Use `getAreaForMeeting()` to route extracted decisions to the correct area file
+- **daily-plan**: Use for today's meetings to show area context in daily focus
+- **week-plan**: Aggregate area states for weekly planning view
+
+---
+
 ## extract_decisions_learnings
 
 **Purpose**: Scan content for candidate decisions and learnings, present for inline review, write approved items to memory.
