@@ -185,4 +185,129 @@ Our vision is to dominate the market.`,
       );
     });
   });
+
+  describe('nested context directories (area-level resources)', () => {
+    it('scans context/{slug}/ subdirectories for markdown files', async () => {
+      // Create area-specific context in a nested directory
+      writeFixtureFile(
+        'context/glance-communications/notes.md',
+        '# Glance Communications Notes\n\nClient meeting notes and decisions about Glance project.',
+      );
+      const result = await getRelevantContext('Glance project notes', paths);
+      const notesFile = result.files.find(
+        (f) => f.relativePath === 'context/glance-communications/notes.md',
+      );
+      assert.ok(notesFile, 'nested context file should be found');
+      assert.equal(notesFile?.category, 'context', 'should use context category');
+    });
+
+    it('scans deeply nested context subdirectories', async () => {
+      // Create deeply nested context file
+      writeFixtureFile(
+        'context/acme-corp/q1-2026/research.md',
+        '# Acme Corp Q1 Research\n\nResearch findings for Acme Corp first quarter.',
+      );
+      const result = await getRelevantContext('Acme research findings', paths);
+      const researchFile = result.files.find(
+        (f) => f.relativePath === 'context/acme-corp/q1-2026/research.md',
+      );
+      assert.ok(researchFile, 'deeply nested context file should be found');
+      assert.equal(researchFile?.category, 'context');
+    });
+
+    it('excludes context/_history/ directory from scanning', async () => {
+      // Create file in _history that should be excluded
+      writeFixtureFile(
+        'context/_history/old-notes.md',
+        '# Old Notes\n\nArchived context history notes.',
+      );
+      // Create valid context file
+      writeFixtureFile(
+        'context/current-notes.md',
+        '# Current Notes\n\nActive context notes for the project.',
+      );
+      const result = await getRelevantContext('notes project', paths);
+      const historyFile = result.files.find((f) => f.relativePath?.includes('_history'));
+      const currentFile = result.files.find((f) => f.relativePath === 'context/current-notes.md');
+      assert.ok(!historyFile, '_history files should be excluded');
+      assert.ok(currentFile, 'non-_history context files should be included');
+    });
+
+    it('excludes nested paths containing _history', async () => {
+      // Create file in nested _history path
+      writeFixtureFile(
+        'context/glance/_history/archived.md',
+        '# Archived\n\nOld Glance communications history.',
+      );
+      const result = await getRelevantContext('Glance communications history', paths);
+      const historyFile = result.files.find((f) => f.relativePath?.includes('_history'));
+      assert.ok(!historyFile, 'nested _history paths should be excluded');
+    });
+
+    it('scans areas/*.md files with context category', async () => {
+      // Create area file
+      writeFixtureFile(
+        'areas/glance-communications.md',
+        `---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "Glance Sync"
+    attendees: ["john-doe"]
+    frequency: weekly
+---
+
+# Glance Communications
+
+## Current State
+Working on Q1 deliverables for Glance partnership.
+
+## Key Decisions
+- 2026-01-15: Chose React for frontend
+`,
+      );
+      const result = await getRelevantContext('Glance partnership deliverables', paths);
+      const areaFile = result.files.find(
+        (f) => f.relativePath === 'areas/glance-communications.md',
+      );
+      assert.ok(areaFile, 'area file should be found');
+      assert.equal(areaFile?.category, 'context', 'area files should use context category (not a new area category)');
+    });
+
+    it('includes multiple area files when relevant to query', async () => {
+      writeFixtureFile(
+        'areas/glance-communications.md',
+        '# Glance Communications\n\nGlance partnership context.',
+      );
+      writeFixtureFile(
+        'areas/acme-corp.md',
+        '# Acme Corp\n\nAcme partnership context.',
+      );
+      const result = await getRelevantContext('partnership context', paths);
+      const glanceArea = result.files.find(
+        (f) => f.relativePath === 'areas/glance-communications.md',
+      );
+      const acmeArea = result.files.find((f) => f.relativePath === 'areas/acme-corp.md');
+      assert.ok(glanceArea, 'glance area should be found');
+      assert.ok(acmeArea, 'acme area should be found');
+      assert.equal(glanceArea?.category, 'context');
+      assert.equal(acmeArea?.category, 'context');
+    });
+
+    it('excludes areas/_template.md from results', async () => {
+      writeFixtureFile(
+        'areas/_template.md',
+        '# {area}\n\nTemplate for areas.',
+      );
+      writeFixtureFile(
+        'areas/real-area.md',
+        '# Real Area\n\nActual area content template usage.',
+      );
+      const result = await getRelevantContext('area template', paths);
+      const templateFile = result.files.find((f) => f.relativePath === 'areas/_template.md');
+      const realFile = result.files.find((f) => f.relativePath === 'areas/real-area.md');
+      assert.ok(!templateFile, '_template.md should be excluded');
+      assert.ok(realFile, 'real area files should be included');
+    });
+  });
 });

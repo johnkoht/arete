@@ -269,6 +269,45 @@ export class ContextService {
                 }
             }
         }
+        // 6b. Nested context directories (context/{slug}/**/*.md)
+        // Scans subdirectories like context/glance-communications/ for area-level context
+        const contextDir = join(paths.root, 'context');
+        const contextDirExists = await this.storage.exists(contextDir);
+        if (contextDirExists) {
+            const contextFiles = await this.storage.list(contextDir, { recursive: true, extensions: ['.md'] });
+            for (const filePath of contextFiles) {
+                const relPath = relative(paths.root, filePath);
+                // Exclude _history directories (archived context)
+                if (relPath.includes('_history'))
+                    continue;
+                // Skip root-level context files (already handled by PRIMITIVE_FILE_MAP)
+                const pathParts = relPath.split('/');
+                if (pathParts.length <= 2)
+                    continue; // Only process nested files (context/{slug}/*.md or deeper)
+                const content = await safeRead(filePath);
+                if (content && hasTokenOverlap(content, queryTokens)) {
+                    await addFile(filePath, 'context', undefined, staticScore);
+                }
+            }
+        }
+        // 6c. Area files (areas/*.md)
+        // Areas are persistent work domains that accumulate intelligence
+        const areasDir = join(paths.root, 'areas');
+        const areasDirExists = await this.storage.exists(areasDir);
+        if (areasDirExists) {
+            const areaFiles = await this.storage.list(areasDir, { extensions: ['.md'] });
+            for (const filePath of areaFiles) {
+                const baseName = filePath.split(/[/\\]/).pop() || '';
+                // Exclude template files
+                if (baseName.startsWith('_'))
+                    continue;
+                const content = await safeRead(filePath);
+                if (content && hasTokenOverlap(content, queryTokens)) {
+                    // Use 'context' category (not a separate 'area' category)
+                    await addFile(filePath, 'context', undefined, staticScore);
+                }
+            }
+        }
         // 7. SearchProvider discovery
         // Semantic search can upgrade scores for files already added with static scores
         try {
@@ -303,9 +342,17 @@ export class ContextService {
                     continue;
                 }
                 const relPath = relative(paths.root, absolutePath);
+                // Skip _history paths and template files from search results
+                if (relPath.includes('_history'))
+                    continue;
+                const baseName = relPath.split('/').pop() || '';
+                if (baseName.startsWith('_'))
+                    continue;
                 let category = 'resources';
                 if (relPath.startsWith('context/'))
                     category = 'context';
+                else if (relPath.startsWith('areas/'))
+                    category = 'context'; // Areas use context category
                 else if (relPath.startsWith('goals/'))
                     category = 'goals';
                 else if (relPath.startsWith('projects/'))
