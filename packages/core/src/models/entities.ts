@@ -78,6 +78,8 @@ export type Goal = {
   filePath: string;
   /** Optional freeform content */
   body?: string;
+  /** Optional area association — links goal to a persistent work domain */
+  area?: string;
 };
 
 /** Candidate input for people intelligence classification */

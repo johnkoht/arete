@@ -590,3 +590,125 @@ Content here.
     assert.equal(goals[0].quarter, '2025-Q3');
   });
 });
+
+describe('parseGoals - Area field', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let goalsDir: string;
+
+  const GOAL_WITH_AREA = `---
+id: "Q1-1"
+title: "Ship onboarding v2"
+status: active
+quarter: "2026-Q1"
+type: outcome
+orgAlignment: "Pillar 2: Retention"
+successCriteria: "90% completion rate"
+area: "glance-communications"
+---
+
+This goal is linked to the Glance Communications area.
+`;
+
+  const GOAL_WITHOUT_AREA = `---
+id: "Q1-2"
+title: "Launch API v3"
+status: complete
+quarter: "2026-Q1"
+type: milestone
+orgAlignment: "Pillar 1: Platform"
+successCriteria: "200 API customers"
+---
+
+No area association for this goal.
+`;
+
+  const GOAL_WITH_EMPTY_AREA = `---
+id: "Q1-3"
+title: "Improve metrics dashboard"
+status: active
+quarter: "2026-Q1"
+type: outcome
+area: ""
+---
+
+Empty area string should be treated as undefined.
+`;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'goal-parser-area-'));
+    storage = new FileStorageAdapter();
+    goalsDir = join(tmpDir, 'goals');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('parses area field from frontmatter', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('goals/2026-Q1-1-ship-onboarding-v2.md', GOAL_WITH_AREA);
+
+    const goals = await parseGoals(goalsDir, storage);
+
+    assert.equal(goals.length, 1);
+    assert.equal(goals[0].area, 'glance-communications');
+  });
+
+  it('returns undefined area for goals without area field', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('goals/2026-Q1-2-launch-api-v3.md', GOAL_WITHOUT_AREA);
+
+    const goals = await parseGoals(goalsDir, storage);
+
+    assert.equal(goals.length, 1);
+    assert.equal(goals[0].area, undefined);
+  });
+
+  it('treats empty area string as undefined', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('goals/2026-Q1-3-improve-metrics.md', GOAL_WITH_EMPTY_AREA);
+
+    const goals = await parseGoals(goalsDir, storage);
+
+    assert.equal(goals.length, 1);
+    assert.equal(goals[0].area, undefined);
+  });
+
+  it('parses mix of goals with and without area', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('goals/2026-Q1-1-ship-onboarding-v2.md', GOAL_WITH_AREA);
+    fixture.writeFile('goals/2026-Q1-2-launch-api-v3.md', GOAL_WITHOUT_AREA);
+
+    const goals = await parseGoals(goalsDir, storage);
+
+    assert.equal(goals.length, 2);
+
+    const goalWithArea = goals.find(g => g.id === 'Q1-1');
+    const goalWithoutArea = goals.find(g => g.id === 'Q1-2');
+
+    assert.ok(goalWithArea, 'Goal Q1-1 should be found');
+    assert.equal(goalWithArea.area, 'glance-communications');
+
+    assert.ok(goalWithoutArea, 'Goal Q1-2 should be found');
+    assert.equal(goalWithoutArea.area, undefined);
+  });
+
+  it('backwards compatible - all existing goal fields still work', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('goals/2026-Q1-1-ship-onboarding-v2.md', GOAL_WITH_AREA);
+
+    const goals = await parseGoals(goalsDir, storage);
+    const goal = goals[0];
+
+    assert.equal(goal.id, 'Q1-1');
+    assert.equal(goal.title, 'Ship onboarding v2');
+    assert.equal(goal.status, 'active');
+    assert.equal(goal.quarter, '2026-Q1');
+    assert.equal(goal.type, 'outcome');
+    assert.equal(goal.orgAlignment, 'Pillar 2: Retention');
+    assert.equal(goal.successCriteria, '90% completion rate');
+    assert.equal(goal.area, 'glance-communications');
+    assert.ok(goal.body?.includes('Glance Communications'));
+  });
+});
