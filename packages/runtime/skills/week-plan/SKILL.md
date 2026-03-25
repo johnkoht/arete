@@ -16,6 +16,7 @@ work_type: planning
 category: essential
 intelligence:
   - context_injection
+  - area_context
 ---
 
 # Week Plan Skill
@@ -42,13 +43,22 @@ This helps set expectations but doesn't change calendar range.
 **Gather silently** (no user interaction needed for this step):
 
 - **Read** current quarter goals from individual files: `goals/*.md` (excluding `strategy.md`).
-  - Parse frontmatter from each file to extract: `id`, `title`, `status`.
+  - Parse frontmatter from each file to extract: `id`, `title`, `status`, `area`.
   - Filter to `status: active` goals.
+  - **Group by area**: Note which goals have `area:` field set and group them for display.
 - **Fallback**: If no individual goal files exist, read `goals/quarter.md` (legacy format).
 - **Read** last week file: `now/week.md` for carry-over and continuity.
 - **Read** `projects/active/` (README or key files) for commitments tied to projects.
 - **Read** `now/scratchpad.md` for ad-hoc commitments or "due this week" items.
-- **Open Commitments**: Run `arete commitments list`. Surface results in the "Commitments due this week" section of the week file. User elevates commitments to outcomes organically - no pick-and-promote interaction required.
+- **Open Commitments with Area Grouping**: Run `arete commitments list --json` and group results by area:
+  - Extract unique area values from commitments
+  - Count commitments per area (commitments without area go to "Unassigned")
+  - Format as: "Area Name: N open commitments" (e.g., "Glance Communications: 3 open commitments")
+  - Surface this summary in the "Area Commitments" section of the week file
+- **Area Context Summaries**: For each area that has open commitments or linked goals:
+  - Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md))
+  - Call `AreaParserService.getAreaContext(areaSlug)` to retrieve Current State section
+  - Include brief area context (1-2 lines) in the weekly plan for situational awareness
 - **Try Calendar (if configured)**: Run `arete pull calendar --days 7 --json`. If the command succeeds and returns events (`success: true` and non-empty `events`), use them to list the week's meetings (by day). If the command fails, returns no events, or is not configured, skip calendar and rely on the user for meeting context.
 
 ### 2. Week's Meetings and Prep
@@ -106,12 +116,40 @@ Also capture (from earlier context, no extra asks needed):
   Template sections:
   - Week dates
   - Top 3-5 outcomes with quarter goal links
+  - **Area Overview** — area context summaries with commitment counts (see format below)
   - Commitments due this week
   - Carried over from last week
   - **Today's Plan** - auto-updated by **daily-plan** (see below)
   - Optional "End of week review" section (filled during **week-review**).
 
   **About Today's Plan**: This section is a placeholder for **daily-plan** to populate. When daily-plan runs, it updates `### Focus` and `### Meetings` with today's context. The `### Notes` subsection is preserved across daily-plan updates, so users can add notes that won't be overwritten.
+
+  **Area Overview format** (include this section when areas have commitments or linked goals):
+  ```markdown
+  ## Area Overview
+  _Active work domains for the week with current state and open commitments._
+
+  ### Glance Communications
+  - **Current State**: Partnership progressing well. API integration complete.
+  - **Open Commitments**: 3
+  - **Linked Goals**: Q1-2 (Launch partner API)
+
+  ### Product Team
+  - **Current State**: Feature freeze in effect. Focus on stability.
+  - **Open Commitments**: 5
+  - **Linked Goals**: Q1-1 (Ship v2.0), Q1-3 (Improve test coverage)
+
+  ### Unassigned
+  - **Open Commitments**: 2
+  ```
+
+  **Format rules**:
+  - Show each area that has either open commitments OR linked goals
+  - Include brief Current State summary (1-2 lines from area file's Current State section)
+  - Show commitment count: "Area Name: N open commitments"
+  - List linked goal IDs (goals with `area:` matching this area slug)
+  - Group commitments without area under "Unassigned" (show count only, no context)
+  - Skip this section entirely if no areas have commitments or linked goals
 
 ### 5. Stakeholder Watchouts (Opt-in)
 
@@ -137,17 +175,22 @@ After writing the week file, offer:
 
 ## References
 
-- **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context
+- **Quarter goals**: `goals/*.md` (excluding `strategy.md`) — individual goal files with frontmatter (includes `area:` field)
 - **Legacy quarter goals**: `goals/quarter.md` (fallback for older workspaces)
 - **Last week**: `now/week.md`
 - **Output**: `now/week.md`
 - **Template**: `templates/plans/week-priorities.md` (override) or `.agents/skills/week-plan/templates/week-priorities.md` (default)
 - **Context**: `projects/active/`, `now/scratchpad.md`
+- **Areas**: `areas/*.md` — area files with context sections (Current State, Key Decisions, etc.)
+- **Commitments by area**: `arete commitments list --area <slug>` or `arete commitments list --json` (group by area)
 - **Calendar**: `arete pull calendar --days 7 --json` (optional; same as daily-plan)
 
 ## Notes
 
 - **Recurrence**: The calendar integration (icalBuddy) does not expose whether an event is recurring. Meeting-type callouts (QBR, monthly review, etc.) are based on **event title** (and notes) only. A future provider (e.g. Google Calendar API) could add recurrence if needed.
+- **Area Integration**: Goals and commitments can be linked to areas via the `area:` field. The week plan shows area-organized views to help users see which work domains need attention. Areas provide persistent context (Current State, Key Decisions) that enriches weekly planning beyond simple task lists.
+- **Related skills**: daily-plan, meeting-prep, and process-meetings also use area context via the **get_area_context** pattern for consistent area-aware workflows.
 
 ## Error Handling
 
