@@ -10,6 +10,7 @@ intelligence:
   - entity_resolution
   - synthesis
   - memory_retrieval
+  - area_context
 integration:
   outputs:
     - type: resource
@@ -19,7 +20,7 @@ integration:
 
 # Process Meetings Skill
 
-Read meeting files from `resources/meetings/`, extract intelligence using CLI primitives, and stage items for review.
+Read meeting files from `resources/meetings/`, extract intelligence using CLI primitives, and stage items for review. Uses the **get_area_context** pattern for mapping meetings to areas and routing extracted intelligence to area files.
 
 **Default behavior (staged mode)**: Writes extracted action items, decisions, and learnings as staged sections directly into the meeting file for review. Does NOT write to memory until approved.
 
@@ -102,6 +103,34 @@ This assembles:
 - `--skip-agenda` — don't look for linked agenda
 - `--skip-people` — don't resolve attendee context
 
+### 2b. For Each Meeting — Map to Area
+
+Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to identify which area this meeting belongs to:
+
+1. **For recurring meetings** — Call `AreaParserService.getAreaForMeeting(meetingTitle)`:
+   - Uses case-insensitive substring matching against `recurring_meetings[].title` in area files
+   - Returns `AreaMatch | null`: `{ areaSlug: string; matchType: 'recurring'; confidence: 1.0 }`
+   - Auto-map when match found — no user confirmation needed
+
+2. **For one-off meetings** (no recurring match) — Infer from attendees + content:
+   - Check if any attendees are associated with an area (via area file `attendees[]` or prior meeting history)
+   - Analyze meeting title and content for area keywords
+   - If match found with confidence ≥ 0.7: auto-map to area
+   - If match found with confidence < 0.7: present to user for confirmation:
+     ```
+     This meeting appears related to [Area Name] (confidence: 0.X).
+     Map to this area? [Y/n]
+     ```
+   - If no match: proceed without area association
+
+3. **Store area association** — When area is determined:
+   - Add `area: <slug>` to meeting frontmatter (or context bundle)
+   - This will be used for:
+     - Routing decisions to area's Key Decisions section
+     - Tagging commitments with area
+
+**Example**: Meeting "CoverWhale Sync" → matches `areas/glance-communications.md` → area = "glance-communications"
+
 ### 3. For Each Meeting — Extract Intelligence
 
 Pipe the context bundle into extraction:
@@ -119,8 +148,8 @@ arete meeting extract <file> --context /tmp/context.json --json
 
 **What gets extracted**:
 - **Summary** — 2-4 sentence overview of the meeting
-- **Action Items** — Commitments with owner and deliverable
-- **Decisions** — Key choices made during the meeting
+- **Action Items** — Commitments with owner and deliverable (tagged with area when meeting is mapped)
+- **Decisions** — Key choices made during the meeting (routed to area file on approval)
 - **Learnings** — Insights worth remembering
 - **Next Steps** — Non-commitment follow-ups
 
@@ -128,7 +157,8 @@ The extract command uses the context bundle for smarter extraction:
 - Priority ranking based on goals/projects
 - Better owner resolution (knows internal vs external)
 - Agenda item merging (unchecked items become action items)
-- Dedup against existing commitments
+- Dedup against existing commitments (scoped by area first when area is available)
+- Area tagging for commitments when meeting has area association
 
 **Flags**:
 - `--context <file>` — context bundle JSON (use `-` for stdin)
@@ -189,6 +219,28 @@ arete meeting approve <slug>
 
 This commits approved decisions and learnings to `.arete/memory/items/`.
 
+**Area-based decision routing**: When the meeting has an area association (from Step 2b):
+
+1. **Write to area file** — For each approved decision, append to the area's `## Key Decisions` section:
+   ```markdown
+   - YYYY-MM-DD: [Decision description]
+   ```
+   Where `YYYY-MM-DD` is the meeting date and the description is a concise summary.
+
+2. **Also write to memory** — Decisions are still written to `.arete/memory/items/decisions.md` for global search. The area file entry provides quick access when prepping for related meetings.
+
+3. **Example**: After approving a decision from "CoverWhale Sync":
+   - Append to `areas/glance-communications.md` under `## Key Decisions`:
+     ```markdown
+     - 2026-03-25: Use REST API instead of GraphQL for partner integration
+     ```
+   - Also write full decision format to `.arete/memory/items/decisions.md`
+
+**Commitment area tagging**: When syncing commitments (Step 7), the area field is preserved:
+- Commitments extracted from area-mapped meetings include `area: <slug>`
+- Enables `arete commitments list --area <slug>` filtering
+- Dedup checks scope to area first for better conflict resolution
+
 ### 7. Refresh Person Memory
 
 For each attendee processed:
@@ -215,14 +267,14 @@ If the agenda file doesn't exist or is already processed, it logs a warning and 
 
 ### 9. Report Results
 
-Report: meetings processed, items staged, and status.
+Report: meetings processed, items staged, area associations, and status.
 
 **Example output**:
 
 ```
 Processed 2 meetings:
-- 2026-03-19-product-sync.md: 3 action items, 1 decision, 2 learnings
-- 2026-03-19-customer-call.md: 2 action items, 0 decisions, 1 learning
+- 2026-03-19-product-sync.md: 3 action items, 1 decision, 2 learnings → area: glance-communications
+- 2026-03-19-customer-call.md: 2 action items, 0 decisions, 1 learning → area: (none)
 
 Per-attendee summary:
 - Sarah: 2 stances, 1 action item
@@ -236,7 +288,9 @@ After approval, report memory updates:
 
 ```
 Approved: 1 decision, 2 learnings committed to memory
+Decision routed to: areas/glance-communications.md (Key Decisions)
 Refreshed person memory: sarah-smith, mike-jones
+Commitments tagged: 3 with area "glance-communications"
 ```
 
 ### 10. Handle Unknown Attendees
@@ -331,12 +385,15 @@ Use `--commit` only when:
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context, extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
 - **CLI Primitives**:
   - `arete meeting context <file> --json` — assemble context bundle
   - `arete meeting extract <file> --context - --json` — extract intelligence
   - `arete meeting apply <file> --intelligence -` — write staged sections
   - `arete meeting approve <slug>` — commit to memory
   - `arete people memory refresh --person <slug>` — refresh person highlights
+  - `arete commitments list --area <slug>` — filter commitments by area
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
-- **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `status`, `processed_at`, `company`, `pillar`)
+- **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `status`, `processed_at`, `company`, `pillar`, `area`)
+- **Areas**: `areas/*.md` (recurring meeting mappings, Key Decisions section for decision routing)
+- **Related**: meeting-prep, daily-plan (both use get_area_context for area enrichment)
