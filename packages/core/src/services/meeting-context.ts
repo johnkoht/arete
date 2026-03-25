@@ -110,6 +110,7 @@ interface ParsedMeetingFrontmatter {
   title: string;
   date: string;
   attendees: Array<{ name: string; email: string }>;
+  attendee_ids?: string[];
   agenda?: string;
 }
 
@@ -165,11 +166,14 @@ function parseMeetingFile(content: string): ParsedMeetingFile | null {
       }
     }
 
+    // Parse attendee_ids (array of slugs)
+    const attendee_ids = Array.isArray(fm.attendee_ids) ? fm.attendee_ids.map(String) : undefined;
+
     // Parse agenda path if present
     const agenda = typeof fm.agenda === 'string' ? fm.agenda : undefined;
 
     return {
-      frontmatter: { title, date, attendees, agenda },
+      frontmatter: { title, date, attendees, attendee_ids, agenda },
       body,
     };
   } catch {
@@ -304,33 +308,17 @@ async function findRecentMeetings(
     const parsed = parseMeetingFile(content);
     if (!parsed) continue;
 
-    // Check if person is an attendee
+    // Check if person is an attendee (via attendees array)
     const isAttendee = parsed.frontmatter.attendees.some(
       (a) =>
         a.email.toLowerCase() === personEmail.toLowerCase() ||
         slugifyPersonName(a.name) === personSlug,
     );
 
-    // Also check attendee_ids in frontmatter
-    const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (fmMatch) {
-      try {
-        const fm = parseYaml(fmMatch[1]) as Record<string, unknown>;
-        if (Array.isArray(fm.attendee_ids)) {
-          const hasSlug = fm.attendee_ids.some(
-            (id) => typeof id === 'string' && id === personSlug,
-          );
-          if (hasSlug && !isAttendee) {
-            meetingTitles.push({ date: parsed.frontmatter.date, title: parsed.frontmatter.title });
-            continue;
-          }
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
+    // Also check attendee_ids in frontmatter (already parsed, no second YAML parse needed)
+    const hasSlug = parsed.frontmatter.attendee_ids?.includes(personSlug) ?? false;
 
-    if (isAttendee) {
+    if (isAttendee || hasSlug) {
       meetingTitles.push({ date: parsed.frontmatter.date, title: parsed.frontmatter.title });
     }
   }

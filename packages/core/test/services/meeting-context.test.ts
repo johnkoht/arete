@@ -359,6 +359,89 @@ title: Product Sync
     });
   });
 
+  describe('attendee_ids parsing', () => {
+    it('parses attendee_ids from frontmatter as string[]', async () => {
+      // Create a person to resolve
+      writePersonFile(tmpDir, 'internal', 'slug-a', {
+        name: 'Person A',
+        email: 'a@example.com',
+        category: 'internal',
+      });
+
+      // Create meeting with attendee_ids
+      writeMeetingFile(tmpDir, '2026-03-19-with-ids.md', {
+        title: 'Meeting With IDs',
+        date: '2026-03-19',
+        attendees: [{ name: 'Person A', email: 'a@example.com' }],
+        attendee_ids: ['slug-a', 'slug-b'],
+      }, 'Content.');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-with-ids.md');
+      const bundle = await buildMeetingContext(meetingPath, deps);
+
+      // Meeting should parse successfully
+      assert.equal(bundle.meeting.title, 'Meeting With IDs');
+      assert.equal(bundle.meeting.date, '2026-03-19');
+    });
+
+    it('handles frontmatter without attendee_ids gracefully', async () => {
+      // Create meeting WITHOUT attendee_ids
+      writeMeetingFile(tmpDir, '2026-03-19-no-ids.md', {
+        title: 'Meeting Without IDs',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Content.');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-no-ids.md');
+      
+      // Should not throw - attendee_ids: undefined is valid
+      const bundle = await buildMeetingContext(meetingPath, deps);
+      assert.equal(bundle.meeting.title, 'Meeting Without IDs');
+    });
+
+    it('finds person in recent meetings via attendee_ids when not in attendees array', async () => {
+      // Create person - they will be found via attendee_ids
+      writePersonFile(tmpDir, 'internal', 'bob-smith', {
+        name: 'Bob Smith',
+        email: 'bob@example.com',
+        category: 'internal',
+      });
+
+      // Create another person whose meeting we'll build context for
+      writePersonFile(tmpDir, 'internal', 'alice-jones', {
+        name: 'Alice Jones',
+        email: 'alice@example.com',
+        category: 'internal',
+      });
+
+      // Create a meeting where Bob is in attendee_ids but NOT in attendees array
+      writeMeetingFile(tmpDir, '2026-03-18-past-meeting.md', {
+        title: 'Past Meeting with Bob',
+        date: '2026-03-18',
+        attendees: [],  // Bob is NOT in attendees array
+        attendee_ids: ['bob-smith'],  // But IS in attendee_ids
+      }, 'This meeting had Bob.');
+
+      // Create the main meeting (with Alice) to build context for
+      writeMeetingFile(tmpDir, '2026-03-19-current.md', {
+        title: 'Current Meeting',
+        date: '2026-03-19',
+        attendees: [{ name: 'Bob Smith', email: 'bob@example.com' }],
+      }, 'Meeting content.');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-current.md');
+      const bundle = await buildMeetingContext(meetingPath, deps);
+
+      // Bob should be resolved and his recentMeetings should include 'Past Meeting with Bob'
+      const bob = bundle.attendees.find(a => a.slug === 'bob-smith');
+      assert.ok(bob, 'Bob should be resolved');
+      assert.ok(
+        bob.recentMeetings.includes('Past Meeting with Bob'),
+        `Bob's recent meetings should include 'Past Meeting with Bob', got: ${bob.recentMeetings.join(', ')}`
+      );
+    });
+  });
+
   describe('integration: meeting with agenda and known attendees', () => {
     it('builds complete context bundle', async () => {
       // Create person
