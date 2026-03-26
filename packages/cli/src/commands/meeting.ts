@@ -38,6 +38,7 @@ import type {
   MeetingContextBundle,
   MeetingIntelligence,
   ApplyMeetingResult,
+  PriorItem,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
@@ -374,6 +375,7 @@ export function registerMeetingCommands(program: Command): void {
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
     .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
+    .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
     .action(async (file: string, opts: {
       json?: boolean;
       stage?: boolean;
@@ -381,6 +383,7 @@ export function registerMeetingCommands(program: Command): void {
       skipQmd?: boolean;
       clearApproved?: boolean;
       context?: string;
+      priorItems?: string;
     }) => {
       const services = await createServices(process.cwd());
 
@@ -393,6 +396,19 @@ export function registerMeetingCommands(program: Command): void {
           }));
         } else {
           error('--clear-approved requires --stage');
+        }
+        process.exit(1);
+      }
+
+      // Early check: stdin can only be consumed once
+      if (opts.context === '-' && opts.priorItems === '-') {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'Cannot read both --context and --prior-items from stdin',
+          }));
+        } else {
+          error('Cannot read both --context and --prior-items from stdin');
         }
         process.exit(1);
       }
@@ -529,6 +545,53 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // Parse prior items if provided
+      let priorItems: PriorItem[] | undefined;
+      if (opts.priorItems) {
+        try {
+          let priorItemsJson: string;
+          if (opts.priorItems === '-') {
+            // Read from stdin
+            const chunks: Buffer[] = [];
+            for await (const chunk of process.stdin) {
+              chunks.push(chunk as Buffer);
+            }
+            priorItemsJson = Buffer.concat(chunks).toString('utf8');
+          } else {
+            // Read from file
+            const content = await services.storage.read(opts.priorItems);
+            if (!content) {
+              if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Prior items file not found: ${opts.priorItems}` }));
+              } else {
+                error(`Prior items file not found: ${opts.priorItems}`);
+              }
+              process.exit(1);
+            }
+            priorItemsJson = content;
+          }
+          const parsed = JSON.parse(priorItemsJson);
+          if (!Array.isArray(parsed)) {
+            throw new Error('Prior items must be an array');
+          }
+          // Validate each element has required fields
+          for (const item of parsed) {
+            if (!item.type || !item.text) {
+              throw new Error('Each prior item must have type and text');
+            }
+          }
+          priorItems = parsed as PriorItem[];
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: `Failed to parse prior items: ${msg}` }));
+          } else {
+            error(`Failed to parse prior items: ${msg}`);
+          }
+          process.exit(1);
+        }
+      }
+
       // Create LLM call wrapper using AIService
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
         const result = await services.ai.call('extraction', prompt);
@@ -541,6 +604,7 @@ export function registerMeetingCommands(program: Command): void {
         extractionResult = await extractMeetingIntelligence(transcript, callLLM, {
           attendees: attendees.length > 0 ? attendees : undefined,
           context: contextBundle,
+          priorItems,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -610,6 +674,7 @@ export function registerMeetingCommands(program: Command): void {
         staged: shouldStage,
         dryRun,
         contextUsed: !!contextBundle,
+        priorItemsUsed: !!priorItems,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 

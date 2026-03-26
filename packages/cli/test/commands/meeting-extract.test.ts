@@ -609,3 +609,178 @@ custom_field: user-added-value
     assert.equal(processed.stagedItemOwner['ai_001'].ownerSlug, 'alice-smith');
   });
 });
+
+describe('--prior-items option', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-prior-items');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, SAMPLE_MEETING_CONTENT, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('errors when both --context - and --prior-items - are specified', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--context', '-', '--prior-items', '-', '--json'],
+      { cwd: tmpDir },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Cannot read both --context and --prior-items from stdin'));
+  });
+
+  it('errors when prior-items file does not exist', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', '/nonexistent/file.json', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Prior items file not found'));
+  });
+
+  it('errors when prior-items is not an array', () => {
+    const priorItemsFile = join(tmpDir, 'prior-items.json');
+    writeFileSync(priorItemsFile, '{"not": "an array"}', 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', priorItemsFile, '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Prior items must be an array'));
+  });
+
+  it('errors when prior-items element is missing type', () => {
+    const priorItemsFile = join(tmpDir, 'prior-items.json');
+    writeFileSync(priorItemsFile, JSON.stringify([
+      { text: 'Some item without type' },
+    ]), 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', priorItemsFile, '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Each prior item must have type and text'));
+  });
+
+  it('errors when prior-items element is missing text', () => {
+    const priorItemsFile = join(tmpDir, 'prior-items.json');
+    writeFileSync(priorItemsFile, JSON.stringify([
+      { type: 'action' },
+    ]), 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', priorItemsFile, '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Each prior item must have type and text'));
+  });
+
+  it('errors when prior-items is invalid JSON', () => {
+    const priorItemsFile = join(tmpDir, 'prior-items.json');
+    writeFileSync(priorItemsFile, 'not valid json', 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', priorItemsFile, '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Failed to parse prior items'));
+  });
+
+  it('accepts valid prior-items file (reaches extraction)', () => {
+    const priorItemsFile = join(tmpDir, 'prior-items.json');
+    writeFileSync(priorItemsFile, JSON.stringify([
+      { type: 'action', text: 'Update documentation' },
+      { type: 'decision', text: 'Use TypeScript for new services' },
+      { type: 'learning', text: 'Daily standups improve coordination', source: 'meeting-123' },
+    ]), 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--prior-items', priorItemsFile, '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Should proceed past validation (may fail at LLM call due to no real API key)
+    const result = JSON.parse(stdout) as { success: boolean; error?: string; priorItemsUsed?: boolean };
+    
+    // Either success (priorItemsUsed = true) or error at LLM call (not at prior-items parsing)
+    if (result.success) {
+      assert.equal(result.priorItemsUsed, true);
+    } else {
+      // Should NOT be a prior-items parsing error
+      assert.ok(!result.error?.includes('Prior items'), `Should not be prior-items error: ${result.error}`);
+      assert.ok(!result.error?.includes('prior item'), `Should not be prior-items validation error: ${result.error}`);
+    }
+  });
+
+  it('includes priorItemsUsed: false when no prior-items provided', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // May succeed or fail at LLM call, but should have priorItemsUsed field if successful
+    const result = JSON.parse(stdout) as { success: boolean; priorItemsUsed?: boolean };
+    
+    if (result.success) {
+      assert.equal(result.priorItemsUsed, false);
+    }
+    // If it failed at LLM call, we can't check priorItemsUsed (error response structure)
+  });
+});
