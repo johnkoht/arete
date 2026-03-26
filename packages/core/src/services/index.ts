@@ -43,6 +43,7 @@ export type {
   MeetingExtractionResult,
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
+  PriorItem,
 } from './meeting-extraction.js';
 
 // Meeting file parsing

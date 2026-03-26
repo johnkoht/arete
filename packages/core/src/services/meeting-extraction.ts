@@ -46,6 +46,13 @@ export type ActionItem = {
   confidence?: number;
 };
 
+/** Item from a prior meeting in the same processing batch, used for deduplication. */
+export interface PriorItem {
+  type: 'action' | 'decision' | 'learning';
+  text: string;
+  source?: string;
+}
+
 /** Full meeting intelligence extracted from a transcript. */
 export type MeetingIntelligence = {
   summary: string;
@@ -341,12 +348,14 @@ function buildAttendeeSlugLookup(context: MeetingContextBundle): Map<string, str
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
+ * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  */
 export function buildMeetingExtractionPrompt(
   transcript: string,
   attendees?: string[],
   ownerSlug?: string,
   context?: MeetingContextBundle,
+  priorItems?: PriorItem[],
 ): string {
   const attendeeContext = attendees?.length
     ? `\n\nMeeting attendees: ${attendees.join(', ')}`
@@ -681,13 +690,18 @@ export function parseMeetingExtractionResponse(response: string): MeetingExtract
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, and context for better extraction
+ * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export async function extractMeetingIntelligence(
   transcript: string,
   callLLM: LLMCallFn,
-  options?: { attendees?: string[]; ownerSlug?: string; context?: MeetingContextBundle },
+  options?: {
+    attendees?: string[];
+    ownerSlug?: string;
+    context?: MeetingContextBundle;
+    priorItems?: PriorItem[];
+  },
 ): Promise<MeetingExtractionResult> {
   if (!transcript || transcript.trim() === '') {
     return {
@@ -708,6 +722,7 @@ export async function extractMeetingIntelligence(
     options?.attendees,
     options?.ownerSlug,
     options?.context,
+    options?.priorItems,
   );
 
   try {

@@ -1090,6 +1090,28 @@ describe('extractMeetingIntelligence', () => {
     assert.equal(result.intelligence.actionItems.length, 0);
     assert.equal(result.validationWarnings.length, 1);
   });
+
+  it('accepts priorItems option without error', async () => {
+    // Task 4: priorItems is plumbing only — this test confirms the option is accepted.
+    // Task 6 will add actual prompt rendering tests for priorItems content.
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        summary: 'Meeting',
+        action_items: [],
+      });
+
+    const priorItems = [
+      { type: 'action' as const, text: 'Send API docs to Sarah', source: 'standup-2026-03-24' },
+      { type: 'decision' as const, text: 'Use REST over GraphQL' },
+    ];
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, {
+      priorItems,
+    });
+
+    // Should return a valid result (no type errors, no runtime errors)
+    assert.equal(result.intelligence.summary, 'Meeting');
+  });
 });
 
 // ---------------------------------------------------------------------------
