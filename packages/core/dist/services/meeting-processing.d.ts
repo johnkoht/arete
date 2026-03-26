@@ -10,7 +10,7 @@
  *   - Auto-approval logic (high confidence → approved, dedup → approved)
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
-import type { MeetingExtractionResult } from './meeting-extraction.js';
+import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
 /** Item source type: 'ai' (LLM extracted) or 'dedup' (matched user notes) */
 export type ItemSource = 'ai' | 'dedup';
 /** Item status: 'approved' (auto or dedup) or 'pending' (needs review) */
@@ -38,6 +38,13 @@ export interface ProcessingOptions {
     confidenceApproved?: number;
     /** Jaccard similarity threshold for user notes dedup (default: 0.7) */
     dedupJaccard?: number;
+    /**
+     * Prior items from earlier meetings in a batch, used for deterministic deduplication.
+     * When provided, items matching prior items (Jaccard > threshold) are marked source: 'dedup'.
+     * Truncated to last 50 entries to bound processing time.
+     * Note: Catch-up scenarios (100+ meetings) may have diminished dedup efficacy due to this cap.
+     */
+    priorItems?: PriorItem[];
 }
 /** Result of processing meeting extraction */
 export interface ProcessedMeetingResult {
@@ -60,6 +67,15 @@ export interface ProcessedMeetingResult {
  * @returns User notes with excluded sections removed
  */
 export declare function extractUserNotes(body: string): string;
+/**
+ * Check if text contains negation markers that indicate a possible contradiction.
+ * Items with negation markers should skip prior-item dedup to avoid suppressing
+ * decisions/learnings that contradict earlier ones.
+ *
+ * @param text - The item text to check
+ * @returns True if text contains any negation marker
+ */
+export declare function hasNegationMarkers(text: string): boolean;
 /**
  * Process meeting extraction results with filtering, dedup, and metadata.
  *

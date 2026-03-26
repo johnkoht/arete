@@ -5,10 +5,11 @@ import {
   extractUserNotes,
   clearApprovedSections,
   formatFilteredStagedSections,
+  hasNegationMarkers,
 } from '../../src/services/meeting-processing.js';
 import type { FilteredItem } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
-import type { MeetingExtractionResult, ActionItem, MeetingIntelligence } from '../../src/services/meeting-extraction.js';
+import type { MeetingExtractionResult, ActionItem, MeetingIntelligence, PriorItem } from '../../src/services/meeting-extraction.js';
 
 // ---------------------------------------------------------------------------
 // Test Helpers
@@ -316,6 +317,329 @@ describe('processMeetingExtraction - dedup matching', () => {
     const processed = processMeetingExtraction(result, userNotes);
     assert.equal(processed.stagedItemSource['le_001'], 'dedup');
     assert.equal(processed.stagedItemStatus['le_001'], 'approved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// processMeetingExtraction - priorItems dedup
+// ---------------------------------------------------------------------------
+
+describe('processMeetingExtraction - priorItems dedup', () => {
+  // Verify Jaccard math before testing (per LEARNINGS.md)
+  it('verifies Jaccard calculation for priorItems test strings', () => {
+    // Prior: "use typescript for all new code" (6 tokens)
+    // New:   "use typescript for all new code today" (7 tokens)
+    // Intersection: 6, Union: 7, Jaccard: 6/7 ≈ 0.857 > 0.7
+    const tokensPrior = normalizeForJaccard('use typescript for all new code');
+    const tokensNew = normalizeForJaccard('use typescript for all new code today');
+
+    assert.deepEqual(tokensPrior, ['use', 'typescript', 'for', 'all', 'new', 'code']);
+    assert.deepEqual(tokensNew, ['use', 'typescript', 'for', 'all', 'new', 'code', 'today']);
+
+    const similarity = jaccardSimilarity(tokensPrior, tokensNew);
+    assert.ok(similarity > 0.7, `Expected similarity > 0.7, got ${similarity}`);
+    assert.equal(similarity.toFixed(3), '0.857');
+  });
+
+  it('verifies Jaccard calculation for low similarity (no dedup)', () => {
+    // Prior: "use typescript for new code" (5 tokens)
+    // New:   "implement caching for database queries" (5 tokens)
+    // Intersection: 1 ("for"), Union: 9, Jaccard: 1/9 ≈ 0.111 < 0.7
+    const tokensPrior = normalizeForJaccard('use typescript for new code');
+    const tokensNew = normalizeForJaccard('implement caching for database queries');
+
+    const similarity = jaccardSimilarity(tokensPrior, tokensNew);
+    assert.ok(similarity < 0.7, `Expected similarity < 0.7, got ${similarity}`);
+  });
+
+  it('marks items as dedup when matching priorItems (Jaccard > 0.7)', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for all new code' },
+    ];
+    const result = createMockResult({
+      // Nearly identical to prior, Jaccard ≈ 0.857
+      decisions: ['use typescript for all new code today'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+    assert.equal(processed.stagedItemStatus['de_001'], 'approved');
+  });
+
+  it('marks items as ai when priorItems have low Jaccard (< 0.7)', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for new code' },
+    ];
+    const result = createMockResult({
+      // Completely different topic, low Jaccard
+      decisions: ['implement caching for database queries'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('applies priorItems dedup to action items', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'send api docs to sarah' },
+    ];
+    const result = createMockResult({
+      // Very similar: 5/6 = 0.833 Jaccard
+      actionItems: [createActionItem('send api docs to sarah today', 0.9)],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['ai_001'], 'dedup');
+  });
+
+  it('applies priorItems dedup to learnings', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'learning', text: 'caching improves performance significantly' },
+    ];
+    const result = createMockResult({
+      // 5/6 = 0.833 Jaccard
+      learnings: ['caching improves performance significantly more'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['le_001'], 'dedup');
+  });
+
+  it('short-circuits: userNotes match takes precedence over priorItems', () => {
+    const userNotes = 'use typescript for all new code';
+    const priorItems: PriorItem[] = []; // No prior items
+    const result = createMockResult({
+      decisions: ['use typescript for all new code today'],
+    });
+
+    const processed = processMeetingExtraction(result, userNotes, { priorItems });
+    // Should be dedup from userNotes match
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+  });
+
+  it('either userNotes OR priorItems match results in dedup', () => {
+    const userNotes = 'completely different user notes';
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for all new code' },
+    ];
+    const result = createMockResult({
+      decisions: ['use typescript for all new code today'],
+    });
+
+    const processed = processMeetingExtraction(result, userNotes, { priorItems });
+    // Should be dedup from priorItems match (userNotes don't match)
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+  });
+
+  it('handles empty priorItems array (no dedup from prior)', () => {
+    const result = createMockResult({
+      decisions: ['use typescript for all new code'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems: [] });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('handles undefined priorItems (no dedup from prior)', () => {
+    const result = createMockResult({
+      decisions: ['use typescript for all new code'],
+    });
+
+    const processed = processMeetingExtraction(result, '', {});
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('truncates priorItems to last 50 entries (cap verification)', () => {
+    // Create 60 prior items, only last 50 should be used
+    const priorItems: PriorItem[] = [];
+    for (let i = 0; i < 60; i++) {
+      // Items 0-9: unique text that won't match our test item
+      // Items 10-59: also unique
+      // Only item at index 55 (which is item 6 in the capped array of last 50) matches
+      if (i === 55) {
+        // This will be in the last 50 (indices 10-59), at position 45 in capped array
+        priorItems.push({ type: 'decision', text: 'approve the marketing budget' });
+      } else if (i === 5) {
+        // This will be truncated (indices 0-9 are dropped)
+        priorItems.push({ type: 'decision', text: 'approve the marketing budget' });
+      } else {
+        priorItems.push({ type: 'decision', text: `unique prior item number ${i}` });
+      }
+    }
+
+    const result = createMockResult({
+      // Match: "approve the marketing budget" vs "approve the marketing budget now"
+      // Tokens: 4 vs 5, Jaccard: 4/5 = 0.8 > 0.7
+      decisions: ['approve the marketing budget now'],
+    });
+
+    // Item at index 55 (in capped array) should match
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+  });
+
+  it('truncation removes early items (cap at most recent 50)', () => {
+    // Create 60 prior items, match is only in first 10 (which get truncated)
+    const priorItems: PriorItem[] = [];
+    for (let i = 0; i < 60; i++) {
+      if (i === 5) {
+        // This will be truncated (indices 0-9 are dropped when taking last 50)
+        priorItems.push({ type: 'decision', text: 'approve the marketing budget' });
+      } else {
+        priorItems.push({ type: 'decision', text: `unique prior item number ${i}` });
+      }
+    }
+
+    const result = createMockResult({
+      decisions: ['approve the marketing budget now'],
+    });
+
+    // Match was in truncated portion, so no dedup
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// processMeetingExtraction - negation markers
+// ---------------------------------------------------------------------------
+
+describe('processMeetingExtraction - negation markers', () => {
+  it('skips priorItems dedup when item contains "not"', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for all new code' },
+    ];
+    const result = createMockResult({
+      // Contains "not" → skip dedup even though base text is similar
+      decisions: ['do not use typescript for all new code'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('skips priorItems dedup when item contains "won\'t"', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'deploy the feature this week' },
+    ];
+    const result = createMockResult({
+      decisions: ["we won't deploy the feature this week"],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('skips priorItems dedup when item contains "no longer"', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'learning', text: 'caching helps with performance' },
+    ];
+    const result = createMockResult({
+      learnings: ['caching no longer helps with performance'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['le_001'], 'ai');
+  });
+
+  it('skips priorItems dedup when item contains "instead of"', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use react for the frontend' },
+    ];
+    const result = createMockResult({
+      decisions: ['use vue instead of react for the frontend'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('skips priorItems dedup when item contains "changed from"', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'target launch date is march' },
+    ];
+    const result = createMockResult({
+      decisions: ['target launch date changed from march to april'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('negation check is case-insensitive', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for all code' },
+    ];
+    const result = createMockResult({
+      decisions: ['NOT using typescript for all code'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+  });
+
+  it('still applies userNotes dedup even with negation markers', () => {
+    // Negation markers only skip priorItems check, not userNotes
+    const userNotes = 'do not use typescript for all new code';
+    const result = createMockResult({
+      decisions: ['do not use typescript for all new code'],
+    });
+
+    const processed = processMeetingExtraction(result, userNotes, { priorItems: [] });
+    // Exact match with userNotes → dedup
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+  });
+
+  it('dedupes normally when no negation markers present', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'use typescript for all new code' },
+    ];
+    const result = createMockResult({
+      decisions: ['use typescript for all new code today'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { priorItems });
+    // No negation markers, high Jaccard → dedup
+    assert.equal(processed.stagedItemSource['de_001'], 'dedup');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasNegationMarkers unit tests
+// ---------------------------------------------------------------------------
+
+describe('hasNegationMarkers', () => {
+  it('returns true for "not"', () => {
+    assert.equal(hasNegationMarkers('We will not proceed with the plan'), true);
+  });
+
+  it('returns true for "won\'t"', () => {
+    assert.equal(hasNegationMarkers("We won't deploy this week"), true);
+  });
+
+  it('returns true for "no longer"', () => {
+    assert.equal(hasNegationMarkers('This is no longer relevant'), true);
+  });
+
+  it('returns true for "instead of"', () => {
+    assert.equal(hasNegationMarkers('Use Vue instead of React'), true);
+  });
+
+  it('returns true for "changed from"', () => {
+    assert.equal(hasNegationMarkers('Priority changed from high to low'), true);
+  });
+
+  it('returns false when no negation markers', () => {
+    assert.equal(hasNegationMarkers('Use typescript for all new code'), false);
+  });
+
+  it('is case-insensitive', () => {
+    assert.equal(hasNegationMarkers('We will NOT proceed'), true);
+    assert.equal(hasNegationMarkers('INSTEAD OF using react'), true);
+  });
+
+  it('returns false for empty string', () => {
+    assert.equal(hasNegationMarkers(''), false);
   });
 });
 

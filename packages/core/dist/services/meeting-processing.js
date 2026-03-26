@@ -77,6 +77,42 @@ function itemMatchesUserNotes(itemText, userNotesTokens, threshold) {
     const similarity = jaccardSimilarity(itemTokens, userNotesTokens);
     return similarity > threshold;
 }
+/**
+ * Negation markers that indicate an item may contradict a prior item.
+ * Items with these markers skip prior-item dedup to avoid suppressing contradictions.
+ */
+const NEGATION_MARKERS = ['not', "won't", 'no longer', 'instead of', 'changed from'];
+/**
+ * Check if text contains negation markers that indicate a possible contradiction.
+ * Items with negation markers should skip prior-item dedup to avoid suppressing
+ * decisions/learnings that contradict earlier ones.
+ *
+ * @param text - The item text to check
+ * @returns True if text contains any negation marker
+ */
+export function hasNegationMarkers(text) {
+    const lower = text.toLowerCase();
+    return NEGATION_MARKERS.some((marker) => lower.includes(marker));
+}
+/**
+ * Check if an item's text matches any prior item.
+ * @param itemText - The item text to check
+ * @param tokenizedPriorItems - Pre-tokenized prior items
+ * @param threshold - Jaccard similarity threshold
+ * @returns True if similarity with any prior item exceeds threshold
+ */
+function itemMatchesPriorItems(itemText, tokenizedPriorItems, threshold) {
+    if (tokenizedPriorItems.length === 0)
+        return false;
+    const itemTokens = normalizeForJaccard(itemText);
+    for (const prior of tokenizedPriorItems) {
+        const similarity = jaccardSimilarity(itemTokens, prior.tokens);
+        if (similarity > threshold) {
+            return true;
+        }
+    }
+    return false;
+}
 // ---------------------------------------------------------------------------
 // Main Processing Function
 // ---------------------------------------------------------------------------
@@ -102,6 +138,13 @@ export function processMeetingExtraction(result, userNotes, options) {
     const dedupJaccard = options?.dedupJaccard ?? DEFAULT_DEDUP_JACCARD;
     // Tokenize user notes once for all comparisons
     const userNotesTokens = normalizeForJaccard(userNotes);
+    // Truncate and pre-tokenize prior items (cap at 50 most recent to bound processing time)
+    // Note: Catch-up scenarios (100+ meetings) may have diminished dedup efficacy due to this cap.
+    const cappedPriorItems = options?.priorItems?.slice(-50) ?? [];
+    const tokenizedPriorItems = cappedPriorItems.map((item) => ({
+        type: item.type,
+        tokens: normalizeForJaccard(item.text),
+    }));
     // Result collections
     const filteredItems = [];
     const stagedItemStatus = {};
@@ -120,7 +163,11 @@ export function processMeetingExtraction(result, userNotes, options) {
         const id = generateItemId('ai_', aiIndex);
         aiIndex++;
         const text = item.description;
-        const isDedup = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        // Check for dedup: userNotes OR priorItems match → source: 'dedup'
+        // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
+        const matchesUserNotes = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
+        const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
         // Determine status
         let status;
@@ -161,7 +208,11 @@ export function processMeetingExtraction(result, userNotes, options) {
         const id = generateItemId('de_', deIndex);
         deIndex++;
         const text = decision;
-        const isDedup = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        // Check for dedup: userNotes OR priorItems match → source: 'dedup'
+        // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
+        const matchesUserNotes = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
+        const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
         let status;
         if (source === 'dedup') {
@@ -189,7 +240,11 @@ export function processMeetingExtraction(result, userNotes, options) {
         const id = generateItemId('le_', leIndex);
         leIndex++;
         const text = learning;
-        const isDedup = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        // Check for dedup: userNotes OR priorItems match → source: 'dedup'
+        // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
+        const matchesUserNotes = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
+        const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
+        const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
         let status;
         if (source === 'dedup') {

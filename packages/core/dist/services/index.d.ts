@@ -15,7 +15,7 @@ export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, 
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, } from './meeting-extraction.js';
-export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, } from './meeting-extraction.js';
+export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, PriorItem, } from './meeting-extraction.js';
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
 export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from './meeting-processing.js';

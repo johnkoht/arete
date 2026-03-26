@@ -226,8 +226,9 @@ function buildAttendeeSlugLookup(context) {
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
+ * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  */
-export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context) {
+export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context, priorItems) {
     const attendeeContext = attendees?.length
         ? `\n\nMeeting attendees: ${attendees.join(', ')}`
         : '';
@@ -528,7 +529,7 @@ export function parseMeetingExtractionResponse(response) {
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, and context for better extraction
+ * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export async function extractMeetingIntelligence(transcript, callLLM, options) {
@@ -545,7 +546,7 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             rawItems: [],
         };
     }
-    const prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context);
+    const prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
     try {
         const response = await callLLM(prompt);
         return parseMeetingExtractionResponse(response);
