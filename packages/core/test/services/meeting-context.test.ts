@@ -104,6 +104,37 @@ function createDeps(root: string, paths: WorkspacePaths): MeetingContextDeps {
   return { storage, intelligence, entity, paths };
 }
 
+function writeAreaFile(
+  root: string,
+  slug: string,
+  frontmatter: Record<string, unknown>,
+  body: string = '',
+): void {
+  const dir = join(root, 'areas');
+  mkdirSync(dir, { recursive: true });
+  const yaml = Object.entries(frontmatter)
+    .map(([k, v]) => {
+      if (Array.isArray(v)) {
+        return `${k}:\n${v.map((item) => {
+          if (typeof item === 'object') {
+            const lines = Object.entries(item as Record<string, unknown>)
+              .map(([ik, iv]) => `    ${ik}: ${typeof iv === 'string' ? `"${iv}"` : JSON.stringify(iv)}`)
+              .join('\n');
+            return `  -\n${lines}`;
+          }
+          return `  - ${item}`;
+        }).join('\n')}`;
+      }
+      return `${k}: ${v == null ? '' : typeof v === 'string' ? `"${v}"` : JSON.stringify(v)}`;
+    })
+    .join('\n');
+  writeFileSync(
+    join(dir, `${slug}.md`),
+    `---\n${yaml}\n---\n\n${body}`,
+    'utf8',
+  );
+}
+
 describe('buildMeetingContext', () => {
   let tmpDir: string;
   let paths: WorkspacePaths;
@@ -1207,5 +1238,223 @@ Meeting content.
     const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
 
     assert.deepEqual(results.get('alice'), ['Meeting'], 'Should match email case-insensitively');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Area context tests (Task 8)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingContext area context', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let deps: MeetingContextDeps;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'meeting-ctx-area-'));
+    paths = makePaths(tmpDir);
+    deps = createDeps(tmpDir, paths);
+    // Create workspace marker
+    mkdirSync(join(tmpDir, '.arete'), { recursive: true });
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'version: 1\n', 'utf8');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('populates areaContext when meeting title matches area recurring meeting', async () => {
+    // Create area file with recurring_meetings
+    writeAreaFile(tmpDir, 'customer-success', {
+      area: 'Customer Success',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Customer Sync', frequency: 'weekly' },
+      ],
+    }, `## Current State
+
+We are focused on customer retention.
+
+## Key Decisions
+
+- Decision 1: Focus on enterprise customers
+`);
+
+    // Create meeting with matching title
+    writeMeetingFile(tmpDir, '2026-03-19-customer-sync.md', {
+      title: 'Customer Sync',
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-customer-sync.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is populated
+    assert.ok(bundle.areaContext, 'areaContext should be populated');
+    assert.equal(bundle.areaContext!.slug, 'customer-success');
+    assert.equal(bundle.areaContext!.name, 'Customer Success');
+    assert.equal(bundle.areaContext!.status, 'active');
+    assert.ok(bundle.areaContext!.sections.currentState?.includes('customer retention'));
+    assert.ok(bundle.areaContext!.sections.keyDecisions?.includes('enterprise customers'));
+
+    // Verify no area-related warnings
+    const areaWarnings = bundle.warnings.filter((w) =>
+      w.includes('Area file not found') || w.includes('Failed to load area context'),
+    );
+    assert.equal(areaWarnings.length, 0, `Unexpected area warnings: ${areaWarnings.join(', ')}`);
+  });
+
+  it('sets areaContext to null with no warning when meeting has no area match', async () => {
+    // Create area file that does NOT match the meeting title
+    writeAreaFile(tmpDir, 'engineering', {
+      area: 'Engineering',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Engineering Standup', frequency: 'daily' },
+      ],
+    }, '## Current State\n\nEngineering notes.');
+
+    // Create meeting with title that doesn't match any area
+    writeMeetingFile(tmpDir, '2026-03-19-random-meeting.md', {
+      title: 'Random Meeting',
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-random-meeting.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is null
+    assert.equal(bundle.areaContext, null, 'areaContext should be null when no area match');
+
+    // Verify no area-related warnings (no warning needed for no match)
+    const areaWarnings = bundle.warnings.filter((w) =>
+      w.includes('Area file not found') || w.includes('Failed to load area context'),
+    );
+    assert.equal(areaWarnings.length, 0, 'Should have no area warnings when no area match');
+  });
+
+  it('adds warning when area matches but file returns null', async () => {
+    // Create a custom mock AreaParserService that returns a match but null context
+    const storage = deps.storage;
+    const mockAreaParser = {
+      async getAreaForMeeting(title: string) {
+        if (title.includes('Product Sync')) {
+          return { areaSlug: 'missing-area', matchType: 'recurring' as const, confidence: 1.0 };
+        }
+        return null;
+      },
+      async getAreaContext(_slug: string) {
+        // Simulate file not found (returns null)
+        return null;
+      },
+    } as AreaParserService;
+
+    // Create deps with mock areaParser
+    const depsWithMock: MeetingContextDeps = {
+      ...deps,
+      areaParser: mockAreaParser,
+    };
+
+    // Create meeting
+    writeMeetingFile(tmpDir, '2026-03-19-product-sync.md', {
+      title: 'Product Sync',
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-product-sync.md');
+    const bundle = await buildMeetingContext(meetingPath, depsWithMock, { skipPeople: true });
+
+    // Verify areaContext is null
+    assert.equal(bundle.areaContext, null, 'areaContext should be null when file missing');
+
+    // Verify warning is pushed
+    assert.ok(
+      bundle.warnings.some((w) => w.includes('Area file not found: missing-area')),
+      `Expected warning 'Area file not found: missing-area', got: ${bundle.warnings.join(', ')}`,
+    );
+  });
+
+  it('adds warning when area context fetch throws', async () => {
+    // Create a custom mock AreaParserService that throws on getAreaContext
+    const mockAreaParser = {
+      async getAreaForMeeting(title: string) {
+        if (title.includes('Error Sync')) {
+          return { areaSlug: 'error-area', matchType: 'recurring' as const, confidence: 1.0 };
+        }
+        return null;
+      },
+      async getAreaContext(_slug: string) {
+        throw new Error('Simulated read error');
+      },
+    } as AreaParserService;
+
+    // Create deps with mock areaParser
+    const depsWithMock: MeetingContextDeps = {
+      ...deps,
+      areaParser: mockAreaParser,
+    };
+
+    // Create meeting
+    writeMeetingFile(tmpDir, '2026-03-19-error-sync.md', {
+      title: 'Error Sync',
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-error-sync.md');
+    const bundle = await buildMeetingContext(meetingPath, depsWithMock, { skipPeople: true });
+
+    // Verify areaContext is null
+    assert.equal(bundle.areaContext, null, 'areaContext should be null when fetch throws');
+
+    // Verify warning is pushed
+    assert.ok(
+      bundle.warnings.some((w) => w.includes('Failed to load area context: error-area')),
+      `Expected warning 'Failed to load area context: error-area', got: ${bundle.warnings.join(', ')}`,
+    );
+  });
+
+  it('includes areaContext in bundle even when null', async () => {
+    // Create meeting with no areas defined in workspace
+    writeMeetingFile(tmpDir, '2026-03-19-standalone.md', {
+      title: 'Standalone Meeting',
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-standalone.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext key exists in bundle (even if null)
+    assert.ok('areaContext' in bundle, 'areaContext key should exist in bundle');
+    assert.equal(bundle.areaContext, null);
+  });
+
+  it('matches area via case-insensitive substring', async () => {
+    // Create area file
+    writeAreaFile(tmpDir, 'product-team', {
+      area: 'Product Team',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'product', frequency: 'weekly' }, // Lowercase
+      ],
+    }, '## Current State\n\nProduct roadmap planning.');
+
+    // Create meeting with title containing the recurring meeting title (case different)
+    writeMeetingFile(tmpDir, '2026-03-19-weekly-product-review.md', {
+      title: 'Weekly PRODUCT Review',  // Different case
+      date: '2026-03-19',
+      attendees: [],
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-weekly-product-review.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is populated (case-insensitive match)
+    assert.ok(bundle.areaContext, 'areaContext should be populated via case-insensitive match');
+    assert.equal(bundle.areaContext!.slug, 'product-team');
   });
 });

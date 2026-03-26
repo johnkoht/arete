@@ -13,7 +13,7 @@
 import { join, basename, resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { WorkspacePaths } from '../models/index.js';
+import type { WorkspacePaths, AreaContext } from '../models/index.js';
 import type { IntelligenceService } from './intelligence.js';
 import type { EntityService } from './entity.js';
 import { AreaParserService } from './area-parser.js';
@@ -80,6 +80,7 @@ export interface MeetingContextBundle {
   attendees: ResolvedAttendee[];
   unknownAttendees: UnknownAttendee[];
   relatedContext: RelatedContext;
+  areaContext?: AreaContext | null;
   warnings: string[];
 }
 
@@ -774,7 +775,21 @@ export async function buildMeetingContext(
     }
   }
 
-  // 4. Get related context via brief service (using meeting title only)
+  // 4. Area context resolution
+  let areaContext: AreaContext | null = null;
+  const areaMatch = await resolvedAreaParser.getAreaForMeeting(frontmatter.title);
+  if (areaMatch) {
+    try {
+      areaContext = await resolvedAreaParser.getAreaContext(areaMatch.areaSlug);
+      if (!areaContext) {
+        warnings.push(`Area file not found: ${areaMatch.areaSlug}`);
+      }
+    } catch (err) {
+      warnings.push(`Failed to load area context: ${areaMatch.areaSlug}`);
+    }
+  }
+
+  // 5. Get related context via brief service (using meeting title only)
   let relatedContext: RelatedContext = {
     goals: [],
     projects: [],
@@ -800,6 +815,7 @@ export async function buildMeetingContext(
     attendees: resolvedAttendees,
     unknownAttendees,
     relatedContext,
+    areaContext,
     warnings,
   };
 }

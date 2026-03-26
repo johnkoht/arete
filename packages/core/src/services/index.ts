@@ -118,3 +118,4 @@ export type {
 
 // Area parsing
 export { AreaParserService } from './area-parser.js';
+export type { AreaContext } from '../models/index.js';
