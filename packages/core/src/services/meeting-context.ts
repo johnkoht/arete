@@ -284,7 +284,33 @@ async function parsePersonFile(
 }
 
 /**
+ * Calculate YYYY-MM-DD cutoff date string for 60 days before reference date.
+ */
+function calculateCutoffDateString(referenceDate: Date, daysBack: number = 60): string {
+  const cutoff = new Date(Date.UTC(
+    referenceDate.getUTCFullYear(),
+    referenceDate.getUTCMonth(),
+    referenceDate.getUTCDate() - daysBack,
+  ));
+  const yyyy = cutoff.getUTCFullYear();
+  const mm = String(cutoff.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(cutoff.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Extract date prefix from meeting filename.
+ * Returns null if filename doesn't match YYYY-MM-DD-*.md pattern.
+ */
+function extractDateFromFilename(filename: string): string | null {
+  const match = filename.match(/^(\d{4}-\d{2}-\d{2})-/);
+  return match ? match[1] : null;
+}
+
+/**
  * Find recent meetings for a person by scanning meeting files.
+ *
+ * @param referenceDate - Pin the "current date" for testability (defaults to now)
  */
 async function findRecentMeetings(
   storage: StorageAdapter,
@@ -292,6 +318,7 @@ async function findRecentMeetings(
   personSlug: string,
   personEmail: string,
   limit: number = 5,
+  referenceDate?: Date,
 ): Promise<string[]> {
   const meetingsDir = join(paths.resources, 'meetings');
   if (!(await storage.exists(meetingsDir))) return [];
@@ -299,9 +326,24 @@ async function findRecentMeetings(
   const files = await storage.list(meetingsDir, { extensions: ['.md'] });
   const meetingTitles: Array<{ date: string; title: string }> = [];
 
+  // Calculate 60-day cutoff for filtering old files
+  const ref = referenceDate ?? new Date();
+  const cutoffDateString = calculateCutoffDateString(ref, 60);
+
   for (const file of files) {
     if (file.endsWith('index.md')) continue;
 
+    // Extract date from filename for early filtering
+    const filename = basename(file);
+    const fileDate = extractDateFromFilename(filename);
+
+    // Skip files older than 60 days (lexicographic comparison)
+    // Boundary: files at exactly 60 days are included (>=), >60 days excluded (<)
+    if (fileDate !== null && fileDate < cutoffDateString) {
+      continue;
+    }
+
+    // Non-standard filenames (no date prefix) are read anyway (graceful fallback)
     const content = await storage.read(file);
     if (!content) continue;
 
@@ -596,3 +638,13 @@ export async function buildMeetingContext(
     warnings,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Exports for testing (internal functions exposed for unit tests)
+// ---------------------------------------------------------------------------
+
+export {
+  findRecentMeetings,
+  calculateCutoffDateString,
+  extractDateFromFilename,
+};

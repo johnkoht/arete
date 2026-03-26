@@ -7,7 +7,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildMeetingContext } from '../../src/services/meeting-context.js';
+import {
+  buildMeetingContext,
+  findRecentMeetings,
+  calculateCutoffDateString,
+  extractDateFromFilename,
+} from '../../src/services/meeting-context.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 import { EntityService } from '../../src/services/entity.js';
 import { ContextService } from '../../src/services/context.js';
@@ -16,6 +21,7 @@ import { IntelligenceService } from '../../src/services/intelligence.js';
 import { getSearchProvider } from '../../src/search/factory.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 import type { MeetingContextDeps } from '../../src/services/meeting-context.js';
+import type { StorageAdapter } from '../../src/storage/adapter.js';
 
 function makePaths(root: string): WorkspacePaths {
   return {
@@ -520,5 +526,325 @@ Me: Sure, let me walk through the key points.
       const realWarnings = bundle.warnings.filter((w) => !w.includes('Brief service'));
       assert.equal(realWarnings.length, 0, `Unexpected warnings: ${realWarnings.join(', ')}`);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 60-day cutoff tests for findRecentMeetings
+// ---------------------------------------------------------------------------
+
+describe('calculateCutoffDateString', () => {
+  it('calculates 60 days before reference date', () => {
+    const ref = new Date('2026-03-25T12:00:00Z');
+    const cutoff = calculateCutoffDateString(ref, 60);
+    assert.equal(cutoff, '2026-01-24');
+  });
+
+  it('handles year boundary (January cutoff goes to previous year)', () => {
+    const ref = new Date('2026-02-15T12:00:00Z');
+    const cutoff = calculateCutoffDateString(ref, 60);
+    assert.equal(cutoff, '2025-12-17');
+  });
+
+  it('uses default 60 days when not specified', () => {
+    const ref = new Date('2026-06-01T12:00:00Z');
+    const cutoff = calculateCutoffDateString(ref);
+    assert.equal(cutoff, '2026-04-02');
+  });
+});
+
+describe('extractDateFromFilename', () => {
+  it('extracts date from standard meeting filename', () => {
+    assert.equal(extractDateFromFilename('2026-03-19-product-sync.md'), '2026-03-19');
+  });
+
+  it('extracts date from filename with multiple hyphens', () => {
+    assert.equal(extractDateFromFilename('2026-01-05-q1-kickoff-meeting.md'), '2026-01-05');
+  });
+
+  it('returns null for non-standard filename', () => {
+    assert.equal(extractDateFromFilename('meeting-notes.md'), null);
+  });
+
+  it('returns null for index file', () => {
+    assert.equal(extractDateFromFilename('index.md'), null);
+  });
+
+  it('returns null for filename without date prefix', () => {
+    assert.equal(extractDateFromFilename('important-sync.md'), null);
+  });
+});
+
+describe('findRecentMeetings 60-day cutoff', () => {
+  /** Helper: create a date string N days before the reference date. */
+  function daysAgo(n: number, ref: Date): string {
+    const d = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate()));
+    d.setUTCDate(d.getUTCDate() - n);
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  /** Build meeting content with frontmatter. */
+  function makeMeetingContent(title: string, date: string, personSlug: string): string {
+    return `---
+title: ${title}
+date: ${date}
+attendees: []
+attendee_ids:
+  - ${personSlug}
+---
+
+Meeting content.
+`;
+  }
+
+  /** Create mock storage that tracks read calls. */
+  function createMockStorage(files: Record<string, string>): StorageAdapter & { readCount: number } {
+    let readCount = 0;
+    return {
+      readCount: 0,
+      async read(path: string): Promise<string | null> {
+        readCount++;
+        // Update the externally accessible count
+        (this as { readCount: number }).readCount = readCount;
+        return files[path] ?? null;
+      },
+      async list(dir: string, options?: { extensions?: string[] }): Promise<string[]> {
+        const ext = options?.extensions?.[0] ?? '.md';
+        return Object.keys(files).filter(
+          (p) => p.startsWith(dir) && p.endsWith(ext),
+        );
+      },
+      async exists(path: string): Promise<boolean> {
+        // Check if directory exists by looking for files under it
+        return Object.keys(files).some((p) => p.startsWith(path));
+      },
+      async write(): Promise<void> {},
+      async delete(): Promise<void> {},
+      async mkdir(): Promise<void> {},
+      async copy(): Promise<void> {},
+    };
+  }
+
+  const REF = new Date('2026-03-25T12:00:00Z');
+  const personSlug = 'alice-jones';
+
+  it('excludes meetings older than 60 days from file reads (R6 mitigation)', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    // Create 10 meeting files: 5 recent (within 60 days), 5 old (> 60 days)
+    const files: Record<string, string> = {};
+
+    // Recent meetings (should be read)
+    for (let i = 0; i < 5; i++) {
+      const date = daysAgo(i * 10, REF); // 0, 10, 20, 30, 40 days ago
+      const path = join(meetingsDir, `${date}-meeting-${i}.md`);
+      files[path] = makeMeetingContent(`Meeting ${i}`, date, personSlug);
+    }
+
+    // Old meetings (should be skipped - no read)
+    for (let i = 5; i < 10; i++) {
+      const date = daysAgo(61 + i * 10, REF); // 71, 81, 91, 101, 111 days ago
+      const path = join(meetingsDir, `${date}-old-meeting-${i}.md`);
+      files[path] = makeMeetingContent(`Old Meeting ${i}`, date, personSlug);
+    }
+
+    const storage = createMockStorage(files);
+
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      5,
+      REF,
+    );
+
+    // Only 5 recent meetings should have been read (not the 5 old ones)
+    assert.equal(storage.readCount, 5, 'Should only read 5 recent meeting files');
+
+    // Should return titles of meetings where person is attendee
+    assert.equal(results.length, 5, 'Should find 5 recent meetings');
+  });
+
+  it('includes meetings at exactly 60 days (boundary test)', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const date60DaysAgo = daysAgo(60, REF);
+    const date61DaysAgo = daysAgo(61, REF);
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${date60DaysAgo}-boundary-meeting.md`)]: makeMeetingContent(
+        'Boundary Meeting',
+        date60DaysAgo,
+        personSlug,
+      ),
+      [join(meetingsDir, `${date61DaysAgo}-excluded-meeting.md`)]: makeMeetingContent(
+        'Excluded Meeting',
+        date61DaysAgo,
+        personSlug,
+      ),
+    };
+
+    const storage = createMockStorage(files);
+
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      5,
+      REF,
+    );
+
+    // Should read only the 60-day meeting, not the 61-day one
+    assert.equal(storage.readCount, 1, 'Should read only the 60-day boundary meeting');
+    assert.deepEqual(results, ['Boundary Meeting']);
+  });
+
+  it('reads non-standard filenames gracefully (no date prefix)', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    // Mix of standard and non-standard filenames
+    const recentDate = daysAgo(10, REF);
+    const oldDate = daysAgo(90, REF);
+
+    const files: Record<string, string> = {
+      // Standard recent file - should be read
+      [join(meetingsDir, `${recentDate}-normal-meeting.md`)]: makeMeetingContent(
+        'Normal Meeting',
+        recentDate,
+        personSlug,
+      ),
+      // Standard old file - should be skipped
+      [join(meetingsDir, `${oldDate}-old-meeting.md`)]: makeMeetingContent(
+        'Old Meeting',
+        oldDate,
+        personSlug,
+      ),
+      // Non-standard filename (no date prefix) - should be read (graceful fallback)
+      [join(meetingsDir, 'important-recurring-sync.md')]: makeMeetingContent(
+        'Important Recurring Sync',
+        recentDate,
+        personSlug,
+      ),
+      // Another non-standard filename - should be read
+      [join(meetingsDir, 'weekly-standup.md')]: makeMeetingContent(
+        'Weekly Standup',
+        recentDate,
+        personSlug,
+      ),
+    };
+
+    const storage = createMockStorage(files);
+
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      10,
+      REF,
+    );
+
+    // Should read: 1 recent standard + 2 non-standard = 3 files
+    // Should skip: 1 old standard file
+    assert.equal(storage.readCount, 3, 'Should read 3 files (1 recent + 2 non-standard)');
+
+    // Should include all 3 meetings where person is found
+    assert.equal(results.length, 3);
+    assert.ok(results.includes('Normal Meeting'));
+    assert.ok(results.includes('Important Recurring Sync'));
+    assert.ok(results.includes('Weekly Standup'));
+  });
+
+  it('defaults to current date when referenceDate not provided', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    // Create a meeting with today's date (will use real Date.now())
+    const today = new Date();
+    const yyyy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(today.getUTCDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${todayStr}-today-meeting.md`)]: makeMeetingContent(
+        'Today Meeting',
+        todayStr,
+        personSlug,
+      ),
+    };
+
+    const storage = createMockStorage(files);
+
+    // Call without referenceDate - should use current date
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      5,
+      // No referenceDate provided
+    );
+
+    assert.equal(storage.readCount, 1);
+    assert.deepEqual(results, ['Today Meeting']);
+  });
+
+  it('skips index.md files', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const recentDate = daysAgo(5, REF);
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, 'index.md')]: '# Meetings Index\n\nThis is the index.',
+      [join(meetingsDir, `${recentDate}-real-meeting.md`)]: makeMeetingContent(
+        'Real Meeting',
+        recentDate,
+        personSlug,
+      ),
+    };
+
+    const storage = createMockStorage(files);
+
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      5,
+      REF,
+    );
+
+    // Should skip index.md, read only the real meeting
+    assert.equal(storage.readCount, 1);
+    assert.deepEqual(results, ['Real Meeting']);
+  });
+
+  it('returns empty array when meetings directory does not exist', async () => {
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    // Empty storage - no meetings directory
+    const storage = createMockStorage({});
+
+    const results = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      'alice@example.com',
+      5,
+      REF,
+    );
+
+    assert.deepEqual(results, []);
+    assert.equal(storage.readCount, 0);
   });
 });
