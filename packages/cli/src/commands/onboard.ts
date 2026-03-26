@@ -273,13 +273,17 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         } else if (existingKey || existingOAuth) {
           // Interactive mode with existing credentials: ask to update
           console.log('');
+          info('AI Configuration');
+          console.log(chalk.dim('  Areté embeds LLMs into your workflow — extracting decisions from meetings,'));
+          console.log(chalk.dim('  building context for prep, and powering search across your workspace.'));
+          console.log('');
           const { confirm } = await import('@inquirer/prompts');
           const currentCred = existingOAuth
             ? 'OAuth login'
             : `API key: ${maskApiKey(existingKey!)}`;
           try {
             const update = await confirm({
-              message: `Update Anthropic credentials? (current: ${currentCred})`,
+              message: `Update AI credentials? (current: ${currentCred})`,
               default: false,
             });
             if (update) {
