@@ -10,7 +10,7 @@
  * Used by `arete meeting context <file>` CLI command.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { WorkspacePaths } from '../models/index.js';
+import type { WorkspacePaths, AreaContext } from '../models/index.js';
 import type { IntelligenceService } from './intelligence.js';
 import type { EntityService } from './entity.js';
 import { AreaParserService } from './area-parser.js';
@@ -72,6 +72,7 @@ export interface MeetingContextBundle {
     attendees: ResolvedAttendee[];
     unknownAttendees: UnknownAttendee[];
     relatedContext: RelatedContext;
+    areaContext?: AreaContext | null;
     warnings: string[];
 }
 /**

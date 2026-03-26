@@ -34,4 +34,5 @@ export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextB
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { AreaParserService } from './area-parser.js';
+export type { AreaContext } from '../models/index.js';
 //# sourceMappingURL=index.d.ts.map

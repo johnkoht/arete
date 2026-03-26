@@ -547,7 +547,21 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
             }
         }
     }
-    // 4. Get related context via brief service (using meeting title only)
+    // 4. Area context resolution
+    let areaContext = null;
+    const areaMatch = await resolvedAreaParser.getAreaForMeeting(frontmatter.title);
+    if (areaMatch) {
+        try {
+            areaContext = await resolvedAreaParser.getAreaContext(areaMatch.areaSlug);
+            if (!areaContext) {
+                warnings.push(`Area file not found: ${areaMatch.areaSlug}`);
+            }
+        }
+        catch (err) {
+            warnings.push(`Failed to load area context: ${areaMatch.areaSlug}`);
+        }
+    }
+    // 5. Get related context via brief service (using meeting title only)
     let relatedContext = {
         goals: [],
         projects: [],
@@ -572,6 +586,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         attendees: resolvedAttendees,
         unknownAttendees,
         relatedContext,
+        areaContext,
         warnings,
     };
 }

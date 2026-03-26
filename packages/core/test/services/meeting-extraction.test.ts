@@ -2535,3 +2535,367 @@ describe('extractMeetingIntelligence - UPDATE exception', () => {
     assert.ok(result.intelligence.decisions[0].includes('April'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - area context (Task 9)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - area context', () => {
+  // Helper to create a MeetingContextBundle with areaContext
+  function makeContextWithArea(areaContext: {
+    slug: string;
+    name: string;
+    status: string;
+    recurringMeetings: Array<{ title: string; attendees: string[]; frequency?: string }>;
+    filePath: string;
+    sections: {
+      currentState: string | null;
+      keyDecisions: string | null;
+      backlog: string | null;
+      activeGoals: string | null;
+      activeWork: string | null;
+      openCommitments: string | null;
+      notes: string | null;
+    };
+  } | undefined): MeetingContextBundle {
+    return {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-25',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+      areaContext,
+    };
+  }
+
+  it('includes area context section when areaContext is present', () => {
+    const context = makeContextWithArea({
+      slug: 'product-development',
+      name: 'Product Development',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/product-development.md',
+      sections: {
+        currentState: 'Working on v2.0 release',
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context (Product Development)'));
+    assert.ok(prompt.includes('**Current State**: Working on v2.0 release'));
+  });
+
+  it('omits area context section when areaContext is not present', () => {
+    const context = makeContextWithArea(undefined);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('### Area Context'));
+  });
+
+  it('truncates current state to 500 characters', () => {
+    const longCurrentState = 'A'.repeat(600);
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: longCurrentState,
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include truncated content with ellipsis
+    assert.ok(prompt.includes('A'.repeat(500) + '...'));
+    // Should NOT include the full 600 character string
+    assert.ok(!prompt.includes('A'.repeat(600)));
+  });
+
+  it('does not truncate current state under 500 characters', () => {
+    const shortCurrentState = 'A'.repeat(400);
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: shortCurrentState,
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include full content without truncation ellipsis
+    assert.ok(prompt.includes('A'.repeat(400)));
+    // Verify no truncation occurred - the text should not end with "..."
+    assert.ok(!prompt.includes('A'.repeat(400) + '...'));
+  });
+
+  it('parses bullet points from keyDecisions markdown string', () => {
+    const keyDecisionsMarkdown = `Some intro text
+- Decision to use TypeScript
+- Decision to adopt GraphQL
+* Another decision with asterisk
+- Final important decision`;
+
+    const context = makeContextWithArea({
+      slug: 'tech-area',
+      name: 'Technology',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/tech-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: keyDecisionsMarkdown,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('**Recent Area Decisions**:'));
+    assert.ok(prompt.includes('- Decision to use TypeScript'));
+    assert.ok(prompt.includes('- Decision to adopt GraphQL'));
+    assert.ok(prompt.includes('* Another decision with asterisk'));
+    assert.ok(prompt.includes('- Final important decision'));
+    // Should NOT include non-bullet text
+    assert.ok(!prompt.includes('Some intro text'));
+  });
+
+  it('limits key decisions to last 5 bullet points', () => {
+    const manyDecisions = `
+- Decision 1
+- Decision 2
+- Decision 3
+- Decision 4
+- Decision 5
+- Decision 6
+- Decision 7`;
+
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: manyDecisions,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include last 5 (3, 4, 5, 6, 7)
+    assert.ok(prompt.includes('Decision 3'));
+    assert.ok(prompt.includes('Decision 7'));
+    // Should NOT include first 2 (1, 2)
+    assert.ok(!prompt.includes('Decision 1'));
+    assert.ok(!prompt.includes('Decision 2'));
+  });
+
+  it('omits key decisions subsection if no bullet points found', () => {
+    const noBullets = `This is just some text
+without any bullet points
+just regular paragraphs.`;
+
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some current state',
+        keyDecisions: noBullets,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context'));
+    assert.ok(prompt.includes('**Current State**'));
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('omits key decisions subsection if keyDecisions is null', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some current state',
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context'));
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('omits key decisions subsection if keyDecisions is empty string', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some state',
+        keyDecisions: '',
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('includes area context with only keyDecisions (no currentState)', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: '- Important decision',
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context (Test Area)'));
+    assert.ok(!prompt.includes('**Current State**'));
+    assert.ok(prompt.includes('**Recent Area Decisions**'));
+    assert.ok(prompt.includes('- Important decision'));
+  });
+
+  it('combines area context with other context sections', () => {
+    const context: MeetingContextBundle = {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-25',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: {
+        path: '/path/to/agenda.md',
+        items: [],
+        unchecked: ['Review timeline'],
+      },
+      attendees: [{
+        slug: 'alice-smith',
+        email: 'alice@example.com',
+        name: 'Alice Smith',
+        category: 'internal',
+        profile: '',
+        stances: [],
+        openItems: [],
+        recentMeetings: [],
+      }],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [{ slug: 'goal-1', title: 'Ship v2', summary: '' }],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+      areaContext: {
+        slug: 'product-area',
+        name: 'Product Area',
+        status: 'active',
+        recurringMeetings: [],
+        filePath: '/areas/product-area.md',
+        sections: {
+          currentState: 'Building features',
+          keyDecisions: '- Decided on approach',
+          backlog: null,
+          activeGoals: null,
+          activeWork: null,
+          openCommitments: null,
+          notes: null,
+        },
+      },
+    };
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // All context sections should be present
+    assert.ok(prompt.includes('### Attendee Context'));
+    assert.ok(prompt.includes('### Related Goals'));
+    assert.ok(prompt.includes('### Unchecked Agenda Items'));
+    assert.ok(prompt.includes('### Area Context (Product Area)'));
+  });
+});

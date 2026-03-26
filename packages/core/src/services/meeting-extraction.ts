@@ -318,6 +318,34 @@ function buildContextSection(context: MeetingContextBundle): string {
     sections.push(agendaLines.join('\n'));
   }
 
+  // Area context (domain knowledge for the meeting topic)
+  if (context.areaContext) {
+    const area = context.areaContext;
+    const areaLines: string[] = [`### Area Context (${area.name})`];
+
+    // Current state (truncate to 500 chars)
+    if (area.sections?.currentState) {
+      const truncated = area.sections.currentState.length > 500
+        ? area.sections.currentState.slice(0, 500) + '...'
+        : area.sections.currentState;
+      areaLines.push(`**Current State**: ${truncated}`);
+    }
+
+    // Key decisions (parse bullet points, last 5)
+    if (area.sections?.keyDecisions) {
+      const decisions = area.sections.keyDecisions
+        .split('\n')
+        .filter(line => /^[-*]\s/.test(line.trim()))
+        .slice(-5);
+      if (decisions.length > 0) {
+        areaLines.push('', '**Recent Area Decisions**:');
+        areaLines.push(...decisions);
+      }
+    }
+
+    sections.push(areaLines.join('\n'));
+  }
+
   if (sections.length === 0) return '';
 
   return `\n\n## Meeting Context (use this for better extraction)
