@@ -85,6 +85,10 @@ Things the builder has corrected — important context for avoiding repeat mista
 
 - **Actively reference collaboration.md for process decisions** (2026-03-25): Don't assume injected context is internalized. When making workflow decisions (spawning subagents, running reviews, choosing execution paths), explicitly re-read the relevant sections of `collaboration.md` and `AGENTS.md` to check for established patterns before proceeding. Having context in the system prompt ≠ actually using it.
 
+- **Use plan-mode extension commands, not manual tool calls** (2026-03-25): When working with plans, ALWAYS use `/plan`, `/review`, `/pre-mortem`, `/approve`, `/build`, `/ship`, `/wrap` commands. These manage frontmatter, status transitions, and artifact placement. NEVER manually write plan.md with the Write tool or update status fields with Edit. The extension handles lifecycle correctly. If you're about to use Write/Edit on a plan file, STOP and find the correct slash command instead. If unsure how a command works, read `.pi/extensions/plan-mode/` first.
+
+- **Don't let urgency override process** (2026-03-25): When builder says "do this while I'm away" or similar time-pressure language, that's NOT permission to skip proper workflows. The builder trusts the established process MORE than they trust improvised solutions. If you're tempted to "just do it manually" because it feels faster, that's a signal to slow down and use the right tooling.
+
 ---
 
 ## Last Synthesized

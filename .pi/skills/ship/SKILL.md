@@ -20,9 +20,28 @@ Automate the complete build workflow from approved plan to PR-ready code. The bu
 ## Prerequisites
 
 - Plan exists in current conversation (Plan Mode) or at `dev/work/plans/{slug}/plan.md`
+- **Plan must be managed by plan-mode extension** — if you created plan.md manually with Write tool, STOP and use `/plan save` instead
 - Working directory is the main repository (not a worktree)
 - Git working tree is clean (no uncommitted changes)
 - `@zenobius/pi-worktrees` extension installed
+
+## Pre-Flight Check (MANDATORY)
+
+Before starting Phase 1, verify plan-mode state:
+
+1. **Check plan frontmatter** — Read `dev/work/plans/{slug}/plan.md` and verify:
+   - `status:` field exists and is `planned` or `approved` (not `idea` or `draft`)
+   - `has_prd: true` if PRD already exists (skip Phase 2.2)
+   - `has_pre_mortem: true` if pre-mortem done (skip Phase 1.2)
+   - `has_review: true` if review done (skip Phase 1.3)
+
+2. **If status is `idea` or `draft`** — HALT and tell the builder:
+   > ⚠️ Plan is in early status (`{status}`). Run `/approve` first to mark it ready for building.
+
+3. **If frontmatter is missing or malformed** — HALT and tell the builder:
+   > ⚠️ Plan may have been created manually without plan-mode extension. Use `/plan save` to recreate with proper frontmatter.
+
+4. **If plan was written with Write tool** (no proper frontmatter) — this is a process violation. Do NOT proceed. The builder must fix the plan state first.
 
 ## Tool Reference
 
