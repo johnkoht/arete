@@ -1141,3 +1141,208 @@ describe('formatFilteredStagedSections', () => {
     assert.ok(!result.includes('## Staged Learnings'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// processMeetingExtraction - completedItems reconciliation
+// ---------------------------------------------------------------------------
+
+describe('processMeetingExtraction - completedItems reconciliation', () => {
+  // CRITICAL: Verify Jaccard math per LEARNINGS.md
+  // For 0.6 threshold: 5 words vs 6 words = 5/6 = 0.833 ✓ (matches)
+  // For 0.6 threshold: 3 words vs 6 words = 3/6 = 0.5 ✗ (no match)
+  it('verifies Jaccard calculation for test strings (0.6 threshold)', () => {
+    // Completed: "Send auth doc to Alex" (5 words)
+    // Action:    "Send auth doc to Alex soon" (6 words)
+    // Intersection: 5, Union: 6, Jaccard: 5/6 = 0.833 ≥ 0.6 ✓
+    const tokensCompleted = normalizeForJaccard('Send auth doc to Alex');
+    const tokensAction = normalizeForJaccard('Send auth doc to Alex soon');
+
+    assert.deepEqual(tokensCompleted, ['send', 'auth', 'doc', 'to', 'alex']);
+    assert.deepEqual(tokensAction, ['send', 'auth', 'doc', 'to', 'alex', 'soon']);
+
+    const similarity = jaccardSimilarity(tokensCompleted, tokensAction);
+    assert.ok(similarity >= 0.6, `Expected >= 0.6, got ${similarity}`);
+    assert.equal(similarity.toFixed(3), '0.833');
+  });
+
+  it('marks action item as skipped when matching completedItems (Jaccard ≥ 0.6)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex soon', 0.9)],
+    });
+
+    // 5/6 = 0.833 ≥ 0.6 threshold
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    assert.equal(processed.stagedItemMatchedText?.['ai_001'], 'Send auth doc to Alex');
+  });
+
+  it('does NOT mark action item when no match (Jaccard < 0.6)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Review the quarterly budget report', 0.9)],
+    });
+
+    // Completely different task
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'approved'); // high confidence auto-approve
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('truncates matched text to 60 chars with "..." suffix', () => {
+    // Create a completed item > 60 chars
+    const longCompletedText =
+      'Send the comprehensive quarterly financial report to Alex for review';
+    // 10 words: "Send the comprehensive quarterly financial report to Alex for review"
+    // Action:   "Send the comprehensive quarterly financial report to Alex for review soon"
+    // 10/11 = 0.909 ≥ 0.6 ✓
+    const result = createMockResult({
+      actionItems: [
+        createActionItem(
+          'Send the comprehensive quarterly financial report to Alex for review soon',
+          0.9,
+        ),
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: [longCompletedText],
+    });
+
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    // 68 chars > 60, so truncated to 57 + "..."
+    const matchedText = processed.stagedItemMatchedText?.['ai_001'];
+    assert.ok(matchedText, 'Expected matchedText to be defined');
+    assert.equal(matchedText.length, 60);
+    assert.ok(matchedText.endsWith('...'), 'Expected truncation suffix');
+    assert.equal(matchedText, 'Send the comprehensive quarterly financial report to Alex...');
+  });
+
+  it('does NOT apply reconciliation to decisions (only action items)', () => {
+    const result = createMockResult({
+      decisions: ['Send auth doc to Alex soon'],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    // Decisions should NOT be skipped — reconciliation is action items only
+    assert.equal(processed.stagedItemStatus['de_001'], 'approved'); // 0.9 default > 0.8
+    assert.equal(processed.stagedItemSource['de_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('does NOT apply reconciliation to learnings (only action items)', () => {
+    const result = createMockResult({
+      learnings: ['Send auth doc to Alex soon'],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    // Learnings should NOT be skipped — reconciliation is action items only
+    assert.equal(processed.stagedItemStatus['le_001'], 'approved'); // 0.9 default > 0.8
+    assert.equal(processed.stagedItemSource['le_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('reconciliation takes precedence over dedup', () => {
+    const userNotes = 'Send auth doc to Alex soon'; // Would match via dedup
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex soon', 0.9)],
+    });
+
+    // Both completedItems and userNotes could match, but reconciliation comes first
+    const processed = processMeetingExtraction(result, userNotes, {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    // Should be reconciled (skipped), not deduped (approved)
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+  });
+
+  it('handles empty completedItems array (no reconciliation)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex', 0.9)],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: [],
+    });
+
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('handles undefined completedItems (no reconciliation)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex', 0.9)],
+    });
+
+    const processed = processMeetingExtraction(result, '', {});
+
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('uses custom reconcileJaccard threshold when provided', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex soon', 0.9)],
+    });
+
+    // 5/6 = 0.833, so threshold 0.9 should NOT match
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+      reconcileJaccard: 0.9,
+    });
+
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.equal(processed.stagedItemMatchedText, undefined);
+  });
+
+  it('matches multiple action items against same completed item', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Send auth doc to Alex soon', 0.9),
+        createActionItem('Send auth doc to Alex today', 0.9),
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    // Both should be reconciled
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    assert.equal(processed.stagedItemSource['ai_002'], 'reconciled');
+    assert.equal(processed.stagedItemMatchedText?.['ai_001'], 'Send auth doc to Alex');
+    assert.equal(processed.stagedItemMatchedText?.['ai_002'], 'Send auth doc to Alex');
+  });
+
+  it('matches action items against multiple completed items', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Send auth doc to Alex soon', 0.9),
+        createActionItem('Review the quarterly budget report', 0.9),
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex', 'Review the quarterly budget'],
+    });
+
+    // First matches first completed item
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    // Second matches second completed item (5/6 = 0.833)
+    assert.equal(processed.stagedItemSource['ai_002'], 'reconciled');
+  });
+});
