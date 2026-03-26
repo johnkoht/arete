@@ -56,3 +56,15 @@ export function getUncheckedAgendaItems(content: string): string[] {
     .filter(item => !item.checked)
     .map(item => item.text);
 }
+
+/**
+ * Get completed (checked) items as simple strings.
+ * 
+ * @param content - Markdown content
+ * @returns Array of completed item texts
+ */
+export function getCompletedItems(content: string): string[] {
+  return parseAgendaItems(content)
+    .filter(item => item.checked)
+    .map(item => item.text);
+}

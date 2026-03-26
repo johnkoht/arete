@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAgendaItems, getUncheckedAgendaItems } from '../../src/utils/agenda.js';
+import { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems } from '../../src/utils/agenda.js';
 
 describe('parseAgendaItems', () => {
   it('parses basic unchecked items', () => {
@@ -112,6 +112,72 @@ describe('getUncheckedAgendaItems', () => {
 - [x] Also done
 `;
     const items = getUncheckedAgendaItems(content);
+
+    assert.equal(items.length, 0);
+  });
+});
+
+describe('getCompletedItems', () => {
+  it('returns completed item texts from basic checkboxes', () => {
+    const content = `
+- [x] Completed task
+- [x] Another completed
+`;
+    const items = getCompletedItems(content);
+
+    assert.equal(items.length, 2);
+    assert.equal(items[0], 'Completed task');
+    assert.equal(items[1], 'Another completed');
+  });
+
+  it('handles indented checkboxes', () => {
+    const content = `
+- [x] Top level done
+  - [x] Indented done
+    - [x] Deeply indented done
+`;
+    const items = getCompletedItems(content);
+
+    assert.equal(items.length, 3);
+    assert.equal(items[0], 'Top level done');
+    assert.equal(items[1], 'Indented done');
+    assert.equal(items[2], 'Deeply indented done');
+  });
+
+  it('handles uppercase X in checkboxes', () => {
+    const content = `
+- [X] Done with uppercase
+- [x] Done with lowercase
+`;
+    const items = getCompletedItems(content);
+
+    assert.equal(items.length, 2);
+    assert.equal(items[0], 'Done with uppercase');
+    assert.equal(items[1], 'Done with lowercase');
+  });
+
+  it('filters out unchecked items from mixed content', () => {
+    const content = `
+## Tasks
+
+- [x] Done
+- [ ] Not done
+- [X] Also done
+- [ ] Also not done
+`;
+    const items = getCompletedItems(content);
+
+    assert.equal(items.length, 2);
+    assert.equal(items[0], 'Done');
+    assert.equal(items[1], 'Also done');
+  });
+
+  it('returns empty array when no items are checked', () => {
+    const content = `
+- [ ] Not done
+- [ ] Also not done
+`;
+    const items = getCompletedItems(content);
 
     assert.equal(items.length, 0);
   });
