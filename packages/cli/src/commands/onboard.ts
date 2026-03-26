@@ -513,6 +513,125 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
       }
 
       // ========================================
+      // PHASE 2.5: Calendar Integration
+      // ========================================
+      let calendarConfigured = false;
+      let calendarSkipped = false;
+
+      if (!opts.json) {
+        console.log('');
+        info('Calendar Integration');
+        console.log(chalk.dim('  Connecting a calendar enables meeting prep and daily planning.'));
+        console.log('');
+
+        const { select } = await import('@inquirer/prompts');
+        type CalendarChoice = 'apple' | 'google' | 'skip';
+        let calendarChoice: CalendarChoice;
+
+        try {
+          calendarChoice = await select<CalendarChoice>({
+            message: 'Would you like to connect a calendar?',
+            choices: [
+              { name: 'Apple Calendar', value: 'apple', description: 'Syncs with macOS Calendar app' },
+              { name: 'Google Calendar', value: 'google', description: 'Opens browser for OAuth' },
+              { name: 'Skip for now', value: 'skip', description: 'Configure later via: arete integration configure' },
+            ],
+          });
+        } catch {
+          calendarSkipped = true;
+          calendarChoice = 'skip';
+        }
+
+        if (calendarChoice === 'apple') {
+          // Configure Apple Calendar with all calendars
+          await services.integrations.configure(root, 'calendar', {
+            provider: 'macos',
+            status: 'active',
+            calendars: [], // Empty = all calendars
+          });
+          calendarConfigured = true;
+          success('Apple Calendar connected (all calendars)');
+        } else if (calendarChoice === 'google') {
+          // Check for real credentials
+          const { getClientCredentials } = await import('@arete/core');
+          const { clientId } = getClientCredentials();
+
+          if (clientId === 'PLACEHOLDER_CLIENT_ID') {
+            // Beta: no production keys
+            warn('Google Calendar requires setup first');
+            console.log(chalk.dim('  Run: arete integration configure google-calendar'));
+            calendarSkipped = true;
+          } else {
+            // Run OAuth flow (simplified - guide user to integration command for full flow)
+            info('Google Calendar setup requires browser authorization');
+            console.log(chalk.dim('  Run: arete integration configure google-calendar'));
+            calendarSkipped = true;
+          }
+        } else {
+          calendarSkipped = true;
+        }
+      } else {
+        // JSON mode: skip calendar setup
+        calendarSkipped = true;
+      }
+
+      // ========================================
+      // PHASE 2.6: Context Prompts (Optional)
+      // ========================================
+      let contextProvided = false;
+
+      if (!opts.json && !profileSkipped) {
+        // Only ask if we just created a profile (not skipped)
+        console.log('');
+        info('Quick Context (optional)');
+        console.log(chalk.dim('  A few sentences about your business helps the agent give better advice.'));
+        console.log(chalk.dim('  Press Enter to skip any question.'));
+        console.log('');
+
+        const { input: inputPrompt } = await import('@inquirer/prompts');
+
+        try {
+          const businessDesc = await inputPrompt({
+            message: 'What does your company do? (1-2 sentences)',
+            default: '',
+          });
+
+          const usersDesc = await inputPrompt({
+            message: 'Who are your primary users?',
+            default: '',
+          });
+
+          // Write to context files if provided
+          if (businessDesc.trim() || usersDesc.trim()) {
+            contextProvided = true;
+
+            if (businessDesc.trim()) {
+              const businessPath = join(root, 'context', 'business-overview.md');
+              const existing = await services.storage.read(businessPath) ?? '';
+              // Append to "Problem Space" or "Company" section
+              const updated = existing.replace(
+                '[Describe the customer problem you solve]',
+                businessDesc.trim()
+              );
+              await services.storage.write(businessPath, updated);
+            }
+
+            if (usersDesc.trim()) {
+              const usersPath = join(root, 'context', 'users-personas.md');
+              const existing = await services.storage.read(usersPath) ?? '';
+              const updated = existing.replace(
+                '[Who uses your product]',
+                usersDesc.trim()
+              );
+              await services.storage.write(usersPath, updated);
+            }
+          }
+        } catch {
+          // User cancelled - fine
+        }
+      }
+
+      // ========================================
       // PHASE 3: Output
       // ========================================
       if (opts.json) {
@@ -538,22 +657,22 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
             provider: aiConfigured ? 'anthropic' : null,
             skipped: aiSkipped,
           },
+          calendar: { configured: calendarConfigured, skipped: calendarSkipped },
+          context: { provided: contextProvided },
         };
         console.log(JSON.stringify(output, null, 2));
         return;
       }
 
-      // Non-JSON mode final output
+      // Non-JSON: First win suggestions
       console.log('');
-      if (!aiSkipped && !aiConfigured) {
-        info('Continue onboarding by saying "Let\'s get started" in chat');
-      } else {
-        info('Continue onboarding by saying "Let\'s get started" in chat');
-      }
+      success('Setup complete!');
       console.log('');
-      console.log(chalk.dim('The agent will help you:'));
-      console.log(chalk.dim('  • Import your existing docs and context'));
-      console.log(chalk.dim('  • Connect integrations (calendar, Fathom)'));
-      console.log(chalk.dim('  • Get your first quick win'));
+      console.log(chalk.bold('  Try one of these to get started:'));
+      console.log('');
+      console.log('    • "Prep for my next meeting" — get context on attendees');
+      console.log('    • "Plan my week" — set priorities and focus');
+      console.log('    • "Let\'s get started" — guided workspace setup');
+      console.log('');
     });
 }
