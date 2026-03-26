@@ -19,7 +19,7 @@ import type { EntityService } from './entity.js';
 import { AreaParserService } from './area-parser.js';
 import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import type { AgendaItem } from '../utils/agenda.js';
-import { findMatchingAgenda } from '../integrations/meetings.js';
+import { findMatchingAgenda, type AgendaMatchResult } from '../integrations/meetings.js';
 import { slugifyPersonName } from './entity.js';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +62,15 @@ export interface RelatedContext {
 }
 
 /**
+ * Agenda candidate for user selection when no auto-match found.
+ */
+export interface AgendaCandidate {
+  path: string;
+  meetingTitle?: string;
+  score: number;
+}
+
+/**
  * Complete meeting context bundle.
  */
 export interface MeetingContextBundle {
@@ -77,6 +86,13 @@ export interface MeetingContextBundle {
     items: AgendaItem[];
     unchecked: string[];
   } | null;
+  /** Metadata about agenda matching for skill-level prompting */
+  agendaMatch?: {
+    matchType: 'exact' | 'fuzzy' | 'none';
+    confidence: number;
+    /** Candidate agendas for user selection when no auto-match */
+    candidates: AgendaCandidate[];
+  };
   attendees: ResolvedAttendee[];
   unknownAttendees: UnknownAttendee[];
   relatedContext: RelatedContext;
@@ -692,24 +708,45 @@ export async function buildMeetingContext(
 
   // 2. Find agenda
   let agenda: MeetingContextBundle['agenda'] = null;
+  let agendaMatch: MeetingContextBundle['agendaMatch'] = undefined;
+  
   if (!options.skipAgenda) {
     let agendaPath: string | null = null;
+    let matchFromFrontmatter = false;
 
-    // First check frontmatter agenda field
+    // First check frontmatter agenda field (explicit link)
     if (frontmatter.agenda) {
       agendaPath = frontmatter.agenda.startsWith('/')
         ? frontmatter.agenda
         : resolve(paths.root, frontmatter.agenda);
+      matchFromFrontmatter = true;
     } else {
-      // Try fuzzy match via findMatchingAgenda
-      const relativePath = await findMatchingAgenda(
+      // Try to find matching agenda via date + title
+      const matchResult = await findMatchingAgenda(
         storage,
         paths.root,
         frontmatter.date,
         frontmatter.title,
       );
-      if (relativePath) {
-        agendaPath = resolve(paths.root, relativePath);
+      
+      // Store match metadata for skill-level prompting
+      agendaMatch = {
+        matchType: matchResult.matchType,
+        confidence: matchResult.confidence,
+        candidates: matchResult.candidates,
+      };
+      
+      // Only auto-link high-confidence matches (exact or fuzzy >= 0.7)
+      if (matchResult.matchType === 'exact' || matchResult.confidence >= 0.7) {
+        if (matchResult.match) {
+          agendaPath = resolve(paths.root, matchResult.match);
+        }
+      } else if (matchResult.candidates.length > 0) {
+        // Low confidence — add warning for skill to handle
+        warnings.push(
+          `Found ${matchResult.candidates.length} potential agenda(s) for this meeting but confidence is low. ` +
+          `Use agendaMatch.candidates to prompt user for selection.`
+        );
       }
     }
 
@@ -723,6 +760,10 @@ export async function buildMeetingContext(
           items,
           unchecked,
         };
+        // If matched from frontmatter, set agendaMatch to reflect explicit link
+        if (matchFromFrontmatter) {
+          agendaMatch = { matchType: 'exact', confidence: 1.0, candidates: [] };
+        }
       } else {
         warnings.push(`Agenda file not found: ${agendaPath}`);
       }
@@ -812,6 +853,7 @@ export async function buildMeetingContext(
   return {
     meeting,
     agenda,
+    agendaMatch,
     attendees: resolvedAttendees,
     unknownAttendees,
     relatedContext,

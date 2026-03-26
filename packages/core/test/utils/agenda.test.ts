@@ -181,4 +181,40 @@ describe('getCompletedItems', () => {
 
     assert.equal(items.length, 0);
   });
+
+  it('handles malformed checkboxes gracefully (no crash)', () => {
+    const content = `
+- [xincomplete
+- [x]
+- [x] 
+- [ ]no space
+- [x]no space but done
+- Regular text without checkbox
+`;
+    const items = getCompletedItems(content);
+
+    // Should not crash on malformed input
+    assert.ok(Array.isArray(items), 'Should return array');
+    // Regex behavior: "- [x]no space but done" matches (no space required before text)
+    // "- [x] " matches with empty text (trimmed), "- [xincomplete" does not match
+    // Filter out empty strings from results
+    const nonEmpty = items.filter(i => i.length > 0);
+    assert.equal(nonEmpty.length, 1, 'Should have one valid item');
+    assert.equal(nonEmpty[0], 'no space but done');
+  });
+
+  it('handles empty content', () => {
+    const items = getCompletedItems('');
+    assert.equal(items.length, 0);
+  });
+
+  it('handles content with only non-checkbox lines', () => {
+    const content = `
+# Header
+Some regular text
+- Regular list item (no checkbox)
+`;
+    const items = getCompletedItems(content);
+    assert.equal(items.length, 0);
+  });
 });

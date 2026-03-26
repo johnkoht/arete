@@ -92,16 +92,66 @@ arete meeting context <file> --json
 
 This assembles:
 - Meeting metadata (title, date, attendees, transcript)
-- Linked agenda (if exists via frontmatter `agenda:` field)
+- Linked agenda (if exists via frontmatter `agenda:` field or auto-matched)
 - Attendee profiles with stances, open items, relationship health
 - Related workspace context (goals, projects, recent decisions)
 
-**Output**: JSON context bundle with `meeting`, `agenda`, `attendees`, `unknownAttendees`, `relatedContext`, and `warnings` fields.
+**Output**: JSON context bundle with `meeting`, `agenda`, `agendaMatch`, `attendees`, `unknownAttendees`, `relatedContext`, and `warnings` fields.
 
 **Flags**:
 - `--json` — output as JSON (required for piping)
 - `--skip-agenda` — don't look for linked agenda
 - `--skip-people` — don't resolve attendee context
+
+### 2a. For Each Meeting — Link Agenda (if not auto-matched)
+
+The context bundle includes `agendaMatch` metadata that tells you how the agenda was matched:
+
+```json
+{
+  "agendaMatch": {
+    "matchType": "exact" | "fuzzy" | "none",
+    "confidence": 0.0-1.0,
+    "candidates": [
+      { "path": "now/agendas/2026-03-25-lindsay-1-1.md", "meetingTitle": "John / Lindsay 1:1", "score": 0.25 }
+    ]
+  }
+}
+```
+
+**Matching behavior**:
+- **`matchType: "exact"`** (confidence 1.0): Agenda's `meeting_title` frontmatter matches meeting title exactly. Auto-linked.
+- **`matchType: "fuzzy"`** with confidence ≥ 0.7: Filename-based match is strong enough. Auto-linked.
+- **`matchType: "fuzzy"`** with confidence < 0.7: Low-confidence match. **Prompt user.**
+- **`matchType: "none"`** with candidates: No match found but agendas exist for this date. **Prompt user.**
+- **`matchType: "none"`** without candidates: No agendas for this date. Proceed without agenda.
+
+**When to prompt user**:
+
+If `agendaMatch.matchType` is `"none"` or confidence < 0.7, and `candidates` is non-empty:
+
+```
+I found agenda(s) for this meeting date but couldn't auto-match:
+
+Meeting: "John / Lindsay 1:1" (2026-03-25)
+
+Available agendas:
+1. now/agendas/2026-03-25-lindsay-1-1.md (score: 0.25)
+2. now/agendas/2026-03-25-team-sync.md (score: 0.10)
+
+Link to one of these agendas? [1/2/skip]
+```
+
+If user selects an agenda:
+- Update the meeting frontmatter to add `agenda: <path>`
+- Re-run context assembly with the linked agenda
+- The agenda's unchecked items will be included in extraction
+
+If user skips:
+- Proceed without agenda
+- Unchecked agenda items won't become action item candidates
+
+**Tip**: To avoid manual linking, ensure agendas include `meeting_title` in frontmatter when created via `prepare-meeting-agenda` skill. This enables exact matching.
 
 ### 2b. For Each Meeting — Map to Area
 

@@ -105,6 +105,7 @@ export type {
   MeetingContextBundle,
   BuildMeetingContextOptions,
   MeetingContextDeps,
+  AgendaCandidate,
 } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
 

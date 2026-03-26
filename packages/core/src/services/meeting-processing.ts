@@ -47,7 +47,7 @@ export interface ProcessingOptions {
   confidenceInclude?: number;
   /** Confidence above which items are auto-approved (default: 0.8) */
   confidenceApproved?: number;
-  /** Jaccard similarity threshold for user notes dedup (default: 0.7) */
+  /** Jaccard similarity threshold for user notes dedup (default: 0.7). Items with similarity >= threshold are considered matches. */
   dedupJaccard?: number;
   /**
    * Prior items from earlier meetings in a batch, used for deterministic deduplication.
@@ -58,7 +58,7 @@ export interface ProcessingOptions {
   priorItems?: PriorItem[];
   /** Completed task texts to match against (from week.md/scratchpad.md) */
   completedItems?: string[];
-  /** Jaccard threshold for completed items reconciliation (default: 0.6) */
+  /** Jaccard threshold for completed items reconciliation (default: 0.6). Items with similarity >= threshold are considered matches. Lower than dedupJaccard (0.7) because completed tasks in week.md are often abbreviated compared to meeting action items. */
   reconcileJaccard?: number;
 }
 
@@ -157,7 +157,7 @@ function itemMatchesUserNotes(
 ): boolean {
   const itemTokens = normalizeForJaccard(itemText);
   const similarity = jaccardSimilarity(itemTokens, userNotesTokens);
-  return similarity > threshold;
+  return similarity >= threshold;
 }
 
 /**
@@ -202,7 +202,7 @@ function itemMatchesPriorItems(
   const itemTokens = normalizeForJaccard(itemText);
   for (const prior of tokenizedPriorItems) {
     const similarity = jaccardSimilarity(itemTokens, prior.tokens);
-    if (similarity > threshold) {
+    if (similarity >= threshold) {
       return true;
     }
   }

@@ -6,9 +6,11 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findMatchingAgenda,
+  findMatchingAgendaPath,
   saveMeetingFile,
   meetingFilename,
   type MeetingForSave,
+  type AgendaMatchResult,
 } from '../../src/integrations/meetings.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 
@@ -117,12 +119,14 @@ describe('findMatchingAgenda', () => {
     storage = createMockStorage();
   });
 
-  it('returns null when agendas directory does not exist', async () => {
+  it('returns matchType none when agendas directory does not exist', async () => {
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
-    assert.equal(result, null);
+    assert.equal(result.matchType, 'none');
+    assert.equal(result.match, null);
+    assert.equal(result.candidates.length, 0);
   });
 
-  it('returns null when no agendas match the date', async () => {
+  it('returns matchType none when no agendas match the date', async () => {
     // Create agenda with different date
     storage.files.set(
       `${WORKSPACE}/now/agendas/2026-03-05-weekly-sync.md`,
@@ -130,7 +134,8 @@ describe('findMatchingAgenda', () => {
     );
 
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
-    assert.equal(result, null);
+    assert.equal(result.matchType, 'none');
+    assert.equal(result.candidates.length, 0);
   });
 
   it('matches agenda by exact date and similar title', async () => {
@@ -140,30 +145,36 @@ describe('findMatchingAgenda', () => {
     );
 
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
-    assert.equal(result, 'now/agendas/2026-03-04-weekly-sync.md');
+    assert.equal(result.match, 'now/agendas/2026-03-04-weekly-sync.md');
+    assert.equal(result.matchType, 'fuzzy');
+    assert.ok(result.confidence >= 0.7);
   });
 
-  it('matches with fuzzy title similarity > 0.7', async () => {
+  it('matches with fuzzy title similarity > 0.5', async () => {
     storage.files.set(
       `${WORKSPACE}/now/agendas/2026-03-04-weekly-team-sync.md`,
       '# Weekly Team Sync'
     );
 
-    // "Weekly Sync" vs "weekly team sync" - 2 of 3 words match = 0.67
-    // But if we have "Team Weekly Sync" it should match better
+    // "Team Weekly Sync" vs "weekly team sync" = 100% match
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Team Weekly Sync');
-    assert.equal(result, 'now/agendas/2026-03-04-weekly-team-sync.md');
+    assert.equal(result.match, 'now/agendas/2026-03-04-weekly-team-sync.md');
+    assert.equal(result.matchType, 'fuzzy');
   });
 
-  it('returns null when title similarity is too low', async () => {
+  it('returns low-confidence match when title similarity is low but single candidate', async () => {
     storage.files.set(
       `${WORKSPACE}/now/agendas/2026-03-04-monthly-review.md`,
       '# Monthly Review'
     );
 
     // "Weekly Sync" vs "monthly review" - no overlap = 0
+    // But it's the only candidate for this date, so it's returned with low confidence
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
-    assert.equal(result, null);
+    assert.equal(result.matchType, 'fuzzy');
+    assert.equal(result.confidence, 0);
+    assert.equal(result.match, 'now/agendas/2026-03-04-monthly-review.md');
+    assert.equal(result.candidates.length, 1);
   });
 
   it('handles ISO date format with time', async () => {
@@ -178,7 +189,7 @@ describe('findMatchingAgenda', () => {
       '2026-03-04T14:30:00Z',
       'Standup'
     );
-    assert.equal(result, 'now/agendas/2026-03-04-standup.md');
+    assert.equal(result.match, 'now/agendas/2026-03-04-standup.md');
   });
 
   it('picks best match when multiple agendas exist for same date', async () => {
@@ -193,7 +204,8 @@ describe('findMatchingAgenda', () => {
 
     // "Weekly Sync" vs "weekly sync" = 100% match
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
-    assert.equal(result, 'now/agendas/2026-03-04-weekly-sync.md');
+    assert.equal(result.match, 'now/agendas/2026-03-04-weekly-sync.md');
+    assert.equal(result.candidates.length, 2);
   });
 
   it('matches single-word titles exactly', async () => {
@@ -203,18 +215,21 @@ describe('findMatchingAgenda', () => {
     );
 
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Standup');
-    assert.equal(result, 'now/agendas/2026-03-04-standup.md');
+    assert.equal(result.match, 'now/agendas/2026-03-04-standup.md');
   });
 
-  it('returns null for agenda with empty title slug', async () => {
+  it('returns candidate for agenda with empty title slug (single candidate)', async () => {
     // Edge case: YYYY-MM-DD-.md (11 chars + nothing after hyphen)
     storage.files.set(`${WORKSPACE}/now/agendas/2026-03-04-.md`, '# Empty');
 
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Some Meeting');
-    assert.equal(result, null);
+    // Single candidate for the date - returned with low confidence
+    assert.equal(result.matchType, 'fuzzy');
+    assert.equal(result.confidence, 0);
+    assert.equal(result.candidates.length, 1);
   });
 
-  it('returns null when title normalizes to empty', async () => {
+  it('returns candidate when title normalizes to empty (single candidate)', async () => {
     storage.files.set(
       `${WORKSPACE}/now/agendas/2026-03-04-meeting.md`,
       '# Meeting'
@@ -222,7 +237,84 @@ describe('findMatchingAgenda', () => {
 
     // Title with only special chars normalizes to empty
     const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', '!!!');
+    // Single candidate for the date - returned with low confidence
+    assert.equal(result.matchType, 'fuzzy');
+    assert.equal(result.confidence, 0);
+    assert.equal(result.candidates.length, 1);
+  });
+
+  it('matches on frontmatter meeting_title for exact match', async () => {
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-lindsay-1-1.md`,
+      '---\nmeeting_title: "John / Lindsay 1:1"\ndate: 2026-03-04\n---\n\n# Lindsay 1:1'
+    );
+
+    // This would fail fuzzy matching but succeeds on exact meeting_title
+    const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'John / Lindsay 1:1');
+    assert.equal(result.match, 'now/agendas/2026-03-04-lindsay-1-1.md');
+    assert.equal(result.matchType, 'exact');
+    assert.equal(result.confidence, 1.0);
+  });
+
+  it('prefers exact meeting_title match over fuzzy filename match', async () => {
+    // One agenda with exact meeting_title match
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-lindsay-weekly.md`,
+      '---\nmeeting_title: "Lindsay Weekly"\ndate: 2026-03-04\n---\n\n# Lindsay Weekly'
+    );
+    // Another agenda with good fuzzy filename match
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-lindsay-weekly-sync.md`,
+      '# Lindsay Weekly Sync'
+    );
+
+    const result = await findMatchingAgenda(storage, WORKSPACE, '2026-03-04', 'Lindsay Weekly');
+    assert.equal(result.match, 'now/agendas/2026-03-04-lindsay-weekly.md');
+    assert.equal(result.matchType, 'exact');
+  });
+});
+
+describe('findMatchingAgendaPath (backward compat)', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('returns null when agendas directory does not exist', async () => {
+    const result = await findMatchingAgendaPath(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
     assert.equal(result, null);
+  });
+
+  it('returns null when no high-confidence match', async () => {
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-monthly-review.md`,
+      '# Monthly Review'
+    );
+
+    // Low similarity - should return null even though there's a candidate
+    const result = await findMatchingAgendaPath(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
+    assert.equal(result, null);
+  });
+
+  it('returns path for high-confidence fuzzy match', async () => {
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-weekly-sync.md`,
+      '# Weekly Sync'
+    );
+
+    const result = await findMatchingAgendaPath(storage, WORKSPACE, '2026-03-04', 'Weekly Sync');
+    assert.equal(result, 'now/agendas/2026-03-04-weekly-sync.md');
+  });
+
+  it('returns path for exact meeting_title match', async () => {
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-03-04-lindsay-1-1.md`,
+      '---\nmeeting_title: "John / Lindsay 1:1"\ndate: 2026-03-04\n---\n\n# Lindsay 1:1'
+    );
+
+    const result = await findMatchingAgendaPath(storage, WORKSPACE, '2026-03-04', 'John / Lindsay 1:1');
+    assert.equal(result, 'now/agendas/2026-03-04-lindsay-1-1.md');
   });
 });
 

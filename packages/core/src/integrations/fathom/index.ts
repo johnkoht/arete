@@ -10,7 +10,7 @@ import { meetingFromListItem } from './save.js';
 import {
   saveMeetingFile,
   meetingFilename,
-  findMatchingAgenda,
+  findMatchingAgendaPath,
   type MeetingForSave,
 } from '../meetings.js';
 
@@ -86,8 +86,8 @@ export async function pullFathom(
     try {
       const meeting = meetingFromListItem(m);
       
-      // Link agenda if available
-      const agenda = await findMatchingAgenda(
+      // Link agenda if available (use high-confidence matches only)
+      const agenda = await findMatchingAgendaPath(
         storage,
         workspaceRoot,
         meeting.date,

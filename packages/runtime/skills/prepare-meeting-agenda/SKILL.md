@@ -61,7 +61,7 @@ Use the **context inference rules** below to suggest a type. User can override.
 
 ### 3. Choose Template
 
-**Load agenda template** — run this command (replace `{type}` with `one-on-one`, `leadership`, `customer`, `dev-team`, or `other`) and use its output as the agenda structure. Do not add sections from elsewhere:
+**Load agenda template** - run this command (replace `{type}` with `one-on-one`, `leadership`, `customer`, `dev-team`, or `other`) and use its output as the agenda structure. Do not add sections from elsewhere:
 ```
 arete template resolve --skill prepare-meeting-agenda --variant {type}
 ```
@@ -76,14 +76,14 @@ The command output defines the complete section structure. If the user wants a d
   - `arete people memory refresh --person <slug> --if-stale-days 3`
 - Check attendee person files for `## Memory Highlights (Auto)` and call out recurring asks/concerns as suggested agenda items.
 - If attendees are unknown, skip refresh and proceed with template-only agenda.
-- **Meetings index** — Read `resources/meetings/index.md` for high-level themes: recent meeting titles and dates often surface recurring topics, priorities, or follow-ups to include as agenda ideas.
-- **Latest meetings** — Read the latest 2–3 meeting files (by filename date) for summaries and key points; use them to suggest agenda items (e.g. follow-ups, open threads, decisions to revisit).
+- **Meetings index** - Read `resources/meetings/index.md` for high-level themes: recent meeting titles and dates often surface recurring topics, priorities, or follow-ups to include as agenda ideas.
+- **Latest meetings** - Read the latest 2-3 meeting files (by filename date) for summaries and key points; use them to suggest agenda items (e.g. follow-ups, open threads, decisions to revisit).
 
 **Gather context when** (proactive; don't wait for the user to ask):
 - The meeting has a specific purpose (e.g. kickoff, strategic planning, two teams meeting, "get things in motion").
-- The user named attendees or teams — resolve them and pull their context.
-- Multiple attendees or cross-group meeting — context is especially valuable.
-- Planning/strategy files are relevant (e.g. `goals/*.md` for individual goals, `now/week.md` open or referenced) — read them and align suggested items. **Goals**: Read individual goal files from `goals/*.md` (excluding `strategy.md`), parse frontmatter for `id`, `title`, `status`, `quarter`. Filter to `status: active` goals. Fallback to `goals/quarter.md` if no individual files exist.
+- The user named attendees or teams - resolve them and pull their context.
+- Multiple attendees or cross-group meeting - context is especially valuable.
+- Planning/strategy files are relevant (e.g. `goals/*.md` for individual goals, `now/week.md` open or referenced) - read them and align suggested items. **Goals**: Read individual goal files from `goals/*.md` (excluding `strategy.md`), parse frontmatter for `id`, `title`, `status`, `quarter`. Filter to `status: active` goals. Fallback to `goals/quarter.md` if no individual files exist.
 - The user gave more than a generic "create an agenda" (e.g. "agenda for the Acme kickoff tomorrow").
 
 **Skip context only when**: No attendees are identified and the user explicitly wants a blank template, or the user says they only want the template structure with no suggested items.
@@ -92,7 +92,7 @@ Do not reimplement calendar or context logic; use existing commands and patterns
 
 ### 5. Build Agenda
 
-- Start from the template’s ## sections.
+- Start from the template's ## sections.
 - If duration is known, apply **time allocation** from the template (e.g. "Updates (10 min)").
 - Inject any suggested items from context into the right sections.
 - Output format (see below): `# Meeting Agenda: [Title]`, metadata, ## sections with optional (Xmin), bullets and checkboxes.
@@ -108,15 +108,18 @@ Do not reimplement calendar or context logic; use existing commands and patterns
 
 ## Output Format
 
-Produce markdown in this shape:
+Produce markdown with **YAML frontmatter** for automatic meeting linking:
 
 ```markdown
-# Meeting Agenda: [Title]
+---
+meeting_title: "John / Lindsay 1:1"  # REQUIRED: Exact calendar event title for auto-linking
+date: 2026-03-25
+type: one-on-one
+attendees:
+  - Lindsay Gray
+---
 
-- **Date**: YYYY-MM-DD
-- **Duration**: [X min] (if known)
-- **Attendees**: [names]
-- **Type**: [leadership | customer | dev-team | one-on-one | other]
+# 1:1: Lindsay Gray
 
 ## [Section 1] (Xmin)
 - Bullet or suggested item
@@ -126,15 +129,27 @@ Produce markdown in this shape:
 ...
 ```
 
-Use template section names and optional time from template’s `time_allocation` when duration is known.
+### Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `meeting_title` | **Yes** | Exact calendar event title (e.g., "John / Lindsay 1:1"). This enables automatic linking when the meeting is processed via Fathom/Krisp. |
+| `date` | Yes | Meeting date in YYYY-MM-DD format |
+| `type` | No | Meeting type (leadership, customer, dev-team, one-on-one, other) |
+| `attendees` | No | List of attendee names |
+| `status` | No | Set to `processed` after meeting is processed |
+
+**Why `meeting_title` matters**: When you sync a meeting from Fathom or Krisp, the meeting file uses the calendar event title. By storing the exact same title in the agenda's frontmatter, `process-meetings` can automatically link them — no fuzzy matching required.
+
+Use template section names and optional time from template's `time_allocation` when duration is known.
 
 ## References
 
-- **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context (for suggested items)
-- **Individual goals**: `goals/*.md` (excluding `strategy.md`) — one file per goal with frontmatter
+- **Pattern**: [PATTERNS.md](../PATTERNS.md) - get_meeting_context (for suggested items)
+- **Individual goals**: `goals/*.md` (excluding `strategy.md`) - one file per goal with frontmatter
 - **Legacy quarter plan**: `goals/quarter.md` (fallback for older workspaces)
 - **Week plan**: `now/week.md`
-- **Meetings**: `resources/meetings/index.md` (high-level themes); latest 2–3 files in `resources/meetings/` (summaries, key points for agenda ideas)
+- **Meetings**: `resources/meetings/index.md` (high-level themes); latest 2-3 files in `resources/meetings/` (summaries, key points for agenda ideas)
 - **Calendar**: `arete pull calendar --today --json` or `--days N`
 - **Templates**: `arete template list meeting-agendas`, `arete template view meeting-agenda --type <type>`
 - **Save location**: `now/agendas/` (primary); project folder or clipboard as alternatives
