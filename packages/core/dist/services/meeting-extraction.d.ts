@@ -82,6 +82,21 @@ export declare function normalizeForJaccard(text: string): string[];
  */
 export declare function jaccardSimilarity(a: string[], b: string[]): number;
 /**
+ * Build exclusion list section for deduplication.
+ * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.
+ * Includes UPDATE exception for changed items.
+ *
+ * Sources:
+ * - priorItems → use item.source if available, else "Prior Meeting"
+ * - context.relatedContext.recentDecisions → use "Recent Decision"
+ * - context.relatedContext.recentLearnings → use "Recent Learning"
+ *
+ * @param context - Optional MeetingContextBundle with recentDecisions/recentLearnings
+ * @param priorItems - Items already extracted from earlier meetings in a batch
+ * @returns Exclusion list section string, empty if no items
+ */
+export declare function buildExclusionListSection(context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
+/**
  * Build the LLM prompt for extracting meeting intelligence.
  *
  * @param transcript - Meeting transcript text
