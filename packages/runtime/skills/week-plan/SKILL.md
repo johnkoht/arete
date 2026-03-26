@@ -17,6 +17,7 @@ category: essential
 intelligence:
   - context_injection
   - area_context
+  - memory_retrieval
 ---
 
 # Week Plan Skill
@@ -66,6 +67,51 @@ For each priority:
 Present the numbered list back for confirmation.
 
 > **Exchange budget**: Target ≤5 exchanges before file is written.
+
+### 2.5. Surface Key Meetings
+
+**Purpose**: Meeting titles and attendees are inputs for memory search — confirm which meetings matter before searching memory for related decisions.
+
+From the calendar pull in Step 1, identify **prep-worthy meetings** this week:
+- QBRs, customer calls, leadership syncs
+- Planning sessions, key 1:1s
+- Any meeting with external stakeholders
+
+Present a concise list:
+> "I see some key meetings this week:
+> - Wed: CoverWhale QBR (Sarah, Jamie)
+> - Thu: UK Roadmap Review (Product team)
+> - Fri: Lindsay 1:1
+>
+> Any others I should flag, or remove from this list?"
+
+User confirms/modifies the list.
+
+### 2.6. Memory-Informed Context
+
+Use the **contextual_memory_search** pattern (see [PATTERNS.md](../PATTERNS.md)).
+
+**Gather search terms** from:
+1. User's priority keywords (from Step 2)
+2. Confirmed meeting titles (from Step 2.5)
+3. Key attendees (resolved from meetings)
+
+**Run searches** (batch, keep concise):
+```bash
+arete search "<priority keyword>" --scope memory --limit 2
+arete search "<meeting topic>" --scope memory --limit 2
+arete search "<key attendee>" --scope memory --limit 2
+```
+
+**Surface relevant items** (max 5 total, only if genuinely useful):
+> "A few things from memory:
+> - **Decision** [3/15]: CoverWhale needs legal sign-off before compliance
+> - **Learning** [3/10]: Sarah prefers data-driven QBR agendas
+> - **Decision** [3/12]: UK roadmap should prioritize enterprise features
+>
+> Anything here that changes your priorities?"
+
+**Empty results**: If no relevant memory found, note briefly: "No directly relevant past decisions found." Proceed without delay — don't ask the "anything here" question.
 
 ### 3. Build Tasks List
 

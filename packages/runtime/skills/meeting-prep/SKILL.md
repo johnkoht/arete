@@ -92,6 +92,32 @@ After attendee slugs are resolved, refresh only if stale/missing:
 
 Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Use the outputs to build the brief.
 
+### 4.5. Search Related Memory
+
+Search for past decisions and learnings related to this meeting.
+
+1. **Extract search terms**:
+   - Meeting topic keywords (e.g., "CoverWhale compliance", "roadmap review")
+   - Each key attendee name
+
+2. **Run searches**:
+   ```bash
+   arete search "<meeting topic>" --scope memory --limit 3
+   arete search "<attendee name>" --scope memory --limit 2
+   ```
+   Run for each key attendee (cap at 3 attendees to avoid noise).
+
+3. **Filter for relevance**:
+   - Keep only items that directly inform this meeting
+   - Prioritize recent decisions (last 30 days)
+   - Skip generic matches that don't add prep value
+
+4. **Include in prep brief**:
+   - Add findings under a "Related Memory" section (see Step 6)
+   - Keep concise: 2-4 items max
+
+5. **Empty results**: If no relevant memory found, omit the "Related Memory" section entirely. Don't say "nothing found."
+
 ### 5. Relationship Intelligence Analysis
 
 Using the person profiles and context already gathered by **get_meeting_context** (do NOT re-run `arete people show`), apply the **relationship_intelligence** pattern from PATTERNS.md for each attendee who has a person profile:
@@ -140,6 +166,12 @@ _(Show commitments tagged with this area)_
 ### Open Action Items
 - [ ] Item from meeting with [attendee]
 - [ ] ...
+
+### Related Memory
+_Include only when relevant items were found in Step 4.5. Omit section if empty._
+
+- **Decision** [YYYY-MM-DD]: [Relevant decision for this meeting]
+- **Learning** [YYYY-MM-DD]: [Relevant learning for this meeting]
 
 ### Stances
 For each attendee with person intelligence (via `arete people show <slug> --memory`):

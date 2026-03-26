@@ -549,6 +549,80 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 ---
 
+## contextual_memory_search
+
+**Purpose**: Lightweight memory retrieval for planning skills based on user-confirmed context. Unlike `context_bundle_assembly` which gathers comprehensive context, this pattern searches memory for decisions and learnings based on topics the user has already confirmed (priorities, meeting titles, attendees). Use this when you need targeted memory context without full bundle assembly.
+
+**Used by**: week-plan, daily-plan, meeting-prep
+
+**Relationship to `context_bundle_assembly`**: This is a lightweight alternative for planning skills that need memory context without full bundle assembly. Use `contextual_memory_search` when you need targeted memory search based on user-confirmed items. Use `context_bundle_assembly` for comprehensive intelligence analysis requiring strategy, memory, and people context together.
+
+**Inputs**: 
+- User-confirmed priorities (from conversation)
+- Meeting titles (from calendar or user input)
+- Attendee names (from meeting resolution)
+- Goal keywords (from quarter/week goals)
+
+**Steps**:
+
+1. **Gather search terms from confirmed context** — Extract keywords from:
+   - User's stated priorities (their exact wording, not paraphrased)
+   - Confirmed meeting titles (QBRs, customer calls, key 1:1s)
+   - Key attendee names (resolved to person slugs)
+   - Related goal keywords (from goals/*.md linkage)
+
+2. **Run targeted memory searches** — For each search term:
+   ```bash
+   arete search "<term>" --scope memory --limit 2
+   ```
+   Use `--limit 2` per term to keep results focused. Cap total results at 5 items.
+
+3. **Filter for relevance** — Not every result is worth surfacing. Keep only items that:
+   - Directly inform the current planning context
+   - Are recent (within last 30 days) OR highly relevant to confirmed priorities
+   - Would change how the user approaches the task
+
+4. **Handle empty results** — If memory search returns no relevant results:
+   - Do NOT ask "Does this change anything?" (awkward UX)
+   - Instead, note briefly: "No directly relevant past decisions found for [topic]."
+   - Proceed without delay
+
+5. **Surface findings concisely** — Present 3-5 items max, each as 1-2 sentences:
+   ```
+   "A few things from memory that might be relevant:
+   - **Decision** [2026-03-15]: CoverWhale requires legal sign-off before compliance
+   - **Learning** [2026-03-10]: UK stakeholders prefer async review for roadmap drafts"
+   ```
+
+6. **Offer to adjust** — After surfacing (only if results found):
+   - "Anything here that changes your priorities?" (for week-plan)
+   - Or surface inline with meeting context (for daily-plan, meeting-prep)
+
+**Outputs**: 
+- 3-5 relevant memory items, or "no relevant results" note
+- Items surfaced conversationally, not as raw data dump
+
+**Example exchange**:
+
+```
+User: "I need to focus on CoverWhale compliance and finalize the UK roadmap this week."
+
+Agent: [runs searches]
+arete search "CoverWhale compliance" --scope memory --limit 2
+arete search "UK roadmap" --scope memory --limit 2
+
+Agent: "A few things from memory:
+- **Decision** [Mar 15]: CoverWhale requires legal sign-off before compliance submission
+- **Learning** [Mar 10]: UK stakeholders prefer async review for roadmap drafts
+- **Decision** [Mar 12]: UK roadmap should prioritize enterprise features
+
+Anything here that changes how you want to frame these priorities?"
+```
+
+**See also**: `context_bundle_assembly` — for comprehensive context gathering requiring strategy, memory, and people together. `get_meeting_context` — for full meeting preparation including attendee context and action items.
+
+---
+
 ## significance_analyst
 
 **Purpose**: Context-aware judgment about what from this content actually matters given everything we know — the builder's strategy, goals, existing decisions, and relationship context. Replaces keyword scanning with reasoning.

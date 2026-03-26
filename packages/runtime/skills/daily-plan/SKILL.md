@@ -51,6 +51,30 @@ Build a daily plan: today's focus from week priorities, meeting list with contex
 - Run **get_area_context** pattern: Call `getAreaForMeeting(meetingTitle)` to check for area association.
 - Note prep suggestions and area context for display.
 
+### 4.5. Memory-Informed Meeting Context
+
+Use the **contextual_memory_search** pattern (see [PATTERNS.md](../PATTERNS.md)) to surface relevant past decisions for today's meetings.
+
+**For each prep-worthy meeting**:
+1. Extract search terms: meeting title keywords + key attendee names
+2. Run: `arete search "<term>" --scope memory --limit 2`
+3. If relevant results found, surface inline with the meeting:
+   - "For your 2pm CoverWhale sync, note: [Decision] Legal sign-off required before compliance submission."
+4. Keep concise: max 1 item per meeting
+
+**Empty results**: If no relevant memory found for a meeting, don't mention it (silent skip). Only surface memory when it genuinely informs the meeting.
+
+**Example**:
+```
+**Meetings**:
+- 10:00 Anthony 1:1 → [agenda](now/agendas/2026-03-25-anthony-1-1.md) ⭐
+- 12:45 Mayra intro → [agenda](now/agendas/2026-03-25-mayra-intro.md)
+- 14:00 CoverWhale Sync → [area: Glance Communications]
+  _Note: [Decision 3/15] Legal sign-off required before compliance_
+- 16:00 UK Roadmap Review
+  _Note: [Learning 3/10] Stakeholders prefer async review_
+```
+
 ### 5. Offer Agenda Creation
 
 For **prep-worthy meetings** (QBR, customer, leadership, 1:1, planning, etc.):

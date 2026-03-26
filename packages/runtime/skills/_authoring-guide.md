@@ -186,7 +186,61 @@ requires_briefing: true      # If true, agent MUST run arete brief before starti
 | `work_type:` | Type of PM work | Affects routing priority and model tier suggestion |
 | `category: community` | Marks as community/custom skill | Affects update behavior and routing weight |
 
+> **Note**: The `intelligence:` list declares which services the skill *can use*, but does **not** auto-execute them. If you want memory searched, you must add explicit steps in your workflow (see "Adding Memory Search to Your Skill" below). Similarly, `requires_briefing: true` is a convention the agent should honor — it's not runtime-enforced.
+
 **Tip**: Set `requires_briefing: true` if your skill benefits from workspace context but you don't want to write custom context-gathering steps. The agent will automatically run `arete brief` and present the results before starting your workflow.
+
+---
+
+## Adding Memory Search to Your Skill
+
+If your skill should surface past decisions and learnings, you have two options:
+
+### Option 1: Pattern Reference (for simple, reusable cases)
+
+Reference the `contextual_memory_search` pattern from PATTERNS.md:
+
+```markdown
+### Step N: Search Related Memory
+
+Use the **contextual_memory_search** pattern (see [PATTERNS.md](../PATTERNS.md)).
+
+Gather search terms from the user's confirmed context (priorities, meeting titles, attendees), run memory searches, and surface relevant items.
+```
+
+This works well when your skill follows the standard "gather → confirm → enrich" flow.
+
+### Option 2: Inline Steps (for complex skills)
+
+For skills that already reference multiple patterns, inline the memory search steps directly:
+
+```markdown
+### Step N: Search Related Memory
+
+1. Extract search terms from [your skill's context source]
+2. Run: `arete search "<term>" --scope memory --limit 3`
+3. Filter for items that directly inform the current task
+4. Surface in output under "Related Memory" section
+5. If no relevant results, omit the section (don't announce "nothing found")
+```
+
+Inline steps reduce cognitive load when a skill already has many pattern references (e.g., meeting-prep references get_meeting_context, get_area_context, and relationship_intelligence).
+
+### Which to Choose?
+
+| Situation | Recommendation |
+|-----------|----------------|
+| Skill has 0-2 pattern references | Use pattern reference |
+| Skill has 3+ pattern references | Use inline steps |
+| Memory search has unique requirements | Use inline steps |
+| Standard "gather → confirm → enrich" flow | Use pattern reference |
+
+### Empty Results Handling
+
+Always handle empty results gracefully:
+- **Silent skip**: Don't mention when nothing found (for inline context, like daily-plan meeting notes)
+- **Brief note**: "No directly relevant past decisions found." (for explicit memory step, like week-plan priorities)
+- **Never**: "I searched memory and found nothing relevant. Does this change anything?" (awkward UX)
 
 ---
 
