@@ -26,6 +26,7 @@ import {
   extractAttendeeSlugs,
   buildMeetingContext,
   applyMeetingIntelligence,
+  getCompletedItems,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -623,10 +624,23 @@ export function registerMeetingCommands(program: Command): void {
 
       // For --stage: process extraction to get filtered items and metadata
       let stagedSections: string;
+      let processed: ReturnType<typeof processMeetingExtraction> | undefined;
       if (shouldStage) {
         // Extract user notes and process extraction (filtering, dedup, metadata)
         const userNotes = extractUserNotes(body);
-        const processed = processMeetingExtraction(extractionResult, userNotes);
+
+        // Read completed items from week.md and scratchpad.md for reconciliation
+        const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
+        const scratchpadContent = await services.storage.read(join(paths.now, 'scratchpad.md')) ?? '';
+        const completedItems = [
+          ...getCompletedItems(weekContent),
+          ...getCompletedItems(scratchpadContent),
+        ];
+
+        processed = processMeetingExtraction(extractionResult, userNotes, {
+          priorItems,
+          completedItems,
+        });
 
         // Format body sections from filtered items (IDs in body match IDs in metadata)
         stagedSections = formatFilteredStagedSections(
@@ -647,6 +661,9 @@ export function registerMeetingCommands(program: Command): void {
           if (Object.keys(processed.stagedItemOwner).length > 0) {
             fm['staged_item_owner'] = processed.stagedItemOwner;
           }
+          if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
+            fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
+          }
 
           // Update body with staged sections
           const updatedBody = updateMeetingContent(body, stagedSections);
@@ -665,6 +682,14 @@ export function registerMeetingCommands(program: Command): void {
         stagedSections = formatStagedSections(extractionResult);
       }
 
+      // Build reconciled items array for JSON output
+      const reconciled = processed?.stagedItemMatchedText
+        ? Object.entries(processed.stagedItemMatchedText).map(([id, matchedText]) => ({
+            id,
+            matchedText,
+          }))
+        : [];
+
       // Build response
       const response = {
         success: true,
@@ -675,6 +700,7 @@ export function registerMeetingCommands(program: Command): void {
         dryRun,
         contextUsed: !!contextBundle,
         priorItemsUsed: !!priorItems,
+        reconciled,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
@@ -688,11 +714,32 @@ export function registerMeetingCommands(program: Command): void {
         info('Dry run — would write the following staged sections:');
         console.log('');
         console.log(stagedSections);
+
+        // Display reconciled items in dry-run too
+        if (reconciled.length > 0) {
+          console.log('');
+          console.log(chalk.bold('Reconciled Action Items'));
+          console.log(chalk.dim('─'.repeat(40)));
+          for (const item of reconciled) {
+            console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
+          }
+        }
         return;
       }
 
       if (shouldStage) {
         success(`Staged sections written to: ${meetingPath}`);
+
+        // Display reconciled items (action items matched to completed tasks)
+        if (reconciled.length > 0) {
+          console.log('');
+          console.log(chalk.bold('Reconciled Action Items'));
+          console.log(chalk.dim('─'.repeat(40)));
+          for (const item of reconciled) {
+            console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
+          }
+        }
+
         displayQmdResult(qmdResult);
         return;
       }

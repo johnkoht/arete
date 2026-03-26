@@ -11,10 +11,10 @@
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
 import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
-/** Item source type: 'ai' (LLM extracted) or 'dedup' (matched user notes) */
-export type ItemSource = 'ai' | 'dedup';
-/** Item status: 'approved' (auto or dedup) or 'pending' (needs review) */
-export type ItemStatus = 'approved' | 'pending';
+/** Item source type: 'ai' (LLM extracted), 'dedup' (matched user notes), or 'reconciled' (matched completed task) */
+export type ItemSource = 'ai' | 'dedup' | 'reconciled';
+/** Item status: 'approved' (auto or dedup), 'pending' (needs review), or 'skipped' (matched completed task) */
+export type ItemStatus = 'approved' | 'pending' | 'skipped';
 /** Owner metadata for action items */
 export interface ItemOwnerMeta {
     ownerSlug?: string;
@@ -45,19 +45,25 @@ export interface ProcessingOptions {
      * Note: Catch-up scenarios (100+ meetings) may have diminished dedup efficacy due to this cap.
      */
     priorItems?: PriorItem[];
+    /** Completed task texts to match against (from week.md/scratchpad.md) */
+    completedItems?: string[];
+    /** Jaccard threshold for completed items reconciliation (default: 0.6) */
+    reconcileJaccard?: number;
 }
 /** Result of processing meeting extraction */
 export interface ProcessedMeetingResult {
     /** Items that passed confidence filtering */
     filteredItems: FilteredItem[];
-    /** Map of item ID → status ('approved' | 'pending') */
+    /** Map of item ID → status ('approved' | 'pending' | 'skipped') */
     stagedItemStatus: Record<string, ItemStatus>;
     /** Map of item ID → confidence score */
     stagedItemConfidence: Record<string, number>;
-    /** Map of item ID → source ('ai' | 'dedup') */
+    /** Map of item ID → source ('ai' | 'dedup' | 'reconciled') */
     stagedItemSource: Record<string, ItemSource>;
     /** Map of item ID → owner metadata (action items only) */
     stagedItemOwner: Record<string, ItemOwnerMeta>;
+    /** Map of item ID → matched completed text (for reconciled items only) */
+    stagedItemMatchedText?: Record<string, string>;
 }
 /**
  * Extract user-written notes from meeting body.

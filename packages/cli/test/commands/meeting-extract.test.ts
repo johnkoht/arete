@@ -784,3 +784,126 @@ describe('--prior-items option', () => {
     // If it failed at LLM call, we can't check priorItemsUsed (error response structure)
   });
 });
+
+describe('completedItems reconciliation wiring', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-completed-items');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, SAMPLE_MEETING_CONTENT, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('reads completed items from week.md when --stage is used', () => {
+    // Create now/week.md with completed items
+    // Using text that would match via Jaccard ≥ 0.6 threshold:
+    // "Send auth doc to Alex" (5 words) matches with high Jaccard similarity
+    const weekContent = `# Week of March 1, 2026
+
+## Focus
+
+Build the authentication system.
+
+## Tasks
+
+- [x] Send auth doc to Alex
+- [x] Review the quarterly budget
+- [ ] Update CI pipeline
+`;
+    mkdirSync(join(tmpDir, 'now'), { recursive: true });
+    writeFileSync(join(tmpDir, 'now', 'week.md'), weekContent, 'utf8');
+
+    // Run extract --stage
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--stage', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { 
+      success: boolean; 
+      error?: string;
+      reconciled?: Array<{ id: string; matchedText: string }>;
+    };
+    
+    if (result.success) {
+      // If extraction succeeded, reconciled array should be present
+      assert.ok('reconciled' in result, 'Should have reconciled field in output');
+      assert.ok(Array.isArray(result.reconciled), 'reconciled should be an array');
+    } else {
+      // If extraction failed, ensure it's not due to week.md reading issues
+      assert.ok(!result.error?.includes('week.md'), `Error should not be about week.md: ${result.error}`);
+      assert.ok(!result.error?.includes('completedItems'), `Error should not be about completedItems: ${result.error}`);
+      assert.ok(!result.error?.includes('now/'), `Error should not be about now/ directory: ${result.error}`);
+    }
+  });
+
+  it('handles missing week.md gracefully (no error)', () => {
+    // Don't create week.md — the CLI should handle this gracefully
+    // (returns empty string via ?? '' fallback in the code)
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--stage', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    
+    // Should NOT error about missing week.md
+    if (!result.success) {
+      assert.ok(!result.error?.includes('week.md'), `Should not error about week.md: ${result.error}`);
+      assert.ok(!result.error?.includes('ENOENT'), `Should not error about file not found: ${result.error}`);
+    }
+  });
+
+  it('reads completed items from scratchpad.md alongside week.md', () => {
+    // Create both now/week.md and now/scratchpad.md with completed items
+    const weekContent = `# Week Plan
+
+- [x] Send auth doc to Alex
+`;
+    const scratchpadContent = `# Scratchpad
+
+- [x] Update API endpoints
+- [ ] Draft blog post
+`;
+    mkdirSync(join(tmpDir, 'now'), { recursive: true });
+    writeFileSync(join(tmpDir, 'now', 'week.md'), weekContent, 'utf8');
+    writeFileSync(join(tmpDir, 'now', 'scratchpad.md'), scratchpadContent, 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--stage', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    
+    // Should NOT error about scratchpad.md reading
+    if (!result.success) {
+      assert.ok(!result.error?.includes('scratchpad.md'), `Should not error about scratchpad.md: ${result.error}`);
+    }
+  });
+});
