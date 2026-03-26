@@ -59,6 +59,23 @@ resources/                    # L1: Raw, immutable, timestamped
 now/scratchpad.md             # Shared working space (user + agent)
 ```
 
+## Session Start (GUIDE Mode)
+
+At the beginning of each conversation, proactively gather context:
+
+1. **Read recent observations** — `.arete/memory/items/agent-observations.md` (last 5 entries)
+   - Look for patterns, preferences, corrections that should inform this session
+
+2. **Check current focus** — `now/week.md` (if exists)
+   - What are this week's priorities and goals?
+
+3. **Check open commitments** — Run `arete commitments list`
+   - What's owed to others? What are others owed?
+
+This ensures continuity without requiring explicit briefing. If files don't exist, skip gracefully.
+
+---
+
 ## GUIDE Mode: Observation Triggers (L2 → agent-observations.md)
 
 Record an observation when:
