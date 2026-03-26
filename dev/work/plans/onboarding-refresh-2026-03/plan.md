@@ -1,7 +1,7 @@
 ---
 title: Onboarding Refresh
 slug: onboarding-refresh-2026-03
-status: planned
+status: complete
 size: medium
 tags: [onboarding, ux, dx]
 created: 2026-03-24T08:55:00Z
