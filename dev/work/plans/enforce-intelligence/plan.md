@@ -1,12 +1,12 @@
 ---
 title: Contextual Memory Retrieval in Planning Skills
 slug: enforce-intelligence
-status: building
+status: complete
 size: small-medium
 tags: [skills, memory, intelligence]
 created: 2026-03-26T04:20:42.847Z
-updated: 2026-03-26T04:59:00.000Z
-completed: null
+updated: 2026-03-26T05:10:00.000Z
+completed: 2026-03-26T05:10:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: false

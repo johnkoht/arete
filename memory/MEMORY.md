@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-25: [enforce-intelligence-learnings](entries/2026-03-25_enforce-intelligence-learnings.md) — Contextual Memory Retrieval: planning skills now actively search memory based on user-confirmed priorities and meetings. New contextual_memory_search pattern in PATTERNS.md. Key: intelligence frontmatter is declaration-only, not enforcement.
 - 2026-03-25: [meeting-extraction-improvements-learnings](entries/2026-03-25_meeting-extraction-improvements-learnings.md) — Meeting Extraction Dedup & Context Enhancement: 13/13 tasks, 100% first-attempt, 0/10 pre-mortem risks, 80+ tests. Batch deduplication, area context, O(N) performance. Key: explicit file lists in prompts, pre-mortem risk refs in ACs.
 - 2026-03-25: [workspace-areas-learnings](entries/2026-03-25_workspace-areas-learnings.md) — Workspace Areas Refactor: persistent work domains with recurring meeting mapping, context hierarchy, area-aware skills. 12/12 tasks, 92% first-attempt, 75+ tests. Key: PATTERNS.md as integration contract, TDD for context service.
 - 2026-03-20: [meeting-processing-primitives-learnings](entries/2026-03-20_meeting-processing-primitives-learnings.md) — Meeting Processing Primitives Phase 1: Composable CLI primitives (meeting context, apply, extract --context), skill refactor, backend integration. 5/5 tasks, 48+ tests, 0/8 pre-mortem risks. Key: design notes with finalized schema before build.
