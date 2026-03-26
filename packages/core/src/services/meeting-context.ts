@@ -16,6 +16,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { WorkspacePaths } from '../models/index.js';
 import type { IntelligenceService } from './intelligence.js';
 import type { EntityService } from './entity.js';
+import { AreaParserService } from './area-parser.js';
 import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import type { AgendaItem } from '../utils/agenda.js';
 import { findMatchingAgenda } from '../integrations/meetings.js';
@@ -100,6 +101,7 @@ export interface MeetingContextDeps {
   intelligence: IntelligenceService;
   entity: EntityService;
   paths: WorkspacePaths;
+  areaParser?: AreaParserService;
 }
 
 // ---------------------------------------------------------------------------
@@ -653,8 +655,11 @@ export async function buildMeetingContext(
   deps: MeetingContextDeps,
   options: BuildMeetingContextOptions = {},
 ): Promise<MeetingContextBundle> {
-  const { storage, intelligence, entity, paths } = deps;
+  const { storage, intelligence, entity, paths, areaParser } = deps;
   const warnings: string[] = [];
+
+  // Create fallback areaParser if not provided (DI pattern)
+  const resolvedAreaParser = areaParser ?? new AreaParserService(storage, paths.root);
 
   // Resolve path
   const absPath = meetingPath.startsWith('/')

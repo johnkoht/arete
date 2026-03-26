@@ -11,6 +11,7 @@
  */
 import { join, basename, resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
+import { AreaParserService } from './area-parser.js';
 import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import { findMatchingAgenda } from '../integrations/meetings.js';
 import { slugifyPersonName } from './entity.js';
@@ -448,8 +449,10 @@ function extractRelatedContext(briefingText) {
  * @returns MeetingContextBundle with all assembled context
  */
 export async function buildMeetingContext(meetingPath, deps, options = {}) {
-    const { storage, intelligence, entity, paths } = deps;
+    const { storage, intelligence, entity, paths, areaParser } = deps;
     const warnings = [];
+    // Create fallback areaParser if not provided (DI pattern)
+    const resolvedAreaParser = areaParser ?? new AreaParserService(storage, paths.root);
     // Resolve path
     const absPath = meetingPath.startsWith('/')
         ? meetingPath

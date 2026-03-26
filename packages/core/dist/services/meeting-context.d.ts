@@ -13,6 +13,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { WorkspacePaths } from '../models/index.js';
 import type { IntelligenceService } from './intelligence.js';
 import type { EntityService } from './entity.js';
+import { AreaParserService } from './area-parser.js';
 import type { AgendaItem } from '../utils/agenda.js';
 export type { AgendaItem } from '../utils/agenda.js';
 /**
@@ -90,6 +91,7 @@ export interface MeetingContextDeps {
     intelligence: IntelligenceService;
     entity: EntityService;
     paths: WorkspacePaths;
+    areaParser?: AreaParserService;
 }
 /**
  * Calculate YYYY-MM-DD cutoff date string for 60 days before reference date.

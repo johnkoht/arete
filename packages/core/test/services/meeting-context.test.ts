@@ -19,6 +19,7 @@ import { EntityService } from '../../src/services/entity.js';
 import { ContextService } from '../../src/services/context.js';
 import { MemoryService } from '../../src/services/memory.js';
 import { IntelligenceService } from '../../src/services/intelligence.js';
+import { AreaParserService } from '../../src/services/area-parser.js';
 import { getSearchProvider } from '../../src/search/factory.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 import type { MeetingContextDeps } from '../../src/services/meeting-context.js';
@@ -526,6 +527,46 @@ Me: Sure, let me walk through the key points.
       // Verify warnings (should be empty or only brief service warnings)
       const realWarnings = bundle.warnings.filter((w) => !w.includes('Brief service'));
       assert.equal(realWarnings.length, 0, `Unexpected warnings: ${realWarnings.join(', ')}`);
+    });
+  });
+
+  describe('areaParser dependency injection', () => {
+    it('accepts areaParser in deps and uses it if provided', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-test.md', {
+        title: 'Test Meeting',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Test content.');
+
+      // Create an AreaParserService instance to pass as dependency
+      const areaParser = new AreaParserService(deps.storage, paths.root);
+
+      // Create deps with explicit areaParser
+      const depsWithAreaParser: MeetingContextDeps = {
+        ...deps,
+        areaParser,
+      };
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-test.md');
+      const bundle = await buildMeetingContext(meetingPath, depsWithAreaParser);
+
+      // Should complete successfully with the provided areaParser
+      assert.equal(bundle.meeting.title, 'Test Meeting');
+    });
+
+    it('creates fallback areaParser when not provided in deps', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-fallback.md', {
+        title: 'Fallback Test',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Fallback content.');
+
+      // Deps without areaParser (uses the default createDeps which omits it)
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-fallback.md');
+      const bundle = await buildMeetingContext(meetingPath, deps);
+
+      // Should complete successfully with internal fallback areaParser
+      assert.equal(bundle.meeting.title, 'Fallback Test');
     });
   });
 });
