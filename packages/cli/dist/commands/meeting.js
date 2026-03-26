@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, } from '@arete/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -516,10 +516,21 @@ export function registerMeetingCommands(program) {
         const shouldStage = Boolean(opts.stage);
         // For --stage: process extraction to get filtered items and metadata
         let stagedSections;
+        let processed;
         if (shouldStage) {
             // Extract user notes and process extraction (filtering, dedup, metadata)
             const userNotes = extractUserNotes(body);
-            const processed = processMeetingExtraction(extractionResult, userNotes);
+            // Read completed items from week.md and scratchpad.md for reconciliation
+            const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
+            const scratchpadContent = await services.storage.read(join(paths.now, 'scratchpad.md')) ?? '';
+            const completedItems = [
+                ...getCompletedItems(weekContent),
+                ...getCompletedItems(scratchpadContent),
+            ];
+            processed = processMeetingExtraction(extractionResult, userNotes, {
+                priorItems,
+                completedItems,
+            });
             // Format body sections from filtered items (IDs in body match IDs in metadata)
             stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary);
             if (!dryRun) {
@@ -533,6 +544,9 @@ export function registerMeetingCommands(program) {
                 fm['staged_item_status'] = processed.stagedItemStatus;
                 if (Object.keys(processed.stagedItemOwner).length > 0) {
                     fm['staged_item_owner'] = processed.stagedItemOwner;
+                }
+                if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
+                    fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
                 }
                 // Update body with staged sections
                 const updatedBody = updateMeetingContent(body, stagedSections);
@@ -549,6 +563,13 @@ export function registerMeetingCommands(program) {
             // Non-stage mode: just format for display (uses raw extraction, no metadata)
             stagedSections = formatStagedSections(extractionResult);
         }
+        // Build reconciled items array for JSON output
+        const reconciled = processed?.stagedItemMatchedText
+            ? Object.entries(processed.stagedItemMatchedText).map(([id, matchedText]) => ({
+                id,
+                matchedText,
+            }))
+            : [];
         // Build response
         const response = {
             success: true,
@@ -559,6 +580,7 @@ export function registerMeetingCommands(program) {
             dryRun,
             contextUsed: !!contextBundle,
             priorItemsUsed: !!priorItems,
+            reconciled,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         if (opts.json) {
@@ -570,10 +592,28 @@ export function registerMeetingCommands(program) {
             info('Dry run — would write the following staged sections:');
             console.log('');
             console.log(stagedSections);
+            // Display reconciled items in dry-run too
+            if (reconciled.length > 0) {
+                console.log('');
+                console.log(chalk.bold('Reconciled Action Items'));
+                console.log(chalk.dim('─'.repeat(40)));
+                for (const item of reconciled) {
+                    console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
+                }
+            }
             return;
         }
         if (shouldStage) {
             success(`Staged sections written to: ${meetingPath}`);
+            // Display reconciled items (action items matched to completed tasks)
+            if (reconciled.length > 0) {
+                console.log('');
+                console.log(chalk.bold('Reconciled Action Items'));
+                console.log(chalk.dim('─'.repeat(40)));
+                for (const item of reconciled) {
+                    console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
+                }
+            }
             displayQmdResult(qmdResult);
             return;
         }

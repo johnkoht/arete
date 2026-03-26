@@ -21,4 +21,11 @@ export declare function parseAgendaItems(content: string): AgendaItem[];
  * @returns Array of unchecked item texts
  */
 export declare function getUncheckedAgendaItems(content: string): string[];
+/**
+ * Get completed (checked) items as simple strings.
+ *
+ * @param content - Markdown content
+ * @returns Array of completed item texts
+ */
+export declare function getCompletedItems(content: string): string[];
 //# sourceMappingURL=agenda.d.ts.map

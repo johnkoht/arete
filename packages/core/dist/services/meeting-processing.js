@@ -17,6 +17,7 @@ import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js'
 const DEFAULT_CONFIDENCE_INCLUDE = 0.5;
 const DEFAULT_CONFIDENCE_APPROVED = 0.8;
 const DEFAULT_DEDUP_JACCARD = 0.7;
+const DEFAULT_RECONCILE_JACCARD = 0.6;
 // ---------------------------------------------------------------------------
 // User Notes Extraction
 // ---------------------------------------------------------------------------
@@ -113,6 +114,28 @@ function itemMatchesPriorItems(itemText, tokenizedPriorItems, threshold) {
     }
     return false;
 }
+/**
+ * Find matching completed item text for reconciliation.
+ * @param itemText - The item text to check
+ * @param tokenizedCompletedItems - Pre-tokenized completed items
+ * @param threshold - Jaccard similarity threshold
+ * @returns Matched completed text (truncated to 60 chars) or undefined if no match
+ */
+function findMatchingCompletedItem(itemText, tokenizedCompletedItems, threshold) {
+    if (tokenizedCompletedItems.length === 0)
+        return undefined;
+    const itemTokens = normalizeForJaccard(itemText);
+    for (const completed of tokenizedCompletedItems) {
+        const similarity = jaccardSimilarity(itemTokens, completed.tokens);
+        if (similarity >= threshold) {
+            // Truncate to 60 chars with "..." suffix if needed
+            return completed.text.length > 60
+                ? completed.text.slice(0, 57) + '...'
+                : completed.text;
+        }
+    }
+    return undefined;
+}
 // ---------------------------------------------------------------------------
 // Main Processing Function
 // ---------------------------------------------------------------------------
@@ -136,6 +159,7 @@ export function processMeetingExtraction(result, userNotes, options) {
     const confidenceInclude = options?.confidenceInclude ?? DEFAULT_CONFIDENCE_INCLUDE;
     const confidenceApproved = options?.confidenceApproved ?? DEFAULT_CONFIDENCE_APPROVED;
     const dedupJaccard = options?.dedupJaccard ?? DEFAULT_DEDUP_JACCARD;
+    const reconcileJaccard = options?.reconcileJaccard ?? DEFAULT_RECONCILE_JACCARD;
     // Tokenize user notes once for all comparisons
     const userNotesTokens = normalizeForJaccard(userNotes);
     // Truncate and pre-tokenize prior items (cap at 50 most recent to bound processing time)
@@ -145,12 +169,19 @@ export function processMeetingExtraction(result, userNotes, options) {
         type: item.type,
         tokens: normalizeForJaccard(item.text),
     }));
+    // Pre-tokenize completed items for reconciliation (no cap needed — week.md is small)
+    const completedItems = options?.completedItems ?? [];
+    const tokenizedCompletedItems = completedItems.map((text) => ({
+        text,
+        tokens: normalizeForJaccard(text),
+    }));
     // Result collections
     const filteredItems = [];
     const stagedItemStatus = {};
     const stagedItemConfidence = {};
     const stagedItemSource = {};
     const stagedItemOwner = {};
+    const stagedItemMatchedText = {};
     // Track indices per type for ID generation
     let aiIndex = 0;
     let deIndex = 0;
@@ -163,7 +194,25 @@ export function processMeetingExtraction(result, userNotes, options) {
         const id = generateItemId('ai_', aiIndex);
         aiIndex++;
         const text = item.description;
-        // Check for dedup: userNotes OR priorItems match → source: 'dedup'
+        // 1. Check reconciliation first (action items only): match against completed tasks
+        // No negation marker bypass — these are completed items, not cross-meeting dedup
+        const matchedCompletedText = findMatchingCompletedItem(text, tokenizedCompletedItems, reconcileJaccard);
+        if (matchedCompletedText !== undefined) {
+            // Item matches a completed task → skip it
+            filteredItems.push({
+                id,
+                text,
+                type: 'action',
+                confidence,
+                ownerMeta: undefined, // Skip owner metadata for reconciled items
+            });
+            stagedItemStatus[id] = 'skipped';
+            stagedItemConfidence[id] = confidence;
+            stagedItemSource[id] = 'reconciled';
+            stagedItemMatchedText[id] = matchedCompletedText;
+            continue;
+        }
+        // 2. Check for dedup: userNotes OR priorItems match → source: 'dedup'
         // Skip priorItems check if item contains negation markers (to avoid suppressing contradictions)
         const matchesUserNotes = itemMatchesUserNotes(text, userNotesTokens, dedupJaccard);
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
@@ -269,6 +318,8 @@ export function processMeetingExtraction(result, userNotes, options) {
         stagedItemConfidence,
         stagedItemSource,
         stagedItemOwner,
+        // Only include stagedItemMatchedText if there are reconciled items
+        ...(Object.keys(stagedItemMatchedText).length > 0 && { stagedItemMatchedText }),
     };
 }
 // ---------------------------------------------------------------------------
