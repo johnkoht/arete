@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import {
   buildMeetingContext,
   findRecentMeetings,
+  findRecentMeetingsForAttendees,
   calculateCutoffDateString,
   extractDateFromFilename,
 } from '../../src/services/meeting-context.js';
@@ -846,5 +847,324 @@ Meeting content.
 
     assert.deepEqual(results, []);
     assert.equal(storage.readCount, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Batched findRecentMeetingsForAttendees tests (Task 3)
+// ---------------------------------------------------------------------------
+
+describe('findRecentMeetingsForAttendees batched lookup', () => {
+  /** Helper: create a date string N days before the reference date. */
+  function daysAgo(n: number, ref: Date): string {
+    const d = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate()));
+    d.setUTCDate(d.getUTCDate() - n);
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  /** Build meeting content with multiple attendees. */
+  function makeMeetingContentMulti(
+    title: string,
+    date: string,
+    attendeeIds: string[],
+    attendees?: Array<{ name: string; email: string }>,
+  ): string {
+    const attendeeIdsYaml = attendeeIds.length > 0
+      ? `attendee_ids:\n${attendeeIds.map((id) => `  - ${id}`).join('\n')}`
+      : 'attendee_ids: []';
+    const attendeesYaml = attendees
+      ? `attendees:\n${attendees.map((a) => `  - name: "${a.name}"\n    email: "${a.email}"`).join('\n')}`
+      : 'attendees: []';
+    return `---
+title: ${title}
+date: ${date}
+${attendeesYaml}
+${attendeeIdsYaml}
+---
+
+Meeting content.
+`;
+  }
+
+  /** Create mock storage that tracks read calls. */
+  function createMockStorage(files: Record<string, string>): StorageAdapter & { readCount: number } {
+    let readCount = 0;
+    return {
+      readCount: 0,
+      async read(path: string): Promise<string | null> {
+        readCount++;
+        (this as { readCount: number }).readCount = readCount;
+        return files[path] ?? null;
+      },
+      async list(dir: string, options?: { extensions?: string[] }): Promise<string[]> {
+        const ext = options?.extensions?.[0] ?? '.md';
+        return Object.keys(files).filter(
+          (p) => p.startsWith(dir) && p.endsWith(ext),
+        );
+      },
+      async exists(path: string): Promise<boolean> {
+        return Object.keys(files).some((p) => p.startsWith(path));
+      },
+      async write(): Promise<void> {},
+      async delete(): Promise<void> {},
+      async mkdir(): Promise<void> {},
+      async copy(): Promise<void> {},
+    };
+  }
+
+  const REF = new Date('2026-03-25T12:00:00Z');
+
+  it('reads each meeting file once regardless of attendee count (R6 mitigation - 3× fewer reads)', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    // 5 attendees
+    const attendees = [
+      { slug: 'alice-jones', email: 'alice@example.com' },
+      { slug: 'bob-smith', email: 'bob@example.com' },
+      { slug: 'carol-white', email: 'carol@example.com' },
+      { slug: 'dave-brown', email: 'dave@example.com' },
+      { slug: 'eve-green', email: 'eve@example.com' },
+    ];
+
+    // 10 meeting files (all recent within 60 days)
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 10; i++) {
+      const date = daysAgo(i * 5, REF); // 0, 5, 10, 15, 20, 25, 30, 35, 40, 45 days ago
+      const path = join(meetingsDir, `${date}-meeting-${i}.md`);
+      // Distribute attendees: each meeting has 2-3 attendees
+      const meetingAttendees = [
+        attendees[i % 5].slug,
+        attendees[(i + 1) % 5].slug,
+        ...(i % 2 === 0 ? [attendees[(i + 2) % 5].slug] : []),
+      ];
+      files[path] = makeMeetingContentMulti(`Meeting ${i}`, date, meetingAttendees);
+    }
+
+    const storage = createMockStorage(files);
+
+    const results = await findRecentMeetingsForAttendees(
+      storage,
+      paths,
+      attendees,
+      5,
+      REF,
+    );
+
+    // KEY ASSERTION: Only 10 file reads, NOT 50 (5 attendees × 10 files)
+    // Before batch: findRecentMeetings called 5 times = 5 × 10 = 50 reads
+    // After batch: single pass = 10 reads
+    assert.equal(storage.readCount, 10, 'Should read only 10 files (one per meeting), NOT 50');
+
+    // Verify results structure
+    assert.equal(results.size, 5, 'Should return results for all 5 attendees');
+    for (const attendee of attendees) {
+      assert.ok(results.has(attendee.slug), `Should have results for ${attendee.slug}`);
+    }
+  });
+
+  it('returns Map<slug, titles[]> for all requested attendees', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [
+      { slug: 'alice', email: 'alice@example.com' },
+      { slug: 'bob', email: 'bob@example.com' },
+    ];
+
+    const date1 = daysAgo(5, REF);
+    const date2 = daysAgo(10, REF);
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${date1}-meeting-1.md`)]: makeMeetingContentMulti(
+        'Meeting One',
+        date1,
+        ['alice', 'bob'],
+      ),
+      [join(meetingsDir, `${date2}-meeting-2.md`)]: makeMeetingContentMulti(
+        'Meeting Two',
+        date2,
+        ['alice'], // Only Alice
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    // Alice should have both meetings (sorted by date descending)
+    assert.deepEqual(results.get('alice'), ['Meeting One', 'Meeting Two']);
+
+    // Bob should have only Meeting One
+    assert.deepEqual(results.get('bob'), ['Meeting One']);
+  });
+
+  it('returns empty array for attendees with no meetings', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [
+      { slug: 'alice', email: 'alice@example.com' },
+      { slug: 'nobody', email: 'nobody@example.com' }, // Not in any meeting
+    ];
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${daysAgo(5, REF)}-meeting.md`)]: makeMeetingContentMulti(
+        'Meeting',
+        daysAgo(5, REF),
+        ['alice'],
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    assert.deepEqual(results.get('alice'), ['Meeting']);
+    assert.deepEqual(results.get('nobody'), [], 'Should return empty array for attendee with no meetings');
+  });
+
+  it('matches attendees via email in attendees array', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [{ slug: 'alice-jones', email: 'alice@example.com' }];
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${daysAgo(5, REF)}-meeting.md`)]: makeMeetingContentMulti(
+        'Email Matched Meeting',
+        daysAgo(5, REF),
+        [], // No attendee_ids
+        [{ name: 'Alice Jones', email: 'alice@example.com' }], // Match via email
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    assert.deepEqual(results.get('alice-jones'), ['Email Matched Meeting']);
+  });
+
+  it('matches attendees via slugified name in attendees array', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [{ slug: 'alice-jones', email: '' }]; // No email
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${daysAgo(5, REF)}-meeting.md`)]: makeMeetingContentMulti(
+        'Name Matched Meeting',
+        daysAgo(5, REF),
+        [], // No attendee_ids
+        [{ name: 'Alice Jones', email: '' }], // Match via slugified name
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    assert.deepEqual(results.get('alice-jones'), ['Name Matched Meeting']);
+  });
+
+  it('applies 60-day cutoff (reuses Task 2 logic)', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [{ slug: 'alice', email: 'alice@example.com' }];
+
+    const files: Record<string, string> = {
+      // Recent meeting (should be included)
+      [join(meetingsDir, `${daysAgo(30, REF)}-recent.md`)]: makeMeetingContentMulti(
+        'Recent Meeting',
+        daysAgo(30, REF),
+        ['alice'],
+      ),
+      // Old meeting (should be excluded)
+      [join(meetingsDir, `${daysAgo(90, REF)}-old.md`)]: makeMeetingContentMulti(
+        'Old Meeting',
+        daysAgo(90, REF),
+        ['alice'],
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    // Should only read the recent file
+    assert.equal(storage.readCount, 1, 'Should skip old meeting files');
+    assert.deepEqual(results.get('alice'), ['Recent Meeting']);
+  });
+
+  it('respects limit parameter per attendee', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [{ slug: 'alice', email: 'alice@example.com' }];
+
+    // Create 10 meetings with Alice
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 10; i++) {
+      const date = daysAgo(i * 5, REF);
+      files[join(meetingsDir, `${date}-meeting-${i}.md`)] = makeMeetingContentMulti(
+        `Meeting ${i}`,
+        date,
+        ['alice'],
+      );
+    }
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 3, REF); // Limit to 3
+
+    assert.equal(results.get('alice')?.length, 3, 'Should respect limit of 3');
+    // Should be most recent 3 (sorted by date descending)
+    assert.deepEqual(results.get('alice'), ['Meeting 0', 'Meeting 1', 'Meeting 2']);
+  });
+
+  it('returns empty arrays for all attendees when meetings directory does not exist', async () => {
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [
+      { slug: 'alice', email: 'alice@example.com' },
+      { slug: 'bob', email: 'bob@example.com' },
+    ];
+
+    const storage = createMockStorage({}); // No files
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    assert.equal(results.size, 2);
+    assert.deepEqual(results.get('alice'), []);
+    assert.deepEqual(results.get('bob'), []);
+    assert.equal(storage.readCount, 0);
+  });
+
+  it('returns empty Map when no attendees provided', async () => {
+    const paths: WorkspacePaths = makePaths('/workspace');
+    const storage = createMockStorage({});
+
+    const results = await findRecentMeetingsForAttendees(storage, paths, [], 5, REF);
+
+    assert.equal(results.size, 0);
+  });
+
+  it('handles case-insensitive email matching', async () => {
+    const meetingsDir = '/workspace/resources/meetings';
+    const paths: WorkspacePaths = makePaths('/workspace');
+
+    const attendees = [{ slug: 'alice', email: 'ALICE@EXAMPLE.COM' }]; // Uppercase email
+
+    const files: Record<string, string> = {
+      [join(meetingsDir, `${daysAgo(5, REF)}-meeting.md`)]: makeMeetingContentMulti(
+        'Meeting',
+        daysAgo(5, REF),
+        [],
+        [{ name: 'Alice', email: 'alice@example.com' }], // Lowercase in file
+      ),
+    };
+
+    const storage = createMockStorage(files);
+    const results = await findRecentMeetingsForAttendees(storage, paths, attendees, 5, REF);
+
+    assert.deepEqual(results.get('alice'), ['Meeting'], 'Should match email case-insensitively');
   });
 });

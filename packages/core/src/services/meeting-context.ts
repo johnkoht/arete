@@ -373,13 +373,150 @@ async function findRecentMeetings(
 }
 
 /**
+ * Find recent meetings for multiple attendees in a single pass through meeting files.
+ *
+ * This batched version reads each meeting file once regardless of attendee count,
+ * reducing file reads from O(A×N) to O(N) where A = attendees, N = meetings.
+ *
+ * @param storage - StorageAdapter for file access (DI pattern)
+ * @param paths - WorkspacePaths for meetings directory location
+ * @param attendees - Array of attendee slugs and emails to look up
+ * @param limit - Maximum meetings to return per attendee (default 5)
+ * @param referenceDate - Pin the "current date" for testability (defaults to now)
+ * @returns Map<slug, titles[]> for ALL requested attendees (empty array if no meetings)
+ */
+async function findRecentMeetingsForAttendees(
+  storage: StorageAdapter,
+  paths: WorkspacePaths,
+  attendees: Array<{ slug: string; email: string }>,
+  limit: number = 5,
+  referenceDate?: Date,
+): Promise<Map<string, string[]>> {
+  // Initialize result map with empty arrays for all requested attendees
+  const result = new Map<string, Array<{ date: string; title: string }>>();
+  for (const attendee of attendees) {
+    result.set(attendee.slug, []);
+  }
+
+  // Early exit if no attendees or meetings directory doesn't exist
+  if (attendees.length === 0) {
+    return new Map<string, string[]>();
+  }
+
+  const meetingsDir = join(paths.resources, 'meetings');
+  if (!(await storage.exists(meetingsDir))) {
+    // Return empty arrays for all requested attendees
+    const emptyResult = new Map<string, string[]>();
+    for (const attendee of attendees) {
+      emptyResult.set(attendee.slug, []);
+    }
+    return emptyResult;
+  }
+
+  const files = await storage.list(meetingsDir, { extensions: ['.md'] });
+
+  // Calculate 60-day cutoff for filtering old files (reuses Task 2 logic)
+  const ref = referenceDate ?? new Date();
+  const cutoffDateString = calculateCutoffDateString(ref, 60);
+
+  // Build lookup structures for fast attendee matching
+  const slugSet = new Set(attendees.map((a) => a.slug));
+  const emailToSlug = new Map<string, string>();
+  for (const attendee of attendees) {
+    if (attendee.email) {
+      emailToSlug.set(attendee.email.toLowerCase(), attendee.slug);
+    }
+  }
+
+  // Single pass through meeting files
+  for (const file of files) {
+    if (file.endsWith('index.md')) continue;
+
+    // Extract date from filename for early filtering
+    const filename = basename(file);
+    const fileDate = extractDateFromFilename(filename);
+
+    // Skip files older than 60 days (lexicographic comparison)
+    // Boundary: files at exactly 60 days are included (>=), >60 days excluded (<)
+    if (fileDate !== null && fileDate < cutoffDateString) {
+      continue;
+    }
+
+    // Non-standard filenames (no date prefix) are read anyway (graceful fallback)
+    const content = await storage.read(file);
+    if (!content) continue;
+
+    const parsed = parseMeetingFile(content);
+    if (!parsed) continue;
+
+    const meetingDate = parsed.frontmatter.date;
+    const meetingTitle = parsed.frontmatter.title;
+
+    // Check ALL requested attendees against this single meeting file
+    // Track which attendees were found in this meeting to avoid duplicates
+    const foundSlugs = new Set<string>();
+
+    // Check attendee_ids first (direct slug match)
+    if (parsed.frontmatter.attendee_ids) {
+      for (const id of parsed.frontmatter.attendee_ids) {
+        if (slugSet.has(id)) {
+          foundSlugs.add(id);
+        }
+      }
+    }
+
+    // Check attendees array (email and name match)
+    for (const meetingAttendee of parsed.frontmatter.attendees) {
+      // Check email match
+      if (meetingAttendee.email) {
+        const matchedSlug = emailToSlug.get(meetingAttendee.email.toLowerCase());
+        if (matchedSlug) {
+          foundSlugs.add(matchedSlug);
+        }
+      }
+
+      // Check name match (slugify and compare)
+      const attendeeSlug = slugifyPersonName(meetingAttendee.name);
+      if (slugSet.has(attendeeSlug)) {
+        foundSlugs.add(attendeeSlug);
+      }
+    }
+
+    // Add meeting to all matched attendees
+    for (const slug of foundSlugs) {
+      const meetings = result.get(slug);
+      if (meetings) {
+        meetings.push({ date: meetingDate, title: meetingTitle });
+      }
+    }
+  }
+
+  // Sort by date descending and limit results for each attendee
+  const finalResult = new Map<string, string[]>();
+  for (const [slug, meetings] of result) {
+    const sortedTitles = meetings
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, limit)
+      .map((m) => m.title);
+    finalResult.set(slug, sortedTitles);
+  }
+
+  return finalResult;
+}
+
+/**
  * Resolve a single attendee to their person profile.
+ *
+ * @param precomputedMeetings - Optional Map<slug, titles[]> from findRecentMeetingsForAttendees().
+ *                              If provided and contains the person slug, uses that data instead
+ *                              of calling findRecentMeetings() (enables batched lookup).
  */
 async function resolveAttendee(
   storage: StorageAdapter,
   entity: EntityService,
   paths: WorkspacePaths,
   attendee: { name: string; email: string },
+  precomputedMeetings?: Map<string, string[]>,
 ): Promise<ResolvedAttendee | null> {
   // Try resolution by email first, then by name
   const resolved = await entity.resolveAll(
@@ -401,13 +538,20 @@ async function resolveAttendee(
   // Parse person file for profile details
   const personDetails = await parsePersonFile(storage, personPath);
 
-  // Find recent meetings
-  const recentMeetings = await findRecentMeetings(
-    storage,
-    paths,
-    personSlug,
-    personEmail,
-  );
+  // Find recent meetings - use precomputed data if available, otherwise fall back
+  let recentMeetings: string[];
+  if (precomputedMeetings && precomputedMeetings.has(personSlug)) {
+    // Use batched lookup result
+    recentMeetings = precomputedMeetings.get(personSlug) ?? [];
+  } else {
+    // Fall back to individual lookup (backward compatibility)
+    recentMeetings = await findRecentMeetings(
+      storage,
+      paths,
+      personSlug,
+      personEmail,
+    );
+  }
 
   return {
     slug: personSlug,
@@ -584,9 +728,25 @@ export async function buildMeetingContext(
   const unknownAttendees: UnknownAttendee[] = [];
 
   if (!options.skipPeople) {
+    // Batch step: collect all potential attendee slugs/emails before the loop
+    // We use slugifyPersonName on names to generate slugs for batched lookup
+    const attendeesForBatch: Array<{ slug: string; email: string }> = frontmatter.attendees.map(
+      (a) => ({
+        slug: slugifyPersonName(a.name),
+        email: a.email,
+      }),
+    );
+
+    // Single call to get recent meetings for ALL attendees at once (O(N) instead of O(A×N))
+    const precomputedMeetings = await findRecentMeetingsForAttendees(
+      storage,
+      paths,
+      attendeesForBatch,
+    );
+
     for (const attendee of frontmatter.attendees) {
       try {
-        const resolved = await resolveAttendee(storage, entity, paths, attendee);
+        const resolved = await resolveAttendee(storage, entity, paths, attendee, precomputedMeetings);
         if (resolved) {
           resolvedAttendees.push(resolved);
         } else {
@@ -645,6 +805,7 @@ export async function buildMeetingContext(
 
 export {
   findRecentMeetings,
+  findRecentMeetingsForAttendees,
   calculateCutoffDateString,
   extractDateFromFilename,
 };
