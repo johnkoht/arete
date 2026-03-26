@@ -40,6 +40,8 @@ import type {
   MeetingExtractionResult,
   FilteredItem,
   MeetingContextBundle,
+  PriorItem,
+  ProcessedMeetingResult,
 } from '@arete/core';
 import * as jobsService from './jobs.js';
 
@@ -107,11 +109,15 @@ export interface ProcessingOptions {
   clearApproved?: boolean;
   /** Pre-built context bundle for enhanced extraction (optional) */
   context?: MeetingContextBundle;
+  /** Prior items from earlier meetings in a batch, used for deduplication */
+  priorItems?: PriorItem[];
 }
 
 /**
  * Testable version of runProcessingSession with injected dependencies.
  * Used by tests to mock file operations and AI service.
+ *
+ * @returns ProcessedMeetingResult so callers can accumulate items for batch deduplication
  */
 export async function runProcessingSessionTestable(
   workspaceRoot: string,
@@ -120,7 +126,7 @@ export async function runProcessingSessionTestable(
   jobs: JobsService,
   deps: ProcessingDeps,
   options: ProcessingOptions = {},
-): Promise<void> {
+): Promise<ProcessedMeetingResult> {
   const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${meetingSlug}.md`);
 
   try {
@@ -174,10 +180,11 @@ export async function runProcessingSessionTestable(
         (fm['attendees'] as Array<{ name: string; email: string }>) || []
       ).map((a) => a.name);
 
-      // Call core extraction service with optional context
+      // Call core extraction service with optional context and prior items
       coreResult = await extractMeetingIntelligence(content, callLLM, {
         attendees: attendeeNames,
         context: options.context,
+        priorItems: options.priorItems,
       });
 
       // If LLM failed and we got empty results, propagate the original error
@@ -201,7 +208,9 @@ export async function runProcessingSessionTestable(
     // 4. Process extraction with filtering, dedup, and metadata using core function
     jobs.appendEvent(jobId, 'Applying confidence thresholds...');
     const userNotes = extractUserNotes(content);
-    const processed = processMeetingExtraction(coreResult, userNotes);
+    const processed = processMeetingExtraction(coreResult, userNotes, {
+      priorItems: options.priorItems,
+    });
 
     // Log filtered counts (compare raw vs filtered items)
     const rawItemCount =
@@ -259,6 +268,9 @@ export async function runProcessingSessionTestable(
     // 11. Mark job done
     jobs.setJobStatus(jobId, 'done');
     jobs.appendEvent(jobId, 'Meeting processed successfully.');
+
+    // Return processed result so callers can accumulate items for batch deduplication
+    return processed;
   } catch (err) {
     // Re-throw but ensure job is marked as error if not already
     throw err;
@@ -310,7 +322,8 @@ export function initializeAIService(aiService: AIService, _config?: AreteConfig)
  * @param meetingSlug    Meeting file slug (no .md extension)
  * @param jobId          ID of the background job to append events to
  * @param jobs           Jobs service (real or mock) — defaults to the real module
- * @param options        Processing options (e.g. clearApproved)
+ * @param options        Processing options (e.g. clearApproved, priorItems)
+ * @returns ProcessedMeetingResult so callers can accumulate items for batch deduplication
  */
 export async function runProcessingSession(
   workspaceRoot: string,
@@ -318,7 +331,7 @@ export async function runProcessingSession(
   jobId: string,
   jobs: JobsService = jobsService,
   options: ProcessingOptions = {},
-): Promise<void> {
+): Promise<ProcessedMeetingResult> {
   // Validate AIService is initialized
   if (!moduleAiService) {
     jobs.setJobStatus(jobId, 'error');
