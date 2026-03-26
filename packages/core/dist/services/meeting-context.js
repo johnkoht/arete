@@ -9,8 +9,9 @@
  *
  * Used by `arete meeting context <file>` CLI command.
  */
-import { join, resolve } from 'path';
+import { join, basename, resolve } from 'path';
 import { parse as parseYaml } from 'yaml';
+import { AreaParserService } from './area-parser.js';
 import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import { findMatchingAgenda } from '../integrations/meetings.js';
 import { slugifyPersonName } from './entity.js';
@@ -60,10 +61,12 @@ function parseMeetingFile(content) {
                 }
             }
         }
+        // Parse attendee_ids (array of slugs)
+        const attendee_ids = Array.isArray(fm.attendee_ids) ? fm.attendee_ids.map(String) : undefined;
         // Parse agenda path if present
         const agenda = typeof fm.agenda === 'string' ? fm.agenda : undefined;
         return {
-            frontmatter: { title, date, attendees, agenda },
+            frontmatter: { title, date, attendees, attendee_ids, agenda },
             body,
         };
     }
@@ -158,44 +161,61 @@ async function parsePersonFile(storage, personPath) {
     return { profile, stances, openItems };
 }
 /**
- * Find recent meetings for a person by scanning meeting files.
+ * Calculate YYYY-MM-DD cutoff date string for 60 days before reference date.
  */
-async function findRecentMeetings(storage, paths, personSlug, personEmail, limit = 5) {
+function calculateCutoffDateString(referenceDate, daysBack = 60) {
+    const cutoff = new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate() - daysBack));
+    const yyyy = cutoff.getUTCFullYear();
+    const mm = String(cutoff.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(cutoff.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+/**
+ * Extract date prefix from meeting filename.
+ * Returns null if filename doesn't match YYYY-MM-DD-*.md pattern.
+ */
+function extractDateFromFilename(filename) {
+    const match = filename.match(/^(\d{4}-\d{2}-\d{2})-/);
+    return match ? match[1] : null;
+}
+/**
+ * Find recent meetings for a person by scanning meeting files.
+ *
+ * @param referenceDate - Pin the "current date" for testability (defaults to now)
+ */
+async function findRecentMeetings(storage, paths, personSlug, personEmail, limit = 5, referenceDate) {
     const meetingsDir = join(paths.resources, 'meetings');
     if (!(await storage.exists(meetingsDir)))
         return [];
     const files = await storage.list(meetingsDir, { extensions: ['.md'] });
     const meetingTitles = [];
+    // Calculate 60-day cutoff for filtering old files
+    const ref = referenceDate ?? new Date();
+    const cutoffDateString = calculateCutoffDateString(ref, 60);
     for (const file of files) {
         if (file.endsWith('index.md'))
             continue;
+        // Extract date from filename for early filtering
+        const filename = basename(file);
+        const fileDate = extractDateFromFilename(filename);
+        // Skip files older than 60 days (lexicographic comparison)
+        // Boundary: files at exactly 60 days are included (>=), >60 days excluded (<)
+        if (fileDate !== null && fileDate < cutoffDateString) {
+            continue;
+        }
+        // Non-standard filenames (no date prefix) are read anyway (graceful fallback)
         const content = await storage.read(file);
         if (!content)
             continue;
         const parsed = parseMeetingFile(content);
         if (!parsed)
             continue;
-        // Check if person is an attendee
+        // Check if person is an attendee (via attendees array)
         const isAttendee = parsed.frontmatter.attendees.some((a) => a.email.toLowerCase() === personEmail.toLowerCase() ||
             slugifyPersonName(a.name) === personSlug);
-        // Also check attendee_ids in frontmatter
-        const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-        if (fmMatch) {
-            try {
-                const fm = parseYaml(fmMatch[1]);
-                if (Array.isArray(fm.attendee_ids)) {
-                    const hasSlug = fm.attendee_ids.some((id) => typeof id === 'string' && id === personSlug);
-                    if (hasSlug && !isAttendee) {
-                        meetingTitles.push({ date: parsed.frontmatter.date, title: parsed.frontmatter.title });
-                        continue;
-                    }
-                }
-            }
-            catch {
-                // Ignore parse errors
-            }
-        }
-        if (isAttendee) {
+        // Also check attendee_ids in frontmatter (already parsed, no second YAML parse needed)
+        const hasSlug = parsed.frontmatter.attendee_ids?.includes(personSlug) ?? false;
+        if (isAttendee || hasSlug) {
             meetingTitles.push({ date: parsed.frontmatter.date, title: parsed.frontmatter.title });
         }
     }
@@ -206,9 +226,123 @@ async function findRecentMeetings(storage, paths, personSlug, personEmail, limit
         .map((m) => m.title);
 }
 /**
- * Resolve a single attendee to their person profile.
+ * Find recent meetings for multiple attendees in a single pass through meeting files.
+ *
+ * This batched version reads each meeting file once regardless of attendee count,
+ * reducing file reads from O(A×N) to O(N) where A = attendees, N = meetings.
+ *
+ * @param storage - StorageAdapter for file access (DI pattern)
+ * @param paths - WorkspacePaths for meetings directory location
+ * @param attendees - Array of attendee slugs and emails to look up
+ * @param limit - Maximum meetings to return per attendee (default 5)
+ * @param referenceDate - Pin the "current date" for testability (defaults to now)
+ * @returns Map<slug, titles[]> for ALL requested attendees (empty array if no meetings)
  */
-async function resolveAttendee(storage, entity, paths, attendee) {
+async function findRecentMeetingsForAttendees(storage, paths, attendees, limit = 5, referenceDate) {
+    // Initialize result map with empty arrays for all requested attendees
+    const result = new Map();
+    for (const attendee of attendees) {
+        result.set(attendee.slug, []);
+    }
+    // Early exit if no attendees or meetings directory doesn't exist
+    if (attendees.length === 0) {
+        return new Map();
+    }
+    const meetingsDir = join(paths.resources, 'meetings');
+    if (!(await storage.exists(meetingsDir))) {
+        // Return empty arrays for all requested attendees
+        const emptyResult = new Map();
+        for (const attendee of attendees) {
+            emptyResult.set(attendee.slug, []);
+        }
+        return emptyResult;
+    }
+    const files = await storage.list(meetingsDir, { extensions: ['.md'] });
+    // Calculate 60-day cutoff for filtering old files (reuses Task 2 logic)
+    const ref = referenceDate ?? new Date();
+    const cutoffDateString = calculateCutoffDateString(ref, 60);
+    // Build lookup structures for fast attendee matching
+    const slugSet = new Set(attendees.map((a) => a.slug));
+    const emailToSlug = new Map();
+    for (const attendee of attendees) {
+        if (attendee.email) {
+            emailToSlug.set(attendee.email.toLowerCase(), attendee.slug);
+        }
+    }
+    // Single pass through meeting files
+    for (const file of files) {
+        if (file.endsWith('index.md'))
+            continue;
+        // Extract date from filename for early filtering
+        const filename = basename(file);
+        const fileDate = extractDateFromFilename(filename);
+        // Skip files older than 60 days (lexicographic comparison)
+        // Boundary: files at exactly 60 days are included (>=), >60 days excluded (<)
+        if (fileDate !== null && fileDate < cutoffDateString) {
+            continue;
+        }
+        // Non-standard filenames (no date prefix) are read anyway (graceful fallback)
+        const content = await storage.read(file);
+        if (!content)
+            continue;
+        const parsed = parseMeetingFile(content);
+        if (!parsed)
+            continue;
+        const meetingDate = parsed.frontmatter.date;
+        const meetingTitle = parsed.frontmatter.title;
+        // Check ALL requested attendees against this single meeting file
+        // Track which attendees were found in this meeting to avoid duplicates
+        const foundSlugs = new Set();
+        // Check attendee_ids first (direct slug match)
+        if (parsed.frontmatter.attendee_ids) {
+            for (const id of parsed.frontmatter.attendee_ids) {
+                if (slugSet.has(id)) {
+                    foundSlugs.add(id);
+                }
+            }
+        }
+        // Check attendees array (email and name match)
+        for (const meetingAttendee of parsed.frontmatter.attendees) {
+            // Check email match
+            if (meetingAttendee.email) {
+                const matchedSlug = emailToSlug.get(meetingAttendee.email.toLowerCase());
+                if (matchedSlug) {
+                    foundSlugs.add(matchedSlug);
+                }
+            }
+            // Check name match (slugify and compare)
+            const attendeeSlug = slugifyPersonName(meetingAttendee.name);
+            if (slugSet.has(attendeeSlug)) {
+                foundSlugs.add(attendeeSlug);
+            }
+        }
+        // Add meeting to all matched attendees
+        for (const slug of foundSlugs) {
+            const meetings = result.get(slug);
+            if (meetings) {
+                meetings.push({ date: meetingDate, title: meetingTitle });
+            }
+        }
+    }
+    // Sort by date descending and limit results for each attendee
+    const finalResult = new Map();
+    for (const [slug, meetings] of result) {
+        const sortedTitles = meetings
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .slice(0, limit)
+            .map((m) => m.title);
+        finalResult.set(slug, sortedTitles);
+    }
+    return finalResult;
+}
+/**
+ * Resolve a single attendee to their person profile.
+ *
+ * @param precomputedMeetings - Optional Map<slug, titles[]> from findRecentMeetingsForAttendees().
+ *                              If provided and contains the person slug, uses that data instead
+ *                              of calling findRecentMeetings() (enables batched lookup).
+ */
+async function resolveAttendee(storage, entity, paths, attendee, precomputedMeetings) {
     // Try resolution by email first, then by name
     const resolved = await entity.resolveAll(attendee.email || attendee.name, 'person', paths, 1);
     if (resolved.length === 0)
@@ -220,8 +354,16 @@ async function resolveAttendee(storage, entity, paths, attendee) {
     const personEmail = attendee.email || person.metadata.email || '';
     // Parse person file for profile details
     const personDetails = await parsePersonFile(storage, personPath);
-    // Find recent meetings
-    const recentMeetings = await findRecentMeetings(storage, paths, personSlug, personEmail);
+    // Find recent meetings - use precomputed data if available, otherwise fall back
+    let recentMeetings;
+    if (precomputedMeetings && precomputedMeetings.has(personSlug)) {
+        // Use batched lookup result
+        recentMeetings = precomputedMeetings.get(personSlug) ?? [];
+    }
+    else {
+        // Fall back to individual lookup (backward compatibility)
+        recentMeetings = await findRecentMeetings(storage, paths, personSlug, personEmail);
+    }
     return {
         slug: personSlug,
         email: personEmail,
@@ -307,8 +449,10 @@ function extractRelatedContext(briefingText) {
  * @returns MeetingContextBundle with all assembled context
  */
 export async function buildMeetingContext(meetingPath, deps, options = {}) {
-    const { storage, intelligence, entity, paths } = deps;
+    const { storage, intelligence, entity, paths, areaParser } = deps;
     const warnings = [];
+    // Create fallback areaParser if not provided (DI pattern)
+    const resolvedAreaParser = areaParser ?? new AreaParserService(storage, paths.root);
     // Resolve path
     const absPath = meetingPath.startsWith('/')
         ? meetingPath
@@ -369,9 +513,17 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     const resolvedAttendees = [];
     const unknownAttendees = [];
     if (!options.skipPeople) {
+        // Batch step: collect all potential attendee slugs/emails before the loop
+        // We use slugifyPersonName on names to generate slugs for batched lookup
+        const attendeesForBatch = frontmatter.attendees.map((a) => ({
+            slug: slugifyPersonName(a.name),
+            email: a.email,
+        }));
+        // Single call to get recent meetings for ALL attendees at once (O(N) instead of O(A×N))
+        const precomputedMeetings = await findRecentMeetingsForAttendees(storage, paths, attendeesForBatch);
         for (const attendee of frontmatter.attendees) {
             try {
-                const resolved = await resolveAttendee(storage, entity, paths, attendee);
+                const resolved = await resolveAttendee(storage, entity, paths, attendee, precomputedMeetings);
                 if (resolved) {
                     resolvedAttendees.push(resolved);
                 }
@@ -395,7 +547,21 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
             }
         }
     }
-    // 4. Get related context via brief service (using meeting title only)
+    // 4. Area context resolution
+    let areaContext = null;
+    const areaMatch = await resolvedAreaParser.getAreaForMeeting(frontmatter.title);
+    if (areaMatch) {
+        try {
+            areaContext = await resolvedAreaParser.getAreaContext(areaMatch.areaSlug);
+            if (!areaContext) {
+                warnings.push(`Area file not found: ${areaMatch.areaSlug}`);
+            }
+        }
+        catch (err) {
+            warnings.push(`Failed to load area context: ${areaMatch.areaSlug}`);
+        }
+    }
+    // 5. Get related context via brief service (using meeting title only)
     let relatedContext = {
         goals: [],
         projects: [],
@@ -420,7 +586,12 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         attendees: resolvedAttendees,
         unknownAttendees,
         relatedContext,
+        areaContext,
         warnings,
     };
 }
+// ---------------------------------------------------------------------------
+// Exports for testing (internal functions exposed for unit tests)
+// ---------------------------------------------------------------------------
+export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, };
 //# sourceMappingURL=meeting-context.js.map

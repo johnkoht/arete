@@ -43,6 +43,7 @@ export type {
   MeetingExtractionResult,
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
+  PriorItem,
 } from './meeting-extraction.js';
 
 // Meeting file parsing
@@ -117,3 +118,4 @@ export type {
 
 // Area parsing
 export { AreaParserService } from './area-parser.js';
+export type { AreaContext } from '../models/index.js';

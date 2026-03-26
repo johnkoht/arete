@@ -198,10 +198,138 @@ function buildContextSection(context) {
         }
         sections.push(agendaLines.join('\n'));
     }
+    // Area context (domain knowledge for the meeting topic)
+    if (context.areaContext) {
+        const area = context.areaContext;
+        const areaLines = [`### Area Context (${area.name})`];
+        // Current state (truncate to 500 chars)
+        if (area.sections?.currentState) {
+            const truncated = area.sections.currentState.length > 500
+                ? area.sections.currentState.slice(0, 500) + '...'
+                : area.sections.currentState;
+            areaLines.push(`**Current State**: ${truncated}`);
+        }
+        // Key decisions (parse bullet points, last 5)
+        if (area.sections?.keyDecisions) {
+            const decisions = area.sections.keyDecisions
+                .split('\n')
+                .filter(line => /^[-*]\s/.test(line.trim()))
+                .slice(-5);
+            if (decisions.length > 0) {
+                areaLines.push('', '**Recent Area Decisions**:');
+                areaLines.push(...decisions);
+            }
+        }
+        sections.push(areaLines.join('\n'));
+    }
     if (sections.length === 0)
         return '';
     return `\n\n## Meeting Context (use this for better extraction)
 ${sections.join('\n\n')}`;
+}
+// ---------------------------------------------------------------------------
+// Exclusion List Building
+// ---------------------------------------------------------------------------
+/** Token budget for exclusion list (~1000 tokens ≈ 4000 chars). */
+const MAX_EXCLUSION_CHARS = 4000;
+/** Maximum items per category in exclusion list. */
+const MAX_EXCLUSION_ITEMS_PER_CATEGORY = 10;
+/**
+ * Build exclusion list section for deduplication.
+ * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.
+ * Includes UPDATE exception for changed items.
+ *
+ * Sources:
+ * - priorItems → use item.source if available, else "Prior Meeting"
+ * - context.relatedContext.recentDecisions → use "Recent Decision"
+ * - context.relatedContext.recentLearnings → use "Recent Learning"
+ *
+ * @param context - Optional MeetingContextBundle with recentDecisions/recentLearnings
+ * @param priorItems - Items already extracted from earlier meetings in a batch
+ * @returns Exclusion list section string, empty if no items
+ */
+export function buildExclusionListSection(context, priorItems) {
+    const actionItems = [];
+    const decisions = [];
+    const learnings = [];
+    // Collect from priorItems (already extracted from earlier meetings)
+    if (priorItems && priorItems.length > 0) {
+        for (const item of priorItems) {
+            const source = item.source || 'Prior Meeting';
+            const entry = { text: item.text, source };
+            switch (item.type) {
+                case 'action':
+                    actionItems.push(entry);
+                    break;
+                case 'decision':
+                    decisions.push(entry);
+                    break;
+                case 'learning':
+                    learnings.push(entry);
+                    break;
+            }
+        }
+    }
+    // Collect from context.relatedContext (recent memory items)
+    if (context?.relatedContext) {
+        const { recentDecisions, recentLearnings } = context.relatedContext;
+        if (recentDecisions && recentDecisions.length > 0) {
+            for (const text of recentDecisions) {
+                decisions.push({ text, source: 'Recent Decision' });
+            }
+        }
+        if (recentLearnings && recentLearnings.length > 0) {
+            for (const text of recentLearnings) {
+                learnings.push({ text, source: 'Recent Learning' });
+            }
+        }
+    }
+    // No items to exclude
+    if (actionItems.length === 0 && decisions.length === 0 && learnings.length === 0) {
+        return '';
+    }
+    // Build the exclusion list with token budget awareness
+    const sections = [];
+    let totalChars = 0;
+    // Helper to add items up to limit and track character count
+    const addItemsSection = (title, items) => {
+        if (items.length === 0)
+            return;
+        const header = `**${title}:**\n`;
+        let sectionContent = header;
+        // Limit to MAX_EXCLUSION_ITEMS_PER_CATEGORY, keep most recent (end of array)
+        const itemsToShow = items.slice(-MAX_EXCLUSION_ITEMS_PER_CATEGORY);
+        for (let i = 0; i < itemsToShow.length; i++) {
+            const item = itemsToShow[i];
+            const line = `${i + 1}. "${item.text}" — source: ${item.source}\n`;
+            // Check if adding this line would exceed budget
+            if (totalChars + sectionContent.length + line.length > MAX_EXCLUSION_CHARS) {
+                break;
+            }
+            sectionContent += line;
+        }
+        if (sectionContent !== header) {
+            sections.push(sectionContent.trim());
+            totalChars += sectionContent.length;
+        }
+    };
+    // Add sections in order: action items, decisions, learnings
+    addItemsSection('Staged Action Items', actionItems);
+    addItemsSection('Staged Decisions', decisions);
+    addItemsSection('Staged Learnings', learnings);
+    if (sections.length === 0) {
+        return '';
+    }
+    return `
+
+## Exclusion List (SKIP these — already captured)
+
+The following items have ALREADY been extracted. SKIP these and any semantic equivalents:
+
+${sections.join('\n\n')}
+
+If the transcript mentions anything semantically equivalent to the above, SKIP IT.
+Exception: Extract if the transcript contains an UPDATE to an existing item (e.g., status change, deadline moved, decision reversed).`;
 }
 /**
  * Build attendee slug lookup from context for owner resolution.
@@ -226,8 +354,9 @@ function buildAttendeeSlugLookup(context) {
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
+ * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  */
-export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context) {
+export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context, priorItems) {
     const attendeeContext = attendees?.length
         ? `\n\nMeeting attendees: ${attendees.join(', ')}`
         : '';
@@ -236,6 +365,8 @@ export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, c
         : '';
     // Build enhanced context section if context bundle is provided
     const enhancedContext = context ? buildContextSection(context) : '';
+    // Build exclusion list for deduplication (from prior items and recent memory)
+    const exclusionList = buildExclusionListSection(context, priorItems);
     return `You are analyzing a meeting transcript to extract structured intelligence.
 
 **IMPORTANT**: Extract ONLY high-confidence, specific items. Quality over quantity.
@@ -299,7 +430,8 @@ Rules:
 - Omit sections that have no content (return empty arrays, not null)
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
-${enhancedContext}
+${enhancedContext}${exclusionList}
+
 Transcript:
 ${transcript}`;
 }
@@ -528,7 +660,7 @@ export function parseMeetingExtractionResponse(response) {
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, and context for better extraction
+ * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export async function extractMeetingIntelligence(transcript, callLLM, options) {
@@ -545,7 +677,7 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             rawItems: [],
         };
     }
-    const prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context);
+    const prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
     try {
         const response = await callLLM(prompt);
         return parseMeetingExtractionResponse(response);

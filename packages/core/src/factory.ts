@@ -19,6 +19,7 @@ import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
 import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
+import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 
 /**
@@ -36,6 +37,7 @@ export type AreteServices = {
   tools: ToolService;
   integrations: IntegrationService;
   commitments: CommitmentsService;
+  areaParser: AreaParserService;
   ai: AIService;
 };
 
@@ -81,6 +83,7 @@ export async function createServices(
   const tools = new ToolService(storage);
   const integrations = new IntegrationService(storage, config);
   const commitments = new CommitmentsService(storage, workspaceRoot);
+  const areaParser = new AreaParserService(storage, workspaceRoot);
 
   // AI service (depends on config)
   const ai = new AIService(config);
@@ -97,6 +100,7 @@ export async function createServices(
     tools,
     integrations,
     commitments,
+    areaParser,
     ai,
   };
 }

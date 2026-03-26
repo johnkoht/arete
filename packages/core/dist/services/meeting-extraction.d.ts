@@ -37,6 +37,12 @@ export type ActionItem = {
     /** LLM confidence score (0-1) for this item. */
     confidence?: number;
 };
+/** Item from a prior meeting in the same processing batch, used for deduplication. */
+export interface PriorItem {
+    type: 'action' | 'decision' | 'learning';
+    text: string;
+    source?: string;
+}
 /** Full meeting intelligence extracted from a transcript. */
 export type MeetingIntelligence = {
     summary: string;
@@ -76,14 +82,30 @@ export declare function normalizeForJaccard(text: string): string[];
  */
 export declare function jaccardSimilarity(a: string[], b: string[]): number;
 /**
+ * Build exclusion list section for deduplication.
+ * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.
+ * Includes UPDATE exception for changed items.
+ *
+ * Sources:
+ * - priorItems → use item.source if available, else "Prior Meeting"
+ * - context.relatedContext.recentDecisions → use "Recent Decision"
+ * - context.relatedContext.recentLearnings → use "Recent Learning"
+ *
+ * @param context - Optional MeetingContextBundle with recentDecisions/recentLearnings
+ * @param priorItems - Items already extracted from earlier meetings in a batch
+ * @returns Exclusion list section string, empty if no items
+ */
+export declare function buildExclusionListSection(context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
+/**
  * Build the LLM prompt for extracting meeting intelligence.
  *
  * @param transcript - Meeting transcript text
  * @param attendees - List of attendee names (optional, for context)
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
+ * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  */
-export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle): string;
+export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
 /**
  * Parse the LLM response into a MeetingExtractionResult.
  * Handles various response formats gracefully — never throws.
@@ -95,13 +117,14 @@ export declare function parseMeetingExtractionResponse(response: string): Meetin
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, and context for better extraction
+ * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export declare function extractMeetingIntelligence(transcript: string, callLLM: LLMCallFn, options?: {
     attendees?: string[];
     ownerSlug?: string;
     context?: MeetingContextBundle;
+    priorItems?: PriorItem[];
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.

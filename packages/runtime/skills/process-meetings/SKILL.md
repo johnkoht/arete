@@ -365,6 +365,85 @@ arete meeting context <file> --json \
 
 ---
 
+## Batch Processing with Deduplication
+
+When processing multiple meetings in a batch (e.g., 5 meetings from the same day), use the `--prior-items` flag to avoid extracting duplicate decisions and action items.
+
+### Chronological Ordering Requirement
+
+**Process meetings from oldest to newest.** This ensures that items extracted from earlier meetings are available as `priorItems` when processing later meetings.
+
+Example: If "Product Sync" (10am) and "Customer Call" (2pm) both discuss "Use REST API", processing chronologically ensures:
+1. "Product Sync" extracts "Use REST API" as a decision
+2. "Customer Call" sees this in `priorItems` and skips the duplicate
+
+### priorItems Format
+
+The `--prior-items` flag accepts a JSON file containing an array of previously-extracted items:
+
+```json
+[
+  { "type": "decision", "text": "Use REST API for partner integration", "source": "Product Sync" },
+  { "type": "action", "text": "John to send API docs by Friday", "source": "Customer Call" }
+]
+```
+
+Fields:
+- `type`: One of `action`, `decision`, or `learning`
+- `text`: The extracted item text
+- `source`: (Optional) Meeting title for context
+
+### Batch Processing Example
+
+```bash
+#!/bin/bash
+# Process today's meetings with deduplication
+
+# Initialize empty priorItems
+echo "[]" > /tmp/prior-items.json
+
+# Get today's meetings, sorted chronologically
+MEETINGS=$(ls resources/meetings/$(date +%Y-%m-%d)-*.md 2>/dev/null | sort)
+
+for meeting in $MEETINGS; do
+  echo "Processing: $meeting"
+  
+  # Build context
+  arete meeting context "$meeting" --json > /tmp/context.json
+  
+  # Extract with priorItems
+  arete meeting extract "$meeting" \
+    --context /tmp/context.json \
+    --prior-items /tmp/prior-items.json \
+    --stage \
+    --json > /tmp/result.json
+  
+  # Accumulate extracted items for next iteration
+  jq -s '.[0] + [.[1].items[].text | {type: "action", text: ., source: "'"$(basename $meeting)"'"}]' \
+    /tmp/prior-items.json /tmp/result.json > /tmp/prior-items-new.json
+  mv /tmp/prior-items-new.json /tmp/prior-items.json
+done
+
+echo "Done. Run 'arete view' to review staged items."
+```
+
+### 50-Item Rolling Window Limitation
+
+The deduplication system uses a **50-item rolling window** to prevent memory bloat in large batches.
+
+- When `priorItems` exceeds 50 entries, only the **most recent 50** are used for Jaccard similarity matching
+- This means catch-up scenarios (100+ meetings) may have **diminished dedup efficacy** for items from early in the batch
+- For large catch-ups, consider processing in smaller batches (e.g., 20 meetings at a time)
+
+### Negation-Aware Deduplication
+
+Items containing negation markers are **not** deduplicated even if they match prior items:
+- "not", "won't", "no longer", "instead of", "changed from"
+
+This ensures contradictory statements (e.g., "We decided NOT to use Redis" vs prior "We decided to use Redis") are still extracted.
+
+---
+
 ## Legacy Mode (`--commit`)
 
 When `--commit` is passed, skip staged mode and write directly to memory.

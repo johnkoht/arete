@@ -6,8 +6,10 @@ import {
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
+  buildExclusionListSection,
 } from '../../src/services/meeting-extraction.js';
-import type { LLMCallFn, MeetingExtractionResult, ActionItem } from '../../src/services/meeting-extraction.js';
+import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem } from '../../src/services/meeting-extraction.js';
+import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
 
 // ---------------------------------------------------------------------------
 // buildMeetingExtractionPrompt
@@ -1090,6 +1092,28 @@ describe('extractMeetingIntelligence', () => {
     assert.equal(result.intelligence.actionItems.length, 0);
     assert.equal(result.validationWarnings.length, 1);
   });
+
+  it('accepts priorItems option without error', async () => {
+    // Task 4: priorItems is plumbing only — this test confirms the option is accepted.
+    // Task 6 will add actual prompt rendering tests for priorItems content.
+    const mockLLM: LLMCallFn = async () =>
+      JSON.stringify({
+        summary: 'Meeting',
+        action_items: [],
+      });
+
+    const priorItems = [
+      { type: 'action' as const, text: 'Send API docs to Sarah', source: 'standup-2026-03-24' },
+      { type: 'decision' as const, text: 'Use REST over GraphQL' },
+    ];
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, {
+      priorItems,
+    });
+
+    // Should return a valid result (no type errors, no runtime errors)
+    assert.equal(result.intelligence.summary, 'Meeting');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2090,5 +2114,788 @@ describe('extractMeetingIntelligence - context option', () => {
     
     // Non-context version should have no action items
     assert.equal(withoutContext.intelligence.actionItems.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildExclusionListSection - unit tests (Task 6)
+// ---------------------------------------------------------------------------
+
+describe('buildExclusionListSection', () => {
+  // Helper to create a minimal MeetingContextBundle
+  function makeContext(overrides: Partial<{
+    recentDecisions: string[];
+    recentLearnings: string[];
+  }> = {}): MeetingContextBundle {
+    return {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-25',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: overrides.recentDecisions ?? [],
+        recentLearnings: overrides.recentLearnings ?? [],
+      },
+      warnings: [],
+    };
+  }
+
+  it('returns empty string when no items', () => {
+    const result = buildExclusionListSection();
+    assert.equal(result, '');
+  });
+
+  it('returns empty string when priorItems is empty array', () => {
+    const result = buildExclusionListSection(undefined, []);
+    assert.equal(result, '');
+  });
+
+  it('returns empty string when context has empty arrays', () => {
+    const context = makeContext({ recentDecisions: [], recentLearnings: [] });
+    const result = buildExclusionListSection(context);
+    assert.equal(result, '');
+  });
+
+  it('includes prior action items with source', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Send API docs to Sarah', source: 'standup-2026-03-24' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('## Exclusion List (SKIP these — already captured)'));
+    assert.ok(result.includes('**Staged Action Items:**'));
+    assert.ok(result.includes('Send API docs to Sarah'));
+    assert.ok(result.includes('standup-2026-03-24'));
+  });
+
+  it('uses "Prior Meeting" when source is not provided', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Review the PR' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('Review the PR'));
+    assert.ok(result.includes('Prior Meeting'));
+  });
+
+  it('includes prior decisions with source', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'Use React for frontend', source: 'planning-meeting' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('**Staged Decisions:**'));
+    assert.ok(result.includes('Use React for frontend'));
+    assert.ok(result.includes('planning-meeting'));
+  });
+
+  it('includes prior learnings with source', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'learning', text: 'Team prefers async communication' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('**Staged Learnings:**'));
+    assert.ok(result.includes('Team prefers async communication'));
+  });
+
+  it('includes recentDecisions from context', () => {
+    const context = makeContext({
+      recentDecisions: ['Cover Whale is next priority'],
+    });
+
+    const result = buildExclusionListSection(context);
+
+    assert.ok(result.includes('**Staged Decisions:**'));
+    assert.ok(result.includes('Cover Whale is next priority'));
+    assert.ok(result.includes('Recent Decision'));
+  });
+
+  it('includes recentLearnings from context', () => {
+    const context = makeContext({
+      recentLearnings: ['Key insight about the system'],
+    });
+
+    const result = buildExclusionListSection(context);
+
+    assert.ok(result.includes('**Staged Learnings:**'));
+    assert.ok(result.includes('Key insight about the system'));
+    assert.ok(result.includes('Recent Learning'));
+  });
+
+  it('groups items by type', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Action item 1', source: 'meeting-1' },
+      { type: 'decision', text: 'Decision 1', source: 'meeting-1' },
+      { type: 'learning', text: 'Learning 1', source: 'meeting-1' },
+      { type: 'action', text: 'Action item 2', source: 'meeting-2' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    // All action items should be grouped together
+    const actionSection = result.match(/\*\*Staged Action Items:\*\*([\s\S]*?)\*\*Staged/);
+    assert.ok(actionSection);
+    assert.ok(actionSection[1].includes('Action item 1'));
+    assert.ok(actionSection[1].includes('Action item 2'));
+  });
+
+  it('combines priorItems and context items', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'Use REST API', source: 'prior-meeting' },
+    ];
+    const context = makeContext({
+      recentDecisions: ['Adopt TypeScript'],
+      recentLearnings: ['Testing improves quality'],
+    });
+
+    const result = buildExclusionListSection(context, priorItems);
+
+    // Should have decisions from both sources
+    assert.ok(result.includes('Use REST API'));
+    assert.ok(result.includes('Adopt TypeScript'));
+    // Should have learnings
+    assert.ok(result.includes('Testing improves quality'));
+  });
+
+  it('uses positive "SKIP" framing', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Test item' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('SKIP these'));
+    assert.ok(result.includes('SKIP IT'));
+    // Should NOT use negative framing
+    assert.ok(!result.includes('do not extract'));
+    assert.ok(!result.includes("don't extract"));
+  });
+
+  it('includes "semantic equivalent" language', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Test item' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('semantic'));
+    assert.ok(result.includes('semantically equivalent'));
+  });
+
+  it('documents UPDATE exception', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Test item' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('Exception'));
+    assert.ok(result.includes('UPDATE'));
+    // Should mention specific update scenarios
+    assert.ok(result.includes('status change') || result.includes('deadline moved') || result.includes('decision reversed'));
+  });
+
+  it('limits items per category to 10', () => {
+    const priorItems: PriorItem[] = [];
+    for (let i = 0; i < 15; i++) {
+      priorItems.push({ type: 'action', text: `Action item ${i + 1}`, source: 'meeting' });
+    }
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    // Should only include 10 items (most recent = last 10, which is items 6-15)
+    // Use quotes to match exact items (avoid "Action item 1" matching "Action item 15")
+    assert.ok(result.includes('"Action item 15"')); // most recent
+    assert.ok(result.includes('"Action item 6"')); // first of last 10
+    assert.ok(!result.includes('"Action item 1"')); // dropped - too old
+    assert.ok(!result.includes('"Action item 5"')); // dropped - too old
+  });
+
+  it('numbers items within each category', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'First decision' },
+      { type: 'decision', text: 'Second decision' },
+    ];
+
+    const result = buildExclusionListSection(undefined, priorItems);
+
+    assert.ok(result.includes('1. "First decision"'));
+    assert.ok(result.includes('2. "Second decision"'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - exclusion list integration (Task 6)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - exclusion list', () => {
+  it('includes exclusion list when priorItems provided', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Send docs to Sarah', source: 'standup' },
+    ];
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, undefined, priorItems);
+
+    assert.ok(prompt.includes('## Exclusion List'));
+    assert.ok(prompt.includes('Send docs to Sarah'));
+    assert.ok(prompt.includes('standup'));
+  });
+
+  it('includes exclusion list when context has recent items', () => {
+    const context: MeetingContextBundle = {
+      meeting: { path: '', title: '', date: '', attendees: [], transcript: '' },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: ['Use microservices architecture'],
+        recentLearnings: [],
+      },
+      warnings: [],
+    };
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('## Exclusion List'));
+    assert.ok(prompt.includes('Use microservices architecture'));
+    assert.ok(prompt.includes('Recent Decision'));
+  });
+
+  it('omits exclusion list when no prior items or recent context', () => {
+    const context: MeetingContextBundle = {
+      meeting: { path: '', title: '', date: '', attendees: [], transcript: '' },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [{ slug: 'goal-1', title: 'Ship v2', summary: '' }], // goals don't go in exclusion list
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+    };
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('## Exclusion List'));
+  });
+
+  it('places exclusion list before transcript', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'Use React' },
+    ];
+
+    const prompt = buildMeetingExtractionPrompt('Meeting transcript content here', undefined, undefined, undefined, priorItems);
+
+    const exclusionIndex = prompt.indexOf('## Exclusion List');
+    const transcriptIndex = prompt.indexOf('Transcript:');
+
+    assert.ok(exclusionIndex > 0);
+    assert.ok(transcriptIndex > 0);
+    assert.ok(exclusionIndex < transcriptIndex, 'Exclusion list should come before transcript');
+  });
+
+  it('combines context and priorItems exclusions', () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Review the PR', source: 'standup' },
+    ];
+    const context: MeetingContextBundle = {
+      meeting: { path: '', title: '', date: '', attendees: [], transcript: '' },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: ['Adopt GraphQL'],
+        recentLearnings: ['Performance matters'],
+      },
+      warnings: [],
+    };
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context, priorItems);
+
+    assert.ok(prompt.includes('Review the PR'));
+    assert.ok(prompt.includes('Adopt GraphQL'));
+    assert.ok(prompt.includes('Performance matters'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractMeetingIntelligence - UPDATE exception behavior (Task 6)
+// ---------------------------------------------------------------------------
+
+describe('extractMeetingIntelligence - UPDATE exception', () => {
+  it('extracts new item when transcript updates prior decision', async () => {
+    // This test validates the UPDATE exception: even though "Use React" is in
+    // priorItems, if the transcript says "Switched to Vue", the LLM should
+    // extract the NEW decision because it's an UPDATE, not a duplicate.
+
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'Use React for frontend', source: 'planning-meeting' },
+    ];
+
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      // Simulate LLM correctly identifying the UPDATE scenario
+      return JSON.stringify({
+        summary: 'Team decided to switch frameworks',
+        decisions: ['Switched to Vue (reverses prior React decision)'],
+        action_items: [],
+        learnings: [],
+      });
+    };
+
+    const result = await extractMeetingIntelligence(
+      'Alice: We reviewed React but decided Vue is better for our use case. Bob: Agreed, lets switch to Vue.',
+      mockLLM,
+      { priorItems },
+    );
+
+    // Verify the prompt includes the UPDATE exception language
+    assert.ok(capturedPrompt.includes('Exception'));
+    assert.ok(capturedPrompt.includes('decision reversed') || capturedPrompt.includes('UPDATE'));
+
+    // The LLM extracted the new decision (simulated behavior)
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.ok(result.intelligence.decisions[0].includes('Vue'));
+  });
+
+  it('prompt includes UPDATE exception when prior items present', async () => {
+    const priorItems: PriorItem[] = [
+      { type: 'action', text: 'Send proposal by Friday' },
+    ];
+
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return '{}';
+    };
+
+    await extractMeetingIntelligence('transcript', mockLLM, { priorItems });
+
+    // Verify UPDATE exception is documented
+    assert.ok(capturedPrompt.includes('Exception'));
+    assert.ok(
+      capturedPrompt.includes('status change') ||
+      capturedPrompt.includes('deadline moved') ||
+      capturedPrompt.includes('decision reversed'),
+    );
+  });
+
+  it('semantic equivalent skipping does not prevent genuine updates', async () => {
+    // Prior item: "Launch scheduled for March"
+    // Transcript: "We need to push the launch to April"
+    // This is an UPDATE (deadline moved), not a duplicate
+
+    const priorItems: PriorItem[] = [
+      { type: 'decision', text: 'Launch scheduled for March', source: 'planning' },
+    ];
+
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return JSON.stringify({
+        summary: 'Launch date updated',
+        decisions: ['Launch pushed to April (deadline moved)'],
+        action_items: [],
+        learnings: [],
+      });
+    };
+
+    const result = await extractMeetingIntelligence(
+      'John: We need to push the launch to April due to testing delays.',
+      mockLLM,
+      { priorItems },
+    );
+
+    // The prompt should include both the prior decision AND the UPDATE exception
+    assert.ok(capturedPrompt.includes('Launch scheduled for March'));
+    assert.ok(capturedPrompt.includes('Exception'));
+
+    // LLM should extract the update
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.ok(result.intelligence.decisions[0].includes('April'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - area context (Task 9)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - area context', () => {
+  // Helper to create a MeetingContextBundle with areaContext
+  function makeContextWithArea(areaContext: {
+    slug: string;
+    name: string;
+    status: string;
+    recurringMeetings: Array<{ title: string; attendees: string[]; frequency?: string }>;
+    filePath: string;
+    sections: {
+      currentState: string | null;
+      keyDecisions: string | null;
+      backlog: string | null;
+      activeGoals: string | null;
+      activeWork: string | null;
+      openCommitments: string | null;
+      notes: string | null;
+    };
+  } | undefined): MeetingContextBundle {
+    return {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-25',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+      areaContext,
+    };
+  }
+
+  it('includes area context section when areaContext is present', () => {
+    const context = makeContextWithArea({
+      slug: 'product-development',
+      name: 'Product Development',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/product-development.md',
+      sections: {
+        currentState: 'Working on v2.0 release',
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context (Product Development)'));
+    assert.ok(prompt.includes('**Current State**: Working on v2.0 release'));
+  });
+
+  it('omits area context section when areaContext is not present', () => {
+    const context = makeContextWithArea(undefined);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('### Area Context'));
+  });
+
+  it('truncates current state to 500 characters', () => {
+    const longCurrentState = 'A'.repeat(600);
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: longCurrentState,
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include truncated content with ellipsis
+    assert.ok(prompt.includes('A'.repeat(500) + '...'));
+    // Should NOT include the full 600 character string
+    assert.ok(!prompt.includes('A'.repeat(600)));
+  });
+
+  it('does not truncate current state under 500 characters', () => {
+    const shortCurrentState = 'A'.repeat(400);
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: shortCurrentState,
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include full content without truncation ellipsis
+    assert.ok(prompt.includes('A'.repeat(400)));
+    // Verify no truncation occurred - the text should not end with "..."
+    assert.ok(!prompt.includes('A'.repeat(400) + '...'));
+  });
+
+  it('parses bullet points from keyDecisions markdown string', () => {
+    const keyDecisionsMarkdown = `Some intro text
+- Decision to use TypeScript
+- Decision to adopt GraphQL
+* Another decision with asterisk
+- Final important decision`;
+
+    const context = makeContextWithArea({
+      slug: 'tech-area',
+      name: 'Technology',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/tech-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: keyDecisionsMarkdown,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('**Recent Area Decisions**:'));
+    assert.ok(prompt.includes('- Decision to use TypeScript'));
+    assert.ok(prompt.includes('- Decision to adopt GraphQL'));
+    assert.ok(prompt.includes('* Another decision with asterisk'));
+    assert.ok(prompt.includes('- Final important decision'));
+    // Should NOT include non-bullet text
+    assert.ok(!prompt.includes('Some intro text'));
+  });
+
+  it('limits key decisions to last 5 bullet points', () => {
+    const manyDecisions = `
+- Decision 1
+- Decision 2
+- Decision 3
+- Decision 4
+- Decision 5
+- Decision 6
+- Decision 7`;
+
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: manyDecisions,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // Should include last 5 (3, 4, 5, 6, 7)
+    assert.ok(prompt.includes('Decision 3'));
+    assert.ok(prompt.includes('Decision 7'));
+    // Should NOT include first 2 (1, 2)
+    assert.ok(!prompt.includes('Decision 1'));
+    assert.ok(!prompt.includes('Decision 2'));
+  });
+
+  it('omits key decisions subsection if no bullet points found', () => {
+    const noBullets = `This is just some text
+without any bullet points
+just regular paragraphs.`;
+
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some current state',
+        keyDecisions: noBullets,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context'));
+    assert.ok(prompt.includes('**Current State**'));
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('omits key decisions subsection if keyDecisions is null', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some current state',
+        keyDecisions: null,
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context'));
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('omits key decisions subsection if keyDecisions is empty string', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: 'Some state',
+        keyDecisions: '',
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+  });
+
+  it('includes area context with only keyDecisions (no currentState)', () => {
+    const context = makeContextWithArea({
+      slug: 'test-area',
+      name: 'Test Area',
+      status: 'active',
+      recurringMeetings: [],
+      filePath: '/areas/test-area.md',
+      sections: {
+        currentState: null,
+        keyDecisions: '- Important decision',
+        backlog: null,
+        activeGoals: null,
+        activeWork: null,
+        openCommitments: null,
+        notes: null,
+      },
+    });
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('### Area Context (Test Area)'));
+    assert.ok(!prompt.includes('**Current State**'));
+    assert.ok(prompt.includes('**Recent Area Decisions**'));
+    assert.ok(prompt.includes('- Important decision'));
+  });
+
+  it('combines area context with other context sections', () => {
+    const context: MeetingContextBundle = {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-25',
+        attendees: [],
+        transcript: '',
+      },
+      agenda: {
+        path: '/path/to/agenda.md',
+        items: [],
+        unchecked: ['Review timeline'],
+      },
+      attendees: [{
+        slug: 'alice-smith',
+        email: 'alice@example.com',
+        name: 'Alice Smith',
+        category: 'internal',
+        profile: '',
+        stances: [],
+        openItems: [],
+        recentMeetings: [],
+      }],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [{ slug: 'goal-1', title: 'Ship v2', summary: '' }],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+      areaContext: {
+        slug: 'product-area',
+        name: 'Product Area',
+        status: 'active',
+        recurringMeetings: [],
+        filePath: '/areas/product-area.md',
+        sections: {
+          currentState: 'Building features',
+          keyDecisions: '- Decided on approach',
+          backlog: null,
+          activeGoals: null,
+          activeWork: null,
+          openCommitments: null,
+          notes: null,
+        },
+      },
+    };
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    // All context sections should be present
+    assert.ok(prompt.includes('### Attendee Context'));
+    assert.ok(prompt.includes('### Related Goals'));
+    assert.ok(prompt.includes('### Unchecked Agenda Items'));
+    assert.ok(prompt.includes('### Area Context (Product Area)'));
   });
 });

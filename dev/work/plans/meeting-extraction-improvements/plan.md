@@ -1,7 +1,7 @@
 ---
 title: Meeting Extraction Improvements
 slug: meeting-extraction-improvements
-status: planned
+status: complete
 size: large
 tags: [core, cli, backend, meeting-extraction, dedup]
 created: 2026-03-25T22:31:11.578Z

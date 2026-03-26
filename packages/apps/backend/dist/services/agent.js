@@ -52,6 +52,8 @@ export function mapActionItemsToStagedItems(items) {
 /**
  * Testable version of runProcessingSession with injected dependencies.
  * Used by tests to mock file operations and AI service.
+ *
+ * @returns ProcessedMeetingResult so callers can accumulate items for batch deduplication
  */
 export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, options = {}) {
     const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${meetingSlug}.md`);
@@ -100,10 +102,11 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             };
             // Get attendees from frontmatter (extract names from {name, email} objects)
             const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
-            // Call core extraction service with optional context
+            // Call core extraction service with optional context and prior items
             coreResult = await extractMeetingIntelligence(content, callLLM, {
                 attendees: attendeeNames,
                 context: options.context,
+                priorItems: options.priorItems,
             });
             // If LLM failed and we got empty results, propagate the original error
             // (core extraction catches errors and returns empty results)
@@ -126,7 +129,9 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         // 4. Process extraction with filtering, dedup, and metadata using core function
         jobs.appendEvent(jobId, 'Applying confidence thresholds...');
         const userNotes = extractUserNotes(content);
-        const processed = processMeetingExtraction(coreResult, userNotes);
+        const processed = processMeetingExtraction(coreResult, userNotes, {
+            priorItems: options.priorItems,
+        });
         // Log filtered counts (compare raw vs filtered items)
         const rawItemCount = coreResult.intelligence.actionItems.length +
             coreResult.intelligence.decisions.length +
@@ -168,6 +173,8 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         // 11. Mark job done
         jobs.setJobStatus(jobId, 'done');
         jobs.appendEvent(jobId, 'Meeting processed successfully.');
+        // Return processed result so callers can accumulate items for batch deduplication
+        return processed;
     }
     catch (err) {
         // Re-throw but ensure job is marked as error if not already
@@ -216,7 +223,8 @@ export function initializeAIService(aiService, _config) {
  * @param meetingSlug    Meeting file slug (no .md extension)
  * @param jobId          ID of the background job to append events to
  * @param jobs           Jobs service (real or mock) — defaults to the real module
- * @param options        Processing options (e.g. clearApproved)
+ * @param options        Processing options (e.g. clearApproved, priorItems)
+ * @returns ProcessedMeetingResult so callers can accumulate items for batch deduplication
  */
 export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jobs = jobsService, options = {}) {
     // Validate AIService is initialized

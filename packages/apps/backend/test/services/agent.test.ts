@@ -792,4 +792,143 @@ Some transcript.
       assert.ok(content.includes('ai_002: approved'));
     });
   });
+
+  describe('priorItems batch deduplication', () => {
+    it('marks items matching priorItems as dedup source', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('Bob will draft the Q2 plan by Friday', { confidence: 0.9 })],
+          decisions: ['We decided to use React for the frontend'],
+        }),
+      });
+
+      // Pass priorItems that should match the action item
+      const priorItems = [
+        { type: 'action' as const, text: 'Bob will draft the Q2 plan by Friday' },
+      ];
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps, { priorItems });
+
+      const content = deps.writtenFiles[0]!.content;
+      // Action item should be marked as dedup because it matches a prior item
+      assert.ok(content.includes('staged_item_source:'));
+      assert.ok(content.includes('ai_001: dedup'));
+      // Decision should be 'ai' since it doesn't match any prior item
+      assert.ok(content.includes('de_001: ai'));
+    });
+
+    it('auto-approves items matching priorItems', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          // Low confidence item that would normally be pending
+          actionItems: [mockActionItem('Send report to Alice', { confidence: 0.6 })],
+        }),
+      });
+
+      const priorItems = [{ type: 'action' as const, text: 'Send report to Alice' }];
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps, { priorItems });
+
+      const content = deps.writtenFiles[0]!.content;
+      // Should be approved because it matches a prior item (dedup takes precedence)
+      assert.ok(content.includes('ai_001: approved'));
+      assert.ok(content.includes('ai_001: dedup'));
+    });
+
+    it('returns ProcessedMeetingResult with filteredItems', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [
+            mockActionItem('Action one', { confidence: 0.9 }),
+            mockActionItem('Action two', { confidence: 0.85 }),
+          ],
+          decisions: ['Decision one'],
+          learnings: ['Learning one'],
+        }),
+      });
+
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      // Verify result structure
+      assert.ok(result.filteredItems, 'Result should have filteredItems');
+      assert.equal(result.filteredItems.length, 4, 'Should have 4 items (2 actions, 1 decision, 1 learning)');
+
+      // Verify item types
+      const actions = result.filteredItems.filter((i) => i.type === 'action');
+      const decisions = result.filteredItems.filter((i) => i.type === 'decision');
+      const learnings = result.filteredItems.filter((i) => i.type === 'learning');
+      assert.equal(actions.length, 2);
+      assert.equal(decisions.length, 1);
+      assert.equal(learnings.length, 1);
+
+      // Verify other result properties
+      assert.ok(result.stagedItemStatus, 'Result should have stagedItemStatus');
+      assert.ok(result.stagedItemConfidence, 'Result should have stagedItemConfidence');
+      assert.ok(result.stagedItemSource, 'Result should have stagedItemSource');
+    });
+
+    it('matches decisions in priorItems', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [],
+          decisions: ['We decided to use React for the frontend'],
+        }),
+      });
+
+      const priorItems = [
+        { type: 'decision' as const, text: 'We decided to use React for the frontend' },
+      ];
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps, { priorItems });
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('de_001: dedup'));
+    });
+
+    it('matches learnings in priorItems', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [],
+          learnings: ['Users prefer dark mode by default'],
+        }),
+      });
+
+      const priorItems = [
+        { type: 'learning' as const, text: 'Users prefer dark mode by default' },
+      ];
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps, { priorItems });
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('le_001: dedup'));
+    });
+
+    it('handles empty priorItems array', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('New action', { confidence: 0.9 })],
+        }),
+      });
+
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps, { priorItems: [] });
+
+      const content = deps.writtenFiles[0]!.content;
+      // Should be 'ai' (not dedup) when priorItems is empty
+      assert.ok(content.includes('ai_001: ai'));
+      // Should still return valid result
+      assert.equal(result.filteredItems.length, 1);
+    });
+  });
 });
