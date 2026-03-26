@@ -260,7 +260,7 @@ Want to synthesize your context into actionable insights?
 
 ### If starting fresh / guided input:
 ```
-Let's plan your week based on your goals.
+Let's plan your week. This will create `now/week.md` with your priorities.
 
 [Guide through week-plan skill]
 ```
@@ -280,6 +280,7 @@ Celebrate completion and provide next steps:
 - ✓ First skill used successfully
 
 **What to do next:**
+- Start your day at `now/` — scratchpad.md for quick notes, week.md for priorities
 - Try `daily-plan` before tomorrow's meetings
 - Run `process-meetings` after your next meeting
 - Explore more: Ask "What can Areté do?" or "Show me all skills"
