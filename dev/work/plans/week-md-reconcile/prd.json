@@ -1,0 +1,86 @@
+{
+  "name": "week-md-reconcile",
+  "branchName": "feature/week-md-reconcile",
+  "goal": "Auto-skip action items during meeting processing that match completed tasks in now/week.md or now/scratchpad.md, reducing manual work for PMs who batch-process meetings.",
+  "userStories": [
+    {
+      "id": "task-1-completed-items-utility",
+      "title": "Add completed items extraction utility",
+      "description": "Add `getCompletedItems(content: string): string[]` function to packages/core/src/utils/agenda.ts that extracts completed checkbox text from markdown. Mirrors existing `getUncheckedAgendaItems()` pattern.",
+      "acceptanceCriteria": [
+        "`getCompletedItems()` returns array of completed task text from markdown checkboxes",
+        "Handles indented checkboxes (`  - [x]`) and uppercase X (`- [X]`)",
+        "Exported from `packages/core/src/utils/index.ts`",
+        "Unit test in `agenda.test.ts` covers: basic checkbox, indented checkbox, uppercase X, mixed content",
+        "`npm run typecheck` passes",
+        "`npm test` passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-meeting-processing-reconciliation",
+      "title": "Extend meeting processing with reconciliation",
+      "description": "Extend processMeetingExtraction() in packages/core/src/services/meeting-processing.ts to match action items against completed items and mark them as skipped. Add 'skipped' to ItemStatus, 'reconciled' to ItemSource, completedItems and reconcileJaccard to ProcessingOptions, and stagedItemMatchedText to ProcessedMeetingResult.",
+      "acceptanceCriteria": [
+        "`ItemStatus` type includes `'skipped'`",
+        "`ItemSource` type includes `'reconciled'`",
+        "`ProcessingOptions.completedItems` added with JSDoc",
+        "`ProcessingOptions.reconcileJaccard` added with default 0.6 in JSDoc",
+        "`ProcessedMeetingResult.stagedItemMatchedText` added",
+        "Action items matching completed tasks get `status: 'skipped'`, `source: 'reconciled'`",
+        "Matched text stored, truncated to 60 chars with '...' suffix",
+        "Decisions and learnings are NOT checked (verify in test)",
+        "Unit tests added for: basic match, no match, truncation, decisions unaffected",
+        "`npm run typecheck` passes",
+        "`npm test` passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-cli-integration",
+      "title": "Integrate in CLI meeting extract",
+      "description": "Update the `extract --stage` command in packages/cli/src/commands/meeting.ts to read completed items from workspace (now/week.md and now/scratchpad.md) and pass to processMeetingExtraction(). Update output formatting for reconciled items and JSON output structure.",
+      "acceptanceCriteria": [
+        "Uses `paths.now` from `WorkspacePaths` or constructs from `join(paths.root, 'now')`",
+        "Reads both `week.md` and `scratchpad.md` (graceful if missing — empty string)",
+        "Import `getCompletedItems` from `@arete/core`",
+        "Running extract shows '✓ Already done (matched: X)' for reconciled items",
+        "Items display in staged sections with skipped status",
+        "JSON output includes `reconciled` array: `[{ id, matchedText }]`",
+        "`npm run typecheck` passes",
+        "`npm test` passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-comprehensive-tests",
+      "title": "Add comprehensive tests",
+      "description": "Add tests in packages/core/test/utils/agenda.test.ts, packages/core/test/services/meeting-processing.test.ts, and packages/cli/test/commands/meeting-extract.test.ts covering the new functionality.",
+      "acceptanceCriteria": [
+        "Unit test: `getCompletedItems()` parses checkboxes correctly (5+ cases)",
+        "Unit test: `processMeetingExtraction()` skips matching action items",
+        "Unit test: matchedText populated and truncated correctly",
+        "Unit test: Decisions and learnings NOT affected by completedItems",
+        "CLI test: extract with mocked week.md shows reconciled items (if test file exists)",
+        "All new tests pass",
+        "`npm run typecheck` passes",
+        "`npm test` — full suite passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-26T04:30:00.000Z",
+    "totalTasks": 4,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
