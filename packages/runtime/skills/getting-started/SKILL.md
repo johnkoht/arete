@@ -189,13 +189,29 @@ Mark drafts with `[DRAFT - please review]` header.
 **Triggers**: Q1 includes 1 or 2 (calendar/recordings), AND Q3 is 3 or 4 (not ready with docs)
 
 ```
-Let's connect your integrations first, then add context.
+Let's connect your calendar. Which do you prefer?
 
-  1. Run: arete integration configure calendar
-  2. Then: arete pull calendar --days 7
+1. **Apple Calendar** — Syncs with macOS Calendar app (iCloud, Google, Outlook via system sync)
+2. **Google Calendar** — Direct connection via OAuth
 
-Let me know when you've done that, or if you need help.
+(Reply with 1 or 2, or "skip" to continue without calendar)
 ```
+
+**If user chooses Apple (1)**:
+1. Run via bash: `arete integration configure calendar --all`
+2. On success, run: `arete pull calendar --days 7`
+3. Confirm: "Calendar connected! Found [X] upcoming events."
+
+**If user chooses Google (2)**:
+1. Explain: "This will open your browser for Google authorization."
+2. Run via bash: `arete integration configure google-calendar --all`
+   - Command blocks until OAuth completes
+3. On success, run: `arete pull calendar --days 7`
+4. Confirm: "Calendar connected! Found [X] upcoming events."
+
+**If user skips**: Continue to Path B (guided input) for context.
+
+**On failure**: Show error and offer to skip: "Calendar setup failed. Would you like to continue without calendar, or try again?"
 
 After integration setup, fall back to Path B (guided input) for context.
 
