@@ -1,0 +1,143 @@
+{
+  "name": "meeting-importance",
+  "branchName": "feature/meeting-importance",
+  "goal": "Reduce meeting processing overhead from 7-9 meetings/day to <5 minutes total attention by auto-inferring importance and processing light meetings with minimal extraction",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Extend CalendarEvent with organizer and recurrence data",
+      "description": "Add organizer and recurringEventId fields to CalendarEvent type. Update Google Calendar provider to map these from API response.",
+      "acceptanceCriteria": [
+        "CalendarEvent has optional organizer?: { name: string; email?: string; self?: boolean }",
+        "CalendarEvent has optional recurringEventId?: string",
+        "GoogleEvent type includes organizer from Google Calendar API schema",
+        "mapGoogleEvent() maps organizer.email, organizer.displayName, organizer.self",
+        "mapGoogleEvent() maps recurringEventId if present",
+        "Existing tests pass (npm test -- packages/core/test/integrations/calendar)",
+        "Use optional chaining for organizer fields (Pre-Mortem R2)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Add importance field and inference logic",
+      "description": "Add importance to MeetingForSave. Create inferMeetingImportance() function with rules based on organizer, attendee count, and agenda linking.",
+      "acceptanceCriteria": [
+        "MeetingForSave has optional importance?: 'skip' | 'light' | 'normal' | 'important'",
+        "MeetingForSave has optional recurring_series_id?: string",
+        "New function inferMeetingImportance(event: CalendarEvent, options?: { hasAgenda?: boolean }): 'light' | 'normal' | 'important'",
+        "Inference: organizer.self === true → 'important'",
+        "Inference: attendees.length === 2 → 'important'",
+        "Inference: attendees.length <= 3 → 'normal'",
+        "Inference: attendees.length >= 5 && !organizer.self → 'light'",
+        "Inference: hasAgenda === true → at least 'normal'",
+        "saveMeetingFile() writes importance to frontmatter when provided",
+        "Tests for inferMeetingImportance() covering all rules",
+        "All new fields are optional for backward compatibility (Pre-Mortem R1)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Create light extraction prompt and mode",
+      "description": "Add buildLightExtractionPrompt() for minimal extraction. Add mode parameter to extractMeetingIntelligence() with 'light', 'normal', and 'thorough' options.",
+      "acceptanceCriteria": [
+        "New ExtractionMode = 'light' | 'normal' | 'thorough' type",
+        "extractMeetingIntelligence() accepts optional mode?: ExtractionMode (default: 'normal')",
+        "buildLightExtractionPrompt() extracts summary only",
+        "buildLightExtractionPrompt() extracts up to 2 learnings focused on domain insights, strategic decisions, or user feedback",
+        "buildLightExtractionPrompt() explicitly instructs: Do NOT extract action items or operational decisions",
+        "buildLightExtractionPrompt() is ~50% shorter than normal prompt",
+        "LIGHT_LIMITS = { actionItems: 0, decisions: 0, learnings: 2 }",
+        "THOROUGH_LIMITS = { actionItems: 10, decisions: 7, learnings: 7 } with no confidence floor",
+        "mode === 'light' uses buildLightExtractionPrompt() and LIGHT_LIMITS",
+        "mode === 'thorough' uses normal prompt with THOROUGH_LIMITS",
+        "Tests for light mode extraction (mock LLM, verify shape)",
+        "Keep existing CATEGORY_LIMITS as NORMAL_LIMITS (Pre-Mortem R7)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Speaking ratio analysis and importance upgrade",
+      "description": "Create calculateSpeakingRatio() to analyze transcript speaker labels. At processing time, upgrade light → normal if user spoke 40%+ of the meeting.",
+      "acceptanceCriteria": [
+        "New function calculateSpeakingRatio(transcript: string, ownerName: string): number | undefined",
+        "Parses speaker labels in format **Name | HH:MM** or **Name | MM:SS**",
+        "Counts words per speaker (not just line count)",
+        "Returns ratio of owner's words to total words (0-1)",
+        "Returns undefined if no speaker labels found (graceful degradation)",
+        "Owner name matching is case-insensitive and handles partial matches",
+        "Tests for ratio calculation with various transcript formats",
+        "Tests for missing speaker labels returning undefined",
+        "Never crash on malformed transcripts (Pre-Mortem R4)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Auto-approve light meetings and add skipped status",
+      "description": "Update processMeetingExtraction() to check importance. Light meetings auto-approve all items. Add 'skipped' as valid status. Reprocessing uses thorough mode.",
+      "acceptanceCriteria": [
+        "ItemStatus type includes 'skipped' (in addition to 'approved' | 'pending')",
+        "processMeetingExtraction() accepts optional importance?: Importance parameter",
+        "importance === 'light': All items have status: 'approved' (auto-approve)",
+        "importance === 'skip': Return immediately with empty result, set status: 'skipped'",
+        "CLI meeting extract reads importance from meeting frontmatter",
+        "--importance <level> flag overrides frontmatter",
+        "If file has status: processed or status: approved, use mode 'thorough' (reprocessing)",
+        "Integrate speaking ratio: if importance === 'light' and calculateSpeakingRatio() > 0.4, upgrade to 'normal'",
+        "Tests for auto-approve logic",
+        "Tests for reprocessing detection",
+        "Atomic write — all items + status in single file write (Pre-Mortem R6)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Wire importance inference into calendar pull",
+      "description": "When pulling calendar events, infer importance for each meeting and include in saved meeting file.",
+      "acceptanceCriteria": [
+        "pullCalendar() calls inferMeetingImportance() for each event",
+        "Importance is passed to meeting save/sync operation",
+        "Meeting frontmatter includes importance: <level> field after sync",
+        "If agenda is linked, hasAgenda: true is passed to inference",
+        "Integration test: pull calendar event → verify importance in frontmatter",
+        "Importance persists in frontmatter for later extraction (Pre-Mortem R8)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Update documentation and LEARNINGS.md",
+      "description": "Document the new importance system in relevant files.",
+      "acceptanceCriteria": [
+        "packages/core/src/integrations/LEARNINGS.md updated with importance inference pattern",
+        "packages/core/src/services/LEARNINGS.md updated with extraction modes",
+        ".pi/expertise/core/PROFILE.md Component Map updated with speaking ratio function",
+        "CLI command documentation updated for --importance flag"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-26T22:00:00.000Z",
+    "totalTasks": 7,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
