@@ -379,8 +379,8 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                 const DEFAULT_AI_CONFIG = {
                   tiers: {
                     fast: 'anthropic/claude-3-5-haiku-latest',
-                    standard: 'anthropic/claude-sonnet-4-20250514',
-                    frontier: 'anthropic/claude-3-opus',
+                    standard: 'anthropic/claude-sonnet-4-latest',
+                    frontier: 'anthropic/claude-opus-4-latest',
                   },
                   tasks: {
                     summary: 'fast',
@@ -442,8 +442,8 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         const API_KEY_AI_CONFIG = {
           tiers: {
             fast: 'anthropic/claude-3-5-haiku-latest',
-            standard: 'anthropic/claude-sonnet-4-20250514',
-            frontier: 'anthropic/claude-3-opus',
+            standard: 'anthropic/claude-sonnet-4-latest',
+            frontier: 'anthropic/claude-opus-4-latest',
           },
           tasks: {
             summary: 'fast',
