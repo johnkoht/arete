@@ -65,6 +65,13 @@ type GoogleAttendee = {
   displayName?: string;
 };
 
+type GoogleOrganizer = {
+  email?: string;
+  displayName?: string;
+  self?: boolean;
+  id?: string;
+};
+
 type GoogleEvent = {
   summary?: string;
   start: GoogleEventTime;
@@ -72,6 +79,8 @@ type GoogleEvent = {
   location?: string;
   attendees?: GoogleAttendee[];
   description?: string;
+  organizer?: GoogleOrganizer;
+  recurringEventId?: string;
 };
 
 type GoogleEventsResponse = {
@@ -226,6 +235,15 @@ function mapGoogleEvent(item: GoogleEvent, calendarName: string): CalendarEvent 
     email: a.email,
   }));
 
+  // Map organizer with optional chaining (Pre-Mortem R2)
+  const organizer = item.organizer
+    ? {
+        name: item.organizer.displayName ?? item.organizer.email ?? '',
+        email: item.organizer.email,
+        self: item.organizer.self,
+      }
+    : undefined;
+
   return {
     title: item.summary ?? '(No title)',
     startTime: new Date(item.start.dateTime ?? item.start.date ?? ''),
@@ -235,6 +253,8 @@ function mapGoogleEvent(item: GoogleEvent, calendarName: string): CalendarEvent 
     location: item.location,
     attendees,
     notes: item.description,
+    organizer,
+    recurringEventId: item.recurringEventId,
   };
 }
 
