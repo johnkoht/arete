@@ -1,13 +1,13 @@
 ---
 title: Meeting Importance
 slug: meeting-importance
-status: planned
+status: complete
 size: medium
 tags: [meetings, extraction, calendar]
 created: 2026-03-26T22:32:12.019Z
-updated: 2026-03-26T23:30:00.000Z
-completed: null
-execution: null
+updated: 2026-03-27T05:15:00.000Z
+completed: 2026-03-27T05:15:00.000Z
+execution: dev/executions/meeting-importance/
 has_review: true
 has_pre_mortem: true
 has_prd: true
