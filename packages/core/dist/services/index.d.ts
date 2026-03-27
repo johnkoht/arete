@@ -11,7 +11,7 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
-export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, } from './commitments.js';
+export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
@@ -35,4 +35,7 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
+export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export type { CompleteTaskResult } from './tasks.js';
+export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from '../models/tasks.js';
 //# sourceMappingURL=index.d.ts.map

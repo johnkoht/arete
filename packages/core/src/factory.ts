@@ -87,9 +87,17 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
-  // Task management (depends on storage + workspace paths)
+  // Task management (depends on storage + workspace paths + commitments for auto-resolution)
   const workspacePaths = workspace.getPaths(workspaceRoot);
-  const tasks = new TaskService(storage, workspacePaths);
+  const tasks = new TaskService(storage, workspacePaths, commitments);
+
+  // Wire up cross-service dependencies
+  // CommitmentsService needs to create tasks, but TaskService needs CommitmentsService.
+  // Break the cycle by injecting the task creation function after construction.
+  commitments.setCreateTaskFn(async (text, metadata) => {
+    const task = await tasks.addTask(text, 'inbox', metadata);
+    return { id: task.id, text: task.text };
+  });
 
   // AI service (depends on config)
   const ai = new AIService(config);

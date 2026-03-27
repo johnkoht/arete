@@ -148,6 +148,38 @@ export type ExtractionMode = 'light' | 'normal' | 'thorough';
 - `packages/core/src/services/meeting-extraction.ts` L35 — `ExtractionMode` type
 - `packages/cli/src/commands/meeting.ts` — `--importance` flag handling
 
+## Task-Commitment Linkage (2026-03-27)
+
+The commitment-task linking system has bidirectional dependencies handled via function injection:
+
+1. **CommitmentsService.create()** can create a linked task in inbox via `createTaskFn`
+2. **TaskService.completeTask()** auto-resolves linked commitments via optional `CommitmentsService` constructor param
+3. **Factory wiring** creates both services, then injects `createTaskFn` after construction to break the cycle
+
+### Key Patterns
+
+- **Function injection for cross-dependencies**: `CommitmentsService.setCreateTaskFn(fn)` accepts a callback rather than taking TaskService in constructor. This avoids circular imports while still enabling the behavior.
+
+- **Optional service injection for auto-resolution**: TaskService constructor accepts optional `CommitmentsService`. When provided, `completeTask()` auto-resolves linked commitments. When absent, behavior is unchanged (backward compatible).
+
+- **Silent failure for auto-resolution** (Harvester requirement): If commitment resolution fails (commitment already resolved, doesn't exist, etc.), the error is caught silently — task completion still succeeds. This prevents blocking user workflows due to orphaned references.
+
+- **Transactional rollback in create()**: If task creation fails after commitment is created, the commitment is removed. Implemented as: save commitment → try create task → on failure, remove commitment from storage.
+
+- **Idempotent create()**: If commitment hash already exists, returns existing commitment without creating duplicate or task. This handles duplicate sync scenarios gracefully.
+
+### Default Behavior
+
+- `i_owe_them` commitments: default `createTask: true` (creates task in inbox)
+- `they_owe_me` commitments: default `createTask: false` (goes to Waiting On via separate flow)
+
+### @from Metadata
+
+Tasks reference their source commitment via `@from(commitment:hashPrefix)` where hashPrefix is 8 chars.
+Only `commitment` type triggers auto-resolution; `meeting` type references are ignored.
+
+---
+
 ## Pre-Edit Checklist
 
 - **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.

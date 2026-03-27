@@ -18,6 +18,7 @@ import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
+import { TaskService } from './services/tasks.js';
 /**
  * All services created by the factory, keyed by role.
  */
@@ -35,6 +36,7 @@ export type AreteServices = {
     commitments: CommitmentsService;
     areaParser: AreaParserService;
     ai: AIService;
+    tasks: TaskService;
 };
 /**
  * Options for createServices. All optional — sensible defaults are used.

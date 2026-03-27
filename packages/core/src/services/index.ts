@@ -16,6 +16,9 @@ export type {
   PriorityLevel,
   CommitmentPriorityInput,
   CommitmentPriorityResult,
+  CreateCommitmentOptions,
+  CreateCommitmentResult,
+  CreateTaskFn,
 } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
@@ -129,6 +132,7 @@ export type { AreaContext } from '../models/index.js';
 
 // Task management
 export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export type { CompleteTaskResult } from './tasks.js';
 export type {
   TaskMetadata,
   TaskDestination,

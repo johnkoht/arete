@@ -35,4 +35,6 @@ export { buildMeetingContext } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
+// Task management
+export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 //# sourceMappingURL=index.js.map

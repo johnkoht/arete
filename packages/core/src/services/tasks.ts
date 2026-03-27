@@ -16,6 +16,7 @@ import type {
   ParsedTaskLine,
   ListTasksOptions,
 } from '../models/tasks.js';
+import type { CommitmentsService } from './commitments.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -212,16 +213,31 @@ function sectionToDestination(section: string): TaskDestination | null {
 // TaskService
 // ---------------------------------------------------------------------------
 
+/**
+ * Result of completing a task.
+ */
+export type CompleteTaskResult = {
+  task: WorkspaceTask;
+  linkedCommitmentId?: string;
+  resolvedCommitment?: {
+    id: string;
+    text: string;
+  };
+};
+
 export class TaskService {
   private readonly weekFile: string;
   private readonly tasksFile: string;
+  private readonly commitments?: CommitmentsService;
 
   constructor(
     private readonly storage: StorageAdapter,
     workspacePaths: WorkspacePaths,
+    commitments?: CommitmentsService,
   ) {
     this.weekFile = join(workspacePaths.now, 'week.md');
     this.tasksFile = join(workspacePaths.now, 'tasks.md');
+    this.commitments = commitments;
   }
 
   // -------------------------------------------------------------------------
@@ -373,9 +389,12 @@ export class TaskService {
 
   /**
    * Mark a task as completed.
-   * Returns the linked commitment ID if @from(commitment:xxx) is present.
+   * Auto-resolves linked commitment if @from(commitment:xxx) is present and CommitmentsService was provided.
+   * Returns the linked commitment ID and resolved commitment info if applicable.
+   *
+   * NOTE: Auto-resolution is silent (no throw on missing commitment) per Harvester requirement.
    */
-  async completeTask(taskId: string): Promise<{ task: WorkspaceTask; linkedCommitmentId?: string }> {
+  async completeTask(taskId: string): Promise<CompleteTaskResult> {
     // Search both files for the task
     const allTasks = await this.listTasks();
     const matches = allTasks.filter((t) => t.id === taskId || t.id.startsWith(taskId));
@@ -420,7 +439,19 @@ export class TaskService {
       ? task.metadata.from.id
       : undefined;
 
-    return { task: updatedTask, linkedCommitmentId };
+    // Auto-resolve linked commitment (silent — no throw on missing)
+    let resolvedCommitment: { id: string; text: string } | undefined;
+    if (linkedCommitmentId && this.commitments) {
+      try {
+        const resolved = await this.commitments.resolve(linkedCommitmentId);
+        resolvedCommitment = { id: resolved.id, text: resolved.text };
+      } catch {
+        // Silent failure per Harvester requirement — commitment may have been
+        // manually resolved or not exist. Log would be ideal but avoid side effects.
+      }
+    }
+
+    return { task: updatedTask, linkedCommitmentId, resolvedCommitment };
   }
 
   /**

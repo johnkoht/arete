@@ -685,6 +685,137 @@ describe('TaskService.completeTask', () => {
 });
 
 // ---------------------------------------------------------------------------
+// TaskService.completeTask auto-resolution tests
+// ---------------------------------------------------------------------------
+
+describe('TaskService.completeTask with CommitmentsService', () => {
+  // Helper to create a mock CommitmentsService
+  function createMockCommitmentsService(options: {
+    resolveResult?: { id: string; text: string; status: string };
+    resolveThrows?: Error;
+  } = {}) {
+    return {
+      resolve: async (id: string) => {
+        if (options.resolveThrows) {
+          throw options.resolveThrows;
+        }
+        return options.resolveResult ?? {
+          id: id + 'f'.repeat(56),
+          text: 'Test commitment',
+          status: 'resolved',
+          resolvedAt: new Date().toISOString(),
+        };
+      },
+    } as unknown as import('../../src/services/commitments.js').CommitmentsService;
+  }
+
+  it('auto-resolves linked commitment when completing task', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Send docs @from(commitment:abc12345)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const mockCommitments = createMockCommitmentsService({
+      resolveResult: {
+        id: 'abc12345' + 'f'.repeat(56),
+        text: 'Send docs to team',
+        status: 'resolved',
+      },
+    });
+    const service = new TaskService(storage, makePaths(), mockCommitments);
+
+    const tasks = await service.listTasks();
+    const result = await service.completeTask(tasks[0].id);
+
+    assert.equal(result.linkedCommitmentId, 'abc12345');
+    assert.ok(result.resolvedCommitment !== undefined);
+    assert.equal(result.resolvedCommitment?.id, 'abc12345' + 'f'.repeat(56));
+    assert.equal(result.resolvedCommitment?.text, 'Send docs to team');
+  });
+
+  it('returns undefined resolvedCommitment when no @from', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Regular task
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const mockCommitments = createMockCommitmentsService();
+    const service = new TaskService(storage, makePaths(), mockCommitments);
+
+    const tasks = await service.listTasks();
+    const result = await service.completeTask(tasks[0].id);
+
+    assert.equal(result.linkedCommitmentId, undefined);
+    assert.equal(result.resolvedCommitment, undefined);
+  });
+
+  it('silently handles missing commitment (Harvester requirement)', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task @from(commitment:missing1)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const mockCommitments = createMockCommitmentsService({
+      resolveThrows: new Error('No commitment found matching id'),
+    });
+    const service = new TaskService(storage, makePaths(), mockCommitments);
+
+    const tasks = await service.listTasks();
+    // Should NOT throw - silent failure
+    const result = await service.completeTask(tasks[0].id);
+
+    assert.equal(result.task.completed, true);
+    assert.equal(result.linkedCommitmentId, 'missing1');
+    assert.equal(result.resolvedCommitment, undefined);
+  });
+
+  it('works without CommitmentsService (backward compatible)', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task @from(commitment:abc12345)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    // No CommitmentsService passed
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const result = await service.completeTask(tasks[0].id);
+
+    assert.equal(result.task.completed, true);
+    assert.equal(result.linkedCommitmentId, 'abc12345');
+    // No resolvedCommitment since no CommitmentsService
+    assert.equal(result.resolvedCommitment, undefined);
+  });
+
+  it('does not attempt resolution for @from(meeting:xxx)', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Review notes @from(meeting:2026-03-27)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    let resolveAttempted = false;
+    const mockCommitments = {
+      resolve: async () => {
+        resolveAttempted = true;
+        return { id: 'test', text: 'test', status: 'resolved' };
+      },
+    } as unknown as import('../../src/services/commitments.js').CommitmentsService;
+    const service = new TaskService(storage, makePaths(), mockCommitments);
+
+    const tasks = await service.listTasks();
+    const result = await service.completeTask(tasks[0].id);
+
+    assert.equal(resolveAttempted, false, 'Should not attempt to resolve meeting references');
+    assert.equal(result.linkedCommitmentId, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TaskService.moveTask tests
 // ---------------------------------------------------------------------------
 

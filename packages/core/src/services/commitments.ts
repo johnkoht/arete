@@ -233,17 +233,70 @@ function jaccard(a: string[], b: string[]): number {
 const JACCARD_THRESHOLD = 0.6;
 
 // ---------------------------------------------------------------------------
+// Types for create()
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for creating a commitment.
+ */
+export type CreateCommitmentOptions = {
+  /** Create a linked task in inbox. Default: true for i_owe_them, false for they_owe_me */
+  createTask?: boolean;
+  /** Goal slug to attach to commitment (metadata) */
+  goalSlug?: string;
+  /** Area slug to attach to commitment (metadata) */
+  area?: string;
+  /** Meeting date for the commitment */
+  date?: Date;
+  /** Meeting source file */
+  source?: string;
+};
+
+/**
+ * Result of creating a commitment.
+ */
+export type CreateCommitmentResult = {
+  commitment: Commitment;
+  task?: {
+    id: string;
+    text: string;
+    destination: string;
+  };
+};
+
+/**
+ * Function to create a linked task. Injected by factory to avoid circular dep.
+ */
+export type CreateTaskFn = (
+  text: string,
+  metadata: {
+    area?: string;
+    person?: string;
+    from?: { type: 'commitment' | 'meeting'; id: string };
+  },
+) => Promise<{ id: string; text: string }>;
+
+// ---------------------------------------------------------------------------
 // CommitmentsService
 // ---------------------------------------------------------------------------
 
 export class CommitmentsService {
   private readonly filePath: string;
+  private createTaskFn?: CreateTaskFn;
 
   constructor(
     private readonly storage: StorageAdapter,
     workspaceRoot: string,
   ) {
     this.filePath = join(workspaceRoot, COMMITMENTS_FILE);
+  }
+
+  /**
+   * Set the task creation function. Called by factory after TaskService is created.
+   * Avoids circular dependency.
+   */
+  setCreateTaskFn(fn: CreateTaskFn): void {
+    this.createTaskFn = fn;
   }
 
   // -------------------------------------------------------------------------
@@ -454,5 +507,97 @@ export class CommitmentsService {
     // Sort by confidence descending
     results.sort((a, b) => b.confidence - a.confidence);
     return results;
+  }
+
+  /**
+   * Create a commitment with optional linked task.
+   *
+   * For i_owe_them: default creates linked task in inbox
+   * For they_owe_me: default does NOT create task (goes to Waiting On separately)
+   *
+   * Transactional: if task creation fails, commitment is rolled back.
+   * Idempotent: if commitment hash already exists, returns existing commitment (no task created).
+   *
+   * @param text - Commitment description
+   * @param personSlug - Person slug (e.g. 'john-smith')
+   * @param personName - Person display name (e.g. 'John Smith')
+   * @param direction - 'i_owe_them' or 'they_owe_me'
+   * @param options - Optional settings
+   */
+  async create(
+    text: string,
+    personSlug: string,
+    personName: string,
+    direction: CommitmentDirection,
+    options?: CreateCommitmentOptions,
+  ): Promise<CreateCommitmentResult> {
+    // Compute hash for dedup
+    const hash = computeCommitmentHash(text, personSlug, direction);
+
+    // Check for existing commitment (idempotent)
+    const all = await this.load();
+    const existing = all.find((c) => c.id === hash);
+    if (existing) {
+      // Return existing commitment, no task created (duplicate sync)
+      return { commitment: existing };
+    }
+
+    // Build commitment object
+    const dateStr = options?.date ? options.date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const commitment: Commitment = {
+      id: hash,
+      text,
+      direction,
+      personSlug,
+      personName,
+      source: options?.source ?? 'manual',
+      date: dateStr,
+      status: 'open',
+      resolvedAt: null,
+      ...(options?.goalSlug ? { goalSlug: options.goalSlug } : {}),
+      ...(options?.area ? { area: options.area } : {}),
+    };
+
+    // Save commitment first
+    await this.save([...all, commitment]);
+
+    // Determine if task should be created
+    // Default: true for i_owe_them, false for they_owe_me
+    const shouldCreateTask = options?.createTask ?? (direction === 'i_owe_them');
+
+    if (!shouldCreateTask || !this.createTaskFn) {
+      return { commitment };
+    }
+
+    // Try to create linked task
+    try {
+      const taskResult = await this.createTaskFn(text, {
+        area: options?.area,
+        person: personSlug,
+        from: { type: 'commitment', id: hash.slice(0, 8) },
+      });
+
+      return {
+        commitment,
+        task: {
+          id: taskResult.id,
+          text: taskResult.text,
+          destination: 'inbox',
+        },
+      };
+    } catch (error) {
+      // Rollback: remove the commitment we just created
+      const updated = all.filter((c) => c.id !== hash);
+      await this.save(updated);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a commitment exists by hash prefix.
+   */
+  async exists(hashPrefix: string): Promise<boolean> {
+    const all = await this.load();
+    return all.some((c) => c.id === hashPrefix || c.id.startsWith(hashPrefix));
   }
 }
