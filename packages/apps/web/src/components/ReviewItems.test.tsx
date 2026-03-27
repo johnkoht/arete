@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReviewItemsSection } from './ReviewItems.js';
 import type { ReviewItem } from '@/api/types.js';
 import { TooltipProvider } from '@/components/ui/tooltip.js';
@@ -25,6 +26,17 @@ function createTestItems(): ReviewItem[] {
 
 // ── Helper ───────────────────────────────────────────────────────────────────
 
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+}
+
 function renderReviewItems(
   items: ReviewItem[],
   overrides: {
@@ -36,17 +48,20 @@ function renderReviewItems(
   const onItemsChange = overrides.onItemsChange ?? vi.fn();
   const onSaveApprove = overrides.onSaveApprove ?? vi.fn();
   const onBulkApprove = overrides.onBulkApprove ?? vi.fn();
+  const queryClient = createQueryClient();
 
   return {
     ...render(
-      <TooltipProvider>
-        <ReviewItemsSection
-          items={items}
-          onItemsChange={onItemsChange}
-          onSaveApprove={onSaveApprove}
-          onBulkApprove={onBulkApprove}
-        />
-      </TooltipProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <ReviewItemsSection
+            items={items}
+            onItemsChange={onItemsChange}
+            onSaveApprove={onSaveApprove}
+            onBulkApprove={onBulkApprove}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>
     ),
     onItemsChange,
     onSaveApprove,
@@ -351,6 +366,70 @@ describe('ReviewItemsSection', () => {
       // Learnings has 1 item
       const learningsButton = screen.getByRole('button', { name: /^collapse learnings$/i });
       expect(learningsButton).toHaveTextContent('1');
+    });
+  });
+
+  describe('reconciled items', () => {
+    it('displays "already done" badge for reconciled items', () => {
+      const items: ReviewItem[] = [
+        {
+          id: 'action-reconciled',
+          type: 'action',
+          text: 'Send auth doc to Alex',
+          status: 'skipped',
+          source: 'reconciled',
+          matchedText: 'Send auth doc to Alex by EOD',
+        },
+        { id: 'action-pending', type: 'action', text: 'Review proposal', status: 'pending' },
+      ];
+      renderReviewItems(items);
+
+      // Should show "already done" badge for reconciled item
+      const badge = screen.getByText('already done');
+      expect(badge).toBeInTheDocument();
+    });
+
+    it('allows un-skipping reconciled items', () => {
+      const items: ReviewItem[] = [
+        {
+          id: 'action-reconciled',
+          type: 'action',
+          text: 'Send auth doc to Alex',
+          status: 'skipped',
+          source: 'reconciled',
+          matchedText: 'Send auth doc to Alex by EOD',
+        },
+      ];
+      const { onItemsChange } = renderReviewItems(items);
+
+      // Click the skip/unskip button (X icon)
+      const skipButton = screen.getByRole('button', { name: /unskip action item/i });
+      fireEvent.click(skipButton);
+
+      // Should call onItemsChange with status changed to pending
+      expect(onItemsChange).toHaveBeenCalledWith([
+        expect.objectContaining({
+          id: 'action-reconciled',
+          status: 'pending',
+        }),
+      ]);
+    });
+
+    it('reconciled items have muted styling', () => {
+      const items: ReviewItem[] = [
+        {
+          id: 'action-reconciled',
+          type: 'action',
+          text: 'Send auth doc to Alex',
+          status: 'skipped',
+          source: 'reconciled',
+        },
+      ];
+      renderReviewItems(items);
+
+      // The text should have line-through styling (applied via CSS class)
+      const itemText = screen.getByText('Send auth doc to Alex');
+      expect(itemText).toHaveClass('line-through');
     });
   });
 });

@@ -4,7 +4,7 @@
 import { join } from 'path';
 import { FathomClient, loadFathomApiKey } from './client.js';
 import { meetingFromListItem } from './save.js';
-import { saveMeetingFile, meetingFilename, findMatchingAgenda, } from '../meetings.js';
+import { saveMeetingFile, meetingFilename, findMatchingAgendaPath, } from '../meetings.js';
 const DEFAULT_TEMPLATE = `# {title}
 
 **Date**: {date}
@@ -65,8 +65,8 @@ export async function pullFathom(storage, workspaceRoot, paths, days) {
     for (const m of meetings) {
         try {
             const meeting = meetingFromListItem(m);
-            // Link agenda if available
-            const agenda = await findMatchingAgenda(storage, workspaceRoot, meeting.date, meeting.title);
+            // Link agenda if available (use high-confidence matches only)
+            const agenda = await findMatchingAgendaPath(storage, workspaceRoot, meeting.date, meeting.title);
             if (agenda) {
                 meeting.agenda = agenda;
             }

@@ -17,7 +17,7 @@
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, buildMeetingContext, createServices, getWorkspacePaths, } from '@arete/core';
+import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, buildMeetingContext, createServices, getWorkspacePaths, getCompletedItems, } from '@arete/core';
 import * as jobsService from './jobs.js';
 // ---------------------------------------------------------------------------
 // ActionItem → StagedItem mapping
@@ -126,11 +126,28 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             jobs.appendEvent(jobId, `Error: AI extraction failed: ${message}`);
             throw new Error(`AI extraction failed: ${message}`);
         }
-        // 4. Process extraction with filtering, dedup, and metadata using core function
+        // 4. Read completed items from week.md and scratchpad.md for reconciliation
+        let completedItems = [];
+        try {
+            const weekPath = join(workspaceRoot, 'now', 'week.md');
+            const weekContent = await deps.readFile(weekPath).catch(() => '');
+            const scratchpadPath = join(workspaceRoot, 'now', 'scratchpad.md');
+            const scratchpadContent = await deps.readFile(scratchpadPath).catch(() => '');
+            completedItems = [
+                ...getCompletedItems(weekContent),
+                ...getCompletedItems(scratchpadContent),
+            ];
+        }
+        catch {
+            // Silently ignore errors - files may not exist
+            completedItems = [];
+        }
+        // 5. Process extraction with filtering, dedup, and metadata using core function
         jobs.appendEvent(jobId, 'Applying confidence thresholds...');
         const userNotes = extractUserNotes(content);
         const processed = processMeetingExtraction(coreResult, userNotes, {
             priorItems: options.priorItems,
+            completedItems,
         });
         // Log filtered counts (compare raw vs filtered items)
         const rawItemCount = coreResult.intelligence.actionItems.length +
@@ -140,22 +157,27 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         if (filteredOutCount > 0) {
             jobs.appendEvent(jobId, `Filtered out ${filteredOutCount} low-confidence items.`);
         }
-        // 5. Log user notes matches
+        // 6. Log user notes matches
         jobs.appendEvent(jobId, 'Checking for user notes...');
         const dedupCount = Object.values(processed.stagedItemSource).filter((s) => s === 'dedup').length;
         if (dedupCount > 0) {
             jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
         }
-        // 6. Log high-confidence auto-approvals (excluding dedup)
+        // 7. Log reconciled items (matched completed tasks in workspace)
+        const reconciledCount = Object.values(processed.stagedItemSource).filter((s) => s === 'reconciled').length;
+        if (reconciledCount > 0) {
+            jobs.appendEvent(jobId, `Skipped ${reconciledCount} items already completed in workspace.`);
+        }
+        // 8. Log high-confidence auto-approvals (excluding dedup)
         const highConfidenceApproved = Object.entries(processed.stagedItemStatus).filter(([id, status]) => status === 'approved' && processed.stagedItemSource[id] !== 'dedup').length;
         if (highConfidenceApproved > 0) {
             jobs.appendEvent(jobId, `Auto-approved ${highConfidenceApproved} high-confidence items.`);
         }
-        // 7. Format staged sections
+        // 9. Format staged sections
         const stagedSections = formatFilteredStagedSections(processed.filteredItems, coreResult.intelligence.summary);
-        // 8. Update content with staged sections
+        // 10. Update content with staged sections
         const updatedContent = updateMeetingContent(content, stagedSections);
-        // 9. Update frontmatter with status, sources, confidence, owner, and item status
+        // 11. Update frontmatter with status, sources, confidence, owner, and item status
         // Note: Core returns camelCase; backend frontmatter uses snake_case
         fm['status'] = 'processed';
         fm['processed_at'] = new Date().toISOString();
@@ -166,11 +188,15 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         if (Object.keys(processed.stagedItemOwner).length > 0) {
             fm['staged_item_owner'] = processed.stagedItemOwner;
         }
-        // 10. Write updated file
+        // Only write matched text if there are reconciled items
+        if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
+            fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
+        }
+        // 12. Write updated file
         jobs.appendEvent(jobId, 'Writing staged sections...');
         const updatedFile = matter.stringify(updatedContent, fm);
         await deps.writeFile(meetingPath, updatedFile);
-        // 11. Mark job done
+        // 13. Mark job done
         jobs.setJobStatus(jobId, 'done');
         jobs.appendEvent(jobId, 'Meeting processed successfully.');
         // Return processed result so callers can accumulate items for batch deduplication

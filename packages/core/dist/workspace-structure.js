@@ -215,5 +215,14 @@ recurring_meetings:
 ## Notes
 <!-- Working observations and context -->
 `,
+    '.arete/memory/items/agent-observations.md': `# Agent Observations
+
+Observations about working with you. Agents add entries here when they notice
+patterns, preferences, or corrections. These inform how agents collaborate with you.
+
+---
+
+<!-- Format: - [YYYY-MM-DD] [Observation] → [Implication] -->
+`,
 };
 //# sourceMappingURL=workspace-structure.js.map

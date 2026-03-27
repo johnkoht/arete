@@ -30,7 +30,7 @@ export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migra
 export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
 export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
 export { buildMeetingContext } from './meeting-context.js';
-export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, } from './meeting-context.js';
+export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, AgendaCandidate, } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { AreaParserService } from './area-parser.js';

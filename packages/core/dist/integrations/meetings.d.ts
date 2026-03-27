@@ -24,16 +24,41 @@ export interface MeetingForSave {
     status?: 'synced' | 'processed' | 'approved';
 }
 /**
+ * Result of agenda matching with metadata for user prompting.
+ */
+export interface AgendaMatchResult {
+    /** Matched agenda path (relative), or null if no match */
+    match: string | null;
+    /** How the match was determined */
+    matchType: 'exact' | 'fuzzy' | 'none';
+    /** Confidence score (1.0 for exact, 0-1 for fuzzy) */
+    confidence: number;
+    /** All candidate agendas for the same date (for user selection if no match) */
+    candidates: Array<{
+        path: string;
+        meetingTitle?: string;
+        score: number;
+    }>;
+}
+/**
  * Find a matching agenda file for a meeting by date and title.
- * Requires exact date match and title similarity > 0.7.
+ *
+ * Matching priority:
+ * 1. Exact match on frontmatter `meeting_title` field (from calendar event)
+ * 2. Fuzzy match on filename with relaxed threshold
  *
  * @param storage - Storage adapter
  * @param workspaceRoot - Workspace root path
- * @param date - Meeting date (YYYY-MM-DD)
- * @param title - Meeting title
- * @returns Relative path to agenda if found, null otherwise
+ * @param date - Meeting date (YYYY-MM-DD or ISO string)
+ * @param title - Meeting title (from calendar/Fathom/Krisp)
+ * @returns Match result with metadata for user prompting
  */
-export declare function findMatchingAgenda(storage: StorageAdapter, workspaceRoot: string, date: string, title: string): Promise<string | null>;
+export declare function findMatchingAgenda(storage: StorageAdapter, workspaceRoot: string, date: string, title: string): Promise<AgendaMatchResult>;
+/**
+ * Simple wrapper that returns just the path (for backward compatibility).
+ * Only returns high-confidence matches (exact or fuzzy >= 0.7).
+ */
+export declare function findMatchingAgendaPath(storage: StorageAdapter, workspaceRoot: string, date: string, title: string): Promise<string | null>;
 export declare function meetingFilename(meeting: MeetingForSave): string;
 export declare function saveMeetingFile(storage: StorageAdapter, meeting: MeetingForSave, outputDir: string, templateContent: string, options?: {
     integration?: string;

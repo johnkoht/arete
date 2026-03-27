@@ -52,7 +52,7 @@ export function getUncheckedAgendaItems(content) {
  */
 export function getCompletedItems(content) {
     return parseAgendaItems(content)
-        .filter(item => item.checked)
+        .filter(item => item.checked && item.text.length > 0)
         .map(item => item.text);
 }
 //# sourceMappingURL=agenda.js.map
