@@ -6,6 +6,71 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ## Week of March 24, 2026
 
+### Meeting Intelligence: Batch Deduplication & Context
+
+**Process multiple meetings without duplicate extractions.** When you process a batch of meetings (e.g., 5 meetings from the same day), Areté now deduplicates across the batch:
+- Same decision mentioned in 3 meetings → extracted once
+- Action item from meeting #1 → not re-extracted in meeting #3
+- Items already in your memory (approved yesterday) → skipped automatically
+
+**Area context flows into extraction.** When processing a meeting linked to an area, the extraction prompt now includes:
+- Area's Current State section
+- Recent decisions from that area
+- Key stakeholders and their stances
+
+This means extracted items are more contextually grounded — the AI knows what's already decided and what's actually new.
+
+**Completed items reconciliation.** Areté now scans your `week.md` for completed tasks and matches them against extracted action items:
+```bash
+arete meeting extract <file> --stage
+# "Send proposal to Acme" matched to completed task — auto-skipped
+```
+
+If you already checked something off in your week file, Areté won't ask you to approve it again.
+
+### Agenda Matching with Frontmatter
+
+**Agendas now auto-link via `meeting_title` frontmatter.** When you create an agenda with the `prepare-meeting-agenda` skill, it now includes:
+```yaml
+---
+meeting_title: "John / Lindsay 1:1"
+date: 2026-03-25
+---
+```
+
+When you pull a recording with that exact title, Areté links it automatically — no fuzzy matching needed. This is especially useful for recurring meetings where the calendar title doesn't match the agenda filename.
+
+**Low-confidence matches prompt for confirmation.** If Areté finds agendas for your meeting date but can't confidently match, it now shows candidates and asks you to pick:
+```
+Found agenda(s) for this meeting but couldn't auto-match:
+1. now/agendas/2026-03-25-lindsay-1-1.md (score: 0.25)
+2. now/agendas/2026-03-25-team-sync.md (score: 0.10)
+Link to one of these? [1/2/skip]
+```
+
+### Onboarding Refresh
+
+**Enhanced `arete onboard` flow.** The CLI onboarding now includes:
+- **Calendar setup** — Configure your calendar integration during onboarding
+- **Context seeding** — Option to pull recent meetings and seed your workspace
+- **First-win suggestions** — After setup, get suggestions for your first action (prep tomorrow's meeting, review a recent recording, etc.)
+
+**Session-start context injection.** When you start a new conversation with your agent, Areté now automatically injects relevant context based on:
+- Time of day (morning → daily plan context; evening → wind-down context)
+- Recent activity (unprocessed meetings, stale commitments)
+- Your current focus from `week.md`
+
+This means your agent starts each conversation already knowing what's on your plate.
+
+### Getting Started Skill Improvements
+
+The conversational onboarding skill (`getting-started`) now:
+- Uses direct calendar commands instead of redirecting to CLI
+- Follows the new `now/` workspace structure
+- Has simplified discovery questions to get you productive faster
+
+---
+
 **Workspace Areas: Persistent work domains that accumulate intelligence.**
 
 ### Areas Overview
