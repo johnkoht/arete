@@ -126,5 +126,17 @@ describe('install command', () => {
       const content = readFileSync(examplePath, 'utf8');
       assert.ok(content.includes('fathom:'), 'credentials example should include fathom section');
     });
+
+    it('creates now/tasks.md with GTD buckets', () => {
+      runCli(['install', tmpDir, '--skip-qmd', '--json']);
+
+      const tasksPath = join(tmpDir, 'now', 'tasks.md');
+      assert.ok(existsSync(tasksPath), 'now/tasks.md should exist');
+      const content = readFileSync(tasksPath, 'utf8');
+      assert.ok(content.includes('## Anytime'), 'should have Anytime section');
+      assert.ok(content.includes('## Someday'), 'should have Someday section');
+      assert.ok(content.includes('@area(slug)'), 'should document @area tag');
+      assert.ok(content.includes('@from(type:id)'), 'should document @from tag');
+    });
   });
 });
