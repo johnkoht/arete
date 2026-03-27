@@ -1,12 +1,12 @@
 ---
 title: "Workflow Stability & Versioning"
 slug: workflow-stability
-status: planned
+status: complete
 size: medium
 tags: [process, tooling, plan-mode]
 created: "2026-03-27T09:30:00.000Z"
 updated: 2026-03-27T04:34:36.097Z
-completed: null
+completed: "2026-03-27T16:29:50.000Z"
 execution: null
 has_review: true
 has_pre_mortem: true
