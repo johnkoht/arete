@@ -194,3 +194,19 @@ Before adding any SDK dependency, verify the transport protocol. If it's JSON-RP
 **Key references**:
 - `packages/core/src/integrations/meetings.ts` — `findMatchingAgenda()`, `titleSimilarity()`, `normalizeTitle()`
 - `packages/core/test/integrations/meetings.test.ts` — 20 tests including edge cases for single-word titles, empty slugs
+
+---
+
+## Calendar Event Matching (for Importance Inference)
+
+`findMatchingCalendarEvent()` matches pulled meetings (Fathom/Krisp) to calendar events for importance inference.
+
+**Matching algorithm**:
+1. Filter to events on the same day as the meeting
+2. If exactly one event: automatic match
+3. If multiple events: best title similarity > 0.3, else first event on that day
+
+**Design decisions**:
+- **0.3 similarity threshold** (vs 0.7 for agenda matching): Calendar events are more likely to be the "right" match because Fathom/Krisp meetings almost always have a corresponding calendar event. Agenda matching is conservative because agendas are optional and might match unrelated meetings.
+- **Fallback to first event** (not null): Better to infer importance from an imperfect calendar match than default to 'normal'. The organizer/attendee data from any same-day event provides useful signal.
+- **Exposed as `PullFathomOptions.calendarEvents` and `PullKrispOptions.calendarEvents`**: The CLI layer fetches calendar events and passes them to the pull functions, keeping calendar provider dependency at the CLI where configuration is available.
