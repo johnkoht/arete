@@ -59,6 +59,41 @@ Before modifying week.md template or parsing:
 
 ---
 
+## Task-Pulling Workflow (Step 3)
+
+### Move vs Copy Semantics
+
+When moving tasks from `tasks.md` Anytime to `week.md`:
+- **DELETE** from source (`now/tasks.md` `## Anytime`)
+- **ADD** to destination (`now/week.md` `### Must/Should/Could complete`)
+- Preserve all metadata tags
+
+This is intentional — avoids duplicate tasks across files.
+
+### Candidate Sources
+
+| Source | Filter | On Selection | On Skip |
+|--------|--------|--------------|---------|
+| `tasks.md` Anytime | All items | Move to week.md | Ask: Someday? |
+| Commitments | `i_owe_them` without linked tasks | Create task with `@from(commitment:)` | Stays uncommitted |
+| week.md Carryover | Incomplete (`- [ ]`) only | Move to selected section | Stays in place |
+
+### Deduplication
+
+Before adding to week.md, check if normalized task text already exists:
+- Normalize: lowercase, trim, remove `@tag()` metadata
+- If duplicate: skip with user notification
+- Prevents "Review metrics" appearing twice if already in week.md
+
+### Commitment Filtering
+
+Filter out commitments that already have linked tasks:
+- Search all tasks (week.md + tasks.md) for `@from(commitment:xxx)` where xxx matches commitment ID
+- If found, commitment already has a task — don't create another
+
+---
+
 ## Change History
 
+- **2026-03-27**: Added task-pulling workflow (Step 3) with move semantics, dedup, and remaining Anytime handling. (task-management PRD, Task 7)
 - **2026-03-27**: Added Inbox, Waiting On sections. Renamed Outcomes → Weekly Priorities. (task-management PRD, Task 2)
