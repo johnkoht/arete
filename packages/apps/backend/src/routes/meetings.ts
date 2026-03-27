@@ -243,7 +243,7 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
   });
 
   // POST /api/meetings/:slug/process — kick off Pi SDK agent session (returns 202 + jobId)
-  // Body: { clearApproved?: boolean } - if true, clears previously approved items before reprocessing
+  // Body: { clearApproved?: boolean, mode?: 'normal' | 'thorough' | 'light' }
   app.post('/:slug/process', async (c) => {
     const apiKey = getEnvApiKey('anthropic');
     const hasOAuth = hasOAuthCredentials('anthropic');
@@ -259,11 +259,13 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
 
     const slug = c.req.param('slug');
     
-    // Parse optional body for clearApproved flag
+    // Parse optional body for clearApproved and mode
     let clearApproved = false;
+    let mode: 'normal' | 'thorough' | 'light' | undefined;
     try {
-      const body = await c.req.json() as { clearApproved?: boolean };
+      const body = await c.req.json() as { clearApproved?: boolean; mode?: 'normal' | 'thorough' | 'light' };
       clearApproved = body.clearApproved ?? false;
+      mode = body.mode;
     } catch {
       // No body or invalid JSON — use defaults
     }
@@ -271,7 +273,7 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
     const jobId = jobsService.createJob('process');
 
     // Fire and forget — return 202 immediately
-    runProcessingSession(workspaceRoot, slug, jobId, jobsService, { clearApproved }).catch((err) => {
+    runProcessingSession(workspaceRoot, slug, jobId, jobsService, { clearApproved, mode }).catch((err) => {
       console.error('[process] Agent error:', err);
       jobsService.setJobStatus(jobId, 'error');
     });

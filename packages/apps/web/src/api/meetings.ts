@@ -233,6 +233,8 @@ export async function processPeople(slug: string): Promise<unknown> {
 export interface ProcessMeetingOptions {
   /** If true, clears previously approved items before reprocessing */
   clearApproved?: boolean;
+  /** Extraction mode: 'normal' (default), 'thorough' (more items), or 'light' (minimal) */
+  mode?: 'normal' | 'thorough' | 'light';
 }
 
 /** POST /api/meetings/:slug/process — start Pi SDK agent processing job */

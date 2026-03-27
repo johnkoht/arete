@@ -194,3 +194,57 @@ Before adding any SDK dependency, verify the transport protocol. If it's JSON-RP
 **Key references**:
 - `packages/core/src/integrations/meetings.ts` — `findMatchingAgenda()`, `titleSimilarity()`, `normalizeTitle()`
 - `packages/core/test/integrations/meetings.test.ts` — 20 tests including edge cases for single-word titles, empty slugs
+
+---
+
+## Calendar Event Matching (for Importance Inference)
+
+`findMatchingCalendarEvent()` matches pulled meetings (Fathom/Krisp) to calendar events for importance inference.
+
+**Matching algorithm**:
+1. Filter to events on the same day as the meeting
+2. If exactly one event: automatic match
+3. If multiple events: best title similarity > 0.3, else first event on that day
+
+**Design decisions**:
+- **0.3 similarity threshold** (vs 0.7 for agenda matching): Calendar events are more likely to be the "right" match because Fathom/Krisp meetings almost always have a corresponding calendar event. Agenda matching is conservative because agendas are optional and might match unrelated meetings.
+- **Fallback to first event** (not null): Better to infer importance from an imperfect calendar match than default to 'normal'. The organizer/attendee data from any same-day event provides useful signal.
+- **Exposed as `PullFathomOptions.calendarEvents` and `PullKrispOptions.calendarEvents`**: The CLI layer fetches calendar events and passes them to the pull functions, keeping calendar provider dependency at the CLI where configuration is available.
+
+---
+
+## Meeting Importance Inference (2026-03-27)
+
+`inferMeetingImportance()` in `meetings.ts` determines meeting importance from calendar event metadata.
+
+### Inference Rules (in priority order)
+
+1. **Organizer is self** (`organizer.self === true`) → `'important'`
+2. **1:1 meeting** (2 attendees) → `'important'`
+3. **Small group** (≤3 attendees) → `'normal'`
+4. **Large audience** (≥5 attendees, not organizer) → `'light'`
+5. **Default** (4 attendees) → `'normal'`
+
+### Modifiers
+
+- **hasAgenda**: If the meeting has a linked agenda and would otherwise be `'light'`, upgrade to `'normal'`. An agenda indicates planned content worth fuller extraction.
+
+### Design Decisions
+
+- **Never returns `'skip'`**: The `'skip'` importance level is user-assigned only (via `--importance skip` flag in CLI). The inference function only returns `'light' | 'normal' | 'important'`.
+- **Organizer takes priority**: Being the organizer means you're responsible for the meeting's outcomes — always extract thoroughly.
+- **1:1s are always important**: Individual conversations tend to have high signal (decisions, action items, relationship context).
+- **Large meetings get light treatment**: When you're one of many attendees, you're likely an observer — save tokens with lighter extraction.
+
+### Speaking Ratio Upgrade (Engagement-Based)
+
+`calculateSpeakingRatio()` in `meeting-processing.ts` analyzes transcript speaker labels to compute what fraction of words the owner spoke. Used post-extraction to potentially upgrade importance:
+- If owner spoke ≥40% of words in a `'light'` meeting → upgrade to `'normal'`
+- Requires transcript with speaker labels (format: `Speaker Name:` on separate lines)
+- Returns `undefined` if no speaker labels found (graceful degradation)
+
+### Key References
+
+- `packages/core/src/integrations/meetings.ts` — `inferMeetingImportance(event, options?)`
+- `packages/core/src/services/meeting-processing.ts` — `calculateSpeakingRatio(transcript, ownerName)`
+- `packages/core/test/integrations/meetings.test.ts` — inference rule tests

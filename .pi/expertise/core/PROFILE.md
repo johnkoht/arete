@@ -158,6 +158,7 @@ These modules implement the People Intelligence feature and are called by `Entit
 - `extractUserNotes(body)` — Extracts user-written notes, excluding Transcript/Staged sections
 - `clearApprovedSections(content)` — Removes `## Approved *` sections for reprocessing
 - `formatFilteredStagedSections(items, summary)` — Formats filtered items as markdown
+- `calculateSpeakingRatio(transcript, ownerName)` — Analyzes transcript speaker labels to compute engagement ratio; used for engagement-based importance upgrade (≥40% speaking → upgrade light→normal)
 
 **Dependencies**: `meeting-extraction.js` (imports `normalizeForJaccard`, `jaccardSimilarity`)
 

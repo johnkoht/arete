@@ -96,6 +96,7 @@ export default function MeetingDetail() {
   // Reprocess confirmation dialog
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [clearApprovedOnReprocess, setClearApprovedOnReprocess] = useState(true);
+  const [extractionMode, setExtractionMode] = useState<'normal' | 'thorough'>('thorough');
 
   // Cleanup SSE on unmount
   useEffect(() => {
@@ -244,7 +245,7 @@ export default function MeetingDetail() {
   };
 
   // Process Meeting — start job, open SSE stream modal
-  const handleProcessClick = (options?: { clearApproved?: boolean }) => {
+  const handleProcessClick = (options?: { clearApproved?: boolean; mode?: 'normal' | 'thorough' }) => {
     processMutation.mutate(options, {
       onSuccess: (data) => {
         setStreamOutput("");
@@ -605,21 +606,59 @@ export default function MeetingDetail() {
               The AI will re-analyze the transcript and extract new action items, decisions, and learnings.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={clearApprovedOnReprocess}
-                onChange={(e) => setClearApprovedOnReprocess(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <span className="text-sm">
-                Clear previously approved items
-              </span>
-            </label>
-            <p className="text-xs text-muted-foreground mt-2 ml-7">
-              If unchecked, new items will be added alongside existing approved items.
-            </p>
+          <div className="py-4 space-y-4">
+            {/* Extraction mode radio buttons */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Extraction depth</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="extractionMode"
+                    value="thorough"
+                    checked={extractionMode === 'thorough'}
+                    onChange={() => setExtractionMode('thorough')}
+                    className="h-4 w-4"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">Thorough</span>
+                    <p className="text-xs text-muted-foreground">Extract more items (10 action items, 7 decisions, 7 learnings)</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="extractionMode"
+                    value="normal"
+                    checked={extractionMode === 'normal'}
+                    onChange={() => setExtractionMode('normal')}
+                    className="h-4 w-4"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">Normal</span>
+                    <p className="text-xs text-muted-foreground">Standard extraction (7 action items, 5 decisions, 5 learnings)</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            {/* Clear approved checkbox */}
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={clearApprovedOnReprocess}
+                  onChange={(e) => setClearApprovedOnReprocess(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm">
+                  Clear previously approved items
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-2 ml-7">
+                If unchecked, new items will be added alongside existing approved items.
+              </p>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -633,7 +672,7 @@ export default function MeetingDetail() {
               size="sm"
               onClick={() => {
                 setReprocessDialogOpen(false);
-                handleProcessClick({ clearApproved: clearApprovedOnReprocess });
+                handleProcessClick({ clearApproved: clearApprovedOnReprocess, mode: extractionMode });
               }}
             >
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
