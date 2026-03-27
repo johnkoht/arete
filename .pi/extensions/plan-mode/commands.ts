@@ -19,6 +19,8 @@ import {
 	slugify,
 	listArchive,
 	archivePlan,
+	listBacklogItems,
+	promoteBacklogItem,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -258,9 +260,12 @@ export async function handlePlan(
 		case "archive":
 			await handleArchive(subcommand.slice(1).join(" "), ctx, pi, state);
 			break;
+		case "promote":
+			await handlePromote(subcommand.slice(1).join(" "), ctx, pi, state);
+			break;
 		default:
 			ctx.ui.notify(
-				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, close, status, delete, archive`,
+				`Unknown subcommand: ${cmd}. Available: new, list, open, save, rename, close, status, delete, archive, promote`,
 				"warning",
 			);
 	}
@@ -1315,6 +1320,93 @@ async function handleArchiveList(ctx: CommandContext): Promise<void> {
 	});
 
 	await ctx.ui.select("Archive", options);
+}
+
+// ────────────────────────────────────────────────────────────
+// /plan promote command handler
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Handle /plan promote <slug> command.
+ * Promotes a backlog item to a plan with proper frontmatter.
+ * If no slug provided, shows a list of backlog items to select from.
+ */
+export async function handlePromote(
+	args: string,
+	ctx: CommandContext,
+	pi: CommandPi,
+	state: PlanModeState,
+): Promise<void> {
+	const slugArg = args.trim();
+
+	let slugToPromote: string | undefined;
+
+	if (slugArg) {
+		// Direct slug provided
+		slugToPromote = slugArg;
+	} else {
+		// Show backlog list for selection
+		const backlogItems = listBacklogItems();
+		
+		if (backlogItems.length === 0) {
+			ctx.ui.notify("No backlog items found in dev/work/backlog/", "info");
+			return;
+		}
+
+		const options = backlogItems.map((item) => `💡 ${item.title} (${item.relativePath})`);
+		const selected = await ctx.ui.select("Select backlog item to promote", options);
+		
+		if (!selected) {
+			ctx.ui.notify("Promote cancelled.", "info");
+			return;
+		}
+
+		// Extract the relative path from the selection
+		const idx = options.indexOf(selected);
+		if (idx >= 0) {
+			slugToPromote = backlogItems[idx].relativePath;
+		}
+	}
+
+	if (!slugToPromote) {
+		ctx.ui.notify("No backlog item selected.", "warning");
+		return;
+	}
+
+	// Promote the backlog item
+	const newSlug = promoteBacklogItem(slugToPromote);
+
+	if (!newSlug) {
+		ctx.ui.notify(`Backlog item not found: ${slugToPromote}`, "error");
+		return;
+	}
+
+	ctx.ui.notify(`🚀 Promoted '${slugToPromote}' → dev/work/plans/${newSlug}/plan.md (status: draft)`, "info");
+
+	// Open the newly created plan
+	const plan = loadPlan(newSlug);
+	if (plan) {
+		state.currentSlug = newSlug;
+		state.planTitle = plan.frontmatter.title;
+		state.planText = plan.content;
+		state.planSize = plan.frontmatter.size;
+		state.preMortemRun = false;
+		state.reviewRun = false;
+		state.prdConverted = false;
+		state.todoItems = extractTodoItems(plan.content);
+		state.planModeEnabled = true;
+		state.executionMode = false;
+		state.loadedFromDisk = true;
+
+		pi.appendEntry("plan-mode", {
+			enabled: state.planModeEnabled,
+			todos: state.todoItems,
+			executing: state.executionMode,
+			currentSlug: state.currentSlug,
+			planSize: state.planSize,
+			loadedFromDisk: state.loadedFromDisk,
+		});
+	}
 }
 
 // ────────────────────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
 	createDefaultState,
 	getChangesSince,
@@ -17,6 +18,7 @@ import {
 	handleBuild,
 	handleShip,
 	handleWrap,
+	handlePromote,
 	parsePlanListFilter,
 	preparePlanListItems,
 	formatRelativeDate,
@@ -3260,6 +3262,143 @@ steps: 1
 		// Verify active plan is shown, archived is not
 		assert.ok(selectOptions.some((o) => o.includes("Active Plan")), "Should show active plan");
 		assert.ok(!selectOptions.some((o) => o.includes("Archived Plan")), "Should NOT show archived plan");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// handlePromote
+// ────────────────────────────────────────────────────────────
+
+describe("handlePromote", () => {
+	let TEST_PLANS_DIR: string;
+	let TEST_BACKLOG_DIR: string;
+	let originalPlansEnv: string | undefined;
+	let originalBacklogEnv: string | undefined;
+
+	beforeEach(() => {
+		const tempDir = mkdtempSync(join(tmpdir(), "promote-cmd-test-"));
+		TEST_PLANS_DIR = join(tempDir, "plans");
+		TEST_BACKLOG_DIR = join(tempDir, "backlog");
+		mkdirSync(TEST_PLANS_DIR, { recursive: true });
+		mkdirSync(TEST_BACKLOG_DIR, { recursive: true });
+
+		originalPlansEnv = process.env.ARETE_TEST_PLANS_DIR;
+		originalBacklogEnv = process.env.ARETE_TEST_BACKLOG_DIR;
+		process.env.ARETE_TEST_PLANS_DIR = TEST_PLANS_DIR;
+		process.env.ARETE_TEST_BACKLOG_DIR = TEST_BACKLOG_DIR;
+	});
+
+	afterEach(() => {
+		process.env.ARETE_TEST_PLANS_DIR = originalPlansEnv;
+		process.env.ARETE_TEST_BACKLOG_DIR = originalBacklogEnv;
+		rmSync(TEST_PLANS_DIR, { recursive: true, force: true });
+		rmSync(TEST_BACKLOG_DIR, { recursive: true, force: true });
+	});
+
+	it("notifies when backlog item not found", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("nonexistent", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("not found"), `Expected 'not found' in: ${notifyMessage}`);
+	});
+
+	it("promotes backlog item by slug and opens the new plan", async () => {
+		// Create backlog item
+		writeFileSync(join(TEST_BACKLOG_DIR, "my-idea.md"), "# My Idea\n\nDescription here.", "utf-8");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("my-idea", ctx, pi, state);
+
+		// Check notification
+		assert.ok(notifyMessage.includes("Promoted"), `Expected 'Promoted' in: ${notifyMessage}`);
+		assert.ok(notifyMessage.includes("my-idea"), `Expected 'my-idea' in: ${notifyMessage}`);
+
+		// Check plan was created
+		const planFile = join(TEST_PLANS_DIR, "my-idea", "plan.md");
+		assert.ok(existsSync(planFile), "Plan file should exist");
+
+		// Check state was updated
+		assert.equal(state.currentSlug, "my-idea");
+		assert.equal(state.planModeEnabled, true);
+		assert.equal(state.loadedFromDisk, true);
+	});
+
+	it("shows backlog list when no slug provided and empty backlog", async () => {
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No backlog items"), `Expected 'No backlog items' in: ${notifyMessage}`);
+	});
+
+	it("shows backlog list when no slug provided", async () => {
+		// Create backlog items
+		writeFileSync(join(TEST_BACKLOG_DIR, "idea-1.md"), "# Idea One", "utf-8");
+		writeFileSync(join(TEST_BACKLOG_DIR, "idea-2.md"), "# Idea Two", "utf-8");
+
+		let selectOptions: string[] = [];
+		let selectTitle = "";
+		const ctx = createTestContext({
+			select: async (title, options) => {
+				selectTitle = title;
+				selectOptions = options;
+				return options[0]; // Select first item
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("", ctx, pi, state);
+
+		assert.ok(selectTitle.includes("backlog"), `Expected 'backlog' in title: ${selectTitle}`);
+		assert.equal(selectOptions.length, 2);
+		assert.ok(selectOptions.some((o) => o.includes("Idea One")));
+		assert.ok(selectOptions.some((o) => o.includes("Idea Two")));
+	});
+
+	it("removes backlog file after promotion", async () => {
+		writeFileSync(join(TEST_BACKLOG_DIR, "to-remove.md"), "# To Remove", "utf-8");
+
+		const ctx = createTestContext();
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("to-remove", ctx, pi, state);
+
+		assert.ok(!existsSync(join(TEST_BACKLOG_DIR, "to-remove.md")), "Backlog file should be removed");
+	});
+
+	it("handles cancelled selection", async () => {
+		writeFileSync(join(TEST_BACKLOG_DIR, "idea.md"), "# Idea", "utf-8");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			select: async () => undefined, // Cancel
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePromote("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("cancelled"), `Expected 'cancelled' in: ${notifyMessage}`);
 	});
 });
 

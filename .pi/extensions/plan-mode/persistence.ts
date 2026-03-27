@@ -605,6 +605,202 @@ export function archivePlan(
 }
 
 // ────────────────────────────────────────────────────────────
+// Backlog operations
+// ────────────────────────────────────────────────────────────
+
+/** Backlog item (lightweight, no frontmatter) */
+export interface BacklogItem {
+	slug: string;
+	title: string;
+	content: string;
+	path: string;
+}
+
+/** Summary of a backlog item for listing */
+export interface BacklogSummary {
+	slug: string;
+	title: string;
+	/** Relative path within backlog dir (e.g. "enhancements/foo" or "foo") */
+	relativePath: string;
+}
+
+/**
+ * Resolve the backlog directory path.
+ */
+function resolveBacklogDir(basePath?: string): string {
+	return basePath ?? process.env.ARETE_TEST_BACKLOG_DIR ?? DEFAULT_BACKLOG_DIR;
+}
+
+/**
+ * Extract title from a backlog file's content.
+ * Expects first line to be `# Title` format.
+ * Falls back to title-casing the filename.
+ */
+function extractBacklogTitle(content: string, filename: string): string {
+	const firstLine = content.split("\n")[0]?.trim() ?? "";
+	if (firstLine.startsWith("# ")) {
+		return firstLine.slice(2).trim();
+	}
+	// Fallback: derive from filename
+	return filename
+		.replace(/\.md$/, "")
+		.replace(/-/g, " ")
+		.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * List all backlog items (flat files and files in subdirectories).
+ * Returns items sorted alphabetically by slug.
+ */
+export function listBacklogItems(basePath?: string): BacklogSummary[] {
+	const backlogDir = resolveBacklogDir(basePath);
+	if (!existsSync(backlogDir)) return [];
+
+	const items: BacklogSummary[] = [];
+
+	function scanDir(dir: string, prefix: string): void {
+		try {
+			const entries = readdirSync(dir, { withFileTypes: true });
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					// Recurse into subdirectories
+					scanDir(join(dir, entry.name), prefix ? `${prefix}/${entry.name}` : entry.name);
+				} else if (entry.name.endsWith(".md")) {
+					const filePath = join(dir, entry.name);
+					try {
+						const content = readFileSync(filePath, "utf-8");
+						const slug = entry.name.replace(/\.md$/, "");
+						const title = extractBacklogTitle(content, entry.name);
+						const relativePath = prefix ? `${prefix}/${slug}` : slug;
+						items.push({ slug, title, relativePath });
+					} catch {
+						// Skip unreadable files
+					}
+				}
+			}
+		} catch {
+			// Skip unreadable directories
+		}
+	}
+
+	scanDir(backlogDir, "");
+	items.sort((a, b) => a.slug.localeCompare(b.slug));
+	return items;
+}
+
+/**
+ * Load a backlog item by slug or relative path.
+ * Searches flat files first, then subdirectories.
+ * Returns null if not found.
+ */
+export function loadBacklogItem(slugOrPath: string, basePath?: string): BacklogItem | null {
+	const backlogDir = resolveBacklogDir(basePath);
+	if (!existsSync(backlogDir)) return null;
+
+	// Try direct path first (e.g. "enhancements/foo" -> backlog/enhancements/foo.md)
+	const directPath = join(backlogDir, `${slugOrPath}.md`);
+	if (existsSync(directPath)) {
+		try {
+			const content = readFileSync(directPath, "utf-8");
+			const slug = slugOrPath.split("/").pop() ?? slugOrPath;
+			const title = extractBacklogTitle(content, slug);
+			return { slug, title, content, path: directPath };
+		} catch {
+			return null;
+		}
+	}
+
+	// Search recursively for matching slug
+	function findInDir(dir: string): BacklogItem | null {
+		try {
+			const entries = readdirSync(dir, { withFileTypes: true });
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					const found = findInDir(join(dir, entry.name));
+					if (found) return found;
+				} else if (entry.name === `${slugOrPath}.md`) {
+					const filePath = join(dir, entry.name);
+					try {
+						const content = readFileSync(filePath, "utf-8");
+						const title = extractBacklogTitle(content, entry.name);
+						return { slug: slugOrPath, title, content, path: filePath };
+					} catch {
+						// Skip
+					}
+				}
+			}
+		} catch {
+			// Skip
+		}
+		return null;
+	}
+
+	return findInDir(backlogDir);
+}
+
+/**
+ * Promote a backlog item to a plan.
+ * Creates a new plan in dev/work/plans/{slug}/ with proper frontmatter.
+ * Removes the backlog file after successful promotion.
+ *
+ * @param slugOrPath - Backlog item slug or relative path
+ * @param backlogPath - Override backlog directory
+ * @param plansPath - Override plans directory
+ * @returns The new plan's slug, or null if item not found
+ */
+export function promoteBacklogItem(
+	slugOrPath: string,
+	backlogPath?: string,
+	plansPath?: string,
+): string | null {
+	const item = loadBacklogItem(slugOrPath, backlogPath);
+	if (!item) return null;
+
+	const plansDir = resolvePlansDir(plansPath);
+
+	// Check for collision with existing plan
+	let finalSlug = item.slug;
+	if (existsSync(join(plansDir, finalSlug))) {
+		// Suffix with counter to avoid collision
+		let counter = 2;
+		while (existsSync(join(plansDir, `${finalSlug}-${counter}`))) {
+			counter++;
+		}
+		finalSlug = `${finalSlug}-${counter}`;
+	}
+
+	// Create frontmatter for the new plan
+	const now = new Date().toISOString();
+	const frontmatter: PlanFrontmatter = {
+		title: item.title,
+		slug: finalSlug,
+		status: "draft",
+		size: "unknown",
+		tags: [],
+		created: now,
+		updated: now,
+		completed: null,
+		execution: null,
+		has_review: false,
+		has_pre_mortem: false,
+		has_prd: false,
+		steps: 0,
+	};
+
+	// Save the plan (preserving the content)
+	savePlan(finalSlug, frontmatter, item.content, plansPath);
+
+	// Remove the backlog file
+	try {
+		rmSync(item.path);
+	} catch {
+		// Ignore removal errors — plan was created successfully
+	}
+
+	return finalSlug;
+}
+
+// ────────────────────────────────────────────────────────────
 // Migration
 // ────────────────────────────────────────────────────────────
 

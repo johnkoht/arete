@@ -20,6 +20,9 @@ import {
 	moveItem,
 	archiveItem,
 	migrateBacklogToPlans,
+	listBacklogItems,
+	loadBacklogItem,
+	promoteBacklogItem,
 	type PlanFrontmatter,
 	type MigrationResult,
 } from "./persistence.js";
@@ -734,5 +737,270 @@ describe("archiveItem", () => {
 
 		const result = parseFrontmatterFromFile(join(archiveDir, "abandoned-plan", "plan.md"));
 		assert.equal(result.frontmatter.status, "abandoned");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// listBacklogItems
+// ────────────────────────────────────────────────────────────
+
+describe("listBacklogItems", () => {
+	let tempDir: string;
+	let backlogDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "backlog-list-test-"));
+		backlogDir = join(tempDir, "backlog");
+		mkdirSync(backlogDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("returns empty array for nonexistent backlog dir", () => {
+		const result = listBacklogItems(join(tempDir, "nonexistent"));
+		assert.deepEqual(result, []);
+	});
+
+	it("returns empty array for empty backlog dir", () => {
+		const result = listBacklogItems(backlogDir);
+		assert.deepEqual(result, []);
+	});
+
+	it("lists flat .md files", () => {
+		writeFileSync(join(backlogDir, "my-idea.md"), "# My Idea\n\nSome content.", "utf-8");
+		writeFileSync(join(backlogDir, "another.md"), "# Another Idea\n\nMore content.", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result.length, 2);
+		assert.ok(result.some((r) => r.slug === "another" && r.title === "Another Idea"));
+		assert.ok(result.some((r) => r.slug === "my-idea" && r.title === "My Idea"));
+	});
+
+	it("lists items in subdirectories", () => {
+		const subDir = join(backlogDir, "enhancements");
+		mkdirSync(subDir, { recursive: true });
+		writeFileSync(join(subDir, "sub-idea.md"), "# Sub Idea\n\nContent.", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result.length, 1);
+		assert.equal(result[0].slug, "sub-idea");
+		assert.equal(result[0].relativePath, "enhancements/sub-idea");
+	});
+
+	it("extracts title from # heading", () => {
+		writeFileSync(join(backlogDir, "test.md"), "# Custom Title\n\nContent.", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result[0].title, "Custom Title");
+	});
+
+	it("falls back to title-cased filename if no heading", () => {
+		writeFileSync(join(backlogDir, "my-cool-idea.md"), "Just content, no heading.", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result[0].title, "My Cool Idea");
+	});
+
+	it("ignores non-.md files", () => {
+		writeFileSync(join(backlogDir, "readme.txt"), "Not a backlog item", "utf-8");
+		writeFileSync(join(backlogDir, "idea.md"), "# Idea", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result.length, 1);
+		assert.equal(result[0].slug, "idea");
+	});
+
+	it("sorts items alphabetically by slug", () => {
+		writeFileSync(join(backlogDir, "zebra.md"), "# Zebra", "utf-8");
+		writeFileSync(join(backlogDir, "apple.md"), "# Apple", "utf-8");
+		writeFileSync(join(backlogDir, "mango.md"), "# Mango", "utf-8");
+
+		const result = listBacklogItems(backlogDir);
+
+		assert.equal(result[0].slug, "apple");
+		assert.equal(result[1].slug, "mango");
+		assert.equal(result[2].slug, "zebra");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// loadBacklogItem
+// ────────────────────────────────────────────────────────────
+
+describe("loadBacklogItem", () => {
+	let tempDir: string;
+	let backlogDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "backlog-load-test-"));
+		backlogDir = join(tempDir, "backlog");
+		mkdirSync(backlogDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("returns null for nonexistent backlog dir", () => {
+		const result = loadBacklogItem("test", join(tempDir, "nonexistent"));
+		assert.equal(result, null);
+	});
+
+	it("returns null for nonexistent item", () => {
+		const result = loadBacklogItem("nonexistent", backlogDir);
+		assert.equal(result, null);
+	});
+
+	it("loads flat .md file by slug", () => {
+		writeFileSync(join(backlogDir, "my-idea.md"), "# My Idea\n\nSome content here.", "utf-8");
+
+		const result = loadBacklogItem("my-idea", backlogDir);
+
+		assert.ok(result !== null);
+		assert.equal(result.slug, "my-idea");
+		assert.equal(result.title, "My Idea");
+		assert.ok(result.content.includes("Some content here"));
+		assert.ok(result.path.endsWith("my-idea.md"));
+	});
+
+	it("loads item by relative path", () => {
+		const subDir = join(backlogDir, "enhancements");
+		mkdirSync(subDir, { recursive: true });
+		writeFileSync(join(subDir, "sub-idea.md"), "# Sub Idea\n\nContent.", "utf-8");
+
+		const result = loadBacklogItem("enhancements/sub-idea", backlogDir);
+
+		assert.ok(result !== null);
+		assert.equal(result.slug, "sub-idea");
+		assert.equal(result.title, "Sub Idea");
+	});
+
+	it("finds item in subdirectory by slug alone", () => {
+		const subDir = join(backlogDir, "skills");
+		mkdirSync(subDir, { recursive: true });
+		writeFileSync(join(subDir, "hidden-idea.md"), "# Hidden Idea", "utf-8");
+
+		const result = loadBacklogItem("hidden-idea", backlogDir);
+
+		assert.ok(result !== null);
+		assert.equal(result.slug, "hidden-idea");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// promoteBacklogItem
+// ────────────────────────────────────────────────────────────
+
+describe("promoteBacklogItem", () => {
+	let tempDir: string;
+	let backlogDir: string;
+	let plansDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "promote-test-"));
+		backlogDir = join(tempDir, "backlog");
+		plansDir = join(tempDir, "plans");
+		mkdirSync(backlogDir, { recursive: true });
+		mkdirSync(plansDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("returns null for nonexistent backlog item", () => {
+		const result = promoteBacklogItem("nonexistent", backlogDir, plansDir);
+		assert.equal(result, null);
+	});
+
+	it("promotes backlog item to plan with proper frontmatter", () => {
+		writeFileSync(join(backlogDir, "cool-idea.md"), "# Cool Idea\n\nSome detailed description.", "utf-8");
+
+		const result = promoteBacklogItem("cool-idea", backlogDir, plansDir);
+
+		assert.equal(result, "cool-idea");
+
+		// Verify plan was created
+		const planFile = join(plansDir, "cool-idea", "plan.md");
+		assert.ok(existsSync(planFile));
+
+		// Verify frontmatter
+		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
+		assert.equal(frontmatter.title, "Cool Idea");
+		assert.equal(frontmatter.slug, "cool-idea");
+		assert.equal(frontmatter.status, "draft");
+		assert.equal(frontmatter.size, "unknown");
+		assert.ok(content.includes("Cool Idea"));
+		assert.ok(content.includes("Some detailed description"));
+	});
+
+	it("removes backlog file after promotion", () => {
+		writeFileSync(join(backlogDir, "to-remove.md"), "# To Remove\n\nContent.", "utf-8");
+
+		promoteBacklogItem("to-remove", backlogDir, plansDir);
+
+		assert.ok(!existsSync(join(backlogDir, "to-remove.md")));
+	});
+
+	it("handles slug collision by suffixing with counter", () => {
+		// Create existing plan
+		savePlan("conflict", makeFrontmatter({ title: "Existing", slug: "conflict" }), "Existing content.", plansDir);
+
+		// Create backlog item with same slug
+		writeFileSync(join(backlogDir, "conflict.md"), "# Conflict\n\nNew content.", "utf-8");
+
+		const result = promoteBacklogItem("conflict", backlogDir, plansDir);
+
+		assert.equal(result, "conflict-2");
+
+		// Both should exist
+		assert.ok(existsSync(join(plansDir, "conflict", "plan.md")));
+		assert.ok(existsSync(join(plansDir, "conflict-2", "plan.md")));
+	});
+
+	it("promotes item from subdirectory", () => {
+		const subDir = join(backlogDir, "enhancements");
+		mkdirSync(subDir, { recursive: true });
+		writeFileSync(join(subDir, "nested-idea.md"), "# Nested Idea\n\nContent.", "utf-8");
+
+		const result = promoteBacklogItem("enhancements/nested-idea", backlogDir, plansDir);
+
+		assert.equal(result, "nested-idea");
+		assert.ok(existsSync(join(plansDir, "nested-idea", "plan.md")));
+		assert.ok(!existsSync(join(subDir, "nested-idea.md")));
+	});
+
+	it("preserves content when promoting", () => {
+		const content = `# Rich Content
+
+## Section 1
+
+Some text here.
+
+## Section 2
+
+- Bullet 1
+- Bullet 2
+
+\`\`\`typescript
+const code = "example";
+\`\`\`
+`;
+		writeFileSync(join(backlogDir, "rich.md"), content, "utf-8");
+
+		promoteBacklogItem("rich", backlogDir, plansDir);
+
+		const planFile = join(plansDir, "rich", "plan.md");
+		const { content: planContent } = parseFrontmatterFromFile(planFile);
+		assert.ok(planContent.includes("## Section 1"));
+		assert.ok(planContent.includes("Bullet 1"));
+		assert.ok(planContent.includes('const code = "example"'));
 	});
 });
