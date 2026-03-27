@@ -102,11 +102,12 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             };
             // Get attendees from frontmatter (extract names from {name, email} objects)
             const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
-            // Call core extraction service with optional context and prior items
+            // Call core extraction service with optional context, prior items, and mode
             coreResult = await extractMeetingIntelligence(content, callLLM, {
                 attendees: attendeeNames,
                 context: options.context,
                 priorItems: options.priorItems,
+                mode: options.mode,
             });
             // If LLM failed and we got empty results, propagate the original error
             // (core extraction catches errors and returns empty results)

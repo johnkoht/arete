@@ -31,6 +31,7 @@ import {
   createServices,
   getWorkspacePaths,
   getCompletedItems,
+  type ExtractionMode,
 } from '@arete/core';
 import type {
   AIService,
@@ -108,6 +109,8 @@ export interface ProcessingDeps {
 export interface ProcessingOptions {
   /** If true, clears previously approved items before reprocessing */
   clearApproved?: boolean;
+  /** Extraction mode: 'normal' (default), 'thorough' (more items), or 'light' (minimal) */
+  mode?: ExtractionMode;
   /** Pre-built context bundle for enhanced extraction (optional) */
   context?: MeetingContextBundle;
   /** Prior items from earlier meetings in a batch, used for deduplication */
@@ -181,11 +184,12 @@ export async function runProcessingSessionTestable(
         (fm['attendees'] as Array<{ name: string; email: string }>) || []
       ).map((a) => a.name);
 
-      // Call core extraction service with optional context and prior items
+      // Call core extraction service with optional context, prior items, and mode
       coreResult = await extractMeetingIntelligence(content, callLLM, {
         attendees: attendeeNames,
         context: options.context,
         priorItems: options.priorItems,
+        mode: options.mode,
       });
 
       // If LLM failed and we got empty results, propagate the original error
