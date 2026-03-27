@@ -32,10 +32,12 @@ import type { StorageAdapter } from '../../src/storage/adapter.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createMockStorage(): StorageAdapter & { files: Map<string, string> } {
+function createMockStorage(): StorageAdapter & { files: Map<string, string>; dirs: Set<string> } {
   const files = new Map<string, string>();
+  const dirs = new Set<string>();
   return {
     files,
+    dirs,
     async read(path: string) {
       return files.get(path) ?? null;
     },
@@ -43,19 +45,33 @@ function createMockStorage(): StorageAdapter & { files: Map<string, string> } {
       files.set(path, content);
     },
     async exists(path: string) {
-      return files.has(path);
+      if (files.has(path)) return true;
+      if (dirs.has(path)) return true;
+      // Check if any file is in this directory (simulates directory exists)
+      for (const filePath of files.keys()) {
+        if (filePath.startsWith(path + '/')) return true;
+      }
+      return false;
     },
     async delete(path: string) {
       files.delete(path);
     },
-    async list() {
-      return [];
+    async list(dir: string, options?: { extensions?: string[] }) {
+      const ext = options?.extensions?.[0] ?? '';
+      const results: string[] = [];
+      const dirPrefix = dir.endsWith('/') ? dir : dir + '/';
+      for (const filePath of files.keys()) {
+        if (filePath.startsWith(dirPrefix) && (!ext || filePath.endsWith(ext))) {
+          results.push(filePath);
+        }
+      }
+      return results;
     },
     async listSubdirectories() {
       return [];
     },
-    async mkdir() {
-      // no-op
+    async mkdir(path: string) {
+      dirs.add(path);
     },
     async getModified() {
       return null;
@@ -928,5 +944,157 @@ krisp:
       result.errors[0].includes('Krisp credentials not found'),
       `error must mention "Krisp credentials not found"; got: "${result.errors[0]}"`
     );
+  });
+
+  it('(19) uses calendar events to infer importance', async () => {
+    // Write valid credentials
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    // Queue fetch response for listMeetings
+    const meetings: KrispMeeting[] = [
+      { meeting_id: 'aaaa1111', name: '1:1 with Jane', date: '2026-01-15' },
+    ];
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 1 meeting' }],
+        structuredContent: { criteria: {}, meetings, count: 1 },
+      },
+    });
+
+    // Calendar event for 1:1 meeting (2 attendees → important)
+    const calendarEvents = [
+      {
+        title: '1:1 with Jane',
+        startTime: new Date('2026-01-15T10:00:00Z'),
+        endTime: new Date('2026-01-15T11:00:00Z'),
+        calendar: 'Work',
+        attendees: [
+          { name: 'Me', email: 'me@example.com' },
+          { name: 'Jane', email: 'jane@example.com' },
+        ],
+        isAllDay: false,
+      },
+    ];
+
+    const result = await pullKrisp(storage, WORKSPACE, paths, 7, { calendarEvents });
+
+    assert.equal(result.saved, 1);
+    
+    // Verify importance in saved file (slugify removes ':' so "1:1" becomes "11")
+    const savedFile = storage.files.get(`${WORKSPACE}/resources/meetings/2026-01-15-11-with-jane.md`);
+    assert.ok(savedFile, 'meeting file should exist');
+    assert.ok(savedFile.includes('importance: important'), 'should have importance: important (1:1 meeting)');
+  });
+
+  it('(20) defaults to normal importance when no calendar event matches', async () => {
+    // Write valid credentials
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    // Queue fetch response for listMeetings
+    const meetings: KrispMeeting[] = [
+      { meeting_id: 'bbbb2222', name: 'Team Standup', date: '2026-01-16' },
+    ];
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 1 meeting' }],
+        structuredContent: { criteria: {}, meetings, count: 1 },
+      },
+    });
+
+    // Calendar events for different day — no match
+    const calendarEvents = [
+      {
+        title: 'Team Standup',
+        startTime: new Date('2026-01-15T09:00:00Z'),
+        endTime: new Date('2026-01-15T09:30:00Z'),
+        calendar: 'Work',
+        attendees: [{ name: 'Team' }],
+        isAllDay: false,
+      },
+    ];
+
+    const result = await pullKrisp(storage, WORKSPACE, paths, 7, { calendarEvents });
+
+    assert.equal(result.saved, 1);
+    
+    // Verify default importance
+    const savedFile = storage.files.get(`${WORKSPACE}/resources/meetings/2026-01-16-team-standup.md`);
+    assert.ok(savedFile, 'meeting file should exist');
+    assert.ok(savedFile.includes('importance: normal'), 'should default to importance: normal');
+  });
+
+  it('(21) passes hasAgenda to importance inference', async () => {
+    // Write valid credentials
+    storage.files.set(CRED_PATH, `
+krisp:
+  client_id: test-client-id
+  client_secret: test-client-secret
+  access_token: test-access-token
+  refresh_token: test-refresh-token
+  expires_at: ${Math.floor(Date.now() / 1000) + 3600}
+`.trim());
+
+    // Create agenda file for matching
+    storage.files.set(
+      `${WORKSPACE}/now/agendas/2026-01-17-all-hands.md`,
+      '---\nmeeting_title: "All Hands"\n---\n\n# All Hands'
+    );
+
+    // Queue fetch response for listMeetings
+    const meetings: KrispMeeting[] = [
+      { meeting_id: 'cccc3333', name: 'All Hands', date: '2026-01-17' },
+    ];
+    queueFetch({
+      jsonrpc: '2.0', id: 1,
+      result: {
+        content: [{ type: 'text', text: 'Found 1 meeting' }],
+        structuredContent: { criteria: {}, meetings, count: 1 },
+      },
+    });
+
+    // Calendar event for large meeting (5 attendees → light, but hasAgenda upgrades to normal)
+    const calendarEvents = [
+      {
+        title: 'All Hands',
+        startTime: new Date('2026-01-17T10:00:00Z'),
+        endTime: new Date('2026-01-17T11:00:00Z'),
+        calendar: 'Work',
+        organizer: { name: 'Boss', email: 'boss@example.com', self: false },
+        attendees: [
+          { name: 'Person 1' },
+          { name: 'Person 2' },
+          { name: 'Person 3' },
+          { name: 'Person 4' },
+          { name: 'Person 5' },
+        ],
+        isAllDay: false,
+      },
+    ];
+
+    const result = await pullKrisp(storage, WORKSPACE, paths, 7, { calendarEvents });
+
+    assert.equal(result.saved, 1);
+    
+    // Verify importance upgraded to normal due to hasAgenda
+    const savedFile = storage.files.get(`${WORKSPACE}/resources/meetings/2026-01-17-all-hands.md`);
+    assert.ok(savedFile, 'meeting file should exist');
+    assert.ok(savedFile.includes('importance: normal'), 'should have importance: normal (hasAgenda upgrades light)');
+    assert.ok(savedFile.includes('agenda: now/agendas/2026-01-17-all-hands.md'), 'should have agenda linked');
   });
 });

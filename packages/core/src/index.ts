@@ -85,6 +85,7 @@ export {
   meetingFilename,
   findMatchingAgenda,
   findMatchingAgendaPath,
+  findMatchingCalendarEvent,
   inferMeetingImportance,
 } from './integrations/meetings.js';
 export type { MeetingForSave, AgendaMatchResult, Importance } from './integrations/meetings.js';

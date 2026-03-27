@@ -8,7 +8,15 @@ import type { WorkspacePaths } from '../../models/index.js';
 import { KrispMcpClient } from './client.js';
 import { loadKrispCredentials } from './config.js';
 import { meetingFromKrisp } from './save.js';
-import { saveMeetingFile, meetingFilename, findMatchingAgendaPath, type MeetingForSave } from '../meetings.js';
+import {
+  saveMeetingFile,
+  meetingFilename,
+  findMatchingAgendaPath,
+  findMatchingCalendarEvent,
+  inferMeetingImportance,
+  type MeetingForSave,
+} from '../meetings.js';
+import type { CalendarEvent } from '../calendar/types.js';
 
 const DEFAULT_TEMPLATE = `# {title}
 
@@ -55,11 +63,17 @@ function dateRange(days: number): { after: string; before: string } {
   };
 }
 
+export interface PullKrispOptions {
+  /** Calendar events for importance inference (optional) */
+  calendarEvents?: CalendarEvent[];
+}
+
 export async function pullKrisp(
   storage: StorageAdapter,
   workspaceRoot: string,
   paths: WorkspacePaths,
-  days: number
+  days: number,
+  options?: PullKrispOptions
 ): Promise<{ success: boolean; saved: number; errors: string[] }> {
   const creds = await loadKrispCredentials(storage, workspaceRoot);
   if (!creds) {
@@ -96,6 +110,8 @@ export async function pullKrisp(
     }
   }
 
+  const calendarEvents = options?.calendarEvents ?? [];
+  
   for (const m of meetings) {
     try {
       const transcriptText = docMap.get(m.meeting_id) ?? '';
@@ -110,6 +126,19 @@ export async function pullKrisp(
       );
       if (agenda) {
         meeting.agenda = agenda;
+      }
+      
+      // Infer importance from calendar event if available (AC#2, AC#5, AC#6)
+      const matchedEvent = findMatchingCalendarEvent(calendarEvents, meeting.date, meeting.title);
+      if (matchedEvent) {
+        meeting.importance = inferMeetingImportance(matchedEvent, { hasAgenda: !!agenda });
+        // Copy recurring series ID if present
+        if (matchedEvent.recurringEventId) {
+          meeting.recurring_series_id = matchedEvent.recurringEventId;
+        }
+      } else {
+        // Default to 'normal' when no calendar event matched (AC#6)
+        meeting.importance = 'normal';
       }
       
       const fullPath = await saveMeetingFile(

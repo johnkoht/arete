@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   findMatchingAgenda,
   findMatchingAgendaPath,
+  findMatchingCalendarEvent,
   saveMeetingFile,
   meetingFilename,
   inferMeetingImportance,
@@ -604,5 +605,106 @@ describe('inferMeetingImportance', () => {
 
     const result = inferMeetingImportance(event);
     assert.equal(result, 'important', '1:1 should still be important without organizer.self');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findMatchingCalendarEvent tests
+// ---------------------------------------------------------------------------
+
+describe('findMatchingCalendarEvent', () => {
+  it('returns null for empty events array', () => {
+    const result = findMatchingCalendarEvent([], '2026-03-04', 'Weekly Sync');
+    assert.equal(result, null);
+  });
+
+  it('returns null when no events match the date', () => {
+    const events = [
+      makeCalendarEvent({
+        title: 'Weekly Sync',
+        startTime: new Date('2026-03-05T10:00:00Z'),
+      }),
+    ];
+
+    const result = findMatchingCalendarEvent(events, '2026-03-04', 'Weekly Sync');
+    assert.equal(result, null);
+  });
+
+  it('returns single event on matching date', () => {
+    const event = makeCalendarEvent({
+      title: 'Weekly Sync',
+      startTime: new Date('2026-03-04T10:00:00Z'),
+    });
+
+    const result = findMatchingCalendarEvent([event], '2026-03-04', 'Weekly Sync');
+    assert.deepEqual(result, event);
+  });
+
+  it('handles ISO date format with time', () => {
+    const event = makeCalendarEvent({
+      title: 'Team Standup',
+      startTime: new Date('2026-03-04T14:30:00Z'),
+    });
+
+    const result = findMatchingCalendarEvent([event], '2026-03-04T10:00:00Z', 'Team Standup');
+    assert.deepEqual(result, event);
+  });
+
+  it('returns best title match when multiple events on same day', () => {
+    const event1 = makeCalendarEvent({
+      title: 'Weekly Sync',
+      startTime: new Date('2026-03-04T10:00:00Z'),
+    });
+    const event2 = makeCalendarEvent({
+      title: 'Team Standup',
+      startTime: new Date('2026-03-04T14:00:00Z'),
+    });
+
+    const result = findMatchingCalendarEvent([event1, event2], '2026-03-04', 'Weekly Sync');
+    assert.deepEqual(result, event1);
+  });
+
+  it('returns first event when no good title match', () => {
+    const event1 = makeCalendarEvent({
+      title: 'Something Else',
+      startTime: new Date('2026-03-04T10:00:00Z'),
+    });
+    const event2 = makeCalendarEvent({
+      title: 'Another Thing',
+      startTime: new Date('2026-03-04T14:00:00Z'),
+    });
+
+    const result = findMatchingCalendarEvent([event1, event2], '2026-03-04', 'Weekly Sync');
+    // When no good title match (> 0.3), returns first event on the day
+    assert.deepEqual(result, event1);
+  });
+
+  it('matches by fuzzy title similarity', () => {
+    const event1 = makeCalendarEvent({
+      title: 'Other Meeting',
+      startTime: new Date('2026-03-04T09:00:00Z'),
+    });
+    const event2 = makeCalendarEvent({
+      title: 'Team Weekly Sync',
+      startTime: new Date('2026-03-04T10:00:00Z'),
+    });
+
+    // "Weekly Team Sync" should match "Team Weekly Sync" with good similarity
+    const result = findMatchingCalendarEvent([event1, event2], '2026-03-04', 'Weekly Team Sync');
+    assert.deepEqual(result, event2);
+  });
+
+  it('handles events with exact same title on different days', () => {
+    const event1 = makeCalendarEvent({
+      title: 'Standup',
+      startTime: new Date('2026-03-03T10:00:00Z'),
+    });
+    const event2 = makeCalendarEvent({
+      title: 'Standup',
+      startTime: new Date('2026-03-04T10:00:00Z'),
+    });
+
+    const result = findMatchingCalendarEvent([event1, event2], '2026-03-04', 'Standup');
+    assert.deepEqual(result, event2);
   });
 });

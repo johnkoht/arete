@@ -91,6 +91,8 @@ export async function pullFathom(
   let saved = 0;
   const errors: string[] = [];
 
+  const calendarEvents = options?.calendarEvents ?? [];
+  
   for (const m of meetings) {
     try {
       const meeting = meetingFromListItem(m);
@@ -104,6 +106,19 @@ export async function pullFathom(
       );
       if (agenda) {
         meeting.agenda = agenda;
+      }
+      
+      // Infer importance from calendar event if available (AC#1, AC#5, AC#6)
+      const matchedEvent = findMatchingCalendarEvent(calendarEvents, meeting.date, meeting.title);
+      if (matchedEvent) {
+        meeting.importance = inferMeetingImportance(matchedEvent, { hasAgenda: !!agenda });
+        // Copy recurring series ID if present
+        if (matchedEvent.recurringEventId) {
+          meeting.recurring_series_id = matchedEvent.recurringEventId;
+        }
+      } else {
+        // Default to 'normal' when no calendar event matched (AC#6)
+        meeting.importance = 'normal';
       }
       
       const fullPath = await saveMeetingFile(
