@@ -81,8 +81,7 @@ git status, git add, git commit, git branch
 
 [PHASE 3] Worktree Setup
 ├── 3.1 Create Worktree
-├── 3.2 Launch Terminal
-└── 3.3 Start Pi Session
+└── 3.2 Switch to Worktree
 
 [PHASE 4] Build (worktree branch)
 ├── 4.1 Execute PRD → GATE: Task failures
@@ -92,10 +91,12 @@ git status, git add, git commit, git branch
 ├── 5.1 Create Memory Entry
 ├── 5.2 Update LEARNINGS.md
 ├── 5.3 Commit Implementation
-└── 5.4 Generate Ship Report
+├── 5.4 Verify with /wrap
+├── 5.5 Generate Ship Report
+└── 5.6 Prompt for Merge → INTERACTIVE
 
-[PHASE 6] Cleanup (after PR merged)
-└── 6.1 Remove Worktree & Branch ← `/ship cleanup <slug>`
+[PHASE 6] Cleanup (after merge)
+└── 6.1 Remove Worktree & Branch ← runs automatically after successful merge
 ```
 
 ---
@@ -723,233 +724,37 @@ echo "✅ Dependencies installed"
 
 ---
 
-### Phase 3.2: Launch Terminal
+### Phase 3.2: Switch to Worktree
 
 **Entry Conditions**:
 - Phase 3.1 complete
 - Worktree path known (from `$worktree_path_abs`)
 
-##### 1. Platform Detection
+**Actions**:
+
+##### 1. Change Directory to Worktree
+
+Switch to the worktree directory in the current terminal session:
 
 ```bash
-detect_platform() {
-  case "$(uname -s)" in
-    Darwin)  echo "macos" ;;
-    Linux)   echo "linux" ;;
-    MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
-    *)       echo "unknown" ;;
-  esac
-}
+# Get worktree path
+repo_name=$(basename "$(git rev-parse --show-toplevel)")
+worktree_path="../${repo_name}.worktrees/${slug}"
+worktree_path_abs=$(cd "${worktree_path}" && pwd)
 
-platform=$(detect_platform)
+# Change to worktree
+cd "${worktree_path_abs}"
+
+echo "🚀 Switched to worktree"
+echo "📁 Directory: $(pwd)"
+echo "🌿 Branch:    $(git branch --show-current)"
 ```
 
-##### Pre-Flight: Permission Check
+##### 2. Verify CWD
 
-Before attempting terminal launch on macOS, verify Automation permissions:
+After switching, verify we're in the correct location:
 
 ```bash
-# Check Automation permissions by running benign osascript
-if ! osascript -e 'tell application "System Events" to return name of current application' &>/dev/null; then
-  echo "⚠️ Automation permissions not granted for Terminal access"
-  echo "Grant access in: System Settings > Privacy & Security > Automation"
-  # Fall back to manual instructions
-fi
-```
-
-If the permission check fails, skip directly to the fallback message (Step 6) and provide manual instructions.
-
-##### 2. macOS Terminal Launch (Primary Implementation)
-
-**V1 implements macOS only** per pre-mortem Risk 2 mitigation. Linux/Windows are documented for future implementation.
-
-**iTerm2 (preferred)**:
-
-```bash
-launch_iterm() {
-  local worktree_path="$1"
-  local slug="$2"
-  local prd_path="dev/work/plans/${slug}/prd.md"
-  
-  osascript <<EOF
-tell application "iTerm"
-    activate
-    set newWindow to (create window with default profile)
-    tell current session of newWindow
-        write text "cd '${worktree_path}' && clear"
-        write text "echo '🚀 Ship It — Worktree Ready'"
-        write text "echo 'Branch: feature/${slug}'"
-        write text "echo 'PRD: ${prd_path}'"
-        write text "echo ''"
-        write text "echo 'Starting pi...'"
-        write text "pi"
-    end tell
-end tell
-EOF
-}
-```
-
-**Terminal.app (fallback)**:
-
-```bash
-launch_terminal_app() {
-  local worktree_path="$1"
-  local slug="$2"
-  local prd_path="dev/work/plans/${slug}/prd.md"
-  
-  osascript <<EOF
-tell application "Terminal"
-    activate
-    set newTab to do script "cd '${worktree_path}' && clear && echo '🚀 Ship It — Worktree Ready' && echo 'Branch: feature/${slug}' && echo 'PRD: ${prd_path}' && echo '' && echo 'Starting pi...' && pi"
-end tell
-EOF
-}
-```
-
-**macOS Launch Sequence**:
-
-```bash
-launch_terminal_macos() {
-  local worktree_path="$1"
-  local slug="$2"
-  
-  # Try iTerm first (preferred)
-  if osascript -e 'tell application "System Events" to (name of processes) contains "iTerm2"' 2>/dev/null | grep -q "true"; then
-    echo "📺 Launching iTerm2..."
-    launch_iterm "${worktree_path}" "${slug}" && return 0
-  fi
-  
-  # Check if iTerm is installed but not running
-  if [[ -d "/Applications/iTerm.app" ]]; then
-    echo "📺 Opening iTerm2..."
-    launch_iterm "${worktree_path}" "${slug}" && return 0
-  fi
-  
-  # Fall back to Terminal.app
-  echo "📺 Launching Terminal.app..."
-  launch_terminal_app "${worktree_path}" "${slug}" && return 0
-  
-  return 1
-}
-```
-
-##### 3. Linux Terminal Launch (V2 — Documented Only)
-
-```bash
-# gnome-terminal (GNOME/Ubuntu)
-gnome-terminal --working-directory="${worktree_path}" -- bash -c "echo 'Ship It — Worktree Ready'; pi; exec bash"
-
-# xterm (fallback)
-xterm -e "cd '${worktree_path}' && echo 'Ship It — Worktree Ready' && pi"
-
-# konsole (KDE)
-konsole --workdir "${worktree_path}" -e "bash -c 'pi'"
-```
-
-##### 4. Windows Terminal Launch (V2 — Documented Only)
-
-```powershell
-# Windows Terminal
-wt -d "${worktree_path}" pi
-
-# PowerShell fallback
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '${worktree_path}'; pi"
-```
-
-##### 5. Launch with Verification
-
-```bash
-launch_terminal() {
-  local worktree_path="$1"
-  local slug="$2"
-  local platform=$(detect_platform)
-  
-  case "${platform}" in
-    macos)
-      if launch_terminal_macos "${worktree_path}" "${slug}"; then
-        # Brief pause to let terminal initialize
-        sleep 2
-        echo "✅ Terminal launched"
-        return 0
-      fi
-      ;;
-    linux)
-      echo "⚠️  Linux terminal launch not implemented in V1"
-      echo "    See SKILL.md Phase 3.2 § Linux Terminal Launch for manual steps"
-      return 1
-      ;;
-    windows)
-      echo "⚠️  Windows terminal launch not implemented in V1"
-      echo "    See SKILL.md Phase 3.2 § Windows Terminal Launch for manual steps"
-      return 1
-      ;;
-    *)
-      echo "❌ Unknown platform: ${platform}"
-      return 1
-      ;;
-  esac
-  
-  return 1
-}
-```
-
-##### 6. Fallback Message
-
-If terminal launch fails, display this message:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ⚠️  Terminal Launch Failed — Manual Steps Required             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Open a new terminal window                                  │
-│                                                                 │
-│  2. Navigate to the worktree:                                   │
-│     cd {worktree_path}                                          │
-│                                                                 │
-│  3. Start pi:                                                   │
-│     pi                                                          │
-│                                                                 │
-│  4. Execute the PRD:                                            │
-│     Execute the PRD at dev/work/plans/{slug}/prd.md             │
-│                                                                 │
-│  ─────────────────────────────────────────────────────────────  │
-│  💡 Or copy-paste this one-liner:                               │
-│                                                                 │
-│     cd '{worktree_path}' && pi                                  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-##### 7. Error Recovery
-
-| Error | Recovery |
-|-------|----------|
-| osascript fails | Check System Preferences > Security > Automation permissions |
-| iTerm not found | Install iTerm2 or use Terminal.app fallback |
-| Terminal doesn't open | Check if another app is blocking; try manual launch |
-| Wrong directory in terminal | Verify `worktree_path` is absolute, not relative |
-
-**Exit Conditions**:
-- Terminal window opened in worktree directory
-- OR fallback message provided with manual instructions
-
-**Handoff to 3.3**: Terminal launch status (`launched` or `manual`)
-
----
-
-### Phase 3.3: Start Pi Session
-
-**Entry Conditions**:
-- Terminal opened in worktree (Phase 3.2 `launched`)
-- OR user has opened terminal manually (Phase 3.2 `manual`)
-
-##### 1. CWD Verification (Run in Worktree Terminal)
-
-Before executing the PRD, verify the pi session is running from the correct directory:
-
-```bash
-# This runs in the NEW terminal, not the original session
 verify_cwd() {
   local expected_worktree="$1"
   local slug="$2"
@@ -960,8 +765,6 @@ verify_cwd() {
     echo "❌ Wrong directory!"
     echo "   Expected: ${expected_worktree}"
     echo "   Current:  ${current_dir}"
-    echo ""
-    echo "   Run: cd '${expected_worktree}'"
     return 1
   fi
   
@@ -986,43 +789,13 @@ verify_cwd() {
 }
 ```
 
-##### 2. Pi Startup Message
-
-When pi starts in the worktree terminal, it should display:
-
-```
-🚀 Ship It — Worktree Session
-
-📁 Directory: {worktree_path}
-🌿 Branch:    feature/{slug}
-📋 PRD:       dev/work/plans/{slug}/prd.md
-
-Ready to execute. Say:
-  "Execute the PRD at dev/work/plans/{slug}/prd.md"
-```
-
-##### 3. Execute-PRD Invocation
-
-The user (or automated script) says to pi:
-
-```
-Execute the PRD at dev/work/plans/{slug}/prd.md
-```
-
-This triggers the `execute-prd` skill which:
-1. Reads the PRD and prd.json
-2. Spawns the Orchestrator (Sr. Eng Manager) persona
-3. Executes tasks sequentially with quality gates
-4. Runs the Reviewer (Sr. Engineer) between tasks
-
-##### 4. PRD Path Resolution
+##### 3. Verify PRD Files
 
 ```bash
-# From within worktree
+# Verify PRD files exist
 prd_path="dev/work/plans/${slug}/prd.md"
 prd_json="dev/work/plans/${slug}/prd.json"
 
-# Verify PRD files exist
 if [[ ! -f "${prd_path}" ]]; then
   echo "❌ PRD not found: ${prd_path}"
   echo "   The PRD should have been committed in Phase 2.3"
@@ -1037,48 +810,41 @@ fi
 echo "✅ PRD ready: ${prd_path}"
 ```
 
-##### 5. Execution State Setup
+##### 4. Display Ready Message
 
-The execute-prd skill will create its own execution state at `dev/executions/{slug}/`. This is handled by the execute-prd skill, not Phase 3.
+```
+🚀 Ship It — Worktree Ready
+
+📁 Directory: {worktree_path}
+🌿 Branch:    feature/{slug}
+📋 PRD:       dev/work/plans/{slug}/prd.md
+
+Proceeding to execute PRD...
+```
+
+##### 5. Error Recovery
+
+| Error | Recovery |
+|-------|----------|
+| cd fails | Verify worktree was created in Phase 3.1 |
+| Wrong branch | `git checkout feature/{slug}` |
+| PRD files missing | Artifacts may not have synced; check Phase 2.3 |
 
 **Exit Conditions**:
-- Pi session started in worktree
-- CWD verified as worktree directory
-- PRD path validated and accessible
-- Ready to execute PRD via execute-prd skill
+- CWD is the worktree directory
+- On correct feature branch
+- PRD files verified accessible
 
 **Handoff to 4.1**: 
 - PRD path: `dev/work/plans/{slug}/prd.md`
 - Execution state path: `dev/executions/{slug}/`
 - Branch: `feature/{slug}`
 
-##### State Handoff (Phase 3 → Phase 4)
-
-When a new pi session starts in the worktree, it needs to know what to execute. Here's what persists and how it transfers:
-
-**What persists on disk**:
-- PRD at `dev/work/plans/{slug}/prd.md` — the full PRD with problem statement, tasks, and acceptance criteria
-- `dev/work/plans/{slug}/prd.json` — machine-readable task list with dependencies and status
-- Execution state at `dev/executions/{slug}/` — progress tracking, created by execute-prd skill
-
-**What the new session needs**:
-- Plan slug — to locate artifacts
-- PRD path — to read task definitions
-- Execution state path — to track/resume progress
-
-**How it's provided**:
-The pi startup message in Phase 3.3 includes the exact command to run:
-```
-Execute the PRD at dev/work/plans/{slug}/prd.md
-```
-
-This triggers the execute-prd skill which reads the PRD, creates execution state if needed, and begins task dispatch. All necessary context is on disk — no session state transfer required.
-
 ---
 
 ## Phase 4: Build
 
-> **Context Switch**: Phases 4-5 run in the worktree terminal, not the original session.
+> **Note**: Phases 4-5 run in the worktree directory (switched in Phase 3.2).
 
 ### Phase 4.1: Execute PRD
 
@@ -1586,11 +1352,93 @@ echo "Branch: $BRANCH"
 
 ---
 
-### Phase 5.4: Generate Ship Report
+### Phase 5.4: Verify with /wrap
 
 **Entry Conditions**:
 - Phase 5.3 complete
-- All artifacts created
+- All wrap artifacts committed
+
+**Actions**:
+
+##### 1. Run /wrap Command
+
+Execute the `/wrap` command to verify all close-out checklist items are complete:
+
+```
+/wrap
+```
+
+The `/wrap` command checks:
+1. **Memory entry exists** — Matches the plan slug in `memory/entries/`
+2. **MEMORY.md index updated** — Contains entry for this slug
+3. **Plan status appropriate** — Status reflects completion
+4. **LEARNINGS.md reviewed** — Changed directories have been checked
+5. **Capability catalog fresh** — If tooling changed, catalog is updated
+
+##### 2. Parse /wrap Output
+
+The `/wrap` command outputs a tiered checklist. Parse for:
+
+| Result | Meaning | Action |
+|--------|---------|--------|
+| All ✓ | All checks pass | Proceed to 5.5 |
+| Some ⚠️ | Non-blocking warnings | Note in ship report, proceed |
+| Any ✗ | Failed checks | Address before proceeding |
+
+##### 3. Handle Failed Checks
+
+If `/wrap` reports failures:
+
+```markdown
+## ⚠️ /wrap Verification Failed
+
+The following close-out checks did not pass:
+
+{list of failed checks from /wrap output}
+
+**Options**:
+1. **Fix** — Address the failures and re-run `/wrap`
+2. **Override** — Proceed anyway (note gaps in ship report)
+```
+
+Common fixes:
+- Missing memory entry → Phase 5.1 incomplete, re-run
+- MEMORY.md not updated → Phase 5.1 incomplete, add index entry
+- LEARNINGS.md not reviewed → Phase 5.2 incomplete, re-check
+
+##### 4. Record Verification Status
+
+Store the `/wrap` result for the ship report:
+
+```typescript
+wrapVerification: {
+  status: "passed" | "warnings" | "failed",
+  checks: {
+    memoryEntry: "✓" | "✗",
+    memoryIndex: "✓" | "✗", 
+    planStatus: "✓" | "✗",
+    learningsReviewed: "✓" | "⚠️" | "✗",
+    catalogFresh: "✓" | "⚠️" | "n/a"
+  },
+  warnings: ["list of warning messages"],
+  failures: ["list of failure messages"]
+}
+```
+
+**Exit Conditions**:
+- `/wrap` executed
+- All checks pass OR warnings noted for report
+- Verification status recorded
+
+**Handoff to 5.5**: Wrap verification status
+
+---
+
+### Phase 5.5: Generate Ship Report
+
+**Entry Conditions**:
+- Phase 5.4 complete
+- All artifacts created and verified
 
 **Actions**:
 
@@ -1644,6 +1492,12 @@ const reportData = {
   // Worktree
   worktreePath: "/path/to/worktree",
   branchName: "feature/{slug}",
+  
+  // Wrap Verification (from Phase 5.4)
+  wrapVerification: {
+    status: "passed" | "warnings" | "failed",
+    warnings: ["any warning messages"],
+  },
   
   // Learnings
   learningsUpdated: "{N files updated}" or "No updates needed",
@@ -1705,9 +1559,217 @@ Present the completed ship report to the builder:
 **Exit Conditions**:
 - Ship report generated
 - Report presented to builder
+
+**Handoff to 5.6**: Ship report displayed, ready for merge prompt
+
+---
+
+### Phase 5.6: Prompt for Merge
+
+**Entry Conditions**:
+- Phase 5.5 complete
+- Ship report displayed
+- Builder has returned (or is present)
+
+**Actions**:
+
+##### 1. Prompt Builder
+
+After displaying the ship report, prompt the builder:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🚢 Ship Complete — Ready to Merge                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Branch: feature/{slug}                                         │
+│  Target: main                                                   │
+│                                                                 │
+│  Options:                                                       │
+│    [M] Merge to main                                            │
+│    [R] Review changes first                                     │
+│    [L] Leave for later (manual merge)                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Ready to merge? (M/R/L):
+```
+
+**Wait for builder response.** Do not proceed automatically.
+
+##### 2. Handle Response
+
+**Option M (Merge)**:
+Proceed to Step 3 (merge flow).
+
+**Option R (Review)**:
+```markdown
+## Review Changes
+
+Here's a summary of changes on `feature/{slug}`:
+
+{output of: git log main..HEAD --oneline}
+
+**Files changed:**
+{output of: git diff main --stat}
+
+When ready, say "merge" to proceed or "skip" to leave for later.
+```
+
+**Option L (Leave for later)**:
+```markdown
+## Merge Later
+
+No problem. To merge manually later:
+
+1. Create PR:
+   \`\`\`
+   gh pr create --title "feat: {slug}" --body "PRD: dev/work/plans/{slug}/prd.md"
+   \`\`\`
+
+2. After merge, cleanup:
+   \`\`\`
+   /ship cleanup {slug}
+   \`\`\`
+
+Branch `feature/{slug}` will remain in worktree at:
+  {worktree_path}
+```
+Skip to Exit Conditions (skill complete without merge).
+
+##### 3. Switch to Main Repository
+
+```bash
+# Store current worktree path for cleanup later
+worktree_path=$(pwd)
+
+# Navigate back to main repository
+cd "{main_repo_path}"
+
+# Verify we're in main repo
+if [[ ! -d ".git" ]]; then
+  echo "❌ Failed to switch to main repository"
+  exit 1
+fi
+
+# Fetch latest
+git fetch origin main
+git checkout main
+git pull origin main
+
+echo "✅ Switched to main repository"
+echo "📁 Directory: $(pwd)"
+```
+
+##### 4. Check Merge Status
+
+```bash
+# Try a dry-run merge to check for conflicts
+if git merge --no-commit --no-ff "feature/${slug}" 2>/dev/null; then
+  # Clean merge possible
+  git merge --abort
+  echo "✅ Branch can be merged cleanly"
+  MERGE_STATUS="clean"
+else
+  # Conflicts detected
+  git merge --abort 2>/dev/null || true
+  echo "⚠️ Merge conflicts detected"
+  MERGE_STATUS="conflicts"
+fi
+```
+
+##### 5a. Clean Merge
+
+If `MERGE_STATUS="clean"`:
+
+```bash
+# Perform the merge
+git merge --no-ff "feature/${slug}" -m "feat: {slug}
+
+Shipped via /ship skill.
+PRD: dev/work/plans/{slug}/prd.md"
+
+# Push to origin
+git push origin main
+
+echo "✅ Merged and pushed to main"
+```
+
+Then proceed to Phase 6.1 (cleanup) automatically.
+
+##### 5b. Handle Conflicts
+
+If `MERGE_STATUS="conflicts"`:
+
+```markdown
+## ⚠️ Merge Conflicts Detected
+
+The following files have conflicts:
+
+{output of: git diff --name-only --diff-filter=U}
+
+**Options:**
+1. **Resolve now** — I'll help you work through each conflict
+2. **Create PR instead** — Use GitHub's merge conflict resolution
+3. **Abort** — Leave for later
+
+What would you like to do? (1/2/3):
+```
+
+**Option 1 (Resolve now)**:
+```bash
+# Start the merge (will pause at conflicts)
+git merge --no-ff "feature/${slug}"
+```
+Then guide builder through resolving each conflict file, testing, and completing the merge.
+
+**Option 2 (Create PR)**:
+```bash
+# Push branch and create PR
+git push -u origin "feature/${slug}"
+gh pr create --title "feat: {slug}" --body "PRD: dev/work/plans/{slug}/prd.md
+
+⚠️ Has merge conflicts that need resolution in GitHub."
+```
+Provide PR URL and exit (cleanup happens after manual merge).
+
+**Option 3 (Abort)**:
+Leave for later, same as Option L in Step 2.
+
+##### 6. Trigger Cleanup
+
+After successful merge, automatically run Phase 6.1:
+
+```markdown
+✅ Merge complete. Running cleanup...
+```
+
+Then execute Phase 6.1 (Remove Worktree & Branch).
+
+##### 7. Final Confirmation
+
+After cleanup completes:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ✅ Ship Complete & Merged                                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ✓ Feature merged to main                                       │
+│  ✓ Worktree removed                                             │
+│  ✓ Branch cleaned up                                            │
+│                                                                 │
+│  Memory entry: memory/entries/YYYY-MM-DD_{slug}-learnings.md    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Exit Conditions**:
+- Builder prompted and responded
+- Either: merge complete + cleanup done, OR builder chose to defer
 - Skill complete
 
-**Final Output**: Ship report with all metrics, artifacts, and next steps
+**Final Output**: Merge confirmation or deferred merge instructions
 
 ---
 
@@ -1727,14 +1789,16 @@ When failures occur, the ship skill is designed for **idempotent recovery**. Eac
 | 2.2 | PRD creation fails | Memory synthesis done | Re-run plan-to-prd skill manually |
 | 2.3 | Commit fails | PRD exists uncommitted | Manual: `git add && git commit` |
 | 3.1 | Worktree creation fails | Artifacts committed | Check git state, retry `/worktree create` |
-| 3.2 | Terminal launch fails | Worktree exists | **Graceful fallback**: manual terminal instructions |
-| 3.3 | Pi start fails | Terminal open | Manual: run `pi` in terminal |
+| 3.2 | CWD switch fails | Worktree exists | Manual: `cd` to worktree path |
 | **4.1** | **Task fails quality gates** | Partial build | **Resume via execute-prd** (existing recovery) |
 | **4.2** | **Final review: NEEDS_REWORK** | Build complete | **Address feedback, re-run final review** |
 | 5.1 | Memory entry fails | Build complete | Manual: create entry following template |
 | 5.2 | LEARNINGS update fails | Entry created | Manual: update LEARNINGS.md files |
 | 5.3 | Commit fails | Wrap complete | Manual: `git add -A && git commit` |
-| 5.4 | Report generation fails | Everything committed | Manual: review `dev/executions/{slug}/` |
+| 5.4 | /wrap fails | Artifacts committed | Address failures, re-run `/wrap` |
+| 5.5 | Report generation fails | Everything verified | Manual: review `dev/executions/{slug}/` |
+| 5.6 | Merge conflicts | Report complete | Resolve conflicts or create PR for GitHub resolution |
+| 5.6 | Builder defers merge | Report complete | Manual merge later via `gh pr create` + `/ship cleanup` |
 | 6.1 | Worktree remove fails | Branch may exist | Check for processes using worktree; `git worktree remove --force` |
 | 6.1 | Branch delete fails | Worktree removed | Check if branch checked out elsewhere; `git branch -D` |
 | 6.1 | Remote delete fails | Local cleanup done | Check permissions; `git push origin --delete feature/{slug}` |
@@ -1776,12 +1840,13 @@ When a gate pauses execution:
 
 ## Phase 6: Cleanup
 
-> **Trigger**: Run `/ship cleanup <slug>` after PR is merged to main.
+> **Trigger**: Runs automatically after successful merge in Phase 5.6, OR manually via `/ship cleanup <slug>` if merge was deferred.
 
 ### Phase 6.1: Remove Worktree & Branch
 
 **Entry Conditions**:
-- PR merged to main (normal case), OR
+- Merge to main complete (automatic trigger from Phase 5.6), OR
+- PR merged via GitHub (manual `/ship cleanup` trigger), OR
 - Builder decides to abandon the branch (force case)
 
 **Actions**:
