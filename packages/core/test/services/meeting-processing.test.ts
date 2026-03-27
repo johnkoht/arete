@@ -1607,3 +1607,193 @@ Hi there.
     assert.equal(ratio, 0.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// processMeetingExtraction - importance-based processing
+// ---------------------------------------------------------------------------
+
+describe('processMeetingExtraction - importance: skip', () => {
+  it('returns empty result immediately for importance: skip', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Task 1', 0.9),
+        createActionItem('Task 2', 0.85),
+      ],
+      decisions: ['Decision 1'],
+      learnings: ['Learning 1'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'skip' });
+
+    // Should return empty result
+    assert.equal(processed.filteredItems.length, 0);
+    assert.deepEqual(processed.stagedItemStatus, {});
+    assert.deepEqual(processed.stagedItemConfidence, {});
+    assert.deepEqual(processed.stagedItemSource, {});
+    assert.deepEqual(processed.stagedItemOwner, {});
+  });
+
+  it('does not process any items for importance: skip', () => {
+    // Even with high-confidence items and user notes matches, skip should return empty
+    const userNotes = 'Review the api documentation today';
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('review the api documentation', 0.99),
+      ],
+      decisions: ['Important decision'],
+      learnings: ['Critical learning'],
+    });
+
+    const processed = processMeetingExtraction(result, userNotes, { importance: 'skip' });
+
+    assert.equal(processed.filteredItems.length, 0);
+  });
+});
+
+describe('processMeetingExtraction - importance: light', () => {
+  it('auto-approves all action items for importance: light', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Low confidence task', 0.55), // Would be 'pending' normally
+        createActionItem('Medium confidence task', 0.75), // Would be 'pending' normally
+        createActionItem('High confidence task', 0.95), // Would be 'approved' anyway
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'light' });
+
+    assert.equal(processed.filteredItems.length, 3);
+    // All should be approved regardless of confidence
+    assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
+    assert.equal(processed.stagedItemStatus['ai_002'], 'approved');
+    assert.equal(processed.stagedItemStatus['ai_003'], 'approved');
+    // Source should still be 'ai' (not dedup)
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.equal(processed.stagedItemSource['ai_002'], 'ai');
+    assert.equal(processed.stagedItemSource['ai_003'], 'ai');
+  });
+
+  it('auto-approves all decisions for importance: light', () => {
+    const result = createMockResult({
+      decisions: ['Decision 1', 'Decision 2'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'light' });
+
+    assert.equal(processed.filteredItems.length, 2);
+    assert.equal(processed.stagedItemStatus['de_001'], 'approved');
+    assert.equal(processed.stagedItemStatus['de_002'], 'approved');
+  });
+
+  it('auto-approves all learnings for importance: light', () => {
+    const result = createMockResult({
+      learnings: ['Learning 1', 'Learning 2'],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'light' });
+
+    assert.equal(processed.filteredItems.length, 2);
+    assert.equal(processed.stagedItemStatus['le_001'], 'approved');
+    assert.equal(processed.stagedItemStatus['le_002'], 'approved');
+  });
+
+  it('still respects confidence filtering for importance: light', () => {
+    // Items below 0.5 should still be excluded
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Very low confidence', 0.3), // Should be excluded
+        createActionItem('Valid item', 0.6), // Should be included and approved
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'light' });
+
+    assert.equal(processed.filteredItems.length, 1);
+    assert.equal(processed.filteredItems[0].text, 'Valid item');
+    assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
+  });
+
+  it('still applies reconciliation for importance: light', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex soon', 0.9)],
+    });
+
+    // Reconciled items should still be marked as 'skipped'
+    const processed = processMeetingExtraction(result, '', {
+      importance: 'light',
+      completedItems: ['Send auth doc to Alex'],
+    });
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+  });
+
+  it('preserves owner metadata for importance: light', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Task with owner', 0.7, {
+          ownerSlug: 'john-smith',
+          direction: 'i_owe_them',
+          counterpartySlug: 'jane-doe',
+        }),
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'light' });
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
+    assert.deepEqual(processed.stagedItemOwner['ai_001'], {
+      ownerSlug: 'john-smith',
+      direction: 'i_owe_them',
+      counterpartySlug: 'jane-doe',
+    });
+  });
+});
+
+describe('processMeetingExtraction - importance: normal/important', () => {
+  it('processes normally for importance: normal', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Low confidence task', 0.6), // Should be 'pending'
+        createActionItem('High confidence task', 0.9), // Should be 'approved'
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'normal' });
+
+    assert.equal(processed.filteredItems.length, 2);
+    assert.equal(processed.stagedItemStatus['ai_001'], 'pending');
+    assert.equal(processed.stagedItemStatus['ai_002'], 'approved');
+  });
+
+  it('processes normally for importance: important', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Low confidence task', 0.6), // Should be 'pending'
+        createActionItem('High confidence task', 0.9), // Should be 'approved'
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '', { importance: 'important' });
+
+    assert.equal(processed.filteredItems.length, 2);
+    assert.equal(processed.stagedItemStatus['ai_001'], 'pending');
+    assert.equal(processed.stagedItemStatus['ai_002'], 'approved');
+  });
+
+  it('processes normally when importance is undefined', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Low confidence task', 0.6),
+        createActionItem('High confidence task', 0.9),
+      ],
+    });
+
+    // No importance option at all
+    const processed = processMeetingExtraction(result, '');
+
+    assert.equal(processed.filteredItems.length, 2);
+    assert.equal(processed.stagedItemStatus['ai_001'], 'pending');
+    assert.equal(processed.stagedItemStatus['ai_002'], 'approved');
+  });
+});

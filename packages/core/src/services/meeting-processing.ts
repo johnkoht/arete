@@ -13,6 +13,7 @@
 
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
 import type { MeetingExtractionResult, ActionItem, PriorItem } from './meeting-extraction.js';
+import type { Importance } from '../integrations/meetings.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,6 +61,13 @@ export interface ProcessingOptions {
   completedItems?: string[];
   /** Jaccard threshold for completed items reconciliation (default: 0.6). Items with similarity >= threshold are considered matches. Lower than dedupJaccard (0.7) because completed tasks in week.md are often abbreviated compared to meeting action items. */
   reconcileJaccard?: number;
+  /**
+   * Meeting importance level for triage workflow.
+   * - 'skip': Return empty result immediately (no extraction needed)
+   * - 'light': Auto-approve all items (skip staging review)
+   * - 'normal' | 'important': Standard processing (default behavior)
+   */
+  importance?: Importance;
 }
 
 /** Result of processing meeting extraction */
@@ -266,6 +274,21 @@ export function processMeetingExtraction(
   options?: ProcessingOptions,
 ): ProcessedMeetingResult {
   const { intelligence } = result;
+  const importance = options?.importance;
+
+  // Handle importance === 'skip': return empty result immediately (no extraction needed)
+  if (importance === 'skip') {
+    return {
+      filteredItems: [],
+      stagedItemStatus: {},
+      stagedItemConfidence: {},
+      stagedItemSource: {},
+      stagedItemOwner: {},
+    };
+  }
+
+  // For importance === 'light': auto-approve all items (set flag for later use)
+  const autoApproveAll = importance === 'light';
 
   // Resolve thresholds
   const confidenceInclude = options?.confidenceInclude ?? DEFAULT_CONFIDENCE_INCLUDE;
@@ -345,9 +368,9 @@ export function processMeetingExtraction(
     const isDedup = matchesUserNotes || matchesPriorItems;
     const source: ItemSource = isDedup ? 'dedup' : 'ai';
 
-    // Determine status
+    // Determine status (auto-approve all for light meetings)
     let status: ItemStatus;
-    if (source === 'dedup') {
+    if (autoApproveAll || source === 'dedup') {
       status = 'approved';
     } else {
       status = confidence > confidenceApproved ? 'approved' : 'pending';
@@ -393,8 +416,9 @@ export function processMeetingExtraction(
     const isDedup = matchesUserNotes || matchesPriorItems;
     const source: ItemSource = isDedup ? 'dedup' : 'ai';
 
+    // Determine status (auto-approve all for light meetings)
     let status: ItemStatus;
-    if (source === 'dedup') {
+    if (autoApproveAll || source === 'dedup') {
       status = 'approved';
     } else {
       status = confidence > confidenceApproved ? 'approved' : 'pending';
@@ -430,8 +454,9 @@ export function processMeetingExtraction(
     const isDedup = matchesUserNotes || matchesPriorItems;
     const source: ItemSource = isDedup ? 'dedup' : 'ai';
 
+    // Determine status (auto-approve all for light meetings)
     let status: ItemStatus;
-    if (source === 'dedup') {
+    if (autoApproveAll || source === 'dedup') {
       status = 'approved';
     } else {
       status = confidence > confidenceApproved ? 'approved' : 'pending';

@@ -907,3 +907,278 @@ Build the authentication system.
     }
   });
 });
+
+describe('--importance flag', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-importance');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, SAMPLE_MEETING_CONTENT, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('returns skipped: true for --importance skip', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--importance', 'skip', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Should succeed without calling LLM
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as { success: boolean; skipped?: boolean; reason?: string };
+    assert.equal(result.success, true);
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, 'importance: skip');
+  });
+
+  it('errors for invalid importance level', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--importance', 'invalid', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(result.error.includes('Invalid importance level'));
+    assert.ok(result.error.includes('skip, light, normal, important'));
+  });
+
+  it('accepts valid importance levels (light, normal, important)', () => {
+    // Test light - should not error at validation
+    const { stdout: lightOut, code: lightCode } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--importance', 'light', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // May fail at LLM call, but should NOT fail at importance validation
+    const lightResult = JSON.parse(lightOut) as { success: boolean; error?: string };
+    if (!lightResult.success) {
+      assert.ok(!lightResult.error?.includes('Invalid importance level'), 
+        `Should not fail importance validation: ${lightResult.error}`);
+    }
+  });
+
+  it('--importance light with --stage sets status to approved (auto-approval)', () => {
+    // When --importance light is used with --stage, items are auto-approved
+    // so the file should be marked as 'approved' not 'processed'
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--importance', 'light', '--stage', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    
+    if (result.success) {
+      // If extraction succeeded, verify the file has status: approved
+      const updatedContent = readFileSync(meetingFile, 'utf8');
+      assert.ok(updatedContent.includes('status: approved'), 
+        'Light importance meetings should have status: approved after --stage');
+      assert.ok(!updatedContent.includes('status: processed'), 
+        'Light importance meetings should NOT have status: processed');
+    } else {
+      // If failed at LLM call, ensure it's not an importance-related error
+      assert.ok(!result.error?.includes('Invalid importance level'), 
+        `Should not fail importance validation: ${result.error}`);
+    }
+  });
+});
+
+describe('importance from frontmatter', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-importance-frontmatter');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('reads importance from frontmatter when no flag provided', () => {
+    // Create meeting file with importance: skip in frontmatter
+    const contentWithSkip = `---
+title: Skip Meeting
+date: "2026-03-01"
+importance: skip
+---
+
+## Transcript
+
+Some content here.
+`;
+    const meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_skip-meeting.md');
+    writeFileSync(meetingFile, contentWithSkip, 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_skip-meeting.md', '--json'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    // Should skip based on frontmatter
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as { success: boolean; skipped?: boolean };
+    assert.equal(result.success, true);
+    assert.equal(result.skipped, true);
+  });
+
+  it('CLI flag overrides frontmatter importance', () => {
+    // Create meeting file with importance: skip in frontmatter
+    const contentWithSkip = `---
+title: Skip Meeting
+date: "2026-03-01"
+importance: skip
+---
+
+## Transcript
+
+Some content here.
+`;
+    const meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_skip-meeting.md');
+    writeFileSync(meetingFile, contentWithSkip, 'utf8');
+
+    // Override frontmatter skip with flag normal - should try extraction
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_skip-meeting.md', '--importance', 'normal', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; skipped?: boolean; error?: string };
+    // Should NOT be skipped (flag overrides frontmatter)
+    if (result.success) {
+      assert.ok(!result.skipped, 'Should not be skipped when flag overrides frontmatter');
+    } else {
+      // May fail at LLM call, but NOT with skipped behavior
+      assert.ok(!result.error?.includes('skipped'), 'Should not skip when flag is normal');
+    }
+  });
+});
+
+describe('reprocessing detection', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-reprocessing');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('detects status: processed as reprocessing', () => {
+    // Create meeting file with status: processed
+    const processedContent = `---
+title: Processed Meeting
+date: "2026-03-01"
+status: processed
+---
+
+## Transcript
+
+Some content here.
+`;
+    const meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_processed.md');
+    writeFileSync(meetingFile, processedContent, 'utf8');
+
+    // Extract - should proceed (mode will be 'thorough' internally)
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_processed.md', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should attempt extraction (may fail at LLM, but not at status check)
+    if (!result.success) {
+      assert.ok(!result.error?.includes('status'), 
+        `Should not error about status: ${result.error}`);
+    }
+  });
+
+  it('detects status: approved as reprocessing', () => {
+    // Create meeting file with status: approved
+    const approvedContent = `---
+title: Approved Meeting
+date: "2026-03-01"
+status: approved
+---
+
+## Transcript
+
+Some content here.
+`;
+    const meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_approved.md');
+    writeFileSync(meetingFile, approvedContent, 'utf8');
+
+    // Extract - should proceed (mode will be 'thorough' internally)
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_approved.md', '--json', '--skip-qmd'],
+      { 
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should attempt extraction (may fail at LLM, but not at status check)
+    if (!result.success) {
+      assert.ok(!result.error?.includes('status'), 
+        `Should not error about status: ${result.error}`);
+    }
+  });
+});

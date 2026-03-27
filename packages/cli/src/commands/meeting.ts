@@ -27,6 +27,7 @@ import {
   buildMeetingContext,
   applyMeetingIntelligence,
   getCompletedItems,
+  calculateSpeakingRatio,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -40,7 +41,10 @@ import type {
   MeetingIntelligence,
   ApplyMeetingResult,
   PriorItem,
+  Importance,
+  ExtractionMode,
 } from '@arete/core';
+import { execSync } from 'child_process';
 import type { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -377,6 +381,7 @@ export function registerMeetingCommands(program: Command): void {
     .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
     .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
     .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
+    .option('--importance <level>', 'Override importance level (skip, light, normal, important)')
     .action(async (file: string, opts: {
       json?: boolean;
       stage?: boolean;
@@ -385,6 +390,7 @@ export function registerMeetingCommands(program: Command): void {
       clearApproved?: boolean;
       context?: string;
       priorItems?: string;
+      importance?: string;
     }) => {
       const services = await createServices(process.cwd());
 
@@ -593,6 +599,93 @@ export function registerMeetingCommands(program: Command): void {
         }
       }
 
+      // Determine effective importance:
+      // 1. CLI flag overrides frontmatter
+      // 2. Frontmatter importance used if no flag
+      // 3. Default to undefined (normal processing)
+      let effectiveImportance: Importance | undefined = undefined;
+      if (opts.importance) {
+        // Validate CLI flag value
+        const validLevels: Importance[] = ['skip', 'light', 'normal', 'important'];
+        if (validLevels.includes(opts.importance as Importance)) {
+          effectiveImportance = opts.importance as Importance;
+        } else {
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: false,
+              error: `Invalid importance level: ${opts.importance}. Valid values: skip, light, normal, important`,
+            }));
+          } else {
+            error(`Invalid importance level: ${opts.importance}. Valid values: skip, light, normal, important`);
+          }
+          process.exit(1);
+        }
+      } else if (frontmatter.importance) {
+        // Read from frontmatter
+        effectiveImportance = frontmatter.importance as Importance;
+      }
+
+      // Handle importance === 'skip': return early with empty result
+      if (effectiveImportance === 'skip') {
+        const response = {
+          success: true,
+          file: meetingPath,
+          intelligence: {
+            summary: '',
+            actionItems: [],
+            nextSteps: [],
+            decisions: [],
+            learnings: [],
+          },
+          validationWarnings: [],
+          staged: false,
+          dryRun: Boolean(opts.dryRun),
+          skipped: true,
+          reason: 'importance: skip',
+          contextUsed: false,
+          priorItemsUsed: false,
+          reconciled: [],
+          qmd: { indexed: false, skipped: true },
+        };
+
+        if (opts.json) {
+          console.log(JSON.stringify(response, null, 2));
+        } else {
+          info(`Skipped extraction: ${meetingPath} (importance: skip)`);
+        }
+        return;
+      }
+
+      // Speaking ratio upgrade: If importance === 'light', check speaking ratio
+      // If owner speaks > 40%, upgrade to 'normal' (they led the meeting)
+      if (effectiveImportance === 'light') {
+        try {
+          const ownerName = execSync('git config user.name', { encoding: 'utf-8' }).trim();
+          if (ownerName) {
+            const ratio = calculateSpeakingRatio(transcript, ownerName);
+            if (ratio !== undefined && ratio > 0.4) {
+              const percentage = (ratio * 100).toFixed(0);
+              if (!opts.json) {
+                info(`Speaking ratio ${percentage}% > 40%, upgrading importance to 'normal'`);
+              }
+              effectiveImportance = 'normal';
+            }
+          }
+        } catch {
+          // git config unavailable, keep inferred importance
+        }
+      }
+
+      // Determine extraction mode:
+      // - Reprocessing (status: processed or approved) → thorough mode
+      // - Light importance → light mode
+      // - Otherwise → normal mode
+      const currentStatus = frontmatter.status;
+      const mode: ExtractionMode =
+        (currentStatus === 'processed' || currentStatus === 'approved')
+          ? 'thorough'
+          : (effectiveImportance === 'light' ? 'light' : 'normal');
+
       // Create LLM call wrapper using AIService
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
         const result = await services.ai.call('extraction', prompt);
@@ -606,6 +699,7 @@ export function registerMeetingCommands(program: Command): void {
           attendees: attendees.length > 0 ? attendees : undefined,
           context: contextBundle,
           priorItems,
+          mode,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -640,6 +734,7 @@ export function registerMeetingCommands(program: Command): void {
         processed = processMeetingExtraction(extractionResult, userNotes, {
           priorItems,
           completedItems,
+          importance: effectiveImportance,
         });
 
         // Format body sections from filtered items (IDs in body match IDs in metadata)
@@ -653,7 +748,7 @@ export function registerMeetingCommands(program: Command): void {
           const fm = { ...frontmatter };
 
           // Write full metadata (snake_case keys)
-          fm['status'] = 'processed';
+          fm['status'] = effectiveImportance === 'light' ? 'approved' : 'processed';
           fm['processed_at'] = new Date().toISOString();
           fm['staged_item_source'] = processed.stagedItemSource;
           fm['staged_item_confidence'] = processed.stagedItemConfidence;
