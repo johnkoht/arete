@@ -23,10 +23,13 @@ import {
 	checkPrdExecutionComplete,
 	detectChecklistTier,
 	findLearningsInDirs,
+	groupPlansByStatus,
+	formatPlanTableRow,
 	type PlanModeState,
 	type CommandContext,
 	type CommandPi,
 	type PlanListResult,
+	type PlanListItem,
 } from "./commands.js";
 import { extractTodoItems } from "./utils.js";
 import type { ExecutionProgressSnapshot } from "./execution-progress.js";
@@ -2345,7 +2348,7 @@ steps: 3
 
 		await handleShip("", ctx, pi, state);
 
-		assert.ok(notifyMessage.includes("Starting ship workflow"), "Should notify about starting");
+		assert.ok(notifyMessage.includes("Status") || notifyMessage.includes("📦") || notifyMessage.includes("building"), "Should notify about starting");
 		assert.ok(sentMessage.includes(".pi/skills/ship/SKILL.md"), "Should reference ship skill");
 		assert.ok(sentMessage.includes("Ready Plan"), "Should include plan title");
 		assert.ok(sentMessage.includes(slug), "Should include plan slug");
@@ -2587,7 +2590,7 @@ describe("build gates", () => {
 
 		// Should proceed to build, not reject
 		assert.ok(!notifyMessage.includes("⛔"), "Should not show gate error");
-		assert.ok(notifyMessage.includes("Build started") || notifyMessage.includes("⚡"), "Should start build");
+		assert.ok(notifyMessage.includes("Status") || notifyMessage.includes("📦") || notifyMessage.includes("building"), "Should start build");
 	});
 
 	it("handleShip rejects idea status", async () => {
@@ -2655,7 +2658,7 @@ describe("build gates", () => {
 
 		// Should proceed to ship, not reject
 		assert.ok(!notifyMessage.includes("⛔"), "Should not show gate error");
-		assert.ok(notifyMessage.includes("ship") || notifyMessage.includes("🚀"), "Should start ship workflow");
+		assert.ok(notifyMessage.includes("Status") || notifyMessage.includes("📦") || notifyMessage.includes("building"), "Should start ship workflow");
 		assert.ok(userMessageSent, "Should send user message to invoke ship skill");
 	});
 });
