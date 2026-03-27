@@ -1564,7 +1564,7 @@ Present the completed ship report to the builder:
 
 ---
 
-### Phase 5.6: Prompt for Merge
+### Phase 5.6: Merge/Close Gate (via Gitboss)
 
 **Entry Conditions**:
 - Phase 5.5 complete
@@ -1573,172 +1573,71 @@ Present the completed ship report to the builder:
 
 **Actions**:
 
-##### 1. Prompt Builder
+##### 1. Dispatch Gitboss Agent
 
-After displaying the ship report, prompt the builder:
+After displaying the ship report, delegate merge decisions to the gitboss agent:
 
+```typescript
+subagent({
+  agent: "gitboss",
+  agentScope: "project",
+  task: `Merge gate for feature/${slug}
+
+**Branch**: feature/${slug}
+**Target**: main
+**PRD**: dev/work/plans/${slug}/prd.md
+**Worktree**: ${worktree_path}
+**Main Repo**: ${main_repo_path}
+
+Run the full merge flow:
+1. Pre-merge checks (uncommitted changes, correct branch, conflicts)
+2. Diff review (present summary to builder)
+3. Prompt for merge decision (M/R/L)
+4. If merge: execute merge, prompt for version decision
+5. If version: invoke /release command
+
+After successful merge, report back so cleanup can proceed.`
+})
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  🚢 Ship Complete — Ready to Merge                              │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Branch: feature/{slug}                                         │
-│  Target: main                                                   │
-│                                                                 │
-│  Options:                                                       │
-│    [M] Merge to main                                            │
-│    [R] Review changes first                                     │
-│    [L] Leave for later (manual merge)                           │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
 
-Ready to merge? (M/R/L):
-```
+Gitboss handles:
+- **Pre-merge checks**: Refuses if uncommitted changes, lists dirty files
+- **Diff review**: Presents change summary (files, lines, scope)
+- **Builder prompt**: Waits for M/R/L decision, never auto-merges
+- **Merge execution**: Switches to main, merges with --no-ff, pushes
+- **Version decision**: Prompts P/M/S, invokes `/release` if requested
+- **Conflict handling**: Surfaces conflicts, offers resolution options
 
-**Wait for builder response.** Do not proceed automatically.
+##### 2. Handle Gitboss Response
 
-##### 2. Handle Response
-
-**Option M (Merge)**:
-Proceed to Step 3 (merge flow).
-
-**Option R (Review)**:
+**Merge Success**:
 ```markdown
-## Review Changes
-
-Here's a summary of changes on `feature/{slug}`:
-
-{output of: git log main..HEAD --oneline}
-
-**Files changed:**
-{output of: git diff main --stat}
-
-When ready, say "merge" to proceed or "skip" to leave for later.
+✅ Gitboss: Merged to main (abc1234)
 ```
+Proceed to Phase 6.1 (cleanup) automatically.
 
-**Option L (Leave for later)**:
+**Merge Deferred** (builder chose L):
 ```markdown
-## Merge Later
+ℹ️ Gitboss: Merge deferred
 
-No problem. To merge manually later:
-
-1. Create PR:
-   \`\`\`
-   gh pr create --title "feat: {slug}" --body "PRD: dev/work/plans/{slug}/prd.md"
-   \`\`\`
-
-2. After merge, cleanup:
-   \`\`\`
-   /ship cleanup {slug}
-   \`\`\`
-
-Branch `feature/{slug}` will remain in worktree at:
-  {worktree_path}
+Branch `feature/{slug}` remains at worktree.
+Run `/ship cleanup {slug}` after manual merge.
 ```
-Skip to Exit Conditions (skill complete without merge).
+Skill complete without cleanup.
 
-##### 3. Switch to Main Repository
-
-```bash
-# Store current worktree path for cleanup later
-worktree_path=$(pwd)
-
-# Navigate back to main repository
-cd "{main_repo_path}"
-
-# Verify we're in main repo
-if [[ ! -d ".git" ]]; then
-  echo "❌ Failed to switch to main repository"
-  exit 1
-fi
-
-# Fetch latest
-git fetch origin main
-git checkout main
-git pull origin main
-
-echo "✅ Switched to main repository"
-echo "📁 Directory: $(pwd)"
-```
-
-##### 4. Check Merge Status
-
-```bash
-# Try a dry-run merge to check for conflicts
-if git merge --no-commit --no-ff "feature/${slug}" 2>/dev/null; then
-  # Clean merge possible
-  git merge --abort
-  echo "✅ Branch can be merged cleanly"
-  MERGE_STATUS="clean"
-else
-  # Conflicts detected
-  git merge --abort 2>/dev/null || true
-  echo "⚠️ Merge conflicts detected"
-  MERGE_STATUS="conflicts"
-fi
-```
-
-##### 5a. Clean Merge
-
-If `MERGE_STATUS="clean"`:
-
-```bash
-# Perform the merge
-git merge --no-ff "feature/${slug}" -m "feat: {slug}
-
-Shipped via /ship skill.
-PRD: dev/work/plans/{slug}/prd.md"
-
-# Push to origin
-git push origin main
-
-echo "✅ Merged and pushed to main"
-```
-
-Then proceed to Phase 6.1 (cleanup) automatically.
-
-##### 5b. Handle Conflicts
-
-If `MERGE_STATUS="conflicts"`:
-
+**Merge Refused** (pre-merge check failed):
 ```markdown
-## ⚠️ Merge Conflicts Detected
+⛔ Gitboss: Pre-merge check failed
 
-The following files have conflicts:
+{reason from gitboss: uncommitted changes, conflicts, etc.}
 
-{output of: git diff --name-only --diff-filter=U}
-
-**Options:**
-1. **Resolve now** — I'll help you work through each conflict
-2. **Create PR instead** — Use GitHub's merge conflict resolution
-3. **Abort** — Leave for later
-
-What would you like to do? (1/2/3):
+Address the issue and re-run: @gitboss merge feature/{slug}
 ```
+Skill pauses for builder to fix.
 
-**Option 1 (Resolve now)**:
-```bash
-# Start the merge (will pause at conflicts)
-git merge --no-ff "feature/${slug}"
-```
-Then guide builder through resolving each conflict file, testing, and completing the merge.
+##### 3. Trigger Cleanup (on merge success)
 
-**Option 2 (Create PR)**:
-```bash
-# Push branch and create PR
-git push -u origin "feature/${slug}"
-gh pr create --title "feat: {slug}" --body "PRD: dev/work/plans/{slug}/prd.md
-
-⚠️ Has merge conflicts that need resolution in GitHub."
-```
-Provide PR URL and exit (cleanup happens after manual merge).
-
-**Option 3 (Abort)**:
-Leave for later, same as Option L in Step 2.
-
-##### 6. Trigger Cleanup
-
-After successful merge, automatically run Phase 6.1:
+After successful merge confirmation from gitboss:
 
 ```markdown
 ✅ Merge complete. Running cleanup...
@@ -1746,7 +1645,7 @@ After successful merge, automatically run Phase 6.1:
 
 Then execute Phase 6.1 (Remove Worktree & Branch).
 
-##### 7. Final Confirmation
+##### 4. Final Confirmation
 
 After cleanup completes:
 
@@ -1765,11 +1664,28 @@ After cleanup completes:
 ```
 
 **Exit Conditions**:
-- Builder prompted and responded
+- Gitboss invoked and responded
 - Either: merge complete + cleanup done, OR builder chose to defer
 - Skill complete
 
 **Final Output**: Merge confirmation or deferred merge instructions
+
+---
+
+#### Gitboss Agent Reference
+
+Gitboss (`.pi/agents/gitboss.md`) is the dedicated agent for merge gating. Its responsibilities:
+
+| Responsibility | What It Does |
+|----------------|--------------|
+| **Pre-merge checks** | Verifies clean working tree, correct branch, no conflicts |
+| **Diff review** | Summarizes changes (files, lines, scope verification) |
+| **Merge execution** | Switches to main, merges with history preservation |
+| **Version decision** | Prompts for release type, invokes `/release` command |
+
+**Out of scope for Gitboss**: Code review (that's @reviewer), running tests (that's CI/@developer), fixing code, creating PRs.
+
+**Manual invocation**: Users can invoke directly with `@gitboss review` or `@gitboss merge` outside the ship workflow
 
 ---
 
