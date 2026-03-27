@@ -255,8 +255,8 @@ export type ReviewItem = {
   status: ItemStatus;
   /** Optional goal association for action items */
   goalSlug?: string;
-  /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
-  source?: 'ai' | 'dedup';
+  /** Origin of this item: ai (LLM extracted), dedup (matched user notes), reconciled (matched completed task in week.md) */
+  source?: 'ai' | 'dedup' | 'reconciled';
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
   /** Owner slug for action items (who is responsible) */
@@ -265,6 +265,8 @@ export type ReviewItem = {
   direction?: ItemDirection;
   /** Counterparty slug for action items (who is the other party) */
   counterpartySlug?: string;
+  /** Matched text from week.md/scratchpad.md (reconciled items only) */
+  matchedText?: string;
 };
 
 export type ApprovedItems = {
