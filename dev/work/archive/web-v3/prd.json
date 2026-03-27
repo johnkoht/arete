@@ -1,0 +1,127 @@
+{
+  "name": "web-v3",
+  "branchName": "feature/web-v3-frontend-ux",
+  "goal": "Improve the Areté web app UX with Notion-like editor, restructured People page, favorites, and streamlined meeting review",
+  "userStories": [
+    {
+      "id": "v3-1-blockeditor",
+      "title": "Finalize BlockEditor Component",
+      "description": "Complete the BlockEditor prototype: add tests, implement lazy loading for bundle size, verify markdown round-trip fidelity, and ensure theme consistency.",
+      "acceptanceCriteria": [
+        "BlockEditor is lazy-loaded via React.lazy() (not in main bundle)",
+        "Markdown round-trip tests exist: import markdown → edit → export preserves content",
+        "Keyboard shortcuts work: Cmd+B (bold), Cmd+I (italic), / (slash menu)",
+        "Theme CSS variables match shadcn dark theme (background, text, borders)",
+        "Read-only mode hides editing UI (side menu, drag handles)",
+        "Integration test: mount BlockEditor, type content, verify onChange fires with markdown",
+        "No lint/typecheck errors"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "99bb69d"
+    },
+    {
+      "id": "v3-2-people-detail",
+      "title": "People Detail Page Restructure",
+      "description": "Replace the two-column layout with single-column, max-width design. Notes use BlockEditor. Add navigation guard for unsaved changes.",
+      "acceptanceCriteria": [
+        "Single-column layout with max-w-3xl container",
+        "Contact info displayed horizontally (email, phone, company inline)",
+        "Open Commitments section: show up to 3 items, 'See All' links to /commitments?person={slug}",
+        "Recent Meetings: show up to 5 items, click opens MeetingSheet",
+        "Intelligence section: health dot, trend icon, summary text",
+        "Notes section uses BlockEditor with edit/save/cancel flow",
+        "Navigation guard warns user if leaving with unsaved changes (use useBlocker)",
+        "Consistent section headers (uppercase, muted color)",
+        "Loading skeleton matches new layout",
+        "Tests: render page, verify sections present, test edit flow"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "bf94662"
+    },
+    {
+      "id": "v3-3-favorites",
+      "title": "People List — Favorites",
+      "description": "Add ability to favorite people for quick access. Requires backend support for favorite field.",
+      "acceptanceCriteria": [
+        "Backend: Person frontmatter schema supports favorite: boolean",
+        "Backend: PATCH /api/people/:slug supports updating favorite status",
+        "Star icon on each row in PeopleIndex (click toggles favorite)",
+        "Favorites tab in PeopleIndex with count badge",
+        "'All' tab shows favorites sorted first",
+        "URL param support: ?category=favorites",
+        "Optimistic update: star click immediately reflects in UI",
+        "Tests: toggle favorite, verify API call, verify UI update"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "a0d69d5"
+    },
+    {
+      "id": "v3-4-commitments",
+      "title": "Commitments Page Enhancement",
+      "description": "Add direction filter (Mine/Theirs/All), table layout, and person filter for People Detail 'See All' link.",
+      "acceptanceCriteria": [
+        "Backend: Verify /api/intelligence/commitments supports person filter param (add if missing)",
+        "Direction subnav above status filters: Mine / Theirs / All",
+        "Mine = i_owe_them, Theirs = they_owe_me",
+        "Table layout with columns: Person, Commitment, Direction, Age, Actions",
+        "Sortable by person name, by age",
+        "Person filter via URL param: ?person=anita-law",
+        "Full URL structure: ?direction=mine&filter=open&person=anita-law",
+        "Tests: filter by direction, verify correct items shown"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "13a1a1e"
+    },
+    {
+      "id": "v3-5-meeting-review",
+      "title": "Meeting Review UX — Collapsible Sections + Approve All",
+      "description": "Reduce meeting review friction with collapsible sections, bulk approve, and smarter defaults. Items render as checked by default (frontend-only).",
+      "acceptanceCriteria": [
+        "Collapsible sections: Action Items, Decisions, Learnings have ChevronDown toggle",
+        "Section collapse state persisted in localStorage (arete-review-collapsed)",
+        "'Approve All' button in section header: approves all items in that section",
+        "Items render as selected (checked) by default — user unchecks bad items",
+        "Clear visual distinction for skipped items (strikethrough or grayed out)",
+        "Keyboard accessible: Tab through items, Enter to toggle",
+        "Tests: collapse section, verify localStorage; bulk approve; toggle item status"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "4630808"
+    },
+    {
+      "id": "v3-6-meeting-sheet",
+      "title": "Meeting Sheet (People Context)",
+      "description": "Replace the meeting popup in People Detail with a full-height Sheet showing meeting details.",
+      "acceptanceCriteria": [
+        "Use shadcn Sheet component (side='right', full viewport height)",
+        "Sheet shows: meeting title, date, summary",
+        "Parsed items visible: decisions, learnings, actions (collapsed groups)",
+        "Metadata: attendees, duration",
+        "Transcript hidden or collapsed by default",
+        "'Open full meeting' link to /meetings/:slug",
+        "Click outside closes; X button closes",
+        "Tests: open sheet, verify content rendered, close via X"
+      ],
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1,
+      "commitSha": "2801dac"
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-07T16:45:00Z",
+    "totalTasks": 6,
+    "completedTasks": 6,
+    "failedTasks": 0
+  }
+}

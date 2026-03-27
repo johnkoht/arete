@@ -1,0 +1,97 @@
+{
+  "name": "project-updates",
+  "branchName": "feature/project-updates",
+  "goal": "Add generic project template, research intake pattern, and index checkpoint guidance to improve project workflow consistency and searchability",
+  "userStories": [
+    {
+      "id": "task-a",
+      "title": "Create general-project skill",
+      "description": "Create a new skill at packages/runtime/skills/general-project/ with flexible template based on glance-comms reference. Include SKILL.md with creates_project: true, project_template: general, triggers, negative triggers, and workflow that accepts 'just start' with sensible defaults. Create templates/project.md with optional markers on heavyweight sections.",
+      "acceptanceCriteria": [
+        "arete skill list shows general-project",
+        "arete skill route 'start a project for domain ownership' returns general-project",
+        "arete skill route 'start a discovery project' returns discovery (not general-project)",
+        "Template has 'optional' markers on heavyweight sections (Phases, Threads, Stakeholders)",
+        "Template includes minimal project guidance at top",
+        "User can create project without answering categorization question"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-b",
+      "title": "Add research_intake pattern",
+      "description": "Add the research_intake pattern to packages/runtime/skills/PATTERNS.md. Include when to use (bulk document processing), suggest language (not auto-apply), workflow steps (scan → analyze each → synthesize → update README → index → cleanup), analysis template structure (Summary, Key Points, Questions, Relevance), conciseness guidance with structural limits, and cleanup step for intermediate files.",
+      "acceptanceCriteria": [
+        "PATTERNS.md has research_intake pattern with clear workflow steps",
+        "Pattern includes analysis template structure with 4 sections (Summary, Key Points, Questions/Concerns, Relevance to Project)",
+        "Pattern uses 'suggest' language, not auto-apply",
+        "Pattern includes structural limits (5-7 bullet points, 2-3 sentences, max 10 paragraphs)",
+        "Pattern includes cleanup/archive step",
+        "Pattern includes explicit arete index step"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-c",
+      "title": "Update discovery skill",
+      "description": "Update the discovery skill to reference the research_intake pattern. Add dedicated numbered step after 'Capture Inputs' (step 4) pointing to research_intake pattern. Reference PATTERNS.md section.",
+      "acceptanceCriteria": [
+        "Discovery skill has dedicated step (not inline mention) referencing research_intake pattern",
+        "Step includes summary: 'Process each → synthesize → index'",
+        "Reference to PATTERNS.md is visible"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-d",
+      "title": "Update general-project skill with pattern",
+      "description": "Update the general-project skill to reference the research_intake pattern. Add dedicated numbered step pointing to research_intake pattern. Reference PATTERNS.md section.",
+      "acceptanceCriteria": [
+        "General-project skill has dedicated step referencing research_intake pattern",
+        "Step includes summary: 'Process each → synthesize → index'",
+        "Reference to PATTERNS.md is visible"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-e",
+      "title": "Add index checkpoint guidance to skills",
+      "description": "Audit skills that create content and add index checkpoint guidance. Pre-implementation audit to identify skills that write to working/outputs/ (max 8). Add standard phrase 'After saving substantial content, run arete index to make it immediately searchable.' with consistent placement. If skills using qmd update are touched, update to arete index.",
+      "acceptanceCriteria": [
+        "Pre-implementation audit completed (list of affected skills confirmed, max 8)",
+        "Skills touched by this plan use arete index (fix qmd update only if touched)",
+        "All affected skills use identical index checkpoint wording",
+        "Standard phrase used consistently"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-f",
+      "title": "Verify onboarding indexing",
+      "description": "Verify that onboarding tool indexes after creating project files. Review onboarding tool (activation workflow step 6). Verify arete index is clearly documented. Fix if missing or unclear.",
+      "acceptanceCriteria": [
+        "Onboarding tool has arete index in activation workflow",
+        "Step is clearly documented"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-25T04:15:00.000Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "planSlug": "slack-integration",
+  "status": "completed",
+  "startedAt": "2026-02-20T16:02:54Z",
+  "updatedAt": "2026-02-20T16:30:00Z",
+  "currentTaskId": null,
+  "completedTasks": 4,
+  "totalTasks": 4,
+  "worktree": {
+    "path": "/Users/johnkoht/code/arete-worktrees/arete--slack-integration",
+    "branch": "slack-integration"
+  }
+}

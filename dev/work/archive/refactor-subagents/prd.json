@@ -1,0 +1,136 @@
+{
+  "name": "refactor-subagents",
+  "branchName": "refactor-subagents",
+  "goal": "Refactor execute-prd from Cursor Task tool + shared dev/autonomous/ state to Pi subagents + per-run worktree isolation with execution state in dev/executions/<plan-slug>/",
+  "userStories": [
+    {
+      "id": "task-1-run-state-management",
+      "title": "Add Run State Management",
+      "description": "Create dev/executions/ directory structure and define status.json schema. Add .gitkeep, gitignore pattern, and README documenting the structure and end-to-end workflow. This is the foundation for per-run isolated state.",
+      "acceptanceCriteria": [
+        "dev/executions/ directory exists with .gitkeep",
+        "dev/executions/ contents gitignored (pattern added to .gitignore)",
+        "dev/executions/README.md documents structure, status.json schema, and end-to-end workflow",
+        "status.json schema defined: planSlug, status (queued|running|paused|blocked|completed|failed), startedAt, updatedAt, currentTaskId, completedTasks, totalTasks, worktree (path + branch)",
+        "prd.json format documented as unchanged (same schema.ts types, copied per-run)",
+        "progress.md documented as append-only log"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-refactor-execute-prd",
+      "title": "Refactor execute-prd Skill",
+      "description": "Rewrite .pi/skills/execute-prd/SKILL.md to use Pi subagent tool instead of Cursor Task tool. Preserve all workflow phases. Add Tool Reference section with concrete subagent call examples. Update state paths to dev/executions/<plan-slug>/. Add mandatory Execution State Path field in subagent prompt template. Document worktree-aware execution. Ensure dual-file sync with .agents/skills/execute-prd/SKILL.md.",
+      "acceptanceCriteria": [
+        "All references to Cursor Task tool / subagent_type: generalPurpose removed",
+        "Tool Reference section added with concrete subagent call examples",
+        "Developer dispatch: subagent({ agent: developer, task: ..., agentScope: project })",
+        "Reviewer dispatch: subagent({ agent: reviewer, task: ..., agentScope: project })",
+        "Subagent prompt template includes Execution State Path field",
+        "All state reads/writes point to dev/executions/<plan-slug>/",
+        "Phase 0 updated: reads prd.json from user-provided path (not hardcoded dev/autonomous/)",
+        "Phase 0 added: copies prd.json to dev/executions/<slug>/, creates status.json and progress.md",
+        "All 4 workflow phases preserved (understand, pre-mortem, task loop, holistic review)",
+        "Skill documents builder runs from worktree",
+        "All subagent calls pass worktree root as cwd",
+        "Developer completion report format documented (Completed, Files Changed, Quality Checks, Commit)",
+        "Reviewer verdict format documented (APPROVED/ITERATE)",
+        "progress.txt references changed to progress.md",
+        "Dual-file sync: .pi/skills/ and .agents/skills/ copies are identical (diff shows no differences)",
+        "grep dev/autonomous in the skill returns zero execution-path hits"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-update-agent-definitions",
+      "title": "Update Agent Definitions",
+      "description": "Update .pi/agents/developer.md, reviewer.md, orchestrator.md, and engineering-lead.md. Remove Cursor-specific references and dev/autonomous/ hardcoded paths. Developer agent must expect orchestrator to provide execution state directory. Add explicit output formats for developer (completion report) and reviewer (APPROVED/ITERATE verdict).",
+      "acceptanceCriteria": [
+        "developer.md: no references to dev/autonomous/prd.json or progress.txt",
+        "developer.md: no Cursor Task tool or Cursor-specific patterns",
+        "developer.md: Update Progress step says to use orchestrator-provided state path",
+        "developer.md: explicit completion report format (Completed, Files Changed, Quality Checks, Commit)",
+        "reviewer.md: no Cursor-specific references",
+        "reviewer.md: explicit APPROVED/ITERATE output format with structured feedback",
+        "reviewer.md: reviews code in current working directory",
+        "orchestrator.md: updated if referencing old paths",
+        "engineering-lead.md: updated if referencing old paths",
+        "All agents have appropriate tools and model in frontmatter",
+        "grep dev/autonomous .pi/agents/*.md returns zero hits"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-update-supporting-skills-and-extension",
+      "title": "Update Supporting Skills, Rules, and Extension Code",
+      "description": "Update all remaining files referencing dev/autonomous/ execution paths: prd-to-json, plan-to-prd (remove EXECUTE.md generation), prd-post-mortem skills, AND the plan-mode extension TypeScript code (/build handler in commands.ts, execution-progress.ts default paths). Leave static template references (dev/autonomous/templates/) for Phase 2. Ensure dual-file sync for all modified skills. Run typecheck and tests after TS changes.",
+      "acceptanceCriteria": [
+        "prd-to-json: output path changed to dev/plans/<slug>/prd.json",
+        "prd-to-json: progress initialization updated for progress.md in dev/executions/",
+        "prd-to-json: dev/autonomous/schema.ts reference left unchanged",
+        "prd-to-json: dual-file sync verified (.pi/skills/ matches .agents/skills/)",
+        "plan-to-prd: handoff prompt uses dev/plans/{feature-name}/prd.json",
+        "plan-to-prd: EXECUTE.md generation removed or marked optional/Cursor-only",
+        "plan-to-prd: skill path in handoff is .pi/skills/execute-prd/SKILL.md",
+        "plan-to-prd: dual-file sync verified",
+        "prd-post-mortem: prd.json ref changed to dev/executions/<slug>/prd.json",
+        "prd-post-mortem: progress.txt changed to dev/executions/<slug>/progress.md",
+        "prd-post-mortem: dual-file sync verified",
+        "commands.ts /build handler: prd.json path updated to dev/plans/<slug>/prd.json",
+        "commands.ts /build handler: PRD path updated to dev/plans/<slug>/prd.md",
+        "commands.ts build status: prdPath updated",
+        "execution-progress.ts: default prdPath parameter updated",
+        "Static template refs (run-pre-mortem, review-plan, plan-pre-mortem.mdc, conventions.md) left unchanged",
+        "Grep verification: zero hits for dev/autonomous/prd.json or dev/autonomous/progress in active files",
+        "npm run typecheck passes after TS changes",
+        "npm test passes after TS changes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-deprecation-markers",
+      "title": "Deprecation Markers on Legacy System",
+      "description": "Add deprecation notices to dev/autonomous/README.md, prd-task-agent.md, and schema.ts. Note that static templates remain until Phase 2. Do not delete any files.",
+      "acceptanceCriteria": [
+        "dev/autonomous/README.md has deprecation notice at top pointing to .pi/skills/execute-prd/",
+        "dev/autonomous/README.md deprecation note mentions static templates remain for Phase 2",
+        "dev/autonomous/prd-task-agent.md has deprecation notice at top",
+        "dev/autonomous/schema.ts has comment noting it may move in Phase 2",
+        "No files deleted from dev/autonomous/"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-path-verification",
+      "title": "Path Consistency Verification and Documentation",
+      "description": "Final verification that all path references are consistent. Run comprehensive greps, verify all dual-file syncs, check .agents/sources/ for stale refs, ensure dev/executions/README.md is complete, and run quality gates.",
+      "acceptanceCriteria": [
+        "grep -rn for dev/autonomous/prd.json and dev/autonomous/progress in active files returns zero hits",
+        "All dual-file sync checks pass (diff between .pi/skills/ and .agents/skills/ for all modified skills)",
+        ".agents/sources/ checked — execution refs updated, static template refs get Phase 2 TODO",
+        "dev/executions/README.md has complete end-to-end workflow documentation",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-19T15:00:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

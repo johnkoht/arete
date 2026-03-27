@@ -1,0 +1,146 @@
+{
+  "name": "agent-experts",
+  "branchName": "refactor/agent-experts",
+  "goal": "Refactor BUILD mode agent infrastructure from monolithic context (~700+ lines, triple duplication) to a two-dimensional composition model: expertise profiles + roles. Planner context drops to <150 lines; subagents get focused, relevant context via a 4-layer stack.",
+  "userStories": [
+    {
+      "id": "move-skills",
+      "title": "Move Build Skills to .pi/skills/",
+      "description": "Move build skills from .agents/skills/ to .pi/skills/ (replacing symlinks with real files). Update plan-mode extension, DEVELOPER.md, and all references.",
+      "acceptanceCriteria": [
+        "All 7 build skills exist as real files (not symlinks) in .pi/skills/",
+        ".agents/skills/ directory no longer exists",
+        "grep -r 'agents/skills' .pi/extensions/ returns nothing",
+        "npm run typecheck passes",
+        "Pi discovers skills correctly (available_skills show .pi/skills/ paths)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "create-build-standards",
+      "title": "Create build-standards.md",
+      "description": "Consolidate all coding standards, testing requirements, and code review checklists from three duplicated sources (conventions.md, testing.mdc, APPEND_SYSTEM.md) into a single .pi/standards/build-standards.md. Remove duplicated content from role files.",
+      "acceptanceCriteria": [
+        ".pi/standards/build-standards.md exists and is <500 lines",
+        "Contains all coding standards, testing rules, quality gates, code review checklist, commit format",
+        "No coding standards duplicated in developer.md or reviewer.md",
+        "Content from all three sources is captured (nothing lost)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "rewrite-planner-context",
+      "title": "Rewrite APPEND_SYSTEM.md and AGENTS.md",
+      "description": "Rewrite both planner context files together with clear content boundary. AGENTS.md = 'what is available?', APPEND_SYSTEM.md = 'how should I work?'. Remove BUILD pipeline, delete .agents/sources/builder/.",
+      "acceptanceCriteria": [
+        "AGENTS.md is <100 lines, hand-written (no generation pipeline)",
+        "APPEND_SYSTEM.md is <100 lines",
+        "Neither file contains coding conventions, testing rules, or code review checklists",
+        "No content duplication between the two files",
+        "npm run build succeeds and dist/AGENTS.md contains GUIDE content",
+        "npm test passes",
+        ".agents/sources/builder/ directory no longer exists",
+        "build:agents:dev script no longer exists in package.json"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "core-expertise-profile",
+      "title": "Create Core Expertise Profile",
+      "description": "Write .pi/expertise/core/PROFILE.md — the domain map for packages/core/. CRITICAL: Must read actual source files before writing. Covers all services, search, integrations, adapters, storage.",
+      "acceptanceCriteria": [
+        ".pi/expertise/core/PROFILE.md exists, ~200-250 lines",
+        "Accurately describes the architecture (spot-check 3 claims verified against source)",
+        "An agent reading it can identify which service to modify for a given task",
+        "Cross-references CLI expertise profile",
+        "Lists all LEARNINGS.md locations in core"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "cli-expertise-profile",
+      "title": "Create CLI Expertise Profile",
+      "description": "Write .pi/expertise/cli/PROFILE.md — the domain map for packages/cli/. CRITICAL: Must read actual source files before writing. Maps each CLI command to the core service it consumes.",
+      "acceptanceCriteria": [
+        ".pi/expertise/cli/PROFILE.md exists, ~200-250 lines",
+        "Accurately maps CLI commands to core services (spot-check 3 claims verified)",
+        "An agent reading it knows where CLI meets core",
+        "Cross-references core expertise profile"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "update-roles",
+      "title": "Update Role Definitions for Composition",
+      "description": "Add composition instructions to each role file (developer, reviewer, orchestrator, engineering-lead, product-manager). Add build-standards.md reference and maintenance checklist. Remove only clearly duplicated coding standards.",
+      "acceptanceCriteria": [
+        "All 5 role files have a Composition section",
+        "All 5 role files reference build-standards.md",
+        "No coding standards duplicated between roles and build-standards.md",
+        "Core behavioral sections of each role remain intact",
+        "All role files have maintenance checklist"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "orchestrator-expertise-spawning",
+      "title": "Update Orchestrator for Expertise-Aware Spawning",
+      "description": "Update orchestrator.md and execute-prd SKILL.md to compose subagent context with the right expertise profile(s) based on task area.",
+      "acceptanceCriteria": [
+        "Orchestrator.md describes how to determine which expertise to attach to a task",
+        "Orchestrator.md describes the 4-layer composition model",
+        "execute-prd SKILL.md includes guidance for expertise-aware spawning",
+        "An orchestrator following these instructions would attach core expertise to core tasks and cli expertise to CLI tasks"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "delete-deprecated",
+      "title": "Delete Deprecated Files and Update References",
+      "description": "Delete .cursor/rules/ directory. Update DEVELOPER.md, SETUP.md, and capabilities.json. Clean up all remaining stale references.",
+      "acceptanceCriteria": [
+        ".cursor/rules/ directory no longer exists",
+        "No references to .cursor/rules/ in DEVELOPER.md, SETUP.md, or capabilities.json",
+        "All capabilities.json paths in implementationPaths and readBeforeChange point to files that exist",
+        "No broken references in active documentation (archive files excluded)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "smoke-tests",
+      "title": "Create Smoke Test Document",
+      "description": "Write smoke-tests.md with 8-10 test scenarios to manually validate the new agent composition model across all agent types.",
+      "acceptanceCriteria": [
+        "smoke-tests.md exists with >=8 test scenarios",
+        "Each scenario has: prompt, expected behavior, red flags",
+        "Scenarios cover all agent types: planner, developer, reviewer, engineering-lead, orchestrator",
+        "Scenarios test both single-expertise and multi-expertise cases"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-02T00:50:00.000Z",
+    "totalTasks": 9,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

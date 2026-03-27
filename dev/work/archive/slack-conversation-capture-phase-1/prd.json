@@ -1,0 +1,81 @@
+{
+  "name": "slack-integration",
+  "branchName": "slack-conversation-capture-phase-1",
+  "goal": "Deliver a manual ingestion flow that converts pasted conversation text into a durable conversation artifact with extracted insights, discoverable by existing Aret\u00e9 context workflows.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Conversation Artifact Schema + Save Infrastructure",
+      "description": "Define ConversationForSave type following MeetingForSave pattern in packages/core/src/integrations/meetings.ts. Fields: title, date, source (manual), participants (text list), raw transcript, normalized content, insights object (each section optional: summary, decisions, action_items, open_questions, stakeholders, risks), provenance metadata. Create saveConversationFile() following saveMeetingFile() pattern. Filename convention: {date}-{title-slug}.md. Output directory: resources/conversations/. Add resources/conversations to BASE_WORKSPACE_DIRS in packages/core/src/workspace-structure.ts. Conversation markdown template with frontmatter (title, date, source, participants).",
+      "acceptanceCriteria": [
+        "ConversationForSave type exists with all required fields: title, date, source, participants, rawTranscript, normalizedContent, insights (optional sections: summary, decisions, actionItems, openQuestions, stakeholders, risks), provenance",
+        "saveConversationFile() writes valid markdown with YAML frontmatter (title, date, source) and structured sections (participants, raw transcript, normalized content, each insight section present only if populated)",
+        "Filename generation: conversationFilename() produces {date}-{slug}.md format",
+        "resources/conversations added to BASE_WORKSPACE_DIRS in workspace-structure.ts",
+        "Unit tests for saveConversationFile() and conversationFilename() pass",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "done",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Manual Ingestion Pipeline (Parse + Extract)",
+      "description": "Build text parser with fallback chain: try structured with timestamps ([timestamp] Name: message) \u2192 structured without timestamps (Name: message) \u2192 raw text paragraph splitting \u2192 always succeed (never throws). Extract participant names as plain text list from detected speaker turns. No Slack-specific parsing (no emoji, no <@mention>, no thread markers). Build LLM insight extraction via single prompt producing structured JSON output with optional sections (summary, decisions, action_items, open_questions, stakeholders, risks). Empty/missing sections handled gracefully (omitted, not blank headers). Source-agnostic prompt. Parser goes in packages/core/src/integrations/conversations/parser.ts. Extraction logic in packages/core/src/integrations/conversations/extract.ts.",
+      "acceptanceCriteria": [
+        "Parser has fallback chain: structured with timestamps \u2192 structured without \u2192 raw paragraphs \u2192 always succeeds",
+        "Parser tests for 4+ input formats: structured with timestamps, structured without timestamps, unstructured blob, empty/minimal input \u2014 all produce valid output (never throw)",
+        "Parser extracts participant names from detected speaker turns as plain text list",
+        "No Slack-specific code in parser (no emoji, no <@mention>, no thread detection)",
+        "Extraction produces structured JSON output with optional sections",
+        "Extraction handles missing sections gracefully (omitted from result, not empty stubs)",
+        "Unit tests for parser and extraction logic pass",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "done",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Review + Save Flow",
+      "description": "Build the end-to-end conversational flow: user pastes text \u2192 system parses and extracts insights \u2192 agent presents extracted output in chat \u2192 user reviews, requests changes conversationally, or confirms \u2192 on confirm, save via saveConversationFile(). No custom editor, no interactive CLI prompts \u2014 just chat-based review. This is a skill-level workflow (the agent orchestrates the flow). Create a capture-conversation skill at runtime/skills/capture-conversation/SKILL.md that defines the conversational flow. The skill should: accept pasted text, call parser, call extraction, present results, handle user feedback, and save on confirmation. Saved artifact includes: frontmatter (title, date, source), raw transcript, normalized content, all extracted insights.",
+      "acceptanceCriteria": [
+        "capture-conversation skill exists at runtime/skills/capture-conversation/SKILL.md",
+        "Skill defines conversational flow: paste \u2192 parse \u2192 extract \u2192 present \u2192 review \u2192 save",
+        "Full flow works end-to-end: paste text \u2192 parsed + extracted \u2192 review \u2192 confirm \u2192 saved file",
+        "Saved file exists at resources/conversations/{date}-{slug}.md with correct frontmatter and content",
+        "Saved file contains: frontmatter (title, date, source), raw transcript, normalized content, populated insight sections",
+        "Skill is registered and discoverable via arete skill list"
+      ],
+      "status": "done",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Context Discoverability",
+      "description": "Verify saved conversations are found by arete context --for 'query' via existing glob patterns in ContextService (packages/core/src/services/context.ts). The context service categorizes files by path \u2014 resources/meetings/ is already categorized as 'memory'. Add resources/conversations to the same category or a new appropriate category. If existing glob patterns don't cover resources/conversations/*.md, add the pattern. No changes to IntelligenceService, MemoryService, or EntityService.",
+      "acceptanceCriteria": [
+        "After saving a conversation about topic X, arete context --for 'X' includes the conversation file in results",
+        "resources/conversations/ files are categorized appropriately in ContextService (e.g., 'memory' category like resources/meetings/)",
+        "No changes to IntelligenceService, MemoryService, or EntityService",
+        "If glob pattern update was needed, it's minimal (one line addition)",
+        "npm run typecheck passes",
+        "npm test passes"
+      ],
+      "status": "done",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-20T15:57:54Z",
+    "totalTasks": 4,
+    "completedTasks": 4,
+    "failedTasks": 0
+  }
+}

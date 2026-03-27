@@ -1,0 +1,149 @@
+{
+  "name": "notion-integration",
+  "branchName": "feature/notion-integration",
+  "goal": "Enable Areté to pull Notion pages into the workspace as markdown, with full QMD indexing, following existing integration patterns (registry, service, CLI). Phase 1: page pull + infrastructure + MCP setup guidance.",
+  "userStories": [
+    {
+      "id": "task-1-types-config-url",
+      "title": "Types + Config + URL Resolver",
+      "description": "Create packages/core/src/integrations/notion/ with foundation modules: types.ts (Areté-specific types only, no SDK re-exports), config.ts (credential loading from credentials.yaml and env var, single source of truth for credential structure), url.ts (resolvePageId for all Notion URL formats, 32-char hex extraction, UUID normalization). Read first: packages/core/src/integrations/fathom/config.ts, packages/core/src/integrations/fathom/client.ts (loadFathomApiKey), packages/core/src/integrations/LEARNINGS.md.",
+      "acceptanceCriteria": [
+        "resolvePageId() handles: workspace URL, short URL, URL with query params, custom domain URL, raw UUID with dashes, raw UUID without dashes, invalid input (returns as-is)",
+        "loadNotionApiKey() loads from credentials.yaml key notion.api_key and falls back to NOTION_API_KEY env var",
+        "Credential loader round-trips: structure that configure writes can be read back (regression test)",
+        "Types contain zero imports from @notionhq/client",
+        "7+ unit tests for URL parsing and token loading",
+        "All files use .js import extensions, no any types"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-notion-client",
+      "title": "Notion API Client",
+      "description": "Build Notion API client with rate limiting, retry, and iterative block fetching. Use SDK or thin fetch wrapper per pre-work decision. Methods: getPage(pageId) with 404 page-sharing error, getPageBlocks(blockId) with pagination, getAllPageBlocks(pageId) iterative queue-based fetcher returning flat block list with depth metadata. MAX_DEPTH=5. Rate limiter at 3 req/sec. Exponential backoff on 429 (1s/2s/4s, max 3 retries). Read first: packages/core/src/integrations/fathom/client.ts, packages/core/src/integrations/krisp/client.ts, pre-work SDK decision.",
+      "acceptanceCriteria": [
+        "Client fetches page metadata successfully",
+        "getAllPageBlocks() returns flat list with depth metadata, processes iteratively (no recursive calls)",
+        "Rate limiter prevents exceeding 3 req/sec (tested with mocked timestamps)",
+        "429 responses trigger exponential backoff and retry, max 3 attempts",
+        "404 returns actionable 'page not shared' error with Notion docs link, not generic 'not found'",
+        "401 returns 'invalid token' error",
+        "MAX_DEPTH constant (5) stops nested block expansion with placeholder",
+        "Tests for: rate limiting, 429 retry, 404 error message, 401 error, pagination, max depth cutoff"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-blocks-to-markdown",
+      "title": "Blocks-to-Markdown Converter",
+      "description": "Build the blocks-to-markdown converter — highest-risk piece. Accepts flat block list with depth metadata from getAllPageBlocks. Tier 1 (must): paragraph, heading_1/2/3, bulleted_list_item, numbered_list_item, to_do, code (with language), quote, divider, table, table_row, image (as markdown image), bookmark (as link), child_page/child_database (as links), rich text (bold, italic, strikethrough, code, links, mentions). Tier 2 (graceful fallback): toggle, callout, column_list/column, synced_block, equation, embed, file, audio, video, breadcrumb, table_of_contents, link_preview. Unknown types: <!-- Unsupported block type: {type} -->. Read first: pre-work API fixtures in packages/core/test/integrations/notion/fixtures/.",
+      "acceptanceCriteria": [
+        "All Tier 1 block types produce correct idiomatic markdown (individual unit test per type)",
+        "Rich text: bold → **text**, italic → *text*, code → `text`, strikethrough → ~~text~~, links → [text](url)",
+        "Nested blocks render with correct indentation based on depth metadata",
+        "Tables render as proper markdown tables with header row",
+        "Code blocks include language annotation",
+        "Tier 2 blocks produce reasonable fallback output, never crash",
+        "Unknown block types produce placeholder comment with type name",
+        "Test suite includes real API fixture test with 10+ block types in one page",
+        "No any types in the converter",
+        "No recursive function calls — iterative processing of flat block list"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-registry-service-wiring",
+      "title": "Integration Registry + Service Wiring",
+      "description": "Register Notion in integration registry and wire up IntegrationService. Add notion entry to registry.ts with api_key auth. Extend PullOptions with optional pages (string[]) and destination (string). Add Notion branch to IntegrationService.pull(). Add getIntegrationStatus() for Notion — manifest-only (arete.yaml + credential loader, no legacy IDE config paths). Add TODO comment for refactoring to provider registry pattern. Read first: packages/core/src/integrations/registry.ts, packages/core/src/services/integrations.ts, packages/core/src/models/integrations.ts.",
+      "acceptanceCriteria": [
+        "notion entry in INTEGRATIONS registry with api_key auth type",
+        "PullOptions has optional pages (string array) and destination (string) fields",
+        "IntegrationService.pull() routes 'notion' to the pull function",
+        "getIntegrationStatus('notion') checks arete.yaml manifest + credential loader (no legacy config paths)",
+        "TODO comment exists for refactoring to provider registry pattern",
+        "Existing Fathom/Krisp/calendar tests still pass",
+        "arete integration list shows Notion with correct status"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-orchestrator-save",
+      "title": "Core Orchestrator + Save",
+      "description": "Build pullNotionPages() orchestrator and save module. save.ts: write markdown with frontmatter (title, source_url, notion_page_id, fetched_at, source: notion). Filename: slugified-title.md. index.ts: pullNotionPages(storage, workspaceRoot, paths, options) processes pages sequentially, returns NotionPullResult. Deduplication by notion_page_id in frontmatter. Partial success: save what succeeds, report all errors. Read first: packages/core/src/integrations/fathom/index.ts, packages/core/src/integrations/fathom/save.ts, packages/core/src/integrations/meetings.ts.",
+      "acceptanceCriteria": [
+        "End-to-end pull: URL → fetch → convert → save with correct frontmatter",
+        "Batch pull processes pages sequentially, reports partial success (saved X, skipped Y, errors Z)",
+        "Deduplication: existing file with matching notion_page_id causes skip (not overwrite)",
+        "Frontmatter includes all required fields: title, source_url, notion_page_id, fetched_at, source",
+        "NotionPullResult compatible with PullResult shape for IntegrationService",
+        "Tests: save with frontmatter, dedup detection, partial success, empty page handling"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-cli-configure-pull",
+      "title": "CLI: Configure + Pull Commands",
+      "description": "Add Notion to CLI configure and pull commands. Configure: prompt for token (or --token flag), validate via /v1/users/me, store in .credentials/credentials.yaml, write to arete.yaml, print MCP setup instructions (JSON snippet for .cursor/mcp.json), print success. Pull: --page (repeatable), --destination (default resources/notes/), --dry-run (stdout only), --json, --skip-qmd. Auto-refresh QMD after pull. Read first: packages/cli/src/commands/integration.ts, packages/cli/src/commands/pull.ts.",
+      "acceptanceCriteria": [
+        "arete integration configure notion prompts for token, validates via API, stores in credentials.yaml, writes to arete.yaml, prints MCP instructions",
+        "--token flag works for non-interactive configuration",
+        "Invalid token returns clear error message (not stack trace)",
+        "arete pull notion --page <url> pulls a single page to default destination",
+        "Multiple --page flags pull multiple pages",
+        "--destination overrides default resources/notes/",
+        "--dry-run prints converted markdown to stdout without saving",
+        "--json returns structured output with success/error data",
+        "QMD auto-refreshes after pull (unless --skip-qmd)",
+        "Tests: configure flow with mocked API (success + failure), pull with mocked core (single, multi, dry-run, json)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-runtime-sync-skill",
+      "title": "Runtime Integration Config + Sync Skill Update",
+      "description": "Update runtime artifacts: create notion.yaml config template, update sync skill with Notion section (commands, page-sharing gotcha, batch pull, --dry-run), update registry.md (Notion → Available with Pull). Read first: packages/runtime/integrations/configs/fathom.yaml, packages/runtime/skills/sync/SKILL.md, packages/runtime/integrations/registry.md.",
+      "acceptanceCriteria": [
+        "notion.yaml config template exists with documented options",
+        "Sync skill includes Notion section with CLI commands, page-sharing 404 gotcha, batch pull example, --dry-run tip",
+        "Registry shows Notion as Available with Pull capability",
+        "Config template follows existing format (calendar.yaml, fathom.yaml)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8-exports-docs-learnings",
+      "title": "Core Barrel Exports + Documentation",
+      "description": "Export public APIs from @arete/core, update credentials README, seed LEARNINGS.md. Exports: pullNotionPages, loadNotionApiKey, resolvePageId, NotionPullResult, NotionPageResult. LEARNINGS.md entries: credential structure, page-sharing 404 pattern, rate limiting, SDK decision rationale, flat block list design, refactoring note, Tier 1/Tier 2 split. Read first: packages/core/src/integrations/LEARNINGS.md, .credentials/README.md.",
+      "acceptanceCriteria": [
+        "pullNotionPages, loadNotionApiKey, resolvePageId exported from @arete/core",
+        "Notion types (NotionPullResult, NotionPageResult) exported from @arete/core",
+        ".credentials/README.md has Notion section with setup link and example",
+        "LEARNINGS.md seeded with 7+ pattern entries",
+        "No broken imports in existing code after barrel changes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-02-22T21:45:00.000Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

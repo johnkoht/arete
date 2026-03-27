@@ -1,0 +1,137 @@
+{
+  "verified": "2026-02-21",
+  "source": "Claude Code MCP session with live Krisp Core account",
+  "tools": [
+    {
+      "name": "mcp__krisp__date_time",
+      "description": "Get current date/time or enumerate dates in a range. Use this for accurate time-based reasoning.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "description": "Start date for range enumeration (inclusive). Accepts ISO 8601 format (e.g., \"2024-01-15\") or common formats like \"15/01/2024\". If provided, end_date is also required."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "End date for range enumeration (inclusive). Accepts ISO 8601 format (e.g., \"2024-01-20\") or common formats like \"20/01/2024\". If provided, start_date is also required."
+          }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__get_document",
+      "description": "Fetch any document by its ID.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 32,
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__get_multiple_documents",
+      "description": "Fetch multiple documents by their IDs in a single request (2-10 documents).",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["ids"],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 32,
+              "pattern": "^[a-f0-9]{32}$"
+            },
+            "minItems": 1,
+            "maxItems": 10
+          }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__list_action_items",
+      "description": "List action items (tasks/follow-ups) from meetings.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "completed": { "type": "boolean" },
+          "assigned_to_me": { "type": "boolean" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
+          "offset": { "type": "integer", "minimum": 0, "default": 0 }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__list_activities",
+      "description": "List activities from the Activity Center.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 15 },
+          "timestamp": { "type": "string", "description": "Pagination cursor - pass the created_at of the last activity to get more results" }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__list_upcoming_meetings",
+      "description": "List upcoming calendar meetings for the next few days.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "days": { "type": "integer", "minimum": 1, "maximum": 14, "default": 7 }
+        }
+      }
+    },
+    {
+      "name": "mcp__krisp__search_meetings",
+      "description": "Search meetings by text query or retrieve by ID.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "id": {
+            "anyOf": [
+              { "type": "string", "minLength": 32, "maxLength": 32 },
+              { "type": "array", "items": { "type": "string", "minLength": 32, "maxLength": 32 }, "minItems": 1, "maxItems": 50 }
+            ],
+            "description": "Meeting ID(s) for direct lookup. When provided, search is ignored."
+          },
+          "search": {
+            "type": "string",
+            "minLength": 3,
+            "description": "Search query to find meetings by name, content, attendees, or topics discussed."
+          },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 },
+          "offset": { "type": "integer", "minimum": 0, "default": 0 },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["name", "date", "url", "is_recurring", "attendees", "speakers", "transcript", "agenda", "meeting_notes", "detailed_summary", "key_points", "action_items", "past_meeting_occurrences"]
+            },
+            "description": "Fields to include in response. If not specified, all fields are returned."
+          },
+          "listen_later": { "type": "boolean" },
+          "after": { "type": "string", "description": "Filter meetings after this date (inclusive). ISO 8601." },
+          "before": { "type": "string", "description": "Filter meetings before this date (inclusive). ISO 8601." },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "participant_domains": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  ]
+}

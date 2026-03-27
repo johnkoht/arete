@@ -1,0 +1,77 @@
+{
+  "name": "unify-meeting-extraction",
+  "branchName": "feature/unify-meeting-extraction",
+  "goal": "Consolidate Web UI meeting extraction to use the production-grade core extraction service (extractMeetingIntelligence), eliminating the duplicate basic implementation in agent.ts. This brings owner attribution, better validation, and extraction quality parity between CLI and Web UI.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add call() Method to ProcessingDeps",
+      "description": "Enable agent.ts to make raw LLM calls required by extractMeetingIntelligence. The core extraction function expects LLMCallFn = (prompt: string) => Promise<string>, not the structured callStructured the backend currently uses.",
+      "acceptanceCriteria": [
+        "ProcessingDeps interface has call(task: string, prompt: string) => Promise<{ text: string }>",
+        "createDefaultDeps() wires call to AIService.call()",
+        "All existing 30 tests pass (no behavior change yet)",
+        "TypeScript compiles without errors"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Refactor Test Mocks for New Format",
+      "description": "Update test infrastructure to support core extraction response format. The 30 tests use makeMockDeps() which returns { text: string, confidence: number } items. Core uses ActionItem[] with owner, ownerSlug, direction, description, confidence.",
+      "acceptanceCriteria": [
+        "mockCoreExtractionResponse() helper generates valid JSON matching core extraction schema",
+        "mockActionItem() helper creates items with sensible defaults (owner: 'me', direction: 'i_owe_them')",
+        "makeMockDeps supports call method that returns raw JSON text (for core extraction)",
+        "All 30 tests pass with updated mocks",
+        "TypeScript compiles without errors"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Wire Backend to Core Extraction Service",
+      "description": "Replace inline extraction in agent.ts with extractMeetingIntelligence from core. The function is already imported but not used. Create adapter to bridge formats and preserve backend-specific logic (dedup, auto-approval).",
+      "acceptanceCriteria": [
+        "extractMeetingIntelligence called instead of callStructured with MeetingExtractionSchema",
+        "callLLM adapter wraps deps.call() to match LLMCallFn signature",
+        "Attendees passed from frontmatter: { attendees: (fm.participants as string[]) || [] }",
+        "Owner/direction fields preserved in extracted action items",
+        "Adapter maps ActionItem.description to backend's expected text field for dedup",
+        "Dedup against user notes works (Jaccard > 0.7)",
+        "Auto-approval based on confidence works (>0.8 approved, >0.5 included)",
+        "All tests pass",
+        "TypeScript compiles without errors"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Validate and Clean Up",
+      "description": "Manual testing, A/B comparison, dead code removal, and documentation.",
+      "acceptanceCriteria": [
+        "Manual test: process a real meeting via Web UI, verify owner badges appear in format @{slug}",
+        "A/B comparison: process 2-3 real transcripts with old code (pre-merge) and new code, document differences",
+        "buildExtractionPrompt() function removed (dead code)",
+        "Old MeetingExtractionSchema removed if no longer used",
+        "Full test suite passes (npm run typecheck && npm test)",
+        "LEARNINGS.md updated in packages/apps/backend/ if gotchas discovered"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-11T21:45:00Z",
+    "totalTasks": 4,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
