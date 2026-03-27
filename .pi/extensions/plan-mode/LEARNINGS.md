@@ -7,11 +7,12 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 - `PLAN-FORMAT.md` — **Canonical plan file format documentation**. Frontmatter schema, valid values, content structure, commands reference. Read this before manually creating plans.
 - `index.ts` — extension entry, Pi event hooks, `PlanModeState`, `autoSavePlan()`, `handleExecutionComplete()` (shared completion handler for both todo and PRD paths)
 - `commands.ts` — `PlanModeState`, `createDefaultState()`, all command handlers, `checkPrdExecutionComplete()`, `CommandContext`/`CommandPi` interfaces
-- `persistence.ts` — `savePlan()`, `loadPlan()`, `parseFrontmatter()`, `serializeFrontmatter()`, `slugify()`, `migrateStatus()`
+- `persistence.ts` — `savePlan()`, `loadPlan()`, `parseFrontmatter()`, `serializeFrontmatter()`, `slugify()`, `migrateStatus()`, `listBacklogItems()`, `loadBacklogItem()`, `promoteBacklogItem()`
 - `utils.ts` — `extractTodoItems()`, `classifyPlanSize()`, `suggestPlanName()`, `TodoItem` type
 - `agents.ts` — `loadAgentConfig()`, `getAgentPrompt()`, `getAgentModel()`, `resolveModel()`; loads agent model settings from `.pi/settings.json` and prompt definitions from `.pi/agents/{role}.md`
 - `execution-progress.ts` — `resolveExecutionProgress()`, `deriveActiveRole()`; reads PRD progress from prd.json during `/build` execution; used by `commands.ts`
 - `widget.ts` — footer and todo widget rendering
+- `release.ts` — semantic versioning utilities: `getCurrentVersion()`, `bumpVersion()`, `getUnreleasedCommits()`, `categorizeCommits()`, `formatChangelogEntry()`, `updateChangelog()`, `executeRelease()`. Uses conventional commit format for changelog categories (feat→Added, fix→Fixed, refactor/perf→Changed). Pre-flight checks for clean tree + main branch.
 - Tests: `.pi/extensions/plan-mode/*.test.ts` (run with `npx tsx --test '.pi/extensions/plan-mode/*.test.ts'`)
 
 ## Gotchas
