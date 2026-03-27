@@ -3,6 +3,50 @@
  */
 import { join, basename } from 'path';
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
+/**
+ * Infer meeting importance from calendar event metadata.
+ *
+ * Priority rules (first match wins):
+ * 1. Organizer is self → 'important'
+ * 2. 1:1 meeting (2 attendees) → 'important'
+ * 3. Small group (≤3 attendees) → 'normal'
+ * 4. Large audience (≥5 attendees, not organizer) → 'light'
+ * 5. Default → 'normal'
+ *
+ * Modifier: If hasAgenda is true and result would be 'light', upgrade to 'normal'.
+ *
+ * Note: Never returns 'skip' — that's user-assigned only.
+ */
+export function inferMeetingImportance(event, options) {
+    const attendeeCount = event.attendees.length;
+    const isOrganizerSelf = event.organizer?.self === true;
+    let importance;
+    // Rule 1: Organizer is self → 'important'
+    if (isOrganizerSelf) {
+        importance = 'important';
+    }
+    // Rule 2: 1:1 meeting (2 attendees) → 'important'
+    else if (attendeeCount === 2) {
+        importance = 'important';
+    }
+    // Rule 3: Small group (≤3 attendees) → 'normal'
+    else if (attendeeCount <= 3) {
+        importance = 'normal';
+    }
+    // Rule 4: Large audience (≥5 attendees, not organizer) → 'light'
+    else if (attendeeCount >= 5) {
+        importance = 'light';
+    }
+    // Rule 5: Default (4 attendees) → 'normal'
+    else {
+        importance = 'normal';
+    }
+    // Modifier: hasAgenda upgrades 'light' to 'normal'
+    if (options?.hasAgenda && importance === 'light') {
+        importance = 'normal';
+    }
+    return importance;
+}
 function slugify(s) {
     return s
         .toLowerCase()
@@ -223,6 +267,12 @@ export async function saveMeetingFile(storage, meeting, outputDir, templateConte
     };
     if (meeting.agenda) {
         frontmatterData['agenda'] = meeting.agenda;
+    }
+    if (meeting.importance) {
+        frontmatterData['importance'] = meeting.importance;
+    }
+    if (meeting.recurring_series_id) {
+        frontmatterData['recurring_series_id'] = meeting.recurring_series_id;
     }
     // Write structured attendees array
     const rawAttendees = meeting.attendees ?? [];

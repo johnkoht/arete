@@ -2,6 +2,15 @@
  * Meeting save logic — uses StorageAdapter, no direct fs.
  */
 import type { StorageAdapter } from '../storage/adapter.js';
+import type { CalendarEvent } from './calendar/types.js';
+/**
+ * Meeting importance levels for triage workflow.
+ * - skip: User-assigned only — auto-skip processing entirely
+ * - light: Large audience meetings — minimal extraction
+ * - normal: Standard meetings — full extraction
+ * - important: 1:1s and self-organized — priority processing
+ */
+export type Importance = 'skip' | 'light' | 'normal' | 'important';
 export interface MeetingForSave {
     title: string;
     date: string;
@@ -22,6 +31,10 @@ export interface MeetingForSave {
     agenda?: string;
     /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
     status?: 'synced' | 'processed' | 'approved';
+    /** Meeting importance for triage workflow. 'skip' is user-assigned only. */
+    importance?: Importance;
+    /** ID of the recurring event series (for recurring meeting detection). */
+    recurring_series_id?: string;
 }
 /**
  * Result of agenda matching with metadata for user prompting.
@@ -40,6 +53,23 @@ export interface AgendaMatchResult {
         score: number;
     }>;
 }
+/**
+ * Infer meeting importance from calendar event metadata.
+ *
+ * Priority rules (first match wins):
+ * 1. Organizer is self → 'important'
+ * 2. 1:1 meeting (2 attendees) → 'important'
+ * 3. Small group (≤3 attendees) → 'normal'
+ * 4. Large audience (≥5 attendees, not organizer) → 'light'
+ * 5. Default → 'normal'
+ *
+ * Modifier: If hasAgenda is true and result would be 'light', upgrade to 'normal'.
+ *
+ * Note: Never returns 'skip' — that's user-assigned only.
+ */
+export declare function inferMeetingImportance(event: CalendarEvent, options?: {
+    hasAgenda?: boolean;
+}): 'light' | 'normal' | 'important';
 /**
  * Find a matching agenda file for a meeting by date and title.
  *

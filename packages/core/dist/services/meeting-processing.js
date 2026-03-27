@@ -155,6 +155,19 @@ function findMatchingCompletedItem(itemText, tokenizedCompletedItems, threshold)
  */
 export function processMeetingExtraction(result, userNotes, options) {
     const { intelligence } = result;
+    const importance = options?.importance;
+    // Handle importance === 'skip': return empty result immediately (no extraction needed)
+    if (importance === 'skip') {
+        return {
+            filteredItems: [],
+            stagedItemStatus: {},
+            stagedItemConfidence: {},
+            stagedItemSource: {},
+            stagedItemOwner: {},
+        };
+    }
+    // For importance === 'light': auto-approve all items (set flag for later use)
+    const autoApproveAll = importance === 'light';
     // Resolve thresholds
     const confidenceInclude = options?.confidenceInclude ?? DEFAULT_CONFIDENCE_INCLUDE;
     const confidenceApproved = options?.confidenceApproved ?? DEFAULT_CONFIDENCE_APPROVED;
@@ -218,9 +231,9 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
-        // Determine status
+        // Determine status (auto-approve all for light meetings)
         let status;
-        if (source === 'dedup') {
+        if (autoApproveAll || source === 'dedup') {
             status = 'approved';
         }
         else {
@@ -263,8 +276,9 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
+        // Determine status (auto-approve all for light meetings)
         let status;
-        if (source === 'dedup') {
+        if (autoApproveAll || source === 'dedup') {
             status = 'approved';
         }
         else {
@@ -295,8 +309,9 @@ export function processMeetingExtraction(result, userNotes, options) {
         const matchesPriorItems = !hasNegationMarkers(text) && itemMatchesPriorItems(text, tokenizedPriorItems, dedupJaccard);
         const isDedup = matchesUserNotes || matchesPriorItems;
         const source = isDedup ? 'dedup' : 'ai';
+        // Determine status (auto-approve all for light meetings)
         let status;
-        if (source === 'dedup') {
+        if (autoApproveAll || source === 'dedup') {
             status = 'approved';
         }
         else {
@@ -396,5 +411,126 @@ export function formatFilteredStagedSections(filteredItems, summary) {
         lines.push('');
     }
     return lines.join('\n');
+}
+// ---------------------------------------------------------------------------
+// Speaking Ratio Analysis
+// ---------------------------------------------------------------------------
+/**
+ * Pattern to match speaker labels in Fathom/Krisp transcripts.
+ * Matches: **John Koht | 01:18** or **John Koht | 1:23:45**
+ * Captures: speaker name (group 1)
+ */
+const SPEAKER_LABEL_PATTERN = /\*\*([^|]+?)\s*\|\s*\d+:\d+(?::\d+)?\*\*/g;
+/**
+ * Pattern to detect anonymous speakers like "Speaker 1", "Speaker 4", etc.
+ * These contribute to total word count but should never match an owner.
+ */
+const ANONYMOUS_SPEAKER_PATTERN = /^Speaker\s+\d+$/i;
+/**
+ * Count words in a text string.
+ * Splits on whitespace and counts non-empty segments.
+ *
+ * @param text - Text to count words in
+ * @returns Number of words
+ */
+function countWords(text) {
+    return text.split(/\s+/).filter((word) => word.length > 0).length;
+}
+/**
+ * Check if owner name matches a speaker name.
+ * - Case-insensitive
+ * - Partial match: "John" matches "John Koht", "John Smith", etc.
+ * - Never matches anonymous speakers like "Speaker 4"
+ *
+ * @param speakerName - Name from transcript speaker label
+ * @param ownerName - Name to match against (typically first name)
+ * @returns True if owner matches this speaker
+ */
+function speakerMatchesOwner(speakerName, ownerName) {
+    // Never match anonymous speakers
+    if (ANONYMOUS_SPEAKER_PATTERN.test(speakerName.trim())) {
+        return false;
+    }
+    const normalizedSpeaker = speakerName.trim().toLowerCase();
+    const normalizedOwner = ownerName.trim().toLowerCase();
+    // Exact match or partial match (owner name appears in speaker name)
+    return (normalizedSpeaker === normalizedOwner ||
+        normalizedSpeaker.includes(normalizedOwner) ||
+        normalizedOwner.includes(normalizedSpeaker));
+}
+/**
+ * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
+ *
+ * Parses Fathom/Krisp-style speaker labels (`**Name | MM:SS**` or `**Name | HH:MM:SS**`)
+ * and counts words spoken by each speaker. Returns the ratio of the owner's words
+ * to total words.
+ *
+ * @param transcript - Meeting transcript text containing speaker labels
+ * @param ownerName - Name of the meeting owner (case-insensitive, partial matches allowed)
+ * @returns Ratio of owner's words to total words (0-1), or undefined if no speaker labels found
+ *
+ * @example
+ * ```ts
+ * const transcript = `
+ * **John Koht | 01:18**
+ * Hello, how are you?
+ *
+ * **Dave | 02:30**
+ * I'm good, thanks for asking.
+ * `;
+ *
+ * calculateSpeakingRatio(transcript, 'John'); // → ~0.4 (4 words out of 10)
+ * calculateSpeakingRatio(transcript, 'Sarah'); // → 0 (not found)
+ * calculateSpeakingRatio('No labels here', 'John'); // → undefined
+ * ```
+ */
+export function calculateSpeakingRatio(transcript, ownerName) {
+    // Handle empty/null inputs gracefully (Pre-Mortem R4)
+    if (!transcript || !ownerName) {
+        return undefined;
+    }
+    // Find all speaker labels and their positions
+    const speakerMatches = [];
+    let match;
+    // Reset regex state
+    SPEAKER_LABEL_PATTERN.lastIndex = 0;
+    while ((match = SPEAKER_LABEL_PATTERN.exec(transcript)) !== null) {
+        speakerMatches.push({
+            name: match[1].trim(),
+            index: match.index,
+            length: match[0].length,
+        });
+    }
+    // No speaker labels found → graceful degradation
+    if (speakerMatches.length === 0) {
+        return undefined;
+    }
+    // Calculate words per speaker segment
+    const wordCounts = new Map();
+    let totalWords = 0;
+    let ownerWords = 0;
+    for (let i = 0; i < speakerMatches.length; i++) {
+        const current = speakerMatches[i];
+        const contentStart = current.index + current.length;
+        const contentEnd = i + 1 < speakerMatches.length
+            ? speakerMatches[i + 1].index
+            : transcript.length;
+        // Extract text between this speaker label and the next
+        const spokenText = transcript.slice(contentStart, contentEnd);
+        const words = countWords(spokenText);
+        totalWords += words;
+        // Track words for this speaker
+        const currentCount = wordCounts.get(current.name) ?? 0;
+        wordCounts.set(current.name, currentCount + words);
+        // Check if this speaker matches the owner
+        if (speakerMatchesOwner(current.name, ownerName)) {
+            ownerWords += words;
+        }
+    }
+    // Avoid division by zero
+    if (totalWords === 0) {
+        return 0;
+    }
+    return ownerWords / totalWords;
 }
 //# sourceMappingURL=meeting-processing.js.map

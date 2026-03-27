@@ -24,6 +24,8 @@ import type { MeetingContextBundle } from './meeting-context.js';
  * Accepts a prompt string and returns the LLM's text response.
  */
 export type LLMCallFn = (prompt: string) => Promise<string>;
+/** Extraction mode determining prompt style and category limits. */
+export type ExtractionMode = 'light' | 'normal' | 'thorough';
 /** Direction of an action item relative to the owner. */
 export type ActionItemDirection = 'i_owe_them' | 'they_owe_me';
 /** A structured action item extracted from a meeting. */
@@ -71,6 +73,26 @@ export type MeetingExtractionResult = {
     /** All items parsed from LLM response before validation filtering (for debugging). */
     rawItems: RawExtractedItem[];
 };
+/** Category limits: max items per category (keep first N in LLM response order). */
+declare const CATEGORY_LIMITS: {
+    actionItems: number;
+    decisions: number;
+    learnings: number;
+};
+/** Light mode limits: summary + minimal learnings only. */
+export declare const LIGHT_LIMITS: {
+    actionItems: number;
+    decisions: number;
+    learnings: number;
+};
+/** Thorough mode limits: higher caps for comprehensive extraction. */
+export declare const THOROUGH_LIMITS: {
+    actionItems: number;
+    decisions: number;
+    learnings: number;
+};
+/** Type for category limits. */
+export type CategoryLimits = typeof CATEGORY_LIMITS;
 /**
  * Normalize text for Jaccard comparison.
  * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
@@ -107,17 +129,29 @@ export declare function buildExclusionListSection(context?: MeetingContextBundle
  */
 export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
 /**
+ * Build a lightweight LLM prompt for minimal extraction.
+ * ~50% shorter than normal prompt, focused on summary + domain learnings.
+ *
+ * Used for light-importance meetings where full extraction is overhead.
+ *
+ * @param transcript - Meeting transcript text
+ */
+export declare function buildLightExtractionPrompt(transcript: string): string;
+/**
  * Parse the LLM response into a MeetingExtractionResult.
  * Handles various response formats gracefully — never throws.
  * Returns validation warnings for rejected items.
+ *
+ * @param response - Raw LLM response text
+ * @param limits - Optional category limits (defaults to CATEGORY_LIMITS for normal mode)
  */
-export declare function parseMeetingExtractionResponse(response: string): MeetingExtractionResult;
+export declare function parseMeetingExtractionResponse(response: string, limits?: CategoryLimits): MeetingExtractionResult;
 /**
  * Extract meeting intelligence from a transcript using an LLM.
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
+ * @param options - Optional attendees, ownerSlug, context, priorItems, and mode for extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export declare function extractMeetingIntelligence(transcript: string, callLLM: LLMCallFn, options?: {
@@ -125,6 +159,8 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
     ownerSlug?: string;
     context?: MeetingContextBundle;
     priorItems?: PriorItem[];
+    /** Extraction mode: 'light' for minimal, 'normal' (default), 'thorough' for comprehensive */
+    mode?: ExtractionMode;
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.
@@ -144,4 +180,5 @@ export declare function formatStagedSections(result: MeetingExtractionResult): s
  * @returns Updated content with staged sections replaced/inserted
  */
 export declare function updateMeetingContent(originalContent: string, stagedSections: string): string;
+export {};
 //# sourceMappingURL=meeting-extraction.d.ts.map

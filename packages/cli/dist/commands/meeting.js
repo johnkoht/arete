@@ -1,7 +1,8 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, calculateSpeakingRatio, } from '@arete/core';
+import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -279,6 +280,7 @@ export function registerMeetingCommands(program) {
         .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
         .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
         .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
+        .option('--importance <level>', 'Override importance level (skip, light, normal, important)')
         .action(async (file, opts) => {
         const services = await createServices(process.cwd());
         // Early check: --clear-approved requires --stage
@@ -486,6 +488,92 @@ export function registerMeetingCommands(program) {
                 process.exit(1);
             }
         }
+        // Determine effective importance:
+        // 1. CLI flag overrides frontmatter
+        // 2. Frontmatter importance used if no flag
+        // 3. Default to undefined (normal processing)
+        let effectiveImportance = undefined;
+        if (opts.importance) {
+            // Validate CLI flag value
+            const validLevels = ['skip', 'light', 'normal', 'important'];
+            if (validLevels.includes(opts.importance)) {
+                effectiveImportance = opts.importance;
+            }
+            else {
+                if (opts.json) {
+                    console.log(JSON.stringify({
+                        success: false,
+                        error: `Invalid importance level: ${opts.importance}. Valid values: skip, light, normal, important`,
+                    }));
+                }
+                else {
+                    error(`Invalid importance level: ${opts.importance}. Valid values: skip, light, normal, important`);
+                }
+                process.exit(1);
+            }
+        }
+        else if (frontmatter.importance) {
+            // Read from frontmatter
+            effectiveImportance = frontmatter.importance;
+        }
+        // Handle importance === 'skip': return early with empty result
+        if (effectiveImportance === 'skip') {
+            const response = {
+                success: true,
+                file: meetingPath,
+                intelligence: {
+                    summary: '',
+                    actionItems: [],
+                    nextSteps: [],
+                    decisions: [],
+                    learnings: [],
+                },
+                validationWarnings: [],
+                staged: false,
+                dryRun: Boolean(opts.dryRun),
+                skipped: true,
+                reason: 'importance: skip',
+                contextUsed: false,
+                priorItemsUsed: false,
+                reconciled: [],
+                qmd: { indexed: false, skipped: true },
+            };
+            if (opts.json) {
+                console.log(JSON.stringify(response, null, 2));
+            }
+            else {
+                info(`Skipped extraction: ${meetingPath} (importance: skip)`);
+            }
+            return;
+        }
+        // Speaking ratio upgrade: If importance === 'light', check speaking ratio
+        // If owner speaks > 40%, upgrade to 'normal' (they led the meeting)
+        if (effectiveImportance === 'light') {
+            try {
+                const ownerName = execSync('git config user.name', { encoding: 'utf-8' }).trim();
+                if (ownerName) {
+                    const ratio = calculateSpeakingRatio(transcript, ownerName);
+                    if (ratio !== undefined && ratio > 0.4) {
+                        const percentage = (ratio * 100).toFixed(0);
+                        if (!opts.json) {
+                            info(`Speaking ratio ${percentage}% > 40%, upgrading importance to 'normal'`);
+                        }
+                        effectiveImportance = 'normal';
+                    }
+                }
+            }
+            catch {
+                // git config unavailable, keep inferred importance
+            }
+        }
+        // Determine extraction mode:
+        // - Reprocessing (status: processed or approved) → thorough mode
+        // - Light importance → light mode
+        // - Otherwise → normal mode
+        const currentStatus = frontmatter.status;
+        const mode = (currentStatus === 'processed' || currentStatus === 'approved')
+            ? 'thorough'
+            : (effectiveImportance === 'light' ? 'light' : 'normal');
         // Create LLM call wrapper using AIService
         const callLLM = async (prompt) => {
             const result = await services.ai.call('extraction', prompt);
@@ -498,6 +586,7 @@ export function registerMeetingCommands(program) {
                 attendees: attendees.length > 0 ? attendees : undefined,
                 context: contextBundle,
                 priorItems,
+                mode,
             });
         }
         catch (err) {
@@ -530,6 +619,7 @@ export function registerMeetingCommands(program) {
             processed = processMeetingExtraction(extractionResult, userNotes, {
                 priorItems,
                 completedItems,
+                importance: effectiveImportance,
             });
             // Format body sections from filtered items (IDs in body match IDs in metadata)
             stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary);
@@ -537,7 +627,7 @@ export function registerMeetingCommands(program) {
                 // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
                 const fm = { ...frontmatter };
                 // Write full metadata (snake_case keys)
-                fm['status'] = 'processed';
+                fm['status'] = effectiveImportance === 'light' ? 'approved' : 'processed';
                 fm['processed_at'] = new Date().toISOString();
                 fm['staged_item_source'] = processed.stagedItemSource;
                 fm['staged_item_confidence'] = processed.stagedItemConfidence;

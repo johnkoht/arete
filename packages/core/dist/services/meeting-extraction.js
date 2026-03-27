@@ -44,6 +44,18 @@ const CATEGORY_LIMITS = {
     decisions: 5,
     learnings: 5,
 };
+/** Light mode limits: summary + minimal learnings only. */
+export const LIGHT_LIMITS = {
+    actionItems: 0,
+    decisions: 0,
+    learnings: 2,
+};
+/** Thorough mode limits: higher caps for comprehensive extraction. */
+export const THOROUGH_LIMITS = {
+    actionItems: 10,
+    decisions: 7,
+    learnings: 7,
+};
 /** Jaccard threshold for near-duplicate detection. */
 const JACCARD_DEDUP_THRESHOLD = 0.8;
 /** Trivial action item patterns to filter (case-insensitive). */
@@ -435,6 +447,49 @@ ${enhancedContext}${exclusionList}
 Transcript:
 ${transcript}`;
 }
+/**
+ * Build a lightweight LLM prompt for minimal extraction.
+ * ~50% shorter than normal prompt, focused on summary + domain learnings.
+ *
+ * Used for light-importance meetings where full extraction is overhead.
+ *
+ * @param transcript - Meeting transcript text
+ */
+export function buildLightExtractionPrompt(transcript) {
+    return `Extract minimal intelligence from this meeting transcript.
+
+Return ONLY valid JSON with no markdown formatting:
+{
+  "summary": "string — 2-3 sentence summary of the meeting",
+  "learnings": ["string — max 2 domain insights"]
+}
+
+## What TO extract (learnings only):
+- Product strategy insights
+- User feedback or behavior patterns
+- Strategic decisions with long-term impact
+- Domain expertise or technical discoveries
+
+## What to SKIP (do NOT extract):
+- Action items (not needed for this meeting type)
+- Operational decisions (tool choices, meeting logistics)
+- Process updates (standups, status changes)
+- Configuration details
+
+Examples:
+✓ EXTRACT: "Enterprise users prefer batch processing over real-time"
+✓ EXTRACT: "React 19 Server Components reduce initial bundle by 40%"
+✗ SKIP: "We'll use Notion for tracking" (tool choice)
+✗ SKIP: "Meeting moved to Tuesday" (logistics)
+
+Rules:
+- Return ONLY the JSON object
+- Maximum 2 learnings (most valuable only)
+- Empty learnings array is fine if nothing qualifies
+
+Transcript:
+${transcript}`;
+}
 // ---------------------------------------------------------------------------
 // Response Parsing
 // ---------------------------------------------------------------------------
@@ -442,8 +497,11 @@ ${transcript}`;
  * Parse the LLM response into a MeetingExtractionResult.
  * Handles various response formats gracefully — never throws.
  * Returns validation warnings for rejected items.
+ *
+ * @param response - Raw LLM response text
+ * @param limits - Optional category limits (defaults to CATEGORY_LIMITS for normal mode)
  */
-export function parseMeetingExtractionResponse(response) {
+export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMITS) {
     const emptyResult = {
         intelligence: {
             summary: '',
@@ -611,32 +669,32 @@ export function parseMeetingExtractionResponse(response) {
     }
     const finalLearnings = dedupedLearnings.map(l => l.text);
     // 4. Apply category limits (keep first N in LLM response order)
-    const limitedActionItems = dedupedActionItems.slice(0, CATEGORY_LIMITS.actionItems);
-    const limitedDecisions = finalDecisions.slice(0, CATEGORY_LIMITS.decisions);
-    const limitedLearnings = finalLearnings.slice(0, CATEGORY_LIMITS.learnings);
+    const limitedActionItems = dedupedActionItems.slice(0, limits.actionItems);
+    const limitedDecisions = finalDecisions.slice(0, limits.decisions);
+    const limitedLearnings = finalLearnings.slice(0, limits.learnings);
     // Add warnings for items exceeding limits
-    if (dedupedActionItems.length > CATEGORY_LIMITS.actionItems) {
-        for (let i = CATEGORY_LIMITS.actionItems; i < dedupedActionItems.length; i++) {
+    if (dedupedActionItems.length > limits.actionItems) {
+        for (let i = limits.actionItems; i < dedupedActionItems.length; i++) {
             validationWarnings.push({
                 item: dedupedActionItems[i].description.slice(0, 50) +
                     (dedupedActionItems[i].description.length > 50 ? '...' : ''),
-                reason: `exceeds action item limit (${CATEGORY_LIMITS.actionItems})`,
+                reason: `exceeds action item limit (${limits.actionItems})`,
             });
         }
     }
-    if (finalDecisions.length > CATEGORY_LIMITS.decisions) {
-        for (let i = CATEGORY_LIMITS.decisions; i < finalDecisions.length; i++) {
+    if (finalDecisions.length > limits.decisions) {
+        for (let i = limits.decisions; i < finalDecisions.length; i++) {
             validationWarnings.push({
                 item: finalDecisions[i].slice(0, 50) + (finalDecisions[i].length > 50 ? '...' : ''),
-                reason: `exceeds decision limit (${CATEGORY_LIMITS.decisions})`,
+                reason: `exceeds decision limit (${limits.decisions})`,
             });
         }
     }
-    if (finalLearnings.length > CATEGORY_LIMITS.learnings) {
-        for (let i = CATEGORY_LIMITS.learnings; i < finalLearnings.length; i++) {
+    if (finalLearnings.length > limits.learnings) {
+        for (let i = limits.learnings; i < finalLearnings.length; i++) {
             validationWarnings.push({
                 item: finalLearnings[i].slice(0, 50) + (finalLearnings[i].length > 50 ? '...' : ''),
-                reason: `exceeds learning limit (${CATEGORY_LIMITS.learnings})`,
+                reason: `exceeds learning limit (${limits.learnings})`,
             });
         }
     }
@@ -660,7 +718,7 @@ export function parseMeetingExtractionResponse(response) {
  *
  * @param transcript - The meeting transcript text
  * @param callLLM - Function that calls the LLM with a prompt and returns the response
- * @param options - Optional attendees, ownerSlug, context, and priorItems for better extraction
+ * @param options - Optional attendees, ownerSlug, context, priorItems, and mode for extraction
  * @returns Extracted intelligence with validation warnings — empty on error
  */
 export async function extractMeetingIntelligence(transcript, callLLM, options) {
@@ -677,10 +735,31 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             rawItems: [],
         };
     }
-    const prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
+    const mode = options?.mode ?? 'normal';
+    // Select prompt and limits based on mode
+    let prompt;
+    let limits;
+    switch (mode) {
+        case 'light':
+            // Light mode: minimal prompt, only summary + 2 learnings
+            prompt = buildLightExtractionPrompt(transcript);
+            limits = LIGHT_LIMITS;
+            break;
+        case 'thorough':
+            // Thorough mode: full prompt with higher limits
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
+            limits = THOROUGH_LIMITS;
+            break;
+        case 'normal':
+        default:
+            // Normal mode: full prompt with standard limits
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
+            limits = CATEGORY_LIMITS;
+            break;
+    }
     try {
         const response = await callLLM(prompt);
-        return parseMeetingExtractionResponse(response);
+        return parseMeetingExtractionResponse(response, limits);
     }
     catch {
         // LLM call failed — return empty result rather than propagating

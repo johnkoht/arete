@@ -145,10 +145,11 @@ New agent to handle the final stages of shipping.
 
 **Changes**:
 - New agent: `.pi/agents/gitboss.md`
-- Three responsibilities ONLY:
-  1. Review implementation diff (changes look correct?)
-  2. Handle merge to main (conflict resolution, commit message)
-  3. Decide if version bump needed → run `/release`
+- Four responsibilities ONLY:
+  1. **Pre-merge checks**: Uncommitted changes → refuse merge, list dirty files
+  2. Review implementation diff (changes look correct?)
+  3. Handle merge to main (conflict resolution, commit message)
+  4. Decide if version bump needed → run `/release`
 - Invoked at end of `/ship` Phase 5.6 (replaces inline merge logic)
 - Can be invoked manually: `/gitboss` or `@gitboss review`
 - Explicit boundaries: no code changes, no architecture decisions
@@ -158,6 +159,7 @@ New agent to handle the final stages of shipping.
 **Acceptance**: 
 - After `/ship` build phase, gitboss handles review+merge+version
 - Agent definition includes clear "out of scope" section
+- Pre-merge check catches uncommitted dist files
 - Manual invocation works
 
 ---

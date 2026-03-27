@@ -14,11 +14,11 @@ export { CommitmentsService, computeCommitmentPriority } from './commitments.js'
 export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
-export { buildMeetingExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, } from './meeting-extraction.js';
-export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, PriorItem, } from './meeting-extraction.js';
+export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
+export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, PriorItem, ExtractionMode, CategoryLimits, } from './meeting-extraction.js';
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
-export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, } from './meeting-processing.js';
+export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, } from './meeting-processing.js';
 export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, } from './meeting-processing.js';
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';

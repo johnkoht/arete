@@ -11,6 +11,7 @@
  *   - Metadata maps for staged items (status, confidence, source, owner)
  */
 import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
+import type { Importance } from '../integrations/meetings.js';
 /** Item source type: 'ai' (LLM extracted), 'dedup' (matched user notes), or 'reconciled' (matched completed task) */
 export type ItemSource = 'ai' | 'dedup' | 'reconciled';
 /** Item status: 'approved' (auto or dedup), 'pending' (needs review), or 'skipped' (matched completed task) */
@@ -49,6 +50,13 @@ export interface ProcessingOptions {
     completedItems?: string[];
     /** Jaccard threshold for completed items reconciliation (default: 0.6). Items with similarity >= threshold are considered matches. Lower than dedupJaccard (0.7) because completed tasks in week.md are often abbreviated compared to meeting action items. */
     reconcileJaccard?: number;
+    /**
+     * Meeting importance level for triage workflow.
+     * - 'skip': Return empty result immediately (no extraction needed)
+     * - 'light': Auto-approve all items (skip staging review)
+     * - 'normal' | 'important': Standard processing (default behavior)
+     */
+    importance?: Importance;
 }
 /** Result of processing meeting extraction */
 export interface ProcessedMeetingResult {
@@ -116,4 +124,31 @@ export declare function clearApprovedSections(content: string): string;
  * @returns Markdown string with Summary and Staged sections
  */
 export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string): string;
+/**
+ * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
+ *
+ * Parses Fathom/Krisp-style speaker labels (`**Name | MM:SS**` or `**Name | HH:MM:SS**`)
+ * and counts words spoken by each speaker. Returns the ratio of the owner's words
+ * to total words.
+ *
+ * @param transcript - Meeting transcript text containing speaker labels
+ * @param ownerName - Name of the meeting owner (case-insensitive, partial matches allowed)
+ * @returns Ratio of owner's words to total words (0-1), or undefined if no speaker labels found
+ *
+ * @example
+ * ```ts
+ * const transcript = `
+ * **John Koht | 01:18**
+ * Hello, how are you?
+ *
+ * **Dave | 02:30**
+ * I'm good, thanks for asking.
+ * `;
+ *
+ * calculateSpeakingRatio(transcript, 'John'); // → ~0.4 (4 words out of 10)
+ * calculateSpeakingRatio(transcript, 'Sarah'); // → 0 (not found)
+ * calculateSpeakingRatio('No labels here', 'John'); // → undefined
+ * ```
+ */
+export declare function calculateSpeakingRatio(transcript: string, ownerName: string): number | undefined;
 //# sourceMappingURL=meeting-processing.d.ts.map

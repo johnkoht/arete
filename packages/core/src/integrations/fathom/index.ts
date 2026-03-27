@@ -11,8 +11,11 @@ import {
   saveMeetingFile,
   meetingFilename,
   findMatchingAgendaPath,
+  findMatchingCalendarEvent,
+  inferMeetingImportance,
   type MeetingForSave,
 } from '../meetings.js';
+import type { CalendarEvent } from '../calendar/types.js';
 
 const DEFAULT_TEMPLATE = `# {title}
 
@@ -56,11 +59,17 @@ function dateRange(days: number): { startDate: string; endDate: string } {
   };
 }
 
+export interface PullFathomOptions {
+  /** Calendar events for importance inference (optional) */
+  calendarEvents?: CalendarEvent[];
+}
+
 export async function pullFathom(
   storage: StorageAdapter,
   workspaceRoot: string,
   paths: WorkspacePaths,
-  days: number
+  days: number,
+  options?: PullFathomOptions
 ): Promise<{ success: boolean; saved: number; errors: string[] }> {
   const apiKey = await loadFathomApiKey(storage, workspaceRoot);
   if (!apiKey) {
