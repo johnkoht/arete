@@ -263,6 +263,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
         // Determine if we should prompt for AI credentials
         let shouldPrompt = false;
         let apiKeyToSave: string | null = null;
+        let aiHeaderShown = false;
 
         if (opts.apiKey) {
           // Non-interactive: use provided key
@@ -277,6 +278,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           console.log(chalk.dim('  Areté embeds LLMs into your workflow — extracting decisions from meetings,'));
           console.log(chalk.dim('  building context for prep, and powering search across your workspace.'));
           console.log('');
+          aiHeaderShown = true;
           const { confirm } = await import('@inquirer/prompts');
           const currentCred = existingOAuth
             ? 'OAuth login'
@@ -303,10 +305,13 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
 
         // Prompt for key if needed
         if (shouldPrompt && !opts.json) {
-          console.log('');
-          info('AI Configuration');
-          console.log(chalk.dim('  Areté uses AI to extract insights from your meetings and context.'));
-          console.log('');
+          // Only show header if we haven't already shown it
+          if (!aiHeaderShown) {
+            console.log('');
+            info('AI Configuration');
+            console.log(chalk.dim('  Areté uses AI to extract insights from your meetings and context.'));
+            console.log('');
+          }
 
           const { select, password } = await import('@inquirer/prompts');
 
@@ -553,19 +558,51 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           success('Apple Calendar connected (all calendars)');
         } else if (calendarChoice === 'google') {
           // Check for real credentials
-          const { getClientCredentials } = await import('@arete/core');
+          const { getClientCredentials, authenticateGoogle, listCalendars } = await import('@arete/core');
           const { clientId } = getClientCredentials();
 
           if (clientId === 'PLACEHOLDER_CLIENT_ID') {
-            // Beta: no production keys
-            warn('Google Calendar requires setup first');
-            console.log(chalk.dim('  Run: arete integration configure google-calendar'));
+            // Beta: no production keys — show guidance
+            warn('Google Calendar is in beta');
+            console.log('');
+            console.log(chalk.dim('  To connect Google Calendar, you need API credentials:'));
+            console.log(chalk.dim('  1. Create a Google Cloud project with Calendar API enabled'));
+            console.log(chalk.dim('  2. Create an OAuth 2.0 Client ID (Desktop app type)'));
+            console.log(chalk.dim('  3. Set environment variables:'));
+            console.log(chalk.dim('     export GOOGLE_CLIENT_ID="your-client-id"'));
+            console.log(chalk.dim('     export GOOGLE_CLIENT_SECRET="your-client-secret"'));
+            console.log('');
+            console.log(chalk.dim('  Or request beta access: john.koht@gmail.com'));
+            console.log(chalk.dim('  Then re-run: arete onboard or arete integration configure google-calendar'));
+            console.log('');
             calendarSkipped = true;
           } else {
-            // Run OAuth flow (simplified - guide user to integration command for full flow)
-            info('Google Calendar setup requires browser authorization');
-            console.log(chalk.dim('  Run: arete integration configure google-calendar'));
-            calendarSkipped = true;
+            // Run OAuth flow inline
+            try {
+              console.log('');
+              info('Opening browser for Google Calendar authorization...');
+              info('If you see an "unverified app" warning, click "Advanced" → "Go to Areté"');
+              console.log('');
+              await authenticateGoogle(services.storage, root);
+              success('Google Calendar authenticated');
+
+              // Fetch calendars and configure with all of them
+              const calendars = await listCalendars(services.storage, root);
+              const selectedCalendarIds = calendars.map(c => c.id);
+
+              await services.integrations.configure(root, 'calendar', {
+                provider: 'google',
+                status: 'active',
+                calendars: selectedCalendarIds,
+              });
+              calendarConfigured = true;
+              success(`Google Calendar connected (${selectedCalendarIds.length} calendar${selectedCalendarIds.length === 1 ? '' : 's'})`);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              error(`Google Calendar setup failed: ${message}`);
+              info('You can try again later with: arete integration configure google-calendar');
+              calendarSkipped = true;
+            }
           }
         } else {
           calendarSkipped = true;

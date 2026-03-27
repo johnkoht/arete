@@ -24,6 +24,8 @@
   "scripts": {
     "dev": "tsx packages/cli/src/index.ts",
     "dev:setup": "bash scripts/dev-setup.sh",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",
+    "rebuild": "npm run clean && npm run build",
     "build": "npm run build:agents:prod && npm run build:packages && npm run build:apps",
     "build:packages": "./node_modules/.bin/tsc -b packages/core packages/cli",
     "build:apps:backend": "./node_modules/.bin/tsc -b packages/apps/backend",
