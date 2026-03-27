@@ -46,6 +46,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Plan mode no longer restricts tools — it relies on prompt guidance.** The tool restriction system (`isAllowedInPlanMode`, `PLAN_MODE_TOOLS`, bash allowlist) was removed in `e9a5194`. All tools remain available in plan mode. The `before_agent_start` hook injects plan-mode context via a `message` that instructs the agent to explore rather than execute. If you see references to tool blocking or `PLAN_MODE_TOOLS` in old memory entries, they are outdated.
 
+- **Loaded plans can't be updated without --capture (2026-03-27).** When `loadedFromDisk = true`, `agent_end` doesn't update `state.planText` (to prevent accidental overwrites). This means `/plan save` saves the OLD content, not new content from conversation. The catch-22: protection against accidental overwrites also prevents intentional updates. Fixed by adding `--capture` flag: `/plan save --capture` extracts plan steps from the last assistant response and saves that instead. The `lastAssistantText` field in state stores the most recent assistant message for this purpose.
+
 ## Invariants
 
 - `state.currentSlug` is always a slugified string (lowercase, kebab-case, no special chars) — never set it directly; use `slugify()` from `persistence.ts`.
