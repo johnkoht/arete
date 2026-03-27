@@ -84,6 +84,7 @@
   - `--clear-approved` - Clear approved sections before re-extracting (requires --stage)
   - `--dry-run` - Show what would be written without writing
   - `--skip-qmd` - Skip automatic qmd index update
+  - `--importance <level>` - Override importance level (skip, light, normal, important). Controls extraction depth: skip=none, light=summary+2 learnings, normal=standard, important=thorough
   - Requires AI configuration (see `arete credentials set`)
 - `arete meeting approve <slug>` - Commit staged items to memory files (decisions.md, learnings.md)
   - `--all` - Mark all pending items as approved before committing

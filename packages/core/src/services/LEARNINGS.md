@@ -109,6 +109,41 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **ContextService nested directory scanning and exclusion patterns** (2026-03-25): `getRelevantContext()` scans nested context directories (`context/{slug}/**/*.md`) and area files (`areas/*.md`). Both use category `'context'` — do NOT create separate categories. Exclusion rules: (1) paths containing `_history` are excluded (archived context), (2) files starting with `_` are excluded (templates like `_template.md`). The SearchProvider discovery path (step 7) must also apply these exclusion rules, not just the static scan (steps 6b/6c). If you add new context-like paths, follow this pattern: use `'context'` category and apply both exclusion filters.
 
+---
+
+## Extraction Modes (2026-03-27)
+
+`ExtractionMode` in `meeting-extraction.ts` controls prompt complexity and output limits based on meeting importance.
+
+```typescript
+export type ExtractionMode = 'light' | 'normal' | 'thorough';
+```
+
+### Mode Behavior
+
+| Mode | Purpose | Action Items | Decisions | Learnings | Notes |
+|------|---------|--------------|-----------|-----------|-------|
+| **light** | Large meetings, low engagement | 0 | 0 | 2 max | ~50% shorter prompt; summary + domain learnings only |
+| **normal** | Standard extraction | 7 max | 5 max | 5 max | Full extraction with confidence threshold |
+| **thorough** | Reprocessing, high importance | 10 max | 7 max | 7 max | Higher limits for comprehensive extraction |
+
+### Mode Selection
+
+- **light**: Used when meeting importance is `'light'` (large audience, observer role). Skips action items entirely since observer rarely has commitments.
+- **normal**: Default mode. Applied to `'normal'` importance meetings. Standard confidence filtering (0.5 include, 0.8 auto-approve).
+- **thorough**: Used for `'important'` meetings or when reprocessing with `--clear-approved`. Higher limits catch more items for manual review.
+
+### Design Rationale
+
+- **Token efficiency**: Light mode reduces prompt size by ~50%, saving tokens on meetings where extraction value is low.
+- **Confidence scaling**: All modes use the same confidence thresholds; limits differ to match expected signal density.
+- **Graceful override**: CLI `--importance` flag allows user to override inferred importance, selecting a different extraction mode.
+
+### Key References
+
+- `packages/core/src/services/meeting-extraction.ts` L35 — `ExtractionMode` type
+- `packages/cli/src/commands/meeting.ts` — `--importance` flag handling
+
 ## Pre-Edit Checklist
 
 - **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.
