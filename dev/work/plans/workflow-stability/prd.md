@@ -287,6 +287,35 @@ Extension command `/release` handles:
 
 ---
 
+### Task 8: Support `/build <slug>` and `/ship <slug>`
+
+**Description**: Allow building plans without requiring plan mode to be active.
+
+**Changes**:
+- Add slug argument parsing to `/build` command
+  - `/build <slug>` — loads plan from `dev/work/plans/{slug}/plan.md`
+  - Validates status (must be `planned`)
+  - Starts execution (same as current behavior)
+- Add slug argument parsing to `/ship` command
+  - `/ship <slug>` — loads plan, runs full ship workflow
+  - Creates worktree, PRD, executes, prompts for merge
+- If plan mode IS active with a different plan, warn and confirm
+- Reuse existing `loadPlan()` from persistence.ts
+
+**Acceptance Criteria**:
+- [ ] `/build workflow-stability` works without plan mode active
+- [ ] `/ship workflow-stability` creates worktree and executes PRD
+- [ ] Status gate enforced: `/build my-idea` fails if status is `idea`
+- [ ] Warning shown if switching from active plan in plan mode
+- [ ] Tests added for slug-based invocation
+
+**Files to Read First**:
+- `.pi/extensions/plan-mode/commands.ts` (handleBuild, existing argument parsing)
+- `.pi/extensions/plan-mode/persistence.ts` (loadPlan function)
+- `.pi/skills/ship/SKILL.md` (ship workflow)
+
+---
+
 ## 4. Pre-Mortem Risks
 
 See `pre-mortem.md` for full analysis. Key mitigations to apply:
@@ -307,3 +336,4 @@ After completion:
 - [ ] Plans folder stays lean (<15 items)
 - [ ] Version can be bumped with `/release patch`
 - [ ] Gitboss catches uncommitted changes before merge
+- [ ] `/build <slug>` and `/ship <slug>` work without plan mode active

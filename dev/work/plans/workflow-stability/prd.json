@@ -156,11 +156,31 @@
       "status": "pending",
       "passes": false,
       "attemptCount": 0
+    },
+    {
+      "id": "task-8-slug-invocation",
+      "title": "Support /build <slug> and /ship <slug>",
+      "description": "Allow building plans without requiring plan mode to be active. /build <slug> loads plan and executes. /ship <slug> runs full ship workflow. Both work outside plan mode. Status gates still apply.",
+      "acceptanceCriteria": [
+        "/build workflow-stability works without plan mode active",
+        "/ship workflow-stability creates worktree and executes PRD",
+        "Status gate enforced: /build my-idea fails if status is idea",
+        "Warning shown if switching from active plan in plan mode",
+        "Tests added for slug-based invocation"
+      ],
+      "filesToRead": [
+        ".pi/extensions/plan-mode/commands.ts",
+        ".pi/extensions/plan-mode/persistence.ts",
+        ".pi/skills/ship/SKILL.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
     }
   ],
   "metadata": {
     "createdAt": "2026-03-27T09:45:00.000Z",
-    "totalTasks": 7,
+    "totalTasks": 8,
     "completedTasks": 0,
     "failedTasks": 0
   }
