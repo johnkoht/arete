@@ -41,7 +41,6 @@ Use this template to generate the final ship report after successful completion.
 ### Phase 3: Worktree Setup ✓
 - Worktree: `{worktreePath}`
 - Branch: `{branchName}`
-- Terminal: {terminalStatus}
 
 ### Phase 4: Build ✓
 - Tasks: {tasksCompleted}/{tasksTotal} complete
@@ -54,6 +53,7 @@ Use this template to generate the final ship report after successful completion.
 - Memory entry: `{memoryEntryPath}`
 - LEARNINGS.md: {learningsUpdated}
 - Implementation committed: `{implCommitSha}`
+- /wrap verification: {wrapVerificationStatus}
 
 ---
 
@@ -78,9 +78,13 @@ Use this template to generate the final ship report after successful completion.
 **Commits**: {commitCount}
 
 **Next Steps**:
-1. Review changes in worktree
-2. Create PR: `gh pr create --title "{prTitle}" --body "{prBody}"`
-3. After merge: `/ship cleanup {slug}`
+Ready to merge? The skill will prompt you to:
+1. Merge to main (handles conflicts if any)
+2. Cleanup worktree and branch automatically
+
+Or if you prefer manual merge later:
+- Create PR: `gh pr create --title "{prTitle}" --body "{prBody}"`
+- After merge: `/ship cleanup {slug}`
 
 ---
 
@@ -144,7 +148,7 @@ Use this template to generate the final ship report after successful completion.
 | `riskSummary` | Risk counts | `0 CRITICAL, 2 HIGH, 3 MEDIUM` |
 | `reviewSummary` | Finding summary | `No blockers, 4 suggestions` |
 | `memorySynthesisBullets` | Bullet count | `4 insights extracted` |
-| `terminalStatus` | Launch result | `iTerm launched` or `Manual instructions provided` |
+| `wrapVerificationStatus` | /wrap result | `✓ All checks passed` or `⚠️ 1 warning` |
 | `successRate` | Percentage | `87%` |
 | `testsAdded` | Test count | `12` |
 | `premortermGate` | Gate status | `Passed` or `Paused → Override` |
