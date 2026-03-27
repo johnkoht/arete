@@ -34,6 +34,7 @@ import {
 	handlePrd,
 	handleBuild,
 	handleShip,
+	handleRelease,
 	handlePlanSave,
 	resolvePrdFeatureSlug,
 	hasUnsavedPlanChanges,
@@ -393,6 +394,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				.map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`)
 				.join("\n");
 			ctx.ui.notify(`Plan Progress:\n${list}`, "info");
+		},
+	});
+
+	pi.registerCommand("release", {
+		description: "Manage releases — /release [status|patch|minor] [--dry-run]",
+		handler: async (args, ctx) => {
+			await handleRelease(args, ctx, pi);
 		},
 	});
 

@@ -41,6 +41,15 @@ import {
 	hasUserFacingChanges,
 	checkUpdatesModified,
 } from "./wrap-checks.js";
+import {
+	getCurrentVersion,
+	bumpVersion,
+	getUnreleasedCommits,
+	runPreflightChecks,
+	executeRelease,
+	getLatestTag,
+	type BumpType,
+} from "./release.js";
 
 // ────────────────────────────────────────────────────────────
 // Shared types for command handlers
@@ -2080,4 +2089,150 @@ function handleBuildStatus(ctx: CommandContext, state: PlanModeState): void {
 	}
 
 	ctx.ui.notify(lines.join("\n"), "info");
+}
+
+// ────────────────────────────────────────────────────────────
+// /release command handler
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Handle /release command for semantic versioning.
+ *
+ * Subcommands:
+ * - status: Show current version and unreleased commits
+ * - patch [--dry-run]: Bump patch version (0.x.Y → 0.x.Y+1)
+ * - minor [--dry-run]: Bump minor version (0.X.y → 0.X+1.0)
+ */
+export async function handleRelease(
+	args: string,
+	ctx: CommandContext,
+	_pi: CommandPi,
+): Promise<void> {
+	const parts = args.trim().split(/\s+/).filter(Boolean);
+	const subcommand = parts[0]?.toLowerCase();
+	const flags = parts.slice(1);
+	const isDryRun = flags.includes("--dry-run");
+
+	if (!subcommand || subcommand === "status") {
+		await handleReleaseStatus(ctx);
+		return;
+	}
+
+	if (subcommand === "patch" || subcommand === "minor") {
+		await handleReleaseBump(subcommand as BumpType, isDryRun, ctx);
+		return;
+	}
+
+	ctx.ui.notify(
+		`Unknown subcommand: ${subcommand}. Usage: /release [status|patch|minor] [--dry-run]`,
+		"warning",
+	);
+}
+
+/**
+ * Show current version and unreleased commits.
+ */
+async function handleReleaseStatus(ctx: CommandContext): Promise<void> {
+	try {
+		const version = getCurrentVersion();
+		const lastTag = getLatestTag();
+		const commits = getUnreleasedCommits();
+
+		const lines: string[] = [];
+		lines.push(`📦 **Current Version**: ${version}`);
+		
+		if (lastTag) {
+			lines.push(`🏷️ **Latest Tag**: ${lastTag}`);
+		} else {
+			lines.push(`🏷️ **Latest Tag**: (none)`);
+		}
+
+		lines.push("");
+		
+		if (commits.length === 0) {
+			lines.push("✅ No unreleased commits.");
+		} else {
+			lines.push(`📝 **Unreleased Commits** (${commits.length}):`);
+			const maxShow = 15;
+			const toShow = commits.slice(0, maxShow);
+			for (const commit of toShow) {
+				lines.push(`  • ${commit.hash} ${commit.subject}`);
+			}
+			if (commits.length > maxShow) {
+				lines.push(`  ... and ${commits.length - maxShow} more`);
+			}
+		}
+
+		lines.push("");
+		lines.push("**Commands**:");
+		lines.push("  /release patch         Bump patch version (0.x.Y → 0.x.Y+1)");
+		lines.push("  /release minor         Bump minor version (0.X.y → 0.X+1.0)");
+		lines.push("  /release patch --dry-run   Preview what would happen");
+
+		ctx.ui.notify(lines.join("\n"), "info");
+	} catch (err) {
+		ctx.ui.notify(`Error: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
+}
+
+/**
+ * Execute a version bump (or dry-run).
+ */
+async function handleReleaseBump(
+	type: BumpType,
+	dryRun: boolean,
+	ctx: CommandContext,
+): Promise<void> {
+	try {
+		// Run preflight checks first (even in dry-run, show warnings)
+		const preflight = runPreflightChecks();
+		
+		if (!preflight.ok && !dryRun) {
+			const errors = preflight.errors.map((e) => `  ❌ ${e}`).join("\n");
+			ctx.ui.notify(`⛔ Release blocked:\n${errors}`, "error");
+			return;
+		}
+
+		// Show preflight warnings in dry-run
+		if (!preflight.ok && dryRun) {
+			const warnings = preflight.errors.map((e) => `  ⚠️ ${e}`).join("\n");
+			ctx.ui.notify(`Preflight warnings (would block release):\n${warnings}`, "warning");
+		}
+
+		// Execute (or simulate) the release
+		const result = executeRelease(type, { dryRun });
+
+		if (dryRun) {
+			const lines: string[] = [];
+			lines.push("🔍 **Dry Run Preview**");
+			lines.push("");
+			lines.push(`Version: ${result.oldVersion} → ${result.newVersion}`);
+			lines.push(`Commits to include: ${result.commits.length}`);
+			lines.push("");
+			lines.push("**Changelog Entry**:");
+			lines.push("```");
+			lines.push(result.changelogEntry.trim());
+			lines.push("```");
+			lines.push("");
+			lines.push("Run without --dry-run to execute the release.");
+			ctx.ui.notify(lines.join("\n"), "info");
+		} else {
+			const lines: string[] = [];
+			lines.push(`🚀 **Released v${result.newVersion}**`);
+			lines.push("");
+			lines.push(`Version: ${result.oldVersion} → ${result.newVersion}`);
+			lines.push(`Commits included: ${result.commits.length}`);
+			lines.push(`Tag: v${result.newVersion}`);
+			lines.push("");
+			lines.push("Files updated:");
+			lines.push("  • package.json");
+			lines.push("  • CHANGELOG.md");
+			lines.push("");
+			lines.push("Next steps:");
+			lines.push("  git push origin main --tags");
+			ctx.ui.notify(lines.join("\n"), "info");
+		}
+	} catch (err) {
+		ctx.ui.notify(`Error: ${err instanceof Error ? err.message : String(err)}`, "error");
+	}
 }
