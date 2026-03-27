@@ -41,11 +41,12 @@ type RawStagedItem = {
   id: string;
   text: string;
   type: 'ai' | 'de' | 'le';
-  source?: 'ai' | 'dedup';
+  source?: 'ai' | 'dedup' | 'reconciled';
   confidence?: number;
   ownerSlug?: string;
   direction?: 'i_owe_them' | 'they_owe_me';
   counterpartySlug?: string;
+  matchedText?: string;
 };
 
 type RawStagedSections = {
@@ -124,6 +125,7 @@ function flattenStagedItems(raw: RawFullMeeting): ReviewItem[] {
     ownerSlug: item.ownerSlug,
     direction: item.direction,
     counterpartySlug: item.counterpartySlug,
+    matchedText: item.matchedText,
   }));
 }
 

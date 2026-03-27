@@ -32,8 +32,8 @@ export type StagedItem = {
   id: string;   // e.g. "ai_001"
   text: string;
   type: 'ai' | 'de' | 'le';
-  /** Origin of this item: ai (LLM extracted), dedup (matched user notes) */
-  source?: 'ai' | 'dedup';
+  /** Origin of this item: ai (LLM extracted), dedup (matched user notes), reconciled (matched weekly action item) */
+  source?: 'ai' | 'dedup' | 'reconciled';
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
   /** Owner slug for action items (who is responsible) */
@@ -42,6 +42,8 @@ export type StagedItem = {
   direction?: StagedItemDirection;
   /** Counterparty slug for action items (who is the other party) */
   counterpartySlug?: string;
+  /** Matched text from week.md for reconciled items */
+  matchedText?: string;
 };
 
 /** All three staged sections for a meeting */

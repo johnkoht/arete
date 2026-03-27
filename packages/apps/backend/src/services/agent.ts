@@ -285,6 +285,10 @@ export async function runProcessingSessionTestable(
     if (Object.keys(processed.stagedItemOwner).length > 0) {
       fm['staged_item_owner'] = processed.stagedItemOwner;
     }
+    // Only write matched text if there are reconciled items
+    if (processed.stagedItemMatchedText && Object.keys(processed.stagedItemMatchedText).length > 0) {
+      fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
+    }
 
     // 12. Write updated file
     jobs.appendEvent(jobId, 'Writing staged sections...');
