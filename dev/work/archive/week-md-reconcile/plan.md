@@ -5,8 +5,8 @@ status: complete
 size: small
 tags: [meeting-processing, commitments, intelligence]
 created: 2026-03-25T23:30:00.000Z
-updated: 2026-03-27T03:08:32.122Z
-completed: 2026-03-26T05:15:00.000Z
+updated: 2026-03-26T05:08:19.855Z
+completed: 2026-03-26T05:08:19.855Z
 execution: null
 has_review: true
 has_pre_mortem: true
