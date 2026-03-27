@@ -2,11 +2,14 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildMeetingExtractionPrompt,
+  buildLightExtractionPrompt,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
   buildExclusionListSection,
+  LIGHT_LIMITS,
+  THOROUGH_LIMITS,
 } from '../../src/services/meeting-extraction.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
@@ -2897,5 +2900,336 @@ just regular paragraphs.`;
     assert.ok(prompt.includes('### Related Goals'));
     assert.ok(prompt.includes('### Unchecked Agenda Items'));
     assert.ok(prompt.includes('### Area Context (Product Area)'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildLightExtractionPrompt (Task 3)
+// ---------------------------------------------------------------------------
+
+describe('buildLightExtractionPrompt', () => {
+
+  it('is ~50% shorter than normal prompt', () => {
+    const transcript = 'Alice: We discussed the product strategy.\nBob: Great insights.';
+    const lightPrompt = buildLightExtractionPrompt(transcript);
+    const normalPrompt = buildMeetingExtractionPrompt(transcript);
+
+    // Light prompt should be significantly shorter (allow 40-60% range)
+    const ratio = lightPrompt.length / normalPrompt.length;
+    assert.ok(ratio < 0.6, `Light prompt should be <60% of normal, got ${(ratio * 100).toFixed(1)}%`);
+    assert.ok(ratio > 0.2, `Light prompt should be >20% of normal, got ${(ratio * 100).toFixed(1)}%`);
+  });
+
+  it('extracts summary only in schema', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    assert.ok(prompt.includes('"summary"'));
+    assert.ok(prompt.includes('"learnings"'));
+  });
+
+  it('does NOT include action_items in schema', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    // Should not have action_items schema
+    assert.ok(!prompt.includes('"action_items"'));
+  });
+
+  it('explicitly instructs NOT to extract action items', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    // Check for explicit "do NOT extract" language for action items
+    assert.ok(
+      prompt.toLowerCase().includes('action items') &&
+      (prompt.toLowerCase().includes('skip') || prompt.toLowerCase().includes('not needed')),
+      'Should instruct to skip action items'
+    );
+  });
+
+  it('focuses learnings on domain insights and strategic decisions', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    assert.ok(
+      prompt.toLowerCase().includes('strategic') ||
+      prompt.toLowerCase().includes('product') ||
+      prompt.toLowerCase().includes('domain'),
+      'Should mention strategic/product/domain focus'
+    );
+  });
+
+  it('includes examples of what TO extract', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    // Should have positive examples
+    assert.ok(prompt.includes('EXTRACT') || prompt.includes('✓'));
+  });
+
+  it('includes examples of what to SKIP', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    // Should have skip examples for operational items
+    assert.ok(prompt.includes('SKIP') || prompt.includes('✗'));
+    // Specific examples
+    assert.ok(
+      prompt.toLowerCase().includes('tool') ||
+      prompt.toLowerCase().includes('logistics') ||
+      prompt.toLowerCase().includes('meeting')
+    );
+  });
+
+  it('limits learnings to max 2', () => {
+    const prompt = buildLightExtractionPrompt('content');
+    assert.ok(prompt.includes('2') || prompt.includes('max 2') || prompt.includes('Maximum 2'));
+  });
+
+  it('includes transcript content', () => {
+    const transcript = 'Unique test transcript content here';
+    const prompt = buildLightExtractionPrompt(transcript);
+    assert.ok(prompt.includes(transcript));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ExtractionMode and limits (Task 3)
+// ---------------------------------------------------------------------------
+
+describe('Extraction mode limits', () => {
+
+  it('LIGHT_LIMITS has correct values', () => {
+    assert.equal(LIGHT_LIMITS.actionItems, 0);
+    assert.equal(LIGHT_LIMITS.decisions, 0);
+    assert.equal(LIGHT_LIMITS.learnings, 2);
+  });
+
+  it('THOROUGH_LIMITS has correct values', () => {
+    assert.equal(THOROUGH_LIMITS.actionItems, 10);
+    assert.equal(THOROUGH_LIMITS.decisions, 7);
+    assert.equal(THOROUGH_LIMITS.learnings, 7);
+  });
+});
+
+describe('parseMeetingExtractionResponse with limits', () => {
+
+  it('respects custom limits parameter', () => {
+    const response = JSON.stringify({
+      summary: 'Test',
+      action_items: [
+        { owner: 'A', description: 'Task 1', direction: 'i_owe_them' },
+        { owner: 'B', description: 'Task 2', direction: 'i_owe_them' },
+        { owner: 'C', description: 'Task 3', direction: 'i_owe_them' },
+      ],
+      decisions: ['D1', 'D2', 'D3'],
+      learnings: ['L1', 'L2', 'L3', 'L4'],
+    });
+
+    const customLimits = { actionItems: 1, decisions: 2, learnings: 2 };
+    const result = parseMeetingExtractionResponse(response, customLimits);
+
+    assert.equal(result.intelligence.actionItems.length, 1);
+    assert.equal(result.intelligence.decisions.length, 2);
+    assert.equal(result.intelligence.learnings.length, 2);
+  });
+
+  it('applies LIGHT_LIMITS correctly (0 action items, 0 decisions, 2 learnings)', () => {
+    const response = JSON.stringify({
+      summary: 'Light meeting',
+      action_items: [
+        { owner: 'A', description: 'Task 1', direction: 'i_owe_them' },
+      ],
+      decisions: ['Decision 1'],
+      learnings: ['Learning 1', 'Learning 2', 'Learning 3'],
+    });
+
+    const result = parseMeetingExtractionResponse(response, LIGHT_LIMITS);
+
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.decisions.length, 0);
+    assert.equal(result.intelligence.learnings.length, 2);
+  });
+
+  it('applies THOROUGH_LIMITS correctly (10 action items, 7 decisions, 7 learnings)', () => {
+    // Create response with more than normal limits
+    const actionItems = [];
+    for (let i = 0; i < 10; i++) {
+      actionItems.push({ owner: `Person ${i}`, description: `Unique task ${i} here`, direction: 'i_owe_them' });
+    }
+    const decisions = [];
+    for (let i = 0; i < 7; i++) {
+      decisions.push(`Unique decision ${i} made`);
+    }
+    const learnings = [];
+    for (let i = 0; i < 7; i++) {
+      learnings.push(`Unique learning ${i} shared`);
+    }
+
+    const response = JSON.stringify({
+      summary: 'Thorough meeting',
+      action_items: actionItems,
+      decisions,
+      learnings,
+    });
+
+    const result = parseMeetingExtractionResponse(response, THOROUGH_LIMITS);
+
+    // All 10 action items should be kept (normal limit is 7)
+    assert.equal(result.intelligence.actionItems.length, 10);
+    // All 7 decisions should be kept (normal limit is 5)
+    assert.equal(result.intelligence.decisions.length, 7);
+    // All 7 learnings should be kept (normal limit is 5)
+    assert.equal(result.intelligence.learnings.length, 7);
+  });
+
+  it('defaults to CATEGORY_LIMITS when no limits provided', () => {
+    const actionItems = [];
+    for (let i = 0; i < 10; i++) {
+      actionItems.push({ owner: `Person ${i}`, description: `Unique task number ${i}`, direction: 'i_owe_them' });
+    }
+
+    const response = JSON.stringify({
+      summary: 'Default limits test',
+      action_items: actionItems,
+    });
+
+    // Call without limits parameter (should default to CATEGORY_LIMITS = 7 action items)
+    const result = parseMeetingExtractionResponse(response);
+
+    assert.equal(result.intelligence.actionItems.length, 7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractMeetingIntelligence with mode (Task 3)
+// ---------------------------------------------------------------------------
+
+describe('extractMeetingIntelligence - mode parameter', () => {
+  it('defaults to normal mode when mode not specified', async () => {
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return JSON.stringify({ summary: 'Test' });
+    };
+
+    await extractMeetingIntelligence('transcript', mockLLM);
+
+    // Should use normal prompt (has action_items schema)
+    assert.ok(capturedPrompt.includes('"action_items"'));
+    assert.ok(capturedPrompt.includes('"decisions"'));
+  });
+
+  it('uses light prompt for mode=light', async () => {
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return JSON.stringify({ summary: 'Light test', learnings: ['Insight'] });
+    };
+
+    await extractMeetingIntelligence('transcript', mockLLM, { mode: 'light' });
+
+    // Light prompt should NOT have action_items schema
+    assert.ok(!capturedPrompt.includes('"action_items"'));
+    // But should have summary and learnings
+    assert.ok(capturedPrompt.includes('"summary"'));
+    assert.ok(capturedPrompt.includes('"learnings"'));
+  });
+
+  it('applies LIGHT_LIMITS for mode=light', async () => {
+    const mockLLM: LLMCallFn = async () => JSON.stringify({
+      summary: 'Light meeting',
+      action_items: [{ owner: 'A', description: 'Task', direction: 'i_owe_them' }],
+      decisions: ['Decision 1'],
+      learnings: ['Learning 1', 'Learning 2', 'Learning 3'],
+    });
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'light' });
+
+    // Light limits: 0 action items, 0 decisions, 2 learnings
+    assert.equal(result.intelligence.actionItems.length, 0);
+    assert.equal(result.intelligence.decisions.length, 0);
+    assert.equal(result.intelligence.learnings.length, 2);
+  });
+
+  it('uses normal prompt with THOROUGH_LIMITS for mode=thorough', async () => {
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      // Return 10 action items
+      const actionItems = [];
+      for (let i = 0; i < 10; i++) {
+        actionItems.push({ owner: `Person ${i}`, description: `Unique action ${i}`, direction: 'i_owe_them' });
+      }
+      return JSON.stringify({
+        summary: 'Thorough meeting',
+        action_items: actionItems,
+        decisions: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'],
+        learnings: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7'],
+      });
+    };
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'thorough' });
+
+    // Thorough mode uses normal prompt (has confidence guidance)
+    assert.ok(capturedPrompt.includes('Confidence Guide'));
+    assert.ok(capturedPrompt.includes('"action_items"'));
+
+    // But with thorough limits (10 action items, 7 decisions, 7 learnings)
+    assert.equal(result.intelligence.actionItems.length, 10);
+    assert.equal(result.intelligence.decisions.length, 7);
+    assert.equal(result.intelligence.learnings.length, 7);
+  });
+
+  it('thorough mode keeps all 10 items when LLM returns 10', async () => {
+    const mockLLM: LLMCallFn = async () => {
+      const actionItems = [];
+      for (let i = 0; i < 10; i++) {
+        actionItems.push({
+          owner: `Person ${i}`,
+          description: `Unique thorough action item number ${i}`,
+          direction: 'i_owe_them',
+          confidence: 0.9,
+        });
+      }
+      return JSON.stringify({
+        summary: 'Thorough extraction test',
+        action_items: actionItems,
+      });
+    };
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'thorough' });
+
+    // All 10 should be kept (vs normal mode which would cap at 7)
+    assert.equal(result.intelligence.actionItems.length, 10);
+    // Verify no limit warnings
+    const limitWarnings = result.validationWarnings.filter(w => w.reason.includes('exceeds'));
+    assert.equal(limitWarnings.length, 0);
+  });
+
+  it('light mode produces summary + ≤2 learnings, 0 action items (mock LLM test)', async () => {
+    const mockLLM: LLMCallFn = async () => JSON.stringify({
+      summary: 'Quick sync about product direction',
+      learnings: [
+        'Users prefer dark mode',
+        'Mobile usage is increasing',
+        'Third learning that should be cut',
+      ],
+      // Even if LLM returns action items (shouldn't with light prompt), limits exclude them
+      action_items: [{ owner: 'X', description: 'Should be excluded', direction: 'i_owe_them' }],
+      decisions: ['Should also be excluded'],
+    });
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'light' });
+
+    // Verify shape
+    assert.equal(result.intelligence.summary, 'Quick sync about product direction');
+    assert.equal(result.intelligence.actionItems.length, 0, 'Light mode: 0 action items');
+    assert.ok(result.intelligence.learnings.length <= 2, 'Light mode: ≤2 learnings');
+    assert.equal(result.intelligence.decisions.length, 0, 'Light mode: 0 decisions');
+  });
+
+  it('mode=normal uses standard limits', async () => {
+    const mockLLM: LLMCallFn = async () => {
+      const actionItems = [];
+      for (let i = 0; i < 10; i++) {
+        actionItems.push({ owner: `P${i}`, description: `Normal mode task ${i}`, direction: 'i_owe_them' });
+      }
+      return JSON.stringify({ summary: 'Normal', action_items: actionItems });
+    };
+
+    const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'normal' });
+
+    // Normal limits = 7 action items
+    assert.equal(result.intelligence.actionItems.length, 7);
   });
 });

@@ -29,12 +29,15 @@ export type {
 // Meeting extraction
 export {
   buildMeetingExtractionPrompt,
+  buildLightExtractionPrompt,
   parseMeetingExtractionResponse,
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
   normalizeForJaccard,
   jaccardSimilarity,
+  LIGHT_LIMITS,
+  THOROUGH_LIMITS,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,
@@ -44,6 +47,8 @@ export type {
   ValidationWarning,
   LLMCallFn as MeetingLLMCallFn,
   PriorItem,
+  ExtractionMode,
+  CategoryLimits,
 } from './meeting-extraction.js';
 
 // Meeting file parsing
