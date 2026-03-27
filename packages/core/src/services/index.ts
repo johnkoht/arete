@@ -61,6 +61,7 @@ export {
   extractUserNotes,
   clearApprovedSections,
   formatFilteredStagedSections,
+  calculateSpeakingRatio,
 } from './meeting-processing.js';
 export type {
   ProcessedMeetingResult,

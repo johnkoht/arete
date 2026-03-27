@@ -6,6 +6,7 @@ import {
   clearApprovedSections,
   formatFilteredStagedSections,
   hasNegationMarkers,
+  calculateSpeakingRatio,
 } from '../../src/services/meeting-processing.js';
 import type { FilteredItem } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
@@ -1344,5 +1345,265 @@ describe('processMeetingExtraction - completedItems reconciliation', () => {
     assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
     // Second matches second completed item (5/6 = 0.833)
     assert.equal(processed.stagedItemSource['ai_002'], 'reconciled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calculateSpeakingRatio
+// ---------------------------------------------------------------------------
+
+describe('calculateSpeakingRatio', () => {
+  it('calculates 100% ratio for single speaker matching owner', () => {
+    const transcript = `
+**John Koht | 01:18**
+Hello, this is a test. I am speaking now and this is my content.
+`;
+    // 13 words, all from owner
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 1);
+  });
+
+  it('calculates 50/50 split between two speakers', () => {
+    const transcript = `
+**John | 01:00**
+One two three four
+
+**Dave | 02:00**
+Five six seven eight
+`;
+    // John: 4 words, Dave: 4 words, total: 8
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.5);
+  });
+
+  it('handles partial name match (John matches John Koht)', () => {
+    const transcript = `
+**John Koht | 01:18**
+Hello this is John speaking.
+
+**Dave Wiedenheft | 02:30**
+Hello this is Dave responding.
+`;
+    // John Koht: 5 words, Dave: 5 words
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.5);
+  });
+
+  it('is case insensitive (john matches John Koht)', () => {
+    const transcript = `
+**John Koht | 01:18**
+Hello this is John speaking.
+
+**Dave | 02:30**
+Hello this is Dave responding.
+`;
+    const ratio = calculateSpeakingRatio(transcript, 'john');
+    assert.equal(ratio, 0.5);
+  });
+
+  it('returns undefined for no speaker labels', () => {
+    const transcript = `
+This is just regular text without any speaker labels.
+It should return undefined.
+`;
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, undefined);
+  });
+
+  it('returns undefined for empty transcript', () => {
+    const ratio = calculateSpeakingRatio('', 'John');
+    assert.equal(ratio, undefined);
+  });
+
+  it('returns undefined for empty owner name', () => {
+    const transcript = `
+**John | 01:00**
+Some words here.
+`;
+    const ratio = calculateSpeakingRatio(transcript, '');
+    assert.equal(ratio, undefined);
+  });
+
+  it('counts anonymous speakers in total but does not match owner', () => {
+    const transcript = `
+**John | 01:00**
+Hello from John.
+
+**Speaker 4 | 02:00**
+Anonymous speaker content here.
+
+**Speaker 1 | 03:00**
+Another anonymous speaker.
+`;
+    // John: 3 words
+    // Speaker 4: 4 words
+    // Speaker 1: 3 words
+    // Total: 10 words, John: 3 words → 0.3
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.3);
+  });
+
+  it('anonymous speaker never matches owner even with partial match', () => {
+    const transcript = `
+**Speaker 4 | 01:00**
+Hello from anonymous.
+
+**John | 02:00**
+Hello from John.
+`;
+    // Even if "Speaker" is part of owner name, anonymous should not match
+    const ratio = calculateSpeakingRatio(transcript, 'Speaker');
+    assert.equal(ratio, 0);
+  });
+
+  it('handles HH:MM:SS timestamp format', () => {
+    const transcript = `
+**John Koht | 1:23:45**
+Long meeting content here.
+
+**Sarah Smith | 2:34:56**
+More content from Sarah.
+`;
+    // John: 4 words, Sarah: 4 words
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.5);
+  });
+
+  it('handles mixed MM:SS and HH:MM:SS formats', () => {
+    const transcript = `
+**John | 01:18**
+Short segment.
+
+**Dave | 1:02:30**
+Longer segment here.
+`;
+    // John: 2 words, Dave: 3 words, total: 5
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.4);
+  });
+
+  it('returns 0 when owner not found among speakers', () => {
+    const transcript = `
+**Alice | 01:00**
+Hello from Alice.
+
+**Bob | 02:00**
+Hello from Bob.
+`;
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0);
+  });
+
+  it('returns 0 when transcript has labels but no content', () => {
+    const transcript = `
+**John | 01:00**
+
+**Dave | 02:00**
+
+`;
+    // No words spoken
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0);
+  });
+
+  it('handles whitespace and newlines between speaker labels', () => {
+    const transcript = `
+
+
+**John Koht | 01:18**
+
+   Hello world this is a test.   
+
+
+**Dave | 02:30**
+
+Hello back to you.
+
+`;
+    // John: 6 words, Dave: 4 words, total: 10
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.equal(ratio, 0.6);
+  });
+
+  it('handles multiple segments from same speaker', () => {
+    const transcript = `
+**John | 01:00**
+First segment.
+
+**Dave | 02:00**
+Dave speaks.
+
+**John | 03:00**
+John again speaks.
+`;
+    // John segments: 2 + 3 = 5 words
+    // Dave: 2 words
+    // Total: 7 words
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.ok(Math.abs(ratio! - 5 / 7) < 0.001, `Expected ~0.714, got ${ratio}`);
+  });
+
+  it('never crashes on malformed transcripts (Pre-Mortem R4)', () => {
+    // Various malformed inputs that should not crash
+    const malformed = [
+      '**|**',
+      '** | **',
+      '**John|01:00**', // missing space
+      '**John | **', // missing timestamp
+      '** | 01:00**', // missing name
+      '****',
+      '*John | 01:00*', // single asterisks
+      '**John | 01:00** **Dave | 02:00**', // inline labels
+    ];
+
+    for (const input of malformed) {
+      // Should not throw
+      const result = calculateSpeakingRatio(input, 'John');
+      // Result is either undefined or a number
+      assert.ok(
+        result === undefined || typeof result === 'number',
+        `Unexpected result type for input: ${input}`,
+      );
+    }
+  });
+
+  it('handles real-world transcript format', () => {
+    // Based on example from notes.md
+    const transcript = `## Transcript
+
+**John Koht | 01:18**
+So weird.
+
+**Dave Wiedenheft | 09:29**
+Hey, John, how are you doing today? I wanted to check in about the project.
+
+**John Koht | 10:45**
+I'm doing great, thanks for asking. The project is progressing well.
+
+**Dave Wiedenheft | 11:30**
+That's good to hear.
+`;
+    // John: 2 + 11 = 13 words ("So weird." + "I'm doing great, thanks for asking. The project is progressing well.")
+    // Dave: 15 + 4 = 19 words
+    // Total: 32 words
+    const ratio = calculateSpeakingRatio(transcript, 'John');
+    assert.ok(ratio !== undefined);
+    assert.ok(
+      Math.abs(ratio - 13 / 32) < 0.001,
+      `Expected ~0.406, got ${ratio}`,
+    );
+  });
+
+  it('handles owner name matching full name in transcript', () => {
+    const transcript = `
+**John Koht | 01:00**
+Hello world.
+
+**Dave | 02:00**
+Hi there.
+`;
+    // Using full name as owner should still match
+    const ratio = calculateSpeakingRatio(transcript, 'John Koht');
+    assert.equal(ratio, 0.5);
   });
 });
