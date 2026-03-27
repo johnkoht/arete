@@ -126,3 +126,13 @@ export type {
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
+
+// Task management
+export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export type {
+  TaskMetadata,
+  TaskDestination,
+  WorkspaceTask,
+  ParsedTaskLine,
+  ListTasksOptions,
+} from '../models/tasks.js';
