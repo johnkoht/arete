@@ -4,6 +4,120 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 25, 2026
+
+### Meeting Importance & Smart Processing
+
+**Areté now infers meeting importance and adjusts processing automatically.** When you pull meetings from Fathom or Krisp, each meeting gets an importance level:
+
+- **skip** — Declined, cancelled, or you're not an attendee → no processing
+- **light** — Large broadcasts, FYI meetings → quick summary + 2 learnings only
+- **normal** — Standard 1:1s, team meetings → full extraction
+- **important** — Recurring 1:1s, customer meetings, QBRs → thorough extraction
+
+```bash
+# Light meetings auto-approve — no review needed
+arete pull fathom
+# → "Team All-Hands" processed with light mode, auto-approved
+# → "John / Manager 1:1" processed with normal mode, staged for review
+```
+
+**How importance is inferred:**
+1. Skip: status declined/cancelled, or you're not attending
+2. Important: recurring 1:1, has linked agenda, you're the organizer
+3. Light: >5 attendees, or title contains "all-hands", "town hall", "broadcast"
+4. Normal: everything else
+
+**Speaking ratio helps classify further.** Areté calculates your speaking ratio from the transcript. If you spoke <20% in a meeting with many attendees, it's likely informational (→ light). This is visible in meeting frontmatter.
+
+### Extraction Modes
+
+**Three extraction modes with different depths.** You can now control how deeply Areté extracts from meetings:
+
+| Mode | Action Items | Decisions | Learnings | Prompt Size |
+|------|-------------|-----------|-----------|-------------|
+| Light | 0 | 0 | 2 | ~33% |
+| Normal | 7 | 5 | 5 | 100% |
+| Thorough | 10 | 7 | 7 | ~120% |
+
+Light mode is for meetings where you just need a summary. Thorough mode is for important meetings where you want maximum extraction.
+
+**Reprocessing defaults to thorough.** When you reprocess an already-extracted meeting (via CLI or web UI), it uses thorough mode automatically — you're reprocessing because you want more, not less.
+
+### UI Extraction Mode Selection
+
+**Choose extraction mode in the web dashboard.** When reprocessing a meeting via `arete view`, you now see radio buttons:
+- Normal — Standard extraction
+- **Thorough** (default) — Deep extraction for important meetings
+
+The mode selection appears in the reprocess dialog alongside the "Clear approved items" checkbox.
+
+### Plan Mode Workflow Enhancements
+
+**`/plan list` now has powerful filters.** Filter your plans by status and location:
+
+```
+/plan list --work       # Active work (idea/draft/planned/building)
+/plan list --backlog    # Backlog items only
+/plan list --building   # Currently building
+/plan list --complete   # Completed plans
+/plan list --archive    # Archived plans (by year-month)
+/plan list --all        # Everything
+```
+
+Plans are grouped by status with a footer showing backlog count.
+
+**`/plan promote <slug>` moves backlog to active.** When a backlog item is ready for work:
+
+```
+/plan promote my-feature
+# Creates dev/work/plans/my-feature/plan.md with draft status
+```
+
+**`/release` manages semantic versioning.** Tag releases with automatic CHANGELOG generation:
+
+```
+/release status           # Show current version and unreleased changes
+/release patch            # Bump 0.0.X
+/release minor            # Bump 0.X.0
+/release patch --dry-run  # Preview without committing
+```
+
+Commits are categorized (feat→Added, fix→Fixed, refactor→Changed) and written to CHANGELOG.md.
+
+**`/build <slug>` and `/ship <slug>` work without plan mode.** You can now start building a plan from anywhere:
+
+```
+/build my-feature    # Loads plan and starts building
+/ship my-feature     # Loads plan and runs full ship workflow
+```
+
+No need to first `/plan open my-feature` — the slug-based commands handle it.
+
+**Automatic status transitions.** Plan status now updates automatically:
+- `/build` or `/ship` → status becomes `building`
+- `/wrap` → status becomes `complete`
+
+**Plans archive with year-month paths.** Completed plans archive to:
+```
+dev/work/archive/2026-03/{slug}/
+```
+
+If a plan with the same slug was already archived that month, it gets a suffix: `my-feature-2/`.
+
+### Gitboss Agent
+
+**New gitboss agent for merge decisions.** When you're ready to merge a feature branch:
+
+```
+# In your feature branch conversation:
+"Ready to merge, ask gitboss for approval"
+```
+
+Gitboss reviews the branch state, checks for conflicts, verifies tests pass, and either approves the merge or explains what needs fixing. Keeps merge decisions explicit and auditable.
+
+---
+
 ## Week of March 24, 2026
 
 ### Meeting Intelligence: Batch Deduplication & Context
