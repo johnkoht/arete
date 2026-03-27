@@ -992,7 +992,13 @@ export async function handlePlanSave(
 	const existingPlan = loadPlan(slug);
 
 	const frontmatter: PlanFrontmatter = existingPlan
-		? { ...existingPlan.frontmatter, updated: now, steps: state.todoItems.length }
+		? { 
+			...existingPlan.frontmatter, 
+			updated: now, 
+			steps: state.todoItems.length,
+			// Update size if we have a classified size (not null/unknown)
+			size: (state.planSize && state.planSize !== "unknown") ? state.planSize : existingPlan.frontmatter.size,
+		}
 		: {
 				title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
 				slug,
