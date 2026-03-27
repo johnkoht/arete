@@ -2190,7 +2190,7 @@ describe("handleShip", () => {
 	beforeEach(() => setupTestPlansDir());
 	afterEach(() => cleanupTestPlansDir());
 
-	it("shows warning when no active plan", async () => {
+	it("shows error when no plan specified and no active plan", async () => {
 		let notifyMessage = "";
 		let notifyType = "";
 		const ctx = createTestContext({
@@ -2204,8 +2204,9 @@ describe("handleShip", () => {
 
 		await handleShip("", ctx, pi, state);
 
-		assert.ok(notifyMessage.includes("No active plan"), "Should warn about no active plan");
-		assert.equal(notifyType, "warning");
+		assert.ok(notifyMessage.includes("No plan specified"), "Should error about no plan specified");
+		assert.ok(notifyMessage.includes("/ship <slug>"), "Should suggest correct usage");
+		assert.equal(notifyType, "error");
 	});
 
 	it("shows error when plan not found", async () => {
@@ -2783,6 +2784,234 @@ describe("auto status transitions", () => {
 
 		assert.equal(state.executionMode, true, "Should enable execution mode");
 		assert.equal(state.planModeEnabled, false, "Should disable plan mode");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// Slug-based invocation — /build <slug> and /ship <slug>
+// ────────────────────────────────────────────────────────────
+
+describe("slug-based invocation", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("/build <slug> works without plan mode active", async () => {
+		const slug = "build-by-slug";
+		createTestPlanWithStatus(slug, "# Build By Slug\n\n1. First step", "planned");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi();
+		// No currentSlug set — plan mode not active
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleBuild(slug, ctx, pi, state);
+
+		// Should proceed to build
+		assert.ok(notifyMessage.includes("building"), `Should start build: ${notifyMessage}`);
+		assert.equal(state.currentSlug, slug, "Should set currentSlug for execution");
+		assert.equal(state.executionMode, true, "Should enable execution mode");
+	});
+
+	it("/ship <slug> works without plan mode active", async () => {
+		const slug = "ship-by-slug";
+		createTestPlanWithStatus(slug, "# Ship By Slug\n\n1. First step", "planned");
+
+		let notifyMessage = "";
+		let sentMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => { notifyMessage = msg; },
+		});
+		const pi = createTestPi({
+			sendUserMessage: (content) => { sentMessage = content; },
+		});
+		// No currentSlug set — plan mode not active
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleShip(slug, ctx, pi, state);
+
+		// Should proceed to ship
+		assert.ok(notifyMessage.includes("building"), `Should start ship workflow: ${notifyMessage}`);
+		assert.ok(sentMessage.includes("ship/SKILL.md"), "Should invoke ship skill");
+		assert.equal(state.currentSlug, slug, "Should set currentSlug for execution");
+		assert.equal(state.executionMode, true, "Should enable execution mode");
+	});
+
+	it("/build <slug> status gate rejects idea status", async () => {
+		const slug = "idea-slug-build";
+		createTestPlanWithStatus(slug, "# Idea Plan\n\n1. Step", "idea");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => { notifyMessage = msg; notifyType = type ?? ""; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleBuild(slug, ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("idea"), "Should mention current status");
+		assert.equal(notifyType, "error", "Should be error notification");
+	});
+
+	it("/ship <slug> status gate rejects draft status", async () => {
+		const slug = "draft-slug-ship";
+		createTestPlanWithStatus(slug, "# Draft Plan\n\n1. Step", "draft");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => { notifyMessage = msg; notifyType = type ?? ""; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleShip(slug, ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("draft"), "Should mention current status");
+		assert.equal(notifyType, "error", "Should be error notification");
+	});
+
+	it("/build shows switching warning when different plan active", async () => {
+		const existingSlug = "existing-plan";
+		const newSlug = "new-plan";
+		createTestPlanWithStatus(existingSlug, "# Existing\n\n1. Step", "planned");
+		createTestPlanWithStatus(newSlug, "# New\n\n1. Step", "planned");
+
+		let confirmTitle = "";
+		let confirmCalled = false;
+		const ctx = createTestContext({
+			notify: () => {},
+			confirm: async (title) => {
+				confirmTitle = title;
+				confirmCalled = true;
+				return true; // Accept switch
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: existingSlug, planModeEnabled: true });
+
+		await handleBuild(newSlug, ctx, pi, state);
+
+		assert.ok(confirmCalled, "Should prompt for confirmation");
+		assert.ok(confirmTitle.includes("Switch"), "Should ask about switching");
+		assert.equal(state.currentSlug, newSlug, "Should switch to new plan");
+	});
+
+	it("/ship shows switching warning when different plan active", async () => {
+		const existingSlug = "existing-ship";
+		const newSlug = "new-ship";
+		createTestPlanWithStatus(existingSlug, "# Existing\n\n1. Step", "planned");
+		createTestPlanWithStatus(newSlug, "# New\n\n1. Step", "planned");
+
+		let confirmTitle = "";
+		let confirmCalled = false;
+		const ctx = createTestContext({
+			notify: () => {},
+			confirm: async (title) => {
+				confirmTitle = title;
+				confirmCalled = true;
+				return true; // Accept switch
+			},
+		});
+		const pi = createTestPi({ sendUserMessage: () => {} });
+		const state = createTestState({ currentSlug: existingSlug, planModeEnabled: true });
+
+		await handleShip(newSlug, ctx, pi, state);
+
+		assert.ok(confirmCalled, "Should prompt for confirmation");
+		assert.ok(confirmTitle.includes("Switch"), "Should ask about switching");
+		assert.equal(state.currentSlug, newSlug, "Should switch to new plan");
+	});
+
+	it("/build cancels if user declines switch", async () => {
+		const existingSlug = "existing-decline";
+		const newSlug = "new-decline";
+		createTestPlanWithStatus(existingSlug, "# Existing\n\n1. Step", "planned");
+		createTestPlanWithStatus(newSlug, "# New\n\n1. Step", "planned");
+
+		const ctx = createTestContext({
+			notify: () => {},
+			confirm: async () => false, // Decline switch
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: existingSlug, planModeEnabled: true });
+
+		await handleBuild(newSlug, ctx, pi, state);
+
+		assert.equal(state.currentSlug, existingSlug, "Should keep original plan");
+		assert.equal(state.executionMode, false, "Should not enter execution mode");
+	});
+
+	it("/build with no slug and no active plan shows helpful error", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => { notifyMessage = msg; notifyType = type ?? ""; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleBuild("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No plan specified"), "Should show helpful error");
+		assert.ok(notifyMessage.includes("/build <slug>"), "Should suggest correct usage");
+		assert.equal(notifyType, "error", "Should be error notification");
+	});
+
+	it("/ship with no slug and no active plan shows helpful error", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => { notifyMessage = msg; notifyType = type ?? ""; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("No plan specified"), "Should show helpful error");
+		assert.ok(notifyMessage.includes("/ship <slug>"), "Should suggest correct usage");
+		assert.equal(notifyType, "error", "Should be error notification");
+	});
+
+	it("/build with slug skips switch warning when same plan", async () => {
+		const slug = "same-plan";
+		createTestPlanWithStatus(slug, "# Same\n\n1. Step", "planned");
+
+		let confirmCalled = false;
+		const ctx = createTestContext({
+			notify: () => {},
+			confirm: async () => { confirmCalled = true; return true; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: slug, planModeEnabled: true });
+
+		await handleBuild(slug, ctx, pi, state);
+
+		// Should NOT prompt — same plan
+		assert.equal(confirmCalled, false, "Should not prompt when same plan");
+		assert.equal(state.executionMode, true, "Should proceed to build");
+	});
+
+	it("/build with nonexistent slug shows error", async () => {
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => { notifyMessage = msg; notifyType = type ?? ""; },
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: null, planModeEnabled: false });
+
+		await handleBuild("nonexistent-plan-xyz", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("not found"), "Should show not found error");
+		assert.equal(notifyType, "error", "Should be error notification");
 	});
 });
 

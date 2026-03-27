@@ -1873,23 +1873,43 @@ export async function handleBuild(
 	pi: CommandPi,
 	state: PlanModeState,
 ): Promise<void> {
-	const subcommand = args.trim().toLowerCase();
+	const trimmedArgs = args.trim();
+	const subcommand = trimmedArgs.toLowerCase();
 
 	if (subcommand === "status") {
 		handleBuildStatus(ctx, state);
 		return;
 	}
 
-	if (!state.currentSlug) {
-		ctx.ui.notify("No active plan. Save and approve a plan first.", "warning");
+	// Support /build <slug> without plan mode active
+	let targetSlug = trimmedArgs || null;
+
+	if (targetSlug) {
+		// If plan mode active with different plan, warn about switching
+		if (state.currentSlug && state.currentSlug !== targetSlug) {
+			const confirmed = await ctx.ui.confirm(
+				"Switch Plan",
+				`Switch from "${state.currentSlug}" to "${targetSlug}"?`,
+			);
+			if (!confirmed) return;
+		}
+	} else {
+		targetSlug = state.currentSlug;
+	}
+
+	if (!targetSlug) {
+		ctx.ui.notify("No plan specified. Use /build <slug> or open a plan first.", "error");
 		return;
 	}
 
-	const plan = loadPlan(state.currentSlug);
+	const plan = loadPlan(targetSlug);
 	if (!plan) {
-		ctx.ui.notify(`Plan not found: ${state.currentSlug}`, "error");
+		ctx.ui.notify(`Plan not found: ${targetSlug}`, "error");
 		return;
 	}
+
+	// Update state with target slug for execution
+	state.currentSlug = targetSlug;
 
 	// Build gate: require planned status
 	if (plan.frontmatter.status === "idea" || plan.frontmatter.status === "draft") {
@@ -1981,16 +2001,35 @@ export async function handleShip(
 	pi: CommandPi,
 	state: PlanModeState,
 ): Promise<void> {
-	if (!state.currentSlug) {
-		ctx.ui.notify("No active plan. Save and approve a plan first.", "warning");
+	// Support /ship <slug> without plan mode active
+	let targetSlug = args.trim() || null;
+
+	if (targetSlug) {
+		// If plan mode active with different plan, warn about switching
+		if (state.currentSlug && state.currentSlug !== targetSlug) {
+			const confirmed = await ctx.ui.confirm(
+				"Switch Plan",
+				`Switch from "${state.currentSlug}" to "${targetSlug}"?`,
+			);
+			if (!confirmed) return;
+		}
+	} else {
+		targetSlug = state.currentSlug;
+	}
+
+	if (!targetSlug) {
+		ctx.ui.notify("No plan specified. Use /ship <slug> or open a plan first.", "error");
 		return;
 	}
 
-	const plan = loadPlan(state.currentSlug);
+	const plan = loadPlan(targetSlug);
 	if (!plan) {
-		ctx.ui.notify(`Plan not found: ${state.currentSlug}`, "error");
+		ctx.ui.notify(`Plan not found: ${targetSlug}`, "error");
 		return;
 	}
+
+	// Update state with target slug for execution
+	state.currentSlug = targetSlug;
 
 	// Check plan status
 	if (plan.frontmatter.status === "complete") {
