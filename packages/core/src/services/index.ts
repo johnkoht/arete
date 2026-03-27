@@ -65,6 +65,7 @@ export {
   clearApprovedSections,
   formatFilteredStagedSections,
   calculateSpeakingRatio,
+  inferUrgency,
 } from './meeting-processing.js';
 export type {
   ProcessedMeetingResult,
@@ -73,6 +74,7 @@ export type {
   ItemSource,
   ItemStatus,
   ItemOwnerMeta,
+  UrgencyBucket,
 } from './meeting-processing.js';
 
 // Pattern detection

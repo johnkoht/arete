@@ -719,3 +719,54 @@ export function calculateSpeakingRatio(
 
   return ownerWords / totalWords;
 }
+
+// ---------------------------------------------------------------------------
+// Urgency Inference for Task Bucket Placement
+// ---------------------------------------------------------------------------
+
+/**
+ * Task bucket based on urgency inference.
+ * Maps to TaskDestination values: 'must', 'should', 'anytime'
+ */
+export type UrgencyBucket = 'must' | 'should' | 'anytime';
+
+/**
+ * Infer task urgency bucket from action item text.
+ *
+ * Scans text for urgency keywords and maps to GTD buckets:
+ * - "urgent", "asap", "immediately", "today", "this week" → must
+ * - "important", "priority", "soon" → should
+ * - "when you can", "sometime", "eventually", "anytime" → anytime
+ * - Default (no keywords) → should (don't block per Harvester requirement)
+ *
+ * @param text - Action item description
+ * @returns Task bucket: 'must', 'should', or 'anytime'
+ *
+ * @example
+ * ```ts
+ * inferUrgency('Send the slides ASAP'); // → 'must'
+ * inferUrgency('Review when you can'); // → 'anytime'
+ * inferUrgency('Send API documentation'); // → 'should' (default)
+ * ```
+ */
+export function inferUrgency(text: string): UrgencyBucket {
+  const lower = text.toLowerCase();
+
+  // Must: urgent, asap, immediately, today, this week
+  if (/\b(urgent|asap|immediately|today|this week)\b/.test(lower)) {
+    return 'must';
+  }
+
+  // Should: important, priority, soon
+  if (/\b(important|priority|soon)\b/.test(lower)) {
+    return 'should';
+  }
+
+  // Anytime: when you can, sometime, eventually, anytime
+  if (/\b(when you can|sometime|eventually|anytime)\b/.test(lower)) {
+    return 'anytime';
+  }
+
+  // Default: should (per Harvester requirement - don't block on unclear urgency)
+  return 'should';
+}
