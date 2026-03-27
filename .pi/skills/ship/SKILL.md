@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Mega-build skill that automates the entire plan-to-PR workflow. After plan approval, say /ship to run pre-mortem, review, memory scan, PRD creation, worktree setup, autonomous build, and final wrap — all with intelligent gates that pause only when human judgment is needed.
+description: Mega-build skill that automates the entire plan-to-merge workflow. After plan approval, say /ship to run pre-mortem, review, memory scan, PRD creation, worktree setup, autonomous build, wrap verification, and interactive merge — all with intelligent gates that pause only when human judgment is needed.
 category: build
 work_type: development
 primitives: []
@@ -9,7 +9,7 @@ requires_briefing: false
 
 # Ship Skill
 
-Automate the complete build workflow from approved plan to PR-ready code. The builder shapes the plan (high-value human time), says `/ship`, and walks away. The system handles mechanical steps autonomously, pausing only at intelligent gates when human judgment is truly needed.
+Automate the complete build workflow from approved plan to merged code. The builder shapes the plan (high-value human time), says `/ship`, and walks away. The system handles mechanical steps autonomously, pausing only at intelligent gates when human judgment is truly needed. When the builder returns, the skill prompts for merge and handles cleanup automatically.
 
 ## When to Use
 
