@@ -17,7 +17,7 @@ export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingE
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
-export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, } from './meeting-processing.js';
+export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis
@@ -37,4 +37,6 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 export { AreaParserService } from './area-parser.js';
 // Task management
 export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+// Task scoring
+export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
 //# sourceMappingURL=index.js.map

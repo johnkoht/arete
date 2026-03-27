@@ -142,3 +142,22 @@ export type {
   ParsedTaskLine,
   ListTasksOptions,
 } from '../models/tasks.js';
+
+// Task scoring
+export {
+  scoreTask,
+  scoreTasks,
+  getTopTasks,
+  scoreDueDate,
+  scoreCommitment,
+  scoreMeetingRelevance,
+  scoreWeekPriority,
+  calculateModifiers,
+  formatScoredTask,
+  formatTaskRecommendations,
+} from './task-scoring.js';
+export type {
+  ScoringContext,
+  ScoreBreakdown,
+  ScoredTask,
+} from './task-scoring.js';

@@ -12,6 +12,7 @@ intelligence:
   - entity_resolution
   - memory_retrieval
   - area_context
+  - task_scoring
 ---
 
 # Daily Plan Skill
@@ -44,6 +45,66 @@ Build a daily plan: today's focus from week priorities, meeting list with contex
 - **Read** `now/scratchpad.md` for ad-hoc items.
 - **Calendar** (if configured): Run `arete pull calendar --today --json` (or `--tomorrow` if planning for tomorrow). If successful, use events as meeting list. Otherwise, ask user.
 - **Commitments**: Run `arete commitments list --json` to surface relevant items.
+
+### 3.5. Score and Select Tasks
+
+Use intelligent task scoring to recommend today's focus from the week's task list.
+
+**Build Scoring Context**:
+1. **Meeting attendees**: Extract person slugs from today's calendar events
+2. **Meeting areas**: Extract area slugs from today's meetings (via `getAreaForMeeting()`)
+3. **Week priorities**: Extract priority text from `now/week.md` Outcomes section
+4. **Focus hours**: Estimate available focus time from calendar gaps
+5. **Needs attention**: People with `needs_attention: true` in their profile
+
+**Score Tasks**:
+1. Get all incomplete tasks from `now/week.md` Tasks sections (Must/Should/Could)
+2. For each task, compute score across dimensions:
+   - **Due Date (0-40)**: Overdue = 40, today = 35, this week = 25, next week = 10, later = 0
+   - **Commitment (0-25)**: Has `@from(commitment:xxx)` = 25
+   - **Meeting Relevance (0-20)**: Task `@person`/`@area` matches today's meeting = 20
+   - **Week Priority (0-15)**: Task text matches word in week priorities = 15
+3. Apply modifiers:
+   - **+10**: Task `@person` is in `needsAttentionPeople`
+   - **+20**: Task relates to today's meeting (attendee or area)
+   - **-10**: Deep work task (write, design, analyze, etc.) but <2hrs focus available
+
+**Present Recommendations**:
+Show top 5 tasks with score breakdown for transparency:
+
+```
+**Recommended focus for today:**
+
+1. Send API docs to Sarah (score: 75)
+   - Due today: +35
+   - Commitment: +25
+   - Meeting with Sarah today: +15
+
+2. Review compliance checklist (score: 55)
+   - Due this week: +25
+   - @area(coverwhale) has meeting today: +20
+   - +10: @sarah needs attention
+
+3. Draft transformer spec (score: 40)
+   - Overdue: +40
+   - -10: Deep work needs 2hrs, only 1hr available
+
+4. Update project status (score: 25)
+   - Due this week: +25
+
+5. Explore new dashboard ideas (score: 0)
+   - No due date
+```
+
+**User Confirmation**:
+After presenting recommendations, confirm:
+> "Any changes to today's focus? (You can swap tasks, add priorities, or accept as-is)"
+
+- **Accept**: Use recommendations as Today's focus
+- **Adjust**: User modifies list, agent updates accordingly
+- **Skip**: User provides their own focus manually
+
+The confirmed tasks become the **Focus** section content in the Today update.
 
 ### 4. For Each Meeting
 
@@ -167,6 +228,7 @@ After writing, confirm:
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context
+- **Service**: `@arete/core` — `scoreTask()`, `scoreTasks()`, `getTopTasks()`, `formatTaskRecommendations()`
 - **Week file**: `now/week.md`
 - **Agendas**: `now/agendas/`
 - **Scratchpad**: `now/scratchpad.md`
