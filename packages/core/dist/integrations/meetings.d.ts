@@ -85,6 +85,19 @@ export declare function inferMeetingImportance(event: CalendarEvent, options?: {
  */
 export declare function findMatchingAgenda(storage: StorageAdapter, workspaceRoot: string, date: string, title: string): Promise<AgendaMatchResult>;
 /**
+ * Find a matching calendar event for a meeting by date and time.
+ *
+ * Matching priority:
+ * 1. Same day + time overlap (meeting falls within calendar event window)
+ * 2. Same day + fuzzy title match (when times don't match exactly)
+ *
+ * @param events - Array of calendar events to search
+ * @param meetingDate - Meeting date (YYYY-MM-DD or ISO string)
+ * @param meetingTitle - Meeting title for fuzzy matching
+ * @returns Matched calendar event or null
+ */
+export declare function findMatchingCalendarEvent(events: CalendarEvent[], meetingDate: string, meetingTitle: string): CalendarEvent | null;
+/**
  * Simple wrapper that returns just the path (for backward compatibility).
  * Only returns high-confidence matches (exact or fuzzy >= 0.7).
  */

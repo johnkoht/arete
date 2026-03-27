@@ -190,6 +190,47 @@ export async function findMatchingAgenda(storage, workspaceRoot, date, title) {
     };
 }
 /**
+ * Find a matching calendar event for a meeting by date and time.
+ *
+ * Matching priority:
+ * 1. Same day + time overlap (meeting falls within calendar event window)
+ * 2. Same day + fuzzy title match (when times don't match exactly)
+ *
+ * @param events - Array of calendar events to search
+ * @param meetingDate - Meeting date (YYYY-MM-DD or ISO string)
+ * @param meetingTitle - Meeting title for fuzzy matching
+ * @returns Matched calendar event or null
+ */
+export function findMatchingCalendarEvent(events, meetingDate, meetingTitle) {
+    if (events.length === 0)
+        return null;
+    // Normalize meeting date to YYYY-MM-DD
+    const targetDate = meetingDate.includes('T') ? meetingDate.slice(0, 10) : meetingDate;
+    // Filter events on the same day
+    const sameDayEvents = events.filter(event => {
+        const eventDate = event.startTime.toISOString().slice(0, 10);
+        return eventDate === targetDate;
+    });
+    if (sameDayEvents.length === 0)
+        return null;
+    // Single event on this day - return it
+    if (sameDayEvents.length === 1) {
+        return sameDayEvents[0];
+    }
+    // Multiple events - find best match by title similarity
+    let bestMatch = null;
+    let bestScore = 0;
+    for (const event of sameDayEvents) {
+        const score = titleSimilarity(meetingTitle, event.title);
+        if (score > bestScore) {
+            bestScore = score;
+            bestMatch = event;
+        }
+    }
+    // Return best match if reasonable similarity (> 0.3), else first event on the day
+    return bestScore > 0.3 ? bestMatch : sameDayEvents[0];
+}
+/**
  * Simple wrapper that returns just the path (for backward compatibility).
  * Only returns high-confidence matches (exact or fuzzy >= 0.7).
  */

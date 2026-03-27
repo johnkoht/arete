@@ -15,7 +15,7 @@ export { getPackageRoot } from './package-root.js';
 export { getAdapter, detectAdapter, getAdapterFromConfig } from './adapters/index.js';
 export type { IDEAdapter, IDETarget } from './adapters/index.js';
 export { getCalendarProvider, type BusyBlock, type FreeBusyResult, type FreeBusyCalendarResult, type CalendarProvider, type CreateEventInput, type CreatedEvent, } from './integrations/calendar/index.js';
-export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, inferMeetingImportance, } from './integrations/meetings.js';
+export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, findMatchingCalendarEvent, inferMeetingImportance, } from './integrations/meetings.js';
 export type { MeetingForSave, AgendaMatchResult, Importance } from './integrations/meetings.js';
 export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
 export type { WriteItemStatusOptions } from './integrations/staged-items.js';
