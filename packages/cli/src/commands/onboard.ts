@@ -50,6 +50,28 @@ function extractDomainFromUrl(url: string): string | null {
   }
 }
 
+/**
+ * Open a URL in the default browser (cross-platform)
+ */
+async function openBrowser(url: string): Promise<void> {
+  const { exec } = await import('node:child_process');
+  return new Promise((resolve, reject) => {
+    // macOS uses 'open', Linux uses 'xdg-open', Windows uses 'start'
+    let command: string;
+    if (process.platform === 'darwin') {
+      command = `open "${url}"`;
+    } else if (process.platform === 'win32') {
+      command = `start "" "${url}"`;
+    } else {
+      command = `xdg-open "${url}"`;
+    }
+    exec(command, (err) => {
+      if (err) reject(new Error('Unable to open browser automatically.'));
+      else resolve();
+    });
+  });
+}
+
 export function registerOnboardCommand(program: Command): void {
   program
     .command('onboard')
@@ -281,11 +303,11 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           aiHeaderShown = true;
           const { confirm } = await import('@inquirer/prompts');
           const currentCred = existingOAuth
-            ? 'OAuth login'
+            ? 'Claude subscription'
             : `API key: ${maskApiKey(existingKey!)}`;
           try {
             const update = await confirm({
-              message: `Update AI credentials? (current: ${currentCred})`,
+              message: `AI already configured (${currentCred}). Change it?`,
               default: false,
             });
             if (update) {
@@ -362,10 +384,16 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
 
               try {
                 const credentials = await provider.login({
-                  onAuth: (authInfo) => {
+                  onAuth: async (authInfo) => {
                     console.log('');
-                    console.log(chalk.bold('  Open this URL in your browser:'));
-                    console.log(`  ${chalk.cyan(authInfo.url)}`);
+                    info('Opening browser for Claude authorization...');
+                    try {
+                      await openBrowser(authInfo.url);
+                    } catch {
+                      // Fallback: show URL if browser won't open
+                      console.log(chalk.bold('  Open this URL in your browser:'));
+                      console.log(`  ${chalk.cyan(authInfo.url)}`);
+                    }
                     if (authInfo.instructions) {
                       console.log('');
                       console.log(chalk.dim(`  ${authInfo.instructions}`));
@@ -711,5 +739,8 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
       console.log('    • "Plan my week" — set priorities and focus');
       console.log('    • "Let\'s get started" — guided workspace setup');
       console.log('');
+
+      // Ensure clean exit (readline interfaces may keep process alive)
+      process.exit(0);
     });
 }
