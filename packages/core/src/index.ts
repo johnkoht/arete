@@ -85,8 +85,9 @@ export {
   meetingFilename,
   findMatchingAgenda,
   findMatchingAgendaPath,
+  inferMeetingImportance,
 } from './integrations/meetings.js';
-export type { MeetingForSave, AgendaMatchResult } from './integrations/meetings.js';
+export type { MeetingForSave, AgendaMatchResult, Importance } from './integrations/meetings.js';
 export {
   generateItemId,
   parseStagedSections,

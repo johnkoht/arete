@@ -9,10 +9,13 @@ import {
   findMatchingAgendaPath,
   saveMeetingFile,
   meetingFilename,
+  inferMeetingImportance,
   type MeetingForSave,
   type AgendaMatchResult,
+  type Importance,
 } from '../../src/integrations/meetings.js';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
+import type { CalendarEvent } from '../../src/integrations/calendar/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -410,5 +413,196 @@ describe('saveMeetingFile', () => {
     const content = storage.files.get(result);
     assert.ok(content);
     assert.ok(content.includes('source: Krisp'));
+  });
+
+  it('includes importance in frontmatter when provided', async () => {
+    const meeting = makeMeeting({ importance: 'important' });
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    assert.ok(content.includes('importance: important'), 'should include importance in frontmatter');
+  });
+
+  it('does not include importance in frontmatter when absent', async () => {
+    const meeting = makeMeeting();
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    assert.ok(!content.includes('importance:'), 'should not include importance when absent');
+  });
+
+  it('includes recurring_series_id in frontmatter when provided', async () => {
+    const meeting = makeMeeting({ recurring_series_id: 'abc123xyz' });
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    assert.ok(content.includes('recurring_series_id: abc123xyz'), 'should include recurring_series_id');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inferMeetingImportance tests
+// ---------------------------------------------------------------------------
+
+function makeCalendarEvent(overrides: Partial<CalendarEvent> = {}): CalendarEvent {
+  return {
+    title: 'Test Meeting',
+    startTime: new Date('2026-03-04T10:00:00Z'),
+    endTime: new Date('2026-03-04T11:00:00Z'),
+    calendar: 'Work',
+    attendees: [],
+    isAllDay: false,
+    ...overrides,
+  };
+}
+
+describe('inferMeetingImportance', () => {
+  it('returns important when organizer.self is true', () => {
+    const event = makeCalendarEvent({
+      organizer: { name: 'Me', email: 'me@example.com', self: true },
+      attendees: [
+        { name: 'Me', email: 'me@example.com' },
+        { name: 'Person 1', email: 'p1@example.com' },
+        { name: 'Person 2', email: 'p2@example.com' },
+        { name: 'Person 3', email: 'p3@example.com' },
+        { name: 'Person 4', email: 'p4@example.com' },
+        { name: 'Person 5', email: 'p5@example.com' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'important', 'organizer self should be important even with many attendees');
+  });
+
+  it('returns important for 1:1 meeting (2 attendees)', () => {
+    const event = makeCalendarEvent({
+      attendees: [
+        { name: 'Me', email: 'me@example.com' },
+        { name: 'Other', email: 'other@example.com' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'important', '1:1 meetings should be important');
+  });
+
+  it('returns normal for small group (3 attendees)', () => {
+    const event = makeCalendarEvent({
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'normal', 'small groups should be normal');
+  });
+
+  it('returns light for large audience (5+ attendees, not organizer)', () => {
+    const event = makeCalendarEvent({
+      organizer: { name: 'Someone Else', email: 'other@example.com', self: false },
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+        { name: 'Person 4' },
+        { name: 'Person 5' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'light', 'large audience meetings should be light');
+  });
+
+  it('returns normal for default case (4 attendees)', () => {
+    const event = makeCalendarEvent({
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+        { name: 'Person 4' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'normal', '4 attendees should be normal');
+  });
+
+  it('upgrades light to normal when hasAgenda is true', () => {
+    const event = makeCalendarEvent({
+      organizer: { name: 'Someone Else', email: 'other@example.com', self: false },
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+        { name: 'Person 4' },
+        { name: 'Person 5' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event, { hasAgenda: true });
+    assert.equal(result, 'normal', 'hasAgenda should upgrade light to normal');
+  });
+
+  it('keeps normal as normal when hasAgenda is true', () => {
+    const event = makeCalendarEvent({
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event, { hasAgenda: true });
+    assert.equal(result, 'normal', 'hasAgenda should not change normal');
+  });
+
+  it('handles missing organizer field gracefully', () => {
+    const event = makeCalendarEvent({
+      // No organizer field
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+        { name: 'Person 3' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'normal', 'should work without organizer field');
+  });
+
+  it('handles empty attendees array', () => {
+    const event = makeCalendarEvent({
+      attendees: [],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'normal', 'empty attendees should be normal (≤3)');
+  });
+
+  it('handles organizer without self field', () => {
+    const event = makeCalendarEvent({
+      organizer: { name: 'Someone', email: 'someone@example.com' },
+      attendees: [
+        { name: 'Person 1' },
+        { name: 'Person 2' },
+      ],
+    });
+
+    const result = inferMeetingImportance(event);
+    assert.equal(result, 'important', '1:1 should still be important without organizer.self');
   });
 });
