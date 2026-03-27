@@ -13,10 +13,14 @@
  * - [DONE:n] markers to track progress during execution
  */
 
+// @ts-ignore - resolved at runtime by Pi's jiti loader
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
+// @ts-ignore - resolved at runtime by Pi's jiti loader
 import type { AssistantMessage, TextContent } from "@mariozechner/pi-ai";
+// @ts-ignore - resolved at runtime by Pi's jiti loader
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+// @ts-ignore - resolved at runtime by Pi's jiti loader
 import { Key } from "@mariozechner/pi-tui";
 import {
 	extractTodoItems,
