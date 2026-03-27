@@ -64,6 +64,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Plan → PRD is 1:1**: Each plan can have at most one PRD. When remaining items from a partially-executed plan need separate PRDs (e.g., pagination vs page redesign), create new plans for each rather than trying to attach multiple PRDs to the original plan. Example: `web-fast-follow` completed Phase 1, then spawned `web-pagination` and `person-detail-redesign` as separate plans for the remaining scope. (2026-03-10)
 
+- **Return structured results from filter functions (2026-03-27)**: `preparePlanListItems()` returns `{ items, backlogCount }` instead of just an array. This allows the caller to display contextual information (footer notification) without re-filtering the data. When a filter function needs to communicate metadata alongside results, prefer returning a structured object over computing metadata separately. Keeps filtering logic single-source-of-truth and improves testability.
+
 ## Resolved Issues
 
 ### `/plan close` save could wipe plan content [RESOLVED 2026-03-10]

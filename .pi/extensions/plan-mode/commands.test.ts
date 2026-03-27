@@ -2784,3 +2784,482 @@ describe("auto status transitions", () => {
 	});
 });
 
+// ────────────────────────────────────────────────────────────
+// archivePlan tests
+// ────────────────────────────────────────────────────────────
+
+describe("archivePlan", () => {
+	const TEST_ARCHIVE_DIR = "dev/work/archive-test";
+	const TEST_ARCHIVE_PLANS_DIR = "dev/plans-archive-test";
+
+	beforeEach(() => {
+		// Clean up test directories
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+		if (existsSync(TEST_ARCHIVE_PLANS_DIR)) {
+			rmSync(TEST_ARCHIVE_PLANS_DIR, { recursive: true, force: true });
+		}
+		// Point tests to isolated directories
+		process.env.ARETE_TEST_PLANS_DIR = TEST_ARCHIVE_PLANS_DIR;
+	});
+
+	afterEach(() => {
+		delete process.env.ARETE_TEST_PLANS_DIR;
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+		if (existsSync(TEST_ARCHIVE_PLANS_DIR)) {
+			rmSync(TEST_ARCHIVE_PLANS_DIR, { recursive: true, force: true });
+		}
+	});
+
+	function createPlanForArchive(slug: string): void {
+		const planDir = join(TEST_ARCHIVE_PLANS_DIR, slug);
+		mkdirSync(planDir, { recursive: true });
+		const frontmatter = `---
+title: ${slug}
+slug: ${slug}
+status: planned
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 2
+---
+
+# ${slug}
+
+1. Step one
+2. Step two
+`;
+		writeFileSync(join(planDir, "plan.md"), frontmatter, "utf-8");
+	}
+
+	it("archives plan to YYYY-MM subdirectory", async () => {
+		const { archivePlan } = await import("./persistence.js");
+		const slug = "archive-test-plan";
+		createPlanForArchive(slug);
+
+		const finalSlug = archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+
+		// Verify the slug returned is the same
+		assert.equal(finalSlug, slug);
+
+		// Verify YYYY-MM path structure
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const expectedPath = join(TEST_ARCHIVE_DIR, yearMonth, slug, "plan.md");
+		assert.ok(existsSync(expectedPath), `Plan should be archived at ${expectedPath}`);
+
+		// Verify source was removed
+		const sourcePath = join(TEST_ARCHIVE_PLANS_DIR, slug);
+		assert.ok(!existsSync(sourcePath), "Source plan should be removed after archiving");
+	});
+
+	it("handles duplicate slugs with counter suffix (-2, -3)", async () => {
+		const { archivePlan } = await import("./persistence.js");
+		const slug = "duplicate-test";
+
+		// Create first plan and archive it
+		createPlanForArchive(slug);
+		const firstSlug = archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+		assert.equal(firstSlug, slug);
+
+		// Create second plan with same slug and archive it
+		createPlanForArchive(slug);
+		const secondSlug = archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+		assert.equal(secondSlug, `${slug}-2`, "Second archive should have -2 suffix");
+
+		// Create third plan with same slug and archive it
+		createPlanForArchive(slug);
+		const thirdSlug = archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+		assert.equal(thirdSlug, `${slug}-3`, "Third archive should have -3 suffix");
+
+		// Verify all three exist
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		assert.ok(existsSync(join(TEST_ARCHIVE_DIR, yearMonth, slug, "plan.md")));
+		assert.ok(existsSync(join(TEST_ARCHIVE_DIR, yearMonth, `${slug}-2`, "plan.md")));
+		assert.ok(existsSync(join(TEST_ARCHIVE_DIR, yearMonth, `${slug}-3`, "plan.md")));
+	});
+
+	it("updates slug in frontmatter when conflict suffix is applied", async () => {
+		const { archivePlan, parseFrontmatterFromFile } = await import("./persistence.js");
+		const slug = "frontmatter-update-test";
+
+		// Create and archive first plan
+		createPlanForArchive(slug);
+		archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+
+		// Create and archive second plan
+		createPlanForArchive(slug);
+		const secondSlug = archivePlan(slug, "complete", TEST_ARCHIVE_DIR);
+
+		// Verify the frontmatter in the second plan has the updated slug
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const { frontmatter } = parseFrontmatterFromFile(
+			join(TEST_ARCHIVE_DIR, yearMonth, secondSlug, "plan.md")
+		);
+		assert.equal(frontmatter.slug, secondSlug, "Frontmatter slug should match the suffixed slug");
+	});
+
+	it("sets status and completed date in archived plan", async () => {
+		const { archivePlan, parseFrontmatterFromFile } = await import("./persistence.js");
+		const slug = "status-update-test";
+		createPlanForArchive(slug);
+
+		archivePlan(slug, "abandoned", TEST_ARCHIVE_DIR);
+
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const { frontmatter } = parseFrontmatterFromFile(
+			join(TEST_ARCHIVE_DIR, yearMonth, slug, "plan.md")
+		);
+		assert.equal(frontmatter.status, "abandoned", "Status should be updated");
+		assert.ok(frontmatter.completed !== null, "Completed date should be set");
+	});
+
+	it("throws error for non-existent plan", async () => {
+		const { archivePlan } = await import("./persistence.js");
+
+		assert.throws(
+			() => archivePlan("non-existent-plan", "complete", TEST_ARCHIVE_DIR),
+			/Plan not found/,
+			"Should throw error for missing plan"
+		);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// listArchive with YYYY-MM subdirectories
+// ────────────────────────────────────────────────────────────
+
+describe("listArchive with YYYY-MM subdirectories", () => {
+	const TEST_ARCHIVE_DIR = "dev/work/archive-list-test";
+
+	beforeEach(() => {
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+	});
+
+	afterEach(() => {
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+	});
+
+	function createArchivedPlan(yearMonth: string, slug: string, status = "complete"): void {
+		const planDir = join(TEST_ARCHIVE_DIR, yearMonth, slug);
+		mkdirSync(planDir, { recursive: true });
+		const frontmatter = `---
+title: ${slug}
+slug: ${slug}
+status: ${status}
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-15T00:00:00.000Z
+completed: 2026-01-15T00:00:00.000Z
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# ${slug}
+`;
+		writeFileSync(join(planDir, "plan.md"), frontmatter, "utf-8");
+	}
+
+	function createLegacyArchivedPlan(slug: string, status = "complete"): void {
+		const planDir = join(TEST_ARCHIVE_DIR, slug);
+		mkdirSync(planDir, { recursive: true });
+		const frontmatter = `---
+title: ${slug}
+slug: ${slug}
+status: ${status}
+size: small
+tags: []
+created: 2025-12-01T00:00:00.000Z
+updated: 2025-12-15T00:00:00.000Z
+completed: 2025-12-15T00:00:00.000Z
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# ${slug}
+`;
+		writeFileSync(join(planDir, "plan.md"), frontmatter, "utf-8");
+	}
+
+	it("scans YYYY-MM subdirectories for archived plans", async () => {
+		const { listArchive } = await import("./persistence.js");
+		createArchivedPlan("2026-01", "plan-jan");
+		createArchivedPlan("2026-02", "plan-feb");
+		createArchivedPlan("2026-02", "plan-feb-2");
+
+		const items = listArchive(TEST_ARCHIVE_DIR);
+
+		assert.equal(items.length, 3);
+		const slugs = items.map((i) => i.slug);
+		assert.ok(slugs.includes("plan-jan"));
+		assert.ok(slugs.includes("plan-feb"));
+		assert.ok(slugs.includes("plan-feb-2"));
+	});
+
+	it("supports legacy flat archive format", async () => {
+		const { listArchive } = await import("./persistence.js");
+		createLegacyArchivedPlan("legacy-plan");
+
+		const items = listArchive(TEST_ARCHIVE_DIR);
+
+		assert.equal(items.length, 1);
+		assert.equal(items[0].slug, "legacy-plan");
+	});
+
+	it("combines YYYY-MM and legacy formats", async () => {
+		const { listArchive } = await import("./persistence.js");
+		createArchivedPlan("2026-03", "new-plan");
+		createLegacyArchivedPlan("old-plan");
+
+		const items = listArchive(TEST_ARCHIVE_DIR);
+
+		assert.equal(items.length, 2);
+		const slugs = items.map((i) => i.slug);
+		assert.ok(slugs.includes("new-plan"));
+		assert.ok(slugs.includes("old-plan"));
+	});
+
+	it("sorts by updated date (most recent first)", async () => {
+		const { listArchive } = await import("./persistence.js");
+
+		// Create plans with different updated dates
+		const planDir1 = join(TEST_ARCHIVE_DIR, "2026-01", "old-plan");
+		mkdirSync(planDir1, { recursive: true });
+		writeFileSync(join(planDir1, "plan.md"), `---
+title: Old Plan
+slug: old-plan
+status: complete
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-01T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 0
+---
+
+# Old Plan
+`, "utf-8");
+
+		const planDir2 = join(TEST_ARCHIVE_DIR, "2026-02", "new-plan");
+		mkdirSync(planDir2, { recursive: true });
+		writeFileSync(join(planDir2, "plan.md"), `---
+title: New Plan
+slug: new-plan
+status: complete
+size: small
+tags: []
+created: 2026-02-01T00:00:00.000Z
+updated: 2026-02-15T00:00:00.000Z
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 0
+---
+
+# New Plan
+`, "utf-8");
+
+		const items = listArchive(TEST_ARCHIVE_DIR);
+
+		assert.equal(items.length, 2);
+		assert.equal(items[0].slug, "new-plan", "Most recent should be first");
+		assert.equal(items[1].slug, "old-plan", "Older should be second");
+	});
+
+	it("returns empty array for non-existent archive directory", async () => {
+		const { listArchive } = await import("./persistence.js");
+		const items = listArchive("dev/work/non-existent-archive-dir");
+		assert.deepEqual(items, []);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// parsePlanListFilter --archive tests
+// ────────────────────────────────────────────────────────────
+
+describe("parsePlanListFilter --archive", () => {
+	it("returns 'archive' for --archive flag", () => {
+		assert.equal(parsePlanListFilter("--archive"), "archive");
+	});
+
+	it("is case insensitive for --archive", () => {
+		assert.equal(parsePlanListFilter("--ARCHIVE"), "archive");
+		assert.equal(parsePlanListFilter("--Archive"), "archive");
+	});
+
+	it("handles --archive with surrounding whitespace", () => {
+		assert.equal(parsePlanListFilter("  --archive  "), "archive");
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// handlePlanList --archive integration tests
+// ────────────────────────────────────────────────────────────
+
+describe("handlePlanList --archive", () => {
+	const TEST_ARCHIVE_DIR = "dev/work/archive";
+	const TEST_PLANS_DIR_FOR_ARCHIVE = "dev/plans-archive-integration";
+
+	beforeEach(() => {
+		// Setup isolated plans dir
+		if (existsSync(TEST_PLANS_DIR_FOR_ARCHIVE)) {
+			rmSync(TEST_PLANS_DIR_FOR_ARCHIVE, { recursive: true, force: true });
+		}
+		mkdirSync(TEST_PLANS_DIR_FOR_ARCHIVE, { recursive: true });
+		process.env.ARETE_TEST_PLANS_DIR = TEST_PLANS_DIR_FOR_ARCHIVE;
+
+		// Clean archive dir
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+	});
+
+	afterEach(() => {
+		delete process.env.ARETE_TEST_PLANS_DIR;
+		if (existsSync(TEST_PLANS_DIR_FOR_ARCHIVE)) {
+			rmSync(TEST_PLANS_DIR_FOR_ARCHIVE, { recursive: true, force: true });
+		}
+		if (existsSync(TEST_ARCHIVE_DIR)) {
+			rmSync(TEST_ARCHIVE_DIR, { recursive: true, force: true });
+		}
+	});
+
+	it("shows archived plans with --archive flag", async () => {
+		// Create an archived plan in YYYY-MM format
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const planDir = join(TEST_ARCHIVE_DIR, yearMonth, "archived-plan");
+		mkdirSync(planDir, { recursive: true });
+		writeFileSync(join(planDir, "plan.md"), `---
+title: Archived Plan
+slug: archived-plan
+status: complete
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-15T00:00:00.000Z
+completed: 2026-01-15T00:00:00.000Z
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# Archived Plan
+`, "utf-8");
+
+		let selectOptions: string[] = [];
+		const ctx = createTestContext({
+			select: async (_title, options) => {
+				selectOptions = options;
+				return undefined;
+			},
+		});
+		ctx.ui.custom = undefined; // Force fallback to simple select
+
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePlan("list --archive", ctx, pi, state, () => {});
+
+		// Verify archived plan is shown
+		assert.ok(selectOptions.some((o) => o.includes("Archived Plan")), "Should show archived plan");
+	});
+
+	it("does not show archived plans in default (work) view", async () => {
+		// Create an active plan
+		const activePlanDir = join(TEST_PLANS_DIR_FOR_ARCHIVE, "active-plan");
+		mkdirSync(activePlanDir, { recursive: true });
+		writeFileSync(join(activePlanDir, "plan.md"), `---
+title: Active Plan
+slug: active-plan
+status: building
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: ${new Date().toISOString()}
+completed: null
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# Active Plan
+`, "utf-8");
+
+		// Create an archived plan
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		const archivedPlanDir = join(TEST_ARCHIVE_DIR, yearMonth, "archived-plan");
+		mkdirSync(archivedPlanDir, { recursive: true });
+		writeFileSync(join(archivedPlanDir, "plan.md"), `---
+title: Archived Plan
+slug: archived-plan
+status: complete
+size: small
+tags: []
+created: 2026-01-01T00:00:00.000Z
+updated: 2026-01-15T00:00:00.000Z
+completed: 2026-01-15T00:00:00.000Z
+execution: null
+has_review: false
+has_pre_mortem: false
+has_prd: false
+steps: 1
+---
+
+# Archived Plan
+`, "utf-8");
+
+		let selectOptions: string[] = [];
+		const ctx = createTestContext({
+			select: async (_title, options) => {
+				selectOptions = options;
+				return undefined;
+			},
+		});
+		ctx.ui.custom = undefined;
+
+		const pi = createTestPi();
+		const state = createTestState();
+
+		await handlePlan("list", ctx, pi, state, () => {});
+
+		// Verify active plan is shown, archived is not
+		assert.ok(selectOptions.some((o) => o.includes("Active Plan")), "Should show active plan");
+		assert.ok(!selectOptions.some((o) => o.includes("Archived Plan")), "Should NOT show archived plan");
+	});
+});
+

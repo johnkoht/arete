@@ -181,6 +181,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				status: "complete",
 				completed: new Date().toISOString(),
 			});
+			ctx.ui.notify("📦 Status → complete", "info");
 		}
 
 		// Offer post-completion options

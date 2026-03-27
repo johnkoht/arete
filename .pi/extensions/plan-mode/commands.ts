@@ -18,7 +18,7 @@ import {
 	loadPlanArtifact,
 	slugify,
 	listArchive,
-	archiveItem,
+	archivePlan,
 	type PlanFrontmatter,
 	type PlanStatus,
 	type PlanSize,
@@ -482,6 +482,8 @@ export interface PlanListItem {
 	value: string;
 	label: string;
 	description: string;
+	/** Status of the plan (used for grouping) */
+	status: PlanStatus;
 }
 
 /** Result from preparePlanListItems */
@@ -491,7 +493,14 @@ export interface PlanListResult {
 }
 
 /** Filter type for plan list */
-export type PlanListFilter = "work" | "backlog" | "complete" | "building" | "planned" | "all";
+export type PlanListFilter = "work" | "backlog" | "complete" | "building" | "planned" | "archive" | "all";
+
+/** Status group with header text and items */
+export interface PlanStatusGroup {
+	status: PlanStatus;
+	headerText: string;
+	items: PlanListItem[];
+}
 
 /** Parse filter flags from args string */
 export function parsePlanListFilter(args: string): PlanListFilter {
@@ -500,6 +509,7 @@ export function parsePlanListFilter(args: string): PlanListFilter {
 	if (trimmed.includes("--complete")) return "complete";
 	if (trimmed.includes("--building")) return "building";
 	if (trimmed.includes("--planned")) return "planned";
+	if (trimmed.includes("--archive")) return "archive";
 	if (trimmed.includes("--all")) return "all";
 	return "work"; // default: building + planned + recent complete (14 days)
 }
@@ -578,6 +588,9 @@ export function preparePlanListItems(
 		case "planned":
 			filtered = plans.filter((p) => p.frontmatter.status === "planned");
 			break;
+		case "archive":
+			// Show all archived plans (no filtering needed, listArchive() already returns them)
+			break;
 		case "all":
 			// No filtering
 			break;
@@ -597,15 +610,96 @@ export function preparePlanListItems(
 			value: p.slug,
 			label: `${emoji} ${p.frontmatter.title}    ${sizeAndDate}`,
 			description: `   ${p.slug}`,
+			status: p.frontmatter.status,
 		};
 	});
 
 	return { items, backlogCount };
 }
 
+/** Human-readable header text for each status */
+const STATUS_HEADER_TEXT: Record<PlanStatus, string> = {
+	building: "⚡ BUILDING",
+	planned: "✅ PLANNED",
+	draft: "📝 DRAFTS",
+	idea: "💡 IDEAS",
+	complete: "🎉 COMPLETE",
+	abandoned: "🚫 ABANDONED",
+};
+
+/**
+ * Group plan list items by their status.
+ * Preserves order within each group (already sorted by status priority from preparePlanListItems).
+ */
+export function groupPlansByStatus(items: PlanListItem[]): PlanStatusGroup[] {
+	const groups: Map<PlanStatus, PlanListItem[]> = new Map();
+	
+	for (const item of items) {
+		const existing = groups.get(item.status);
+		if (existing) {
+			existing.push(item);
+		} else {
+			groups.set(item.status, [item]);
+		}
+	}
+	
+	// Convert to array of groups, maintaining the order items came in (already sorted by priority)
+	const result: PlanStatusGroup[] = [];
+	const seenStatuses = new Set<PlanStatus>();
+	
+	for (const item of items) {
+		if (!seenStatuses.has(item.status)) {
+			seenStatuses.add(item.status);
+			result.push({
+				status: item.status,
+				headerText: STATUS_HEADER_TEXT[item.status] ?? item.status.toUpperCase(),
+				items: groups.get(item.status) ?? [],
+			});
+		}
+	}
+	
+	return result;
+}
+
+/**
+ * Format a plan item as a table row with aligned columns.
+ * Returns [row1, row2] where row1 is title+size+date and row2 is the slug.
+ */
+export function formatPlanTableRow(
+	item: PlanListItem,
+	maxTitleWidth = 24,
+	maxSizeWidth = 8,
+): { row1: string; row2: string } {
+	const emoji = STATUS_EMOJI[item.status] ?? "📄";
+	
+	// Extract title from label (after emoji)
+	// Label format: "emoji title    size, date"
+	const labelParts = item.label.split("    ");
+	const titleWithEmoji = labelParts[0] ?? item.label;
+	const title = titleWithEmoji.replace(/^[^\s]+\s*/, ""); // Remove emoji
+	const sizeAndDate = labelParts[1] ?? "";
+	
+	// Parse size and date from sizeAndDate
+	const [size, date] = sizeAndDate.split(", ").map(s => s?.trim() ?? "");
+	
+	// Pad title and size for alignment
+	const paddedTitle = title.slice(0, maxTitleWidth).padEnd(maxTitleWidth);
+	const paddedSize = (size ?? "").slice(0, maxSizeWidth).padEnd(maxSizeWidth);
+	const dateStr = date ?? "";
+	
+	// Row 1: emoji + title + size + date
+	const row1 = `${emoji} ${paddedTitle} ${paddedSize} ${dateStr}`;
+	// Row 2: indented slug (extract from description)
+	const slug = item.description.trim();
+	const row2 = `  ${slug}`;
+	
+	return { row1, row2 };
+}
+
 async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {
-	const plans = listPlans();
 	const filter = parsePlanListFilter(args);
+	// Use listArchive() for archive filter, listPlans() otherwise
+	const plans = filter === "archive" ? listArchive() : listPlans();
 	const { items, backlogCount } = preparePlanListItems(plans, filter);
 
 	if (items.length === 0) {
@@ -622,8 +716,38 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 		complete: "Completed Plans",
 		building: "Building Plans",
 		planned: "Planned Plans",
+		archive: "Archived Plans",
 		all: "All Plans",
 	};
+
+	// Group items by status for section headers
+	const groups = groupPlansByStatus(items);
+
+	// Build table-formatted items with section headers
+	const tableItems: Array<{ value: string; label: string; description: string; isHeader?: boolean }> = [];
+	for (const group of groups) {
+		// Add section header (non-selectable, marked with special value)
+		tableItems.push({
+			value: `__header__${group.status}`,
+			label: `── ${group.headerText} ──`,
+			description: "",
+			isHeader: true,
+		});
+		// Add items in this group with table formatting
+		for (const item of group.items) {
+			const { row1, row2 } = formatPlanTableRow(item);
+			tableItems.push({
+				value: item.value,
+				label: row1,
+				description: row2,
+			});
+		}
+	}
+
+	// Footer text for work view
+	const footerText = filter === "work" && backlogCount > 0
+		? `Showing active plans. Use --backlog to see ${backlogCount} idea${backlogCount === 1 ? "" : "s"}/draft${backlogCount === 1 ? "" : "s"}.`
+		: "";
 
 	// Try rich UI if available
 	if (ctx.hasUI && ctx.ui.custom) {
@@ -644,8 +768,8 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 			// Header
 			container.addChild(new Text(typedTheme.fg("accent", typedTheme.bold(headerTextMap[filter]))));
 
-			// SelectList
-			const selectList = new SelectList(items, Math.min(items.length, 15), {
+			// SelectList with table items
+			const selectList = new SelectList(tableItems, Math.min(tableItems.length, 15), {
 				selectedPrefix: (text: string) => typedTheme.fg("accent", text),
 				selectedText: (text: string) => typedTheme.fg("accent", text),
 				description: (text: string) => typedTheme.fg("muted", text),
@@ -653,12 +777,23 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 				noMatch: (text: string) => typedTheme.fg("warning", text),
 			});
 
-			selectList.onSelect = (item: { value: string }) => done(item.value);
+			selectList.onSelect = (item: { value: string; isHeader?: boolean }) => {
+				// Skip header items
+				if (item.value.startsWith("__header__")) {
+					return;
+				}
+				done(item.value);
+			};
 			selectList.onCancel = () => done(null);
 
 			container.addChild(selectList);
 
-			// Footer hint
+			// Footer with backlog count (for work view)
+			if (footerText) {
+				container.addChild(new Text(typedTheme.fg("muted", footerText)));
+			}
+
+			// Navigation hint
 			container.addChild(new Text(typedTheme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
 			container.addChild(new DynamicBorder((str: string) => typedTheme.fg("accent", str)));
 
@@ -677,20 +812,20 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 			};
 		});
 	} else {
-		// Fallback: simple select
-		const options = items.map((item) => item.label);
+		// Fallback: simple select (filter out headers)
+		const selectableItems = tableItems.filter((item) => !item.value.startsWith("__header__"));
+		const options = selectableItems.map((item) => item.label);
 		const selected = await ctx.ui.select("Plans", options);
 		if (selected) {
 			const index = options.indexOf(selected);
 			if (index >= 0) {
-				selectedSlug = items[index].value;
+				selectedSlug = selectableItems[index].value;
 			}
 		}
-	}
-
-	// Show backlog count notification for work view
-	if (filter === "work" && backlogCount > 0) {
-		ctx.ui.notify(`Showing active work. ${backlogCount} item${backlogCount === 1 ? "" : "s"} in backlog.`, "info");
+		// Show footer notification for fallback UI
+		if (footerText) {
+			ctx.ui.notify(footerText, "info");
+		}
 	}
 
 	if (selectedSlug) {
@@ -1103,8 +1238,10 @@ export async function handleArchive(
 		const archiveStatus = status.includes("Complete") ? "complete" as const : "abandoned" as const;
 
 		try {
-			archiveItem(slug, archiveStatus);
-			ctx.ui.notify(`📁 Archived to dev/work/archive/${slug}/`, "info");
+			const finalSlug = archivePlan(slug, archiveStatus);
+			const now = new Date();
+			const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+			ctx.ui.notify(`📁 Archived to dev/work/archive/${yearMonth}/${finalSlug}/`, "info");
 
 			if (state.currentSlug === slug) {
 				state.currentSlug = null;
@@ -1137,8 +1274,10 @@ export async function handleArchive(
 	const archiveStatus = status.includes("Complete") ? "complete" as const : "abandoned" as const;
 
 	try {
-		archiveItem(state.currentSlug, archiveStatus);
-		ctx.ui.notify(`📁 Archived to dev/work/archive/${state.currentSlug}/`, "info");
+		const finalSlug = archivePlan(state.currentSlug, archiveStatus);
+		const now = new Date();
+		const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+		ctx.ui.notify(`📁 Archived to dev/work/archive/${yearMonth}/${finalSlug}/`, "info");
 
 		state.currentSlug = null;
 		state.planText = "";
@@ -1694,7 +1833,7 @@ export async function handleBuild(
 	state.planModeEnabled = false;
 	state.executionMode = true;
 
-	ctx.ui.notify("⚡ Build started!", "info");
+	ctx.ui.notify("📦 Status → building", "info");
 
 	if (plan.frontmatter.has_prd) {
 		// Has PRD: invoke execute-prd skill
@@ -1724,6 +1863,9 @@ export async function handleBuild(
 		executing: state.executionMode,
 		currentSlug: state.currentSlug,
 		planSize: state.planSize,
+		preMortemRun: state.preMortemRun,
+		reviewRun: state.reviewRun,
+		prdConverted: state.prdConverted,
 		loadedFromDisk: state.loadedFromDisk,
 	});
 }
@@ -1769,7 +1911,28 @@ export async function handleShip(
 		return;
 	}
 
-	ctx.ui.notify("🚀 Starting ship workflow...", "info");
+	// Transition to building — match handleBuild pattern
+	updatePlanFrontmatter(state.currentSlug, { status: "building" });
+
+	// Enable execution mode for completion detection
+	state.planModeEnabled = false;
+	state.executionMode = true;
+
+	// Notify user (status transition)
+	ctx.ui.notify("📦 Status → building", "info");
+
+	// Persist state for session resume (LEARNINGS.md: state persistence fields must stay in sync)
+	pi.appendEntry("plan-mode", {
+		enabled: state.planModeEnabled,
+		todos: state.todoItems,
+		executing: state.executionMode,
+		currentSlug: state.currentSlug,
+		planSize: state.planSize,
+		preMortemRun: state.preMortemRun,
+		reviewRun: state.reviewRun,
+		prdConverted: state.prdConverted,
+		loadedFromDisk: state.loadedFromDisk,
+	});
 
 	// Invoke the ship skill
 	pi.sendUserMessage(

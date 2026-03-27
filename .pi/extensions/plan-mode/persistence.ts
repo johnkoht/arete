@@ -416,6 +416,7 @@ function resolveDir(basePath: string | undefined, defaultDir: string): string {
 
 /**
  * List archived items (folders only), sorted by updated date.
+ * Scans both flat archive/{slug}/ (legacy) and archive/YYYY-MM/{slug}/ (new format).
  */
 export function listArchive(basePath?: string): PlanSummary[] {
 	const dir = resolveDir(basePath, DEFAULT_ARCHIVE_DIR);
@@ -427,14 +428,41 @@ export function listArchive(basePath?: string): PlanSummary[] {
 
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue;
-			const planFile = join(dir, entry.name, "plan.md");
-			if (!existsSync(planFile)) continue;
 
-			try {
-				const { frontmatter } = parseFrontmatterFromFile(planFile);
-				items.push({ slug: entry.name, frontmatter });
-			} catch {
-				// Skip unparseable
+			// Check if this is a YYYY-MM subdirectory
+			const isYearMonth = /^\d{4}-\d{2}$/.test(entry.name);
+
+			if (isYearMonth) {
+				// Scan the YYYY-MM subdirectory for plan folders
+				const monthDir = join(dir, entry.name);
+				try {
+					const monthEntries = readdirSync(monthDir, { withFileTypes: true });
+					for (const planEntry of monthEntries) {
+						if (!planEntry.isDirectory()) continue;
+						const planFile = join(monthDir, planEntry.name, "plan.md");
+						if (!existsSync(planFile)) continue;
+
+						try {
+							const { frontmatter } = parseFrontmatterFromFile(planFile);
+							items.push({ slug: planEntry.name, frontmatter });
+						} catch {
+							// Skip unparseable
+						}
+					}
+				} catch {
+					// Skip unreadable directories
+				}
+			} else {
+				// Legacy flat archive/{slug}/ format
+				const planFile = join(dir, entry.name, "plan.md");
+				if (!existsSync(planFile)) continue;
+
+				try {
+					const { frontmatter } = parseFrontmatterFromFile(planFile);
+					items.push({ slug: entry.name, frontmatter });
+				} catch {
+					// Skip unparseable
+				}
 			}
 		}
 
@@ -481,6 +509,7 @@ export function moveItem(slug: string, fromDir: string, toDir: string): void {
 /**
  * Archive a plan. Moves from plans/ to archive/.
  * Updates status to "complete" or "abandoned" and sets completed date.
+ * @deprecated Use archivePlan() instead — it archives to YYYY-MM subdirectories.
  */
 export function archiveItem(slug: string, status: "complete" | "abandoned", basePath?: string): void {
 	const plansDir = basePath ? join(basePath, "../plans") : DEFAULT_PLANS_DIR;
@@ -509,6 +538,70 @@ export function archiveItem(slug: string, status: "complete" | "abandoned", base
 		const fm = serializeFrontmatter(frontmatter);
 		writeFileSync(planFile, `${fm}\n\n${content}`, "utf-8");
 	}
+}
+
+/**
+ * Archive a plan to dev/work/archive/YYYY-MM/{slug}/.
+ * Moves from plans/ to archive/ with YYYY-MM date-based subdirectory.
+ * Handles duplicate slugs in the same month with counter suffix (-2, -3).
+ * Updates status to "complete" or "abandoned" and sets completed date.
+ *
+ * @param slug - Plan slug to archive
+ * @param status - Final status: "complete" or "abandoned"
+ * @param archivePath - Override archive base directory (default: dev/work/archive)
+ * @param plansPath - Override plans directory (default: uses ARETE_TEST_PLANS_DIR env or dev/work/plans)
+ */
+export function archivePlan(
+	slug: string,
+	status: "complete" | "abandoned",
+	archivePath?: string,
+	plansPath?: string,
+): string {
+	const plansDir = resolvePlansDir(plansPath);
+	const archiveDir = resolveDir(archivePath, DEFAULT_ARCHIVE_DIR);
+
+	const src = join(plansDir, slug);
+	if (!existsSync(src) || !statSync(src).isDirectory()) {
+		throw new Error(`Plan not found: ${slug}`);
+	}
+
+	// Create YYYY-MM subdirectory
+	const now = new Date();
+	const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+	const monthDir = join(archiveDir, yearMonth);
+
+	if (!existsSync(monthDir)) {
+		mkdirSync(monthDir, { recursive: true });
+	}
+
+	// Find unique destination path with conflict handling
+	let finalSlug = slug;
+	let dest = join(monthDir, slug);
+	let counter = 2;
+
+	while (existsSync(dest)) {
+		finalSlug = `${slug}-${counter}`;
+		dest = join(monthDir, finalSlug);
+		counter++;
+	}
+
+	// Move the plan folder
+	cpSync(src, dest, { recursive: true });
+	rmSync(src, { recursive: true, force: true });
+
+	// Update status and completed date in the archive copy
+	const planFile = join(dest, "plan.md");
+	if (existsSync(planFile)) {
+		const { frontmatter, content } = parseFrontmatterFromFile(planFile);
+		frontmatter.status = status;
+		frontmatter.slug = finalSlug; // Update slug if it changed due to conflict
+		frontmatter.completed = new Date().toISOString();
+		frontmatter.updated = new Date().toISOString();
+		const fm = serializeFrontmatter(frontmatter);
+		writeFileSync(planFile, `${fm}\n\n${content}`, "utf-8");
+	}
+
+	return finalSlug;
 }
 
 // ────────────────────────────────────────────────────────────
