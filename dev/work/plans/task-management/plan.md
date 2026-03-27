@@ -3,15 +3,15 @@ title: Task Management
 slug: task-management
 status: building
 size: large
-tags: []
+tags: [tasks, commitments, planning, web-app]
 created: 2026-03-27T05:24:53.863Z
-updated: 2026-03-27T21:17:24.963Z
+updated: 2026-03-27T22:30:00.000Z
 completed: null
-execution: null
-has_review: false
-has_pre_mortem: false
-has_prd: false
-steps: 14
+execution: dev/executions/task-management/
+has_review: true
+has_pre_mortem: true
+has_prd: true
+steps: 18
 ---
 
 # Task Management System
