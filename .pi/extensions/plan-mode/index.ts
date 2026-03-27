@@ -107,7 +107,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			planId: plan?.frontmatter.slug ?? state.currentSlug,
 			title: state.planTitle ?? plan?.frontmatter.title ?? null,
 			status: plan?.frontmatter.status ?? null,
-			planSize: state.planSize,
+			planSize: state.planSize === "unknown" ? null : state.planSize,
 			stepsCount: state.todoItems.length || (plan?.frontmatter.steps ?? 0),
 			todosCompleted: state.todoItems.filter((t) => t.completed).length,
 			todosTotal: state.todoItems.length,
