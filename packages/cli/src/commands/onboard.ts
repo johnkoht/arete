@@ -294,32 +294,11 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           // JSON mode without --api-key: skip AI config (can't prompt)
           aiSkipped = true;
         } else if (existingKey || existingOAuth) {
-          // Interactive mode with existing credentials: ask to update
-          console.log('');
-          info('AI Configuration');
-          console.log(chalk.dim('  Areté embeds LLMs into your workflow — extracting decisions from meetings,'));
-          console.log(chalk.dim('  building context for prep, and powering search across your workspace.'));
-          console.log('');
-          aiHeaderShown = true;
-          const { confirm } = await import('@inquirer/prompts');
-          const currentCred = existingOAuth
-            ? 'Claude subscription'
-            : `API key: ${maskApiKey(existingKey!)}`;
-          try {
-            const update = await confirm({
-              message: `AI already configured (${currentCred}). Change it?`,
-              default: false,
-            });
-            if (update) {
-              shouldPrompt = true;
-            } else {
-              info('Keeping existing credentials');
-              aiConfigured = true; // Already configured
-            }
-          } catch {
-            // User cancelled (Ctrl+C)
-            aiSkipped = true;
-          }
+          // Interactive mode with existing credentials: just use them
+          const currentCred = existingOAuth ? 'Claude subscription' : 'API key';
+          success(`Using existing AI credentials (${currentCred})`);
+          aiConfigured = true;
+          // No need to prompt - credentials are global and already working
         } else {
           // Interactive mode with no existing credentials: prompt for setup
           shouldPrompt = true;
