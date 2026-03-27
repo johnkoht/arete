@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-27: [workflow-stability-learnings](entries/2026-03-27_workflow-stability-learnings.md) — Workflow Stability: 8/8 tasks, 100% first-attempt, 0/8 pre-mortem risks. Build gates, auto-status transitions, YYYY-MM archive, /release command, gitboss agent, /plan promote. Key: LEARNINGS.md injection prevented state bugs.
 - 2026-03-26: [onboarding-refresh-learnings](entries/2026-03-26_onboarding-refresh-learnings.md) — Onboarding Refresh: 9/9 tasks, 100% first-attempt. Model tiers (-latest suffix), messaging, agent-observations.md, session-start context injection, CLI calendar/context/first-win, getting-started skill overhaul. Key: pre-mortem mitigations prevented all 6 risks.
 - 2026-03-26: [week-md-reconcile-learnings](entries/2026-03-26_week-md-reconcile-learnings.md) — Week.md Reconciliation: 3/3 tasks, 100% first-attempt. getCompletedItems utility, meeting processing integration, CLI --prior-items flag. Completed items from week.md now flow into meeting extraction context.
 - 2026-03-25: [enforce-intelligence-learnings](entries/2026-03-25_enforce-intelligence-learnings.md) — Contextual Memory Retrieval: planning skills now actively search memory based on user-confirmed priorities and meetings. New contextual_memory_search pattern in PATTERNS.md. Key: intelligence frontmatter is declaration-only, not enforcement.

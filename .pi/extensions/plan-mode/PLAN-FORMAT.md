@@ -190,11 +190,12 @@ Enable users to see upcoming meetings in their workspace briefings.
 
 ## Commands Reference
 
+
 | Command | Description |
 |---------|-------------|
 | `/plan` | Toggle plan mode |
 | `/plan new [name]` | Start a new plan |
-| `/plan list` | List plans (`--ideas`, `--active`) |
+| `/plan list` | List plans (`--work`, `--backlog`, `--complete`, `--building`, `--planned`, `--archive`, `--all`) |
 | `/plan open <slug>` | Open a saved plan |
 | `/plan save [name]` | Save the current plan |
 | `/plan rename <name>` | Rename the current plan |
@@ -202,9 +203,14 @@ Enable users to see upcoming meetings in their workspace briefings.
 | `/plan status` | Show lifecycle info |
 | `/plan delete` | Delete the current plan |
 | `/plan archive` | Archive as complete/abandoned |
+| `/plan promote <slug>` | Promote backlog item to draft plan |
 | `/review` | Run cross-model review |
 | `/pre-mortem` | Run pre-mortem analysis |
 | `/prd` | Convert plan to PRD |
 | `/approve` | Mark plan as ready |
-| `/build` | Start execution |
+| `/build [slug]` | Start execution (optional slug for plan) |
+| `/ship [slug]` | Full ship workflow (optional slug for plan) |
 | `/wrap` | Close-out checklist |
+| `/release status` | Show current version and unreleased commits |
+| `/release patch [--dry-run]` | Bump patch version (0.x.Y) |
+| `/release minor [--dry-run]` | Bump minor version (0.X.0) |
