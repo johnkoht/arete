@@ -22,7 +22,7 @@ intelligence:
 
 # Week Plan Skill
 
-Guide the PM to define the top 3-5 outcomes for the week. Read current quarter goals, last week file, active projects, and commitments. Output is `now/week.md`.
+Guide the PM to define the top 3-5 weekly priorities. Read current quarter goals, last week file, active projects, and commitments. Output is `now/week.md`.
 
 ## When to Use
 
@@ -142,10 +142,12 @@ arete template resolve --skill week-plan --variant week-priorities
 ```
 
 **Sections**:
-- **Outcomes** — Simple numbered list (1-5 items)
+- **Weekly Priorities** — Simple numbered list (1-5 items, formerly "Outcomes")
 - **Today** — Placeholder for daily-plan (Focus, Meetings)
+- **Inbox** — Quick capture area for daily winddown (no metadata required)
 - **Notes** — Empty, user's working scratchpad
 - **Tasks** — Must/Should/Could subsections populated from commitments
+- **Waiting On** — What others owe you (they_owe_me commitments)
 - **Carried from last week** — Incomplete items
 - **Daily Progress** — Empty, populated by daily-plan
 
@@ -153,7 +155,7 @@ arete template resolve --skill week-plan --variant week-priorities
 ```markdown
 # Week — Mon Mar 24, 2026
 
-## Outcomes
+## Weekly Priorities
 1. POP ready for 3/31 launch
 2. CoverWhale through compliance
 3. UK priorities finalized
@@ -164,6 +166,8 @@ arete template resolve --skill week-plan --variant week-priorities
 **Meetings**:
 - 10:00 Team standup
 - 14:00 PM sync
+
+## Inbox
 
 ## Notes
 
@@ -178,6 +182,9 @@ arete template resolve --skill week-plan --variant week-priorities
 
 ### Could complete
 - [ ] Clean up Jira backlog
+
+## Waiting On
+- [ ] Sarah: Legal sign-off on CoverWhale templates @person(sarah-chen) @from(commitment:abc123)
 
 ## Carried from last week
 - [ ] Finalize Q2 OKRs
@@ -218,4 +225,4 @@ arete template resolve --skill week-plan --variant week-priorities
 ## Error Handling
 
 - If no quarter goals exist, create week file anyway; suggest **quarter-plan**.
-- If >5 outcomes, suggest ranking and deferring extras to next week.
+- If >5 priorities, suggest ranking and deferring extras to next week.
