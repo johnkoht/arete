@@ -11,7 +11,7 @@ execution: null
 has_review: true
 has_pre_mortem: true
 has_prd: true
-steps: 7
+steps: 8
 ---
 
 # Workflow Stability & Versioning
@@ -185,6 +185,28 @@ Command for version bumps with proper tracking.
 
 ---
 
+### 8. **Support `/build <slug>` and `/ship <slug>`** — Execute without plan mode
+
+Allow building plans without requiring plan mode to be active.
+
+**Changes**:
+- `/build <slug>` — loads plan from `dev/work/plans/{slug}/plan.md`, validates status, executes
+- `/ship <slug>` — loads plan, runs full ship workflow (worktree, PRD, build, merge)
+- Both commands work outside plan mode (no `/plan open` required)
+- If plan mode IS active with a different plan, warn and confirm before switching
+- Status gates still apply (must be `planned` to proceed)
+
+**Pre-mortem mitigation**: Reuse existing `loadPlan()` from persistence.ts. Don't duplicate plan loading logic.
+
+**Acceptance**: 
+- `/build workflow-stability` works without plan mode active
+- `/ship workflow-stability` creates worktree and executes PRD
+- Status gate enforced: `/build my-idea` fails if status is `idea`
+- Warning shown if switching from active plan
+- Tests added for slug-based invocation
+
+---
+
 ## Risks
 
 See `pre-mortem.md` for full analysis. Key risks:
@@ -197,6 +219,7 @@ See `pre-mortem.md` for full analysis. Key risks:
 
 - Step 3 depends on Step 2 (status checks before transitions)
 - Step 6 depends on Step 7 (gitboss needs `/release`)
+- Step 8 depends on Step 2 (gates) and Step 3 (auto-transition)
 - Steps 1, 4, 5 are independent
 
 ## Out of Scope
