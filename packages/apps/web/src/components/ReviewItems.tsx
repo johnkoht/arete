@@ -83,6 +83,22 @@ function ItemCard({ item, onStatusChange, onTextChange, onGoalChange, goals, rea
               from your notes
             </Badge>
           )}
+          {/* "already done" badge for reconciled items with matched text */}
+          {item.source === "reconciled" && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground cursor-help">
+                  <CheckCheck className="mr-1 h-3 w-3" />
+                  already done
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">
+                  Matched: "{item.matchedText ?? 'completed task in week.md'}"
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {/* Owner badge for action items with owner info */}
           {isAction && item.ownerSlug && (
             <Badge variant="secondary" className="text-xs font-normal">
