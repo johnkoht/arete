@@ -6,7 +6,7 @@ Plans are stored as markdown files with YAML frontmatter at `dev/work/plans/{slu
 
 **Preferred**: Use the plan-mode extension commands:
 - `/plan new [name]` — Create a new plan
-- `/plan save [name]` — Save the current plan
+- `/plan save [name] [--capture]` — Save the current plan (--capture: use latest agent response instead of loaded content)
 
 **Auto-save**: When plan mode is active and you produce numbered steps under a "Plan:" header, the extension auto-saves with correct frontmatter.
 
@@ -197,7 +197,7 @@ Enable users to see upcoming meetings in their workspace briefings.
 | `/plan new [name]` | Start a new plan |
 | `/plan list` | List plans (`--work`, `--backlog`, `--complete`, `--building`, `--planned`, `--archive`, `--all`) |
 | `/plan open <slug>` | Open a saved plan |
-| `/plan save [name]` | Save the current plan |
+| `/plan save [name] [--capture]` | Save the current plan (`--capture`: use latest agent response) |
 | `/plan rename <name>` | Rename the current plan |
 | `/plan close` | Close the current plan |
 | `/plan status` | Show lifecycle info |

@@ -70,6 +70,8 @@ export interface PlanModeState {
 	/** Whether the current plan was loaded from disk (true) or created fresh (false).
 	 *  Auto-save is disabled for loaded plans to prevent accidental overwrites. */
 	loadedFromDisk: boolean;
+	/** Last assistant message text (for --capture flag in /plan save) */
+	lastAssistantText: string | null;
 }
 
 /** Create a fresh default state */
@@ -86,6 +88,7 @@ export function createDefaultState(): PlanModeState {
 		reviewRun: false,
 		prdConverted: false,
 		loadedFromDisk: false,
+		lastAssistantText: null,
 	};
 }
 
@@ -248,9 +251,16 @@ export async function handlePlan(
 		case "open":
 			await handlePlanOpen(subcommand[1], ctx, pi, state);
 			break;
-		case "save":
-			await handlePlanSave(subcommand[1], ctx, pi, state);
+		case "save": {
+			const saveArgs = subcommand.slice(1).join(" ");
+			const hasCapture = saveArgs.includes("--capture");
+			const slug = saveArgs.replace("--capture", "").trim() || undefined;
+			await handlePlanSave(slug, ctx, pi, state, { 
+				capture: hasCapture,
+				lastAssistantText: hasCapture ? state.lastAssistantText ?? undefined : undefined
+			});
 			break;
+		}
 		case "rename":
 			await handlePlanRename(subcommand[1], ctx, pi, state);
 			break;
@@ -908,7 +918,23 @@ export async function handlePlanSave(
 	ctx: CommandContext,
 	pi: CommandPi,
 	state: PlanModeState,
+	options?: { capture?: boolean; lastAssistantText?: string },
 ): Promise<void> {
+	// If --capture flag is set and we have new content from conversation, use it
+	if (options?.capture && options?.lastAssistantText) {
+		const extracted = extractTodoItems(options.lastAssistantText);
+		if (extracted.length > 0) {
+			state.planText = options.lastAssistantText;
+			state.todoItems = extracted;
+			state.planSize = classifyPlanSize(extracted, options.lastAssistantText);
+			state.loadedFromDisk = false; // Now it's fresh content
+			ctx.ui.notify("📝 Captured latest plan from conversation", "info");
+		} else {
+			ctx.ui.notify("No plan steps found in latest response. Save cancelled.", "warning");
+			return;
+		}
+	}
+
 	if (!state.planText) {
 		ctx.ui.notify("No plan to save. Create a plan first.", "warning");
 		return;

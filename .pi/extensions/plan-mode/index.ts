@@ -573,6 +573,9 @@ After completing a step, include a [DONE:n] tag in your response.
 		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
 		if (lastAssistant) {
 			const text = getTextContent(lastAssistant);
+			// Always store the last assistant text for --capture flag
+			state.lastAssistantText = text;
+			
 			const extracted = extractTodoItems(text);
 			if (extracted.length > 0) {
 				// Only update plan state if this is a fresh plan (not loaded from disk).
