@@ -16,6 +16,14 @@ export interface CalendarEvent {
     }>;
     notes?: string;
     isAllDay: boolean;
+    /** Meeting organizer (from Google Calendar API) */
+    organizer?: {
+        name: string;
+        email?: string;
+        self?: boolean;
+    };
+    /** ID of the recurring event series (from Google Calendar API) */
+    recurringEventId?: string;
 }
 export interface CalendarOptions {
     calendars?: string[];

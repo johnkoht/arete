@@ -2,7 +2,7 @@
  * Meeting save logic — uses StorageAdapter, no direct fs.
  */
 import { join, basename } from 'path';
-import { stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 function slugify(s) {
     return s
         .toLowerCase()
@@ -41,44 +41,121 @@ function titleSimilarity(a, b) {
     return union > 0 ? intersection / union : 0;
 }
 /**
+ * Parse frontmatter from markdown content.
+ * Returns null if no valid frontmatter found.
+ */
+function parseAgendaFrontmatter(content) {
+    const match = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!match)
+        return null;
+    try {
+        return parseYaml(match[1]);
+    }
+    catch {
+        return null;
+    }
+}
+/**
  * Find a matching agenda file for a meeting by date and title.
- * Requires exact date match and title similarity > 0.7.
+ *
+ * Matching priority:
+ * 1. Exact match on frontmatter `meeting_title` field (from calendar event)
+ * 2. Fuzzy match on filename with relaxed threshold
  *
  * @param storage - Storage adapter
  * @param workspaceRoot - Workspace root path
- * @param date - Meeting date (YYYY-MM-DD)
- * @param title - Meeting title
- * @returns Relative path to agenda if found, null otherwise
+ * @param date - Meeting date (YYYY-MM-DD or ISO string)
+ * @param title - Meeting title (from calendar/Fathom/Krisp)
+ * @returns Match result with metadata for user prompting
  */
 export async function findMatchingAgenda(storage, workspaceRoot, date, title) {
     const agendasDir = join(workspaceRoot, 'now', 'agendas');
     // Check if agendas directory exists
     if (!(await storage.exists(agendasDir))) {
-        return null;
+        return { match: null, matchType: 'none', confidence: 0, candidates: [] };
     }
     // List agenda files
     const allFiles = await storage.list(agendasDir, { extensions: ['.md'] });
     const agendaFiles = allFiles.map(f => basename(f));
     // Normalize date to YYYY-MM-DD
     const datePrefix = date.includes('T') ? date.slice(0, 10) : date;
-    // Filter by date prefix and find best title match
-    let bestMatch = null;
+    // Collect candidates for the same date
+    const candidates = [];
+    let exactMatch = null;
     for (const filename of agendaFiles) {
         // Check date prefix match
         if (!filename.startsWith(datePrefix))
             continue;
-        // Extract title from filename: YYYY-MM-DD-title.md -> title
+        const relativePath = `now/agendas/${filename}`;
+        const fullPath = join(workspaceRoot, relativePath);
+        // Read and parse frontmatter to check for meeting_title
+        const content = await storage.read(fullPath);
+        const frontmatter = content ? parseAgendaFrontmatter(content) : null;
+        const meetingTitle = frontmatter?.meeting_title;
+        // Check for exact meeting_title match (case-insensitive)
+        if (meetingTitle && meetingTitle.toLowerCase() === title.toLowerCase()) {
+            exactMatch = { path: relativePath, meetingTitle };
+        }
+        // Calculate fuzzy score from filename
         const titlePart = filename.slice(11, -3); // Remove date prefix and .md
         const agendaTitle = titlePart.replace(/-/g, ' ');
         const score = titleSimilarity(title, agendaTitle);
-        if (score > 0.7 && (!bestMatch || score > bestMatch.score)) {
-            bestMatch = {
-                path: `now/agendas/${filename}`,
-                score
-            };
-        }
+        candidates.push({
+            path: relativePath,
+            meetingTitle,
+            score
+        });
     }
-    return bestMatch?.path ?? null;
+    // Sort candidates by score descending
+    candidates.sort((a, b) => b.score - a.score);
+    // Return exact match if found
+    if (exactMatch) {
+        return {
+            match: exactMatch.path,
+            matchType: 'exact',
+            confidence: 1.0,
+            candidates
+        };
+    }
+    // Return best fuzzy match if score > 0.5
+    const bestFuzzy = candidates[0];
+    if (bestFuzzy && bestFuzzy.score > 0.5) {
+        return {
+            match: bestFuzzy.path,
+            matchType: 'fuzzy',
+            confidence: bestFuzzy.score,
+            candidates
+        };
+    }
+    // If only one candidate for this date, return it with low confidence
+    // (let the skill decide whether to prompt user)
+    if (candidates.length === 1) {
+        return {
+            match: candidates[0].path,
+            matchType: 'fuzzy',
+            confidence: candidates[0].score,
+            candidates
+        };
+    }
+    // No match - return candidates for user selection
+    return {
+        match: null,
+        matchType: 'none',
+        confidence: 0,
+        candidates
+    };
+}
+/**
+ * Simple wrapper that returns just the path (for backward compatibility).
+ * Only returns high-confidence matches (exact or fuzzy >= 0.7).
+ */
+export async function findMatchingAgendaPath(storage, workspaceRoot, date, title) {
+    const result = await findMatchingAgenda(storage, workspaceRoot, date, title);
+    // Only return high-confidence matches automatically
+    if (result.matchType === 'exact' || result.confidence >= 0.7) {
+        return result.match;
+    }
+    return null;
 }
 export function meetingFilename(meeting) {
     let dateStr = meeting.date;

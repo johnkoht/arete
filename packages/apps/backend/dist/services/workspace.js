@@ -299,6 +299,28 @@ function parseStagedItemOwner(content) {
         return {};
     }
 }
+/** Parse `staged_item_matched_text` from meeting file frontmatter. */
+function parseStagedItemMatchedText(content) {
+    const match = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!match)
+        return {};
+    try {
+        const fm = matter(content).data;
+        const raw = fm['staged_item_matched_text'];
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+            return {};
+        const result = {};
+        for (const [key, val] of Object.entries(raw)) {
+            if (typeof val === 'string') {
+                result[key] = val;
+            }
+        }
+        return result;
+    }
+    catch {
+        return {};
+    }
+}
 export async function getMeeting(workspaceRoot, slug) {
     const filePath = slugToPath(workspaceRoot, slug);
     let raw;
@@ -316,10 +338,12 @@ export async function getMeeting(workspaceRoot, slug) {
     const stagedItemSource = parseStagedItemSource(raw);
     const stagedItemConfidence = parseStagedItemConfidence(raw);
     const stagedItemOwner = parseStagedItemOwner(raw);
-    // Apply sources, confidence, and owner metadata to staged items
+    const stagedItemMatchedText = parseStagedItemMatchedText(raw);
+    // Apply sources, confidence, owner, and matchedText metadata to staged items
     for (const item of stagedSections.actionItems) {
         item.source = stagedItemSource[item.id] ?? 'ai';
         item.confidence = stagedItemConfidence[item.id];
+        item.matchedText = stagedItemMatchedText[item.id];
         // Apply owner metadata if available
         const ownerMeta = stagedItemOwner[item.id];
         if (ownerMeta) {
@@ -331,10 +355,12 @@ export async function getMeeting(workspaceRoot, slug) {
     for (const item of stagedSections.decisions) {
         item.source = stagedItemSource[item.id] ?? 'ai';
         item.confidence = stagedItemConfidence[item.id];
+        item.matchedText = stagedItemMatchedText[item.id];
     }
     for (const item of stagedSections.learnings) {
         item.source = stagedItemSource[item.id] ?? 'ai';
         item.confidence = stagedItemConfidence[item.id];
+        item.matchedText = stagedItemMatchedText[item.id];
     }
     // Parse approved_items from frontmatter if present
     const rawApproved = fm['approved_items'];

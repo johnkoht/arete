@@ -76,7 +76,7 @@ function generateItemId(prefix, index) {
 function itemMatchesUserNotes(itemText, userNotesTokens, threshold) {
     const itemTokens = normalizeForJaccard(itemText);
     const similarity = jaccardSimilarity(itemTokens, userNotesTokens);
-    return similarity > threshold;
+    return similarity >= threshold;
 }
 /**
  * Negation markers that indicate an item may contradict a prior item.
@@ -108,7 +108,7 @@ function itemMatchesPriorItems(itemText, tokenizedPriorItems, threshold) {
     const itemTokens = normalizeForJaccard(itemText);
     for (const prior of tokenizedPriorItems) {
         const similarity = jaccardSimilarity(itemTokens, prior.tokens);
-        if (similarity > threshold) {
+        if (similarity >= threshold) {
             return true;
         }
     }

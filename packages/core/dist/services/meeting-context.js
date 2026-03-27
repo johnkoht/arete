@@ -478,19 +478,36 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     };
     // 2. Find agenda
     let agenda = null;
+    let agendaMatch = undefined;
     if (!options.skipAgenda) {
         let agendaPath = null;
-        // First check frontmatter agenda field
+        let matchFromFrontmatter = false;
+        // First check frontmatter agenda field (explicit link)
         if (frontmatter.agenda) {
             agendaPath = frontmatter.agenda.startsWith('/')
                 ? frontmatter.agenda
                 : resolve(paths.root, frontmatter.agenda);
+            matchFromFrontmatter = true;
         }
         else {
-            // Try fuzzy match via findMatchingAgenda
-            const relativePath = await findMatchingAgenda(storage, paths.root, frontmatter.date, frontmatter.title);
-            if (relativePath) {
-                agendaPath = resolve(paths.root, relativePath);
+            // Try to find matching agenda via date + title
+            const matchResult = await findMatchingAgenda(storage, paths.root, frontmatter.date, frontmatter.title);
+            // Store match metadata for skill-level prompting
+            agendaMatch = {
+                matchType: matchResult.matchType,
+                confidence: matchResult.confidence,
+                candidates: matchResult.candidates,
+            };
+            // Only auto-link high-confidence matches (exact or fuzzy >= 0.7)
+            if (matchResult.matchType === 'exact' || matchResult.confidence >= 0.7) {
+                if (matchResult.match) {
+                    agendaPath = resolve(paths.root, matchResult.match);
+                }
+            }
+            else if (matchResult.candidates.length > 0) {
+                // Low confidence — add warning for skill to handle
+                warnings.push(`Found ${matchResult.candidates.length} potential agenda(s) for this meeting but confidence is low. ` +
+                    `Use agendaMatch.candidates to prompt user for selection.`);
             }
         }
         if (agendaPath) {
@@ -503,6 +520,10 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
                     items,
                     unchecked,
                 };
+                // If matched from frontmatter, set agendaMatch to reflect explicit link
+                if (matchFromFrontmatter) {
+                    agendaMatch = { matchType: 'exact', confidence: 1.0, candidates: [] };
+                }
             }
             else {
                 warnings.push(`Agenda file not found: ${agendaPath}`);
@@ -583,6 +604,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     return {
         meeting,
         agenda,
+        agendaMatch,
         attendees: resolvedAttendees,
         unknownAttendees,
         relatedContext,

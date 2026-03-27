@@ -54,6 +54,14 @@ export interface RelatedContext {
     recentLearnings: string[];
 }
 /**
+ * Agenda candidate for user selection when no auto-match found.
+ */
+export interface AgendaCandidate {
+    path: string;
+    meetingTitle?: string;
+    score: number;
+}
+/**
  * Complete meeting context bundle.
  */
 export interface MeetingContextBundle {
@@ -69,6 +77,13 @@ export interface MeetingContextBundle {
         items: AgendaItem[];
         unchecked: string[];
     } | null;
+    /** Metadata about agenda matching for skill-level prompting */
+    agendaMatch?: {
+        matchType: 'exact' | 'fuzzy' | 'none';
+        confidence: number;
+        /** Candidate agendas for user selection when no auto-match */
+        candidates: AgendaCandidate[];
+    };
     attendees: ResolvedAttendee[];
     unknownAttendees: UnknownAttendee[];
     relatedContext: RelatedContext;

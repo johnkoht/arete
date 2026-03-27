@@ -5,7 +5,7 @@ import { join } from 'path';
 import { KrispMcpClient } from './client.js';
 import { loadKrispCredentials } from './config.js';
 import { meetingFromKrisp } from './save.js';
-import { saveMeetingFile, meetingFilename, findMatchingAgenda } from '../meetings.js';
+import { saveMeetingFile, meetingFilename, findMatchingAgendaPath } from '../meetings.js';
 const DEFAULT_TEMPLATE = `# {title}
 
 **Date**: {date}
@@ -85,8 +85,8 @@ export async function pullKrisp(storage, workspaceRoot, paths, days) {
         try {
             const transcriptText = docMap.get(m.meeting_id) ?? '';
             const meeting = meetingFromKrisp(m, transcriptText);
-            // Link agenda if available
-            const agenda = await findMatchingAgenda(storage, workspaceRoot, meeting.date, meeting.title);
+            // Link agenda if available (use high-confidence matches only)
+            const agenda = await findMatchingAgendaPath(storage, workspaceRoot, meeting.date, meeting.title);
             if (agenda) {
                 meeting.agenda = agenda;
             }
