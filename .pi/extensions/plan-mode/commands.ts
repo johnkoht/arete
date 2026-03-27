@@ -1651,14 +1651,13 @@ export async function handleBuild(
 		return;
 	}
 
-	// Check if plan is approved (ready)
-	if (plan.frontmatter.status === "draft") {
-		const proceed = await ctx.ui.confirm(
-			"Plan Not Ready",
-			"This plan is still a draft. Mark it ready and start building?",
+	// Build gate: require planned status
+	if (plan.frontmatter.status === "idea" || plan.frontmatter.status === "draft") {
+		ctx.ui.notify(
+			`⛔ Plan status is '${plan.frontmatter.status}'. Run /approve first.`,
+			"error",
 		);
-		if (!proceed) return;
-		updatePlanFrontmatter(state.currentSlug, { status: "planned" });
+		return;
 	}
 
 	if (plan.frontmatter.status === "complete") {
@@ -1761,14 +1760,13 @@ export async function handleShip(
 		return;
 	}
 
-	// Offer to approve if not yet ready
-	if (plan.frontmatter.status === "draft" || plan.frontmatter.status === "idea") {
-		const proceed = await ctx.ui.confirm(
-			"Plan Not Ready",
-			`This plan is still '${plan.frontmatter.status}'. Mark it ready and start shipping?`,
+	// Ship gate: require planned status
+	if (plan.frontmatter.status === "idea" || plan.frontmatter.status === "draft") {
+		ctx.ui.notify(
+			`⛔ Plan status is '${plan.frontmatter.status}'. Run /approve first.`,
+			"error",
 		);
-		if (!proceed) return;
-		updatePlanFrontmatter(state.currentSlug, { status: "planned" });
+		return;
 	}
 
 	ctx.ui.notify("🚀 Starting ship workflow...", "info");

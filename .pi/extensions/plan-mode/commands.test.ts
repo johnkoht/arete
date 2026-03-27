@@ -14,6 +14,7 @@ import {
 	handlePlanClose,
 	handlePlanRename,
 	handlePlanStatus,
+	handleBuild,
 	handleShip,
 	handleWrap,
 	parsePlanListFilter,
@@ -204,12 +205,20 @@ function cleanupTestPlansDir(): void {
 }
 
 function createTestPlan(slug: string, content: string): void {
+	createTestPlanWithStatus(slug, content, "draft");
+}
+
+function createTestPlanWithStatus(
+	slug: string,
+	content: string,
+	status: "idea" | "draft" | "planned" | "building" | "complete" | "abandoned",
+): void {
 	const planDir = join(TEST_PLANS_DIR, slug);
 	mkdirSync(planDir, { recursive: true });
 	const frontmatter = `---
 title: ${slug.replace(/-/g, " ")}
 slug: ${slug}
-status: draft
+status: ${status}
 size: small
 tags: []
 created: 2026-01-01T00:00:00.000Z
@@ -2507,6 +2516,147 @@ describe("findLearningsInDirs", () => {
 		assert.ok(result.includes(dir1));
 		assert.ok(result.includes(dir2));
 		assert.ok(!result.includes(dir3));
+	});
+});
+
+// ────────────────────────────────────────────────────────────
+// Build gates tests — /build and /ship require planned status
+// ────────────────────────────────────────────────────────────
+
+describe("build gates", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("handleBuild rejects idea status", async () => {
+		createTestPlanWithStatus("idea-plan", "# Plan\n\n1. Do something", "idea");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "idea-plan" });
+
+		await handleBuild("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("idea"), "Should mention current status");
+		assert.ok(notifyMessage.includes("/approve"), "Should tell user to run /approve");
+		assert.equal(notifyType, "error", "Should be an error notification");
+	});
+
+	it("handleBuild rejects draft status", async () => {
+		createTestPlanWithStatus("draft-plan", "# Plan\n\n1. Do something", "draft");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "draft-plan" });
+
+		await handleBuild("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("draft"), "Should mention current status");
+		assert.ok(notifyMessage.includes("/approve"), "Should tell user to run /approve");
+		assert.equal(notifyType, "error", "Should be an error notification");
+	});
+
+	it("handleBuild allows planned status", async () => {
+		createTestPlanWithStatus("planned-plan", "# Plan\n\n1. Do something", "planned");
+
+		let notifyMessage = "";
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "planned-plan" });
+
+		await handleBuild("", ctx, pi, state);
+
+		// Should proceed to build, not reject
+		assert.ok(!notifyMessage.includes("⛔"), "Should not show gate error");
+		assert.ok(notifyMessage.includes("Build started") || notifyMessage.includes("⚡"), "Should start build");
+	});
+
+	it("handleShip rejects idea status", async () => {
+		createTestPlanWithStatus("idea-ship", "# Plan\n\n1. Do something", "idea");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "idea-ship" });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("idea"), "Should mention current status");
+		assert.ok(notifyMessage.includes("/approve"), "Should tell user to run /approve");
+		assert.equal(notifyType, "error", "Should be an error notification");
+	});
+
+	it("handleShip rejects draft status", async () => {
+		createTestPlanWithStatus("draft-ship", "# Plan\n\n1. Do something", "draft");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: "draft-ship" });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("⛔"), "Should show stop emoji");
+		assert.ok(notifyMessage.includes("draft"), "Should mention current status");
+		assert.ok(notifyMessage.includes("/approve"), "Should tell user to run /approve");
+		assert.equal(notifyType, "error", "Should be an error notification");
+	});
+
+	it("handleShip allows planned status", async () => {
+		createTestPlanWithStatus("planned-ship", "# Plan\n\n1. Do something", "planned");
+
+		let notifyMessage = "";
+		let userMessageSent = false;
+		const ctx = createTestContext({
+			notify: (msg) => {
+				notifyMessage = msg;
+			},
+		});
+		const pi = createTestPi({
+			sendUserMessage: () => {
+				userMessageSent = true;
+			},
+		});
+		const state = createTestState({ currentSlug: "planned-ship" });
+
+		await handleShip("", ctx, pi, state);
+
+		// Should proceed to ship, not reject
+		assert.ok(!notifyMessage.includes("⛔"), "Should not show gate error");
+		assert.ok(notifyMessage.includes("ship") || notifyMessage.includes("🚀"), "Should start ship workflow");
+		assert.ok(userMessageSent, "Should send user message to invoke ship skill");
 	});
 });
 
