@@ -2663,3 +2663,124 @@ describe("build gates", () => {
 	});
 });
 
+// ────────────────────────────────────────────────────────────
+// Auto status transitions — /build and /ship set status to "building"
+// ────────────────────────────────────────────────────────────
+
+describe("auto status transitions", () => {
+	beforeEach(() => setupTestPlansDir());
+	afterEach(() => cleanupTestPlansDir());
+
+	it("handleBuild transitions status from planned to building", async () => {
+		const slug = "build-status-transition";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. First step\n2. Second step", "planned");
+
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: slug });
+
+		await handleBuild("", ctx, pi, state);
+
+		// Verify status was updated on disk
+		const { loadPlan } = await import("./persistence.js");
+		const plan = loadPlan(slug);
+		assert.equal(plan?.frontmatter.status, "building", "Status should be 'building' on disk");
+	});
+
+	it("handleBuild shows status transition notification", async () => {
+		const slug = "build-notify-transition";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. First step", "planned");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: slug });
+
+		await handleBuild("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("📦"), "Should show package emoji");
+		assert.ok(notifyMessage.includes("building"), "Should mention building");
+		assert.equal(notifyType, "info", "Should be info notification");
+	});
+
+	it("handleShip transitions status from planned to building", async () => {
+		const slug = "ship-status-transition";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. First step\n2. Second step", "planned");
+
+		const ctx = createTestContext({
+			notify: () => {},
+		});
+		const pi = createTestPi({
+			sendUserMessage: () => {}, // ship sends a user message to invoke the skill
+		});
+		const state = createTestState({ currentSlug: slug });
+
+		await handleShip("", ctx, pi, state);
+
+		// Verify status was updated on disk
+		const { loadPlan } = await import("./persistence.js");
+		const plan = loadPlan(slug);
+		assert.equal(plan?.frontmatter.status, "building", "Status should be 'building' on disk");
+	});
+
+	it("handleShip shows status transition notification", async () => {
+		const slug = "ship-notify-transition";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. First step", "planned");
+
+		let notifyMessage = "";
+		let notifyType = "";
+		const ctx = createTestContext({
+			notify: (msg, type) => {
+				notifyMessage = msg;
+				notifyType = type ?? "";
+			},
+		});
+		const pi = createTestPi({
+			sendUserMessage: () => {},
+		});
+		const state = createTestState({ currentSlug: slug });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.ok(notifyMessage.includes("📦"), "Should show package emoji");
+		assert.ok(notifyMessage.includes("building"), "Should mention building");
+		assert.equal(notifyType, "info", "Should be info notification");
+	});
+
+	it("handleBuild enables execution mode after transitioning to building", async () => {
+		const slug = "build-exec-mode";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. Do something", "planned");
+
+		const ctx = createTestContext({ notify: () => {} });
+		const pi = createTestPi();
+		const state = createTestState({ currentSlug: slug, executionMode: false });
+
+		await handleBuild("", ctx, pi, state);
+
+		assert.equal(state.executionMode, true, "Should enable execution mode");
+		assert.equal(state.planModeEnabled, false, "Should disable plan mode");
+	});
+
+	it("handleShip enables execution mode after transitioning to building", async () => {
+		const slug = "ship-exec-mode";
+		createTestPlanWithStatus(slug, "# Plan\n\n1. Do something", "planned");
+
+		const ctx = createTestContext({ notify: () => {} });
+		const pi = createTestPi({ sendUserMessage: () => {} });
+		const state = createTestState({ currentSlug: slug, executionMode: false });
+
+		await handleShip("", ctx, pi, state);
+
+		assert.equal(state.executionMode, true, "Should enable execution mode");
+		assert.equal(state.planModeEnabled, false, "Should disable plan mode");
+	});
+});
+
