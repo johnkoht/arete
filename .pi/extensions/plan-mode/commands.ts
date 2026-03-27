@@ -484,32 +484,103 @@ export interface PlanListItem {
 	description: string;
 }
 
+/** Result from preparePlanListItems */
+export interface PlanListResult {
+	items: PlanListItem[];
+	backlogCount: number;
+}
+
 /** Filter type for plan list */
-export type PlanListFilter = "ideas" | "active" | "all";
+export type PlanListFilter = "work" | "backlog" | "complete" | "building" | "planned" | "all";
 
 /** Parse filter flags from args string */
 export function parsePlanListFilter(args: string): PlanListFilter {
 	const trimmed = args.trim().toLowerCase();
-	if (trimmed.includes("--ideas")) return "ideas";
-	if (trimmed.includes("--active")) return "active";
-	return "all";
+	if (trimmed.includes("--backlog")) return "backlog";
+	if (trimmed.includes("--complete")) return "complete";
+	if (trimmed.includes("--building")) return "building";
+	if (trimmed.includes("--planned")) return "planned";
+	if (trimmed.includes("--all")) return "all";
+	return "work"; // default: building + planned + recent complete (14 days)
 }
 
-/** Filter and sort plans, then build list items. Pure function for testability. */
+/**
+ * Format an ISO date string as a relative date for display.
+ * Returns "today", "yesterday", "2d ago", "1w ago", "2w ago", or "Mar 15" for older dates.
+ */
+export function formatRelativeDate(isoString: string): string {
+	if (!isoString) return "";
+
+	const date = new Date(isoString);
+	if (isNaN(date.getTime())) return "";
+
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+	if (diffDays === 0) return "today";
+	if (diffDays === 1) return "yesterday";
+	if (diffDays < 7) return `${diffDays}d ago`;
+	if (diffDays < 14) return "1w ago";
+	if (diffDays < 21) return "2w ago";
+
+	// Older dates: show "Mar 15" format
+	const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+	return `${months[date.getMonth()]} ${date.getDate()}`;
+}
+
+/**
+ * Filter and sort plans, then build list items. Pure function for testability.
+ * @param plans - Array of plan summaries
+ * @param filter - Filter type (work, backlog, complete, building, planned, all)
+ * @param cutoffDate - Date for 14-day filtering on "work" view (defaults to 14 days ago)
+ */
 export function preparePlanListItems(
 	plans: Array<{ slug: string; frontmatter: PlanFrontmatter }>,
 	filter: PlanListFilter,
-): PlanListItem[] {
+	cutoffDate?: Date,
+): PlanListResult {
+	// Calculate backlog count (ideas + drafts)
+	const backlogCount = plans.filter((p) =>
+		p.frontmatter.status === "idea" || p.frontmatter.status === "draft"
+	).length;
+
+	// Default cutoff: 14 days ago
+	const cutoff = cutoffDate ?? new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
 	let filtered = plans;
 
-	if (filter === "ideas") {
-		filtered = plans.filter((p) => p.frontmatter.status === "idea");
-	} else if (filter === "active") {
-		filtered = plans.filter((p) =>
-			p.frontmatter.status === "draft" ||
-			p.frontmatter.status === "planned" ||
-			p.frontmatter.status === "building",
-		);
+	switch (filter) {
+		case "work":
+			// building + planned + complete within 14 days
+			filtered = plans.filter((p) => {
+				const status = p.frontmatter.status;
+				if (status === "building" || status === "planned") return true;
+				if (status === "complete") {
+					const updated = new Date(p.frontmatter.updated);
+					return updated >= cutoff;
+				}
+				return false;
+			});
+			break;
+		case "backlog":
+			// ideas + drafts
+			filtered = plans.filter((p) =>
+				p.frontmatter.status === "idea" || p.frontmatter.status === "draft"
+			);
+			break;
+		case "complete":
+			filtered = plans.filter((p) => p.frontmatter.status === "complete");
+			break;
+		case "building":
+			filtered = plans.filter((p) => p.frontmatter.status === "building");
+			break;
+		case "planned":
+			filtered = plans.filter((p) => p.frontmatter.status === "planned");
+			break;
+		case "all":
+			// No filtering
+			break;
 	}
 
 	const sorted = [...filtered].sort((a, b) => {
@@ -518,20 +589,24 @@ export function preparePlanListItems(
 		return pa - pb;
 	});
 
-	return sorted.map((p) => {
+	const items = sorted.map((p) => {
 		const emoji = STATUS_EMOJI[p.frontmatter.status] ?? "📄";
+		const relativeDate = formatRelativeDate(p.frontmatter.updated);
+		const sizeAndDate = [p.frontmatter.size, relativeDate].filter(Boolean).join(", ");
 		return {
 			value: p.slug,
-			label: `${emoji} ${p.frontmatter.title} (${p.slug})`,
-			description: `${p.frontmatter.size}, ${p.frontmatter.steps} steps`,
+			label: `${emoji} ${p.frontmatter.title}    ${sizeAndDate}`,
+			description: `   ${p.slug}`,
 		};
 	});
+
+	return { items, backlogCount };
 }
 
 async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, state: PlanModeState): Promise<void> {
 	const plans = listPlans();
 	const filter = parsePlanListFilter(args);
-	const items = preparePlanListItems(plans, filter);
+	const { items, backlogCount } = preparePlanListItems(plans, filter);
 
 	if (items.length === 0) {
 		ctx.ui.notify("No plans found in dev/work/plans/", "info");
@@ -539,6 +614,16 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 	}
 
 	let selectedSlug: string | null = null;
+
+	// Map filter to header text
+	const headerTextMap: Record<PlanListFilter, string> = {
+		work: "Active Plans",
+		backlog: "Backlog (ideas & drafts)",
+		complete: "Completed Plans",
+		building: "Building Plans",
+		planned: "Planned Plans",
+		all: "All Plans",
+	};
 
 	// Try rich UI if available
 	if (ctx.hasUI && ctx.ui.custom) {
@@ -557,8 +642,7 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 			container.addChild(new DynamicBorder((str: string) => typedTheme.fg("accent", str)));
 
 			// Header
-			const headerText = filter === "all" ? "Plans" : filter === "ideas" ? "Plans (ideas)" : "Plans (active)";
-			container.addChild(new Text(typedTheme.fg("accent", typedTheme.bold(headerText))));
+			container.addChild(new Text(typedTheme.fg("accent", typedTheme.bold(headerTextMap[filter]))));
 
 			// SelectList
 			const selectList = new SelectList(items, Math.min(items.length, 15), {
@@ -602,6 +686,11 @@ async function handlePlanList(args: string, ctx: CommandContext, pi: CommandPi, 
 				selectedSlug = items[index].value;
 			}
 		}
+	}
+
+	// Show backlog count notification for work view
+	if (filter === "work" && backlogCount > 0) {
+		ctx.ui.notify(`Showing active work. ${backlogCount} item${backlogCount === 1 ? "" : "s"} in backlog.`, "info");
 	}
 
 	if (selectedSlug) {

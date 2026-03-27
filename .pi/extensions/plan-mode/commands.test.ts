@@ -18,12 +18,14 @@ import {
 	handleWrap,
 	parsePlanListFilter,
 	preparePlanListItems,
+	formatRelativeDate,
 	checkPrdExecutionComplete,
 	detectChecklistTier,
 	findLearningsInDirs,
 	type PlanModeState,
 	type CommandContext,
 	type CommandPi,
+	type PlanListResult,
 } from "./commands.js";
 import { extractTodoItems } from "./utils.js";
 import type { ExecutionProgressSnapshot } from "./execution-progress.js";
@@ -988,33 +990,92 @@ steps: 0
 });
 
 // ────────────────────────────────────────────────────────────
+// formatRelativeDate tests
+// ────────────────────────────────────────────────────────────
+
+describe("formatRelativeDate", () => {
+	it("returns empty string for empty input", () => {
+		assert.equal(formatRelativeDate(""), "");
+	});
+
+	it("returns empty string for invalid date", () => {
+		assert.equal(formatRelativeDate("not-a-date"), "");
+	});
+
+	it("returns 'today' for today's date", () => {
+		const today = new Date().toISOString();
+		assert.equal(formatRelativeDate(today), "today");
+	});
+
+	it("returns 'yesterday' for yesterday's date", () => {
+		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+		assert.equal(formatRelativeDate(yesterday), "yesterday");
+	});
+
+	it("returns 'Nd ago' for dates within a week", () => {
+		const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+		assert.equal(formatRelativeDate(threeDaysAgo), "3d ago");
+	});
+
+	it("returns '1w ago' for dates 7-13 days ago", () => {
+		const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+		assert.equal(formatRelativeDate(tenDaysAgo), "1w ago");
+	});
+
+	it("returns '2w ago' for dates 14-20 days ago", () => {
+		const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+		assert.equal(formatRelativeDate(fifteenDaysAgo), "2w ago");
+	});
+
+	it("returns 'Mon DD' format for dates older than 3 weeks", () => {
+		const oldDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+		const result = formatRelativeDate(oldDate.toISOString());
+		// Should match pattern like "Feb 25" or "Mar 1"
+		assert.ok(/^[A-Z][a-z]{2} \d{1,2}$/.test(result), `Expected 'Mon DD' format, got: ${result}`);
+	});
+});
+
+// ────────────────────────────────────────────────────────────
 // parsePlanListFilter tests
 // ────────────────────────────────────────────────────────────
 
 describe("parsePlanListFilter", () => {
-	it("returns 'all' for empty args", () => {
-		assert.equal(parsePlanListFilter(""), "all");
+	it("returns 'work' (default) for empty args", () => {
+		assert.equal(parsePlanListFilter(""), "work");
 	});
 
-	it("returns 'all' for whitespace-only args", () => {
-		assert.equal(parsePlanListFilter("  "), "all");
+	it("returns 'work' (default) for whitespace-only args", () => {
+		assert.equal(parsePlanListFilter("  "), "work");
 	});
 
-	it("returns 'ideas' for --ideas flag", () => {
-		assert.equal(parsePlanListFilter("--ideas"), "ideas");
+	it("returns 'backlog' for --backlog flag", () => {
+		assert.equal(parsePlanListFilter("--backlog"), "backlog");
 	});
 
-	it("returns 'active' for --active flag", () => {
-		assert.equal(parsePlanListFilter("--active"), "active");
+	it("returns 'complete' for --complete flag", () => {
+		assert.equal(parsePlanListFilter("--complete"), "complete");
+	});
+
+	it("returns 'building' for --building flag", () => {
+		assert.equal(parsePlanListFilter("--building"), "building");
+	});
+
+	it("returns 'planned' for --planned flag", () => {
+		assert.equal(parsePlanListFilter("--planned"), "planned");
+	});
+
+	it("returns 'all' for --all flag", () => {
+		assert.equal(parsePlanListFilter("--all"), "all");
 	});
 
 	it("is case insensitive", () => {
-		assert.equal(parsePlanListFilter("--IDEAS"), "ideas");
-		assert.equal(parsePlanListFilter("--Active"), "active");
+		assert.equal(parsePlanListFilter("--BACKLOG"), "backlog");
+		assert.equal(parsePlanListFilter("--Complete"), "complete");
+		assert.equal(parsePlanListFilter("--BUILDING"), "building");
 	});
 
 	it("handles flag with surrounding whitespace", () => {
-		assert.equal(parsePlanListFilter("  --ideas  "), "ideas");
+		assert.equal(parsePlanListFilter("  --backlog  "), "backlog");
 	});
 });
 
@@ -1023,7 +1084,12 @@ describe("parsePlanListFilter", () => {
 // ────────────────────────────────────────────────────────────
 
 describe("preparePlanListItems", () => {
-	function makePlan(slug: string, status: "idea" | "draft" | "planned" | "building" | "complete" | "abandoned", size = "small", steps = 3) {
+	function makePlan(
+		slug: string,
+		status: "idea" | "draft" | "planned" | "building" | "complete" | "abandoned",
+		size = "small",
+		updated = "2026-01-01T00:00:00.000Z",
+	) {
 		return {
 			slug,
 			frontmatter: {
@@ -1033,20 +1099,21 @@ describe("preparePlanListItems", () => {
 				size: size as import("./persistence.js").PlanSize,
 				tags: [] as string[],
 				created: "2026-01-01T00:00:00.000Z",
-				updated: "2026-01-01T00:00:00.000Z",
+				updated,
 				completed: null,
 				execution: null,
 				has_review: false,
 				has_pre_mortem: false,
 				has_prd: false,
-				steps,
+				steps: 3,
 			},
 		};
 	}
 
-	it("returns empty array for empty plans", () => {
+	it("returns empty items array for empty plans", () => {
 		const result = preparePlanListItems([], "all");
-		assert.deepEqual(result, []);
+		assert.deepEqual(result.items, []);
+		assert.equal(result.backlogCount, 0);
 	});
 
 	it("sorts by status priority: building first, idea last", () => {
@@ -1057,22 +1124,25 @@ describe("preparePlanListItems", () => {
 			makePlan("planned-plan", "planned"),
 		];
 		const result = preparePlanListItems(plans, "all");
-		assert.equal(result[0].value, "building-plan");
-		assert.equal(result[1].value, "planned-plan");
-		assert.equal(result[2].value, "draft-plan");
-		assert.equal(result[3].value, "idea-plan");
+		assert.equal(result.items[0].value, "building-plan");
+		assert.equal(result.items[1].value, "planned-plan");
+		assert.equal(result.items[2].value, "draft-plan");
+		assert.equal(result.items[3].value, "idea-plan");
 	});
 
-	it("formats label with emoji, title, and slug", () => {
-		const plans = [makePlan("my-plan", "draft")];
+	it("formats label with emoji, title, size, and relative date", () => {
+		const plans = [makePlan("my-plan", "draft", "medium")];
 		const result = preparePlanListItems(plans, "all");
-		assert.equal(result[0].label, "📝 My Plan (my-plan)");
+		// Label format: "emoji title    size, relative-date"
+		assert.ok(result.items[0].label.includes("📝"), "Should have draft emoji");
+		assert.ok(result.items[0].label.includes("My Plan"), "Should have title");
+		assert.ok(result.items[0].label.includes("medium"), "Should have size");
 	});
 
-	it("formats description with size and steps", () => {
-		const plans = [makePlan("my-plan", "draft", "medium", 5)];
+	it("formats description as indented slug", () => {
+		const plans = [makePlan("my-plan", "draft", "medium")];
 		const result = preparePlanListItems(plans, "all");
-		assert.equal(result[0].description, "medium, 5 steps");
+		assert.equal(result.items[0].description, "   my-plan");
 	});
 
 	it("uses correct emoji for each status", () => {
@@ -1081,22 +1151,57 @@ describe("preparePlanListItems", () => {
 		for (let i = 0; i < statuses.length; i++) {
 			const plans = [makePlan(`plan-${statuses[i]}`, statuses[i])];
 			const result = preparePlanListItems(plans, "all");
-			assert.ok(result[0].label.startsWith(expectedEmojis[i]), `Expected ${statuses[i]} to have emoji ${expectedEmojis[i]}`);
+			assert.ok(result.items[0].label.startsWith(expectedEmojis[i]), `Expected ${statuses[i]} to have emoji ${expectedEmojis[i]}`);
 		}
 	});
 
-	it("filters to only ideas with 'ideas' filter", () => {
+	it("calculates backlogCount as ideas + drafts", () => {
 		const plans = [
 			makePlan("idea-one", "idea"),
 			makePlan("draft-one", "draft"),
+			makePlan("building-one", "building"),
 			makePlan("idea-two", "idea"),
 		];
-		const result = preparePlanListItems(plans, "ideas");
-		assert.equal(result.length, 2);
-		assert.ok(result.every((r) => r.value.startsWith("idea-")));
+		const result = preparePlanListItems(plans, "all");
+		assert.equal(result.backlogCount, 3); // 2 ideas + 1 draft
 	});
 
-	it("filters to active statuses with 'active' filter", () => {
+	// ─── Filter: work (default) ───────────────────────────────
+	it("work filter shows building + planned + recent complete", () => {
+		const recentDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(); // 5 days ago
+		const oldDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+		const plans = [
+			makePlan("idea-one", "idea"),
+			makePlan("draft-one", "draft"),
+			makePlan("building-one", "building", "small", recentDate),
+			makePlan("planned-one", "planned", "small", recentDate),
+			makePlan("complete-recent", "complete", "small", recentDate),
+			makePlan("complete-old", "complete", "small", oldDate),
+		];
+		const result = preparePlanListItems(plans, "work");
+		assert.equal(result.items.length, 3);
+		const slugs = result.items.map((r) => r.value);
+		assert.ok(slugs.includes("building-one"));
+		assert.ok(slugs.includes("planned-one"));
+		assert.ok(slugs.includes("complete-recent"));
+		assert.ok(!slugs.includes("complete-old"), "Should exclude old completed plans");
+		assert.ok(!slugs.includes("idea-one"), "Should exclude ideas");
+		assert.ok(!slugs.includes("draft-one"), "Should exclude drafts");
+	});
+
+	it("work filter respects custom cutoffDate parameter", () => {
+		const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+		const plans = [
+			makePlan("complete-old", "complete", "small", thirtyDaysAgo),
+		];
+		// With a 60-day cutoff, the plan should be included
+		const cutoff60 = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+		const result = preparePlanListItems(plans, "work", cutoff60);
+		assert.equal(result.items.length, 1);
+	});
+
+	// ─── Filter: backlog ────────────────────────────────────
+	it("backlog filter shows only ideas and drafts", () => {
 		const plans = [
 			makePlan("idea-one", "idea"),
 			makePlan("draft-one", "draft"),
@@ -1104,28 +1209,68 @@ describe("preparePlanListItems", () => {
 			makePlan("planned-one", "planned"),
 			makePlan("complete-one", "complete"),
 		];
-		const result = preparePlanListItems(plans, "active");
-		assert.equal(result.length, 3);
-		const slugs = result.map((r) => r.value);
+		const result = preparePlanListItems(plans, "backlog");
+		assert.equal(result.items.length, 2);
+		const slugs = result.items.map((r) => r.value);
+		assert.ok(slugs.includes("idea-one"));
 		assert.ok(slugs.includes("draft-one"));
-		assert.ok(slugs.includes("building-one"));
-		assert.ok(slugs.includes("planned-one"));
 	});
 
-	it("returns all plans with 'all' filter", () => {
+	// ─── Filter: complete ───────────────────────────────────
+	it("complete filter shows only complete plans", () => {
+		const plans = [
+			makePlan("idea-one", "idea"),
+			makePlan("draft-one", "draft"),
+			makePlan("complete-one", "complete"),
+			makePlan("complete-two", "complete"),
+		];
+		const result = preparePlanListItems(plans, "complete");
+		assert.equal(result.items.length, 2);
+		assert.ok(result.items.every((r) => r.value.startsWith("complete-")));
+	});
+
+	// ─── Filter: building ───────────────────────────────────
+	it("building filter shows only building plans", () => {
+		const plans = [
+			makePlan("building-one", "building"),
+			makePlan("planned-one", "planned"),
+			makePlan("building-two", "building"),
+		];
+		const result = preparePlanListItems(plans, "building");
+		assert.equal(result.items.length, 2);
+		assert.ok(result.items.every((r) => r.value.startsWith("building-")));
+	});
+
+	// ─── Filter: planned ────────────────────────────────────
+	it("planned filter shows only planned plans", () => {
+		const plans = [
+			makePlan("planned-one", "planned"),
+			makePlan("building-one", "building"),
+			makePlan("planned-two", "planned"),
+		];
+		const result = preparePlanListItems(plans, "planned");
+		assert.equal(result.items.length, 2);
+		assert.ok(result.items.every((r) => r.value.startsWith("planned-")));
+	});
+
+	// ─── Filter: all ────────────────────────────────────────
+	it("all filter returns all plans", () => {
 		const plans = [
 			makePlan("a", "idea"),
 			makePlan("b", "draft"),
 			makePlan("c", "complete"),
+			makePlan("d", "building"),
+			makePlan("e", "planned"),
+			makePlan("f", "abandoned"),
 		];
 		const result = preparePlanListItems(plans, "all");
-		assert.equal(result.length, 3);
+		assert.equal(result.items.length, 6);
 	});
 
 	it("sets value to the plan slug", () => {
 		const plans = [makePlan("test-slug", "draft")];
 		const result = preparePlanListItems(plans, "all");
-		assert.equal(result[0].value, "test-slug");
+		assert.equal(result.items[0].value, "test-slug");
 	});
 });
 
@@ -1182,7 +1327,8 @@ steps: ${steps}
 
 	it("falls back to simple select when custom is not available", async () => {
 		const slug = `test-list-fallback-${Date.now()}`;
-		createPlanOnDisk(slug, "draft", "small", 2);
+		// Use "building" status so it appears in default "work" filter
+		createPlanOnDisk(slug, "building", "small", 2);
 
 		let selectCalled = false;
 		const ctx = createTestContext({
@@ -1200,7 +1346,7 @@ steps: ${steps}
 		const state = createTestState();
 
 		try {
-			await handlePlan("list", ctx, pi, state, () => {});
+			await handlePlan("list --all", ctx, pi, state, () => {});
 			assert.ok(selectCalled, "Should have used simple select fallback");
 		} finally {
 			rmSync(join(PLANS_DIR, slug), { recursive: true, force: true });
@@ -1209,7 +1355,8 @@ steps: ${steps}
 
 	it("falls back to simple select when hasUI is false", async () => {
 		const slug = `test-list-noui-${Date.now()}`;
-		createPlanOnDisk(slug, "draft", "small", 2);
+		// Use "building" status so it appears in default "work" filter
+		createPlanOnDisk(slug, "building", "small", 2);
 
 		let selectCalled = false;
 		const ctx = createTestContext({
@@ -1224,18 +1371,21 @@ steps: ${steps}
 		const state = createTestState();
 
 		try {
-			await handlePlan("list", ctx, pi, state, () => {});
+			await handlePlan("list --all", ctx, pi, state, () => {});
 			assert.ok(selectCalled, "Should have used simple select when hasUI is false");
 		} finally {
 			rmSync(join(PLANS_DIR, slug), { recursive: true, force: true });
 		}
 	});
 
-	it("passes --ideas filter through to show only idea plans", async () => {
-		const ideaSlug = `test-idea-${Date.now()}`;
-		const draftSlug = `test-draft-${Date.now()}`;
+	it("passes --backlog filter through to show only idea and draft plans", async () => {
+		// Use simple names that are easy to match in title format
+		const ideaSlug = `idea-backlog-test`;
+		const draftSlug = `draft-backlog-test`;
+		const buildingSlug = `building-backlog-test`;
 		createPlanOnDisk(ideaSlug, "idea");
 		createPlanOnDisk(draftSlug, "draft");
+		createPlanOnDisk(buildingSlug, "building");
 
 		let selectOptions: string[] = [];
 		const ctx = createTestContext({
@@ -1250,19 +1400,22 @@ steps: ${steps}
 		const state = createTestState();
 
 		try {
-			await handlePlan("list --ideas", ctx, pi, state, () => {});
-			// Only idea plans should appear
-			assert.ok(selectOptions.some((o) => o.includes(ideaSlug)), "Should include idea plan");
-			assert.ok(!selectOptions.some((o) => o.includes(draftSlug)), "Should not include draft plan");
+			await handlePlan("list --backlog", ctx, pi, state, () => {});
+			// Only idea and draft plans should appear (backlog)
+			// Check for title (title-cased version of slug) in labels
+			assert.ok(selectOptions.some((o) => o.includes("Idea Backlog Test")), "Should include idea plan");
+			assert.ok(selectOptions.some((o) => o.includes("Draft Backlog Test")), "Should include draft plan");
+			assert.ok(!selectOptions.some((o) => o.includes("Building Backlog Test")), "Should not include building plan");
 		} finally {
 			rmSync(join(PLANS_DIR, ideaSlug), { recursive: true, force: true });
 			rmSync(join(PLANS_DIR, draftSlug), { recursive: true, force: true });
+			rmSync(join(PLANS_DIR, buildingSlug), { recursive: true, force: true });
 		}
 	});
 
-	it("passes --active filter through to show only active plans", async () => {
-		const ideaSlug = `test-idea-active-${Date.now()}`;
-		const buildingSlug = `test-building-active-${Date.now()}`;
+	it("default (no filter) shows only active work (building + planned)", async () => {
+		const ideaSlug = `idea-active-test`;
+		const buildingSlug = `building-active-test`;
 		createPlanOnDisk(ideaSlug, "idea");
 		createPlanOnDisk(buildingSlug, "building");
 
@@ -1279,9 +1432,10 @@ steps: ${steps}
 		const state = createTestState();
 
 		try {
-			await handlePlan("list --active", ctx, pi, state, () => {});
-			assert.ok(selectOptions.some((o) => o.includes(buildingSlug)), "Should include building plan");
-			assert.ok(!selectOptions.some((o) => o.includes(ideaSlug)), "Should not include idea plan");
+			await handlePlan("list", ctx, pi, state, () => {});
+			// Check for title-cased versions in labels
+			assert.ok(selectOptions.some((o) => o.includes("Building Active Test")), "Should include building plan");
+			assert.ok(!selectOptions.some((o) => o.includes("Idea Active Test")), "Should not include idea plan");
 		} finally {
 			rmSync(join(PLANS_DIR, ideaSlug), { recursive: true, force: true });
 			rmSync(join(PLANS_DIR, buildingSlug), { recursive: true, force: true });
