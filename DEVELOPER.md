@@ -77,7 +77,10 @@ The `.pi/` directory at the repo root configures pi for this project:
 │   ├── reviewer.md     # Sr. Engineer — code review + AC verification
 │   ├── developer.md    # Task execution agent
 │   ├── product-manager.md
-│   └── engineering-lead.md
+│   ├── engineering-lead.md
+│   └── gitboss.md      # Git gatekeeper agent
+├── expertise/          # Domain profiles (core/, cli/, web/, backend/)
+├── standards/          # Build standards (build-standards.md, patterns.md, maintenance.md)
 └── APPEND_SYSTEM.md    # System prompt additions
 ```
 
@@ -108,6 +111,8 @@ These skills in `.pi/skills/` are used during development, not shipped to users:
 | `prd-post-mortem` | Post-mortem analysis after PRD execution |
 | `review-plan` | Cross-model second-opinion review |
 | `run-pre-mortem` | Pre-mortem risk analysis (8 categories) |
+| `hotfix` | Structured bug fix process with diagnosis and review |
+| `ship` | Mega-build: plan-to-merge workflow automation |
 | `synthesize-collaboration-profile` | Update builder collaboration profile from entries |
 
 > **Note**: Pi is a global developer tool — it is not an npm dependency of Areté. Each developer installs it on their machine alongside Node.js and their IDE.
@@ -401,6 +406,8 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 - `packages/core/src/services/intelligence.ts` - IntelligenceService (briefing, routing, skill preparation)
 - `packages/cli/src/commands/intelligence.ts` - CLI commands for context, memory, brief, resolve
 
+> **Note**: Additional domain-specific services exist beyond the core services listed above: `person-health.ts`, `person-memory.ts`, `person-signals.ts` for people intelligence; `meeting-apply.ts`, `meeting-context.ts`, `meeting-extraction.ts`, `meeting-parser.ts`, `meeting-processing.ts` for meeting processing; `commitments.ts`, `momentum.ts`, `patterns.ts` for tracking systems.
+
 **How it works**:
 
 **Context injection**: `arete context --for "create PRD for search feature"`
@@ -513,7 +520,21 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 - YAML frontmatter (name, type, description, time_allocation)
 - Markdown body (sections with bullets)
 
-### 13. Autonomous PRD Execution
+### 13. Areas System
+
+**Purpose**: Persistent work domains for recurring responsibilities.
+
+**Key files**:
+- `areas/{slug}.md` - Area definition files
+- `packages/core/src/services/area-parser.ts` - Area file parsing
+
+**How it works**:
+- Areas represent ongoing responsibilities (e.g., "product-analytics", "customer-success")
+- Each area can map to recurring meetings and stakeholders
+- Areas persist across projects and planning cycles
+- Used by daily-plan and meeting-prep skills for context
+
+### 14. Autonomous PRD Execution
 
 **Purpose**: Execute PRD tasks sequentially with fresh context per task.
 
