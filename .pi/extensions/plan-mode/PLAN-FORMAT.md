@@ -4,11 +4,17 @@ Plans are stored as markdown files with YAML frontmatter at `dev/work/plans/{slu
 
 ## Creating Plans
 
-**Preferred**: Use the plan-mode extension commands:
+**Preferred (for agents)**: Use the `set_plan` tool to write the plan directly:
+```
+set_plan({ plan: "# My Plan\n\n## Problem\n...\n\nPlan:\n1. Step one\n2. Step two" })
+```
+This writes exactly what you provide — no conversational framing captured. Include a "Plan:" section with numbered steps for progress tracking.
+
+**Preferred (for users)**: Use the plan-mode extension commands:
 - `/plan new [name]` — Create a new plan
 - `/plan save [name] [--capture]` — Save the current plan. The `--capture` flag saves the **entire** last agent response (not just steps). The response must contain a "Plan:" section with numbered steps to validate it's a plan, but all content (specs, examples, context) is preserved.
 
-**Auto-save**: When plan mode is active and you produce numbered steps under a "Plan:" header, the extension auto-saves with correct frontmatter.
+**Auto-save**: When plan mode is active and you produce numbered steps under a "Plan:" header, the extension auto-saves with correct frontmatter. Note: auto-save captures your entire response including any conversational framing.
 
 **Do not manually write plan.md files** unless you understand the full schema below. The extension handles frontmatter creation, status transitions, and artifact tracking automatically.
 

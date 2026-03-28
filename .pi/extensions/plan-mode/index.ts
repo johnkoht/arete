@@ -45,7 +45,7 @@ import {
 	type PlanModeState,
 	createDefaultState,
 } from "./commands.js";
-import { loadPlan, savePlanArtifact, slugify, updatePlanFrontmatter, type PlanSize } from "./persistence.js";
+import { loadPlan, savePlan, savePlanArtifact, slugify, updatePlanFrontmatter, type PlanSize } from "./persistence.js";
 import { getAgentPrompt } from "./agents.js";
 import { resolveExecutionProgress } from "./execution-progress.js";
 import { renderFooterStatus, renderTodoWidget, type WidgetState } from "./widget.js";
@@ -308,6 +308,111 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		},
 	});
 
+	// set_plan tool — explicit plan writing (no auto-capture framing issues)
+	pi.registerTool({
+		name: "set_plan",
+		label: "Set Plan",
+		description:
+			"Write the complete plan to plan.md. Call this whenever the plan changes. " +
+			"The content you provide becomes the entire plan body (frontmatter is managed automatically). " +
+			"Include a 'Plan:' section with numbered steps for the widget to track progress.",
+		parameters: Type.Object({
+			plan: Type.String({
+				description: "Full plan document text. This overwrites the plan body and should include the complete latest plan.",
+			}),
+			slug: Type.Optional(Type.String({
+				description: "Plan slug (kebab-case). If omitted, uses current plan or derives from first heading.",
+			})),
+		}),
+		execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
+			const planText = params.plan?.trim();
+			if (!planText) {
+				return {
+					content: [{ type: "text", text: "Error: Plan content cannot be empty." }],
+					isError: true,
+				};
+			}
+
+			// Determine slug: provided > current > derived from title
+			let slug = params.slug?.trim();
+			if (!slug && state.currentSlug) {
+				slug = state.currentSlug;
+			}
+			if (!slug) {
+				// Try to derive from first heading
+				const titleMatch = planText.match(/^#\s+(.+)/m);
+				if (titleMatch) {
+					slug = slugify(titleMatch[1].trim());
+				}
+			}
+			if (!slug) {
+				return {
+					content: [{ type: "text", text: "Error: No slug provided and couldn't derive from plan title. Add a '# Title' heading or provide a slug." }],
+					isError: true,
+				};
+			}
+
+			// Extract todo items for widget tracking
+			const extracted = extractTodoItems(planText);
+			const planSize = classifyPlanSize(extracted, planText);
+
+			// Load existing plan or create new frontmatter
+			const now = new Date().toISOString();
+			const existingPlan = loadPlan(slug);
+			const frontmatter = existingPlan
+				? {
+					...existingPlan.frontmatter,
+					updated: now,
+					steps: extracted.length,
+					size: (planSize && planSize !== "unknown") ? planSize : existingPlan.frontmatter.size,
+				}
+				: {
+					title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+					slug,
+					status: "draft" as const,
+					size: planSize ?? ("small" as PlanSize),
+					tags: [],
+					created: now,
+					updated: now,
+					completed: null,
+					execution: null,
+					has_review: state.reviewRun,
+					has_pre_mortem: state.preMortemRun,
+					has_prd: state.prdConverted,
+					steps: extracted.length,
+				};
+
+			// Save the plan
+			savePlan(slug, frontmatter, planText);
+
+			// Update state
+			state.currentSlug = slug;
+			state.planText = planText;
+			state.todoItems = extracted;
+			state.planSize = planSize;
+			state.loadedFromDisk = true; // Treat as loaded to prevent auto-save overwrites
+
+			// Enable plan mode if not already
+			if (!state.planModeEnabled) {
+				state.planModeEnabled = true;
+			}
+
+			updateStatus(ctx);
+			persistState();
+
+			const stepInfo = extracted.length > 0 ? ` (${extracted.length} steps)` : "";
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Plan saved to dev/work/plans/${slug}/plan.md${stepInfo}`,
+					},
+				],
+				isError: false,
+			};
+		},
+	});
+
 	// ── Command Registration ───────────────────────────────
 
 	pi.registerCommand("plan", {
@@ -454,12 +559,27 @@ Help the user explore ideas and shape clear, actionable plans. You have full too
 - Reading relevant code to ground the plan in reality
 - Shaping a concrete, numbered plan
 
-When ready, create a detailed numbered plan under a "Plan:" header:
+## Saving the Plan
+Use the \`set_plan\` tool to write the plan to plan.md. Call it whenever the plan changes.
+
+**Important**: The \`set_plan\` tool writes exactly what you provide — no conversational framing ("Here's the plan:", "Let me know if..."). Write the plan content directly.
+
+Include a "Plan:" section with numbered steps for progress tracking:
+
+\`\`\`
+# Plan Title
+
+## Problem
+What we're solving.
+
+## Solution
+How we'll solve it.
 
 Plan:
 1. First step description
 2. Second step description
 ...
+\`\`\`
 
 When the user is satisfied, they'll use /approve and /build to start execution.
 

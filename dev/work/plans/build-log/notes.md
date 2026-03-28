@@ -1,4 +1,6 @@
-# Build Log — Plan Notes (Revised)
+# Build Log — Detailed Spec
+
+> **Note**: This is the detailed specification for the build-log feature. `plan.md` contains the summary with steps and acceptance criteria. This file contains the full template schema and implementation details that the PRD should reference.
 
 ## Problem
 
