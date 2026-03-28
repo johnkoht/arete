@@ -87,6 +87,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |construct-roadmap:{triggers:"Build roadmap for Q2 2026",does:"Build product roadmaps with prioritization and timelines"}
 |create-prd:{triggers:"Create a PRD, write a PRD for...",does:"Interactive PRD creation with Product Leader persona"}
 |daily-plan:{triggers:"What's on my plate today?",does:"Plan your day with focus, meetings, and priorities"}
+|daily-winddown:{triggers:"Daily winddown, end of day, close the day",does:"End-of-day reconciliation — pull recordings, process inbox, process meetings, triage action items, update weekly plan"}
 |discovery:{triggers:"Start discovery, research [topic]",does:"Guide problem discovery and research synthesis"}
 |finalize-project:{triggers:"Finalize this project",does:"Archive completed projects and extract learnings"}
 |general-project:{triggers:"Start a project, new project for [topic]",does:"Start generic projects for work that doesn't fit specialized categories"}
