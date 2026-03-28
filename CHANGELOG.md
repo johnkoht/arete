@@ -1,0 +1,558 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.0] - 2026-03-28
+
+### Added
+- build-log - implementation
+- add session boundary handling in Phase 0.2
+- add build-log update instructions to all phases
+- add Phase 0 for build-log initialization and resume
+- add build-log template for inter-session state
+- add set_plan tool for explicit plan writing
+- integrate review UI into daily-winddown
+- add --path and --wait flags to arete view
+- add /review page for task triage
+- add /api/review endpoints for task triage
+- pull weekly-winddown from arete-reserv local-only
+- pull daily-winddown from arete-reserv with task integration
+- add daily-winddown stub with inbox processing
+- add task scoring service with breakdown output
+- week-plan pulls from task store with move semantics
+- create tasks from approved action items with urgency inference
+- link commitments to tasks with auto-resolution
+- add TaskService for GTD task management
+- update week.md structure with Inbox and Waiting On sections
+- add now/tasks.md GTD task store structure
+- add --capture flag to /plan save
+- support /build <slug> and /ship <slug> without plan mode
+- add /release command for semantic versioning
+- add gitboss agent for merge gating
+- add /plan promote and migration script for backlog
+- add YYYY-MM archive path with conflict handling
+- add tests for auto status transitions
+- add extraction mode selection to reprocess dialog
+- enforce build gates for /build and /ship
+- enhance /plan list with filters and display
+- wire importance inference into meeting pulls
+- add importance-based processing and auto-approve
+- add calculateSpeakingRatio for transcript analysis
+- display reconciled items with 'already done' badge
+- add extraction modes (light/normal/thorough)
+- wire matchedText through meeting response
+- simplify worktree flow and add merge prompt
+- add reconciled source and matchedText to ReviewItem type
+- add meeting importance inference
+- thread completedItems through meeting processing
+- add organizer and recurringEventId to CalendarEvent
+- enhanced agenda matching with frontmatter support
+- enhance onboard with calendar, context, and first-win suggestions
+- add session-start context injection for GUIDE mode
+- add agent-observations.md to DEFAULT_FILES
+- add contextual memory retrieval to planning skills
+- integrate completedItems reconciliation in meeting extract
+- add completedItems reconciliation to meeting processing
+- add getCompletedItems utility for week.md reconciliation
+- thread priorItems through runProcessingSession
+- add --prior-items option to meeting extract
+- add area context to extraction prompt
+- add area context to MeetingContextBundle
+- wire AreaParserService into createServices factory
+- add areaParser to MeetingContextDeps
+- add exclusion list to extraction prompt for dedup
+- extend Jaccard dedup for priorItems in processMeetingExtraction
+- add priorItems to extraction options
+- redesign weekly plan template with daily progress archival
+- copy UPDATES.md to workspace during install/update
+- add area setup to onboarding tool
+- add area integration to week-plan skill
+- add area integration to process-meetings skill
+- add area integration to daily-plan skill
+- add area context to meeting-prep skill
+- add area field to goals
+- add area field to commitments
+- add arete create area CLI command
+- create area parser service with PATTERNS.md
+- extend context service for nested scanning
+- add area templates and workspace structure
+- use core meeting services in runProcessingSession
+- add --context flag to meeting extract
+- add meeting apply service and CLI command
+- add meeting context service and CLI command
+- replace project picker with goal picker in meeting review
+- manual goal linking during meeting approve
+- show goalSlug in commitments list
+- add goalSlug to Commitment type
+- process-meetings archives linked agendas via frontmatter
+- daily-plan offers agenda creation for prep-worthy meetings
+- context service globs individual goal files
+- seed individual goal files
+- add goal parser service with fallback support
+- add Goal type to entities
+- add goal migration service for individual files
+- add Today's Plan section to week template
+- add --clear-approved flag to meeting extract
+- add meeting approve command
+- add full metadata to meeting extract --stage
+- add processMeetingExtraction and extractUserNotes
+- use extractMeetingIntelligence for meeting processing
+- add call() method to ProcessingDeps
+- add owner badge display and owner parsing (Step 2)
+- extend StagedItem type with owner/direction fields (Step 1)
+- add deprecation warnings to context --for, memory search, memory timeline
+- add missing 'how do we X' intent derivation pattern
+- add timeline mode to search command
+- add person filtering to search command
+- add search command with scope filtering
+- normalize qmd_collection to qmd_collections in config loading
+- wire multi-collection QMD into install/update commands
+- add multi-collection QMD setup for scoped search
+- implement cleanup command
+- implement build and wrap phase
+- implement worktree and terminal launch
+- implement PRD creation and commit phase
+- implement memory review phase details
+- create skill structure
+- add pagination to CommitmentsPage
+- add pagination to PeopleIndex
+- add pagination to MeetingsIndex
+- move Edit button to header in PersonDetailPage
+- add pagination to meetings, people, commitments endpoints
+- add UPDATES.md check for user-facing changes
+- add commitment reconciliation endpoint and UI
+- add commitment priority scoring
+- add confidence-based pre-selection
+- add user notes deduplication with auto-approve
+- add quality tuning filters to meeting extraction
+- add source and confidence fields to extraction types
+- Add project picker to ReviewItems (Track A)
+- Web Fast Follow Phase 1 foundation
+- redesign CommitmentsPage and PersonDetailPage
+- page polish - max-width, markdown rendering, table layout, pagination
+- add hotfix skill for structured bug fixes
+- add reprocess meeting with clearApproved option
+- add tests and documentation for /wrap command
+- add tiered output formatting for /wrap checklist
+- add detection logic for /wrap close-out checklist
+- add /wrap command skeleton for close-out checklist
+- auto-build web app in arete view if dist missing
+- add OAuth login support for AI providers
+- add arete meeting extract command
+- add formatStagedSections and updateMeetingContent
+- add AI config show/set commands
+- add AI configuration to onboarding
+- add credentials management commands
+- add AIService with pi-ai integration and credential management
+- enhance commitments page with filters and table layout
+- add people favorites with optimistic updates
+- enhance MeetingSheet with full meeting details
+- add localStorage persistence and bulk approve to meeting review
+- finalize BlockEditor with lazy loading and tests
+- extract and display meeting sections separately
+- TipTap markdown editor + person notes editing
+- API key settings page + /settings route
+- interactive week priority checkboxes
+- people detail full page + backend enhancements
+- people page category filter tabs
+- iteration 3 — global search, commitments page, activity feed
+- iteration 2 — signal patterns UI, SSE auto-refresh, people/goals tests, commitment drill-down, strategy preview fix
+- Plan B — Product Intelligence Dashboard (5 pages + backend routes)
+- Plan A — Intelligence Engine (daily brief, momentum, watcher, patterns, enhanced status)
+- fix bugs and add sorting, reprocess, summary generation
+- update extract_decisions_learnings with Significance Analyst reference; add expert agent section to authoring guide
+- update week-review with Significance Analyst expert pattern
+- update meeting-prep with Relationship Intelligence expert pattern
+- update process-meetings Step 7 with Significance Analyst expert pattern
+- add expert agent patterns — context_bundle_assembly, significance_analyst, relationship_intelligence
+- add arete view command
+- update process-meetings skill for staged output mode
+- delete sync skill and update references to new integration skills
+- add fathom skill with meeting template and PATTERNS.md entry
+- create Krisp skill with template and PATTERNS.md entry
+- add focused notion and calendar integration skills
+- wire React app to backend API with TanStack Query
+- Pi SDK agent integration with SSE streaming
+- link agendas to meetings and collapse recorder notes
+- Hono server with meeting CRUD and job endpoints
+- add staged item data model and utilities
+- establish packages/apps/ structure with backend scaffold and web import
+- add action item parser for meeting files
+- add meeting extraction service and CLI command
+- add Krisp support and live integration status check
+- add UPDATES.md with retroactive release notes; update /wrap backlog item
+- intelligence discoverability for skill authors and agents
+- arete commitments list and resolve commands
+- bidirectional commitment sync via person memory checkboxes
+- CommitmentsService with sync, resolve, reconcile, and pruning
+- wire callLLM into action item extraction with per-meeting cache
+- LLM-based commitment extraction with regex fallback
+- Commitment data model types
+- allow community skills in template resolve + validation gate passed
+- migrate 9 native skills to integration profiles
+- add integration guidance to skill install output
+- wire integration injection into install/update + fix root-level skill file deployment
+- add integration section generation utilities
+- add SkillIntegration types and getInfo() integration reading
+- add lsp tool to subagents and project settings
+- add --memory flag to people show and --dry-run to refresh
+- render enriched auto-memory sections with stances, items, health
+- integrate stance and action item extraction into refreshPersonMemory
+- add LLM stance extraction module
+- add relationship health computation
+- add action item extraction with lifecycle
+- add lsp tool to subagents and project settings
+- commit built dist files for GitHub install support
+- enable GitHub install support
+- improve schedule-meeting UX
+- add schedule-meeting skill for conversational booking
+- add arete calendar create command
+- add createEvent() to Google Calendar provider
+- upgrade OAuth scopes to enable calendar write access
+- add arete availability find command
+- add findAvailableSlots algorithm
+- add getFreeBusy method to Google Calendar provider
+- add FreeBusy types to CalendarProvider interface
+- add index checkpoint guidance to save-meeting and process-meetings
+- add research_intake reference to general-project skill
+- add research_intake reference to discovery skill
+- add research_intake pattern for bulk document processing
+- add general-project skill for generic work
+- add qmd indexing to onboard, people, and krisp commands
+- add calendar FreeBusy plan and test script
+- add qmd embed to index operations for semantic search
+- export public API and add documentation
+- add beta gate for Google Calendar credentials
+- add unsaved indicator to footer for loaded plans
+- add CLI configure and pull commands for notion
+- wire Google Calendar into factory, configure, pull, and status
+- implement Google Calendar API client and provider
+- implement Google Calendar OAuth2 flow and credential storage
+- add google-calendar to integration registry
+- merge tools into route commands and refactor tool.ts
+- add ToolService and ToolDefinition type
+- add pull orchestrator and save module
+- register Notion in integration registry and service wiring
+- add blocks-to-markdown converter with Tier 1/Tier 2 support
+- add Notion API client with rate limiting and retry
+- add types, config, and URL resolver for Notion integration
+- add integration phase to arete onboard (calendar, fathom, krisp)
+- make arete onboard identity phase rerun-safe with @inquirer/prompts
+- add listIcalBuddyCalendars() for calendar listing
+- add @inquirer/prompts dependency for interactive onboarding
+- merge tools into route commands and refactor tool.ts
+- add ToolService and ToolDefinition type
+- add /plan close to unload plan and return to default mode
+- enhance templates with risks, skills table, working tracker, and checkpoint deliverables
+- add Direct Execution Protocol for non-PRD changes
+- auto-commit plan to git when /build starts
+- enrich orchestrator identity, add reviewer doc awareness, close-out checklist
+- inject optional SearchProvider into EntityService for meeting pre-filter
+- add arete index command for manual search re-indexing
+- wire refreshQmdIndex() into pull fathom, meeting add, and meeting process
+- wire Krisp into integration framework (registry, service, CLI)
+- add refreshQmdIndex() helper and fix capabilities registry
+- fix tool delivery and improve onboarding tool content
+- add Krisp save transform, pull orchestrator, verified types
+- add Krisp MCP client, types skeleton, and credential helpers
+- auto-setup qmd collection on arete install/update
+- add agent-memory extension for auto-injecting collaboration profile
+- conversation capture phase 2 — people modes & improvements
+- add LEARNINGS.md convention and behavioral rules
+- unify plans and backlog into single system
+- auto-save on /plan new
+- add migration function and deprecate backlog persistence
+- support name argument in /plan new, update command docs
+- add resources/conversations/ to context discovery
+- add capture-conversation skill for manual conversation ingestion
+- add parser with fallback chain and LLM insight extraction
+- add backlog, shelve, and archive commands (Tasks 5 & 6)
+- update persistence paths and add backlog/archive functions (Task 3)
+- unified frontmatter schema (Task 1)
+- add per-run execution state directory structure
+- use numbered conversational format for discovery
+- add arete onboard CLI + update onboarding skill
+- complete Phase 1 implementation (10/10 tasks)
+- surface active plan id in status and widget
+- implement linear phase pipeline refinement
+- add phase tracking to state
+- arete template resolve/list/view CLI + unified override paths (Decision 1+2)
+- template architecture — ship templates/GUIDE.md on install, backfill on update, skill-local templates, resolveTemplatePath
+- add plan diff on resume
+- add /plan new command with template selection
+- add plan templates module (discovery, refactor, integration)
+- add agent model configuration to settings.json (Task 14)
+- refactor index.ts — wire all modules together (Tasks 11-13)
+- add commands module with all handlers (Task 10)
+- add lifecycle status widget (Task 9)
+- add plan classification and smart menu utilities (Task 7)
+- add Product Manager agent definition (Task 6)
+- add agent configuration module (Task 4)
+- add lifecycle state machine module (Task 2)
+- add plan persistence module (Task 1)
+- create agent definition files for Pi subagent extension
+- symlink build skills to .pi/skills/
+- install and adapt plan-mode extension for Pi
+- port dev rules to .pi/APPEND_SYSTEM.md
+- create .pi/ directory structure and settings
+- implement entity relationships with findMentions and getRelationships
+- implement proactive context assembly with inventory and skill preparation
+- implement temporal intelligence with timeline and recency signals
+- migrate runtime content to packages/runtime
+- rebuild CLI as thin service wrapper over @arete/core
+- add createServices factory and verify core isolation
+- implement WorkspaceService, SkillService, IntegrationService with adapters
+- implement IntelligenceService with briefing and routing
+- implement EntityService with people management and compat shims
+- implement ContextService and MemoryService with compat shims
+- implement FileStorageAdapter and port search providers
+- add service stubs, StorageAdapter, SearchProvider, and utility functions
+- create model type definitions for all 9 domains
+- add multi-IDE consistency safeguards
+- add Intelligence and Workflows compression
+- generate new compressed AGENTS.md
+- add npm scripts for AGENTS.md compilation
+- add compression logic to build-agents.ts
+- add build-agents.ts compilation script
+- add guide AGENTS.md source files
+- add builder AGENTS.md source files
+- add shared AGENTS.md source files
+- create .agents/sources/ directory structure
+- enhance activation workflow with new working files
+- update Project Structure with new working files
+- add Landmines to Avoid section with anti-patterns
+- enhance templates with tactical guidance
+- add Universal Principles cross-cutting section
+- enrich Phase 3 with organizational navigation
+- enrich Phase 2 with quick wins and trust building
+- enrich Phase 1 with tactical best practices
+- abstract quality practices from PRD execution
+- add tool routing to skill router
+- add prepare-meeting-agenda skill and router tests (C1, C2)
+- add template list and view CLI (B1, B2)
+- add now/agendas and .arete/templates/meeting-agendas to workspace (A3)
+- add default template files (A2)
+- add template loader and types (A1)
+- integrate adapter system into install command
+- add copy-runtime build step, fix npm package contents
+- add structured backlog for future features and improvements
+- integrate calendar to auto-populate meetings
+- add pull calendar CLI command with person matching
+- add config handling and setup command
+- implement IcalBuddy provider for macOS Calendar integration
+- add CalendarProvider interface and types
+- surface relevance scores and improve gap detection
+- add SearchProvider-powered file discovery with relevance scoring
+- upgrade to SearchProvider with semantic search and recency weighting
+- Phase 3 services 4-5 — primitive briefing assembly, enhanced skill router
+- Phase 3 services 1-3 — context injection, memory retrieval, entity resolution
+- Phase 2 project templates for four work types + roadmap
+- Phase 1 restructure - now/, goals/, .arete/memory/ and migration
+
+### Changed
+- batch findRecentMeetings across attendees
+- add 60-day cutoff to findRecentMeetings
+- week-review and prepare-meeting-agenda read individual goal files
+- week-plan and daily-plan read individual goal files
+- goals-alignment reads individual goal files
+- quarter-plan writes individual goal files
+- week-review handles Today's Plan section
+- daily-plan writes to week.md with merge-aware updates
+- make week-plan interactive with opt-in watchouts
+- extract clearApprovedSections and formatFilteredStagedSections
+- extract clearApprovedSections and formatFilteredStagedSections
+- use processMeetingExtraction from core
+- remove dead extraction code
+- use updateMeetingContent from @arete/core
+- extract DEFAULT_AI_CONFIG to avoid duplication
+- replace pi-coding-agent with AIService for meeting processing
+- restructure PersonDetailPage to single-column layout
+- remove CLI extract command, use agent-driven extraction
+- delete deprecated .cursor/rules/ and update references
+- add composition instructions to role definitions
+- rewrite planner context, remove BUILD generation pipeline
+- consolidate coding standards into build-standards.md
+- move build skills from .agents/skills/ to .pi/skills/
+- extract person-memory module from entity.ts
+- simplify to playbook + plan + notes structure
+- extract formatSlotTime to shared formatters
+- isolate overwrite tests from real plans directory
+- extract shared calendar types to types.ts, remove dead CalendarEvent from models
+- update cross-references for getting-started rename
+- rename onboarding skill to getting-started
+- retire arete setup, update docs to reference arete onboard
+- update cross-references for getting-started rename
+- rename onboarding skill to getting-started
+- extract displayQmdResult helper; clarify qmd-setup param docs
+- remove tool restrictions, rely on prompt guidance
+- migrate work items to dev/work/ (Task 2)
+- split review checklists into reviewer agent, fix fallback paths
+- update all dev/autonomous execution-path references
+- update agent definitions for Pi subagents workflow
+- rewrite skill for Pi subagents and execution state isolation
+- consolidate remaining templates into skills; clean up orphans
+- consolidate templates into skills; document override convention
+- update source to use .agents/skills/ and runtime/ paths
+- move files to runtime/ and dev/ directories
+- Phase 2 slim default skills, shared patterns, extended frontmatter
+- update path references for Product OS
+
+### Fixed
+- remove duplicate parseStagedItemOwner, rebuild dist
+- address eng lead review suggestions
+- add aria-labels to ReviewPage buttons for accessibility
+- remove invalid 'unknown' comparison in set_plan
+- sanitize user-provided slugs in set_plan
+- update size when saving existing plans
+- add ts-ignore for Pi framework imports
+- fix PlanSize type mismatch in widget state
+- restore accidentally deleted dev/work/archive/ folder
+- update tests for new status transition messages
+- onboard uses existing AI creds without prompting
+- onboard UX polish
+- onboard UX improvements and build cache prevention
+- improve onboard messaging with AI context
+- update default AI tiers to use -latest suffix
+- add safeguards against bypassing plan-mode extension
+- eliminate double YAML parse in findRecentMeetings
+- improve relevance filtering for entity queries
+- add staged_item_status to process-meetings agent fallback path
+- prevent stale closure from losing goal selections in ReviewItems
+- prioritize Approved Action Items section and handle ISO dates
+- parse owner-only action item notation (@slug)
+- resolve attendees during approval workflow for commitments sync
+- add /ship command to invoke ship skill
+- copy PATTERNS.md to user workspaces during install/update
+- preserve owner metadata when committing approved action items
+- reprocess meeting UI refresh + owner metadata persistence
+- support legacy memory file format in dashboard parser
+- connect meeting approval to commitments flow
+- add complete frontmatter to meeting-processing-improvements plan
+- add YAML frontmatter to meeting-processing-improvements plan
+- add deprecation markers to help text, regenerate AGENTS.md
+- update intelligence.md and read-agents-md.ts for unified search command
+- add input validation for --limit and --days, add try/catch for timeline
+- update build-agents.ts and context.ts for unified search command
+- address review findings H1, H2, M3, L3
+- correct type cast for async createServices mock
+- use unique temp dir per test run to fix parallel test interference
+- address engineering lead review concerns
+- correct QMD JSON field names and path handling
+- use Tabs component for CommitmentsPage direction/filter tabs
+- handle paginated response in Dashboard and MeetingDetail
+- persist loadedFromDisk in all appendEntry calls
+- use 'any' type for appendEntry mock data parameter
+- resolve type errors in plan-mode extension
+- use ApprovedItemsSection for approved meetings
+- clear API key env vars in credentials tests for isolation
+- fix TypeScript errors in view.test.ts spawnSync mock
+- fix type errors in ai.test.ts mock functions
+- remove duplicate MeetingExtraction type
+- use claude-3-5-haiku for fast tier, fix API key test isolation
+- use correct anthropic model for validation, show masked key after entry
+- use LucideIcon type for EMPTY_STATES icons
+- fix BlockEditor lazy loading and table style consistency
+- fix TipTap v3 API compatibility in MarkdownEditor
+- correct BubbleMenu import for TipTap v3
+- handle legacy standalone [x] format in priority toggle
+- toggle checkboxes correctly in goals priority PATCH
+- regex for section parsing - $ matches end-of-line in multiline mode
+- handle unquoted YAML dates in meeting frontmatter
+- use JS-compatible regex for section matching
+- meeting status detection and API conventions
+- package apps for GitHub installs
+- polish empty states + verify sidebar navigation
+- stale editor content after save + commit dist
+- greedy regex strips Recent Meetings content from rawContent
+- people/internal dir mapping (internals → internal)
+- P0 polish — /people/:slug route + goals.ts \z regex bug
+- add summary generation to processing prompt
+- serve web static files from packages/apps/web/dist/
+- address engineering-lead review feedback for leverage-intelligence
+- address engineering-lead review feedback for integration skills
+- align agent test event shape with Pi SDK normalized types
+- move wrap-command from backlog/ to plans/ (unified system)
+- wrap DELETE in withSlugLock; clean up unused deps
+- exclude skill doc files from user workspace copy
+- clarify test name for missing section behavior
+- correct direction logic in fallback heuristics
+- pass CommitmentsService to refreshPersonMemory in CLI
+- add retroactive plan.md for intelligence-discoverability
+- strengthen planning process learning — don't skip plan step
+- expand LEARNINGS.md triggers to cover first-use patterns and design decisions
+- adapt to Krisp MCP API change (get_multiple_documents)
+- update test for get_multiple_documents API change
+- update remaining .cursor/rules/ references
+- run build before tests to generate dist/AGENTS.md
+- handle midnight edge case in parseNaturalDate test
+- include packages/*/package.json in npm tarball for GitHub install
+- extend search to include meetings and conversations
+- add calendar.readonly scope for listCalendars
+- add empty .npmignore to prevent gitignore from affecting npm install
+- move bin entry to root level for reliable npm git install
+- remove workspaces config to fix npm git install file inclusion
+- add packages/cli/dist/ to files array for npm install
+- use explicit node_modules/.bin paths to avoid npx installing wrong packages
+- use npx for tsc in build scripts for GitHub install compatibility
+- always refresh GUIDE.md on arete update
+- use relative paths for PATTERNS.md references
+- improve skill routing for content ingestion queries
+- qmd collection detection to handle 'name (qmd://...)' format
+- use pre-built dist/AGENTS.md in installed workspaces
+- isolate all tests from real plans directory
+- prevent agent_end from overwriting loaded plan content
+- add eng-lead recommended improvements
+- map calendar provider status in integration list
+- correct skills-index trigger column and remove duplicate LEARNINGS line
+- update getting-started SKILL.md heading from 'Onboarding Skill' to 'Getting Started'
+- track entries and remove broken MEMORY index links
+- correct skills-index trigger column and remove duplicate LEARNINGS line
+- update getting-started SKILL.md heading from 'Onboarding Skill' to 'Getting Started'
+- address engineering lead review feedback — drop dead import, add trade-off comments, update prd.json
+- remove dead typeof branch in speaker→attendee mapping
+- untrack package-lock.json exclusion (syncing with main)
+- prevent re-execution of completed PRD builds
+- meeting cache, limit cap, path normalization in refreshPersonMemory
+- align Krisp types and parsing with real API responses
+- unwrap MCP tools/call content envelope in Krisp callTool
+- commit package-lock.json for reproducible CI builds
+- add MCP Accept header to Krisp callTool (fixes 406 Not Acceptable)
+- match node_modules symlinks (add entry without trailing slash)
+- match node_modules symlinks (add entry without trailing slash)
+- gitignore was excluding onboarding tool templates from git
+- capture refresh token rotation in refreshTokens and callTool
+- add --skip-qmd to all test install calls to prevent qmd hangs
+- apply engineering-lead review findings across 3 LEARNINGS.md files
+- address engineering-lead review feedback for qmd auto-setup
+- rewrite backlog/shelve commands to use unified plans system
+- review fixes — missing exports, skill write-file flow, extraction error handling
+- add 'new' as alias for 'add' in /plan backlog
+- add mandatory subagent pre-flight check, remove silent fallback
+- use plan-slug-based prd.json path in /build command
+- update stale prd.json path references
+- post-merge hardening — use DEFAULT_BACKLOG_DIR, handle idea/abandoned statuses
+- remove last dev/autonomous/ reference from developer agent
+- clarify subagent tool is auto-loaded, not a project extension
+- simplify company/website prompts
+- add arete onboard to next steps
+- reconcile restored session state with plan frontmatter
+- suppress stale execution status on non-build plans
+- scope PRD progress to active plan slug
+- restore pipeline widget when opening plans from list
+- prevent prd-stage loop after out-of-order gates
+- allow prd conversion writes without disabling plan mode
+- define 'use it' explicitly in all template load instructions
+- make template loading imperative in all SKILL.md files
+- remove --noEmit from tsc -b (incompatible with composite projects)
+- add .pi/ to compressed workspace structure in AGENTS.md
+- add packages/runtime/templates and GUIDE.md to git (update .gitignore)
+- remove either/or IDE path in workspace-structure.md
+- properly restore .cursor/rules/ with all files
+- restore .cursor/rules/ deleted in bd3e397
+- use transformable paths for multi-IDE support
+- make tool paths IDE-agnostic
+- handle symlinked tool directories in getToolsList
+- update missed path references in create-prd and context-management
