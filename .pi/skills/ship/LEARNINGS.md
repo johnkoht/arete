@@ -8,6 +8,8 @@
 
 - **Use /wrap for verification, don't duplicate checks** (2026-03-26): The plan-mode extension already has `/wrap` which verifies memory entry exists, MEMORY.md is updated, LEARNINGS.md reviewed, etc. Rather than reimplementing these checks in the ship skill, just invoke `/wrap` and parse its output.
 
+- **Verify state before resuming** (2026-03-28): Phase 0.3 sanity-checks that logged phase matches actual artifacts before resuming. If build-log says "Phase 2.2 complete" but prd.md doesn't exist, something is wrong. Always verify rather than trusting the log blindly — prevents silent failures from corrupt/stale logs.
+
 ## Invariants
 
 - **Phase 5.6 must wait for builder input**: The merge prompt is intentionally blocking. Do not auto-merge or timeout — the builder needs to consciously decide to merge or defer.
@@ -31,3 +33,4 @@
 - [SKILL.md](./SKILL.md) — Full workflow documentation
 - [orchestrator.md](./orchestrator.md) — Gate decision matrix and orchestrator behavior
 - [templates/ship-report.md](./templates/ship-report.md) — Report template
+- [templates/build-log.md](./templates/build-log.md) — Inter-session handoff template for resume

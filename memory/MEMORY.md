@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-28: [build-log-learnings](entries/2026-03-28_build-log-learnings.md) — Build Log for Ship: 6/6 tasks, 100% first-attempt, 0/6 pre-mortem risks. Phase 0 for resume, session markers, state verification, Build Log Update Reference. Key: documentation-focused PRD, no surprises.
 - 2026-03-28: [task-management-learnings](entries/2026-03-28_task-management-learnings.md) — Task Management System: 18/18 tasks, 100% first-attempt, ~75 tests. TaskService, task-scoring, commitment linking, Review UI, winddown skills (local-only). Key: function injection for circular deps, session files for cross-process coordination.
 - 2026-03-27: [workflow-stability-learnings](entries/2026-03-27_workflow-stability-learnings.md) — Workflow Stability: 8/8 tasks, 100% first-attempt, 0/8 pre-mortem risks. Build gates, auto-status transitions, YYYY-MM archive, /release command, gitboss agent, /plan promote. Key: LEARNINGS.md injection prevented state bugs.
 - 2026-03-27: [meeting-importance-prd-learnings](entries/2026-03-27_meeting-importance-prd-learnings.md) — Meeting Importance: 7/7 tasks, 71% first-attempt (2 iterations), 0/8 pre-mortem risks, 88+ tests. Auto-infer importance from organizer/attendees, light extraction mode, speaking ratio upgrade, auto-approve light meetings. Key: pre-work sanity checks caught architecture gaps (calendar pull vs Fathom/Krisp integration).

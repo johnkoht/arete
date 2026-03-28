@@ -69,6 +69,11 @@ git status, git add, git commit, git branch
 ## Workflow Overview
 
 ```
+[PHASE 0] Initialize Build Log (main branch)
+├── 0.1 Check for Existing Build Log
+├── 0.2 Create New OR Resume Existing
+└── 0.3 Verify State (if resuming) → GATE: Mismatch detected
+
 [PHASE 1] Pre-Build (main branch, human can walk away)
 ├── 1.1 Save Plan
 ├── 1.2 Run Pre-Mortem → GATE: CRITICAL risks
@@ -101,6 +106,314 @@ git status, git add, git commit, git branch
 
 ---
 
+## Phase 0: Initialize Build Log
+
+Phase 0 manages the build-log.md artifact that enables inter-session resume. It runs before any other phase.
+
+### Phase 0.1: Check for Existing Build Log
+
+**Entry Conditions**:
+- Pre-flight check passed
+- Plan slug determined
+
+**Actions**:
+
+```bash
+slug="{plan-slug}"
+build_log="dev/executions/${slug}/build-log.md"
+
+if [[ -f "$build_log" ]]; then
+  # Extract current state
+  state=$(grep -E "^\*\*State\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+  phase=$(grep -E "^\*\*Phase\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+  
+  echo "📋 Existing build log found"
+  echo "   State: $state"
+  echo "   Phase: $phase"
+  
+  if [[ "$state" == "COMPLETE" ]]; then
+    echo "⚠️ Build already complete. Re-run will restart from Phase 1."
+    # Require confirmation before proceeding
+  else
+    echo "🔄 Resume mode: will continue from $phase"
+  fi
+else
+  echo "📝 No existing build log. Will create new."
+fi
+```
+
+**Exit Conditions**:
+- Build log existence determined
+- If exists: state and phase extracted
+- Next action determined (new, resume, or confirm re-run)
+
+---
+
+### Phase 0.2: Create New OR Resume Existing
+
+**Entry Conditions**:
+- Phase 0.1 complete
+- Action determined (new/resume/re-run)
+
+**Actions — New Build**:
+
+If no build log exists, create from template:
+
+```bash
+slug="{plan-slug}"
+mkdir -p "dev/executions/${slug}"
+cp ".pi/skills/ship/templates/build-log.md" "dev/executions/${slug}/build-log.md"
+
+# Fill in template values
+# Note: sed -i '' is macOS syntax; Linux uses sed -i (no empty string)
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sed -i '' \
+  -e "s/{slug}/${slug}/g" \
+  -e "s/{ISO timestamp}/${timestamp}/g" \
+  "dev/executions/${slug}/build-log.md"
+
+echo "✓ Created build-log.md from template"
+```
+
+**Actions — Resume**:
+
+If build log exists with State ≠ COMPLETE:
+
+1. **Append session marker** to build-log.md:
+
+   ```bash
+   slug="{plan-slug}"
+   build_log="dev/executions/${slug}/build-log.md"
+   timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+   
+   # Extract current phase and state
+   current_phase=$(grep -E "^\*\*Phase\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+   current_state=$(grep -E "^\*\*State\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+   
+   # Count existing sessions
+   session_count=$(grep -c "^### Session" "$build_log")
+   next_session=$((session_count + 1))
+   
+   # Create session marker
+   session_marker="---
+
+### Session ${next_session}
+**Started**: ${timestamp}
+**Resumed From**: ${current_phase} (${current_state})
+
+"
+   
+   # Insert at marker location
+   sed -i '' "s|<!-- INSERT NEW SESSION HERE -->|<!-- INSERT NEW SESSION HERE -->\n\n${session_marker}|" "$build_log"
+   ```
+
+2. **Display resume summary**:
+   ```
+   🔄 Resuming Ship: {slug}
+   
+   **Current Phase**: {phase}
+   **State**: {state}
+   **Last Update**: {timestamp}
+   **Sessions**: {count} → {count + 1}
+   
+   Session {N} started. Continuing from {phase}...
+   ```
+
+3. Proceed to Phase 0.3 (Verify State)
+
+**Actions — Re-Run Completed Build**:
+
+If build log exists with State = COMPLETE:
+
+```
+⚠️ Build Already Complete
+
+This build was completed previously. Re-running will:
+- Archive the existing build-log.md to build-log.{timestamp}.md
+- Start fresh from Phase 1
+
+Continue? [y/N]
+```
+
+Wait for explicit confirmation before proceeding.
+
+**Exit Conditions**:
+- New: build-log.md created, ready for Phase 1
+- Resume: summary displayed, ready for Phase 0.3
+- Re-run: confirmation received OR aborted
+
+---
+
+### Phase 0.3: Verify State (Resume Only)
+
+**Entry Conditions**:
+- Phase 0.2 determined resume mode
+- Current phase and state known
+
+**Purpose**: Sanity-check that logged state matches actual artifacts before resuming. Prevents silent failures from stale/corrupt logs.
+
+**Phase → Artifact Mapping**:
+
+<!-- Update this mapping if phases are renumbered -->
+
+| Logged Phase | Expected Artifact | Verification |
+|-------------|------------------|--------------|
+| 1.2 (Pre-Mortem) complete | `dev/work/plans/{slug}/pre-mortem.md` | File exists |
+| 1.3 (Review) complete | `dev/work/plans/{slug}/review.md` | File exists |
+| 2.2 (Convert to PRD) complete | `dev/work/plans/{slug}/prd.md`, `prd.json` | Both files exist |
+| 2.3 (Commit Artifacts) complete | Plan committed | `git log --oneline -1 --grep="plan: {slug}"` returns result |
+| 3.1 (Create Worktree) complete | Worktree exists | `../{repo}.worktrees/{slug}` is directory |
+| 4.1+ | Execution state | `dev/executions/{slug}/` exists |
+| 5.6 (Merge) complete | Branch merged | `git branch --merged main` includes `feature/{slug}` |
+
+**Actions**:
+
+```bash
+slug="{plan-slug}"
+current_phase=$(grep -E "^\*\*Phase\*\*:" "dev/executions/${slug}/build-log.md" | head -1 | sed 's/.*: //' | cut -d' ' -f1)
+errors=()
+
+# Check based on current phase
+case "$current_phase" in
+  1.3*|2.*|3.*|4.*|5.*)
+    # Phase 1.2 should be complete
+    [[ ! -f "dev/work/plans/${slug}/pre-mortem.md" ]] && errors+=("Pre-mortem missing but Phase 1.2 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  2.*|3.*|4.*|5.*)
+    # Phase 1.3 should be complete
+    [[ ! -f "dev/work/plans/${slug}/review.md" ]] && errors+=("Review missing but Phase 1.3 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  2.3*|3.*|4.*|5.*)
+    # Phase 2.2 should be complete
+    [[ ! -f "dev/work/plans/${slug}/prd.md" ]] && errors+=("prd.md missing but Phase 2.2 logged complete")
+    [[ ! -f "dev/work/plans/${slug}/prd.json" ]] && errors+=("prd.json missing but Phase 2.2 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  3.2*|4.*|5.*)
+    # Phase 3.1 should be complete
+    repo_name=$(basename "$(git rev-parse --show-toplevel)")
+    [[ ! -d "../${repo_name}.worktrees/${slug}" ]] && errors+=("Worktree missing but Phase 3.1 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  6.*)
+    # Phase 5.6 should be complete (branch merged)
+    if ! git branch --merged main 2>/dev/null | grep -q "feature/${slug}"; then
+      errors+=("Branch not merged to main but Phase 5.6 logged complete")
+    fi
+    ;;
+esac
+
+# Report
+if [[ ${#errors[@]} -eq 0 ]]; then
+  echo "✓ State verification passed"
+else
+  echo "⚠️ State Mismatch Detected"
+  echo ""
+  for err in "${errors[@]}"; do
+    echo "  - $err"
+  done
+  echo ""
+  echo "Options:"
+  echo "  [F] Fix log — Reset to earlier phase"
+  echo "  [R] Rebuild — Regenerate missing artifacts"
+  echo "  [A] Abort — Cancel resume"
+fi
+```
+
+**Gate: State Verification**
+
+| Condition | Action |
+|-----------|--------|
+| All artifacts match logged state | → Proceed to logged phase |
+| Mismatch detected | → **PAUSE** and present options |
+
+**Exit Conditions**:
+- Verification passed: continue to logged phase
+- Mismatch: user chose fix/rebuild/abort
+
+**Handoff**: Resume at the phase indicated in build-log.md Current Status
+
+---
+
+## Build Log Update Reference
+
+Each phase updates `dev/executions/{slug}/build-log.md` at entry and exit. This enables resume from any point.
+
+### On Phase Start
+
+Update Current Status and add Started entry:
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: IN_PROGRESS
+**Last Update**: {ISO timestamp}
+```
+
+```markdown
+#### Phase X.Y: {Phase Name} ⏳
+**Started**: {ISO timestamp}
+```
+
+### On Phase Complete
+
+Update Current Status and complete the entry:
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name} (moving to X.Z)
+**State**: COMPLETE
+**Last Update**: {ISO timestamp}
+```
+
+```markdown
+#### Phase X.Y: {Phase Name} ✓
+**Started**: {timestamp}
+**Completed**: {timestamp}
+**Outcome**: {1-2 sentence summary of what was done}
+**Artifacts**: `{path}` (if files created)
+```
+
+### On Gate Pause
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: BLOCKED
+**Last Update**: {ISO timestamp}
+**Reason**: {gate name}: {specific reason}
+```
+
+### On Failure
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: FAILED
+**Last Update**: {ISO timestamp}
+**Reason**: {error description}
+```
+
+Mark the phase entry with ✗:
+```markdown
+#### Phase X.Y: {Phase Name} ✗
+**Started**: {timestamp}
+**Failed**: {timestamp}
+**Reason**: {error description}
+```
+
+---
+
 ## Phase 1: Pre-Build
 
 ### Phase 1.1: Save Plan
@@ -117,6 +430,8 @@ git status, git add, git commit, git branch
 **Exit Conditions**:
 - Plan saved at `dev/work/plans/{slug}/plan.md`
 - Plan slug determined for subsequent phases
+
+**Build Log**: Update to Phase 1.1, State IN_PROGRESS on start; State COMPLETE with Outcome "Saved to dev/work/plans/{slug}/plan.md" on finish.
 
 **Handoff to 1.2**: Plan path passed to pre-mortem skill
 
@@ -136,6 +451,8 @@ git status, git add, git commit, git branch
 **Exit Conditions**:
 - `pre-mortem.md` created in plan directory
 - Risk assessment complete with severity levels
+
+**Build Log**: Update to Phase 1.2, State IN_PROGRESS on start. On complete: Outcome "{N} risks identified ({N} CRITICAL, {N} HIGH, {N} MEDIUM)", Artifacts "pre-mortem.md". On gate pause: State BLOCKED, Reason "Pre-Mortem: CRITICAL risk identified".
 
 **Gate: Pre-Mortem**
 
@@ -165,6 +482,8 @@ See [orchestrator.md](./orchestrator.md) for gate decision matrix.
 **Exit Conditions**:
 - `review.md` created in plan directory
 - Blocker assessment complete
+
+**Build Log**: Update to Phase 1.3, State IN_PROGRESS on start. On complete: Outcome "Review: {verdict}", Artifacts "review.md". On gate pause: State BLOCKED, Reason "Review: structural blockers found".
 
 **Gate: Review**
 
@@ -315,6 +634,8 @@ Produce **exactly 3-5 bullets** (per pre-mortem mitigation — avoid noise). Eac
 - Memory synthesis complete (3-5 bullets)
 - Synthesis stored for PRD handoff
 
+**Build Log**: Update to Phase 2.1, State IN_PROGRESS on start. On complete: Outcome "Memory synthesis: {N} bullets from {N} sources".
+
 **Handoff to 2.2**: Memory synthesis bullets to inform PRD context
 
 ---
@@ -432,6 +753,8 @@ fi
 - `prd.md` created in plan directory
 - `prd.json` created and passes validation
 - Memory insights incorporated into task descriptions/criteria
+
+**Build Log**: Update to Phase 2.2, State IN_PROGRESS on start. On complete: Outcome "PRD created with {N} tasks", Artifacts "prd.md, prd.json".
 
 **Handoff to 2.3**: Artifact paths for commit, validation status
 
@@ -583,6 +906,8 @@ fi
 - Commit SHA recorded and available for handoff
 - No uncommitted changes in plan directory
 
+**Build Log**: Update to Phase 2.3, State IN_PROGRESS on start. On complete: Outcome "Artifacts committed ({commit_sha})", Artifacts "5 files in dev/work/plans/{slug}/".
+
 **Handoff to 3.1**: Plan slug and commit SHA (stored in `.commit-sha` or `state.env`)
 
 ---
@@ -720,6 +1045,8 @@ echo "✅ Dependencies installed"
 - Branch `feature/{slug}` created
 - npm install complete
 
+**Build Log**: Update to Phase 3.1, State IN_PROGRESS on start. On complete: Outcome "Worktree created at {path}, branch feature/{slug}".
+
 **Handoff to 3.2**: Worktree absolute path (stored in `$worktree_path_abs`)
 
 ---
@@ -835,6 +1162,8 @@ Proceeding to execute PRD...
 - On correct feature branch
 - PRD files verified accessible
 
+**Build Log**: Update to Phase 3.2, State IN_PROGRESS on start. On complete: Outcome "Switched to worktree, PRD verified".
+
 **Handoff to 4.1**: 
 - PRD path: `dev/work/plans/{slug}/prd.md`
 - Execution state path: `dev/executions/{slug}/`
@@ -919,6 +1248,8 @@ If a task fails quality gates after 2 attempts, execute-prd will stop.
 - All tasks in `prd.json` status: "complete"
 - All commits made on feature branch
 - Execution state at `dev/executions/{slug}/`
+
+**Build Log**: Update to Phase 4.1, State IN_PROGRESS on start. On complete: Outcome "Executed {N}/{N} tasks, {N} iterations", Decisions "{any blockers resolved}". On gate pause: State BLOCKED, Reason "Build: task {id} failed after {N} attempts".
 
 **Gate: Build**
 
@@ -1017,6 +1348,8 @@ Parse the engineering lead's response for:
 **Exit Conditions**:
 - Final review complete
 - Verdict: READY or NEEDS_REWORK
+
+**Build Log**: Update to Phase 4.2, State IN_PROGRESS on start. On complete: Outcome "Final review: {verdict}", Decisions "{any issues noted}". On gate pause: State BLOCKED, Reason "Final Review: NEEDS_REWORK - {issue count} issues".
 
 **Gate: Final Review**
 
@@ -1166,6 +1499,8 @@ Add entry at the TOP of the Index section in `memory/MEMORY.md`:
 - Memory entry created at `memory/entries/YYYY-MM-DD_{slug}-learnings.md`
 - MEMORY.md index updated with new line at top
 
+**Build Log**: Update to Phase 5.1, State IN_PROGRESS on start. On complete: Outcome "Memory entry created", Artifacts "memory/entries/YYYY-MM-DD_{slug}-learnings.md".
+
 **Handoff to 5.2**: Entry path, execution summary
 
 ---
@@ -1270,6 +1605,8 @@ If no gotchas were discovered:
 - LEARNINGS.md files updated (if applicable)
 - OR noted that no new learnings found (and verified)
 
+**Build Log**: Update to Phase 5.2, State IN_PROGRESS on start. On complete: Outcome "Updated {N} LEARNINGS.md files" or "No new learnings (verified)".
+
 **Handoff to 5.3**: List of LEARNINGS.md files updated (or "None — verified")
 
 ---
@@ -1347,6 +1684,8 @@ echo "Branch: $BRANCH"
 - Implementation committed with standard message
 - Branch pushed (or ready to push)
 - Commit SHA and branch recorded
+
+**Build Log**: Update to Phase 5.3, State IN_PROGRESS on start. On complete: Outcome "Implementation committed ({commit_sha}), branch pushed".
 
 **Handoff to 5.4**: Final commit SHA, branch name, push status
 
@@ -1429,6 +1768,8 @@ wrapVerification: {
 - `/wrap` executed
 - All checks pass OR warnings noted for report
 - Verification status recorded
+
+**Build Log**: Update to Phase 5.4, State IN_PROGRESS on start. On complete: Outcome "/wrap verification: {status} ({N} checks passed, {N} warnings)".
 
 **Handoff to 5.5**: Wrap verification status
 
@@ -1560,6 +1901,8 @@ Present the completed ship report to the builder:
 - Ship report generated
 - Report presented to builder
 
+**Build Log**: Update to Phase 5.5, State IN_PROGRESS on start. On complete: Outcome "Ship report generated and presented".
+
 **Handoff to 5.6**: Ship report displayed, ready for merge prompt
 
 ---
@@ -1668,6 +2011,8 @@ After cleanup completes:
 - Either: merge complete + cleanup done, OR builder chose to defer
 - Skill complete
 
+**Build Log**: Update to Phase 5.6, State IN_PROGRESS on start. On complete: Outcome "Merged to main ({sha})" or "Merge deferred". Update State to COMPLETE when workflow finishes.
+
 **Final Output**: Merge confirmation or deferred merge instructions
 
 ---
@@ -1719,14 +2064,22 @@ When failures occur, the ship skill is designed for **idempotent recovery**. Eac
 | 6.1 | Branch delete fails | Worktree removed | Check if branch checked out elsewhere; `git branch -D` |
 | 6.1 | Remote delete fails | Local cleanup done | Check permissions; `git push origin --delete feature/{slug}` |
 
-### Resume Command (V2)
+### Resuming a Stalled Build
 
-Future enhancement: `/ship resume {slug}` to resume from last successful phase.
+The build-log.md artifact enables seamless resume. When a session stalls:
 
-For V1, recovery is manual:
-1. Check `dev/work/plans/{slug}/` for existing artifacts
-2. Check `dev/executions/{slug}/` for build state
-3. Re-run from appropriate phase
+1. **Run `/ship {slug}`** — Phase 0 detects the existing build-log
+2. **Review resume summary** — Shows current phase, state, session count
+3. **Verify state** — Phase 0.3 checks artifacts match logged state
+4. **Continue automatically** — Resumes from the logged phase
+
+The build-log at `dev/executions/{slug}/build-log.md` is authoritative for phase progress. It tracks:
+- Current phase and state (IN_PROGRESS, BLOCKED, COMPLETE, FAILED)
+- Session history with timestamps
+- Decisions made at each phase
+- Artifacts created
+
+**If mismatch detected**: Phase 0.3 presents options (fix log, rebuild artifacts, abort) rather than proceeding with stale state.
 
 ### Gate Pause Recovery
 
@@ -1931,6 +2284,8 @@ force_cleanup() {
 - Local branch deleted (`-d` for merged, `-D` for force)
 - Remote branch deleted (if exists)
 - Stale worktree refs pruned
+
+**Build Log**: Update to Phase 6.1, State IN_PROGRESS on start. On complete: Outcome "Cleanup complete: worktree removed, branch deleted".
 
 **Command Summary**:
 
