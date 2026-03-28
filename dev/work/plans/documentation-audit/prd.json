@@ -1,0 +1,143 @@
+{
+  "name": "documentation-audit",
+  "branchName": "feature/documentation-audit",
+  "goal": "Create a /audit skill that orchestrates domain-expert subagents to audit and fix project documentation, with approval gates for structural changes.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Create Skill Scaffold",
+      "description": "Create the main skill file with triggers, description, tool references, and workflow overview.",
+      "acceptanceCriteria": [
+        "Frontmatter matches existing skills: name, description, category: build, work_type: development",
+        "Triggers defined: /audit, /audit --scope <domain>, /audit --dry-run",
+        "Tool Reference section documents subagent usage with profile injection pattern",
+        "Workflow overview shows: load skill → spawn experts → collect reports → approval gate → apply fixes → report",
+        "--dry-run behavior documented: runs full audit and generates reports but suppresses all auto-fixes",
+        "References orchestrator.md for domain dispatch details"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Create Orchestrator",
+      "description": "Create the orchestrator file with domain dispatch logic, expert report schema, approval gate UX, and report aggregation.",
+      "acceptanceCriteria": [
+        "Domain expert dispatch section with task prompts for each domain (core, cli, runtime, build, docs)",
+        "Each expert prompt includes 'Read first' file list (per Risk 2 mitigation)",
+        "Expert report schema defined with required sections: # Audit: {domain}, ## Findings, ## Auto-Fixed, ## Proposed Changes",
+        "Approval gate UX defined with options: [Y] Apply all, [N] Skip all, [#] Select items",
+        "Skipped items saved to dev/work/audits/{date}-deferred.md",
+        "Report aggregation logic: read /tmp/audit-{domain}.md files, merge into single report",
+        "Cross-cutting checks owned by orchestrator: AGENTS.md consistency, memory/MEMORY.md index accuracy",
+        "Single-point edit rule: Experts do NOT edit capabilities.json directly; orchestrator merges all proposals",
+        "Domain boundary enforcement: Before auto-fixing, verify file is exclusively within your domain"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Create Documentation Manifest",
+      "description": "Create the manifest file that defines what to audit, organized by domain with glob patterns for flexibility.",
+      "acceptanceCriteria": [
+        "YAML structure with domains as top-level keys",
+        "Each domain specifies: files, expertise_profile, auto_fix, require_approval",
+        "Includes all domains: core, cli, runtime, build, docs",
+        "Uses glob patterns where possible (e.g., packages/core/src/**/LEARNINGS.md)",
+        "Includes last_verified timestamp field",
+        "Includes auto-discover entries: Check packages/*/README.md exists"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Create Report Template",
+      "description": "Create the report template used by the orchestrator to generate the final audit report.",
+      "acceptanceCriteria": [
+        "Template structure with sections for each domain",
+        "Summary section with counts: total files audited, issues found, auto-fixed, deferred",
+        "Per-domain sections with findings and actions taken",
+        "Capabilities.json changes section (if any)",
+        "Deferred items section (items requiring follow-up)",
+        "Timestamp and next audit recommendation"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Verify Skill Discovery",
+      "description": "Verify the skill is discoverable via Pi's skill routing and add capability entry.",
+      "acceptanceCriteria": [
+        "Skill appears in available_skills block when pi loads (build skills in .pi/skills/ are auto-discovered)",
+        "Verify skill description appears in pi's skill list",
+        "Capability entry added to dev/catalog/capabilities.json with type: skill, owner: build, status: active",
+        "Entrypoints documented: /audit, /audit --scope, /audit --dry-run"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Validate with Single Domain (Dry Run)",
+      "description": "Validate the skill works by running a single-domain audit in dry-run mode.",
+      "acceptanceCriteria": [
+        "Run /audit --scope cli --dry-run",
+        "Skill loads and parses scope correctly",
+        "Expert is spawned with correct prompt including file list",
+        "Expert produces report in correct format",
+        "No files are modified (dry-run enforcement)",
+        "Report is written to /tmp/audit-cli.md",
+        "Any issues found during validation are fixed"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Full Orchestration Test (Dry Run)",
+      "description": "Validate full orchestration with all 5 domains in dry-run mode.",
+      "acceptanceCriteria": [
+        "Run /audit --dry-run",
+        "All 5 experts spawn (parallel or sequential per orchestrator design)",
+        "All 5 reports collected",
+        "Report aggregation works correctly",
+        "Approval gate shows proposed changes (no input needed in dry-run)",
+        "Final report written to dev/work/audits/{date}.md",
+        "Execution completes without errors"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Apply Validation Fixes",
+      "description": "Fix any issues discovered during validation runs (Tasks 6-7).",
+      "acceptanceCriteria": [
+        "All issues from Tasks 6-7 are resolved",
+        "Re-run validation if significant changes made",
+        "Skill is production-ready",
+        "npm run typecheck passes",
+        "npm test passes (if any tests added)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-28T05:30:00Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
