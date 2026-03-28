@@ -134,6 +134,28 @@ Your business and product knowledge. Fill in business-overview.md, users-persona
 
 Quick capture space for notes and ideas.
 `,
+    'now/tasks.md': `# Tasks
+
+Your task backlog organized by GTD buckets.
+
+## Format
+
+\`\`\`
+- [ ] Description @area(slug) @project(slug) @person(slug) @from(type:id) @due(YYYY-MM-DD)
+\`\`\`
+
+All @tags are optional. Plain \`- [ ] Task\` is valid.
+
+**@from types**: \`commitment:hash\` (linked commitment), \`meeting:slug\` (from meeting)
+
+## Anytime
+
+<!-- Tasks to do eventually — no specific deadline -->
+
+## Someday
+
+<!-- Things to consider doing — maybe never -->
+`,
     'goals/strategy.md': `# Goals & Strategy
 
 Business goals and strategic direction.

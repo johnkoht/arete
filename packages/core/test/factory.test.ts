@@ -20,6 +20,7 @@ import { ToolService } from '../src/services/tools.js';
 import { CommitmentsService } from '../src/services/commitments.js';
 import { AreaParserService } from '../src/services/area-parser.js';
 import { AIService } from '../src/services/ai.js';
+import { TaskService } from '../src/services/tasks.js';
 import { FileStorageAdapter } from '../src/storage/file.js';
 import { getDefaultConfig } from '../src/config.js';
 
@@ -49,6 +50,7 @@ describe('createServices', () => {
       'search',
       'skills',
       'storage',
+      'tasks',
       'tools',
       'workspace',
     ]);
@@ -68,6 +70,7 @@ describe('createServices', () => {
     assert.ok(services.commitments instanceof CommitmentsService, 'commitments is CommitmentsService');
     assert.ok(services.areaParser instanceof AreaParserService, 'areaParser is AreaParserService');
     assert.ok(services.ai instanceof AIService, 'ai is AIService');
+    assert.ok(services.tasks instanceof TaskService, 'tasks is TaskService');
   });
 
   it('search provider has the expected interface', async () => {

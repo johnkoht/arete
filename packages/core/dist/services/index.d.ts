@@ -11,15 +11,15 @@ export { IntegrationService } from './integrations.js';
 export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
-export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, } from './commitments.js';
+export type { PriorityLevel, CommitmentPriorityInput, CommitmentPriorityResult, CreateCommitmentOptions, CreateCommitmentResult, CreateTaskFn, } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type { AICallOptions, AICallResult, AIStructuredResult, AIServiceTestDeps, ModelSpec, } from './ai.js';
 export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
 export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, PriorItem, ExtractionMode, CategoryLimits, } from './meeting-extraction.js';
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
-export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, } from './meeting-processing.js';
-export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, } from './meeting-processing.js';
+export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
+export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, UrgencyBucket, } from './meeting-processing.js';
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
 export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';
@@ -35,4 +35,9 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
+export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export type { CompleteTaskResult } from './tasks.js';
+export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from '../models/tasks.js';
+export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
+export type { ScoringContext, ScoreBreakdown, ScoredTask, } from './task-scoring.js';
 //# sourceMappingURL=index.d.ts.map

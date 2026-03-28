@@ -87,6 +87,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |construct-roadmap:{triggers:"Build roadmap for Q2 2026",does:"Build product roadmaps with prioritization and timelines"}
 |create-prd:{triggers:"Create a PRD, write a PRD for...",does:"Interactive PRD creation with Product Leader persona"}
 |daily-plan:{triggers:"What's on my plate today?",does:"Plan your day with focus, meetings, and priorities"}
+|daily-winddown:{triggers:"Daily winddown, end of day, close the day",does:"End-of-day reconciliation — pull recordings, process inbox, process meetings, triage action items, update weekly plan"}
 |discovery:{triggers:"Start discovery, research [topic]",does:"Guide problem discovery and research synthesis"}
 |finalize-project:{triggers:"Finalize this project",does:"Archive completed projects and extract learnings"}
 |general-project:{triggers:"Start a project, new project for [topic]",does:"Start generic projects for work that doesn't fit specialized categories"}
@@ -110,6 +111,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |synthesize:{triggers:"Synthesize what we've learned",does:"Extract themes and insights from project inputs"}
 |week-plan:{triggers:"Plan the week, set weekly priorities",does:"Plan the week and set weekly priorities"}
 |week-review:{triggers:"Review my week",does:"Review week progress and prepare for next week"}
+|weekly-winddown:{triggers:"Weekly winddown, end of week, friday winddown",does:"End-of-week review, thread arcs, and next week planning"}
 |workspace-tour:{triggers:"Give me a tour, how does this work?",does:"Orient users to workspace structure and capabilities"}
 
 [Tools]|auto-applied:runtime/tools/

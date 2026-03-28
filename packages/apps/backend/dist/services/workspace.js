@@ -5,7 +5,7 @@
 import { join } from 'path';
 import fs from 'fs/promises';
 import matter from 'gray-matter';
-import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, extractAttendeeSlugs, } from '@arete/core';
+import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, extractAttendeeSlugs, inferUrgency, PEOPLE_CATEGORIES, } from '@arete/core';
 const storage = new FileStorageAdapter();
 function meetingsDir(workspaceRoot) {
     return join(workspaceRoot, 'resources', 'meetings');
@@ -73,6 +73,81 @@ function extractSummary(fm, body) {
         }
     }
     return '';
+}
+/**
+ * Format a person slug as a display name.
+ * E.g., 'john-smith' → 'John Smith'
+ */
+function formatSlugAsName(slug) {
+    return slug
+        .split('-')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+/**
+ * Get person display name from slug by searching all people categories.
+ * Falls back to formatting the slug as a name if not found.
+ */
+async function getPersonName(workspaceRoot, slug) {
+    const peopleDir = join(workspaceRoot, 'people');
+    for (const category of PEOPLE_CATEGORIES) {
+        const filePath = join(peopleDir, category, `${slug}.md`);
+        try {
+            const content = await fs.readFile(filePath, 'utf8');
+            const parsed = matter(content);
+            const name = parsed.data['name'];
+            if (name)
+                return name;
+        }
+        catch {
+            // File not found or error, try next category
+        }
+    }
+    // Fallback: format slug as name
+    return formatSlugAsName(slug);
+}
+/**
+ * Add an entry to the ## Waiting On section in week.md.
+ * Creates the section if it doesn't exist.
+ *
+ * Format: - [ ] Person Name: What they owe @person(slug) @from(commitment:hashPrefix)
+ */
+async function addWaitingOnEntry(workspaceRoot, personName, personSlug, text, commitmentHashPrefix) {
+    const weekFile = join(workspaceRoot, 'now', 'week.md');
+    let content;
+    try {
+        content = await fs.readFile(weekFile, 'utf8');
+    }
+    catch {
+        // File doesn't exist, create minimal structure
+        content = `# Week\n\n## Waiting On\n`;
+    }
+    const entry = `- [ ] ${personName}: ${text} @person(${personSlug}) @from(commitment:${commitmentHashPrefix})`;
+    // Find ## Waiting On section
+    const waitingOnMatch = content.match(/^## Waiting On\s*$/m);
+    if (waitingOnMatch) {
+        // Section exists - insert entry after header
+        const insertPos = (waitingOnMatch.index ?? 0) + waitingOnMatch[0].length;
+        const before = content.slice(0, insertPos);
+        const after = content.slice(insertPos);
+        content = `${before}\n${entry}${after}`;
+    }
+    else {
+        // Section doesn't exist - append it
+        // Find a good place to insert (after Tasks section or at end)
+        const tasksMatch = content.match(/^### Could complete[\s\S]*?(?=\n## |\n---|\z)/m);
+        if (tasksMatch && tasksMatch.index !== undefined) {
+            const insertPos = tasksMatch.index + tasksMatch[0].length;
+            const before = content.slice(0, insertPos);
+            const after = content.slice(insertPos);
+            content = `${before}\n\n## Waiting On\n${entry}${after}`;
+        }
+        else {
+            // Append at end
+            content = content.trimEnd() + `\n\n## Waiting On\n${entry}\n`;
+        }
+    }
+    await fs.writeFile(weekFile, content, 'utf8');
 }
 /**
  * Parse a markdown section with list items into an array of item objects.
@@ -436,43 +511,72 @@ export async function updateItemStatus(workspaceRoot, slug, itemId, options) {
  * Approve meeting and run post-approval automation.
  *
  * Post-approval steps:
- * 1. Commit approved items to memory (decisions, learnings)
- * 2. Resolve attendees to slugs (if attendee_ids missing)
- * 3. Refresh QMD index
- * 4. Refresh person memory for each attendee (syncs commitments)
+ * 1. Save staged_item_owner metadata (needed for direction info after commit)
+ * 2. Commit approved items to memory (decisions, learnings)
+ * 3. Resolve attendees to slugs (if attendee_ids missing)
+ * 4. Refresh QMD index
+ * 5. Create commitments and tasks from action items:
+ *    - i_owe_them: create commitment + task with urgency-based bucket
+ *    - they_owe_me: create commitment + Waiting On entry
+ * 6. Refresh person memory for each attendee
  */
 export async function approveMeeting(workspaceRoot, slug, options = {}) {
     const filePath = slugToPath(workspaceRoot, slug);
     const memoryDir = join(workspaceRoot, '.arete', 'memory', 'items');
-    // Step 1: Commit approved items
+    // Step 1: Read and save staged_item_owner BEFORE commitApprovedItems clears it
+    const rawContentBeforeCommit = await fs.readFile(filePath, 'utf8');
+    const ownerMap = parseStagedItemOwner(rawContentBeforeCommit);
+    const stagedSections = parseStagedSections(rawContentBeforeCommit);
+    const statusMap = parseStagedItemStatus(rawContentBeforeCommit);
+    const editsMap = parseStagedItemEdits(rawContentBeforeCommit);
+    // Collect approved action items with their metadata
+    const approvedActionItems = [];
+    for (const item of stagedSections.actionItems) {
+        if (statusMap[item.id] !== 'approved')
+            continue;
+        const ownerMeta = ownerMap[item.id];
+        const text = editsMap[item.id] ?? item.text;
+        const direction = ownerMeta?.direction ?? 'i_owe_them';
+        approvedActionItems.push({
+            id: item.id,
+            text,
+            ownerSlug: ownerMeta?.ownerSlug ?? item.ownerSlug,
+            counterpartySlug: ownerMeta?.counterpartySlug ?? item.counterpartySlug,
+            direction,
+        });
+    }
+    // Step 2: Commit approved items (decisions, learnings to memory)
     await commitApprovedItems(storage, filePath, memoryDir);
-    // Get meeting to extract attendee_ids
+    // Get meeting to extract metadata
     let meeting = await getMeeting(workspaceRoot, slug);
     if (!meeting)
         throw new Error(`Meeting not found after approve: ${slug}`);
-    // Step 2: Resolve attendees to slugs if attendee_ids is missing
-    // This ensures action items can be synced to CommitmentsService
+    // Extract meeting area for task metadata
+    const meetingArea = typeof meeting.frontmatter['area'] === 'string'
+        ? meeting.frontmatter['area']
+        : undefined;
+    const meetingDate = typeof meeting.frontmatter['date'] === 'string'
+        ? new Date(meeting.frontmatter['date'].slice(0, 10))
+        : new Date();
+    // Step 3: Resolve attendees to slugs if attendee_ids is missing
     let attendeeIds = Array.isArray(meeting.frontmatter['attendee_ids'])
         ? meeting.frontmatter['attendee_ids'].filter((id) => typeof id === 'string')
         : [];
     if (attendeeIds.length === 0) {
-        // Compute attendee_ids from attendees field using extractAttendeeSlugs
         attendeeIds = extractAttendeeSlugs(meeting.frontmatter);
         if (attendeeIds.length > 0) {
-            // Write attendee_ids back to meeting frontmatter
             const raw = await fs.readFile(filePath, 'utf8');
             const parsed = matter(raw);
             const fm = parsed.data;
             fm['attendee_ids'] = attendeeIds;
             const updated = matter.stringify(parsed.content, fm);
             await fs.writeFile(filePath, updated, 'utf8');
-            // Re-fetch meeting with updated frontmatter
             meeting = await getMeeting(workspaceRoot, slug);
             if (!meeting)
                 throw new Error(`Meeting not found after attendee resolution: ${slug}`);
         }
     }
-    // Step 3: Refresh QMD index
+    // Step 4: Refresh QMD index
     const config = await loadConfig(storage, workspaceRoot);
     let qmdRefreshed = false;
     try {
@@ -480,64 +584,62 @@ export async function approveMeeting(workspaceRoot, slug, options = {}) {
         qmdRefreshed = true;
     }
     catch (err) {
-        // Non-fatal — log but continue
         console.error('[approveMeeting] QMD refresh failed:', err);
     }
-    // Step 4: Sync action items to commitments with goalSlug (if provided)
-    // This runs before refreshPersonMemory so items with goalSlug are added first;
-    // refreshPersonMemory will skip them due to hash-based dedup.
+    // Step 5: Create commitments and tasks from action items
     const personMemoryRefreshed = [];
-    if (attendeeIds.length > 0) {
+    let commitmentsCreated = 0;
+    let tasksCreated = 0;
+    let waitingOnCreated = 0;
+    if (approvedActionItems.length > 0) {
         try {
             const services = await createServices(workspaceRoot);
             const paths = services.workspace.getPaths(workspaceRoot);
-            // If goalSlug provided, sync action items directly with goalSlug
-            if (options.goalSlug && meeting.approvedItems.actionItems.length > 0) {
-                const { createHash } = await import('node:crypto');
-                const meetingDate = typeof meeting.frontmatter['date'] === 'string'
-                    ? meeting.frontmatter['date'].slice(0, 10)
-                    : new Date().toISOString().slice(0, 10);
-                // Build PersonActionItems with goalSlug for each attendee
-                const personItemsMap = new Map();
-                // Parse action items from approved list to extract owner info
-                for (const actionItemText of meeting.approvedItems.actionItems) {
-                    // Parse owner notation: "Text (@owner-slug → @counterparty-slug)"
-                    const ownerMatch = actionItemText.match(/\(@([a-z0-9-]+)(?:\s*→\s*@([a-z0-9-]+))?\)$/i);
-                    const text = ownerMatch
-                        ? actionItemText.slice(0, actionItemText.lastIndexOf('(')).trim()
-                        : actionItemText;
-                    const ownerSlug = ownerMatch?.[1];
-                    const counterpartySlug = ownerMatch?.[2];
-                    // Default direction is i_owe_them (→)
-                    const direction = 'i_owe_them';
-                    // Determine person slug (the other party in the commitment)
-                    const personSlug = direction === 'i_owe_them' ? counterpartySlug : ownerSlug;
-                    if (!personSlug)
-                        continue;
-                    // Compute hash for dedup
-                    const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
-                    const hash = createHash('sha256')
-                        .update(`${normalized}${personSlug}${direction}`)
-                        .digest('hex');
-                    const actionItem = {
-                        text,
-                        direction,
-                        source: `${slug}.md`,
-                        date: meetingDate,
-                        hash,
-                        stale: false,
+            for (const item of approvedActionItems) {
+                // Determine person slug (the other party in the commitment)
+                const personSlug = item.direction === 'i_owe_them'
+                    ? item.counterpartySlug
+                    : item.ownerSlug;
+                if (!personSlug)
+                    continue;
+                // Get person display name for commitment and Waiting On
+                const personName = await getPersonName(workspaceRoot, personSlug);
+                if (item.direction === 'i_owe_them') {
+                    // I owe them: create commitment + task with urgency-based bucket
+                    const result = await services.commitments.create(item.text, personSlug, personName, 'i_owe_them', {
+                        createTask: false, // We'll create the task manually with proper bucket
                         goalSlug: options.goalSlug,
-                    };
-                    const existing = personItemsMap.get(personSlug) ?? [];
-                    existing.push(actionItem);
-                    personItemsMap.set(personSlug, existing);
+                        area: meetingArea,
+                        date: meetingDate,
+                        source: `${slug}.md`,
+                    });
+                    commitmentsCreated++;
+                    // Infer urgency and create task with proper bucket
+                    const urgencyBucket = inferUrgency(item.text);
+                    const taskDestination = urgencyBucket;
+                    await services.tasks.addTask(item.text, taskDestination, {
+                        area: meetingArea,
+                        person: personSlug,
+                        from: { type: 'commitment', id: result.commitment.id.slice(0, 8) },
+                    });
+                    tasksCreated++;
                 }
-                // Sync to commitments service
-                if (personItemsMap.size > 0) {
-                    await services.commitments.sync(personItemsMap);
+                else {
+                    // They owe me: create commitment only + add to Waiting On
+                    const result = await services.commitments.create(item.text, personSlug, personName, 'they_owe_me', {
+                        createTask: false,
+                        goalSlug: options.goalSlug,
+                        area: meetingArea,
+                        date: meetingDate,
+                        source: `${slug}.md`,
+                    });
+                    commitmentsCreated++;
+                    // Add to Waiting On section in week.md
+                    await addWaitingOnEntry(workspaceRoot, personName, personSlug, item.text, result.commitment.id.slice(0, 8));
+                    waitingOnCreated++;
                 }
             }
-            // Step 5: Refresh person memory for attendees
+            // Step 6: Refresh person memory for attendees
             for (const personSlug of attendeeIds) {
                 try {
                     await services.entity.refreshPersonMemory(paths, {
@@ -547,14 +649,12 @@ export async function approveMeeting(workspaceRoot, slug, options = {}) {
                     personMemoryRefreshed.push(personSlug);
                 }
                 catch (err) {
-                    // Non-fatal per person — log and continue
                     console.error(`[approveMeeting] Person memory refresh failed for ${personSlug}:`, err);
                 }
             }
         }
         catch (err) {
-            // Non-fatal — log but continue
-            console.error('[approveMeeting] Services creation failed:', err);
+            console.error('[approveMeeting] Task/commitment creation failed:', err);
         }
     }
     return {
@@ -562,7 +662,7 @@ export async function approveMeeting(workspaceRoot, slug, options = {}) {
         automation: {
             qmdRefreshed,
             personMemoryRefreshed,
-            commitmentsUpdated: personMemoryRefreshed.length > 0,
+            commitmentsUpdated: commitmentsCreated > 0,
             ...(options.goalSlug ? { goalSlug: options.goalSlug } : {}),
         },
     };

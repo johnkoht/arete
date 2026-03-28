@@ -1,7 +1,7 @@
 # Week — {week_start_date}
 
-## Outcomes
-<!-- Your top 3-5 outcomes for the week. Keep it simple. -->
+## Weekly Priorities
+<!-- Your top 3-5 priorities for the week. Keep it simple. -->
 1. 
 2. 
 3. 
@@ -12,6 +12,10 @@
 **Meetings**:
 <!-- Format: - HH:MM Meeting name → [agenda](now/agendas/slug.md) -->
 <!-- Mark key meetings with ⭐ -->
+
+## Inbox
+<!-- Quick capture during daily winddown. No metadata required — just dump it here. -->
+<!-- Process during next triage to move items to Tasks or tasks.md -->
 
 ## Notes
 <!-- Working notes captured throughout the week. This section is preserved across daily-plan updates. -->
@@ -28,6 +32,10 @@
 ### Could complete
 <!-- Nice to have. Do if time permits. -->
 - [ ] 
+
+## Waiting On
+<!-- What others owe you. Format: - [ ] Person: What they owe @person(slug) @from(commitment:id) -->
+<!-- Populated from they_owe_me commitments during meeting processing -->
 
 ## Carried from last week
 <!-- Uncompleted items from previous week. Review and re-prioritize. -->

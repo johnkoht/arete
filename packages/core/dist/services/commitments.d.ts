@@ -41,10 +41,56 @@ export type CommitmentPriorityResult = {
  * @returns Priority score (0-100) and level (high/medium/low)
  */
 export declare function computeCommitmentPriority(input: CommitmentPriorityInput): CommitmentPriorityResult;
+/**
+ * Options for creating a commitment.
+ */
+export type CreateCommitmentOptions = {
+    /** Create a linked task in inbox. Default: true for i_owe_them, false for they_owe_me */
+    createTask?: boolean;
+    /** Goal slug to attach to commitment (metadata) */
+    goalSlug?: string;
+    /** Area slug to attach to commitment (metadata) */
+    area?: string;
+    /** Meeting date for the commitment */
+    date?: Date;
+    /** Meeting source file */
+    source?: string;
+};
+/**
+ * Result of creating a commitment.
+ */
+export type CreateCommitmentResult = {
+    commitment: Commitment;
+    task?: {
+        id: string;
+        text: string;
+        destination: string;
+    };
+};
+/**
+ * Function to create a linked task. Injected by factory to avoid circular dep.
+ */
+export type CreateTaskFn = (text: string, metadata: {
+    area?: string;
+    person?: string;
+    from?: {
+        type: 'commitment' | 'meeting';
+        id: string;
+    };
+}) => Promise<{
+    id: string;
+    text: string;
+}>;
 export declare class CommitmentsService {
     private readonly storage;
     private readonly filePath;
+    private createTaskFn?;
     constructor(storage: StorageAdapter, workspaceRoot: string);
+    /**
+     * Set the task creation function. Called by factory after TaskService is created.
+     * Avoids circular dependency.
+     */
+    setCreateTaskFn(fn: CreateTaskFn): void;
     private load;
     /**
      * Write commitments to disk, applying pruning first.
@@ -109,5 +155,25 @@ export declare class CommitmentsService {
         };
         confidence: number;
     }[]>;
+    /**
+     * Create a commitment with optional linked task.
+     *
+     * For i_owe_them: default creates linked task in inbox
+     * For they_owe_me: default does NOT create task (goes to Waiting On separately)
+     *
+     * Transactional: if task creation fails, commitment is rolled back.
+     * Idempotent: if commitment hash already exists, returns existing commitment (no task created).
+     *
+     * @param text - Commitment description
+     * @param personSlug - Person slug (e.g. 'john-smith')
+     * @param personName - Person display name (e.g. 'John Smith')
+     * @param direction - 'i_owe_them' or 'they_owe_me'
+     * @param options - Optional settings
+     */
+    create(text: string, personSlug: string, personName: string, direction: CommitmentDirection, options?: CreateCommitmentOptions): Promise<CreateCommitmentResult>;
+    /**
+     * Check if a commitment exists by hash prefix.
+     */
+    exists(hashPrefix: string): Promise<boolean>;
 }
 //# sourceMappingURL=commitments.d.ts.map

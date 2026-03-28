@@ -79,3 +79,44 @@ staged_item_confidence:
 ```
 
 **Prevention**: When a skill has multiple execution paths (CLI vs agent fallback), ensure both paths produce equivalent output. The CLI path's output is the reference — the agent fallback documentation must match it.
+
+---
+
+## 2026-03-28: Winddown skills must be local-only
+
+**Context**: daily-winddown and weekly-winddown skills were ported from arete-reserv (private workspace) which had Notion integration. The Areté core repository does NOT have Notion integration.
+
+**What matters**: 
+- All `arete notion` commands must be removed
+- All Notion push/pull references must be replaced with local file operations
+- Thread arcs and context health checks must use local files only (`arete search --timeline`)
+- Skills should reference TaskService for task operations, not direct file writes
+
+**Verification**: `grep -ri "notion" packages/runtime/skills/daily-winddown packages/runtime/skills/weekly-winddown` should return no matches.
+
+**Integration hooks**: daily-winddown Phase 2.5 has optional Review UI integration (`useReviewUI` config). When enabled, it runs `arete view --path /review --wait` and handles timeout/fallback. This is opt-in (default: off) per Harvester persona requirement.
+
+---
+
+## 2026-03-28: Review UI opt-in pattern
+
+**Context**: The Review UI (`arete view --path /review --wait`) provides a web-based triage interface for tasks, decisions, learnings, and commitments. It's designed for interactive use, not autonomous agent flows.
+
+**Design decision**: Review UI is opt-in (default: off) for several reasons:
+1. **Harvester persona**: Needs zero-friction async triage — won't use interactive UI during daily winddown
+2. **Agent workflows**: Agents can't interact with web UIs; CLI triage fallback is always available
+3. **Timeout handling**: `--wait --timeout 300` blocks for up to 5 minutes; workflows should handle timeout gracefully
+
+**Integration pattern**:
+```markdown
+### Phase 2.5: Optional Review UI (orchestrator, opt-in)
+
+1. Check `useReviewUI` config flag
+2. If enabled AND staged items exist:
+   - Run `arete view --path /review --wait --timeout 300`
+   - On success: read approved items from completion file
+   - On timeout/error: fall back to CLI triage
+3. If disabled: skip directly to CLI triage
+```
+
+**Fallback requirement**: Any skill using Review UI MUST have a CLI fallback path. The web UI is an enhancement, not a requirement.

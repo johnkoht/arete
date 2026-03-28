@@ -16,6 +16,9 @@ export type {
   PriorityLevel,
   CommitmentPriorityInput,
   CommitmentPriorityResult,
+  CreateCommitmentOptions,
+  CreateCommitmentResult,
+  CreateTaskFn,
 } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
 export type {
@@ -62,6 +65,7 @@ export {
   clearApprovedSections,
   formatFilteredStagedSections,
   calculateSpeakingRatio,
+  inferUrgency,
 } from './meeting-processing.js';
 export type {
   ProcessedMeetingResult,
@@ -70,6 +74,7 @@ export type {
   ItemSource,
   ItemStatus,
   ItemOwnerMeta,
+  UrgencyBucket,
 } from './meeting-processing.js';
 
 // Pattern detection
@@ -126,3 +131,33 @@ export type {
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
+
+// Task management
+export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export type { CompleteTaskResult } from './tasks.js';
+export type {
+  TaskMetadata,
+  TaskDestination,
+  WorkspaceTask,
+  ParsedTaskLine,
+  ListTasksOptions,
+} from '../models/tasks.js';
+
+// Task scoring
+export {
+  scoreTask,
+  scoreTasks,
+  getTopTasks,
+  scoreDueDate,
+  scoreCommitment,
+  scoreMeetingRelevance,
+  scoreWeekPriority,
+  calculateModifiers,
+  formatScoredTask,
+  formatTaskRecommendations,
+} from './task-scoring.js';
+export type {
+  ScoringContext,
+  ScoreBreakdown,
+  ScoredTask,
+} from './task-scoring.js';

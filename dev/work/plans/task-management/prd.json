@@ -15,9 +15,9 @@
         "Tasks without metadata work (plain - [ ] Task is valid)",
         "Unit tests for install/update behavior"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-2",
@@ -31,9 +31,9 @@
         "Missing sections created on first use (not required to exist)",
         "Document section semantics in now/LEARNINGS.md or similar"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-3",
@@ -50,9 +50,9 @@
         "Unit tests for CRUD, metadata parsing, cross-file reads, edge cases",
         "No direct fs calls — all I/O through StorageAdapter"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-4",
@@ -67,9 +67,9 @@
         "Transactional: if task creation fails, commitment creation rolls back",
         "Unit tests for create-with-task, complete-resolves-commitment, orphan detection, rollback"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-5",
@@ -83,9 +83,9 @@
         "If urgency unclear, default to Should (don't block, per Harvester)",
         "Unit tests for urgency inference mapping, metadata inheritance, CLI path, backend path"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-6",
@@ -97,9 +97,9 @@
         "Manual verification: arete install creates both files; TaskService can list/add/complete tasks",
         "All Phase 1 tasks (1-5) marked complete in prd.json"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-7",
@@ -114,9 +114,9 @@
         "Asks about remaining Anytime items: Leave in Anytime or move to Someday?",
         "Skill file updated with clear workflow steps"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-8",
@@ -132,9 +132,9 @@
         "User confirms/adjusts recommendations (not forced to accept)",
         "Unit tests for each scoring dimension, edge cases, combined scoring"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-9",
@@ -149,9 +149,9 @@
         "On confirmation: move items, add metadata, clear from inbox",
         "Document workflow in skill file"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-10",
@@ -163,9 +163,9 @@
         "Manual verification: week-plan pulls from tasks.md; daily-plan shows scoring breakdown",
         "All Phase 2 tasks (7-9) marked complete"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-11",
@@ -180,9 +180,9 @@
         "Added to AGENTS.md skills index",
         "No broken references or missing dependencies"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-12",
@@ -200,9 +200,9 @@
         "Added to AGENTS.md skills index",
         "No broken references or Notion dependencies"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-13",
@@ -215,9 +215,9 @@
         "Manual verification: skills load without error",
         "All Phase 3 tasks (11-12) marked complete"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-14",
@@ -230,9 +230,9 @@
         "Error handling for missing workspace, invalid session",
         "Unit tests for both endpoints"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-15",
@@ -249,9 +249,9 @@
         "Loading state, empty state with dashboard link",
         "Responsive design"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-16",
@@ -267,9 +267,9 @@
         "Cleanup: deletes session files after read",
         "Unit tests for session creation, polling, timeout, cleanup"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-17",
@@ -285,9 +285,9 @@
         "FALLBACK PATH: if UI disabled or fails, use CLI triage in terminal",
         "Document opt-in behavior in skill file"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     },
     {
       "id": "task-18",
@@ -300,15 +300,15 @@
         "AGENTS.md skills index includes daily-winddown and weekly-winddown",
         "All TODO/FIXME comments addressed or tracked"
       ],
-      "status": "pending",
-      "passes": false,
-      "attemptCount": 0
+      "status": "complete",
+      "passes": true,
+      "attemptCount": 1
     }
   ],
   "metadata": {
     "createdAt": "2026-03-27T22:30:00.000Z",
     "totalTasks": 18,
-    "completedTasks": 0,
+    "completedTasks": 18,
     "failedTasks": 0
   }
 }

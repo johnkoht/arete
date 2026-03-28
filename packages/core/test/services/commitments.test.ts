@@ -1155,6 +1155,261 @@ describe('CommitmentsService.reconcile()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// create()
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.create()', () => {
+  it('creates a commitment with correct fields', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.create(
+      'Send the report',
+      'alice',
+      'Alice Smith',
+      'i_owe_them',
+      { source: 'meeting.md' }
+    );
+
+    assert.equal(result.commitment.text, 'Send the report');
+    assert.equal(result.commitment.personSlug, 'alice');
+    assert.equal(result.commitment.personName, 'Alice Smith');
+    assert.equal(result.commitment.direction, 'i_owe_them');
+    assert.equal(result.commitment.status, 'open');
+    assert.equal(result.commitment.resolvedAt, null);
+    assert.equal(result.commitment.source, 'meeting.md');
+
+    // Verify persisted
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 1);
+    assert.equal(parsed.commitments[0].text, 'Send the report');
+  });
+
+  it('includes goalSlug and area when provided', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.create(
+      'Complete Q1 deliverable',
+      'bob',
+      'Bob Jones',
+      'i_owe_them',
+      { goalSlug: 'q1-roadmap', area: 'engineering' }
+    );
+
+    assert.equal(result.commitment.goalSlug, 'q1-roadmap');
+    assert.equal(result.commitment.area, 'engineering');
+  });
+
+  it('uses current date when date not provided', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const before = new Date().toISOString().split('T')[0];
+    const result = await svc.create('Task', 'alice', 'Alice', 'i_owe_them');
+    const after = new Date().toISOString().split('T')[0];
+
+    // Date should be between before and after (typically same)
+    assert.ok(result.commitment.date >= before);
+    assert.ok(result.commitment.date <= after);
+  });
+
+  it('uses provided date when specified', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.create(
+      'Task',
+      'alice',
+      'Alice',
+      'i_owe_them',
+      { date: new Date('2026-01-15') }
+    );
+
+    assert.equal(result.commitment.date, '2026-01-15');
+  });
+
+  it('is idempotent — returns existing commitment if hash matches', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Create first
+    const result1 = await svc.create('Same task', 'alice', 'Alice', 'i_owe_them');
+    // Create again with same text/person/direction
+    const result2 = await svc.create('Same task', 'alice', 'Alice', 'i_owe_them');
+
+    // Should return same commitment
+    assert.equal(result1.commitment.id, result2.commitment.id);
+
+    // Should only have one in storage
+    const written = store.get(COMMITMENTS_PATH);
+    const parsed = JSON.parse(written!) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 1);
+  });
+
+  it('does not create task when createTask: false', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let taskCreated = false;
+    svc.setCreateTaskFn(async () => {
+      taskCreated = true;
+      return { id: 'task123', text: 'Test' };
+    });
+
+    const result = await svc.create(
+      'Task',
+      'alice',
+      'Alice',
+      'i_owe_them',
+      { createTask: false }
+    );
+
+    assert.equal(taskCreated, false);
+    assert.equal(result.task, undefined);
+  });
+
+  it('creates task by default for i_owe_them when createTaskFn is set', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let capturedMetadata: { area?: string; person?: string; from?: { type: string; id: string } } = {};
+    svc.setCreateTaskFn(async (text, metadata) => {
+      capturedMetadata = metadata;
+      return { id: 'task456', text };
+    });
+
+    const result = await svc.create(
+      'Send report',
+      'alice',
+      'Alice',
+      'i_owe_them',
+      { area: 'sales' }
+    );
+
+    assert.ok(result.task !== undefined);
+    assert.equal(result.task?.id, 'task456');
+    assert.equal(result.task?.destination, 'inbox');
+    assert.equal(capturedMetadata.area, 'sales');
+    assert.equal(capturedMetadata.person, 'alice');
+    assert.equal(capturedMetadata.from?.type, 'commitment');
+    // from.id should be 8-char prefix of commitment hash
+    assert.equal(capturedMetadata.from?.id.length, 8);
+  });
+
+  it('does NOT create task by default for they_owe_me', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let taskCreated = false;
+    svc.setCreateTaskFn(async () => {
+      taskCreated = true;
+      return { id: 'task123', text: 'Test' };
+    });
+
+    const result = await svc.create('Waiting on', 'bob', 'Bob', 'they_owe_me');
+
+    assert.equal(taskCreated, false);
+    assert.equal(result.task, undefined);
+  });
+
+  it('can force task creation for they_owe_me with createTask: true', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    let taskCreated = false;
+    svc.setCreateTaskFn(async () => {
+      taskCreated = true;
+      return { id: 'task123', text: 'Test' };
+    });
+
+    const result = await svc.create(
+      'Waiting on',
+      'bob',
+      'Bob',
+      'they_owe_me',
+      { createTask: true }
+    );
+
+    assert.equal(taskCreated, true);
+    assert.ok(result.task !== undefined);
+  });
+
+  it('rolls back commitment if task creation fails (transactional)', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    svc.setCreateTaskFn(async () => {
+      throw new Error('Task creation failed');
+    });
+
+    await assert.rejects(
+      () => svc.create('Task', 'alice', 'Alice', 'i_owe_them'),
+      /Task creation failed/
+    );
+
+    // Commitment should be rolled back
+    const written = store.get(COMMITMENTS_PATH);
+    if (written) {
+      const parsed = JSON.parse(written) as CommitmentsFile;
+      assert.equal(parsed.commitments.length, 0, 'Commitment should be rolled back on task failure');
+    }
+  });
+
+  it('does not create task when createTaskFn is not set', async () => {
+    const store = new Map<string, string>();
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    // Don't set createTaskFn
+    const result = await svc.create('Task', 'alice', 'Alice', 'i_owe_them');
+
+    // Commitment created, no task
+    assert.ok(result.commitment);
+    assert.equal(result.task, undefined);
+  });
+});
+
+describe('CommitmentsService.exists()', () => {
+  it('returns true for existing commitment', async () => {
+    const c = makeCommitment({ id: 'abc12345' + 'f'.repeat(56) });
+    const svc = new CommitmentsService(makeStorage([c]), WORKSPACE_ROOT);
+
+    const exists = await svc.exists('abc12345');
+    assert.equal(exists, true);
+  });
+
+  it('returns false for non-existing commitment', async () => {
+    const c = makeCommitment({ id: 'abc12345' + 'f'.repeat(56) });
+    const svc = new CommitmentsService(makeStorage([c]), WORKSPACE_ROOT);
+
+    const exists = await svc.exists('xyz00000');
+    assert.equal(exists, false);
+  });
+
+  it('matches full hash', async () => {
+    const fullHash = 'a'.repeat(64);
+    const c = makeCommitment({ id: fullHash });
+    const svc = new CommitmentsService(makeStorage([c]), WORKSPACE_ROOT);
+
+    const exists = await svc.exists(fullHash);
+    assert.equal(exists, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // computeCommitmentPriority()
 // ---------------------------------------------------------------------------
 

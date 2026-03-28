@@ -151,4 +151,29 @@ export declare function formatFilteredStagedSections(filteredItems: FilteredItem
  * ```
  */
 export declare function calculateSpeakingRatio(transcript: string, ownerName: string): number | undefined;
+/**
+ * Task bucket based on urgency inference.
+ * Maps to TaskDestination values: 'must', 'should', 'anytime'
+ */
+export type UrgencyBucket = 'must' | 'should' | 'anytime';
+/**
+ * Infer task urgency bucket from action item text.
+ *
+ * Scans text for urgency keywords and maps to GTD buckets:
+ * - "urgent", "asap", "immediately", "today", "this week" → must
+ * - "important", "priority", "soon" → should
+ * - "when you can", "sometime", "eventually", "anytime" → anytime
+ * - Default (no keywords) → should (don't block per Harvester requirement)
+ *
+ * @param text - Action item description
+ * @returns Task bucket: 'must', 'should', or 'anytime'
+ *
+ * @example
+ * ```ts
+ * inferUrgency('Send the slides ASAP'); // → 'must'
+ * inferUrgency('Review when you can'); // → 'anytime'
+ * inferUrgency('Send API documentation'); // → 'should' (default)
+ * ```
+ */
+export declare function inferUrgency(text: string): UrgencyBucket;
 //# sourceMappingURL=meeting-processing.d.ts.map

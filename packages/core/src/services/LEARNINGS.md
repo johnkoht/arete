@@ -24,6 +24,10 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 
 - **`meeting-processing.ts`** (2026-03-15) — Post-extraction processing for meeting intelligence. `processMeetingExtraction(result, userNotes, options?)` applies confidence filtering (<0.5 excluded), Jaccard dedup against user notes (>0.7 match = dedup source), and auto-approval logic (>0.8 confidence or dedup = approved). Returns `ProcessedMeetingResult` with filtered items and metadata maps (`stagedItemStatus`, `stagedItemConfidence`, `stagedItemSource`, `stagedItemOwner`). `extractUserNotes(body)` extracts user-written notes from meeting body, excluding Transcript and Staged sections. `clearApprovedSections(content)` removes `## Approved *` sections for reprocessing. `formatFilteredStagedSections(items, summary)` formats filtered items as markdown. Used by CLI `extract --stage`, CLI `approve`, and backend `runProcessingSession`. Reuses `normalizeForJaccard()` and `jaccardSimilarity()` from `meeting-extraction.ts`.
 
+- **`tasks.ts`** (2026-03-27) — `TaskService` manages GTD tasks across `now/week.md` and `now/tasks.md`. Constructor takes `StorageAdapter` + `WorkspacePaths`. Methods: `listTasks(options?)` reads both files with filters (area/project/person/due/completed/destination), `addTask(text, destination, metadata?)` adds to specified section, `completeTask(taskId)` marks done and returns linked commitment ID if `@from(commitment:id)` present, `moveTask(taskId, destination)` handles cross-file moves, `findTask(taskId)`, `deleteTask(taskId)`. Metadata parsing extracts `@tag(value)` patterns (area, project, person, due, from); unknown tags ignored, malformed tags preserved as text. Task ID is 8-char sha256 hash of normalized text (like CommitmentsService). Bucket-to-file mapping: inbox/must/should/could → week.md, anytime/someday → tasks.md.
+
+- **`task-scoring.ts`** (2026-03-27) — Pure scoring functions for intelligent task prioritization. No class (stateless). `scoreTask(task, context)` returns `{ score, breakdown }` across 5 dimensions: due date (0-40), commitment (0-25), meeting relevance (0-20), week priority (0-15), modifiers (+10/-10/+20). `scoreTasks(tasks, context)` sorts by score descending. `getTopTasks(tasks, context, limit)` returns top N. `formatScoredTask(scored, rank)` and `formatTaskRecommendations(tasks, limit)` produce human-readable output with breakdown. Types: `ScoringContext` (meeting attendees/areas, week priorities, focus hours, needs_attention people), `ScoreBreakdown` (per-dimension scores with reasons), `ScoredTask`. Date parsing uses local time (not UTC) for timezone-consistent comparisons.
+
 ## Gotchas
 
 - **`createServices()` is async — it loads `arete.yaml` from disk.** Callers must `await createServices(process.cwd())`. Forgetting the `await` gives a Promise, not `AreteServices`. Every CLI command in `packages/cli/src/commands/` correctly awaits it — follow that pattern. Defined in `packages/core/src/factory.ts` L54.
@@ -47,6 +51,10 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - **Jaccard similarity test strings must be verified mathematically** (2026-03-09). When writing tests for Jaccard-based deduplication (used in `meeting-extraction.ts` and `commitments.ts`), you cannot rely on intuition for what "looks similar". Test strings that appear nearly identical often produce Jaccard scores below threshold because: (1) one different word reduces overlap significantly (e.g., 4/6 = 0.67 for strings differing by 2 words), (2) the normalize function strips punctuation and lowercases, changing token counts. For Jaccard > 0.8 threshold, use test pairs where first string has N words and second has N+1 (adding only one word), giving N/(N+1) similarity. Example: "Send API docs to Sarah" (5 words) vs "Send API docs to Sarah now" (6 words) = 5/6 = 0.833. Debug with: `const w1 = text.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean)` then `intersection.length / union.size`.
 
 - **`processMeetingExtraction` decisions/learnings default to 0.9 confidence** (2026-03-15). Unlike action items which have explicit confidence from extraction, decisions and learnings in `MeetingExtractionResult` don't carry confidence values. The `processMeetingExtraction()` function defaults them to 0.9, which exceeds the auto-approval threshold (0.8). This means all decisions and learnings are auto-approved unless they match user notes (dedup). If you need pending decisions/learnings in the future, the extraction service would need to emit confidence values for them.
+
+- **TaskService section parsing: ALL headers end sections** (2026-03-27). GTD buckets (Inbox, Must, Should, Could, Anytime, Someday) are independent sections — NOT a nested hierarchy. The `findSection()` function ends a section at ANY markdown header (# ## or ###), not just same-or-higher-level headers. This is intentional: `## Inbox` and `### Must complete` are siblings in the GTD model, not parent-child. If you use hierarchical parsing (## ends at next ##, ### ends at next ### or ##), tasks from `### Must` would incorrectly be included in `## Inbox` when reading week.md.
+
+- **Date parsing must use local time, not UTC** (2026-03-27). When comparing dates for task scoring (due date vs reference date), parsing `new Date('2026-03-25')` creates a UTC midnight date which may be the previous day in local time. For YYYY-MM-DD strings without time component, use `new Date(year, month - 1, day)` to create a local time date. In tests, create reference dates with explicit local time: `new Date(2026, 2, 25, 12, 0, 0)` (noon) rather than `new Date('2026-03-25')`. The task-scoring.ts `parseDate()` function handles this by parsing YYYY-MM-DD as local date components.
 
 ## Invariants
 
@@ -143,6 +151,38 @@ export type ExtractionMode = 'light' | 'normal' | 'thorough';
 
 - `packages/core/src/services/meeting-extraction.ts` L35 — `ExtractionMode` type
 - `packages/cli/src/commands/meeting.ts` — `--importance` flag handling
+
+## Task-Commitment Linkage (2026-03-27)
+
+The commitment-task linking system has bidirectional dependencies handled via function injection:
+
+1. **CommitmentsService.create()** can create a linked task in inbox via `createTaskFn`
+2. **TaskService.completeTask()** auto-resolves linked commitments via optional `CommitmentsService` constructor param
+3. **Factory wiring** creates both services, then injects `createTaskFn` after construction to break the cycle
+
+### Key Patterns
+
+- **Function injection for cross-dependencies**: `CommitmentsService.setCreateTaskFn(fn)` accepts a callback rather than taking TaskService in constructor. This avoids circular imports while still enabling the behavior.
+
+- **Optional service injection for auto-resolution**: TaskService constructor accepts optional `CommitmentsService`. When provided, `completeTask()` auto-resolves linked commitments. When absent, behavior is unchanged (backward compatible).
+
+- **Silent failure for auto-resolution** (Harvester requirement): If commitment resolution fails (commitment already resolved, doesn't exist, etc.), the error is caught silently — task completion still succeeds. This prevents blocking user workflows due to orphaned references.
+
+- **Transactional rollback in create()**: If task creation fails after commitment is created, the commitment is removed. Implemented as: save commitment → try create task → on failure, remove commitment from storage.
+
+- **Idempotent create()**: If commitment hash already exists, returns existing commitment without creating duplicate or task. This handles duplicate sync scenarios gracefully.
+
+### Default Behavior
+
+- `i_owe_them` commitments: default `createTask: true` (creates task in inbox)
+- `they_owe_me` commitments: default `createTask: false` (goes to Waiting On via separate flow)
+
+### @from Metadata
+
+Tasks reference their source commitment via `@from(commitment:hashPrefix)` where hashPrefix is 8 chars.
+Only `commitment` type triggers auto-resolution; `meeting` type references are ignored.
+
+---
 
 ## Pre-Edit Checklist
 

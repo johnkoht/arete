@@ -22,7 +22,7 @@ intelligence:
 
 # Week Plan Skill
 
-Guide the PM to define the top 3-5 outcomes for the week. Read current quarter goals, last week file, active projects, and commitments. Output is `now/week.md`.
+Guide the PM to define the top 3-5 weekly priorities. Read current quarter goals, last week file, active projects, and commitments. Output is `now/week.md`.
 
 ## When to Use
 
@@ -113,24 +113,88 @@ arete search "<key attendee>" --scope memory --limit 2
 
 **Empty results**: If no relevant memory found, note briefly: "No directly relevant past decisions found." Proceed without delay — don't ask the "anything here" question.
 
-### 3. Build Tasks List
+### 3. Build Tasks List (Pull from Task Store)
 
-From commitments and context, populate the Tasks section:
+Rather than creating tasks from scratch, pull existing tasks from the workspace:
 
-**Must complete** — Critical items with due dates this week or blocking dependencies:
-- Commitments with `due:` this week
-- Items user explicitly marked as critical
+#### 3.1 Gather Candidates
 
-**Should complete** — Important but not blocking:
-- Commitments without hard deadlines
-- Project milestones
+Read from three sources:
 
-**Could complete** — Nice to have:
-- Backlog items user wants to tackle
-- Low-priority improvements
+1. **Task Backlog**: Read `now/tasks.md` `## Anytime` section
+2. **Open Commitments**: Run `arete commitments list --json`, filter to:
+   - `direction: i_owe_them` only
+   - WITHOUT existing linked tasks (no `@from(commitment:)` match in tasks.md or week.md)
+3. **Last Week Carryover**: Read `now/week.md` Tasks section, filter to incomplete (`- [ ]`) items
 
-Also capture:
-- **Carried from last week**: Incomplete items from previous `now/week.md`
+#### 3.2 Present Grouped Candidates
+
+Present candidates in a numbered list grouped by source:
+
+```markdown
+## From Task Backlog (Anytime)
+1. Review Q1 metrics @project(analytics)
+2. Update onboarding docs @area(product)
+3. Research competitor pricing @project(pricing)
+
+## From Open Commitments (Not Yet Tasks)
+4. Send API specs to Sarah @person(sarah-chen)
+5. Review contract draft @person(jamie)
+
+## Carried from Last Week (Incomplete)
+6. Finalize compliance checklist
+7. Schedule design review
+```
+
+> "Here are your candidate tasks for this week. Which ones should be on your plate?"
+
+#### 3.3 User Selects Destinations (Numbered List)
+
+Prompt user with numbered selection:
+
+> "Which tasks for this week? Enter numbers for each bucket:
+> - **Must** (critical this week): 
+> - **Should** (important, not blocking): 
+> - **Could** (nice to have): "
+
+Example user response: "Must: 1, 4. Should: 2, 6. Could: 3"
+
+#### 3.4 Move Selected Tasks
+
+For selected tasks from **Task Backlog (Anytime)**:
+- **MOVE** (not copy): Remove from `now/tasks.md` `## Anytime`, add to `now/week.md` appropriate section
+- Preserve all metadata (`@area()`, `@project()`, `@person()`, `@due()`, `@from()`)
+
+For selected tasks from **Open Commitments**:
+- Create new task in `now/week.md` with `@from(commitment:id)` link
+- Include `@person()` from commitment counterparty
+
+For **Carryover** items:
+- Already in week.md — move to appropriate section (Must/Should/Could) if in wrong section
+
+**Deduplication**: Before adding to week.md, check if task text already exists in Tasks section:
+- If duplicate found: Skip with note: "Skipped 'Review Q1 metrics' — already in week.md"
+- Compare normalized text (lowercase, trimmed, ignore metadata tags)
+
+#### 3.5 Handle Remaining Anytime Items
+
+After selections, if Anytime tasks remain unselected:
+
+> "These tasks remain in your Anytime backlog:
+> - Research competitor pricing @project(pricing)
+> - Clean up Jira labels @area(product)
+>
+> Would you like to move any to **Someday** (parking lot for later)? Enter numbers, or press Enter to keep in Anytime."
+
+If user provides numbers, move those tasks from `## Anytime` to `## Someday` in `now/tasks.md`.
+
+#### Summary: Task Destinations
+
+| Source | Selected | Not Selected |
+|--------|----------|--------------|
+| Anytime (tasks.md) | → week.md (Must/Should/Could) | Ask: Anytime or Someday? |
+| Open Commitments | → week.md + @from(commitment:) | Stays uncommitted |
+| Carryover (week.md) | → appropriate section | Stays in current section |
 
 ### 4. Write Week File
 
@@ -142,10 +206,12 @@ arete template resolve --skill week-plan --variant week-priorities
 ```
 
 **Sections**:
-- **Outcomes** — Simple numbered list (1-5 items)
+- **Weekly Priorities** — Simple numbered list (1-5 items, formerly "Outcomes")
 - **Today** — Placeholder for daily-plan (Focus, Meetings)
+- **Inbox** — Quick capture area for daily winddown (no metadata required)
 - **Notes** — Empty, user's working scratchpad
 - **Tasks** — Must/Should/Could subsections populated from commitments
+- **Waiting On** — What others owe you (they_owe_me commitments)
 - **Carried from last week** — Incomplete items
 - **Daily Progress** — Empty, populated by daily-plan
 
@@ -153,7 +219,7 @@ arete template resolve --skill week-plan --variant week-priorities
 ```markdown
 # Week — Mon Mar 24, 2026
 
-## Outcomes
+## Weekly Priorities
 1. POP ready for 3/31 launch
 2. CoverWhale through compliance
 3. UK priorities finalized
@@ -164,6 +230,8 @@ arete template resolve --skill week-plan --variant week-priorities
 **Meetings**:
 - 10:00 Team standup
 - 14:00 PM sync
+
+## Inbox
 
 ## Notes
 
@@ -178,6 +246,9 @@ arete template resolve --skill week-plan --variant week-priorities
 
 ### Could complete
 - [ ] Clean up Jira backlog
+
+## Waiting On
+- [ ] Sarah: Legal sign-off on CoverWhale templates @person(sarah-chen) @from(commitment:abc123)
 
 ## Carried from last week
 - [ ] Finalize Q2 OKRs
@@ -218,4 +289,4 @@ arete template resolve --skill week-plan --variant week-priorities
 ## Error Handling
 
 - If no quarter goals exist, create week file anyway; suggest **quarter-plan**.
-- If >5 outcomes, suggest ranking and deferring extras to next week.
+- If >5 priorities, suggest ranking and deferring extras to next week.

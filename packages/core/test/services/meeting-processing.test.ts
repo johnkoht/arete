@@ -7,6 +7,7 @@ import {
   formatFilteredStagedSections,
   hasNegationMarkers,
   calculateSpeakingRatio,
+  inferUrgency,
 } from '../../src/services/meeting-processing.js';
 import type { FilteredItem } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
@@ -1795,5 +1796,115 @@ describe('processMeetingExtraction - importance: normal/important', () => {
     assert.equal(processed.filteredItems.length, 2);
     assert.equal(processed.stagedItemStatus['ai_001'], 'pending');
     assert.equal(processed.stagedItemStatus['ai_002'], 'approved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inferUrgency tests
+// ---------------------------------------------------------------------------
+
+describe('inferUrgency', () => {
+  describe('must bucket (urgent keywords)', () => {
+    it('returns must for "urgent"', () => {
+      assert.equal(inferUrgency('Send the proposal urgent'), 'must');
+    });
+
+    it('returns must for "ASAP"', () => {
+      assert.equal(inferUrgency('Review docs ASAP'), 'must');
+    });
+
+    it('returns must for "immediately"', () => {
+      assert.equal(inferUrgency('Call client immediately'), 'must');
+    });
+
+    it('returns must for "today"', () => {
+      assert.equal(inferUrgency('Submit report today'), 'must');
+    });
+
+    it('returns must for "this week"', () => {
+      assert.equal(inferUrgency('Finish the slides this week'), 'must');
+    });
+
+    it('is case insensitive', () => {
+      assert.equal(inferUrgency('Send URGENT email'), 'must');
+      assert.equal(inferUrgency('Do this TODAY'), 'must');
+    });
+  });
+
+  describe('should bucket (important keywords)', () => {
+    it('returns should for "important"', () => {
+      assert.equal(inferUrgency('This is important to discuss'), 'should');
+    });
+
+    it('returns should for "priority"', () => {
+      assert.equal(inferUrgency('Review priority items'), 'should');
+    });
+
+    it('returns should for "soon"', () => {
+      assert.equal(inferUrgency('Get back to them soon'), 'should');
+    });
+  });
+
+  describe('anytime bucket (flexible keywords)', () => {
+    it('returns anytime for "when you can"', () => {
+      assert.equal(inferUrgency('Review when you can'), 'anytime');
+    });
+
+    it('returns anytime for "sometime"', () => {
+      assert.equal(inferUrgency('Do this sometime'), 'anytime');
+    });
+
+    it('returns anytime for "eventually"', () => {
+      assert.equal(inferUrgency('We should eventually migrate'), 'anytime');
+    });
+
+    it('returns anytime for "anytime"', () => {
+      assert.equal(inferUrgency('Call me anytime'), 'anytime');
+    });
+  });
+
+  describe('default bucket', () => {
+    it('returns should for text with no urgency keywords', () => {
+      assert.equal(inferUrgency('Send API documentation'), 'should');
+    });
+
+    it('returns should for empty string', () => {
+      assert.equal(inferUrgency(''), 'should');
+    });
+
+    it('returns should for generic action items', () => {
+      assert.equal(inferUrgency('Follow up with Sarah about the proposal'), 'should');
+      assert.equal(inferUrgency('Review the contract details'), 'should');
+      assert.equal(inferUrgency('Schedule a meeting with the team'), 'should');
+    });
+  });
+
+  describe('keyword boundary matching', () => {
+    it('does not match partial words', () => {
+      // "priority" should match, but not "deprioritize"
+      assert.equal(inferUrgency('deprioritize the task'), 'should'); // no match on partial "priority"
+    });
+
+    it('matches keywords at word boundaries', () => {
+      assert.equal(inferUrgency('urgent: send slides'), 'must');
+      assert.equal(inferUrgency('send slides (urgent)'), 'must');
+    });
+  });
+
+  describe('precedence', () => {
+    it('must keywords take precedence over should', () => {
+      // Both "urgent" (must) and "important" (should) present
+      assert.equal(inferUrgency('This is urgent and important'), 'must');
+    });
+
+    it('should keywords take precedence over anytime', () => {
+      // Both "soon" (should) and "sometime" (anytime) present
+      assert.equal(inferUrgency('Do this soon, or sometime'), 'should');
+    });
+
+    it('must keywords take precedence over anytime', () => {
+      // Both "today" (must) and "anytime" (anytime) present
+      assert.equal(inferUrgency('Reply today or anytime'), 'must');
+    });
   });
 });

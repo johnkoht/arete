@@ -21,6 +21,7 @@ import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
+import { TaskService } from './services/tasks.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -39,6 +40,7 @@ export type AreteServices = {
   commitments: CommitmentsService;
   areaParser: AreaParserService;
   ai: AIService;
+  tasks: TaskService;
 };
 
 /**
@@ -85,6 +87,18 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
+  // Task management (depends on storage + workspace paths + commitments for auto-resolution)
+  const workspacePaths = workspace.getPaths(workspaceRoot);
+  const tasks = new TaskService(storage, workspacePaths, commitments);
+
+  // Wire up cross-service dependencies
+  // CommitmentsService needs to create tasks, but TaskService needs CommitmentsService.
+  // Break the cycle by injecting the task creation function after construction.
+  commitments.setCreateTaskFn(async (text, metadata) => {
+    const task = await tasks.addTask(text, 'inbox', metadata);
+    return { id: task.id, text: task.text };
+  });
+
   // AI service (depends on config)
   const ai = new AIService(config);
 
@@ -102,5 +116,6 @@ export async function createServices(
     commitments,
     areaParser,
     ai,
+    tasks,
   };
 }

@@ -18,6 +18,7 @@ import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
+import { TaskService } from './services/tasks.js';
 /**
  * Create all Areté services wired with correct dependencies.
  *
@@ -46,6 +47,16 @@ export async function createServices(workspaceRoot, options) {
     const integrations = new IntegrationService(storage, config);
     const commitments = new CommitmentsService(storage, workspaceRoot);
     const areaParser = new AreaParserService(storage, workspaceRoot);
+    // Task management (depends on storage + workspace paths + commitments for auto-resolution)
+    const workspacePaths = workspace.getPaths(workspaceRoot);
+    const tasks = new TaskService(storage, workspacePaths, commitments);
+    // Wire up cross-service dependencies
+    // CommitmentsService needs to create tasks, but TaskService needs CommitmentsService.
+    // Break the cycle by injecting the task creation function after construction.
+    commitments.setCreateTaskFn(async (text, metadata) => {
+        const task = await tasks.addTask(text, 'inbox', metadata);
+        return { id: task.id, text: task.text };
+    });
     // AI service (depends on config)
     const ai = new AIService(config);
     return {
@@ -62,6 +73,7 @@ export async function createServices(workspaceRoot, options) {
         commitments,
         areaParser,
         ai,
+        tasks,
     };
 }
 //# sourceMappingURL=factory.js.map

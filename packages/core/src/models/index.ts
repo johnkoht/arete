@@ -147,3 +147,12 @@ export type {
   PRD,
 } from './prd.js';
 export { validateTask, validatePRD } from './prd.js';
+
+// Task management domain
+export type {
+  TaskMetadata,
+  TaskDestination,
+  WorkspaceTask,
+  ParsedTaskLine,
+  ListTasksOptions,
+} from './tasks.js';

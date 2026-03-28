@@ -197,4 +197,37 @@ describe('integration: workspace install/update journeys', () => {
     const content = readFileSync(inputTemplate, 'utf-8');
     assert.equal(content, '# My custom meeting note', 'update must not overwrite customized template');
   });
+
+  it('update backfills now/tasks.md without overwriting existing', () => {
+    const workspace = join(sandboxRoot, 'update-tasks');
+    installWorkspace(workspace, 'cursor');
+
+    const tasksPath = join(workspace, 'now', 'tasks.md');
+    assert.equal(existsSync(tasksPath), true, 'now/tasks.md should exist after install');
+
+    // Verify content has GTD buckets
+    const initialContent = readFileSync(tasksPath, 'utf-8');
+    assert.ok(initialContent.includes('## Anytime'), 'should have Anytime section');
+    assert.ok(initialContent.includes('## Someday'), 'should have Someday section');
+
+    // Remove it to simulate a workspace that never had it
+    unlinkSync(tasksPath);
+    assert.equal(existsSync(tasksPath), false, 'now/tasks.md should be gone');
+
+    // Update should backfill it
+    const update = runUpdateJson(workspace);
+    assert.equal(update.success, true, 'update should succeed');
+    assert.equal(existsSync(tasksPath), true, 'now/tasks.md should be backfilled by update');
+
+    // Verify backfilled content is correct
+    const backfilledContent = readFileSync(tasksPath, 'utf-8');
+    assert.ok(backfilledContent.includes('## Anytime'), 'backfilled should have Anytime section');
+    assert.ok(backfilledContent.includes('## Someday'), 'backfilled should have Someday section');
+
+    // A second update must not overwrite customized content
+    writeFileSync(tasksPath, '# My custom tasks\n\n## Anytime\n\n- [ ] My task', 'utf-8');
+    runUpdateJson(workspace);
+    const preserved = readFileSync(tasksPath, 'utf-8');
+    assert.equal(preserved, '# My custom tasks\n\n## Anytime\n\n- [ ] My task', 'update must not overwrite customized tasks.md');
+  });
 });

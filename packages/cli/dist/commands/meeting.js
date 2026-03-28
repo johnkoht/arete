@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, extractAttendeeSlugs, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, calculateSpeakingRatio, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, calculateSpeakingRatio, inferUrgency, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -9,6 +9,56 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
 import { success, error, info, warn, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
+/**
+ * Format a person slug as a display name.
+ * E.g., 'john-smith' → 'John Smith'
+ */
+function formatSlugAsName(slug) {
+    return slug
+        .split('-')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+/**
+ * Add an entry to the ## Waiting On section in week.md.
+ * Creates the section if it doesn't exist.
+ *
+ * Format: - [ ] Person Name: What they owe @person(slug) @from(commitment:hashPrefix)
+ */
+async function addWaitingOnEntry(storage, nowPath, personName, personSlug, text, commitmentHashPrefix) {
+    const weekFile = join(nowPath, 'week.md');
+    let content = await storage.read(weekFile);
+    if (!content) {
+        // File doesn't exist, create minimal structure
+        content = `# Week\n\n## Waiting On\n`;
+    }
+    const entry = `- [ ] ${personName}: ${text} @person(${personSlug}) @from(commitment:${commitmentHashPrefix})`;
+    // Find ## Waiting On section
+    const waitingOnMatch = content.match(/^## Waiting On\s*$/m);
+    if (waitingOnMatch) {
+        // Section exists - insert entry after header
+        const insertPos = (waitingOnMatch.index ?? 0) + waitingOnMatch[0].length;
+        const before = content.slice(0, insertPos);
+        const after = content.slice(insertPos);
+        content = `${before}\n${entry}${after}`;
+    }
+    else {
+        // Section doesn't exist - append it
+        // Find a good place to insert (after Tasks section or at end)
+        const tasksMatch = content.match(/^### Could complete[\s\S]*?(?=\n## |\n---|\z)/m);
+        if (tasksMatch && tasksMatch.index !== undefined) {
+            const insertPos = tasksMatch.index + tasksMatch[0].length;
+            const before = content.slice(0, insertPos);
+            const after = content.slice(insertPos);
+            content = `${before}\n\n## Waiting On\n${entry}${after}`;
+        }
+        else {
+            // Append at end
+            content = content.trimEnd() + `\n\n## Waiting On\n${entry}\n`;
+        }
+    }
+    await storage.write(weekFile, content);
+}
 const DEFAULT_TEMPLATE = `# {title}
 **Date**: {date}
 **Duration**: {duration}
@@ -938,63 +988,74 @@ export function registerMeetingCommands(program) {
                 }
             }
         }
-        // Commit approved items
+        // --------------------------------------------------------------------------
+        // Save owner metadata BEFORE commitApprovedItems clears it
+        // --------------------------------------------------------------------------
+        const ownerMap = parseStagedItemOwner(updatedContent);
+        const editsMap = parseStagedItemEdits(updatedContent);
+        // Get meeting metadata for task/commitment creation
+        const meetingDate = typeof frontmatter['date'] === 'string'
+            ? new Date(frontmatter['date'].slice(0, 10))
+            : new Date();
+        const meetingArea = typeof frontmatter['area'] === 'string'
+            ? frontmatter['area']
+            : undefined;
+        // Commit approved items (decisions, learnings to memory)
         const memoryDir = join(root, '.arete', 'memory', 'items');
         await commitApprovedItems(services.storage, meetingPath, memoryDir);
         // --------------------------------------------------------------------------
-        // Sync commitments with goal linking
+        // Create commitments and tasks from action items
         // --------------------------------------------------------------------------
+        let tasksCreated = 0;
+        let waitingOnCreated = 0;
         if (approvedActionItemIds.length > 0) {
-            // Re-read meeting to get approved items with owner info
-            const approvedContent = await services.storage.read(meetingPath);
-            const { frontmatter: approvedFm } = extractFrontmatter(approvedContent ?? '');
-            // Get attendee slugs from frontmatter
-            const attendeeSlugs = extractAttendeeSlugs(approvedFm);
-            // Get owner metadata from original staged sections
-            const ownerMap = parseStagedItemOwner(updatedContent);
-            const stagedItemEdits = (frontmatter['staged_item_edits'] ?? {});
-            // Build PersonActionItem array for each person
-            const personItemsMap = new Map();
-            // Get meeting date for action items
-            const meetingDate = typeof approvedFm['date'] === 'string'
-                ? approvedFm['date'].slice(0, 10)
-                : new Date().toISOString().slice(0, 10);
             for (const itemId of approvedActionItemIds) {
                 const item = stagedSections.actionItems.find((ai) => ai.id === itemId);
                 if (!item)
                     continue;
                 const ownerMeta = ownerMap[itemId];
-                const text = stagedItemEdits[itemId] ?? item.text;
-                const ownerSlug = ownerMeta?.ownerSlug ?? item.ownerSlug;
-                const direction = ownerMeta?.direction ?? item.direction ?? 'i_owe_them';
+                const text = editsMap[itemId] ?? item.text;
+                const direction = (ownerMeta?.direction ?? item.direction ?? 'i_owe_them');
                 const counterpartySlug = ownerMeta?.counterpartySlug ?? item.counterpartySlug;
-                // Determine the person slug for this commitment (the other party)
-                // If I owe them, the person is the counterparty. If they owe me, the person is the owner.
+                const ownerSlug = ownerMeta?.ownerSlug ?? item.ownerSlug;
+                // Determine person slug (the other party in the commitment)
                 const personSlug = direction === 'i_owe_them' ? counterpartySlug : ownerSlug;
                 if (!personSlug)
                     continue;
-                // Compute hash for dedup (matches CommitmentsService)
-                const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
-                const { createHash } = await import('node:crypto');
-                const hash = createHash('sha256')
-                    .update(`${normalized}${personSlug}${direction}`)
-                    .digest('hex');
-                const actionItem = {
-                    text,
-                    direction,
-                    source: `${slug}.md`,
-                    date: meetingDate,
-                    hash,
-                    stale: false,
-                    ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
-                };
-                const existing = personItemsMap.get(personSlug) ?? [];
-                existing.push(actionItem);
-                personItemsMap.set(personSlug, existing);
-            }
-            // Sync to commitments service
-            if (personItemsMap.size > 0) {
-                await services.commitments.sync(personItemsMap);
+                // Get person display name
+                const personName = formatSlugAsName(personSlug);
+                if (direction === 'i_owe_them') {
+                    // I owe them: create commitment + task with urgency-based bucket
+                    const result = await services.commitments.create(text, personSlug, personName, 'i_owe_them', {
+                        createTask: false, // We'll create the task manually with proper bucket
+                        goalSlug: selectedGoalSlug,
+                        area: meetingArea,
+                        date: meetingDate,
+                        source: `${slug}.md`,
+                    });
+                    // Infer urgency and create task with proper bucket
+                    const urgencyBucket = inferUrgency(text);
+                    const taskDestination = urgencyBucket;
+                    await services.tasks.addTask(text, taskDestination, {
+                        area: meetingArea,
+                        person: personSlug,
+                        from: { type: 'commitment', id: result.commitment.id.slice(0, 8) },
+                    });
+                    tasksCreated++;
+                }
+                else {
+                    // They owe me: create commitment only + add to Waiting On
+                    const result = await services.commitments.create(text, personSlug, personName, 'they_owe_me', {
+                        createTask: false,
+                        goalSlug: selectedGoalSlug,
+                        area: meetingArea,
+                        date: meetingDate,
+                        source: `${slug}.md`,
+                    });
+                    // Add to Waiting On section in week.md
+                    await addWaitingOnEntry(services.storage, paths.now, personName, personSlug, text, result.commitment.id.slice(0, 8));
+                    waitingOnCreated++;
+                }
             }
         }
         // Refresh QMD index unless --skip-qmd

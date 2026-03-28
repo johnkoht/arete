@@ -186,7 +186,7 @@
       ],
       "notes": [
         "OAuth callback uses localhost dynamic port and requires browser consent.",
-        "If Google shows an unverified-app warning, users continue via Advanced -> Go to Aret\u00e9 (unsafe)."
+        "If Google shows an unverified-app warning, users continue via Advanced -> Go to Areté (unsafe)."
       ],
       "lastVerified": "2026-02-25"
     },
@@ -503,7 +503,10 @@
         "packages/core/src/services/LEARNINGS.md",
         ".pi/expertise/core/PROFILE.md"
       ],
-      "testCommands": ["npm run typecheck", "npm test"],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
       "notes": [
         "Part of core service trio: Context + Memory + Entity",
         "Injected into IntelligenceService for briefing assembly",
@@ -531,7 +534,10 @@
         "packages/core/src/services/LEARNINGS.md",
         ".pi/expertise/core/PROFILE.md"
       ],
-      "testCommands": ["npm run typecheck", "npm test"],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
       "notes": [
         "Part of core service trio: Context + Memory + Entity",
         "Uses recency boosting for search relevance",
@@ -566,7 +572,10 @@
         "packages/core/src/services/LEARNINGS.md",
         ".pi/expertise/core/PROFILE.md"
       ],
-      "testCommands": ["npm run typecheck", "npm test"],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
       "notes": [
         "Part of core service trio: Context + Memory + Entity",
         "SEARCH_PROVIDER_CANDIDATE_LIMIT = 100 triggers full scan fallback",
@@ -598,7 +607,10 @@
         "packages/core/src/services/entity.ts",
         ".pi/expertise/core/PROFILE.md"
       ],
-      "testCommands": ["npm run typecheck", "npm test"],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
       "notes": [
         "Top-level orchestrator — never touches StorageAdapter directly",
         "routeToSkill() uses stop words, trigger matching, description overlap, work type keywords",
@@ -766,6 +778,41 @@
         "Rate limit: 3 req/sec with timestamp-based windowing",
         "File URLs expire ~1 hour (S3 pre-signed URLs)",
         "Supports 20+ block types; unknown types emit HTML comments"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "task-service",
+      "name": "Task Service",
+      "type": "service",
+      "description": "GTD-style task management across now/week.md and now/tasks.md. Supports metadata tags (@area, @project, @person, @due, @from), cross-file CRUD, and auto-resolution of linked commitments.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts",
+        "packages/core/src/models/tasks.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts",
+        "packages/core/src/services/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Task IDs are 8-char sha256 hash of normalized text (same pattern as CommitmentsService)",
+        "Bucket mapping: inbox/must/should/could → week.md, anytime/someday → tasks.md",
+        "Auto-resolution: completing task with @from(commitment:id) resolves linked commitment",
+        "Scoring service is stateless (pure functions)",
+        "Scoring dimensions: due date (0-40), commitment (0-25), meeting relevance (0-20), week priority (0-15)"
       ],
       "lastVerified": "2026-03-28"
     }

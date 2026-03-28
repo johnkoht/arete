@@ -5,6 +5,7 @@ import { spawn, spawnSync, exec } from 'child_process';
 import { createServer } from 'net';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { createServices, getPackageRoot } from '@arete/core';
 import { error, info, warn } from '../formatters.js';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -91,9 +92,46 @@ export function ensureWebBuild(packageRoot, json, spawnSyncFn = spawnSync, exist
     }
     return true;
 }
+// ─── Session Management ──────────────────────────────────────────────────────
+export function getSessionPath(root, sessionId) {
+    return join(root, '.arete', `.review-session-${sessionId}`);
+}
+export function getCompletePath(root, sessionId) {
+    return join(root, '.arete', `.review-complete-${sessionId}`);
+}
+export async function createSession(storage, root, sessionId) {
+    const session = {
+        sessionId,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+    };
+    const sessionPath = getSessionPath(root, sessionId);
+    await storage.write(sessionPath, JSON.stringify(session));
+    return session;
+}
+export async function pollForCompletion(storage, root, sessionId, timeoutMs, pollIntervalMs = 500) {
+    const completePath = getCompletePath(root, sessionId);
+    const sessionPath = getSessionPath(root, sessionId);
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+        const content = await storage.read(completePath);
+        if (content) {
+            // Parse result
+            const result = JSON.parse(content);
+            // Cleanup: delete both session and complete files
+            await storage.delete(sessionPath);
+            await storage.delete(completePath);
+            return result;
+        }
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+    }
+    // Timeout — cleanup session file only (complete file doesn't exist)
+    await storage.delete(sessionPath);
+    return { timedOut: true };
+}
 // ─── Core Implementation (injectable for tests) ───────────────────────────────
 export async function runView(opts, deps = {}) {
-    const { spawnFn = spawn, spawnSyncFn = spawnSync, openBrowserFn = defaultOpenBrowser, fetchFn = fetch, isPortAvailableFn = isPortAvailable, existsSyncFn = existsSync, } = deps;
+    const { spawnFn = spawn, spawnSyncFn = spawnSync, openBrowserFn = defaultOpenBrowser, fetchFn = fetch, isPortAvailableFn = isPortAvailable, existsSyncFn = existsSync, randomUUIDFn = randomUUID, } = deps;
     // 1. Resolve workspace root
     const services = await createServices(process.cwd());
     const root = await services.workspace.findRoot();
@@ -164,15 +202,53 @@ export async function runView(opts, deps = {}) {
         emitError(opts.json, `Server did not start within 5 seconds on port ${port}`);
         process.exit(1);
     }
-    // 7. Open browser
-    const url = `http://localhost:${port}`;
+    // 7. Build URL (with optional --path)
+    const baseUrl = `http://localhost:${port}`;
+    let url = opts.path ? `${baseUrl}${opts.path}` : baseUrl;
+    // 8. Handle --wait mode
+    if (opts.wait) {
+        const sessionId = randomUUIDFn();
+        await createSession(services.storage, root, sessionId);
+        // Append sessionId as query parameter
+        const separator = url.includes('?') ? '&' : '?';
+        const urlWithSession = `${url}${separator}session=${sessionId}`;
+        try {
+            await openBrowserFn(urlWithSession);
+        }
+        catch {
+            // Non-fatal — user can open manually
+        }
+        if (!opts.json) {
+            info(`\nWaiting for review to complete...`);
+            info(`Session: ${sessionId}`);
+        }
+        // Poll for completion
+        const timeoutSec = parseInt(opts.timeout ?? '300', 10);
+        const timeoutMs = timeoutSec * 1000;
+        const result = await pollForCompletion(services.storage, root, sessionId, timeoutMs);
+        // Kill the server
+        child.kill('SIGTERM');
+        if (opts.json) {
+            console.log(JSON.stringify(result));
+        }
+        else if (result.timedOut) {
+            warn('Review timed out');
+        }
+        else {
+            const approvedCount = result.approved?.length ?? 0;
+            const skippedCount = result.skipped?.length ?? 0;
+            info(`Review complete: ${approvedCount} approved, ${skippedCount} skipped`);
+        }
+        return result;
+    }
+    // 9. Non-wait mode: Open browser
     try {
         await openBrowserFn(url);
     }
     catch {
         // Non-fatal — user can open manually
     }
-    // 8. Print ready message
+    // 10. Print ready message
     info(`\nAreté workspace open at ${url}`);
     info('Press Ctrl+C to stop.\n');
     // Keep the process alive
@@ -185,6 +261,9 @@ export function registerViewCommand(program, deps = {}) {
         .description('Open the Areté workspace in the browser (meeting triage UI)')
         .option('--port <port>', 'Port to run the server on')
         .option('--json', 'Output as JSON')
+        .option('--path <route>', 'Open browser to a specific route (e.g., /review)')
+        .option('--wait', 'Block until the UI session completes')
+        .option('--timeout <seconds>', 'Timeout for --wait mode (default: 300)', '300')
         .action(async (opts) => {
         await runView(opts, deps);
     });
