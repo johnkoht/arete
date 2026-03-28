@@ -55,6 +55,12 @@ ORCHESTRATOR (you)
 │   ├─ Subagent: Meeting C   │
 │   └─ Subagent: Meeting D ──┘
 │
+├─ Phase 2.5: Optional Review UI ── orchestrator (opt-in, default: off)
+│   ├─ Check useReviewUI config
+│   ├─ If enabled + staged items: `arete view --path /review --wait`
+│   ├─ On success: continue with approved items
+│   └─ On timeout/error: fallback to CLI triage
+│
 ├─ Phase 3: Review & Intelligence ── orchestrator (sequential)
 │   ├─ User reviews in arete view (external)
 │   ├─ Triage approved action items
@@ -403,6 +409,85 @@ PROMPT: |
 
 ---
 
+### Phase 2.5: Optional Review UI
+
+> **OPT-IN FEATURE**: Review UI is disabled by default. Users who prefer the traditional CLI triage workflow are unaffected. Enable only when you want the visual review experience.
+
+**Configuration**: Check if `useReviewUI` is enabled in skill config or via agent flag.
+- Default: **false** (CLI triage is the default path)
+- Enable: Pass `--review-ui` flag when invoking skill, or set `skills.daily-winddown.useReviewUI: true` in `arete.yaml`
+
+**If no staged items exist**:
+> "No staged items to review — proceeding to triage."
+>
+> (Skip directly to Phase 3)
+
+**If useReviewUI is false OR config not set**:
+> "Using CLI triage (default). To use the visual review UI, pass `--review-ui` or set `useReviewUI: true` in config."
+>
+> (Skip directly to Phase 3)
+
+**If staged items exist AND useReviewUI is true**:
+
+#### 2.5.1 Invoke Review UI with Wait
+
+```bash
+arete view --path /review --wait --timeout 300 --json
+```
+
+This command:
+- Opens the review UI in the browser at `/review`
+- Blocks until the user completes review or timeout (5 minutes)
+- Returns JSON output with the result
+
+#### 2.5.2 Handle Completion Results
+
+**On successful completion** (JSON output with `approved`/`skipped` arrays):
+
+Parse the result:
+```json
+{
+  "approved": [{ "id": "abc123", "type": "decision" }, ...],
+  "skipped": [{ "id": "def456", "type": "learning" }, ...]
+}
+```
+
+Actions:
+- Log: "Review complete: {N} approved, {M} skipped"
+- Approved items will be committed to memory in Phase 3b
+- Skipped items remain in staged sections for next run
+- Continue to Phase 3 with approved items pre-selected
+
+#### 2.5.3 Handle Timeout
+
+**On timeout** (JSON output `{ "timedOut": true }`):
+
+```markdown
+> Review UI timed out after 5 minutes.
+>
+> Staged items remain in meeting files for next run.
+>
+> Continue with CLI triage? [Y/n]
+```
+
+User choices:
+- **Yes** → Proceed to Phase 3 with standard CLI triage
+- **No** → Exit gracefully with note: "Staged items remain for next winddown run."
+
+#### 2.5.4 Handle Errors
+
+**On error** (command fails or non-zero exit):
+
+```markdown
+> Review UI unavailable: {error message}
+>
+> Falling back to CLI triage...
+```
+
+Auto-fallback to Phase 3 (CLI triage). Do not prompt — maintain flow.
+
+---
+
 ### Phase 3: Review & Intelligence (orchestrator — sequential)
 
 This phase runs in the orchestrator context. It handles user interaction, writes, and verification.
@@ -721,6 +806,7 @@ The skip option is critical for maintaining flow:
 - **No meetings today**: Skip Phase 2, proceed to Phase 3 (task triage with existing commitments).
 - **Meeting subagent fails**: Note the failed meeting, process the rest. Report which meetings were not processed.
 - **arete view not used**: If user skips UI review, triage can still work with staged items directly from meeting files.
+- **Review UI fails or times out**: Auto-fallback to CLI triage (Phase 2.5.3/2.5.4). Never block the winddown flow.
 - **`arete index` fails**: Note the failure but do not block the final report.
 - **Subagent returns malformed output**: Skip that subagent's data and note the issue. Process what's available from other subagents.
 - **Agenda merge fails for single file**: Log the error and continue. Agenda file remains in `now/agendas/`.
@@ -731,7 +817,8 @@ The skip option is critical for maintaining flow:
 
 ## Notes
 
-- **Approval flow**: User reviews and approves items in `arete view` (web UI). The agent then helps triage approved items into the week plan vs commitments for later.
+- **Review UI is opt-in**: The visual review UI (Phase 2.5) is disabled by default. Set `skills.daily-winddown.useReviewUI: true` in `arete.yaml` or pass `--review-ui` flag to enable. This preserves the traditional CLI triage workflow for users who prefer it (Harvester requirement: don't force new UX on users).
+- **Approval flow**: User reviews and approves items in `arete view` (web UI) if Review UI is enabled, or via CLI triage (Phase 3a) if disabled. The agent then helps triage approved items into the week plan vs commitments for later.
 - **Local-first**: All state is in local markdown files (`now/week.md`, `goals/*.md`, `people/`, `.arete/memory/`). No external integrations required for core workflow.
 - **Commitments as backlog**: Items marked "Not This Week" stay in `.arete/commitments.json` and surface in future daily plans. Nothing falls through the cracks.
 - **Commitment auto-resolution**: TaskService.completeTask() auto-resolves linked commitments via `@from(commitment:XXX)` metadata. No manual link handling needed.
@@ -766,4 +853,5 @@ The skip option is critical for maintaining flow:
   - `.arete/memory/items/` — decisions and learnings
   - `.arete/commitments.json` — tracked commitments
 - **Web UI**: `arete view` — review and approve staged items
+- **Review UI with wait**: `arete view --path /review --wait --timeout 300 --json` — blocks until user completes review (Phase 2.5)
 - **Related skills**: process-meetings, daily-plan, week-plan, week-review, weekly-winddown, prepare-meeting-agenda
