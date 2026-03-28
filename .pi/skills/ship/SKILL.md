@@ -165,6 +165,7 @@ mkdir -p "dev/executions/${slug}"
 cp ".pi/skills/ship/templates/build-log.md" "dev/executions/${slug}/build-log.md"
 
 # Fill in template values
+# Note: sed -i '' is macOS syntax; Linux uses sed -i (no empty string)
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 sed -i '' \
   -e "s/{slug}/${slug}/g" \
@@ -263,6 +264,7 @@ Wait for explicit confirmation before proceeding.
 | 2.3 (Commit Artifacts) complete | Plan committed | `git log --oneline -1 --grep="plan: {slug}"` returns result |
 | 3.1 (Create Worktree) complete | Worktree exists | `../{repo}.worktrees/{slug}` is directory |
 | 4.1+ | Execution state | `dev/executions/{slug}/` exists |
+| 5.6 (Merge) complete | Branch merged | `git branch --merged main` includes `feature/{slug}` |
 
 **Actions**:
 
@@ -299,6 +301,15 @@ case "$current_phase" in
     # Phase 3.1 should be complete
     repo_name=$(basename "$(git rev-parse --show-toplevel)")
     [[ ! -d "../${repo_name}.worktrees/${slug}" ]] && errors+=("Worktree missing but Phase 3.1 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  6.*)
+    # Phase 5.6 should be complete (branch merged)
+    if ! git branch --merged main 2>/dev/null | grep -q "feature/${slug}"; then
+      errors+=("Branch not merged to main but Phase 5.6 logged complete")
+    fi
     ;;
 esac
 
