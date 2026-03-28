@@ -18,6 +18,7 @@ Tools are **lifecycle-based, stateful capabilities** that complement Skills. Whi
 
 | Tool | Path | Description | Lifecycle |
 |------|------|-------------|-----------|
+| **commitments** | `runtime/tools/commitments/TOOL.md` | Track and resolve open commitments — what you owe people and what they owe you | Ongoing |
 | **onboarding** | `runtime/tools/onboarding/TOOL.md` | 30/60/90 day plan for thriving at a new job—learn, contribute, lead | 90-150 days |
 | **seed-context** | `runtime/tools/seed-context/TOOL.md` | Bootstrap workspace context by importing historical data from integrations | One-time (minutes to hours) |
 

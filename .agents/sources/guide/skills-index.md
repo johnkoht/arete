@@ -21,9 +21,15 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **prepare-meeting-agenda** | `runtime/skills/prepare-meeting-agenda/SKILL.md` | Create structured meeting agenda documents | "Create meeting agenda for leadership sync" |
 | **process-meetings** | `runtime/skills/process-meetings/SKILL.md` | Extract decisions/learnings from saved meetings | "Process my meetings" |
 | **quarter-plan** | `runtime/skills/quarter-plan/SKILL.md` | Set quarterly goals and outcomes | "Set my quarter goals" |
+| **calendar** | `runtime/skills/calendar/SKILL.md` | View and pull calendar events | "Show my calendar", "what meetings do I have" |
 | **capture-conversation** | `runtime/skills/capture-conversation/SKILL.md` | Capture pasted conversations with extracted insights | "Capture this conversation", "save this discussion" |
+| **fathom** | `runtime/skills/fathom/SKILL.md` | Pull meeting recordings from Fathom and save to workspace | "Pull from fathom", "sync fathom" |
+| **krisp** | `runtime/skills/krisp/SKILL.md` | Pull meeting recordings from Krisp and save to workspace | "Pull from krisp", "sync krisp" |
+| **notion** | `runtime/skills/notion/SKILL.md` | Pull pages from Notion and save to workspace | "Pull from notion", "import notion page" |
+| **people-intelligence** | `runtime/skills/people-intelligence/SKILL.md` | Classify people mentions with evidence-backed suggestions | "Classify these people", "people intelligence" |
+| **rapid-context-dump** | `runtime/skills/rapid-context-dump/SKILL.md` | Bootstrap workspace context from docs, website, or pasted content | "Dump my context", "import my docs" |
 | **save-meeting** | `runtime/skills/save-meeting/SKILL.md` | Save and structure meeting notes | "Save this meeting" |
-| **sync** | `runtime/skills/sync/SKILL.md` | Sync recent data from integrations | "Sync my meetings" |
+| **schedule-meeting** | `runtime/skills/schedule-meeting/SKILL.md` | Schedule meetings or block focus time with availability finding | "Schedule a meeting", "book time with" |
 | **synthesize** | `runtime/skills/synthesize/SKILL.md` | Extract themes and insights from project inputs | "Synthesize what we've learned" |
 | **week-plan** | `runtime/skills/week-plan/SKILL.md` | Plan the week and set weekly priorities | "Plan the week", "set weekly priorities" |
 | **week-review** | `runtime/skills/week-review/SKILL.md` | Review week progress and prepare for next week | "Review my week" |
@@ -50,9 +56,17 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 - **prepare-meeting-agenda** - Structured agenda document creation
 - **capture-conversation** - Capture and structure pasted conversations
 - **save-meeting** - Save and structure meeting notes
+- **schedule-meeting** - Schedule meetings or block focus time
 - **process-meetings** - Extract decisions/learnings to memory
-- **sync** - Pull recent data from integrations
 - **synthesize** - Extract themes from project inputs
+
+### Integrations
+- **calendar** - View and pull calendar events
+- **fathom** - Pull meeting recordings from Fathom
+- **krisp** - Pull meeting recordings from Krisp
+- **notion** - Pull pages from Notion
+- **rapid-context-dump** - Bootstrap context from docs, website, or pasted content
+- **people-intelligence** - Classify people mentions with evidence-backed suggestions
 
 ### Operations
 - **getting-started** - Conversational workspace setup

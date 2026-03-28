@@ -571,24 +571,26 @@ After completing a step, include a [DONE:n] tag in your response.
 			return;
 		}
 
+		// Always capture last assistant text for --capture flag (regardless of plan mode)
+		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
+		const lastAssistantText = lastAssistant ? getTextContent(lastAssistant) : null;
+		if (lastAssistantText) {
+			state.lastAssistantText = lastAssistantText;
+		}
+
 		// In plan mode: extract todos and auto-save
 		if (!state.planModeEnabled) return;
 
-		const lastAssistant = [...event.messages].reverse().find(isAssistantMessage);
-		if (lastAssistant) {
-			const text = getTextContent(lastAssistant);
-			// Always store the last assistant text for --capture flag
-			state.lastAssistantText = text;
-			
-			const extracted = extractTodoItems(text);
+		if (lastAssistantText) {
+			const extracted = extractTodoItems(lastAssistantText);
 			if (extracted.length > 0) {
 				// Only update plan state if this is a fresh plan (not loaded from disk).
 				// Prevents tangential agent responses with numbered steps from
 				// overwriting the loaded plan content. (Regression fix: plan-overwrite bug)
 				if (!state.loadedFromDisk) {
 					state.todoItems = extracted;
-					state.planText = text;
-					state.planSize = classifyPlanSize(extracted, text);
+					state.planText = lastAssistantText;
+					state.planSize = classifyPlanSize(extracted, lastAssistantText);
 
 					// Auto-save the plan
 					await autoSavePlan(ctx);

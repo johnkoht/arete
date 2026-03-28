@@ -11,7 +11,7 @@
 
 ```bash
 # Install globally
-npm install -g @arete/cli
+npm install -g github:johnkoht/arete
 
 # Create new workspace
 arete install ~/my-pm-workspace
@@ -174,7 +174,45 @@ arete pull calendar --today --json
 
 **Skills Integration**: The **daily-plan** skill uses calendar data to build meeting context for each of today's meetings. It shows who you're meeting with, what you owe them, recent meetings, and prep suggestions.
 
-### 4. Optional: MCP Integrations
+### 4. Meeting Recording Integrations (Optional)
+
+Meeting recording services automatically capture transcripts, summaries, and action items from your meetings.
+
+#### Fathom
+
+AI meeting assistant that records and transcribes meetings.
+
+**Setup** (one-time browser OAuth):
+```bash
+arete integration configure fathom
+```
+
+**Pull meetings**:
+```bash
+arete pull fathom --days 7  # Pull last 7 days
+```
+
+Saves meeting files to `resources/meetings/`. Use with `seed-context` tool to import historical meetings.
+
+#### Krisp
+
+AI-powered meeting recorder with transcripts, summaries, and action items.
+
+**Setup** (one-time browser OAuth):
+```bash
+arete integration configure krisp
+```
+
+**Pull meetings**:
+```bash
+arete pull krisp --days 7  # Pull last 7 days
+```
+
+Saves markdown files to `resources/meetings/`. Requires Krisp Core plan or higher.
+
+> **Note**: After initial OAuth setup, pull commands run silently with automatic token refresh.
+
+### 5. Optional: MCP Integrations
 
 MCP (Model Context Protocol) integrations extend the workspace with external tools. These are optional but unlock additional capabilities.
 
@@ -201,7 +239,15 @@ See `scratchpad.md` → "MCP Integrations" for future integration ideas:
 2. Navigate to the MCP section
 3. Add your MCP server URL and authenticate
 
-### 5. Start Using the Workspace
+### 6. Start Using the Workspace
+
+**Web Dashboard**:
+```bash
+arete view              # Open meeting triage dashboard in browser
+arete view --port 3001  # Use custom port
+```
+
+The web dashboard provides a visual interface for syncing, processing, reviewing, and approving meetings.
 
 **Start a project** (or invoke skills with `/skill-name`):
 - "Start a discovery project for [topic]"

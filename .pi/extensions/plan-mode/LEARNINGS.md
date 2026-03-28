@@ -48,6 +48,8 @@ The plan-mode extension is a Pi extension loaded at runtime via jiti (no compila
 
 - **Loaded plans can't be updated without --capture (2026-03-27).** When `loadedFromDisk = true`, `agent_end` doesn't update `state.planText` (to prevent accidental overwrites). This means `/plan save` saves the OLD content, not new content from conversation. The catch-22: protection against accidental overwrites also prevents intentional updates. Fixed by adding `--capture` flag: `/plan save --capture` extracts plan steps from the last assistant response and saves that instead. The `lastAssistantText` field in state stores the most recent assistant message for this purpose.
 
+- **`--capture` flag only worked when plan mode was already enabled (2026-03-28).** The `lastAssistantText` capture was inside the `if (!state.planModeEnabled) return;` block, meaning the last assistant message was never stored unless plan mode was on. This broke the expected workflow: have a normal conversation, agent proposes a plan, user runs `/plan save my-plan --capture` to capture it. The fix moves `lastAssistantText` capture BEFORE the plan mode check, so it's always captured regardless of plan mode state.
+
 ## Invariants
 
 - `state.currentSlug` is always a slugified string (lowercase, kebab-case, no special chars) — never set it directly; use `slugify()` from `persistence.ts`.

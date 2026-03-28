@@ -178,7 +178,7 @@ Start with: "Plan my week" or "What's on my plate today?"
 
 ### For Users (Product Builders)
 
-- **[GUIDE.md](runtime/GUIDE.md)** - Comprehensive user reference (shipped to workspace)
+- **[GUIDE.md](packages/runtime/GUIDE.md)** - Comprehensive user reference (shipped to workspace)
 - **[SETUP.md](SETUP.md)** - Installation, integrations, troubleshooting
 - **[ONBOARDING.md](ONBOARDING.md)** - First-time setup checklist
 
@@ -258,6 +258,7 @@ arete search "onboarding" --timeline --days 90           # temporal view
 arete resolve "Jane"
 arete brief --for "competitive analysis"
 arete index                                              # re-index search after manual edits
+arete view                                               # open meeting triage web app
 ```
 
 ### Templates & Customization
@@ -292,7 +293,8 @@ Connect to external tools:
 - **Calendar** (macOS) - Pull events for meeting prep and planning
 - **Fathom** - Import meeting recordings and transcripts
 - **Krisp** - Pull meeting recordings, transcripts, summaries, and action items
-- (Future: Google Calendar, Slack, Linear, Notion)
+- **Google Calendar** - OAuth-based calendar sync for meeting prep and availability
+- (Future: Slack, Linear, Notion)
 
 See SETUP.md for configuration.
 
@@ -318,7 +320,7 @@ We optimize for **product builders operating at their highest level**, not busyn
 ## Community & Support
 
 - **Documentation**: See GUIDE.md in your workspace after install
-- **GitHub**: [github.com/yourusername/arete](https://github.com/yourusername/arete)
+- **GitHub**: [github.com/johnkoht/arete](https://github.com/johnkoht/arete)
 - **Issues**: Report bugs or request features
 - **Discussions**: Ask questions, share workflows
 
