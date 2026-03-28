@@ -233,6 +233,32 @@
       "lastUpdated": "2026-03-11"
     },
     {
+      "name": "audit",
+      "type": "skill",
+      "description": "Orchestrate domain-expert subagents to audit and fix project documentation. Supports --scope for single-domain audit and --dry-run for preview mode.",
+      "provenance": "built",
+      "owner": "build",
+      "status": "active",
+      "implementationPaths": [
+        ".pi/skills/audit/SKILL.md",
+        ".pi/skills/audit/orchestrator.md",
+        ".pi/skills/audit/manifest.yaml",
+        ".pi/skills/audit/templates/audit-report.md"
+      ],
+      "entrypoints": [
+        "/audit",
+        "/audit --scope <domain>",
+        "/audit --dry-run"
+      ],
+      "readBeforeChange": [
+        ".pi/skills/audit/SKILL.md",
+        ".pi/skills/audit/orchestrator.md",
+        ".pi/expertise/core/PROFILE.md",
+        ".pi/expertise/cli/PROFILE.md"
+      ],
+      "lastUpdated": "2026-03-28"
+    },
+    {
       "id": "commitments-service",
       "name": "Commitments Service",
       "type": "service",

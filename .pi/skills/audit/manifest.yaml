@@ -1,0 +1,158 @@
+# Documentation Audit Manifest
+# 
+# Defines what to audit for each domain. Used by the orchestrator
+# to dispatch domain experts with the correct scope.
+#
+# Last verified: 2026-03-28
+
+version: 1
+last_verified: "2026-03-28"
+
+domains:
+  core:
+    description: "Core package - services, integrations, adapters"
+    expertise_profile: ".pi/expertise/core/PROFILE.md"
+    
+    files:
+      # Explicit files
+      - "packages/core/src/services/**/*.ts"
+      - "packages/core/src/integrations/**/*.ts"
+      - "packages/core/src/adapters/**/*.ts"
+      - "packages/core/src/search/**/*.ts"
+      - "packages/core/src/models/**/*.ts"
+      - "packages/core/src/storage/**/*.ts"
+      - "dev/catalog/capabilities.json"
+      
+      # LEARNINGS.md files to check
+      - "packages/core/src/services/LEARNINGS.md"
+      - "packages/core/src/integrations/LEARNINGS.md"
+      - "packages/core/src/integrations/*/LEARNINGS.md"
+      - "packages/core/src/adapters/LEARNINGS.md"
+      - "packages/core/src/search/LEARNINGS.md"
+    
+    auto_fix:
+      - "LEARNINGS.md gaps"  # Can create missing LEARNINGS.md files
+    
+    require_approval:
+      - "capabilities.json additions"
+      - "capabilities.json removals"
+      - "PROFILE.md changes"
+    
+    auto_discover:
+      - check: "packages/core/src/integrations/*/LEARNINGS.md"
+        rule: "Each integration directory should have LEARNINGS.md if it has OAuth or complex patterns"
+
+  cli:
+    description: "CLI package - commands, argument parsing"
+    expertise_profile: ".pi/expertise/cli/PROFILE.md"
+    
+    files:
+      - "packages/cli/src/commands/**/*.ts"
+      - "packages/cli/LEARNINGS.md"
+      - "packages/cli/src/commands/LEARNINGS.md"
+      - "dev/catalog/capabilities.json"
+      - "README.md"  # Commands section
+    
+    auto_fix:
+      - "LEARNINGS.md gaps"
+    
+    require_approval:
+      - "capabilities.json additions"
+      - "README.md command list changes"
+
+  runtime:
+    description: "Runtime package - skills, tools, rules, templates"
+    expertise_profile: null  # Use core profile
+    
+    files:
+      - "packages/runtime/GUIDE.md"
+      - "packages/runtime/UPDATES.md"
+      - "packages/runtime/skills/*/SKILL.md"
+      - "packages/runtime/tools/*/TOOL.md"
+      - "packages/runtime/skills/LEARNINGS.md"
+      - "packages/runtime/tools/LEARNINGS.md"
+      - "packages/runtime/rules/LEARNINGS.md"
+    
+    auto_fix:
+      - "LEARNINGS.md gaps"
+      - "Documentation typos"
+    
+    require_approval:
+      - "GUIDE.md skill list changes"
+      - "New skill additions"
+      - "Skill removals"
+    
+    auto_discover:
+      - check: "packages/runtime/skills/*/SKILL.md"
+        rule: "Every skill directory must have SKILL.md"
+      - check: "packages/runtime/tools/*/TOOL.md"
+        rule: "Every tool directory must have TOOL.md"
+
+  build:
+    description: "Build tooling - skills, extensions, standards, agents"
+    expertise_profile: null
+    
+    files:
+      - ".pi/standards/*.md"
+      - ".pi/skills/*/SKILL.md"
+      - ".pi/skills/*/LEARNINGS.md"
+      - ".pi/extensions/*/index.ts"
+      - ".pi/extensions/*/LEARNINGS.md"
+      - ".pi/agents/*.md"
+      - ".pi/expertise/*/PROFILE.md"
+      - "memory/MEMORY.md"
+      - "memory/collaboration.md"
+    
+    auto_fix:
+      - "Minor standards updates"
+      - "LEARNINGS.md gaps"
+    
+    require_approval:
+      - "Standards structural changes"
+      - "Agent definition changes"
+      - "Expertise profile changes"
+    
+    auto_discover:
+      - check: ".pi/skills/*/SKILL.md"
+        rule: "Every build skill must have SKILL.md"
+      - check: ".pi/agents/*.md"
+        rule: "Agent definitions should be consistent"
+
+  docs:
+    description: "Root documentation - README, SETUP, DEVELOPER"
+    expertise_profile: null
+    
+    files:
+      - "README.md"
+      - "SETUP.md"
+      - "DEVELOPER.md"
+      - "AGENTS.md"
+      - "ONBOARDING.md"
+    
+    auto_fix:
+      - "Typos"
+      - "Dead internal links"
+    
+    require_approval:
+      - "Feature list changes"
+      - "Command list changes"
+      - "Architecture changes"
+    
+    link_validation:
+      enabled: true
+      ignore_external: true  # Only check internal links
+      ignore_patterns:
+        - "http://"
+        - "https://"
+        - "mailto:"
+
+# Cross-cutting checks (orchestrator-owned)
+cross_cutting:
+  - name: "AGENTS.md skills consistency"
+    description: "Verify AGENTS.md [Skills] section matches runtime/skills/"
+    
+  - name: "Memory index accuracy"
+    description: "Verify memory/MEMORY.md index references valid entries"
+    
+  - name: "Capabilities.json path validity"
+    description: "Verify all implementationPaths in capabilities.json exist"
