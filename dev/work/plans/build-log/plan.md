@@ -5,11 +5,11 @@ status: building
 size: large
 tags: []
 created: 2026-03-28T03:27:36.149Z
-updated: 2026-03-28T04:52:20.061Z
+updated: 2026-03-28T04:54:21.700Z
 completed: null
 execution: null
-has_review: false
-has_pre_mortem: false
+has_review: true
+has_pre_mortem: true
 has_prd: false
 steps: 6
 ---
