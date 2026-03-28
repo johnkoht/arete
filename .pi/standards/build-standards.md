@@ -11,6 +11,7 @@ Single source of truth for coding conventions, testing requirements, and quality
 Before any commit, these **must pass**:
 
 ```bash
+npm run build      # Regenerates dist/ files (must be committed)
 npm run typecheck  # Must pass
 npm test           # Must pass (full suite, not just new tests)
 ```
@@ -22,6 +23,16 @@ npm run test:py
 ```
 
 **No exceptions** — even for "quick fixes." Quality gates catch ripple effects.
+
+### Dist Files Must Be Committed
+
+The `dist/` directories are committed for GitHub install support (users can install directly from GitHub without building). After any source change:
+
+1. Run `npm run build` to regenerate dist files
+2. Stage and commit the dist changes with your source changes
+3. If you see unstaged dist files in `git status`, you forgot to build
+
+This applies to: `packages/core/dist/`, `packages/cli/dist/`, `packages/apps/backend/dist/`, `packages/apps/web/dist/`
 
 ---
 
@@ -196,11 +207,13 @@ Example: `refactor(build): consolidate coding standards into build-standards.md`
 
 ## Before Committing
 
-1. `npm run typecheck`
-2. `npm run test:all` (or `npm test` + `npm run test:py` if Python touched)
-3. New code → new/updated tests
-4. Code review checklist (see above)
-5. After regression fixes: update the nearest LEARNINGS.md with what broke, why, and how to avoid it
+1. `npm run build` (regenerates dist/ — must be committed)
+2. `npm run typecheck`
+3. `npm run test:all` (or `npm test` + `npm run test:py` if Python touched)
+4. Stage dist files with your source changes (`git add packages/*/dist/`)
+5. New code → new/updated tests
+6. Code review checklist (see above)
+7. After regression fixes: update the nearest LEARNINGS.md with what broke, why, and how to avoid it
 
 ### Cleanup Check
 
