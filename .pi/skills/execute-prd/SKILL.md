@@ -321,12 +321,25 @@ For each pending task (in dependency order):
 
 11. **Reviewer: Pre-Work Sanity Check**
 
+    **Include expertise profiles**: Use the same profile(s) selected in Step 10 for the developer. Extract key sections based on profile type:
+    - **Core** (`packages/core/`): `## Invariants`, `## Anti-Patterns & Common Mistakes`, `## Key Abstractions & Patterns`
+    - **CLI** (`packages/cli/`): `## Purpose & Boundaries`, `## Command Architecture` + first 100 lines of `## Command Map`
+    - **Fallback** (unknown profile): first 150-200 lines of the profile
+
     Dispatch the reviewer to validate the task prompt before the developer starts:
 
     ```typescript
     subagent({
       agent: "reviewer",
-      task: "Pre-work sanity check for Task [ID]: [title]\n\n[paste the crafted prompt]\n\nReview this task prompt for clarity, completeness of AC, sufficient context, and pre-mortem mitigation coverage.",
+      task: `Pre-work sanity check for Task [ID]: [title]
+
+## Expertise Profile Context
+[paste key sections from selected profile(s) per the mapping above]
+
+## Task Prompt to Review
+[paste the crafted prompt]
+
+Review this task prompt for clarity, completeness of AC, sufficient context, and pre-mortem mitigation coverage. Use the expertise profile to verify the context includes relevant invariants and avoids documented anti-patterns.`,
       agentScope: "project"
     })
     ```
@@ -347,12 +360,28 @@ For each pending task (in dependency order):
 
 13. **Reviewer: Code Review**
 
+    **Include expertise profiles**: Use the same profile(s) the developer received. Extract key sections per the mapping in Step 11 (Core: Invariants/Anti-Patterns/Key Abstractions; CLI: Purpose/Command Architecture; Fallback: first 150-200 lines).
+
     After the developer completes, dispatch the reviewer for a thorough code review:
 
     ```typescript
     subagent({
       agent: "reviewer",
-      task: "Code review for Task [ID]: [title]\n\nAcceptance Criteria:\n[list from prd.json]\n\nPre-mortem mitigations for this task:\n[list]\n\nDeveloper completion report:\n[paste developer output]\n\nReview the implementation. Return APPROVED or ITERATE with structured feedback.",
+      task: `Code review for Task [ID]: [title]
+
+## Expertise Profile Context
+[paste key sections from selected profile(s) — same as developer received]
+
+## Acceptance Criteria
+[list from prd.json]
+
+## Pre-mortem mitigations for this task
+[list]
+
+## Developer completion report
+[paste developer output]
+
+Review the implementation. Use the expertise profile to verify the code respects domain invariants and avoids documented anti-patterns. Return APPROVED or ITERATE with structured feedback.`,
       agentScope: "project"
     })
     ```
@@ -387,6 +416,7 @@ For each pending task (in dependency order):
     - Mark task complete in `dev/executions/{plan-slug}/prd.json` (`status: "complete"`)
     - Update `dev/executions/{plan-slug}/status.json` (`currentTaskId`, `completedTasks`, `updatedAt`)
     - Verify commitSha is recorded
+    - **Output the completion marker**: `[DONE:N]` where N is the task number (e.g., `[DONE:1]`, `[DONE:2]`). This updates the plan-mode widget checklist.
 
 15. **Progress Update (Every 3 Tasks)** (Orchestrator)
     
@@ -560,6 +590,8 @@ Before diving into the detailed steps below, verify you'll cover all of these:
 **Commits**: [sha]
 
 [Progress details]
+
+[DONE:X]  <!-- Output after each task completion to update widget checklist -->
 ```
 
 ### Final Report

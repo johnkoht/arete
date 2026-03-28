@@ -1290,12 +1290,34 @@ If a task fails quality gates after 2 attempts, execute-prd will stop.
 
 **Actions**:
 
+**Step 0: Determine Expertise Profiles**
+
+Determine which packages were touched during the PRD execution:
+
+```bash
+# Get packages touched by this branch
+git diff --name-only main...HEAD | grep "^packages/" | cut -d'/' -f2 | sort -u
+```
+
+Load corresponding expertise profiles based on packages touched:
+- `packages/core/` → `.pi/expertise/core/PROFILE.md`
+- `packages/cli/` → `.pi/expertise/cli/PROFILE.md`
+- Both → include both profiles
+
+Extract key sections based on profile type:
+- **Core**: `## Invariants`, `## Anti-Patterns & Common Mistakes`, `## Key Abstractions & Patterns`
+- **CLI**: `## Purpose & Boundaries`, `## Command Architecture` + first 100 lines of `## Command Map`
+- **Fallback** (unknown profile): first 150-200 lines of the profile
+
 **Step 1: Spawn Engineering Lead for Holistic Review**
 
 ```typescript
 subagent({
   agent: "engineering-lead",
   task: `Holistic review for PRD: {slug}
+
+## Expertise Profile Context
+[paste key sections from profiles determined in Step 0]
 
 **PRD**: Read \`dev/work/plans/{slug}/prd.md\` — focus on Problem Statement and Success Criteria
 **Execution State**: \`dev/executions/{slug}/\`
@@ -1306,9 +1328,11 @@ Perform a holistic review:
 1. **Problem Satisfaction**: Does the implementation solve the problem statement in the PRD?
 2. **Acceptance Criteria**: Are all ACs from each task verified as met?
 3. **Integration**: Do the parts work together? Any gaps between tasks?
-4. **Edge Cases**: Any obvious edge cases not covered?
-5. **Regressions**: Any signs of broken existing functionality?
-6. **Code Quality**: Consistent patterns, no obvious duplication?
+4. **Domain Invariants**: Does the implementation respect the invariants from the expertise profile(s)?
+5. **Anti-Patterns**: Does the code avoid the documented anti-patterns?
+6. **Edge Cases**: Any obvious edge cases not covered?
+7. **Regressions**: Any signs of broken existing functionality?
+8. **Code Quality**: Consistent patterns, no obvious duplication?
 
 **Return your verdict in this format:**
 
@@ -1317,6 +1341,8 @@ Perform a holistic review:
 **Verdict**: READY | NEEDS_REWORK
 
 **Problem Satisfaction**: [Does implementation solve the stated problem?]
+
+**Domain Compliance**: [Does implementation respect invariants and avoid anti-patterns from expertise profiles?]
 
 **Task Verification**:
 | Task | AC Met | Notes |
