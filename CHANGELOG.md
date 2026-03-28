@@ -1,4 +1,19 @@
 # Changelog
+## [0.3.0] - 2026-03-28
+
+### Added
+- add [DONE:N] markers and expertise profile injection
+- split changelog into BUILD (CHANGELOG.md) and GUIDE (UPDATES.md)
+- audit skill - documentation audit orchestration
+
+### Changed
+- lean orchestrator - subagents read own profiles
+
+### Fixed
+- distinguish BUILD vs GUIDE docs in manifest
+- audit findings - memory index + skill frontmatter
+- use persistent report paths, add template rendering note
+
 
 Build tooling and developer experience changes for Areté contributors.
 
