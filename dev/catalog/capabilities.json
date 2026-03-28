@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-16",
+  "lastUpdated": "2026-03-28",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -474,6 +474,141 @@
         "npm test"
       ],
       "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "task-service",
+      "name": "Task Service",
+      "type": "service",
+      "description": "GTD-style task management across now/week.md and now/tasks.md. Supports metadata tags (@area, @project, @person, @due, @from), cross-file CRUD, and auto-resolution of linked commitments.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts",
+        "packages/core/src/models/tasks.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/tasks.ts",
+        "packages/core/src/services/task-scoring.ts",
+        "packages/core/src/services/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Task IDs are 8-char sha256 hash of normalized text (same pattern as CommitmentsService)",
+        "Bucket mapping: inbox/must/should/could → week.md, anytime/someday → tasks.md",
+        "Auto-resolution: completing task with @from(commitment:id) resolves linked commitment",
+        "Scoring service is stateless (pure functions)",
+        "Scoring dimensions: due date (0-40), commitment (0-25), meeting relevance (0-20), week priority (0-15)"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "daily-winddown-skill",
+      "name": "Daily Winddown Skill",
+      "type": "skill",
+      "description": "End-of-day reconciliation: pull recordings, process inbox, process meetings, triage action items, update weekly plan. Uses subagent orchestration for parallel meeting processing.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "arete",
+      "implementationPaths": [
+        "packages/runtime/skills/daily-winddown/SKILL.md"
+      ],
+      "entrypoints": [
+        "daily winddown",
+        "end of day",
+        "wind down"
+      ],
+      "readBeforeChange": [
+        "packages/runtime/skills/daily-winddown/SKILL.md",
+        "packages/runtime/skills/LEARNINGS.md"
+      ],
+      "dependencies": [
+        "process-meetings",
+        "TaskService"
+      ],
+      "notes": [
+        "Opt-in Review UI via useReviewUI config (default: off)",
+        "Uses TaskService for task creation instead of direct file writes",
+        "Inbox processing step for week.md ## Inbox items"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "weekly-winddown-skill",
+      "name": "Weekly Winddown Skill",
+      "type": "skill",
+      "description": "End-of-week review: thread arcs, context health checks, commitment review, and next week planning. Local files only (no Notion).",
+      "provenance": "built",
+      "status": "active",
+      "owner": "arete",
+      "implementationPaths": [
+        "packages/runtime/skills/weekly-winddown/SKILL.md"
+      ],
+      "entrypoints": [
+        "weekly winddown",
+        "end of week",
+        "friday winddown"
+      ],
+      "readBeforeChange": [
+        "packages/runtime/skills/weekly-winddown/SKILL.md",
+        "packages/runtime/skills/LEARNINGS.md"
+      ],
+      "dependencies": [
+        "arete search --timeline",
+        "TaskService"
+      ],
+      "notes": [
+        "Local-only: no Notion references",
+        "Thread arcs use arete search --timeline",
+        "Context health checks local files"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "review-ui",
+      "name": "Review UI Page",
+      "type": "application",
+      "description": "Aggregated review page in web app for tasks, staged decisions/learnings, and commitments. Supports quick approve/skip controls and bulk actions.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/apps/web/src/pages/ReviewPage.tsx",
+        "packages/apps/web/src/components/ReviewItems.tsx",
+        "packages/apps/web/src/hooks/review.ts",
+        "packages/apps/backend/src/routes/review.ts",
+        "packages/cli/src/commands/view.ts"
+      ],
+      "entrypoints": [
+        "arete view --path /review",
+        "arete view --path /review --wait",
+        "GET /api/review/pending",
+        "POST /api/review/complete"
+      ],
+      "readBeforeChange": [
+        "packages/apps/web/src/pages/ReviewPage.tsx",
+        "packages/apps/backend/src/routes/review.ts",
+        "packages/cli/src/commands/view.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "--wait creates session file and polls for completion signal",
+        "--timeout <seconds> for wait mode (default: 300)",
+        "Task destination selector: Must/Should/Could/Anytime/Someday",
+        "Opt-in from daily-winddown via useReviewUI config"
+      ],
+      "lastVerified": "2026-03-28"
     }
   ]
 }
