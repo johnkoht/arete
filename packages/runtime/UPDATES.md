@@ -4,6 +4,83 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 28, 2026
+
+### Task Management System
+
+**Areté now has a unified task management system with GTD-style organization.** Tasks and commitments work together with intelligent scoring and a new Review UI.
+
+#### New File: `now/tasks.md`
+
+Store longer-term tasks in a dedicated task store with GTD buckets:
+
+```markdown
+## Anytime
+
+- [ ] Research competitor pricing @project(pricing-update)
+- [ ] Set up 1:1 with Sarah @person(sarah-chen) @due(2026-04-01)
+
+## Someday
+
+- [ ] Explore AI summarization tools
+```
+
+**Metadata tags**: `@area()`, `@project()`, `@person()`, `@due()`, `@from(commitment:id)`
+
+Run `arete update` to create the file in existing workspaces.
+
+#### Task Scoring in Daily Planning
+
+When you run the daily-plan skill, Areté now scores tasks intelligently:
+
+| Factor | Points | Description |
+|--------|--------|-------------|
+| Due date | 0-40 | Urgent items score higher |
+| Commitment | 0-25 | Items you owe others |
+| Meeting relevance | 0-20 | Related to today's meetings |
+| Week priority | 0-15 | Must > Should > Could |
+
+**Relationship health modifier**: Tasks linked to people marked "needs_attention" get +10 points.
+
+You'll see scoring reasons next to each suggested task.
+
+#### Commitment-Task Linking
+
+When you approve "I owe them" commitments from meetings, Areté now automatically:
+1. Creates a linked task with `@from(commitment:id)`
+2. Places it in your week tasks
+3. Auto-resolves the commitment when you complete the task
+
+No prompts, no extra steps — just complete the task and the commitment closes.
+
+#### Review UI (`arete view --path /review`)
+
+New interactive review page for triaging pending items:
+
+```bash
+# Open Review UI directly
+arete view --path /review
+
+# Block until you click "Done Reviewing"
+arete view --path /review --wait --timeout 120
+```
+
+- **Tasks**: Approve/skip with destination selector (Must/Should/Could/Anytime/Someday)
+- **Decisions & Learnings**: Edit, approve, or skip staged meeting extracts
+- **Commitments**: View pending commitments (links to commitments page)
+- **Bulk actions**: Approve All, Skip All per section
+
+#### Winddown Skills (Local-Only)
+
+Two new skills ported from arete-reserv:
+
+- **daily-winddown** — End-of-day reflection + inbox processing
+- **weekly-winddown** — Friday review + next week planning
+
+Both use local files only (no Notion integration).
+
+---
+
 ## Week of March 25, 2026
 
 ### Meeting Importance & Smart Processing
