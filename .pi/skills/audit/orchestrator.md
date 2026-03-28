@@ -69,7 +69,7 @@ You are the core domain expert. Audit the packages/core directory and capabiliti
 3. **Expertise profile accuracy**: Does .pi/expertise/core/PROFILE.md accurately describe the current architecture?
 
 ### Output Format
-Write your findings to /tmp/audit-core.md using this EXACT format:
+Write your findings to dev/work/audits/{date}/expert-core.md using this EXACT format:
 
 \`\`\`markdown
 # Audit: core
@@ -137,7 +137,7 @@ You are the CLI domain expert. Audit the packages/cli directory and capabilities
 3. **README.md commands section**: Does the main README.md accurately list available commands?
 
 ### Output Format
-Write your findings to /tmp/audit-cli.md using the EXACT format from SKILL.md.
+Write your findings to dev/work/audits/{date}/expert-cli.md using the EXACT format from SKILL.md.
 
 ### Rules
 - ${dryRun ? 'DRY_RUN=true: Do NOT modify any files. Report only.' : 'You may auto-fix LEARNINGS.md gaps within your domain.'}
@@ -178,7 +178,7 @@ You are the runtime domain expert. Audit the packages/runtime directory, GUIDE.m
 3. **LEARNINGS.md coverage**: Check packages/runtime/{skills,tools,rules}/ have LEARNINGS.md
 
 ### Output Format
-Write your findings to /tmp/audit-runtime.md using the EXACT format from SKILL.md.
+Write your findings to dev/work/audits/{date}/expert-runtime.md using the EXACT format from SKILL.md.
 
 ### Rules
 - ${dryRun ? 'DRY_RUN=true: Do NOT modify any files. Report only.' : 'You may auto-fix documentation corrections within your domain.'}
@@ -213,7 +213,7 @@ You are the build domain expert. Audit the .pi directory, standards, expertise p
 5. **Memory index**: Is memory/MEMORY.md index accurate and complete?
 
 ### Output Format
-Write your findings to /tmp/audit-build.md using the EXACT format from SKILL.md.
+Write your findings to dev/work/audits/{date}/expert-build.md using the EXACT format from SKILL.md.
 
 ### Rules
 - ${dryRun ? 'DRY_RUN=true: Do NOT modify any files. Report only.' : 'You may make minor updates to standards.'}
@@ -247,7 +247,7 @@ You are the docs domain expert. Audit the root-level documentation files.
 5. **Completeness**: Are there obvious gaps in documentation?
 
 ### Output Format
-Write your findings to /tmp/audit-docs.md using the EXACT format from SKILL.md.
+Write your findings to dev/work/audits/{date}/expert-docs.md using the EXACT format from SKILL.md.
 
 ### Rules
 - ${dryRun ? 'DRY_RUN=true: Do NOT modify any files. Report only.' : 'You may fix typos and dead internal links.'}
@@ -265,7 +265,7 @@ After all experts complete, collect their reports:
 ```typescript
 const reports = {};
 for (const domain of domains) {
-  const reportPath = `/tmp/audit-${domain}.md`;
+  const reportPath = `dev/work/audits/${date}/expert-${domain}.md`;
   if (fs.existsSync(reportPath)) {
     reports[domain] = fs.readFileSync(reportPath, 'utf-8');
   } else {
@@ -449,7 +449,11 @@ Review these items and apply manually if needed, or address in the next audit ru
 
 ## Phase 9: Generate Final Report
 
-Use the report template to generate the final audit report:
+Use the report template to generate the final audit report. The template uses Handlebars-like syntax:
+- `{{variable}}` — Simple variable replacement
+- `{{#if condition}}...{{else}}...{{/if}}` — Conditional sections
+
+Render the template by replacing variables with collected values and evaluating conditionals.
 
 ```typescript
 const date = new Date().toISOString().split('T')[0];

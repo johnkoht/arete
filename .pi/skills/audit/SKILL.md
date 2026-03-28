@@ -69,7 +69,7 @@ Run full audit and generate reports but suppress all auto-fixes:
 [1] Load skill, parse flags (--scope, --dry-run)
 [2] Read manifest.yaml for audit configuration
 [3] Dispatch domain experts (parallel or single based on scope)
-    └── Each expert writes to /tmp/audit-{domain}.md
+    └── Each expert writes to dev/work/audits/{date}/expert-{domain}.md
 [4] Collect all expert reports
 [5] Extract structural changes requiring approval
 [6] Present approval gate (if not --dry-run)
