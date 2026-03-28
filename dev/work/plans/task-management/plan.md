@@ -1,12 +1,12 @@
 ---
 title: Task Management
 slug: task-management
-status: building
+status: complete
 size: large
 tags: [tasks, commitments, planning, web-app]
 created: 2026-03-27T05:24:53.863Z
-updated: 2026-03-27T22:30:00.000Z
-completed: null
+updated: 2026-03-28T00:30:00.000Z
+completed: 2026-03-28T00:30:00.000Z
 execution: dev/executions/task-management/
 has_review: true
 has_pre_mortem: true
