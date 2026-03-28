@@ -129,70 +129,6 @@ Light mode is for meetings where you just need a summary. Thorough mode is for i
 
 The mode selection appears in the reprocess dialog alongside the "Clear approved items" checkbox.
 
-### Plan Mode Workflow Enhancements
-
-**`/plan list` now has powerful filters.** Filter your plans by status and location:
-
-```
-/plan list --work       # Active work (idea/draft/planned/building)
-/plan list --backlog    # Backlog items only
-/plan list --building   # Currently building
-/plan list --complete   # Completed plans
-/plan list --archive    # Archived plans (by year-month)
-/plan list --all        # Everything
-```
-
-Plans are grouped by status with a footer showing backlog count.
-
-**`/plan promote <slug>` moves backlog to active.** When a backlog item is ready for work:
-
-```
-/plan promote my-feature
-# Creates dev/work/plans/my-feature/plan.md with draft status
-```
-
-**`/release` manages semantic versioning.** Tag releases with automatic CHANGELOG generation:
-
-```
-/release status           # Show current version and unreleased changes
-/release patch            # Bump 0.0.X
-/release minor            # Bump 0.X.0
-/release patch --dry-run  # Preview without committing
-```
-
-Commits are categorized (feat→Added, fix→Fixed, refactor→Changed) and written to CHANGELOG.md.
-
-**`/build <slug>` and `/ship <slug>` work without plan mode.** You can now start building a plan from anywhere:
-
-```
-/build my-feature    # Loads plan and starts building
-/ship my-feature     # Loads plan and runs full ship workflow
-```
-
-No need to first `/plan open my-feature` — the slug-based commands handle it.
-
-**Automatic status transitions.** Plan status now updates automatically:
-- `/build` or `/ship` → status becomes `building`
-- `/wrap` → status becomes `complete`
-
-**Plans archive with year-month paths.** Completed plans archive to:
-```
-dev/work/archive/2026-03/{slug}/
-```
-
-If a plan with the same slug was already archived that month, it gets a suffix: `my-feature-2/`.
-
-### Gitboss Agent
-
-**New gitboss agent for merge decisions.** When you're ready to merge a feature branch:
-
-```
-# In your feature branch conversation:
-"Ready to merge, ask gitboss for approval"
-```
-
-Gitboss reviews the branch state, checks for conflicts, verifies tests pass, and either approves the merge or explains what needs fixing. Keeps merge decisions explicit and auditable.
-
 ---
 
 ## Week of March 24, 2026
@@ -473,14 +409,6 @@ The goal: spend less time reviewing AI extractions and more time on the work tha
 - **Project linking in reviews** — When reviewing meeting items, you can now link them to projects directly
 - **Person page improvements** — The Edit button is now in the page header for better discoverability
 
-**Close-out checklist for your plans.** When you finish a plan and want to make sure all the documentation is up to date, run `/wrap` in plan mode. It checks:
-- Memory entry exists for this plan
-- MEMORY.md index is updated
-- LEARNINGS.md files in changed directories
-- Capability catalog freshness (if you added new commands)
-
-Each item shows ✅ (done), ❌ (missing with what to do), or ⚠️ (suggested review). No more manually remembering what needs updating after a build.
-
 ---
 
 ## Week of March 8, 2026
@@ -586,7 +514,5 @@ The refresh is stale-aware: pass `--if-stale-days 3` and Areté skips anyone ref
 ## Earlier (January–February 2026)
 
 **Intelligence layer.** The core intelligence services — context gathering, briefing assembly, entity resolution, search — all stabilized during this period. These are the foundation that makes `arete brief`, `arete search`, and `arete route` work. Skills use them automatically.
-
-**Plan mode.** The `/plan` system in pi (plan lifecycle, pre-mortem, PRD flow) was built and refined through this period. If you're using Areté for your own product development, this is the system that manages plans from idea → building → complete.
 
 **Workspace installation.** `arete install` and `arete update` got significantly more reliable — correct file placement, proper tool copying, and consistent behavior across fresh installs and updates.

@@ -40,6 +40,8 @@ import {
 	checkCapabilityCatalog,
 	hasUserFacingChanges,
 	checkUpdatesModified,
+	hasBuildChanges,
+	checkChangelogModified,
 } from "./wrap-checks.js";
 import {
 	getCurrentVersion,
@@ -1692,6 +1694,8 @@ export function formatCloseoutChecklist(
 		dirsWithLearnings: string[];
 		hasUserFacingChanges: boolean;
 		updatesModified: boolean;
+		hasBuildChanges: boolean;
+		changelogModified: boolean;
 	},
 ): string {
 	const lines: string[] = [];
@@ -1749,13 +1753,23 @@ export function formatCloseoutChecklist(
 			lines.push("✅ No LEARNINGS.md files in changed directories");
 		}
 
-		// UPDATES.md check for user-facing changes
+		// UPDATES.md check for user-facing changes (GUIDE)
 		if (results.hasUserFacingChanges) {
 			if (results.updatesModified) {
 				lines.push("✅ UPDATES.md was updated (user-facing changes detected)");
 			} else {
 				needsAttention++;
 				lines.push("❌ UPDATES.md not updated — User-facing changes detected in packages/runtime/ or packages/apps/. Add release notes to `packages/runtime/UPDATES.md`");
+			}
+		}
+
+		// CHANGELOG.md check for build changes (BUILD)
+		if (results.hasBuildChanges) {
+			if (results.changelogModified) {
+				lines.push("✅ CHANGELOG.md was updated (build changes detected)");
+			} else {
+				needsAttention++;
+				lines.push("❌ CHANGELOG.md not updated — Build changes detected in .pi/ or dev/. Add release notes to `CHANGELOG.md`");
 			}
 		}
 	}
@@ -1837,6 +1851,8 @@ export async function handleWrap(
 	// Check for user-facing changes and UPDATES.md status
 	const userFacingChanges = hasUserFacingChanges(changedDirs);
 	const updatesModified = userFacingChanges ? checkUpdatesModified(planCreated) : false;
+	const buildChanges = hasBuildChanges(changedDirs);
+	const changelogModified = buildChanges ? checkChangelogModified(planCreated) : false;
 
 	// Format and send the tiered checklist output
 	const checklistOutput = formatCloseoutChecklist(
@@ -1852,6 +1868,8 @@ export async function handleWrap(
 			dirsWithLearnings,
 			hasUserFacingChanges: userFacingChanges,
 			updatesModified,
+			hasBuildChanges: buildChanges,
+			changelogModified,
 		},
 	);
 

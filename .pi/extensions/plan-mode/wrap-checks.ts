@@ -173,13 +173,20 @@ function escapeRegExp(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// User-facing paths that should trigger UPDATES.md review
+// User-facing paths that should trigger UPDATES.md review (GUIDE)
 const USER_FACING_PATHS = [
 	"packages/runtime/",
 	"packages/apps/",
 ];
 
+// Build paths that should trigger CHANGELOG.md review (BUILD)
+const BUILD_PATHS = [
+	".pi/",
+	"dev/",
+];
+
 const UPDATES_FILE = "packages/runtime/UPDATES.md";
+const CHANGELOG_FILE = "CHANGELOG.md";
 
 /**
  * Check if changed directories include user-facing code paths.
@@ -211,6 +218,51 @@ export function checkUpdatesModified(since: Date, cwd: string = process.cwd()): 
 		const sinceStr = since.toISOString();
 		const output = execSync(
 			`git log --oneline --since="${sinceStr}" -- "${UPDATES_FILE}"`,
+			{
+				cwd,
+				encoding: "utf-8",
+				stdio: ["pipe", "pipe", "pipe"],
+			},
+		);
+
+		// If there's any output, the file was modified
+		return output.trim().length > 0;
+	} catch {
+		// Git not available or command failed — assume not modified
+		return false;
+	}
+}
+
+/**
+ * Check if changed directories include build/tooling paths.
+ * Build paths: .pi/, dev/
+ *
+ * @param changedDirs - Array of changed directory paths from getChangedDirectories
+ * @returns true if any build paths were changed
+ */
+export function hasBuildChanges(changedDirs: string[] | null): boolean {
+	if (!changedDirs || changedDirs.length === 0) {
+		return false;
+	}
+
+	return changedDirs.some((dir) =>
+		BUILD_PATHS.some((buildPath) => dir.startsWith(buildPath)),
+	);
+}
+
+/**
+ * Check if CHANGELOG.md was modified since a given date.
+ * Uses git log to check for commits touching the file.
+ *
+ * @param since - Date to check from
+ * @param cwd - Working directory (defaults to process.cwd())
+ * @returns true if CHANGELOG.md was updated since the date, false otherwise
+ */
+export function checkChangelogModified(since: Date, cwd: string = process.cwd()): boolean {
+	try {
+		const sinceStr = since.toISOString();
+		const output = execSync(
+			`git log --oneline --since="${sinceStr}" -- "${CHANGELOG_FILE}"`,
 			{
 				cwd,
 				encoding: "utf-8",
