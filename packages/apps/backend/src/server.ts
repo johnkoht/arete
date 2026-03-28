@@ -17,6 +17,7 @@ import { createPeopleRouter } from './routes/people.js';
 import { createGoalsRouter } from './routes/goals.js';
 import { createSearchRouter } from './routes/search.js';
 import { createSettingsRouter } from './routes/settings.js';
+import { createReviewRouter } from './routes/review.js';
 import { readActivityEvents } from './services/activity.js';
 
 // Absolute path to packages/apps/web/dist/ — resolved from this file's location
@@ -112,6 +113,7 @@ export function createApp(workspaceRoot: string): Hono {
   app.route('/api/goals', createGoalsRouter(workspaceRoot));
   app.route('/api/search', createSearchRouter(workspaceRoot));
   app.route('/api/settings', createSettingsRouter(workspaceRoot));
+  app.route('/api/review', createReviewRouter(workspaceRoot));
 
   // GET /api/activity?limit=10 — recent activity events
   app.get('/api/activity', async (c) => {
