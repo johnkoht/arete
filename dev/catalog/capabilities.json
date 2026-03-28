@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-03-16",
+  "lastUpdated": "2026-03-28",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -18,31 +18,40 @@
         ".pi/extensions/plan-mode/index.ts",
         ".pi/extensions/plan-mode/commands.ts",
         ".pi/extensions/plan-mode/persistence.ts",
-        ".pi/extensions/plan-mode/widget.ts"
+        ".pi/extensions/plan-mode/widget.ts",
+        ".pi/extensions/plan-mode/release.ts",
+        ".pi/extensions/plan-mode/wrap-checks.ts",
+        ".pi/extensions/plan-mode/execution-progress.ts",
+        ".pi/extensions/plan-mode/agents.ts"
       ],
       "entrypoints": [
         "/plan",
-        "/plan list",
-        "/plan open",
-        "/plan save",
-        "/plan status",
-        "/plan next",
-        "/plan hold",
-        "/plan block",
-        "/plan resume",
-        "/plan delete",
+        "/plan new",
+        "/plan list [--backlog|--complete|--building|--planned|--archive|--all]",
+        "/plan open <slug>",
+        "/plan save [--capture]",
+        "/plan rename <new-name>",
+        "/plan close",
+        "/plan status [idea|draft|planned]",
+        "/plan delete [slug]",
+        "/plan archive [slug|list]",
+        "/plan promote [backlog-item]",
+        "/approve",
         "/review",
         "/pre-mortem",
         "/prd",
-        "/build",
+        "/build [slug]",
         "/build status",
-        "/wrap"
+        "/ship [slug]",
+        "/todos",
+        "/wrap",
+        "/release [status|patch|minor] [--dry-run]"
       ],
       "readBeforeChange": [
         ".pi/extensions/plan-mode/index.ts",
         ".pi/extensions/plan-mode/commands.ts",
         ".pi/APPEND_SYSTEM.md",
-        "dev/plans/"
+        "dev/work/plans/"
       ],
       "testCommands": [
         "npm test",
@@ -52,7 +61,7 @@
         "Workspace-local extension under .pi/extensions (not baked into Pi core).",
         "Exact upstream/base origin should be confirmed and recorded in a follow-up pass."
       ],
-      "lastVerified": "2026-02-18"
+      "lastVerified": "2026-03-28"
     },
     {
       "id": "pi-agent-memory-extension",
@@ -362,7 +371,7 @@
       "id": "web-dashboard",
       "name": "Product Intelligence Dashboard",
       "type": "application",
-      "description": "Full web application for product intelligence visualization. Includes Dashboard, Meeting Triage, People Intelligence, Goals Alignment, Memory Feed, Intelligence Patterns, Commitments, and Global Search pages.",
+      "description": "Full web application for product intelligence visualization. Includes Dashboard, Meeting Triage (with detail view), People Intelligence (with detail view), Goals Alignment, Memory Feed, Intelligence Patterns, Commitments, Global Search, and Settings pages.",
       "provenance": "built",
       "status": "active",
       "owner": "build",
@@ -398,7 +407,7 @@
         "Launched via arete view command which spawns backend and opens browser",
         "SSE endpoint for real-time meeting processing updates"
       ],
-      "lastVerified": "2026-03-08"
+      "lastVerified": "2026-03-28"
     },
     {
       "id": "daily-intelligence",
@@ -474,6 +483,291 @@
         "npm test"
       ],
       "lastVerified": "2026-03-08"
+    },
+    {
+      "id": "context-service",
+      "name": "Context Service",
+      "type": "service",
+      "description": "Assembles relevant workspace context for queries and skills. Maps product primitives to workspace files via PRIMITIVE_FILE_MAP. Detects coverage gaps. Provides context inventory with freshness tracking.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/context.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/context.ts"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/context.ts",
+        "packages/core/src/services/LEARNINGS.md",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "testCommands": ["npm run typecheck", "npm test"],
+      "notes": [
+        "Part of core service trio: Context + Memory + Entity",
+        "Injected into IntelligenceService for briefing assembly",
+        "Uses SearchProvider for semantic file matching"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "memory-service",
+      "name": "Memory Service",
+      "type": "service",
+      "description": "Manages workspace memory (decisions, learnings, observations). Provides search, creation, timeline building with theme extraction. Memory files: decisions.md, learnings.md, agent-observations.md in .arete/memory/items/.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/memory.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/memory.ts",
+        "arete search --scope memory"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/memory.ts",
+        "packages/core/src/services/LEARNINGS.md",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "testCommands": ["npm run typecheck", "npm test"],
+      "notes": [
+        "Part of core service trio: Context + Memory + Entity",
+        "Uses recency boosting for search relevance",
+        "Theme extraction requires minimum 3 occurrences"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "entity-service",
+      "name": "Entity Service",
+      "type": "service",
+      "description": "Resolves entity references (people, meetings, projects) via fuzzy matching. Manages people files (CRUD, list, memory refresh). Finds mentions and relationships across workspace. Includes People Intelligence for candidate triage.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/entity.ts",
+        "packages/core/src/services/person-memory.ts",
+        "packages/core/src/services/person-health.ts",
+        "packages/core/src/services/person-signals.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/entity.ts",
+        "arete resolve",
+        "arete people list",
+        "arete people show",
+        "arete people memory refresh"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/entity.ts",
+        "packages/core/src/services/person-memory.ts",
+        "packages/core/src/services/LEARNINGS.md",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "testCommands": ["npm run typecheck", "npm test"],
+      "notes": [
+        "Part of core service trio: Context + Memory + Entity",
+        "SEARCH_PROVIDER_CANDIDATE_LIMIT = 100 triggers full scan fallback",
+        "Person Intelligence modules (person-*.ts) are implementation details, not exported from core index"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "intelligence-service",
+      "name": "Intelligence Service",
+      "type": "service",
+      "description": "Orchestrates Context, Memory, and Entity services to assemble primitive briefings. Routes queries to best skill via trigger matching, description overlap, and work type keywords. Prepares skill context with proactive search.",
+      "provenance": "built",
+      "status": "active",
+      "owner": "build",
+      "implementationPaths": [
+        "packages/core/src/services/intelligence.ts"
+      ],
+      "entrypoints": [
+        "packages/core/src/services/intelligence.ts",
+        "arete brief --for",
+        "arete route",
+        "arete skill route"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/services/intelligence.ts",
+        "packages/core/src/services/context.ts",
+        "packages/core/src/services/memory.ts",
+        "packages/core/src/services/entity.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "testCommands": ["npm run typecheck", "npm test"],
+      "notes": [
+        "Top-level orchestrator — never touches StorageAdapter directly",
+        "routeToSkill() uses stop words, trigger matching, description overlap, work type keywords",
+        "Service composition pattern: IntelligenceService(context, memory, entity)"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "apple-calendar-provider",
+      "name": "Apple Calendar Provider",
+      "type": "integration",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "macos",
+      "summary": "macOS-only calendar integration via ical-buddy CLI. Default calendar provider for Mac users.",
+      "implementationPaths": [
+        "packages/core/src/integrations/calendar/ical-buddy.ts",
+        "packages/core/src/integrations/calendar/index.ts",
+        "packages/core/src/integrations/registry.ts",
+        "packages/cli/src/commands/integration.ts",
+        "packages/cli/src/commands/pull.ts"
+      ],
+      "entrypoints": [
+        "arete integration configure calendar",
+        "arete pull calendar --today",
+        "arete pull calendar --days N"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/integrations/LEARNINGS.md",
+        "packages/core/src/integrations/calendar/ical-buddy.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Requires ical-buddy binary installed via Homebrew: brew install ical-buddy",
+        "macOS only — use google-calendar-provider for cross-platform",
+        "Provider alias: 'macos' → 'apple-calendar' in registry"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "krisp-integration",
+      "name": "Krisp Integration",
+      "type": "integration",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Meeting recording integration with AI summaries, transcripts, and action items via Krisp MCP API. OAuth PKCE authentication.",
+      "implementationPaths": [
+        "packages/core/src/integrations/krisp/index.ts",
+        "packages/core/src/integrations/krisp/client.ts",
+        "packages/core/src/integrations/krisp/config.ts",
+        "packages/core/src/integrations/krisp/save.ts",
+        "packages/core/src/integrations/krisp/types.ts",
+        "packages/cli/src/commands/integration.ts",
+        "packages/cli/src/commands/pull.ts"
+      ],
+      "entrypoints": [
+        "arete integration configure krisp",
+        "arete pull krisp --days N"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/integrations/krisp/LEARNINGS.md",
+        "packages/core/src/integrations/krisp/client.ts",
+        "packages/core/src/integrations/registry.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Uses MCP (Model Context Protocol) over HTTP Streamable",
+        "OAuth requires browser consent flow",
+        "API uses get_multiple_documents (not get_document) for batch transcript fetch",
+        "SSE responses require Accept: application/json, text/event-stream header",
+        "Date filtering: add +1 day to 'before' to include today's meetings across timezones"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "fathom-integration",
+      "name": "Fathom Integration",
+      "type": "integration",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Meeting recording and transcription integration. Pulls summaries, transcripts, and action items from Fathom.",
+      "implementationPaths": [
+        "packages/core/src/integrations/fathom/index.ts",
+        "packages/core/src/integrations/fathom/client.ts",
+        "packages/core/src/integrations/fathom/config.ts",
+        "packages/core/src/integrations/fathom/save.ts",
+        "packages/core/src/integrations/fathom/types.ts",
+        "packages/cli/src/commands/integration.ts",
+        "packages/cli/src/commands/pull.ts"
+      ],
+      "entrypoints": [
+        "arete integration configure fathom",
+        "arete pull fathom --days N"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/integrations/LEARNINGS.md",
+        "packages/core/src/integrations/fathom/client.ts",
+        "packages/core/src/integrations/registry.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "API key from https://fathom.video/settings/api",
+        "Stored in FATHOM_API_KEY env var or .credentials/credentials.yaml",
+        "Follows same pattern as Krisp: thin fetch wrapper, not SDK"
+      ],
+      "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "notion-integration",
+      "name": "Notion Integration",
+      "type": "integration",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Documentation integration pulling Notion pages as markdown. Supports nested blocks, tables, code, images with rate limiting and dedup.",
+      "implementationPaths": [
+        "packages/core/src/integrations/notion/index.ts",
+        "packages/core/src/integrations/notion/client.ts",
+        "packages/core/src/integrations/notion/config.ts",
+        "packages/core/src/integrations/notion/url.ts",
+        "packages/core/src/integrations/notion/blocks-to-markdown.ts",
+        "packages/core/src/integrations/notion/save.ts",
+        "packages/core/src/integrations/notion/types.ts",
+        "packages/cli/src/commands/integration.ts",
+        "packages/cli/src/commands/pull.ts"
+      ],
+      "entrypoints": [
+        "arete integration configure notion",
+        "arete pull notion <page-urls...>",
+        "arete pull notion --dry-run <page-urls...>"
+      ],
+      "readBeforeChange": [
+        "packages/core/src/integrations/notion/LEARNINGS.md",
+        "packages/core/src/integrations/notion/client.ts",
+        "packages/core/src/integrations/notion/blocks-to-markdown.ts",
+        "packages/core/src/integrations/registry.ts"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "API key from notion.so/profile/integrations (internal integration)",
+        "Stored in NOTION_API_KEY env var or .credentials/credentials.yaml",
+        "Thin fetch wrapper — no @notionhq/client SDK (567KB saved)",
+        "Rate limit: 3 req/sec with timestamp-based windowing",
+        "File URLs expire ~1 hour (S3 pre-signed URLs)",
+        "Supports 20+ block types; unknown types emit HTML comments"
+      ],
+      "lastVerified": "2026-03-28"
     }
   ]
 }
