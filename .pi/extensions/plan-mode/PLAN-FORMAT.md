@@ -6,7 +6,7 @@ Plans are stored as markdown files with YAML frontmatter at `dev/work/plans/{slu
 
 **Preferred**: Use the plan-mode extension commands:
 - `/plan new [name]` — Create a new plan
-- `/plan save [name] [--capture]` — Save the current plan (--capture: use latest agent response instead of loaded content)
+- `/plan save [name] [--capture]` — Save the current plan. The `--capture` flag saves the **entire** last agent response (not just steps). The response must contain a "Plan:" section with numbered steps to validate it's a plan, but all content (specs, examples, context) is preserved.
 
 **Auto-save**: When plan mode is active and you produce numbered steps under a "Plan:" header, the extension auto-saves with correct frontmatter.
 
