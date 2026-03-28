@@ -1,6 +1,10 @@
 ---
 name: prd-to-json
 description: Convert markdown PRD to JSON task list for autonomous execution. INTERNAL TOOL for Areté development only.
+category: build
+work_type: development
+primitives: []
+requires_briefing: false
 ---
 
 # PRD to JSON Skill
