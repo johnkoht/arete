@@ -335,6 +335,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 			// Determine slug: provided > current > derived from title
 			let slug = params.slug?.trim();
+			if (slug) {
+				slug = slugify(slug); // Always sanitize user-provided slugs
+			}
 			if (!slug && state.currentSlug) {
 				slug = state.currentSlug;
 			}
