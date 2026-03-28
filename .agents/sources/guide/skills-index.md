@@ -28,6 +28,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **synthesize** | `runtime/skills/synthesize/SKILL.md` | Extract themes and insights from project inputs | "Synthesize what we've learned" |
 | **week-plan** | `runtime/skills/week-plan/SKILL.md` | Plan the week and set weekly priorities | "Plan the week", "set weekly priorities" |
 | **week-review** | `runtime/skills/week-review/SKILL.md` | Review week progress and prepare for next week | "Review my week" |
+| **weekly-winddown** | `runtime/skills/weekly-winddown/SKILL.md` | End-of-week review, thread arcs, and next week planning | "Weekly winddown", "end of week", "friday winddown" |
 | **workspace-tour** | `runtime/skills/workspace-tour/SKILL.md` | Orient users to workspace structure and capabilities | "Give me a tour", "how does this work?" |
 
 ## Skill Categories
@@ -38,6 +39,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 - **week-review** - Review progress and prepare for next week
 - **daily-plan** - Daily focus with meeting context and priorities
 - **daily-winddown** - End-of-day inbox triage, notes capture, commitment review
+- **weekly-winddown** - End-of-week review, thread arcs, and next week planning
 - **goals-alignment** - Compare goals to org strategy
 
 ### Discovery & Definition

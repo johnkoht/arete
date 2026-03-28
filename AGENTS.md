@@ -105,6 +105,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 |synthesize:{triggers:"Synthesize what we've learned",does:"Extract themes and insights from project inputs"}
 |week-plan:{triggers:"Plan the week, set weekly priorities",does:"Plan the week and set weekly priorities"}
 |week-review:{triggers:"Review my week",does:"Review week progress and prepare for next week"}
+|weekly-winddown:{triggers:"Weekly winddown, end of week, friday winddown",does:"End-of-week review, thread arcs, and next week planning"}
 |workspace-tour:{triggers:"Give me a tour, how does this work?",does:"Orient users to workspace structure and capabilities"}
 
 [Tools]|auto-applied:runtime/tools/
