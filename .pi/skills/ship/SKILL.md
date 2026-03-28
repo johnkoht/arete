@@ -69,6 +69,11 @@ git status, git add, git commit, git branch
 ## Workflow Overview
 
 ```
+[PHASE 0] Initialize Build Log (main branch)
+├── 0.1 Check for Existing Build Log
+├── 0.2 Create New OR Resume Existing
+└── 0.3 Verify State (if resuming) → GATE: Mismatch detected
+
 [PHASE 1] Pre-Build (main branch, human can walk away)
 ├── 1.1 Save Plan
 ├── 1.2 Run Pre-Mortem → GATE: CRITICAL risks
@@ -98,6 +103,206 @@ git status, git add, git commit, git branch
 [PHASE 6] Cleanup (after merge)
 └── 6.1 Remove Worktree & Branch ← runs automatically after successful merge
 ```
+
+---
+
+## Phase 0: Initialize Build Log
+
+Phase 0 manages the build-log.md artifact that enables inter-session resume. It runs before any other phase.
+
+### Phase 0.1: Check for Existing Build Log
+
+**Entry Conditions**:
+- Pre-flight check passed
+- Plan slug determined
+
+**Actions**:
+
+```bash
+slug="{plan-slug}"
+build_log="dev/executions/${slug}/build-log.md"
+
+if [[ -f "$build_log" ]]; then
+  # Extract current state
+  state=$(grep -E "^\*\*State\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+  phase=$(grep -E "^\*\*Phase\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+  
+  echo "📋 Existing build log found"
+  echo "   State: $state"
+  echo "   Phase: $phase"
+  
+  if [[ "$state" == "COMPLETE" ]]; then
+    echo "⚠️ Build already complete. Re-run will restart from Phase 1."
+    # Require confirmation before proceeding
+  else
+    echo "🔄 Resume mode: will continue from $phase"
+  fi
+else
+  echo "📝 No existing build log. Will create new."
+fi
+```
+
+**Exit Conditions**:
+- Build log existence determined
+- If exists: state and phase extracted
+- Next action determined (new, resume, or confirm re-run)
+
+---
+
+### Phase 0.2: Create New OR Resume Existing
+
+**Entry Conditions**:
+- Phase 0.1 complete
+- Action determined (new/resume/re-run)
+
+**Actions — New Build**:
+
+If no build log exists, create from template:
+
+```bash
+slug="{plan-slug}"
+mkdir -p "dev/executions/${slug}"
+cp ".pi/skills/ship/templates/build-log.md" "dev/executions/${slug}/build-log.md"
+
+# Fill in template values
+timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+sed -i '' \
+  -e "s/{slug}/${slug}/g" \
+  -e "s/{ISO timestamp}/${timestamp}/g" \
+  "dev/executions/${slug}/build-log.md"
+
+echo "✓ Created build-log.md from template"
+```
+
+**Actions — Resume**:
+
+If build log exists with State ≠ COMPLETE:
+
+1. Display resume summary:
+   ```
+   🔄 Resuming Ship: {slug}
+   
+   **Current Phase**: {phase}
+   **State**: {state}
+   **Last Update**: {timestamp}
+   **Sessions**: {count}
+   
+   Continuing from {phase}...
+   ```
+
+2. Proceed to Phase 0.3 (Verify State)
+
+**Actions — Re-Run Completed Build**:
+
+If build log exists with State = COMPLETE:
+
+```
+⚠️ Build Already Complete
+
+This build was completed previously. Re-running will:
+- Archive the existing build-log.md to build-log.{timestamp}.md
+- Start fresh from Phase 1
+
+Continue? [y/N]
+```
+
+Wait for explicit confirmation before proceeding.
+
+**Exit Conditions**:
+- New: build-log.md created, ready for Phase 1
+- Resume: summary displayed, ready for Phase 0.3
+- Re-run: confirmation received OR aborted
+
+---
+
+### Phase 0.3: Verify State (Resume Only)
+
+**Entry Conditions**:
+- Phase 0.2 determined resume mode
+- Current phase and state known
+
+**Purpose**: Sanity-check that logged state matches actual artifacts before resuming. Prevents silent failures from stale/corrupt logs.
+
+**Phase → Artifact Mapping**:
+
+<!-- Update this mapping if phases are renumbered -->
+
+| Logged Phase | Expected Artifact | Verification |
+|-------------|------------------|--------------|
+| 1.2 (Pre-Mortem) complete | `dev/work/plans/{slug}/pre-mortem.md` | File exists |
+| 1.3 (Review) complete | `dev/work/plans/{slug}/review.md` | File exists |
+| 2.2 (Convert to PRD) complete | `dev/work/plans/{slug}/prd.md`, `prd.json` | Both files exist |
+| 2.3 (Commit Artifacts) complete | Plan committed | `git log --oneline -1 --grep="plan: {slug}"` returns result |
+| 3.1 (Create Worktree) complete | Worktree exists | `../{repo}.worktrees/{slug}` is directory |
+| 4.1+ | Execution state | `dev/executions/{slug}/` exists |
+
+**Actions**:
+
+```bash
+slug="{plan-slug}"
+current_phase=$(grep -E "^\*\*Phase\*\*:" "dev/executions/${slug}/build-log.md" | head -1 | sed 's/.*: //' | cut -d' ' -f1)
+errors=()
+
+# Check based on current phase
+case "$current_phase" in
+  1.3*|2.*|3.*|4.*|5.*)
+    # Phase 1.2 should be complete
+    [[ ! -f "dev/work/plans/${slug}/pre-mortem.md" ]] && errors+=("Pre-mortem missing but Phase 1.2 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  2.*|3.*|4.*|5.*)
+    # Phase 1.3 should be complete
+    [[ ! -f "dev/work/plans/${slug}/review.md" ]] && errors+=("Review missing but Phase 1.3 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  2.3*|3.*|4.*|5.*)
+    # Phase 2.2 should be complete
+    [[ ! -f "dev/work/plans/${slug}/prd.md" ]] && errors+=("prd.md missing but Phase 2.2 logged complete")
+    [[ ! -f "dev/work/plans/${slug}/prd.json" ]] && errors+=("prd.json missing but Phase 2.2 logged complete")
+    ;;
+esac
+
+case "$current_phase" in
+  3.2*|4.*|5.*)
+    # Phase 3.1 should be complete
+    repo_name=$(basename "$(git rev-parse --show-toplevel)")
+    [[ ! -d "../${repo_name}.worktrees/${slug}" ]] && errors+=("Worktree missing but Phase 3.1 logged complete")
+    ;;
+esac
+
+# Report
+if [[ ${#errors[@]} -eq 0 ]]; then
+  echo "✓ State verification passed"
+else
+  echo "⚠️ State Mismatch Detected"
+  echo ""
+  for err in "${errors[@]}"; do
+    echo "  - $err"
+  done
+  echo ""
+  echo "Options:"
+  echo "  [F] Fix log — Reset to earlier phase"
+  echo "  [R] Rebuild — Regenerate missing artifacts"
+  echo "  [A] Abort — Cancel resume"
+fi
+```
+
+**Gate: State Verification**
+
+| Condition | Action |
+|-----------|--------|
+| All artifacts match logged state | → Proceed to logged phase |
+| Mismatch detected | → **PAUSE** and present options |
+
+**Exit Conditions**:
+- Verification passed: continue to logged phase
+- Mismatch: user chose fix/rebuild/abort
+
+**Handoff**: Resume at the phase indicated in build-log.md Current Status
 
 ---
 
