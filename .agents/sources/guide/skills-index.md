@@ -10,6 +10,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 | **construct-roadmap** | `runtime/skills/construct-roadmap/SKILL.md` | Build product roadmaps with prioritization and timelines | "Build roadmap for Q2 2026" |
 | **create-prd** | `runtime/skills/create-prd/SKILL.md` | Interactive PRD creation with Product Leader persona | "Create a PRD", "write a PRD for..." |
 | **daily-plan** | `runtime/skills/daily-plan/SKILL.md` | Plan your day with focus, meetings, and priorities | "What's on my plate today?" |
+| **daily-winddown** | `runtime/skills/daily-winddown/SKILL.md` | End-of-day inbox triage and winddown routine | "End my day", "process inbox", "daily winddown" |
 | **discovery** | `runtime/skills/discovery/SKILL.md` | Guide problem discovery and research synthesis | "Start discovery", "research [topic]" |
 | **finalize-project** | `runtime/skills/finalize-project/SKILL.md` | Archive completed projects and extract learnings | "Finalize this project" |
 | **general-project** | `runtime/skills/general-project/SKILL.md` | Start generic projects for work that doesn't fit specialized categories | "Start a project", "new project for [topic]" |
@@ -36,6 +37,7 @@ Skills are reusable workflows that help you (and your AI) get things done—disc
 - **week-plan** - Define top 3-5 outcomes for the week
 - **week-review** - Review progress and prepare for next week
 - **daily-plan** - Daily focus with meeting context and priorities
+- **daily-winddown** - End-of-day inbox triage, notes capture, commitment review
 - **goals-alignment** - Compare goals to org strategy
 
 ### Discovery & Definition
