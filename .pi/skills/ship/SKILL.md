@@ -306,6 +306,75 @@ fi
 
 ---
 
+## Build Log Update Reference
+
+Each phase updates `dev/executions/{slug}/build-log.md` at entry and exit. This enables resume from any point.
+
+### On Phase Start
+
+Update Current Status and add Started entry:
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: IN_PROGRESS
+**Last Update**: {ISO timestamp}
+```
+
+```markdown
+#### Phase X.Y: {Phase Name} ⏳
+**Started**: {ISO timestamp}
+```
+
+### On Phase Complete
+
+Update Current Status and complete the entry:
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name} (moving to X.Z)
+**State**: COMPLETE
+**Last Update**: {ISO timestamp}
+```
+
+```markdown
+#### Phase X.Y: {Phase Name} ✓
+**Started**: {timestamp}
+**Completed**: {timestamp}
+**Outcome**: {1-2 sentence summary of what was done}
+**Artifacts**: `{path}` (if files created)
+```
+
+### On Gate Pause
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: BLOCKED
+**Last Update**: {ISO timestamp}
+**Reason**: {gate name}: {specific reason}
+```
+
+### On Failure
+
+```markdown
+## Current Status
+**Phase**: X.Y — {Phase Name}
+**State**: FAILED
+**Last Update**: {ISO timestamp}
+**Reason**: {error description}
+```
+
+Mark the phase entry with ✗:
+```markdown
+#### Phase X.Y: {Phase Name} ✗
+**Started**: {timestamp}
+**Failed**: {timestamp}
+**Reason**: {error description}
+```
+
+---
+
 ## Phase 1: Pre-Build
 
 ### Phase 1.1: Save Plan
@@ -322,6 +391,8 @@ fi
 **Exit Conditions**:
 - Plan saved at `dev/work/plans/{slug}/plan.md`
 - Plan slug determined for subsequent phases
+
+**Build Log**: Update to Phase 1.1, State IN_PROGRESS on start; State COMPLETE with Outcome "Saved to dev/work/plans/{slug}/plan.md" on finish.
 
 **Handoff to 1.2**: Plan path passed to pre-mortem skill
 
@@ -341,6 +412,8 @@ fi
 **Exit Conditions**:
 - `pre-mortem.md` created in plan directory
 - Risk assessment complete with severity levels
+
+**Build Log**: Update to Phase 1.2, State IN_PROGRESS on start. On complete: Outcome "{N} risks identified ({N} CRITICAL, {N} HIGH, {N} MEDIUM)", Artifacts "pre-mortem.md". On gate pause: State BLOCKED, Reason "Pre-Mortem: CRITICAL risk identified".
 
 **Gate: Pre-Mortem**
 
@@ -370,6 +443,8 @@ See [orchestrator.md](./orchestrator.md) for gate decision matrix.
 **Exit Conditions**:
 - `review.md` created in plan directory
 - Blocker assessment complete
+
+**Build Log**: Update to Phase 1.3, State IN_PROGRESS on start. On complete: Outcome "Review: {verdict}", Artifacts "review.md". On gate pause: State BLOCKED, Reason "Review: structural blockers found".
 
 **Gate: Review**
 
@@ -520,6 +595,8 @@ Produce **exactly 3-5 bullets** (per pre-mortem mitigation — avoid noise). Eac
 - Memory synthesis complete (3-5 bullets)
 - Synthesis stored for PRD handoff
 
+**Build Log**: Update to Phase 2.1, State IN_PROGRESS on start. On complete: Outcome "Memory synthesis: {N} bullets from {N} sources".
+
 **Handoff to 2.2**: Memory synthesis bullets to inform PRD context
 
 ---
@@ -637,6 +714,8 @@ fi
 - `prd.md` created in plan directory
 - `prd.json` created and passes validation
 - Memory insights incorporated into task descriptions/criteria
+
+**Build Log**: Update to Phase 2.2, State IN_PROGRESS on start. On complete: Outcome "PRD created with {N} tasks", Artifacts "prd.md, prd.json".
 
 **Handoff to 2.3**: Artifact paths for commit, validation status
 
@@ -788,6 +867,8 @@ fi
 - Commit SHA recorded and available for handoff
 - No uncommitted changes in plan directory
 
+**Build Log**: Update to Phase 2.3, State IN_PROGRESS on start. On complete: Outcome "Artifacts committed ({commit_sha})", Artifacts "5 files in dev/work/plans/{slug}/".
+
 **Handoff to 3.1**: Plan slug and commit SHA (stored in `.commit-sha` or `state.env`)
 
 ---
@@ -925,6 +1006,8 @@ echo "✅ Dependencies installed"
 - Branch `feature/{slug}` created
 - npm install complete
 
+**Build Log**: Update to Phase 3.1, State IN_PROGRESS on start. On complete: Outcome "Worktree created at {path}, branch feature/{slug}".
+
 **Handoff to 3.2**: Worktree absolute path (stored in `$worktree_path_abs`)
 
 ---
@@ -1040,6 +1123,8 @@ Proceeding to execute PRD...
 - On correct feature branch
 - PRD files verified accessible
 
+**Build Log**: Update to Phase 3.2, State IN_PROGRESS on start. On complete: Outcome "Switched to worktree, PRD verified".
+
 **Handoff to 4.1**: 
 - PRD path: `dev/work/plans/{slug}/prd.md`
 - Execution state path: `dev/executions/{slug}/`
@@ -1124,6 +1209,8 @@ If a task fails quality gates after 2 attempts, execute-prd will stop.
 - All tasks in `prd.json` status: "complete"
 - All commits made on feature branch
 - Execution state at `dev/executions/{slug}/`
+
+**Build Log**: Update to Phase 4.1, State IN_PROGRESS on start. On complete: Outcome "Executed {N}/{N} tasks, {N} iterations", Decisions "{any blockers resolved}". On gate pause: State BLOCKED, Reason "Build: task {id} failed after {N} attempts".
 
 **Gate: Build**
 
@@ -1222,6 +1309,8 @@ Parse the engineering lead's response for:
 **Exit Conditions**:
 - Final review complete
 - Verdict: READY or NEEDS_REWORK
+
+**Build Log**: Update to Phase 4.2, State IN_PROGRESS on start. On complete: Outcome "Final review: {verdict}", Decisions "{any issues noted}". On gate pause: State BLOCKED, Reason "Final Review: NEEDS_REWORK - {issue count} issues".
 
 **Gate: Final Review**
 
@@ -1371,6 +1460,8 @@ Add entry at the TOP of the Index section in `memory/MEMORY.md`:
 - Memory entry created at `memory/entries/YYYY-MM-DD_{slug}-learnings.md`
 - MEMORY.md index updated with new line at top
 
+**Build Log**: Update to Phase 5.1, State IN_PROGRESS on start. On complete: Outcome "Memory entry created", Artifacts "memory/entries/YYYY-MM-DD_{slug}-learnings.md".
+
 **Handoff to 5.2**: Entry path, execution summary
 
 ---
@@ -1475,6 +1566,8 @@ If no gotchas were discovered:
 - LEARNINGS.md files updated (if applicable)
 - OR noted that no new learnings found (and verified)
 
+**Build Log**: Update to Phase 5.2, State IN_PROGRESS on start. On complete: Outcome "Updated {N} LEARNINGS.md files" or "No new learnings (verified)".
+
 **Handoff to 5.3**: List of LEARNINGS.md files updated (or "None — verified")
 
 ---
@@ -1552,6 +1645,8 @@ echo "Branch: $BRANCH"
 - Implementation committed with standard message
 - Branch pushed (or ready to push)
 - Commit SHA and branch recorded
+
+**Build Log**: Update to Phase 5.3, State IN_PROGRESS on start. On complete: Outcome "Implementation committed ({commit_sha}), branch pushed".
 
 **Handoff to 5.4**: Final commit SHA, branch name, push status
 
@@ -1634,6 +1729,8 @@ wrapVerification: {
 - `/wrap` executed
 - All checks pass OR warnings noted for report
 - Verification status recorded
+
+**Build Log**: Update to Phase 5.4, State IN_PROGRESS on start. On complete: Outcome "/wrap verification: {status} ({N} checks passed, {N} warnings)".
 
 **Handoff to 5.5**: Wrap verification status
 
@@ -1765,6 +1862,8 @@ Present the completed ship report to the builder:
 - Ship report generated
 - Report presented to builder
 
+**Build Log**: Update to Phase 5.5, State IN_PROGRESS on start. On complete: Outcome "Ship report generated and presented".
+
 **Handoff to 5.6**: Ship report displayed, ready for merge prompt
 
 ---
@@ -1872,6 +1971,8 @@ After cleanup completes:
 - Gitboss invoked and responded
 - Either: merge complete + cleanup done, OR builder chose to defer
 - Skill complete
+
+**Build Log**: Update to Phase 5.6, State IN_PROGRESS on start. On complete: Outcome "Merged to main ({sha})" or "Merge deferred". Update State to COMPLETE when workflow finishes.
 
 **Final Output**: Merge confirmation or deferred merge instructions
 
@@ -2136,6 +2237,8 @@ force_cleanup() {
 - Local branch deleted (`-d` for merged, `-D` for force)
 - Remote branch deleted (if exists)
 - Stale worktree refs pruned
+
+**Build Log**: Update to Phase 6.1, State IN_PROGRESS on start. On complete: Outcome "Cleanup complete: worktree removed, branch deleted".
 
 **Command Summary**:
 
