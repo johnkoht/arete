@@ -5,7 +5,7 @@
 import { join } from 'path';
 import fs from 'fs/promises';
 import matter from 'gray-matter';
-import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, extractAttendeeSlugs, inferUrgency, PEOPLE_CATEGORIES, } from '@arete/core';
+import { FileStorageAdapter, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, loadConfig, refreshQmdIndex, createServices, extractAttendeeSlugs, inferUrgency, PEOPLE_CATEGORIES, } from '@arete/core';
 const storage = new FileStorageAdapter();
 function meetingsDir(workspaceRoot) {
     return join(workspaceRoot, 'resources', 'meetings');
@@ -338,34 +338,6 @@ function parseStagedItemConfidence(content) {
         for (const [key, val] of Object.entries(raw)) {
             if (typeof val === 'number') {
                 result[key] = val;
-            }
-        }
-        return result;
-    }
-    catch {
-        return {};
-    }
-}
-/** Parse `staged_item_owner` from meeting file frontmatter. */
-function parseStagedItemOwner(content) {
-    const match = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!match)
-        return {};
-    try {
-        const fm = matter(content).data;
-        const raw = fm['staged_item_owner'];
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-            return {};
-        // Validate structure
-        const result = {};
-        for (const [key, val] of Object.entries(raw)) {
-            if (val && typeof val === 'object' && !Array.isArray(val)) {
-                const meta = val;
-                result[key] = {
-                    ownerSlug: typeof meta['ownerSlug'] === 'string' ? meta['ownerSlug'] : undefined,
-                    direction: typeof meta['direction'] === 'string' ? meta['direction'] : undefined,
-                    counterpartySlug: typeof meta['counterpartySlug'] === 'string' ? meta['counterpartySlug'] : undefined,
-                };
             }
         }
         return result;
