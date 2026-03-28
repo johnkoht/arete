@@ -13,6 +13,7 @@ import GoalsView from "@/pages/GoalsView";
 import MemoryFeed from "@/pages/MemoryFeed";
 import IntelligencePage from "@/pages/IntelligencePage";
 import CommitmentsPage from "@/pages/CommitmentsPage";
+import ReviewPage from "@/pages/ReviewPage";
 import SearchPage from "@/pages/SearchPage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="/people" element={<PeopleIndex />} />
         <Route path="/people/:slug" element={<PersonDetailPage />} />
         <Route path="/commitments" element={<CommitmentsPage />} />
+        <Route path="/review" element={<ReviewPage />} />
         <Route path="/goals" element={<GoalsView />} />
         <Route path="/memory" element={<MemoryFeed />} />
         <Route path="/intelligence" element={<IntelligencePage />} />

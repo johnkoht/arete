@@ -219,6 +219,69 @@ export type SearchResponse = {
   results: SearchResult[];
 };
 
+// ── Review types ──────────────────────────────────────────────────────────────
+
+export type TaskDestination = 'inbox' | 'must' | 'should' | 'could' | 'anytime' | 'someday';
+
+export type TaskMetadata = {
+  area?: string;
+  project?: string;
+  person?: string;
+  from?: { type: 'commitment' | 'meeting'; id: string };
+  due?: string;
+};
+
+export type WorkspaceTask = {
+  id: string;
+  text: string;
+  completed: boolean;
+  metadata: TaskMetadata;
+  source: { file: string; section: string };
+};
+
+export type StagedMemoryItem = {
+  id: string;
+  text: string;
+  type: 'decision' | 'learning';
+  meetingSlug: string;
+  meetingTitle: string;
+  meetingDate: string;
+  source?: 'ai' | 'dedup' | 'reconciled';
+  confidence?: number;
+};
+
+export type ReviewCommitment = {
+  id: string;
+  text: string;
+  direction: 'i_owe_them' | 'they_owe_me';
+  personSlug: string;
+  personName: string;
+  source: string;
+  date: string;
+  status: 'open' | 'resolved' | 'dropped';
+  resolvedAt: string | null;
+  projectSlug?: string;
+  goalSlug?: string;
+  area?: string;
+};
+
+export type PendingReviewResponse = {
+  tasks: WorkspaceTask[];
+  decisions: StagedMemoryItem[];
+  learnings: StagedMemoryItem[];
+  commitments: ReviewCommitment[];
+};
+
+export type CompleteReviewRequest = {
+  sessionId: string;
+  approved: string[];
+  skipped: string[];
+};
+
+export type CompleteReviewResponse = {
+  success: boolean;
+};
+
 // ── Activity types ────────────────────────────────────────────────────────────
 
 export type ActivityItem = {
