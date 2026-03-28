@@ -156,6 +156,7 @@ function TaskItem({
             <Button
               variant={isApproved ? "default" : "outline"}
               size="sm"
+              aria-label={isApproved ? "Remove task approval" : "Approve task"}
               className={`h-8 px-2 ${
                 isApproved
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -173,6 +174,7 @@ function TaskItem({
             <Button
               variant={isSkipped ? "default" : "outline"}
               size="sm"
+              aria-label={isSkipped ? "Remove task skip" : "Skip task"}
               className={`h-8 px-2 ${
                 isSkipped
                   ? "bg-muted-foreground hover:bg-muted-foreground/90 text-background"
@@ -237,6 +239,7 @@ function MemoryItem({
                 value={displayText}
                 onChange={(e) => onEditChange(e.target.value)}
                 className="h-8 text-sm"
+                aria-label="Edit item text"
                 autoFocus
               />
               <Button
@@ -283,6 +286,7 @@ function MemoryItem({
             <Button
               variant="outline"
               size="sm"
+              aria-label="Edit item"
               className="h-8 px-2 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 dark:hover:bg-blue-950/30"
               onClick={onEditStart}
             >
@@ -292,6 +296,7 @@ function MemoryItem({
           <Button
             variant={isApproved ? "default" : "outline"}
             size="sm"
+            aria-label={isApproved ? "Remove item approval" : "Approve item"}
             className={`h-8 px-2 ${
               isApproved
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -306,6 +311,7 @@ function MemoryItem({
           <Button
             variant={isSkipped ? "default" : "outline"}
             size="sm"
+            aria-label={isSkipped ? "Remove item skip" : "Skip item"}
             className={`h-8 px-2 ${
               isSkipped
                 ? "bg-muted-foreground hover:bg-muted-foreground/90 text-background"
