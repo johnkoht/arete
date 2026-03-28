@@ -123,11 +123,16 @@ domains:
     expertise_profile: null
     
     files:
+      # User-facing (GUIDE)
       - "README.md"
       - "SETUP.md"
+      - "ONBOARDING.md"
+      - "packages/runtime/UPDATES.md"  # GUIDE changelog
+      
+      # Developer-facing (BUILD)
       - "DEVELOPER.md"
       - "AGENTS.md"
-      - "ONBOARDING.md"
+      - "CHANGELOG.md"  # BUILD changelog
     
     auto_fix:
       - "Typos"
