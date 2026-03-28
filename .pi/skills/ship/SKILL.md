@@ -178,19 +178,47 @@ echo "✓ Created build-log.md from template"
 
 If build log exists with State ≠ COMPLETE:
 
-1. Display resume summary:
+1. **Append session marker** to build-log.md:
+
+   ```bash
+   slug="{plan-slug}"
+   build_log="dev/executions/${slug}/build-log.md"
+   timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+   
+   # Extract current phase and state
+   current_phase=$(grep -E "^\*\*Phase\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+   current_state=$(grep -E "^\*\*State\*\*:" "$build_log" | head -1 | sed 's/.*: //')
+   
+   # Count existing sessions
+   session_count=$(grep -c "^### Session" "$build_log")
+   next_session=$((session_count + 1))
+   
+   # Create session marker
+   session_marker="---
+
+### Session ${next_session}
+**Started**: ${timestamp}
+**Resumed From**: ${current_phase} (${current_state})
+
+"
+   
+   # Insert at marker location
+   sed -i '' "s|<!-- INSERT NEW SESSION HERE -->|<!-- INSERT NEW SESSION HERE -->\n\n${session_marker}|" "$build_log"
+   ```
+
+2. **Display resume summary**:
    ```
    🔄 Resuming Ship: {slug}
    
    **Current Phase**: {phase}
    **State**: {state}
    **Last Update**: {timestamp}
-   **Sessions**: {count}
+   **Sessions**: {count} → {count + 1}
    
-   Continuing from {phase}...
+   Session {N} started. Continuing from {phase}...
    ```
 
-2. Proceed to Phase 0.3 (Verify State)
+3. Proceed to Phase 0.3 (Verify State)
 
 **Actions — Re-Run Completed Build**:
 
