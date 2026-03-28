@@ -1,12 +1,12 @@
 ---
 title: Build Context Injection
 slug: build-context-injection
-status: building
+status: complete
 size: medium
 tags: []
 created: 2026-03-28T05:54:31.003Z
-updated: 2026-03-28T06:08:02.469Z
-completed: null
+updated: 2026-03-28T06:41:44.857Z
+completed: 2026-03-28T06:41:44.857Z
 execution: null
 has_review: true
 has_pre_mortem: true

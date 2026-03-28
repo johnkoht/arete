@@ -1,12 +1,12 @@
 ---
 title: Documentation Audit
 slug: documentation-audit
-status: building
+status: complete
 size: large
 tags: []
 created: 2026-03-28T05:02:35.536Z
-updated: 2026-03-28T05:22:14.147Z
-completed: null
+updated: 2026-03-28T06:41:56.659Z
+completed: 2026-03-28T06:41:56.659Z
 execution: null
 has_review: true
 has_pre_mortem: true
