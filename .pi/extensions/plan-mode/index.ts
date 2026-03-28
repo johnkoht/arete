@@ -367,7 +367,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 					...existingPlan.frontmatter,
 					updated: now,
 					steps: extracted.length,
-					size: (planSize && planSize !== "unknown") ? planSize : existingPlan.frontmatter.size,
+					size: planSize,
 				}
 				: {
 					title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
