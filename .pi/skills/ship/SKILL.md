@@ -2053,14 +2053,22 @@ When failures occur, the ship skill is designed for **idempotent recovery**. Eac
 | 6.1 | Branch delete fails | Worktree removed | Check if branch checked out elsewhere; `git branch -D` |
 | 6.1 | Remote delete fails | Local cleanup done | Check permissions; `git push origin --delete feature/{slug}` |
 
-### Resume Command (V2)
+### Resuming a Stalled Build
 
-Future enhancement: `/ship resume {slug}` to resume from last successful phase.
+The build-log.md artifact enables seamless resume. When a session stalls:
 
-For V1, recovery is manual:
-1. Check `dev/work/plans/{slug}/` for existing artifacts
-2. Check `dev/executions/{slug}/` for build state
-3. Re-run from appropriate phase
+1. **Run `/ship {slug}`** — Phase 0 detects the existing build-log
+2. **Review resume summary** — Shows current phase, state, session count
+3. **Verify state** — Phase 0.3 checks artifacts match logged state
+4. **Continue automatically** — Resumes from the logged phase
+
+The build-log at `dev/executions/{slug}/build-log.md` is authoritative for phase progress. It tracks:
+- Current phase and state (IN_PROGRESS, BLOCKED, COMPLETE, FAILED)
+- Session history with timestamps
+- Decisions made at each phase
+- Artifacts created
+
+**If mismatch detected**: Phase 0.3 presents options (fix log, rebuild artifacts, abort) rather than proceeding with stale state.
 
 ### Gate Pause Recovery
 

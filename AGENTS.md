@@ -30,7 +30,7 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 
 [Workspace]|two contexts: USER (installed) vs BUILD (this repo)
 |user:now/ goals/ context/ context/{area-slug}/ areas/ projects/ resources/ .arete/ people/ templates/ .pi/skills/
-|build:packages/ memory/ .agents/ dev/work/(plans, archive, backlog)/ dev/(autonomous, catalog, personas)/ .pi/ scripts/
+|build:packages/ memory/ .agents/ dev/work/(plans, archive, backlog)/ dev/(autonomous, catalog, personas)/ dev/executions/{slug}/(build-log.md, prd.json, status.json, progress.md) .pi/ scripts/
 |key_diff:memory/ at root (BUILD) vs .arete/memory/ (USER); .pi/skills/ = build skills (BUILD) vs product skills (USER); areas/ = persistent work domains with recurring meeting mappings
 
 [CLI]
@@ -141,3 +141,4 @@ Example: User says "help me prep for my meeting" → find meeting-prep in [Skill
 ||review:periodic-review (workspace audit) → week-review (progress) → quarter retrospective
 ||onboard:onboarding tool (30/60/90) → learn/contribute/lead phases
 ||context:seed-context (bootstrap) → sync (ongoing) → pull (integrations)
+||ship_resume:check dev/executions/{slug}/build-log.md → verify state → continue from logged phase
