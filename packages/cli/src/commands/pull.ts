@@ -3,7 +3,7 @@
  */
 
 import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
-import type { QmdRefreshResult, CalendarProvider, AreteConfig, Importance } from '@arete/core';
+import type { QmdRefreshResult, CalendarProvider, AreteConfig } from '@arete/core';
 import type { Command } from 'commander';
 import { isAbsolute, join } from 'path';
 import { tmpdir } from 'os';
