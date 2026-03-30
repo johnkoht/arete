@@ -3,7 +3,7 @@
  */
 
 import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex } from '@arete/core';
-import type { QmdRefreshResult } from '@arete/core';
+import type { QmdRefreshResult, CalendarProvider, AreteConfig } from '@arete/core';
 import type { Command } from 'commander';
 import { isAbsolute, join } from 'path';
 import { tmpdir } from 'os';
@@ -53,7 +53,7 @@ export function registerPullCommand(program: Command): void {
         const days = parseInt(opts.days ?? String(DEFAULT_DAYS), 10);
 
         if (integration === 'calendar') {
-          return pullCalendar(services, root, opts.today ?? false, opts.json ?? false);
+          return pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
         }
 
         if (integration === 'notion') {
@@ -175,6 +175,18 @@ export type PullNotionDeps = {
     workspaceRoot: string,
   ) => Promise<{ qmd_collection?: string }>;
   refreshQmdIndexFn: (workspaceRoot: string, collectionName: string | undefined) => Promise<QmdRefreshResult>;
+};
+
+export type PullCalendarDeps = {
+  loadConfigFn: (
+    storage: Awaited<ReturnType<typeof import('@arete/core').createServices>>['storage'],
+    workspaceRoot: string,
+  ) => Promise<AreteConfig>;
+  getCalendarProviderFn: (
+    config: AreteConfig,
+    storage: Awaited<ReturnType<typeof import('@arete/core').createServices>>['storage'],
+    workspaceRoot: string,
+  ) => Promise<CalendarProvider | null>;
 };
 
 export async function pullNotion(
@@ -332,14 +344,21 @@ function stripFrontmatter(content: string): string {
   return match ? match[1] : content;
 }
 
-async function pullCalendar(
+export async function pullCalendarHelper(
   services: Awaited<ReturnType<typeof import('@arete/core').createServices>>,
   workspaceRoot: string,
-  today: boolean,
-  json: boolean,
+  opts: {
+    today: boolean;
+    json: boolean;
+  },
+  deps: PullCalendarDeps = {
+    loadConfigFn: loadConfig,
+    getCalendarProviderFn: getCalendarProvider,
+  },
 ): Promise<void> {
-  const config = await loadConfig(services.storage, workspaceRoot);
-  const provider = await getCalendarProvider(config, services.storage, workspaceRoot);
+  const { today, json } = opts;
+  const config = await deps.loadConfigFn(services.storage, workspaceRoot);
+  const provider = await deps.getCalendarProviderFn(config, services.storage, workspaceRoot);
 
   if (!provider) {
     if (json) {

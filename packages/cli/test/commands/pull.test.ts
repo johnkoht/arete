@@ -8,8 +8,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
-import type { QmdRefreshResult } from '@arete/core';
-import { pullNotion } from '../../src/commands/pull.js';
+import type { QmdRefreshResult, CalendarProvider, CalendarEvent, AreteConfig } from '@arete/core';
+import { pullNotion, pullCalendarHelper, type PullCalendarDeps } from '../../src/commands/pull.js';
 import { createTmpDir, cleanupTmpDir, runCli, runCliRaw } from '../helpers.js';
 
 describe('arete pull — krisp dispatch', () => {
@@ -274,6 +274,308 @@ describe('arete pull — notion helper', () => {
     });
 
     assert.equal(refreshCalled, false);
+  });
+});
+
+describe('arete pull — calendar helper', () => {
+  // Mock CalendarProvider for testing
+  function createMockCalendarProvider(
+    options: {
+      name?: string;
+      available?: boolean;
+      events?: CalendarEvent[];
+    } = {},
+  ): CalendarProvider {
+    const {
+      name = 'test-provider',
+      available = true,
+      events = [],
+    } = options;
+
+    return {
+      name,
+      isAvailable: async () => available,
+      getTodayEvents: async () => events,
+      getUpcomingEvents: async () => events,
+    };
+  }
+
+  // Create mock services for calendar tests
+  function createCalendarMockServices(): Awaited<ReturnType<typeof import('@arete/core').createServices>> {
+    return {
+      storage: {
+        read: async () => null,
+        write: async () => undefined,
+        exists: async () => false,
+        delete: async () => undefined,
+        list: async () => [],
+        listSubdirectories: async () => [],
+        mkdir: async () => undefined,
+        getModified: async () => null,
+      },
+      workspace: {
+        getPaths: () => ({
+          root: '/workspace',
+          people: '/workspace/people',
+          meetings: '/workspace/meetings',
+          projects: '/workspace/projects',
+          context: '/workspace/context',
+          resources: '/workspace/resources',
+          templates: '/workspace/templates',
+          areas: '/workspace/areas',
+          skills: '/workspace/skills',
+          tools: '/workspace/tools',
+          now: '/workspace/now',
+          goals: '/workspace/goals',
+          memory: '/workspace/.arete/memory',
+          memoryEntries: '/workspace/.arete/memory/entries',
+        }),
+      },
+    } as unknown as Awaited<ReturnType<typeof import('@arete/core').createServices>>;
+  }
+
+  // Sample events for testing
+  const sampleEvents: CalendarEvent[] = [
+    {
+      title: 'Team Standup',
+      startTime: new Date('2026-03-30T09:00:00Z'),
+      endTime: new Date('2026-03-30T09:30:00Z'),
+      calendar: 'Work',
+      location: 'Zoom',
+      isAllDay: false,
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+      ],
+    },
+    {
+      title: 'Lunch',
+      startTime: new Date('2026-03-30T12:00:00Z'),
+      endTime: new Date('2026-03-30T13:00:00Z'),
+      calendar: 'Personal',
+      isAllDay: false,
+      attendees: [],
+    },
+  ];
+
+  it('--json returns { success: true, events: [...] } structure', async () => {
+    const services = createCalendarMockServices();
+    const provider = createMockCalendarProvider({ events: sampleEvents });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as { success: boolean; events: unknown[] };
+    assert.equal(result.success, true);
+    assert.ok(Array.isArray(result.events));
+    assert.equal(result.events.length, 2);
+  });
+
+  it('event objects contain required fields (title, startTime, endTime, calendar, attendees)', async () => {
+    const services = createCalendarMockServices();
+    const provider = createMockCalendarProvider({ events: sampleEvents });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{
+        title: string;
+        startTime: string;
+        endTime: string;
+        calendar: string;
+        attendees: Array<{ name: string; email?: string }>;
+      }>;
+    };
+
+    const event = result.events[0];
+    assert.ok(typeof event.title === 'string', 'title should be a string');
+    assert.ok(typeof event.startTime === 'string', 'startTime should be a string');
+    assert.ok(typeof event.endTime === 'string', 'endTime should be a string');
+    assert.ok(typeof event.calendar === 'string', 'calendar should be a string');
+    assert.ok(Array.isArray(event.attendees), 'attendees should be an array');
+
+    // Verify actual values
+    assert.equal(event.title, 'Team Standup');
+    assert.equal(event.calendar, 'Work');
+    assert.equal(event.attendees.length, 2);
+    assert.equal(event.attendees[0].name, 'Alice');
+    assert.equal(event.attendees[0].email, 'alice@example.com');
+  });
+
+  it('--today flag uses getTodayEvents', async () => {
+    const services = createCalendarMockServices();
+    let todayEventsCalled = false;
+    let upcomingEventsCalled = false;
+
+    const provider: CalendarProvider = {
+      name: 'test-provider',
+      isAvailable: async () => true,
+      getTodayEvents: async () => {
+        todayEventsCalled = true;
+        return sampleEvents.slice(0, 1); // Return first event only
+      },
+      getUpcomingEvents: async () => {
+        upcomingEventsCalled = true;
+        return sampleEvents;
+      },
+    };
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: true, json: true }, deps);
+    });
+
+    assert.equal(todayEventsCalled, true, 'getTodayEvents should be called');
+    assert.equal(upcomingEventsCalled, false, 'getUpcomingEvents should not be called');
+
+    const result = JSON.parse(output.stdout) as { success: boolean; events: unknown[] };
+    assert.equal(result.events.length, 1);
+  });
+
+  it('calendar not configured returns JSON error with helpful message', async () => {
+    const services = createCalendarMockServices();
+
+    // Mock process.exit to prevent test from terminating
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('process.exit called');
+    }) as typeof process.exit;
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({}) as AreteConfig,
+      getCalendarProviderFn: async () => null, // No provider configured
+    };
+
+    try {
+      const output = await captureConsole(async () => {
+        try {
+          await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+        } catch {
+          // Expected: process.exit throws
+        }
+      });
+
+      const result = JSON.parse(output.stdout) as {
+        success: boolean;
+        error: string;
+        message: string;
+      };
+
+      assert.equal(result.success, false);
+      assert.equal(result.error, 'Calendar not configured');
+      assert.ok(result.message.includes('arete integration configure calendar'));
+      assert.equal(exitCode, 1);
+    } finally {
+      process.exit = originalExit;
+    }
+  });
+
+  it('provider unavailable returns provider-specific JSON error (ical-buddy)', async () => {
+    const services = createCalendarMockServices();
+    const provider = createMockCalendarProvider({
+      name: 'ical-buddy',
+      available: false,
+    });
+
+    // Mock process.exit to prevent test from terminating
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('process.exit called');
+    }) as typeof process.exit;
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'ical-buddy' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    try {
+      const output = await captureConsole(async () => {
+        try {
+          await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+        } catch {
+          // Expected: process.exit throws
+        }
+      });
+
+      const result = JSON.parse(output.stdout) as {
+        success: boolean;
+        error: string;
+        message: string;
+      };
+
+      assert.equal(result.success, false);
+      assert.equal(result.error, 'icalBuddy not installed');
+      assert.ok(result.message.includes('brew install ical-buddy'));
+      assert.equal(exitCode, 1);
+    } finally {
+      process.exit = originalExit;
+    }
+  });
+
+  it('provider unavailable returns provider-specific JSON error (google-calendar)', async () => {
+    const services = createCalendarMockServices();
+    const provider = createMockCalendarProvider({
+      name: 'google-calendar',
+      available: false,
+    });
+
+    // Mock process.exit to prevent test from terminating
+    const originalExit = process.exit;
+    let exitCode: number | undefined;
+    process.exit = ((code?: number) => {
+      exitCode = code;
+      throw new Error('process.exit called');
+    }) as typeof process.exit;
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'google' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    try {
+      const output = await captureConsole(async () => {
+        try {
+          await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+        } catch {
+          // Expected: process.exit throws
+        }
+      });
+
+      const result = JSON.parse(output.stdout) as {
+        success: boolean;
+        error: string;
+        message: string;
+      };
+
+      assert.equal(result.success, false);
+      assert.equal(result.error, 'Google Calendar not available');
+      assert.ok(result.message.includes('arete integration configure google-calendar'));
+      assert.equal(exitCode, 1);
+    } finally {
+      process.exit = originalExit;
+    }
   });
 });
 
