@@ -10,7 +10,7 @@ import { parse as parseYaml } from 'yaml';
 
 import type { QmdRefreshResult, CalendarProvider, CalendarEvent, AreteConfig } from '@arete/core';
 import { pullNotion, pullCalendarHelper, type PullCalendarDeps } from '../../src/commands/pull.js';
-import { createTmpDir, cleanupTmpDir, runCli, runCliRaw } from '../helpers.js';
+import { createTmpDir, cleanupTmpDir, runCli, runCliRaw, captureConsole } from '../helpers.js';
 
 describe('arete pull — krisp dispatch', () => {
   let workspaceDir: string;
@@ -977,19 +977,4 @@ function createMockServices(input: {
     lastPullCall: { workspaceRoot: string; integration: string; options: Record<string, unknown> } | null;
     deletedPaths: string[];
   };
-}
-
-async function captureConsole(task: () => Promise<void>): Promise<{ stdout: string }> {
-  const logs: string[] = [];
-  const originalLog = console.log;
-  console.log = (...args: unknown[]) => {
-    logs.push(args.map(String).join(' '));
-  };
-
-  try {
-    await task();
-    return { stdout: logs.join('\n') };
-  } finally {
-    console.log = originalLog;
-  }
 }

@@ -69,13 +69,6 @@ function createMockConfig(ai?: AIConfig): AreteConfig {
   };
 }
 
-// Mock console output
-function captureConsole(): { logs: string[]; errors: string[] } {
-  const logs: string[] = [];
-  const errors: string[] = [];
-  return { logs, errors };
-}
-
 describe('config show ai', () => {
   beforeEach(() => {
     mockWorkspace.findRoot.mock.resetCalls();
