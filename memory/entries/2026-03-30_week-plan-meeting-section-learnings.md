@@ -72,3 +72,36 @@ Synthesized from developer completion reports:
 ## Refactor Items
 
 None — no duplicative patterns or tech debt identified.
+
+---
+
+## Phase 2: Tech Debt & Enhancements (Post-Review)
+
+After the initial holistic review, the engineering lead identified 4 improvements which were implemented:
+
+### Tasks Completed
+
+| Task | Description | Commit |
+|------|-------------|--------|
+| 5 | Extract `captureConsole` to shared test helper | 6f5f6ad |
+| 6 | Remove unused `Importance` import | f498418 |
+| 7 | Add integration test for CLI error paths | b05b4d8 |
+| 8 | Add agenda lookup caching (caller-side) | 605d238 |
+
+### Key Decisions
+
+1. **Caller-side caching** (Task 8): Chose to list agenda files once before the event loop rather than modifying `findMatchingAgendaPath()` signature. This:
+   - Avoids changing API used by Fathom/Krisp integrations
+   - Keeps optimization visible at call site
+   - Allows skipping inner function entirely when no agenda exists
+
+2. **Integration test scope** (Task 7): Focused on error paths since CLI-level mocking for calendar providers isn't supported. Tests the full path from Commander.js registration through JSON output and exit code.
+
+### Phase 2 Metrics
+
+| Metric | Value |
+|--------|-------|
+| Tasks | 4/4 complete |
+| First-Attempt Success | 100% |
+| Tests Added | +3 |
+| Token Usage | ~14K
