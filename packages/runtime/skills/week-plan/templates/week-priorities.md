@@ -6,6 +6,11 @@
 2. 
 3. 
 
+## Key Meetings
+<!-- Prep-worthy meetings this week. Check off when prep is complete. -->
+<!-- Format: - [ ] Day Time: Title (attendees) — prep: [link] or "needs prep" -->
+<!-- Omit this section if no key meetings this week. -->
+
 ## Today — {day_date}
 **Focus**: 
 
