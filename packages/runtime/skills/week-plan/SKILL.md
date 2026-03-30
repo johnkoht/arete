@@ -72,20 +72,51 @@ Present the numbered list back for confirmation.
 
 **Purpose**: Meeting titles and attendees are inputs for memory search — confirm which meetings matter before searching memory for related decisions.
 
-From the calendar pull in Step 1, identify **prep-worthy meetings** this week:
-- QBRs, customer calls, leadership syncs
-- Planning sessions, key 1:1s
-- Any meeting with external stakeholders
+**Parse calendar JSON** from Step 1 (`arete pull calendar --days 7 --json`). Each event contains:
+- `importance`: "light" | "normal" | "important"
+- `hasAgenda`: boolean (agenda file exists in `now/agendas/`)
+- `organizer`: `{ name, email, self }` or null
+- `attendees`: `[{ name, email, personSlug? }]`
 
-Present a concise list:
-> "I see some key meetings this week:
-> - Wed: CoverWhale QBR (Sarah, Jamie)
-> - Thu: UK Roadmap Review (Product team)
-> - Fri: Lindsay 1:1
+**Classify meetings into two groups**:
+
+🔴 **High priority** — `importance === "important"`
+- 1:1s (2 attendees total)
+- You organized (organizer.self === true)
+
+🟡 **Prep-worthy** — `importance === "normal"` AND one of:
+- `hasAgenda === true`
+- Has external attendee (email domain differs from organizer's domain)
+
+**Determine "why flagged"** for each meeting:
+- `(1:1)` — exactly 2 attendees
+- `(you organized)` — organizer.self === true
+- `(has agenda)` — hasAgenda === true
+- `(external: @domain.com)` — attendee domain differs from organizer domain
+
+**Fallback**: If `importance` field is missing (older calendar output), use title matching:
+- QBR, quarterly, customer, client → important
+- 1:1, one-on-one, sync → important
+- Leadership, exec, board → important
+
+**Hide `light` importance meetings** unless user explicitly asks to see them.
+
+**Present grouped list**:
+> "Key meetings this week:
 >
-> Any others I should flag, or remove from this list?"
+> 🔴 **High priority**
+> - Wed 2:00pm: Sarah Chen 1:1 (1:1)
+> - Thu 10:00am: CoverWhale QBR (you organized)
+>
+> 🟡 **Prep-worthy**
+> - Tue 3:00pm: UK Roadmap Review (external: @acme.com)
+> - Fri 11:00am: Product Sync (has agenda)
+>
+> Add, remove, or skip any? (Enter numbers to remove, + to add, or press Enter to confirm)"
 
-User confirms/modifies the list.
+**User confirms/modifies** the list using quick selection (preserve existing UX pattern).
+
+**⚠️ Keep this confirmed list for Step 4 output** — the Key Meetings section will include exactly these meetings with their flags.
 
 ### 2.6. Memory-Informed Context
 
@@ -207,6 +238,7 @@ arete template resolve --skill week-plan --variant week-priorities
 
 **Sections**:
 - **Weekly Priorities** — Simple numbered list (1-5 items, formerly "Outcomes")
+- **Key Meetings** — Confirmed prep-worthy meetings from Step 2.5 (optional, omit if empty)
 - **Today** — Placeholder for daily-plan (Focus, Meetings)
 - **Inbox** — Quick capture area for daily winddown (no metadata required)
 - **Notes** — Empty, user's working scratchpad
@@ -214,6 +246,20 @@ arete template resolve --skill week-plan --variant week-priorities
 - **Waiting On** — What others owe you (they_owe_me commitments)
 - **Carried from last week** — Incomplete items
 - **Daily Progress** — Empty, populated by daily-plan
+
+**Key Meetings format** (from confirmed list in Step 2.5):
+```markdown
+## Key Meetings
+- [ ] Wed 2:00pm: Sarah Chen 1:1 (Sarah Chen) — prep: needs prep
+- [ ] Thu 10:00am: CoverWhale QBR (Sarah, Jamie, Alex) — prep: [CoverWhale QBR](now/agendas/coverwhale-qbr.md)
+- [ ] Fri 11:00am: Product Sync (Product team) — prep: needs prep
+```
+
+**Empty state**: If no high-priority or prep-worthy meetings, write:
+```markdown
+## Key Meetings
+No high-priority meetings this week — light calendar!
+```
 
 **Format example**:
 ```markdown
@@ -223,6 +269,10 @@ arete template resolve --skill week-plan --variant week-priorities
 1. POP ready for 3/31 launch
 2. CoverWhale through compliance
 3. UK priorities finalized
+
+## Key Meetings
+- [ ] Wed 2:00pm: Sarah Chen 1:1 (Sarah Chen) — prep: needs prep
+- [ ] Thu 10:00am: CoverWhale QBR (Sarah, Jamie, Alex) — prep: [CoverWhale QBR](now/agendas/coverwhale-qbr.md)
 
 ## Today — Mon Mar 24
 **Focus**: Week kickoff and planning.
