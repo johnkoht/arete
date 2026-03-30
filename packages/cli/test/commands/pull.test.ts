@@ -577,6 +577,267 @@ describe('arete pull — calendar helper', () => {
       process.exit = originalExit;
     }
   });
+
+  it('JSON output includes importance, organizer, notes, hasAgenda fields', async () => {
+    const services = createCalendarMockServices();
+    const eventWithOrganizer: CalendarEvent = {
+      title: 'Product Review',
+      startTime: new Date('2026-03-30T10:00:00Z'),
+      endTime: new Date('2026-03-30T11:00:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+      ],
+      organizer: { name: 'Alice', email: 'alice@example.com', self: false },
+      notes: 'Discuss Q2 roadmap',
+    };
+    const provider = createMockCalendarProvider({ events: [eventWithOrganizer] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{
+        importance: string;
+        organizer: { name: string; email: string; self: boolean } | null;
+        notes: string | null;
+        hasAgenda: boolean;
+      }>;
+    };
+
+    assert.equal(result.events.length, 1);
+    const event = result.events[0];
+    assert.ok(['light', 'normal', 'important'].includes(event.importance), 'importance should be valid');
+    assert.deepEqual(event.organizer, { name: 'Alice', email: 'alice@example.com', self: false });
+    assert.equal(event.notes, 'Discuss Q2 roadmap');
+    assert.equal(typeof event.hasAgenda, 'boolean');
+  });
+
+  it('organizer.self = true outputs importance: important', async () => {
+    const services = createCalendarMockServices();
+    const selfOrganizerEvent: CalendarEvent = {
+      title: 'My Team Meeting',
+      startTime: new Date('2026-03-30T14:00:00Z'),
+      endTime: new Date('2026-03-30T15:00:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Me', email: 'me@example.com' },
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+        { name: 'Carol', email: 'carol@example.com' },
+        { name: 'Dave', email: 'dave@example.com' },
+        { name: 'Eve', email: 'eve@example.com' },
+      ],
+      organizer: { name: 'Me', email: 'me@example.com', self: true },
+    };
+    const provider = createMockCalendarProvider({ events: [selfOrganizerEvent] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{ importance: string }>;
+    };
+
+    // Even with 6 attendees (would be 'light'), organizer.self=true makes it 'important'
+    assert.equal(result.events[0].importance, 'important');
+  });
+
+  it('1:1 meeting (2 attendees) outputs importance: important', async () => {
+    const services = createCalendarMockServices();
+    const oneOnOneEvent: CalendarEvent = {
+      title: '1:1 with Alice',
+      startTime: new Date('2026-03-30T16:00:00Z'),
+      endTime: new Date('2026-03-30T16:30:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Me', email: 'me@example.com' },
+        { name: 'Alice', email: 'alice@example.com' },
+      ],
+    };
+    const provider = createMockCalendarProvider({ events: [oneOnOneEvent] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{ importance: string }>;
+    };
+
+    assert.equal(result.events[0].importance, 'important');
+  });
+
+  it('large meeting (5+ attendees) without organizer outputs importance: light', async () => {
+    const services = createCalendarMockServices();
+    const largeMeetingEvent: CalendarEvent = {
+      title: 'All Hands',
+      startTime: new Date('2026-03-30T17:00:00Z'),
+      endTime: new Date('2026-03-30T18:00:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+        { name: 'Carol', email: 'carol@example.com' },
+        { name: 'Dave', email: 'dave@example.com' },
+        { name: 'Eve', email: 'eve@example.com' },
+      ],
+      // No organizer field - uses attendee count only
+    };
+    const provider = createMockCalendarProvider({ events: [largeMeetingEvent] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{ importance: string }>;
+    };
+
+    assert.equal(result.events[0].importance, 'light');
+  });
+
+  it('event without organizer computes importance via attendee count', async () => {
+    const services = createCalendarMockServices();
+    // 3 attendees = small group = 'normal'
+    const smallGroupEvent: CalendarEvent = {
+      title: 'Planning Session',
+      startTime: new Date('2026-03-30T09:00:00Z'),
+      endTime: new Date('2026-03-30T10:00:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+        { name: 'Carol', email: 'carol@example.com' },
+      ],
+      // No organizer - relies on attendee count
+    };
+    const provider = createMockCalendarProvider({ events: [smallGroupEvent] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{ importance: string }>;
+    };
+
+    // 3 attendees = small group = 'normal'
+    assert.equal(result.events[0].importance, 'normal');
+  });
+
+  it('event with matching agenda upgrades light to normal', async () => {
+    // Create services with storage that returns an agenda file
+    const services = {
+      storage: {
+        read: async () => null,
+        write: async () => undefined,
+        exists: async (path: string) => path.includes('agendas'),
+        delete: async () => undefined,
+        list: async (dir: string) => {
+          // Return an agenda file that matches the event date and title
+          if (dir.includes('agendas')) {
+            return ['2026-03-30-all-hands.md'];
+          }
+          return [];
+        },
+        listSubdirectories: async () => [],
+        mkdir: async () => undefined,
+        getModified: async () => null,
+      },
+      workspace: {
+        getPaths: () => ({
+          root: '/workspace',
+          people: '/workspace/people',
+          meetings: '/workspace/meetings',
+          projects: '/workspace/projects',
+          context: '/workspace/context',
+          resources: '/workspace/resources',
+          templates: '/workspace/templates',
+          areas: '/workspace/areas',
+          skills: '/workspace/skills',
+          tools: '/workspace/tools',
+          now: '/workspace/now',
+          goals: '/workspace/goals',
+          memory: '/workspace/.arete/memory',
+          memoryEntries: '/workspace/.arete/memory/entries',
+        }),
+      },
+    } as unknown as Awaited<ReturnType<typeof import('@arete/core').createServices>>;
+
+    // Large meeting that would be 'light' without agenda
+    const largeMeetingWithAgenda: CalendarEvent = {
+      title: 'All Hands',
+      startTime: new Date('2026-03-30T17:00:00Z'),
+      endTime: new Date('2026-03-30T18:00:00Z'),
+      calendar: 'Work',
+      isAllDay: false,
+      attendees: [
+        { name: 'Alice', email: 'alice@example.com' },
+        { name: 'Bob', email: 'bob@example.com' },
+        { name: 'Carol', email: 'carol@example.com' },
+        { name: 'Dave', email: 'dave@example.com' },
+        { name: 'Eve', email: 'eve@example.com' },
+      ],
+    };
+    const provider = createMockCalendarProvider({ events: [largeMeetingWithAgenda] });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    const output = await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    const result = JSON.parse(output.stdout) as {
+      success: boolean;
+      events: Array<{ importance: string; hasAgenda: boolean }>;
+    };
+
+    // Large meeting with agenda should be 'normal' (upgraded from 'light')
+    assert.equal(result.events[0].hasAgenda, true);
+    assert.equal(result.events[0].importance, 'normal');
+  });
 });
 
 describe('arete pull — unknown integration lists krisp', () => {

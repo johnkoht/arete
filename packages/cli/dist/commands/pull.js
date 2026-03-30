@@ -1,7 +1,7 @@
 /**
  * arete pull [integration] — fetch data from integrations
  */
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
 import { isAbsolute, join } from 'path';
 import { tmpdir } from 'os';
 import { header, listItem, success, error, info } from '../formatters.js';
@@ -35,7 +35,7 @@ export function registerPullCommand(program) {
         }
         const days = parseInt(opts.days ?? String(DEFAULT_DAYS), 10);
         if (integration === 'calendar') {
-            return pullCalendar(services, root, opts.today ?? false, opts.json ?? false);
+            return pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
         }
         if (integration === 'notion') {
             return pullNotion(services, root, {
@@ -244,9 +244,13 @@ function stripFrontmatter(content) {
     const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
     return match ? match[1] : content;
 }
-async function pullCalendar(services, workspaceRoot, today, json) {
-    const config = await loadConfig(services.storage, workspaceRoot);
-    const provider = await getCalendarProvider(config, services.storage, workspaceRoot);
+export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
+    loadConfigFn: loadConfig,
+    getCalendarProviderFn: getCalendarProvider,
+}) {
+    const { today, json } = opts;
+    const config = await deps.loadConfigFn(services.storage, workspaceRoot);
+    const provider = await deps.getCalendarProviderFn(config, services.storage, workspaceRoot);
     if (!provider) {
         if (json) {
             console.log(JSON.stringify({
@@ -296,6 +300,7 @@ async function pullCalendar(services, workspaceRoot, today, json) {
     const paths = services.workspace.getPaths(workspaceRoot);
     const enrichedEvents = [];
     for (const event of events) {
+        // Enrich attendees with personSlug from workspace people
         const enrichedAttendees = [];
         for (const attendee of event.attendees) {
             const e = { ...attendee };
@@ -307,9 +312,44 @@ async function pullCalendar(services, workspaceRoot, today, json) {
             }
             enrichedAttendees.push(e);
         }
-        enrichedEvents.push({ ...event, attendees: enrichedAttendees });
+        // Check for matching agenda file in now/agendas/
+        const dateStr = event.startTime.toISOString().slice(0, 10);
+        const agendaPath = await findMatchingAgendaPath(services.storage, workspaceRoot, dateStr, event.title);
+        const hasAgenda = agendaPath !== null;
+        // Infer importance from calendar event metadata
+        const importance = inferMeetingImportance(event, { hasAgenda });
+        enrichedEvents.push({
+            ...event,
+            attendees: enrichedAttendees,
+            importance,
+            hasAgenda,
+        });
     }
     if (json) {
+        /**
+         * JSON Output Structure for `arete pull calendar --json`:
+         * {
+         *   success: boolean,
+         *   events: Array<{
+         *     title: string,
+         *     startTime: string (ISO 8601),
+         *     endTime: string (ISO 8601),
+         *     calendar: string,
+         *     location?: string,
+         *     notes?: string,
+         *     isAllDay: boolean,
+         *     attendees: Array<{ name: string, email?: string, personSlug?: string }>,
+         *     organizer?: { name: string, email?: string, self?: boolean },
+         *     importance: 'light' | 'normal' | 'important',
+         *     hasAgenda: boolean
+         *   }>
+         * }
+         *
+         * Importance inference rules (see inferMeetingImportance in @arete/core):
+         * - 'important': organizer.self=true OR 1:1 meeting (2 attendees)
+         * - 'normal': small group (≤3 attendees) OR large meeting with agenda
+         * - 'light': large audience (≥5 attendees, not organizer, no agenda)
+         */
         console.log(JSON.stringify({
             success: true,
             events: enrichedEvents.map((e) => ({
@@ -318,12 +358,16 @@ async function pullCalendar(services, workspaceRoot, today, json) {
                 endTime: e.endTime.toISOString(),
                 calendar: e.calendar,
                 location: e.location,
+                notes: e.notes ?? null,
                 isAllDay: e.isAllDay,
                 attendees: e.attendees.map((a) => ({
                     name: a.name,
                     email: a.email,
                     personSlug: a.personSlug,
                 })),
+                organizer: e.organizer ?? null,
+                importance: e.importance,
+                hasAgenda: e.hasAgenda,
             })),
         }, null, 2));
         return;

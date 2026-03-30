@@ -2,8 +2,8 @@
  * arete pull [integration] — fetch data from integrations
  */
 
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex } from '@arete/core';
-import type { QmdRefreshResult, CalendarProvider, AreteConfig } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
+import type { QmdRefreshResult, CalendarProvider, AreteConfig, Importance } from '@arete/core';
 import type { Command } from 'commander';
 import { isAbsolute, join } from 'path';
 import { tmpdir } from 'os';
@@ -412,8 +412,22 @@ export async function pullCalendarHelper(
     : await provider.getUpcomingEvents(7);
 
   const paths = services.workspace.getPaths(workspaceRoot);
-  const enrichedEvents = [];
+  const enrichedEvents: Array<{
+    title: string;
+    startTime: Date;
+    endTime: Date;
+    calendar: string;
+    location?: string;
+    notes?: string;
+    isAllDay: boolean;
+    attendees: Array<{ name: string; email?: string; personSlug?: string }>;
+    organizer?: { name: string; email?: string; self?: boolean };
+    importance: 'light' | 'normal' | 'important';
+    hasAgenda: boolean;
+  }> = [];
+
   for (const event of events) {
+    // Enrich attendees with personSlug from workspace people
     const enrichedAttendees = [];
     for (const attendee of event.attendees) {
       const e: typeof attendee & { personSlug?: string } = { ...attendee };
@@ -430,10 +444,48 @@ export async function pullCalendarHelper(
       }
       enrichedAttendees.push(e);
     }
-    enrichedEvents.push({ ...event, attendees: enrichedAttendees });
+
+    // Check for matching agenda file in now/agendas/
+    const dateStr = event.startTime.toISOString().slice(0, 10);
+    const agendaPath = await findMatchingAgendaPath(services.storage, workspaceRoot, dateStr, event.title);
+    const hasAgenda = agendaPath !== null;
+
+    // Infer importance from calendar event metadata
+    const importance = inferMeetingImportance(event, { hasAgenda });
+
+    enrichedEvents.push({
+      ...event,
+      attendees: enrichedAttendees,
+      importance,
+      hasAgenda,
+    });
   }
 
   if (json) {
+    /**
+     * JSON Output Structure for `arete pull calendar --json`:
+     * {
+     *   success: boolean,
+     *   events: Array<{
+     *     title: string,
+     *     startTime: string (ISO 8601),
+     *     endTime: string (ISO 8601),
+     *     calendar: string,
+     *     location?: string,
+     *     notes?: string,
+     *     isAllDay: boolean,
+     *     attendees: Array<{ name: string, email?: string, personSlug?: string }>,
+     *     organizer?: { name: string, email?: string, self?: boolean },
+     *     importance: 'light' | 'normal' | 'important',
+     *     hasAgenda: boolean
+     *   }>
+     * }
+     *
+     * Importance inference rules (see inferMeetingImportance in @arete/core):
+     * - 'important': organizer.self=true OR 1:1 meeting (2 attendees)
+     * - 'normal': small group (≤3 attendees) OR large meeting with agenda
+     * - 'light': large audience (≥5 attendees, not organizer, no agenda)
+     */
     console.log(
       JSON.stringify(
         {
@@ -444,12 +496,16 @@ export async function pullCalendarHelper(
             endTime: e.endTime.toISOString(),
             calendar: e.calendar,
             location: e.location,
+            notes: e.notes ?? null,
             isAllDay: e.isAllDay,
             attendees: e.attendees.map((a) => ({
               name: a.name,
               email: a.email,
-              personSlug: (a as { personSlug?: string }).personSlug,
+              personSlug: a.personSlug,
             })),
+            organizer: e.organizer ?? null,
+            importance: e.importance,
+            hasAgenda: e.hasAgenda,
           })),
         },
         null,
