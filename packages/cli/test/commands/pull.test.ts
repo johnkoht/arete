@@ -838,6 +838,109 @@ describe('arete pull — calendar helper', () => {
     assert.equal(result.events[0].hasAgenda, true);
     assert.equal(result.events[0].importance, 'normal');
   });
+
+  it('agenda lookup lists files once before the loop, not N times for N events', async () => {
+    // Track how many times storage.list is called for the agendas directory
+    let agendaListCallCount = 0;
+
+    const services = {
+      storage: {
+        read: async () => null,
+        write: async () => undefined,
+        exists: async () => false,
+        delete: async () => undefined,
+        list: async (dir: string) => {
+          if (dir.includes('agendas')) {
+            agendaListCallCount++;
+            return ['2026-03-30-standup.md'];
+          }
+          return [];
+        },
+        listSubdirectories: async () => [],
+        mkdir: async () => undefined,
+        getModified: async () => null,
+      },
+      workspace: {
+        getPaths: () => ({
+          root: '/workspace',
+          people: '/workspace/people',
+          meetings: '/workspace/meetings',
+          projects: '/workspace/projects',
+          context: '/workspace/context',
+          resources: '/workspace/resources',
+          templates: '/workspace/templates',
+          areas: '/workspace/areas',
+          skills: '/workspace/skills',
+          tools: '/workspace/tools',
+          now: '/workspace/now',
+          goals: '/workspace/goals',
+          memory: '/workspace/.arete/memory',
+          memoryEntries: '/workspace/.arete/memory/entries',
+        }),
+      },
+    } as unknown as Awaited<ReturnType<typeof import('@arete/core').createServices>>;
+
+    // Create 5 events — previously this would cause 5 storage.list calls
+    const fiveEvents: CalendarEvent[] = [
+      {
+        title: 'Meeting 1',
+        startTime: new Date('2026-03-30T09:00:00Z'),
+        endTime: new Date('2026-03-30T10:00:00Z'),
+        calendar: 'Work',
+        isAllDay: false,
+        attendees: [],
+      },
+      {
+        title: 'Meeting 2',
+        startTime: new Date('2026-03-30T11:00:00Z'),
+        endTime: new Date('2026-03-30T12:00:00Z'),
+        calendar: 'Work',
+        isAllDay: false,
+        attendees: [],
+      },
+      {
+        title: 'Meeting 3',
+        startTime: new Date('2026-03-30T13:00:00Z'),
+        endTime: new Date('2026-03-30T14:00:00Z'),
+        calendar: 'Work',
+        isAllDay: false,
+        attendees: [],
+      },
+      {
+        title: 'Meeting 4',
+        startTime: new Date('2026-03-30T15:00:00Z'),
+        endTime: new Date('2026-03-30T16:00:00Z'),
+        calendar: 'Work',
+        isAllDay: false,
+        attendees: [],
+      },
+      {
+        title: 'Meeting 5',
+        startTime: new Date('2026-03-30T17:00:00Z'),
+        endTime: new Date('2026-03-30T18:00:00Z'),
+        calendar: 'Work',
+        isAllDay: false,
+        attendees: [],
+      },
+    ];
+    const provider = createMockCalendarProvider({ events: fiveEvents });
+
+    const deps: PullCalendarDeps = {
+      loadConfigFn: async () => ({ integrations: { calendar: { provider: 'test' } } }) as AreteConfig,
+      getCalendarProviderFn: async () => provider,
+    };
+
+    await captureConsole(async () => {
+      await pullCalendarHelper(services, '/workspace', { today: false, json: true }, deps);
+    });
+
+    // AC: Agenda listing happens once (not 5 times for 5 events)
+    assert.equal(
+      agendaListCallCount,
+      1,
+      `storage.list for agendas should be called once, but was called ${agendaListCallCount} times`,
+    );
+  });
 });
 
 describe('arete pull — unknown integration lists krisp', () => {

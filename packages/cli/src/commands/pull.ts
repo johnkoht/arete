@@ -5,7 +5,7 @@
 import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
 import type { QmdRefreshResult, CalendarProvider, AreteConfig } from '@arete/core';
 import type { Command } from 'commander';
-import { isAbsolute, join } from 'path';
+import { isAbsolute, join, basename } from 'path';
 import { tmpdir } from 'os';
 import { header, listItem, success, error, info } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
@@ -426,6 +426,12 @@ export async function pullCalendarHelper(
     hasAgenda: boolean;
   }> = [];
 
+  // Cache agenda files — list once before the loop instead of N times for N events
+  const agendasDir = join(workspaceRoot, 'now', 'agendas');
+  const agendaFiles = await services.storage.list(agendasDir, { extensions: ['.md'] });
+  // Build Set of date prefixes (YYYY-MM-DD) for O(1) lookup
+  const agendaDateSet = new Set(agendaFiles.map(f => basename(f).slice(0, 10)));
+
   for (const event of events) {
     // Enrich attendees with personSlug from workspace people
     const enrichedAttendees = [];
@@ -445,9 +451,11 @@ export async function pullCalendarHelper(
       enrichedAttendees.push(e);
     }
 
-    // Check for matching agenda file in now/agendas/
+    // Check for matching agenda file in now/agendas/ (uses cached date Set for O(1) filtering)
     const dateStr = event.startTime.toISOString().slice(0, 10);
-    const agendaPath = await findMatchingAgendaPath(services.storage, workspaceRoot, dateStr, event.title);
+    const agendaPath = agendaDateSet.has(dateStr)
+      ? await findMatchingAgendaPath(services.storage, workspaceRoot, dateStr, event.title)
+      : null;
     const hasAgenda = agendaPath !== null;
 
     // Infer importance from calendar event metadata
