@@ -925,6 +925,55 @@ describe('arete pull calendar — provider-aware availability errors', () => {
   });
 });
 
+/**
+ * Integration test for CLI error paths (Task 7).
+ *
+ * This tests the actual CLI command registration and error handling when
+ * no calendar integration is configured — verifies the full path from
+ * Commander.js registration through to JSON output and exit code.
+ */
+describe('arete pull calendar --json — CLI error paths (no calendar configured)', () => {
+  let workspaceDir: string;
+
+  beforeEach(() => {
+    workspaceDir = createTmpDir('arete-test-pull-calendar-error');
+    // Create a fresh workspace — no calendar integration configured by default
+    runCli(['install', workspaceDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(workspaceDir);
+  });
+
+  it('returns JSON error with { success: false, error: string } when calendar not configured', () => {
+    // Run the CLI command — calendar is not configured in fresh workspace
+    const { stdout, code } = runCliRaw(['pull', 'calendar', '--json'], {
+      cwd: workspaceDir,
+    });
+
+    // Verify non-zero exit code (AC: "Non-zero exit code verified")
+    assert.equal(code, 1, 'exit code should be 1 for unconfigured calendar');
+
+    // Parse and verify JSON structure (AC: "verify JSON structure")
+    const result = JSON.parse(stdout) as {
+      success: boolean;
+      error: string;
+      message: string;
+    };
+
+    // Verify structure matches { success: false, error: string } indicating calendar not configured
+    assert.equal(result.success, false, 'success should be false');
+    assert.equal(typeof result.error, 'string', 'error should be a string');
+
+    // Document actual error message for future reference (AC: "documents actual error message")
+    // Expected messages from packages/cli/src/commands/pull.ts L365-376:
+    //   error: "Calendar not configured"
+    //   message: "Run: arete integration configure calendar"
+    assert.equal(result.error, 'Calendar not configured');
+    assert.equal(result.message, 'Run: arete integration configure calendar');
+  });
+});
+
 type PullResult = {
   integration: string;
   itemsProcessed: number;
