@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-03-30: [week-plan-meeting-section-learnings](entries/2026-03-30_week-plan-meeting-section-learnings.md) — Key Meetings section for week-plan skill: calendar JSON exposes importance/organizer/notes/hasAgenda, skill classifies by priority, template captures confirmed meetings. 4/4 tasks, 100% first-attempt, +12 tests. Key: PullNotionDeps pattern for testability.
 - 2026-03-28: [build-context-injection-learnings](entries/2026-03-28_build-context-injection-learnings.md) — Profile injection for reviewers: execute-prd Steps 11/13 and /ship Phase 4.2 now receive expertise profiles. 4/4 tasks, 0/5 pre-mortem risks. Key: review caught CLI profile structure mismatch.
 - 2026-03-28: [documentation-audit-learnings](entries/2026-03-28_documentation-audit-learnings.md) — Audit skill: orchestrate domain experts to audit/fix docs. 8/8 tasks, 100% first-attempt, 0/8 pre-mortem risks. Profile injection pattern, manifest.yaml for declarative inventory, approval gates with deferred items.
 - 2026-03-28: [build-log-learnings](entries/2026-03-28_build-log-learnings.md) — Build Log for Ship: 6/6 tasks, 100% first-attempt, 0/6 pre-mortem risks. Phase 0 for resume, session markers, state verification, Build Log Update Reference. Key: documentation-focused PRD, no surprises.
