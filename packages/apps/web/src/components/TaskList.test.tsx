@@ -41,8 +41,16 @@ const mockUseCompleteTask = vi.fn(() => ({
   pendingTaskId: null as string | null,
 }));
 
+// Mock useUpdateTask hook (used by SchedulePopup)
+const mockUpdateMutate = vi.fn();
+const mockUseUpdateTask = vi.fn(() => ({
+  mutate: mockUpdateMutate,
+  isPending: false,
+}));
+
 vi.mock('@/hooks/tasks.js', () => ({
   useCompleteTask: () => mockUseCompleteTask(),
+  useUpdateTask: () => mockUseUpdateTask(),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -127,6 +135,10 @@ describe('TaskList', () => {
       mutate: mockMutate,
       isPending: false,
       pendingTaskId: null,
+    });
+    mockUseUpdateTask.mockReturnValue({
+      mutate: mockUpdateMutate,
+      isPending: false,
     });
   });
 

@@ -8,36 +8,20 @@
  * - Fade-out animation on successful completion
  * - Keyboard accessibility (Space/Enter to complete)
  * - Text truncation for long descriptions
+ * - Schedule popup for quick date assignment
  */
 
 import { useState, useCallback, type KeyboardEvent } from 'react';
-import {
-  Inbox,
-  AlertCircle,
-  CalendarDays,
-  Calendar,
-  Clock,
-  Archive,
-  Loader2,
-  type LucideIcon,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Avatar } from '@/components/Avatar.js';
+import { SchedulePopup } from '@/components/SchedulePopup.js';
 import { useCompleteTask } from '@/hooks/tasks.js';
 import type { Task } from '@/api/types.js';
 
-// ── Constants ────────────────────────────────────────────────────────────────
 
-const DESTINATION_ICONS: Record<Task['destination'], LucideIcon> = {
-  inbox: Inbox,
-  must: AlertCircle,
-  should: CalendarDays,
-  could: Calendar,
-  anytime: Clock,
-  someday: Archive,
-} as const;
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -92,7 +76,6 @@ export function TaskList({ tasks }: TaskListProps) {
       {tasks.map((task) => {
         const isTaskPending = isPending && pendingTaskId === task.id;
         const isFading = fadingTasks.has(task.id);
-        const DestinationIcon = DESTINATION_ICONS[task.destination];
 
         return (
           <div
@@ -139,11 +122,12 @@ export function TaskList({ tasks }: TaskListProps) {
                 </Badge>
               )}
 
-              {/* Schedule badge with destination icon */}
-              <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                <DestinationIcon className="h-3 w-3" />
-                {task.destination}
-              </Badge>
+              {/* Schedule popup (replaces static badge) */}
+              <SchedulePopup
+                taskId={task.id}
+                currentDestination={task.destination}
+                currentDue={task.due}
+              />
             </div>
           </div>
         );

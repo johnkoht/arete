@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createElement, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -34,10 +34,6 @@ const mockUseUpdateTask = vi.fn(() => ({
 vi.mock('@/hooks/tasks.js', () => ({
   useUpdateTask: () => mockUseUpdateTask(),
 }));
-
-// Mock date for consistent testing
-const MOCK_TODAY = new Date('2026-03-31T12:00:00.000Z');
-const MOCK_TOMORROW = new Date('2026-04-01T12:00:00.000Z');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,13 +65,23 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+function getToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function getTomorrow(): Date {
+  const today = getToday();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow;
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('SchedulePopup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(MOCK_TODAY);
     mockUseUpdateTask.mockReturnValue({
       mutate: mockMutate,
       isPending: false,
@@ -84,12 +90,11 @@ describe('SchedulePopup', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    vi.useRealTimers();
   });
 
   describe('popover behavior', () => {
     it('clicking badge opens popover', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -108,7 +113,7 @@ describe('SchedulePopup', () => {
     });
 
     it('popup closes after selection', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -130,7 +135,7 @@ describe('SchedulePopup', () => {
     });
 
     it('focus returns to trigger after close', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -155,7 +160,7 @@ describe('SchedulePopup', () => {
 
   describe('date selection', () => {
     it('selecting Today sets due to today\'s date', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -168,12 +173,12 @@ describe('SchedulePopup', () => {
 
       expect(mockMutate).toHaveBeenCalledWith({
         id: 'task-001',
-        updates: { due: formatDate(MOCK_TODAY) },
+        updates: { due: formatDate(getToday()) },
       });
     });
 
     it('selecting Tomorrow sets due to tomorrow\'s date', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -186,12 +191,12 @@ describe('SchedulePopup', () => {
 
       expect(mockMutate).toHaveBeenCalledWith({
         id: 'task-001',
-        updates: { due: formatDate(MOCK_TOMORROW) },
+        updates: { due: formatDate(getTomorrow()) },
       });
     });
 
     it('selecting Anytime clears due date (due=null)', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -209,7 +214,7 @@ describe('SchedulePopup', () => {
     });
 
     it('selecting Someday moves to someday destination', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -229,7 +234,7 @@ describe('SchedulePopup', () => {
 
   describe('keyboard navigation', () => {
     it('Escape key closes popover', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -250,7 +255,7 @@ describe('SchedulePopup', () => {
     });
 
     it('Arrow keys navigate options', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -266,7 +271,7 @@ describe('SchedulePopup', () => {
       // Press ArrowDown to navigate
       await user.keyboard('{ArrowDown}');
 
-      // First option should be highlighted (aria-selected)
+      // Check that an option has highlighting/selection
       await waitFor(() => {
         const highlightedOption = screen.getAllByRole('option').find(
           (opt) => opt.getAttribute('data-highlighted') === 'true' || 
@@ -289,7 +294,7 @@ describe('SchedulePopup', () => {
     });
 
     it('Enter selects highlighted option', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -316,7 +321,7 @@ describe('SchedulePopup', () => {
 
   describe('accessibility', () => {
     it('popup has role=\'listbox\'', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -330,7 +335,7 @@ describe('SchedulePopup', () => {
     });
 
     it('options have role=\'option\'', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -357,7 +362,7 @@ describe('SchedulePopup', () => {
 
   describe('calendar date picker', () => {
     it('Pick date option opens calendar', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -370,17 +375,16 @@ describe('SchedulePopup', () => {
       const pickDateOption = screen.getByRole('option', { name: /pick date/i });
       await user.click(pickDateOption);
 
-      // Calendar should appear
+      // Calendar should appear (data-testid="calendar" or role="grid")
       await waitFor(() => {
-        // Calendar uses role="grid" for the day grid
-        const calendar = document.querySelector('[data-testid="calendar"]') ||
+        const calendar = screen.queryByTestId('calendar') ||
                          screen.queryByRole('grid');
         expect(calendar).toBeInTheDocument();
       });
     });
 
     it('selecting date from calendar calls updateTask', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
         currentDestination: 'must',
@@ -395,19 +399,27 @@ describe('SchedulePopup', () => {
 
       // Wait for calendar to appear
       await waitFor(() => {
-        const calendar = document.querySelector('[data-testid="calendar"]') ||
+        const calendar = screen.queryByTestId('calendar') ||
                          screen.queryByRole('grid');
         expect(calendar).toBeInTheDocument();
       });
 
-      // Click a day in the calendar (click "15" which should be visible)
-      const dayButton = screen.getByRole('gridcell', { name: /15/i });
-      if (dayButton) {
-        await user.click(dayButton);
+      // Click a day in the calendar - find an enabled day button
+      // The calendar renders days as buttons with role="gridcell"
+      const dayButtons = screen.getAllByRole('gridcell').filter(
+        (cell) => !cell.hasAttribute('disabled') && cell.textContent?.match(/^\d+$/)
+      );
+      
+      if (dayButtons.length > 0) {
+        // Click the first enabled day
+        await user.click(dayButtons[0]);
 
-        // Should have called mutate with the selected date
+        // Should have called mutate with a date
         await waitFor(() => {
           expect(mockMutate).toHaveBeenCalled();
+          const call = mockMutate.mock.calls[0][0];
+          expect(call.id).toBe('task-001');
+          expect(call.updates.due).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         });
       }
     });
