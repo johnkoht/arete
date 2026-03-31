@@ -73,6 +73,45 @@ Components using `EventSource` import `BASE_URL` from `@/api/client.js`. Don't h
 ### Sync job coordination
 `useSyncKrisp` returns `{ jobId }`. The component stores `jobId` in state and passes it to `useJobStatus(jobId)`. A `useEffect` on `jobStatus.data?.status` triggers `invalidateQueries(['meetings'])` and toast on done/error. This separation is intentional — hooks can't call other hooks inside `onSuccess`.
 
+### useEffect Initialization — Stale Closure with External State (2026-03-30)
+
+**What broke**: Clicking approve/skip on one item in ReviewPage would sometimes affect other items.
+
+**Why**: The initialization `useEffect` that populates decision state from fetched data had a stale closure bug:
+```tsx
+// ❌ BAD: reads taskDecisions from stale closure
+useEffect(() => {
+  for (const task of data.tasks) {
+    if (!taskDecisions[task.id]) {  // stale reference!
+      newDecisions[task.id] = { status: "pending" };
+    }
+  }
+  setTaskDecisions(prev => ({ ...prev, ...newDecisions }));
+}, [data]); // missing taskDecisions in deps, but adding it causes infinite loop
+```
+
+When React Query refetched (30s stale time) or re-renders occurred, this effect could run with stale `taskDecisions` and incorrectly re-initialize items the user had already modified.
+
+**Fix**: Use functional state updates that read current state inside the setter:
+```tsx
+// ✅ GOOD: functional update always gets current state
+useEffect(() => {
+  setTaskDecisions((prev) => {
+    const updated = { ...prev };
+    let changed = false;
+    for (const task of data.tasks) {
+      if (!updated[task.id]) {  // prev is always current
+        updated[task.id] = { status: "pending" };
+        changed = true;
+      }
+    }
+    return changed ? updated : prev;  // avoid unnecessary re-renders
+  });
+}, [data]);
+```
+
+**Pattern**: When an effect needs to conditionally update state based on both external data AND current state, always use functional updates. The `prev` parameter is guaranteed to be current, unlike closed-over state variables.
+
 ### Approved vs Parsed Items — Use Correct Component for Status (2026-03-09)
 
 When rendering meeting items, the component must match the meeting status:

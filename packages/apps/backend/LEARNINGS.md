@@ -30,6 +30,31 @@ package uses the `yaml` library directly. Don't mix them — gray-matter's `matt
 produces slightly different output than yaml.stringify. Use `matter.stringify()` for round-trip
 safety in backend service code.
 
+### Aggregation Endpoints Must Filter Consistently (2026-03-30)
+
+**What broke**: The `/api/review/pending` endpoint returned ALL open commitments while only returning
+decisions/learnings from processed meetings. Users saw old commitments unrelated to current review.
+
+**Why**: The endpoint fetched commitments via `services.commitments.listOpen()` without filtering,
+while decisions/learnings were correctly filtered to `status === 'processed'` meetings.
+
+**Fix**: Filter commitments to only include those from processed meetings:
+```typescript
+const processedMeetingSlugs = new Set(processedMeetings.map(m => m.slug));
+const allCommitments = await services.commitments.listOpen();
+const commitments = allCommitments.filter(c => {
+  if (c.source.startsWith('meeting:')) {
+    const meetingSlug = c.source.slice('meeting:'.length);
+    return processedMeetingSlugs.has(meetingSlug);
+  }
+  return false;
+});
+```
+
+**Pattern**: When building aggregation endpoints that combine data from multiple sources, ensure ALL
+sources are filtered with the same criteria. If decisions/learnings are scoped to processed meetings,
+commitments must be too.
+
 ### gray-matter Caches Frontmatter Data Objects (2026-03-07)
 
 `gray-matter` caches the `data` object across parses. If you mutate `data` and then re-parse
