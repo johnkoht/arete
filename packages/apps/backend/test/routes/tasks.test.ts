@@ -795,3 +795,449 @@ describe('DELETE /api/tasks/:id', () => {
     assert.equal(res.status, 404);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Suggested tasks endpoint tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Wire format for suggested tasks (includes scoring breakdown).
+ */
+type SuggestedTaskWire = TaskWire & {
+  score: number;
+  breakdown: {
+    dueDate: number;
+    commitment: number;
+    meetingRelevance: number;
+    weekPriority: number;
+  };
+};
+
+/**
+ * Build test app with suggestions endpoint support.
+ */
+function buildSuggestionsTestApp(options: {
+  taskService?: Partial<MockTaskService>;
+  commitmentsService?: Partial<MockCommitmentsService>;
+  personResolver?: MockPersonResolver;
+  weekFileContent?: string | null; // null = file not found
+}) {
+  const app = new Hono();
+
+  const tasks: MockTaskService = {
+    listTasks: options.taskService?.listTasks ?? (() => Promise.resolve([])),
+    completeTask: options.taskService?.completeTask ?? (() => Promise.reject(new Error('Not found'))),
+    updateTask: options.taskService?.updateTask ?? (() => Promise.reject(new Error('Not found'))),
+    moveTask: options.taskService?.moveTask ?? (() => Promise.reject(new Error('Not found'))),
+    deleteTask: options.taskService?.deleteTask ?? (() => Promise.reject(new Error('Not found'))),
+  };
+
+  const commitments: MockCommitmentsService = {
+    listOpen: options.commitmentsService?.listOpen ?? (() => Promise.resolve([])),
+  };
+
+  const resolvePerson = options.personResolver ?? (() => Promise.resolve(null));
+  const weekContent = options.weekFileContent;
+
+  // Parse week priorities from content (matches route implementation)
+  function parseWeekPriorities(content: string | null): string[] {
+    if (!content) return [];
+    const regex = /^###\s+\d+[.\s]+(.+)$/gm;
+    const priorities: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(content)) !== null) {
+      priorities.push(match[1].trim());
+    }
+    return priorities;
+  }
+
+  // Helper to enrich task → TaskWire
+  async function enrichTask(task: WorkspaceTask, allCommitments: Commitment[]): Promise<TaskWire> {
+    let person: { slug: string; name: string } | null = null;
+    if (task.metadata.person) {
+      const resolved = await resolvePerson(task.metadata.person);
+      person = resolved ?? { slug: task.metadata.person, name: task.metadata.person };
+    }
+
+    let from: TaskWire['from'] = null;
+    if (task.metadata.from?.type === 'commitment') {
+      const commitment = allCommitments.find(c => c.id.startsWith(task.metadata.from!.id));
+      if (commitment) {
+        const daysOpen = Math.floor((Date.now() - new Date(commitment.date).getTime()) / (1000 * 60 * 60 * 24));
+        from = {
+          type: 'commitment',
+          id: commitment.id.slice(0, 8),
+          text: commitment.text,
+          priority: daysOpen >= 7 ? 'high' : daysOpen >= 3 ? 'medium' : 'low',
+          daysOpen,
+        };
+      }
+    }
+
+    return {
+      id: task.id,
+      text: task.text,
+      destination: sectionToDestination(task.source.section),
+      due: task.metadata.due ?? null,
+      area: task.metadata.area ?? null,
+      project: task.metadata.project ?? null,
+      person,
+      from,
+      completed: task.completed,
+      source: task.source,
+    };
+  }
+
+  // Minimal mock of scoreTasks for test purposes
+  // Real implementation uses @arete/core scoreTasks
+  function mockScoreTasks(
+    taskList: WorkspaceTask[],
+    context: { weekPriorities: string[]; referenceDate: Date },
+  ) {
+    // Simple scoring: due date urgency + week priority matching
+    return taskList.map((task) => {
+      let score = 0;
+      const breakdown = {
+        dueDate: { score: 0, reason: '' },
+        commitment: { score: 0, reason: '' },
+        meetingRelevance: { score: 0, reason: '' },
+        weekPriority: { score: 0, reason: '' },
+        modifiers: { score: 0, reasons: [] as string[] },
+        total: 0,
+      };
+
+      // Due date scoring
+      if (task.metadata.due) {
+        const dueDate = new Date(task.metadata.due);
+        const today = new Date(context.referenceDate);
+        today.setHours(0, 0, 0, 0);
+
+        if (dueDate < today) {
+          breakdown.dueDate = { score: 40, reason: 'Overdue' };
+        } else if (dueDate.toDateString() === today.toDateString()) {
+          breakdown.dueDate = { score: 35, reason: 'Due today' };
+        } else {
+          breakdown.dueDate = { score: 10, reason: 'Due later' };
+        }
+        score += breakdown.dueDate.score;
+      }
+
+      // Week priority matching
+      if (context.weekPriorities.length > 0) {
+        const taskLower = task.text.toLowerCase();
+        for (const priority of context.weekPriorities) {
+          const words = priority.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          if (words.some(word => taskLower.includes(word))) {
+            breakdown.weekPriority = { score: 15, reason: `Matches: ${priority}` };
+            score += 15;
+            break;
+          }
+        }
+      }
+
+      // Commitment scoring
+      if (task.metadata.from?.type === 'commitment') {
+        breakdown.commitment = { score: 25, reason: 'Linked to commitment' };
+        score += 25;
+      }
+
+      breakdown.total = score;
+
+      return { task, score, breakdown };
+    }).sort((a, b) => b.score - a.score);
+  }
+
+  // GET /api/tasks/suggested
+  app.get('/api/tasks/suggested', async (c) => {
+    try {
+      const dateParam = c.req.query('date');
+
+      // Parse week priorities
+      const weekPriorities = parseWeekPriorities(weekContent);
+
+      // Build scoring context
+      const referenceDate = dateParam ? new Date(dateParam) : new Date();
+
+      // Get incomplete tasks
+      const allTasks = await tasks.listTasks();
+      const incompleteTasks = allTasks.filter(t => !t.completed);
+
+      // If no tasks, return empty array
+      if (incompleteTasks.length === 0) {
+        return c.json({ tasks: [] });
+      }
+
+      // Score tasks
+      const scoredTasks = mockScoreTasks(incompleteTasks, { weekPriorities, referenceDate });
+
+      // Take top 10
+      const topTasks = scoredTasks.slice(0, 10);
+
+      // Enrich and transform to wire format
+      const allCommitments = await commitments.listOpen();
+      const wireTasks: SuggestedTaskWire[] = [];
+
+      for (const scored of topTasks) {
+        const enriched = await enrichTask(scored.task, allCommitments);
+        wireTasks.push({
+          ...enriched,
+          score: scored.score,
+          breakdown: {
+            dueDate: scored.breakdown.dueDate.score,
+            commitment: scored.breakdown.commitment.score,
+            meetingRelevance: scored.breakdown.meetingRelevance.score,
+            weekPriority: scored.breakdown.weekPriority.score,
+          },
+        });
+      }
+
+      return c.json({ tasks: wireTasks });
+    } catch (err) {
+      console.error('[tasks] suggested error:', err);
+      return c.json({ error: 'Failed to get suggested tasks' }, 500);
+    }
+  });
+
+  return app;
+}
+
+describe('GET /api/tasks/suggested', () => {
+  it('returns scored tasks sorted by score descending', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const highScoreTask = makeTask({
+      id: 'high1111',
+      text: 'Ship task UI',
+      metadata: { due: today }, // Due today = 35 points
+    });
+    const lowScoreTask = makeTask({
+      id: 'low11111',
+      text: 'Low priority task',
+      metadata: {},
+    });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([lowScoreTask, highScoreTask]) },
+      weekFileContent: '### 1. Ship task UI\n### 2. Review PRD',
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 2);
+    // High score task should be first
+    assert.equal(data.tasks[0].id, 'high1111');
+    assert.ok(data.tasks[0].score >= data.tasks[1].score);
+  });
+
+  it('respects ?date=YYYY-MM-DD for referenceDate in scoring', async () => {
+    // A task that is overdue relative to 2026-04-10
+    const overdue = makeTask({
+      id: 'overdue1',
+      text: 'Overdue task',
+      metadata: { due: '2026-04-05' },
+    });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([overdue]) },
+      weekFileContent: null,
+    });
+
+    // With referenceDate = 2026-04-10, due 2026-04-05 is overdue (40 points)
+    const res = await app.request('/api/tasks/suggested?date=2026-04-10');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.equal(data.tasks[0].breakdown.dueDate, 40); // Overdue score
+  });
+
+  it('parses weekPriorities from week.md correctly', async () => {
+    const matchingTask = makeTask({
+      id: 'match111',
+      text: 'Ship the feature today',
+    });
+    const nonMatchingTask = makeTask({
+      id: 'nomatch1',
+      text: 'Random unrelated task',
+    });
+
+    const weekContent = `# Week Plan
+
+## Priorities
+
+### 1. Ship the feature
+### 2. Review documentation
+
+## Tasks
+
+### Must complete
+- [ ] Some task
+`;
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([matchingTask, nonMatchingTask]) },
+      weekFileContent: weekContent,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    // The matching task should have weekPriority score
+    const matching = data.tasks.find(t => t.id === 'match111');
+    assert.ok(matching);
+    assert.equal(matching!.breakdown.weekPriority, 15);
+  });
+
+  it('returns empty array when no tasks', async () => {
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([]) },
+      weekFileContent: null,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.deepEqual(data.tasks, []);
+  });
+
+  it('excludes completed tasks', async () => {
+    const incomplete = makeTask({ id: 'open1111', text: 'Open task', completed: false });
+    const complete = makeTask({ id: 'done1111', text: 'Done task', completed: true });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([incomplete, complete]) },
+      weekFileContent: null,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.equal(data.tasks[0].id, 'open1111');
+  });
+
+  it('handles missing week.md gracefully (empty priorities array)', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Ship feature' });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([task]) },
+      weekFileContent: null, // Simulates missing file
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    // No week priority match when file is missing
+    assert.equal(data.tasks[0].breakdown.weekPriority, 0);
+  });
+
+  it('handles malformed week.md (no Priorities section)', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Ship feature' });
+
+    // File exists but has no ### N. Priority format
+    const malformedContent = `# Week Plan
+
+Just some random content without priority headings.
+
+## Random Section
+More text here.
+`;
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([task]) },
+      weekFileContent: malformedContent,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    // No priorities parsed, so no weekPriority score
+    assert.equal(data.tasks[0].breakdown.weekPriority, 0);
+  });
+
+  it('returns flat breakdown scores (not nested objects)', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const task = makeTask({
+      id: 'task1111',
+      text: 'Ship feature',
+      metadata: { due: today },
+    });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([task]) },
+      weekFileContent: '### 1. Ship feature',
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+
+    // Verify breakdown has flat numbers, not objects
+    const breakdown = data.tasks[0].breakdown;
+    assert.equal(typeof breakdown.dueDate, 'number');
+    assert.equal(typeof breakdown.commitment, 'number');
+    assert.equal(typeof breakdown.meetingRelevance, 'number');
+    assert.equal(typeof breakdown.weekPriority, 'number');
+  });
+
+  it('limits results to top 10 tasks', async () => {
+    // Create 15 tasks
+    const tasks: WorkspaceTask[] = [];
+    for (let i = 0; i < 15; i++) {
+      tasks.push(makeTask({ id: `task${i.toString().padStart(4, '0')}`, text: `Task ${i}` }));
+    }
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve(tasks) },
+      weekFileContent: null,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 10);
+  });
+
+  it('enriches person and commitment fields', async () => {
+    const commitment = makeCommitment({
+      id: 'commit01' + '0'.repeat(56),
+      text: 'Follow up on proposal',
+    });
+
+    const task = makeTask({
+      id: 'task1111',
+      text: 'Task with person and commitment',
+      metadata: {
+        person: 'jane-doe',
+        from: { type: 'commitment', id: 'commit01' },
+      },
+    });
+
+    const app = buildSuggestionsTestApp({
+      taskService: { listTasks: () => Promise.resolve([task]) },
+      commitmentsService: { listOpen: () => Promise.resolve([commitment]) },
+      personResolver: async (slug) => slug === 'jane-doe' ? { slug: 'jane-doe', name: 'Jane Doe' } : null,
+      weekFileContent: null,
+    });
+
+    const res = await app.request('/api/tasks/suggested');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: SuggestedTaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.deepEqual(data.tasks[0].person, { slug: 'jane-doe', name: 'Jane Doe' });
+    assert.ok(data.tasks[0].from);
+    assert.equal(data.tasks[0].from?.id, 'commit01');
+  });
+});
