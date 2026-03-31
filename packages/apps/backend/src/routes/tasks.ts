@@ -13,11 +13,14 @@ import {
   AmbiguousIdError,
   FileStorageAdapter,
   computeCommitmentPriority,
+  scoreTasks,
 } from '@arete/core';
 import type {
   TaskDestination,
   WorkspaceTask,
   Commitment,
+  ScoringContext,
+  ScoredTask,
 } from '@arete/core';
 import { withFileLock } from '../services/locks.js';
 
@@ -45,6 +48,19 @@ interface TaskWire {
   } | null;
   completed: boolean;
   source: { file: string; section: string };
+}
+
+/**
+ * Wire format for suggested tasks (includes flat scoring breakdown).
+ */
+interface SuggestedTaskWire extends TaskWire {
+  score: number;
+  breakdown: {
+    dueDate: number;
+    commitment: number;
+    meetingRelevance: number;
+    weekPriority: number;
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -153,6 +169,56 @@ async function enrichTask(
     from,
     completed: task.completed,
     source: task.source,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Week priorities parsing
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Parse week priorities from now/week.md content.
+ * Extracts titles from lines like "### 1. Ship task UI" or "### 2 Review PRD"
+ * Returns empty array if file doesn't exist or has no priorities section.
+ */
+async function parseWeekPriorities(workspaceRoot: string): Promise<string[]> {
+  const weekPath = join(workspaceRoot, 'now', 'week.md');
+  const content = await storage.read(weekPath);
+
+  if (!content) {
+    return [];
+  }
+
+  const regex = /^###\s+\d+[.\s]+(.+)$/gm;
+  const priorities: string[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    priorities.push(match[1].trim());
+  }
+
+  return priorities;
+}
+
+/**
+ * Transform ScoredTask to SuggestedTaskWire (flatten breakdown).
+ */
+async function toSuggestedWire(
+  scored: ScoredTask,
+  allCommitments: Commitment[],
+  workspaceRoot: string,
+): Promise<SuggestedTaskWire> {
+  const enriched = await enrichTask(scored.task, allCommitments, workspaceRoot);
+
+  return {
+    ...enriched,
+    score: scored.score,
+    breakdown: {
+      dueDate: scored.breakdown.dueDate.score,
+      commitment: scored.breakdown.commitment.score,
+      meetingRelevance: scored.breakdown.meetingRelevance.score,
+      weekPriority: scored.breakdown.weekPriority.score,
+    },
   };
 }
 
@@ -282,6 +348,53 @@ export function createTasksRouter(workspaceRoot: string): Hono {
     } catch (err) {
       console.error('[tasks] listTasks error:', err);
       return c.json({ error: 'Failed to list tasks' }, 500);
+    }
+  });
+
+  // GET /api/tasks/suggested — AI-scored task recommendations
+  // NOTE: This route must be defined BEFORE /:id to avoid "suggested" matching as an ID
+  app.get('/suggested', async (c) => {
+    try {
+      const dateParam = c.req.query('date');
+
+      // Parse week priorities from now/week.md
+      const weekPriorities = await parseWeekPriorities(workspaceRoot);
+
+      // Build scoring context
+      const context: ScoringContext = {
+        todayMeetingAttendees: [],
+        todayMeetingAreas: [],
+        weekPriorities,
+        availableFocusHours: 8,
+        needsAttentionPeople: [],
+        referenceDate: dateParam ? new Date(dateParam) : new Date(),
+      };
+
+      // Get incomplete tasks
+      const services = await createServices(workspaceRoot);
+      const allTasks = await services.tasks.listTasks({ completed: false });
+
+      // Return empty array when no tasks
+      if (allTasks.length === 0) {
+        return c.json({ tasks: [] });
+      }
+
+      // Score and sort tasks
+      const scoredTasks = scoreTasks(allTasks, context);
+
+      // Take top 10
+      const topTasks = scoredTasks.slice(0, 10);
+
+      // Enrich and transform to wire format
+      const allCommitments = await services.commitments.listOpen();
+      const wireTasks: SuggestedTaskWire[] = await Promise.all(
+        topTasks.map((scored) => toSuggestedWire(scored, allCommitments, workspaceRoot)),
+      );
+
+      return c.json({ tasks: wireTasks });
+    } catch (err) {
+      console.error('[tasks] suggested error:', err);
+      return c.json({ error: 'Failed to get suggested tasks' }, 500);
     }
   });
 
