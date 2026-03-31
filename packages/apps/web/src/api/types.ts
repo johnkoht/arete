@@ -219,6 +219,71 @@ export type SearchResponse = {
   results: SearchResult[];
 };
 
+// ── Task types (for Tasks page) ───────────────────────────────────────────────
+
+/**
+ * Task type for the Tasks page.
+ * Distinct from WorkspaceTask (used in review page) — this is the enriched
+ * wire format from GET /api/tasks with resolved person names and commitment details.
+ */
+export type Task = {
+  id: string;
+  text: string;
+  destination: 'inbox' | 'must' | 'should' | 'could' | 'anytime' | 'someday';
+  due: string | null;
+  area: string | null;
+  project: string | null;
+  person: { slug: string; name: string } | null;
+  from: {
+    type: 'commitment';
+    id: string;
+    text: string;
+    priority: 'high' | 'medium' | 'low';
+    daysOpen: number;
+  } | null;
+  completed: boolean;
+  source: { file: string; section: string };
+};
+
+/**
+ * Suggested task with AI scoring breakdown.
+ * Returned from GET /api/tasks/suggested.
+ */
+export type SuggestedTask = Task & {
+  score: number;
+  breakdown: {
+    dueDate: number;
+    commitment: number;
+    meetingRelevance: number;
+    weekPriority: number;
+  };
+};
+
+/** Filter param for fetchTasks */
+export type TasksFilter = 'today' | 'upcoming' | 'anytime' | 'someday';
+
+/** Options for fetchTasks */
+export type FetchTasksOptions = {
+  limit?: number;
+  offset?: number;
+  waitingOn?: boolean;
+};
+
+/** Response from GET /api/tasks */
+export type TasksResponse = {
+  tasks: Task[];
+  total: number;
+  offset: number;
+  limit: number;
+};
+
+/** Updates for PATCH /api/tasks/:id */
+export type TaskUpdate = {
+  completed?: boolean;
+  due?: string | null;
+  destination?: Task['destination'];
+};
+
 // ── Review types ──────────────────────────────────────────────────────────────
 
 export type TaskDestination = 'inbox' | 'must' | 'should' | 'could' | 'anytime' | 'someday';

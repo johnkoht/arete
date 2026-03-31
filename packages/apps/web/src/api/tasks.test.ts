@@ -5,7 +5,7 @@
  * Uses vi.stubGlobal to mock fetch.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BASE_URL } from './client.js';
 import { fetchTasks, fetchTaskSuggestions, updateTask, deleteTask } from './tasks.js';
 import type { Task, SuggestedTask } from './types.js';
