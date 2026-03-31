@@ -4,6 +4,44 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of March 30, 2026
+
+### Key Meetings Section in Week Plan
+
+**Your confirmed meetings now persist in your weekly plan.** Previously, the week-plan skill asked you to confirm "key meetings this week" but then discarded your answer. Now those confirmed meetings appear in a new `## Key Meetings` section in your `week.md` file.
+
+**Meetings are classified by importance:**
+- 🔴 **High priority** — 1:1s, meetings you organized, small groups
+- 🟡 **Prep-worthy** — Normal meetings with an agenda or external attendees
+- ⚪ **Light** — Large broadcasts, all-hands (hidden by default)
+
+Each meeting shows *why* it was flagged: `(1:1)`, `(you organized)`, `(has agenda)`, `(external: @acme.com)`
+
+**Calendar JSON now includes importance data.** Run `arete pull calendar --json` to see the new fields:
+```json
+{
+  "events": [{
+    "title": "John / Lindsay 1:1",
+    "importance": "important",
+    "organizer": { "name": "John", "email": "john@...", "self": true },
+    "hasAgenda": true,
+    "notes": "Discuss Q2 roadmap"
+  }]
+}
+```
+
+**Example output in week.md:**
+```markdown
+## Key Meetings
+- [ ] Tue 2:00pm: Lindsay 1:1 (1:1) — prep needed
+- [ ] Wed 3:00pm: CoverWhale QBR (has agenda) — prep: [agenda](now/agendas/coverwhale-qbr.md)
+- [ ] Fri 11:00am: UK Roadmap Review (external: @acme.com) — prep needed
+```
+
+Check off meetings as you complete your prep. The section is omitted if you have no prep-worthy meetings that week.
+
+---
+
 ## Week of March 28, 2026
 
 ### Task Management System

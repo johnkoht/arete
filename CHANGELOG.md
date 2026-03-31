@@ -26,7 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-*Changes since last release will appear here.*
+### Added
+- `pullCalendarHelper()` with DI pattern for testable calendar pulls
+- Calendar JSON output includes `importance`, `organizer`, `notes`, `hasAgenda` fields
+- Agenda lookup caching (caller-side) for performance optimization
+- `captureConsole<T>` shared test helper in `packages/cli/test/helpers.ts`
+- Integration test for calendar pull CLI error paths
+
+### Changed
+- Week-plan skill Step 2.5 now classifies meetings by importance (🔴 High priority / 🟡 Prep-worthy)
+- Week template includes `## Key Meetings` section between Weekly Priorities and Today
+
+### Fixed
+- Unused `Importance` type import removed from pull.ts
 
 ---
 
