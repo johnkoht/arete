@@ -157,15 +157,27 @@ function buildTestApp(mocks: MockServices = {}) {
       // 1. Get inbox tasks
       const tasks = await taskService.listTasks({ destination: 'inbox' });
 
-      // 2. Get open commitments
-      const commitments = await commitmentsService.listOpen();
-
-      // 3. Get staged decisions/learnings from processed meetings
-      const decisions: unknown[] = [];
-      const learnings: unknown[] = [];
-
+      // 2. List all meetings and filter to 'processed' status
       const allMeetings = await workspaceService.listMeetings();
       const processedMeetings = allMeetings.filter((m) => m.status === 'processed');
+
+      // Build set of processed meeting slugs for filtering
+      const processedMeetingSlugs = new Set(processedMeetings.map((m) => m.slug));
+
+      // 3. Get open commitments — filter to only those from processed meetings
+      const allCommitments = await commitmentsService.listOpen();
+      const commitments = allCommitments.filter((c) => {
+        // source format is "meeting:slug" — extract slug and check if it's processed
+        if (c.source.startsWith('meeting:')) {
+          const meetingSlug = c.source.slice('meeting:'.length);
+          return processedMeetingSlugs.has(meetingSlug);
+        }
+        return false;
+      });
+
+      // 4. Get staged decisions/learnings from processed meetings
+      const decisions: unknown[] = [];
+      const learnings: unknown[] = [];
 
       for (const meeting of processedMeetings) {
         const fullMeeting = await workspaceService.getMeeting(meeting.slug);
@@ -312,9 +324,15 @@ describe('GET /api/review/pending', () => {
     assert.equal(body.tasks[0].text, 'Inbox item');
   });
 
-  it('returns open commitments', async () => {
-    const commitment = makeCommitment({ id: 'commit_001', text: 'Follow up with client' });
+  it('returns commitments from processed meetings', async () => {
+    const processedMeeting = makeMeetingSummary({ slug: '2024-01-15-standup', status: 'processed' });
+    const commitment = makeCommitment({
+      id: 'commit_001',
+      text: 'Follow up with client',
+      source: 'meeting:2024-01-15-standup',
+    });
     const app = buildTestApp({
+      listMeetings: () => Promise.resolve([processedMeeting]),
       listOpenCommitments: () => Promise.resolve([commitment]),
     });
 
@@ -325,6 +343,49 @@ describe('GET /api/review/pending', () => {
     assert.equal(body.commitments.length, 1);
     assert.equal(body.commitments[0].id, 'commit_001');
     assert.equal(body.commitments[0].text, 'Follow up with client');
+  });
+
+  it('filters out commitments not from processed meetings', async () => {
+    // One processed meeting, one synced (not processed) meeting
+    const processedMeeting = makeMeetingSummary({ slug: '2024-01-15-standup', status: 'processed' });
+    const syncedMeeting = makeMeetingSummary({ slug: '2024-01-16-review', status: 'synced' });
+
+    // Commitments from different sources
+    const commitmentFromProcessed = makeCommitment({
+      id: 'c1',
+      text: 'From processed meeting',
+      source: 'meeting:2024-01-15-standup',
+    });
+    const commitmentFromSynced = makeCommitment({
+      id: 'c2',
+      text: 'From synced meeting',
+      source: 'meeting:2024-01-16-review',
+    });
+    const commitmentManual = makeCommitment({
+      id: 'c3',
+      text: 'Manual commitment',
+      source: 'manual',
+    });
+    const commitmentOldFormat = makeCommitment({
+      id: 'c4',
+      text: 'Old format source',
+      source: 'meeting-2024-01-10', // old format without colon
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([processedMeeting, syncedMeeting]),
+      listOpenCommitments: () =>
+        Promise.resolve([commitmentFromProcessed, commitmentFromSynced, commitmentManual, commitmentOldFormat]),
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/pending');
+
+    assert.equal(status, 200);
+    const body = json as { commitments: MockCommitment[] };
+    // Only the commitment from the processed meeting should be included
+    assert.equal(body.commitments.length, 1);
+    assert.equal(body.commitments[0].id, 'c1');
+    assert.equal(body.commitments[0].text, 'From processed meeting');
   });
 
   it('returns staged decisions from processed meetings', async () => {
@@ -538,7 +599,7 @@ describe('POST /api/review/complete', () => {
     assert.equal(body.success, true);
 
     // Verify the file was written
-    assert.ok(writtenPath?.includes('.review-complete-valid-session'));
+    assert.ok((writtenPath as string | null)?.includes('.review-complete-valid-session'));
     assert.ok(writtenContent !== null);
 
     const parsed = JSON.parse(writtenContent!) as {

@@ -457,34 +457,39 @@ export default function ReviewPage() {
   }, [editedItems]);
 
   // Initialize decisions when data loads
+  // Uses functional updates to avoid stale closure issues
   useEffect(() => {
     if (!data) return;
 
-    // Initialize task decisions
-    const newTaskDecisions: Record<string, TaskDecision> = {};
-    for (const task of data.tasks) {
-      if (!taskDecisions[task.id]) {
-        newTaskDecisions[task.id] = {
-          status: "pending",
-          destination: "must", // default destination
-        };
+    // Initialize task decisions — only add missing, never overwrite existing
+    setTaskDecisions((prev) => {
+      const updated = { ...prev };
+      let changed = false;
+      for (const task of data.tasks) {
+        if (!updated[task.id]) {
+          updated[task.id] = {
+            status: "pending",
+            destination: "must",
+          };
+          changed = true;
+        }
       }
-    }
-    if (Object.keys(newTaskDecisions).length > 0) {
-      setTaskDecisions((prev) => ({ ...prev, ...newTaskDecisions }));
-    }
+      return changed ? updated : prev;
+    });
 
-    // Initialize memory decisions
-    const newMemoryDecisions: Record<string, MemoryDecision> = {};
-    for (const item of [...data.decisions, ...data.learnings]) {
-      if (!memoryDecisions[item.id]) {
-        newMemoryDecisions[item.id] = { status: "pending" };
+    // Initialize memory decisions — only add missing, never overwrite existing
+    setMemoryDecisions((prev) => {
+      const updated = { ...prev };
+      let changed = false;
+      for (const item of [...data.decisions, ...data.learnings]) {
+        if (!updated[item.id]) {
+          updated[item.id] = { status: "pending" };
+          changed = true;
+        }
       }
-    }
-    if (Object.keys(newMemoryDecisions).length > 0) {
-      setMemoryDecisions((prev) => ({ ...prev, ...newMemoryDecisions }));
-    }
-  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+      return changed ? updated : prev;
+    });
+  }, [data]);
 
   // Callback helpers
   const handleTaskDecisionChange = useCallback((id: string, decision: TaskDecision) => {

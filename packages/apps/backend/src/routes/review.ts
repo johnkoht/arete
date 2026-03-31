@@ -60,16 +60,27 @@ export function createReviewRouter(workspaceRoot: string): Hono {
       // 1. Get inbox tasks
       const tasks = await services.tasks.listTasks({ destination: 'inbox' });
       
-      // 2. Get open commitments
-      const commitments = await services.commitments.listOpen();
-      
-      // 3. Get staged decisions/learnings from processed meetings
-      const decisions: StagedMemoryItem[] = [];
-      const learnings: StagedMemoryItem[] = [];
-      
-      // List all meetings and filter to 'processed' status
+      // 2. List all meetings and filter to 'processed' status
       const allMeetings = await workspaceService.listMeetings(workspaceRoot);
       const processedMeetings = allMeetings.filter(m => m.status === 'processed');
+      
+      // Build set of processed meeting slugs for filtering
+      const processedMeetingSlugs = new Set(processedMeetings.map(m => m.slug));
+      
+      // 3. Get open commitments — filter to only those from processed meetings
+      const allCommitments = await services.commitments.listOpen();
+      const commitments = allCommitments.filter(c => {
+        // source format is "meeting:slug" — extract slug and check if it's processed
+        if (c.source.startsWith('meeting:')) {
+          const meetingSlug = c.source.slice('meeting:'.length);
+          return processedMeetingSlugs.has(meetingSlug);
+        }
+        return false;
+      });
+      
+      // 4. Get staged decisions/learnings from processed meetings
+      const decisions: StagedMemoryItem[] = [];
+      const learnings: StagedMemoryItem[] = [];
       
       for (const meeting of processedMeetings) {
         const fullMeeting = await workspaceService.getMeeting(workspaceRoot, meeting.slug);
