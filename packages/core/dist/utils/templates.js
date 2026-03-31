@@ -14,7 +14,7 @@ import { join } from 'node:path';
  */
 export const TEMPLATE_REGISTRY = {
     'create-prd': ['prd-simple', 'prd-regular', 'prd-full', 'project'],
-    'prepare-meeting-agenda': ['one-on-one', 'leadership', 'customer', 'dev-team', 'other'],
+    'prepare-meeting-agenda': ['one-on-one', 'leadership', 'customer', 'dev-team', 'stakeholder', 'weekly-team', 'other'],
     'discovery': ['project', 'research-note', 'user-feedback'],
     'competitive-analysis': ['project'],
     'construct-roadmap': ['project', 'roadmap'],
