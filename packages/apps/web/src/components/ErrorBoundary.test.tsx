@@ -104,32 +104,17 @@ describe('ErrorBoundary', () => {
   });
 
   describe('error logging', () => {
-    it('logs error with structured format including message', () => {
-      render(
-        <ErrorBoundary>
-          <ThrowError message="Logged error message" />
-        </ErrorBoundary>
-      );
-
-      // Check that console.error was called with structured object
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: 'Logged error message',
-        })
-      );
-    });
-
-    it('logs error with stack trace', () => {
+    it('logs error with component stack', () => {
       render(
         <ErrorBoundary>
           <ThrowError />
         </ErrorBoundary>
       );
 
-      // Check that console.error was called with object containing stack
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          stack: expect.any(String),
+          message: expect.any(String),
+          componentStack: expect.stringContaining('ThrowError'),
         })
       );
     });

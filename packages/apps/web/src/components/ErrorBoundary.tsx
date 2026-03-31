@@ -6,22 +6,14 @@
  * Logs errors with structured format including component stack.
  */
 
-import { useEffect } from 'react';
+
 import { ErrorBoundary as ReactErrorBoundary, FallbackProps } from 'react-error-boundary';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // ── Error Fallback Component ─────────────────────────────────────────────────
 
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
-  useEffect(() => {
-    // Log error with structured format including stack trace
-    console.error({
-      message: error.message,
-      stack: error.stack,
-    });
-  }, [error]);
-
+function ErrorFallback({ resetErrorBoundary }: FallbackProps) {
   return (
     <div
       role="alert"
@@ -51,7 +43,16 @@ export interface ErrorBoundaryProps {
 
 export function ErrorBoundary({ children }: ErrorBoundaryProps) {
   return (
-    <ReactErrorBoundary FallbackComponent={ErrorFallback}>
+    <ReactErrorBoundary
+      FallbackComponent={ErrorFallback}
+      onError={(error, info) => {
+        console.error({
+          message: error.message,
+          stack: error.stack,
+          componentStack: info.componentStack,
+        });
+      }}
+    >
       {children}
     </ReactErrorBoundary>
   );
