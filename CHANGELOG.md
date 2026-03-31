@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `[Build Principles]` section in AGENTS.md with 6 execution principles for autonomous work
+- Integrity check in `build-agents.ts` to prevent root AGENTS.md from being overwritten with GUIDE content
+
+### Fixed
+- Restored BUILD mode AGENTS.md that had been accidentally overwritten with GUIDE content (commit c57e944)
+- AGENTS.md now correctly includes `[Identity]`, `[Expertise]`, `[Roles]`, and all 10 build skills
+- Added missing expertise profiles (backend, web) and roles (gitboss) to AGENTS.md
+
+### Added
 - `pullCalendarHelper()` with DI pattern for testable calendar pulls
 - Calendar JSON output includes `importance`, `organizer`, `notes`, `hasAgenda` fields
 - Agenda lookup caching (caller-side) for performance optimization

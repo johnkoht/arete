@@ -72,6 +72,7 @@ node_modules/
 !.agents/skills/**
 !.agents/sources/
 !.agents/sources/**
+!.agents/LEARNINGS.md
 .cursor/integrations/
 .cursor/tools/
 # .cursor/rules/ contains BUILDER-only rules for this dev repo.
