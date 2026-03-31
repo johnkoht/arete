@@ -169,6 +169,66 @@ describe('withFileLock', () => {
       // Clean up - wait for longOp to complete
       await longOp;
     });
+
+    it('maintains serialization when middle waiter times out', async () => {
+      const filePath = '/test/serialization-timeout.txt';
+      const events: string[] = [];
+
+      // A: holds lock for 6 seconds (completes at t=6s)
+      const opA = withFileLock(filePath, async () => {
+        events.push('A:start');
+        await sleep(6000);
+        events.push('A:end');
+        return 'A';
+      });
+
+      // Wait for A to acquire lock
+      await sleep(10);
+
+      // B: tries to acquire, will timeout after 5 seconds (at t=5s)
+      const opB = withFileLock(filePath, async () => {
+        events.push('B:start');
+        return 'B';
+      }).catch((err) => {
+        events.push('B:timeout');
+        return err;
+      });
+
+      // Wait 1.5 seconds so C's 5s timeout fires at t=6.5s (after A completes at t=6s)
+      await sleep(1500);
+
+      // C: queued behind B, must wait for A to complete (not just B's timeout)
+      // C's own 5s timeout will fire at ~t=6.5s, after A completes at t=6s
+      const opC = withFileLock(filePath, async () => {
+        events.push('C:start');
+        events.push('C:end');
+        return 'C';
+      });
+
+      // Wait for all operations
+      const [resultA, resultB, resultC] = await Promise.all([opA, opB, opC]);
+
+      // Verify results
+      assert.equal(resultA, 'A');
+      assert.ok(resultB instanceof Error, 'B should have timed out');
+      assert.equal(resultC, 'C');
+
+      // Critical assertion: C must start AFTER A ends
+      // If the bug exists, C would start before A ends (concurrent execution)
+      const aEndIndex = events.indexOf('A:end');
+      const cStartIndex = events.indexOf('C:start');
+      assert.ok(
+        aEndIndex < cStartIndex,
+        `C must wait for A to complete. Events: ${events.join(', ')}`
+      );
+
+      // B should timeout before A ends
+      const bTimeoutIndex = events.indexOf('B:timeout');
+      assert.ok(
+        bTimeoutIndex < aEndIndex,
+        `B should timeout before A ends. Events: ${events.join(', ')}`
+      );
+    });
   });
 
   describe('return values', () => {

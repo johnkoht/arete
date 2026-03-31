@@ -37,20 +37,30 @@ export async function withFileLock<T>(
   writeQueue.set(filePath, next);
 
   // Wait for prior lock with timeout
+  let timeoutId: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       reject(new Error(`Lock timeout: waited 5 seconds for lock on ${filePath}`));
     }, LOCK_TIMEOUT_MS);
   });
 
+  let acquiredLock = false;
   try {
     // Wait for prior lock to release (with timeout)
     await Promise.race([prior, timeout]);
+    clearTimeout(timeoutId!);
+    acquiredLock = true;
 
     // Execute the function while holding the lock
     return await fn();
   } finally {
-    // Always release our lock, even on error or timeout
-    resolve();
+    if (acquiredLock) {
+      // Normal completion or fn() error - release immediately
+      resolve();
+    } else {
+      // Timed out before acquiring lock - chain to maintain serialization
+      // Next waiter must wait for prior holder to complete
+      prior.finally(() => resolve());
+    }
   }
 }
