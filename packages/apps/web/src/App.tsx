@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Dashboard from "@/pages/Dashboard";
 import MeetingsIndex from "@/pages/MeetingsIndex";
 import MeetingDetail from "@/pages/MeetingDetail";
@@ -16,6 +17,7 @@ import CommitmentsPage from "@/pages/CommitmentsPage";
 import ReviewPage from "@/pages/ReviewPage";
 import SearchPage from "@/pages/SearchPage";
 import SettingsPage from "@/pages/SettingsPage";
+import TasksPage from "@/pages/TasksPage";
 import NotFound from "./pages/NotFound";
 import { useProcessingEvents } from "@/hooks/useProcessingEvents.js";
 
@@ -38,6 +40,7 @@ function AppRoutes() {
         <Route path="/people" element={<PeopleIndex />} />
         <Route path="/people/:slug" element={<PersonDetailPage />} />
         <Route path="/commitments" element={<CommitmentsPage />} />
+        <Route path="/tasks" element={<ErrorBoundary><TasksPage /></ErrorBoundary>} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/goals" element={<GoalsView />} />
         <Route path="/memory" element={<MemoryFeed />} />

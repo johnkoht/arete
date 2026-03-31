@@ -328,8 +328,8 @@ describe("TasksPage", () => {
 
       renderPage();
 
-      // Should show skeletons while loading
-      const skeletons = document.querySelectorAll('[class*="skeleton"]');
+      // Should show skeletons while loading (Skeleton component uses animate-pulse)
+      const skeletons = document.querySelectorAll('[class*="animate-pulse"]');
       expect(skeletons.length).toBeGreaterThan(0);
     });
   });

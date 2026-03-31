@@ -9,6 +9,7 @@ import {
   CheckSquare,
   ClipboardCheck,
   Search,
+  ListTodo,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +19,7 @@ const navItems = [
   { icon: Calendar, label: "Meetings", path: "/meetings", enabled: true },
   { icon: Users, label: "People", path: "/people", enabled: true },
   { icon: CheckSquare, label: "Commitments", path: "/commitments", enabled: true },
+  { icon: ListTodo, label: "Tasks", path: "/tasks", enabled: true },
   { icon: ClipboardCheck, label: "Review", path: "/review", enabled: true },
   { icon: Target, label: "Goals", path: "/goals", enabled: true },
   { icon: Zap, label: "Intelligence", path: "/intelligence", enabled: true },
