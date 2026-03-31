@@ -2,16 +2,16 @@
 title: Task Management Ui
 slug: task-management-ui
 status: idea
-size: tiny
+size: large
 tags: []
 created: 2026-03-30T03:35:49.116Z
-updated: 2026-03-31T03:18:49.195Z
+updated: 2026-03-31T03:55:04.273Z
 completed: null
 execution: null
 has_review: false
 has_pre_mortem: false
 has_prd: false
-steps: 0
+steps: 8
 ---
 
 # Task Management UI
@@ -20,73 +20,162 @@ steps: 0
 
 Tasks in markdown files (`now/tasks.md`, `now/week.md`) have verbose inline metadata (`@from(commitment:13b257c8)`) that makes them hard to scan. There's no visual UI for task management — only the raw markdown files.
 
-## Vision
+## Solution
 
-A clean, interactive task management page in the web app (`arete view`) with:
-- **Tabs/Filters**: All (grouped by section), Today, Anytime, Someday
-- **Task Items**: Checkbox, owner avatar (initials + tooltip), description, due date, age
-- **Drag-and-drop**: Move tasks between sections
-- **Bulk selection**: Toggle selection mode, multi-select, then Move to / Archive / Mark complete
+Build a clean, interactive Tasks page in the web app (`arete view`) inspired by Things 3, with tabs, quick scheduling, drag-and-drop, and intelligence-driven suggestions.
 
-## Open Questions (awaiting answers)
+## Design Decisions
 
-### 1. "Today" tab definition
-What should "Today" show?
-- **Option A**: Must + Should (the urgent weekly stuff) ← recommended
-- **Option B**: Only tasks with `@due(today)`
-- **Option C**: A separate "Today" bucket manually curated each morning
+### Tab Structure
 
-### 2. Owner vs Person semantics
-Current `@person(slug)` seems to mean different things:
-- In "Waiting On" section = who owes you (their task)
-- In Must/Should sections = related person (your task)
+| Tab | Content |
+|-----|---------|
+| **Today** | Due today + overdue (top), AI-suggested priorities (bottom) |
+| **Upcoming** | Future dated tasks grouped by date (see format below) |
+| **Anytime** | Backlog with no date |
+| **Someday** | On hold, maybe never |
+| **Waiting On** | Filter showing tasks/commitments others owe you |
 
-Should we distinguish visually? (e.g., their avatar with amber dot = waiting on them)
+### Upcoming View Format
+```
+31 Tomorrow
+- [ ] Task 1
+- [ ] Task 2
 
-### 3. Age tracking
-To show "how long it's been open":
-- **Infer from source**: Parse date from `@from(meeting:slug)` or look up commitment ← recommended for v1
-- **Add creation date**: Start adding `@created(YYYY-MM-DD)` to new tasks
-- **Skip for now**: Ship without age, add later
+1 Wednesday  
+- [ ] Task 1
 
-### 4. "Archive" action definition
-How does Archive differ from Completed or Someday?
-- Is it "done but keep for reference"?
-- Or "delete/hide permanently"?
+2 Thursday
+- [ ] Task 1
 
-### 5. "Waiting On" treatment
-week.md has a "Waiting On" section. Should this be:
-- A separate tab (All / Today / **Waiting** / Anytime / Someday)
-- Visible in All view as its own section
-- A toggle filter ("Show tasks I'm waiting on")
+April 7-30 (collapsed)
+May (collapsed)
+June (collapsed)
+...
+```
 
-## Technical Foundation (discovered)
+### Task Line Item
+- **Checkbox** — complete task
+- **Avatar** — initials with tooltip (person related to task)
+- **Description** — task text
+- **Schedule badge** — shows current bucket/date:
+  - ⭐ Today
+  - 📅 Apr 1 (specific date)
+  - 🔄 Anytime  
+  - 📦 Someday
+- **Click badge** → Quick schedule popup: Today / Tomorrow / Date picker / Anytime / Someday
+- **Commitment info** — if linked, show "High priority, 14 days open"
 
-**Existing services:**
-- `TaskService` in `packages/core/src/services/tasks.ts` with: `listTasks`, `addTask`, `completeTask`, `moveTask`, `findTask`, `deleteTask`
-- Task destinations: `inbox`, `must`, `should`, `could`, `anytime`, `someday`
-- Auto-resolve linked commitments on task completion
+### Today's "Suggested" Section
+Real tasks surfaced by intelligence. User can:
+- Set due today
+- Schedule for future date
+- Punt to Anytime/Someday
+- Discard (hide from suggestions)
 
-**Existing UI patterns:**
-- `AvatarStack` component with initials + tooltips
-- `CommitmentsPage` as reference for table layout, filters, actions
+Suggestion signals (V1, simple heuristic):
+- Tasks linked to today's meetings (by person)
+- High-priority commitments aging >7 days
+- Oldest tasks in Anytime
 
-**Needs to be added:**
-- Backend API routes for tasks (`/api/tasks/*`)
-- Drag-and-drop library (recommend `@dnd-kit/core`)
-- TasksPage component
+### Must/Should/Could Buckets
+**Decision: Keep for now** — retain existing buckets during testing. Document that we may remove them if the new date-based model works well. The current weekly structure in `week.md` remains valid; UI can read/write to these sections.
 
-## Rough Plan (pending answers to open questions)
+**Future consideration**: If date-based scheduling proves sufficient, deprecate Must/Should/Could in favor of pure GTD (Today/Anytime/Someday) + smart suggestions.
 
-1. Add Tasks API routes to backend
-2. Add drag-and-drop library
-3. Build TasksPage with tabs and task list
-4. Add drag-and-drop between sections
-5. Add bulk selection mode with actions
-6. Add to sidebar navigation
+## Technical Foundation
 
-**Size estimate**: Medium-Large (5-6 steps)
+**Existing:**
+- `TaskService` with `listTasks`, `addTask`, `completeTask`, `moveTask`, `deleteTask`
+- Destinations: `inbox`, `must`, `should`, `could`, `anytime`, `someday`
+- `AvatarStack` component
+- `CommitmentsPage` as UI reference
+
+**Needs:**
+- Backend routes: `/api/tasks/*`
+- Drag-and-drop: `@dnd-kit/core`
+- Task model updates: ensure `@due(YYYY-MM-DD)` is fully supported
+- Suggestion logic in backend (meeting context + commitment priority)
+
+## Out of Scope (V1)
+
+- Today + This Evening split (Phase 2)
+- Magic Plus draggable add button (Phase 2)
+- Multi-select with swipe gesture (Phase 2)
+- Calendar events displayed in Today (fast follow)
+- Creating new tasks from UI (use existing markdown/skills)
+- Editing task text from UI
+
+## Risks
+
+1. **Task model mismatch**: Current model uses buckets (must/should/could), new model emphasizes dates. May need migration or dual support.
+2. **Suggestion quality**: Simple heuristics may surface irrelevant tasks. Start conservative.
+3. **Drag-and-drop complexity**: Cross-section drag with different data sources (tasks vs commitments in Waiting On).
 
 ---
 
-*Status: Awaiting answers to open questions before finalizing plan*
+Plan:
+
+1. **Backend: Tasks API routes**
+   - GET /api/tasks (list with filters: destination, due date range, person)
+   - POST /api/tasks (create)
+   - PATCH /api/tasks/:id (update: complete, move, reschedule)
+   - DELETE /api/tasks/:id
+   - GET /api/tasks/suggested (today's suggestions based on meetings + commitments)
+   - AC: All CRUD operations work, tests pass
+
+2. **Frontend: TasksPage shell with tabs**
+   - Add route /tasks to App.tsx
+   - Add to sidebar navigation
+   - Implement tab navigation: Today, Upcoming, Anytime, Someday
+   - Waiting On as filter toggle
+   - AC: Can navigate between tabs, empty states shown
+
+3. **Frontend: Task list with line items**
+   - Task row: checkbox, avatar, description, schedule badge
+   - Show commitment info if linked (priority, age)
+   - Complete task on checkbox click (auto-resolve linked commitment)
+   - AC: Tasks display correctly, completion works
+
+4. **Frontend: Quick schedule popup**
+   - Click schedule badge → popup with: Today / Tomorrow / Date picker / Anytime / Someday
+   - Update task on selection
+   - AC: Can reschedule any task via popup
+
+5. **Frontend: Today view with suggestions**
+   - Top section: Due today + overdue
+   - Bottom section: Suggested tasks
+   - Suggested tasks show action buttons (Set Today / Schedule / Punt / Discard)
+   - AC: Suggestions appear, actions work
+
+6. **Frontend: Upcoming view**
+   - Group tasks by date
+   - Show day number + weekday name
+   - Collapse distant dates (rest of month, future months)
+   - AC: Future tasks grouped correctly
+
+7. **Frontend: Drag-and-drop between sections**
+   - Install @dnd-kit/core
+   - Drag task from one section to another (e.g., Anytime → Today)
+   - Update task destination on drop
+   - AC: Can drag tasks between sections, persists correctly
+
+8. **Frontend: Waiting On filter**
+   - Filter toggle shows tasks/commitments where others owe you
+   - Display person avatar prominently
+   - AC: Filter shows correct items
+
+---
+
+**Size**: Large (8 steps)
+
+**Recommendation**: Run `/pre-mortem` before execution. Consider splitting into two phases:
+- Phase 1 (steps 1-5): Core functionality, shippable
+- Phase 2 (steps 6-8): Upcoming view, drag-and-drop, Waiting On
+
+## Phase 2 Ideas (documented for later)
+- Today + This Evening split
+- Magic Plus (draggable add button)
+- Multi-select with swipe gesture
+- Calendar events in Today view
+- Remove Must/Should/Could buckets if date-based model proves sufficient
