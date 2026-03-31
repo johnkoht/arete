@@ -11,6 +11,7 @@
 
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
+import { TaskList } from "@/components/TaskList.js";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -157,18 +158,9 @@ export default function TasksPage() {
                 </div>
               )}
 
-              {/* Task list placeholder - will be implemented in later tasks */}
+              {/* Task list */}
               {!isLoading && !error && tasks.length > 0 && (
-                <div className="space-y-2">
-                  {tasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="p-3 border rounded-md text-sm"
-                    >
-                      {task.text}
-                    </div>
-                  ))}
-                </div>
+                <TaskList tasks={tasks} />
               )}
             </TabsContent>
           ))}

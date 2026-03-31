@@ -250,6 +250,8 @@ export function useCompleteTask() {
   return {
     mutate,
     isPending: mutation.isPending,
+    /** The task ID currently being completed (only valid when isPending is true) */
+    pendingTaskId: mutation.isPending ? (mutation.variables ?? null) : null,
     isSuccess: mutation.isSuccess,
     isError: mutation.isError,
     error: mutation.error,
