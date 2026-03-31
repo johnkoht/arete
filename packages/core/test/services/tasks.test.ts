@@ -12,6 +12,8 @@ import type { WorkspacePaths } from '../../src/models/workspace.js';
 import type { TaskMetadata, TaskDestination, WorkspaceTask } from '../../src/models/tasks.js';
 import {
   TaskService,
+  TaskNotFoundError,
+  AmbiguousIdError,
   parseMetadata,
   parseTaskLine,
   formatTask,
@@ -996,6 +998,196 @@ describe('TaskService.deleteTask', () => {
       () => service.deleteTask('nonexistent'),
       /No task found/
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TaskService.updateTask tests
+// ---------------------------------------------------------------------------
+
+describe('TaskService.updateTask', () => {
+  it('adds @due to task without existing date', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task without date
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { due: '2026-04-15' });
+
+    assert.equal(updated.metadata.due, '2026-04-15');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@due(2026-04-15)'));
+  });
+
+  it('modifies existing @due date', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task with date @due(2026-03-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { due: '2026-04-30' });
+
+    assert.equal(updated.metadata.due, '2026-04-30');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@due(2026-04-30)'));
+    assert.ok(!content?.includes('@due(2026-03-01)'));
+  });
+
+  it('removes @due when due=null', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task with date @due(2026-03-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { due: null });
+
+    assert.equal(updated.metadata.due, undefined);
+    const content = store.get(WEEK_FILE);
+    assert.ok(!content?.includes('@due'));
+  });
+
+  it('preserves other metadata (@area, @person, @from)', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Complex task @area(sales) @person(john) @from(commitment:abc123) @due(2026-03-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { due: '2026-05-01' });
+
+    assert.equal(updated.metadata.area, 'sales');
+    assert.equal(updated.metadata.person, 'john');
+    assert.deepEqual(updated.metadata.from, { type: 'commitment', id: 'abc123' });
+    assert.equal(updated.metadata.due, '2026-05-01');
+    
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(sales)'));
+    assert.ok(content?.includes('@person(john)'));
+    assert.ok(content?.includes('@from(commitment:abc123)'));
+    assert.ok(content?.includes('@due(2026-05-01)'));
+  });
+
+  it('throws TaskNotFoundError for non-existent ID', async () => {
+    const store = makeWeekFile(`# Week\n## Inbox\n`);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    await assert.rejects(
+      () => service.updateTask('nonexistent', { due: '2026-04-01' }),
+      (err: Error) => {
+        assert.ok(err instanceof TaskNotFoundError);
+        assert.ok(err.message.includes('nonexistent'));
+        return true;
+      }
+    );
+  });
+
+  it('throws AmbiguousIdError for ambiguous prefix', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task one
+- [ ] Task two
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Empty prefix matches all
+    await assert.rejects(
+      () => service.updateTask('', { due: '2026-04-01' }),
+      (err: Error) => {
+        assert.ok(err instanceof AmbiguousIdError);
+        assert.ok(err.message.includes('Ambiguous'));
+        return true;
+      }
+    );
+  });
+
+  it('supports id prefix matching', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Update me
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const prefix = tasks[0].id.slice(0, 4);
+    const updated = await service.updateTask(prefix, { due: '2026-04-01' });
+
+    assert.equal(updated.metadata.due, '2026-04-01');
+  });
+
+  it('is atomic — file unchanged on validation error', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Existing task
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const originalContent = store.get(WEEK_FILE);
+
+    // Try to update non-existent task
+    try {
+      await service.updateTask('nonexistent', { due: '2026-04-01' });
+    } catch {
+      // Expected
+    }
+
+    // File should be unchanged
+    assert.equal(store.get(WEEK_FILE), originalContent);
+  });
+
+  it('works with tasks in tasks.md', async () => {
+    const tasksContent = `# Tasks
+## Anytime
+- [ ] Backlog task
+`;
+    const store = makeTasksFile(tasksContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { due: '2026-06-01' });
+
+    assert.equal(updated.metadata.due, '2026-06-01');
+    const content = store.get(TASKS_FILE);
+    assert.ok(content?.includes('@due(2026-06-01)'));
+  });
+
+  it('preserves completed state when updating', async () => {
+    const weekContent = `# Week
+## Inbox
+- [x] Completed task @due(2026-03-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks({ completed: true });
+    const updated = await service.updateTask(tasks[0].id, { due: '2026-04-01' });
+
+    assert.equal(updated.completed, true);
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('- [x]'));
   });
 });
 
