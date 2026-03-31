@@ -1,0 +1,240 @@
+{
+  "name": "task-management-ui",
+  "branchName": "feature/task-management-ui",
+  "goal": "Build a clean, interactive Tasks page in the web app (arete view) inspired by Things 3, with tabs (Today/Upcoming/Anytime/Someday), quick scheduling, and AI-driven suggestions.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Core TaskService.updateTask() Method",
+      "description": "Add updateTask(id, updates) method to existing TaskService in packages/core/src/services/tasks.ts. Signature: updateTask(id: string, updates: { due?: string | null }): Promise<WorkspaceTask>. Updates task metadata; text and ID remain unchanged. Throws TaskNotFoundError for unknown ID. Throws AmbiguousIdError if ID prefix matches multiple tasks. File written atomically (no partial updates on error). Follow existing completeTask() pattern.",
+      "acceptanceCriteria": [
+        "updateTask adds @due(YYYY-MM-DD) to task without existing date",
+        "updateTask modifies existing @due date",
+        "updateTask removes @due when due=null",
+        "updateTask preserves other metadata (@area, @person, @from)",
+        "updateTask throws TaskNotFoundError for non-existent ID",
+        "updateTask throws AmbiguousIdError for ambiguous prefix",
+        "updateTask is atomic — file unchanged on validation error",
+        "Method exported from tasks.ts",
+        "Errors are typed exports (TaskNotFoundError, AmbiguousIdError)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Backend Write Lock Utility",
+      "description": "Create withFileLock(filePath, fn) in packages/apps/backend/src/services/locks.ts to prevent concurrent write corruption. Mutex per file path using async queue pattern. Lock timeout: 5 seconds (prevents deadlock). Release lock in finally block (even on error). Similar pattern to existing withSlugLock in meetings routes.",
+      "acceptanceCriteria": [
+        "Concurrent writes to same file are serialized (not interleaved)",
+        "Writes to different files proceed in parallel",
+        "Lock is released on function error",
+        "Lock times out after 5 seconds with descriptive error",
+        "Utility exported from locks.ts"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Backend Tasks API Routes (CRUD)",
+      "description": "Create task API routes in packages/apps/backend/src/routes/tasks.ts with GET, PATCH, DELETE endpoints. GET /api/tasks with filters (filter=today|upcoming|anytime|someday, waitingOn=true) + pagination (limit, offset). PATCH /api/tasks/:id update task per wire format using withFileLock(). DELETE /api/tasks/:id delete task using withFileLock(). 'today' filter: @due(today) UNION must bucket, deduped, sorted (overdue first). Register routes in backend server.ts.",
+      "acceptanceCriteria": [
+        "GET returns paginated list with total count",
+        "GET filter=today includes must bucket tasks",
+        "GET filter=today includes @due(today) tasks",
+        "GET filter=today dedupes tasks matching both criteria",
+        "GET filter=today sorts overdue before today (by days overdue desc)",
+        "GET waitingOn=true filters to tasks with @from(commitment:*)",
+        "GET returns 400 for invalid filter param",
+        "PATCH updates completion status",
+        "PATCH updates due date",
+        "PATCH clears due date when due=null",
+        "PATCH moves between destinations",
+        "PATCH returns 404 for unknown ID",
+        "PATCH returns 400 for invalid due date format",
+        "DELETE removes task from file",
+        "DELETE returns 404 for unknown ID",
+        "Concurrent PATCH requests are serialized (no file corruption)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Backend Suggestions Endpoint",
+      "description": "Create GET /api/tasks/suggested endpoint for AI-driven task recommendations. Parse weekPriorities from now/week.md '## Priorities' section. Assemble simplified ScoringContext (todayMeetingAttendees: [], weekPriorities from parsed file). Call scoreTasks() from packages/core/src/services/task-scoring.ts. Return top 10 scored tasks with breakdown.",
+      "acceptanceCriteria": [
+        "Returns scored tasks sorted by score descending",
+        "Respects ScoringContext.referenceDate",
+        "Parses weekPriorities from week.md correctly",
+        "Returns empty array when no tasks",
+        "Excludes completed tasks",
+        "Handles missing week.md gracefully (empty priorities array)",
+        "Handles malformed week.md (no Priorities section)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Frontend Types and API Client",
+      "description": "Add task types to packages/apps/web/src/api/types.ts matching wire format. Add packages/apps/web/src/api/tasks.ts with fetch functions: fetchTasks(filter, options), fetchTaskSuggestions(), updateTask(id, updates), deleteTask(id). Type mapping in API layer (not components). Error messages include context (field, ID, etc.).",
+      "acceptanceCriteria": [
+        "fetchTasks maps wire format correctly to frontend types",
+        "fetchTasks handles empty response",
+        "fetchTaskSuggestions handles empty suggestions",
+        "updateTask sends correct PATCH body",
+        "deleteTask sends DELETE request",
+        "fetchTasks throws on network error with actionable message",
+        "fetchTasks throws on 500 with error from body",
+        "fetchTasks throws on 400 with field-specific error",
+        "fetchTasks throws on 404 with task ID"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Frontend Hooks with Race Condition Protection",
+      "description": "Create TanStack Query hooks in packages/apps/web/src/hooks/tasks.ts: useTasks(filter, options), useTaskSuggestions(), useUpdateTask(), useCompleteTask(). Query config: staleTime: 30_000, gcTime: 300_000. Optimistic update pattern: cancelQueries before update, getQueriesData/setQueriesData (plural) for pagination, rollback in onError. Race condition protection: mutations debounced 100ms; ignore duplicate calls while pending. Use ref pattern to avoid stale closure bugs.",
+      "acceptanceCriteria": [
+        "useTasks refetches on filter change",
+        "useTasks uses correct staleTime (30s)",
+        "useUpdateTask optimistically updates cache",
+        "useUpdateTask rolls back on error",
+        "useUpdateTask calls cancelQueries before optimistic update",
+        "useCompleteTask invalidates queries on success",
+        "useCompleteTask ignores duplicate calls while pending",
+        "useUpdateTask debounces rapid calls (100ms)",
+        "Mutations use ref pattern to avoid stale closure bugs"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Frontend Avatar Component",
+      "description": "Create packages/apps/web/src/components/Avatar.tsx for single-person display. Props: name: string, size?: 'sm' | 'md'. Compute initials from name (first letter of first two words). Include Tooltip with full name (use existing shadcn Tooltip). Accessible via aria-label.",
+      "acceptanceCriteria": [
+        "Renders initials from name (\"John Doe\" → \"JD\")",
+        "Renders single initial for single word name",
+        "Shows tooltip on hover with full name",
+        "Handles empty name gracefully (shows \"?\")",
+        "Has accessible label via aria-label"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Frontend TasksPage Error Boundary",
+      "description": "Add error boundary wrapper to TasksPage for graceful error handling. Create error boundary component or use react-error-boundary. Wrap TasksPage content. On error: show 'Something went wrong' message with retry button. Log error to console (structured object with component stack).",
+      "acceptanceCriteria": [
+        "Error boundary catches child component errors",
+        "Error boundary shows 'Something went wrong' message",
+        "Retry button re-mounts children (resets error state)",
+        "Error is logged with component stack"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9",
+      "title": "Frontend TasksPage Shell with Tabs",
+      "description": "Create main TasksPage component with tab navigation. Add route /tasks to App.tsx. Add to sidebar navigation. Tab navigation: Today, Upcoming, Anytime, Someday. Waiting On filter toggle (URL param ?waitingOn=true). Tab via URL param ?tab=today (default: today). Empty states per tab with role='status'. Use existing shadcn Tabs component.",
+      "acceptanceCriteria": [
+        "Renders all four tabs (Today, Upcoming, Anytime, Someday)",
+        "Tab click updates URL param ?tab=",
+        "URL param selects correct tab on page load",
+        "Waiting On toggle updates URL param ?waitingOn=true",
+        "Shows correct empty state per tab",
+        "Empty states have role='status' for accessibility",
+        "Loading state shows skeleton",
+        "Error state shows error message with retry",
+        "Arrow keys navigate between tabs",
+        "Tabs have correct aria-selected state",
+        "Page renders at 375px viewport without horizontal scroll"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-10",
+      "title": "Frontend Task List with Line Items",
+      "description": "Build task list component with interactive line items. Task row: checkbox, Avatar (if person), description, schedule badge. Commitment badge if from?.type === 'commitment'. Checkbox click → useCompleteTask() mutation. During mutation: checkbox shows spinner (disabled). On success: task row fades out (300ms). On error: toast 'Failed to complete task'. Keyboard: Space/Enter on focused row completes task. Long text truncates with ellipsis.",
+      "acceptanceCriteria": [
+        "Renders task text and checkbox",
+        "Renders Avatar with person initials when person exists",
+        "Renders schedule badge with correct icon per destination",
+        "Renders commitment badge when from exists",
+        "Checkbox click calls complete mutation",
+        "Checkbox shows spinner during mutation",
+        "Completed task fades out (300ms)",
+        "Failed completion shows toast error",
+        "Space key completes focused task",
+        "Rapid checkbox clicks don't create duplicate mutations",
+        "Long task text truncates with ellipsis"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-11",
+      "title": "Frontend Quick Schedule Popup",
+      "description": "Build schedule popup for quick date assignment. Click schedule badge → shadcn Popover. Options: Today / Tomorrow / Pick date / Anytime / Someday. Date picker: shadcn Calendar (install if not present). On selection → useUpdateTask() with new due value. Popup closes after selection; focus returns to trigger badge. Full keyboard accessibility with escape, arrow keys, enter, focus trap, and ARIA roles.",
+      "acceptanceCriteria": [
+        "Clicking badge opens popover",
+        "Selecting Today sets due to today's date",
+        "Selecting Tomorrow sets due to tomorrow's date",
+        "Selecting Anytime clears due date (due=null)",
+        "Selecting Someday moves to someday destination",
+        "Escape key closes popover",
+        "Arrow keys navigate options",
+        "Enter selects highlighted option",
+        "Popup closes after selection",
+        "Focus returns to trigger after close",
+        "Popup has role='listbox', options have role='option'"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-12",
+      "title": "Frontend Today View with Suggestions",
+      "description": "Build Today tab with tasks and AI suggestions sections. Top section: 'Tasks' — due today + overdue (sorted: overdue first by days desc). Bottom section: 'Suggested' — from /api/tasks/suggested. Sections load independently (suggestions can fail without breaking tasks). Suggestions show skeleton while loading. Action buttons on suggestions: Set Today / Schedule / Punt. Toast confirms each action. Partial failure handling.",
+      "acceptanceCriteria": [
+        "Renders tasks section with overdue sorted first",
+        "Renders suggestions section separately",
+        "Suggestions skeleton while loading",
+        "Tasks visible when suggestions fail",
+        "Suggestions visible when tasks fail (with tasks error state)",
+        "Set Today button updates due to today's date",
+        "Schedule button opens date picker",
+        "Punt button moves to anytime destination",
+        "Toast confirms successful action",
+        "Toast shows error on failed action"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-31T05:05:00.000Z",
+    "totalTasks": 12,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
