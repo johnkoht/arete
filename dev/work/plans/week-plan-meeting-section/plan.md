@@ -5,22 +5,22 @@ status: building
 size: large
 tags: []
 created: 2026-03-30T02:55:38.934Z
-updated: 2026-03-30T03:26:54.497Z
+updated: 2026-03-30T05:45:00.000Z
 completed: null
 execution: null
 has_review: true
 has_pre_mortem: true
 has_prd: true
-steps: 6
+steps: 8
 ---
 
 # Restore Key Meetings Section to Week Plan
 
 ## Problem
 
-The week-plan skill has a broken user interaction: Step 2.5 asks users to confirm "key meetings this week" for memory search, but then **discards the confirmation**. The meetings evaporate — they're never written to `week.md`.
+The week-plan skill has a broken user interaction: Step 2.5 asks users to confirm "key meetings this week" for memory search, but then **discards the confirmation**. The meetings evaporate - they're never written to `week.md`.
 
-Meanwhile, we have `inferMeetingImportance()` that categorizes meetings as `important`, `normal`, or `light` based on organizer status, attendee count, and agenda presence. This is only used in Fathom/Krisp pulls — not in week planning.
+Meanwhile, we have `inferMeetingImportance()` that categorizes meetings as `important`, `normal`, or `light` based on organizer status, attendee count, and agenda presence. This is only used in Fathom/Krisp pulls - not in week planning.
 
 **Core insight**: If you ask the user to confirm something, it should appear somewhere. Confirmation without output is wasted interaction.
 
@@ -85,7 +85,7 @@ Plan:
      - [ ] Each meeting shows *why* flagged: (1:1), (you organized), (has agenda), (external stakeholder)
      - [ ] User can add/remove/skip with quick confirmation
      - [ ] Explicit instruction: "Keep this confirmed list for Step 4 output"
-     - [ ] If no key meetings: "No high-priority meetings this week — light calendar!"
+     - [ ] If no key meetings: "No high-priority meetings this week - light calendar!"
      - [ ] `light` importance meetings hidden unless user asks
 
 4. **Add Key Meetings section to week template and docs**
@@ -96,7 +96,7 @@ Plan:
    - Files: `packages/runtime/skills/week-plan/templates/week-priorities.md`, `packages/runtime/skills/week-plan/LEARNINGS.md`, `dev/catalog/capabilities.json`
    - AC:
      - [ ] Template includes `## Key Meetings` section with format comments
-     - [ ] Format: `- [ ] Day Time: Title (attendees) — prep: [link] or "prep needed"`
+     - [ ] Format: `- [ ] Day Time: Title (attendees) - prep: [link] or "prep needed"`
      - [ ] Section omitted if no prep-worthy meetings (no empty section)
      - [ ] LEARNINGS.md updated with section semantics and pre-edit checklist
      - [ ] `dev/catalog/capabilities.json` updated to document new JSON fields in calendar pull
@@ -110,18 +110,18 @@ Plan:
 After running week-plan:
 
 ```markdown
-# Week — Mon Mar 24, 2026
+# Week - Mon Mar 24, 2026
 
 ## Weekly Priorities
 1. POP ready for 3/31 launch [Q1-1]
 2. CoverWhale through compliance [Q1-3]
 
 ## Key Meetings
-- [ ] Tue 2:00pm: Lindsay 1:1 — prep needed
-- [ ] Wed 3:00pm: CoverWhale QBR (Sarah, Jamie) — prep: [agenda](now/agendas/coverwhale-qbr.md)
-- [ ] Fri 11:00am: UK Roadmap Review (Product team) — prep needed
+- [ ] Tue 2:00pm: Lindsay 1:1 - prep needed
+- [ ] Wed 3:00pm: CoverWhale QBR (Sarah, Jamie) - prep: [agenda](now/agendas/coverwhale-qbr.md)
+- [ ] Fri 11:00am: UK Roadmap Review (Product team) - prep needed
 
-## Today — Mon Mar 24
+## Today - Mon Mar 24
 ...
 ```
 
@@ -137,7 +137,7 @@ After running week-plan:
 
 ## Size Estimate
 
-**Small** (4 steps) — Steps 1-2 are CLI changes with tests; Steps 3-4 are skill/template updates.
+**Small** (4 steps) - Steps 1-2 are CLI changes with tests; Steps 3-4 are skill/template updates.
 
 ## Risks
 
@@ -170,3 +170,53 @@ After running week-plan:
 | inferMeetingImportance | Already exists (10 tests) | No changes needed |
 | Provider edge cases (no organizer) | `pull.test.ts` | ical-buddy path |
 | Manual QA | Step 4 | End-to-end verification |
+
+---
+
+## Engineering Lead Recommendations (Post-Review)
+
+The following tasks address tech debt and enhancements identified during code review:
+
+5. **Extract captureConsole to shared test helper**
+   - The `captureConsole` helper in `pull.test.ts` should be shared
+   - Note: `config.test.ts` has a dead stub (not a working duplicate) — remove it
+   - Files: `packages/cli/test/helpers.ts`, `packages/cli/test/commands/pull.test.ts`, `packages/cli/test/commands/config.test.ts`
+   - AC:
+     - [ ] `captureConsole<T>(task: () => Promise<T>)` exported from `packages/cli/test/helpers.ts`
+     - [ ] Returns `{ stdout: string; result: T }` for flexibility
+     - [ ] `pull.test.ts` updated to import from helpers (remove local definition)
+     - [ ] Dead `captureConsole` stub in `config.test.ts` removed (not replaced — it's unused)
+     - [ ] All tests still pass
+
+6. **Remove unused Importance import**
+   - `Importance` type is imported but not used in type annotations
+   - Minor cleanup for code hygiene
+   - File: `packages/cli/src/commands/pull.ts`
+   - AC:
+     - [ ] `Importance` removed from import statement
+     - [ ] No new TypeScript errors introduced
+     - [ ] Typecheck passes
+
+7. **Add integration test for CLI error paths**
+   - Currently only the helper function is tested, not CLI registration/dispatch
+   - Focus on error paths since CLI-level mocking for calendar providers is not supported
+   - File: `packages/cli/test/commands/pull.test.ts`
+   - AC:
+     - [ ] Test: `arete pull calendar --json` with no calendar configured returns JSON error
+     - [ ] Test verifies JSON structure: `{ success: false, error: string }` indicating calendar not configured
+     - [ ] Test documents actual error message for future reference
+     - [ ] Test uses real workspace created via `runCli(['install', ...])`
+     - [ ] No calendar integration configured in test workspace
+     - [ ] Non-zero exit code verified
+
+8. **Add agenda lookup caching (caller-side approach)**
+   - Current implementation calls `storage.list(agendasDir)` for EVERY event in the loop
+   - Use caller-side caching to minimize blast radius (no API changes to findMatchingAgendaPath)
+   - Files: `packages/cli/src/commands/pull.ts`, `packages/cli/test/commands/pull.test.ts`
+   - AC:
+     - [ ] Agenda files listed ONCE before the event loop via `services.storage.list()`
+     - [ ] Agenda date prefixes stored in Set for O(1) lookup
+     - [ ] For each event: check Set for date match, only call `findMatchingAgendaPath` if potential match exists
+     - [ ] Fathom/Krisp integration code unchanged (they can adopt pattern later if needed)
+     - [ ] Test added to verify agenda listing happens once (mock storage.list call count)
+     - [ ] Existing tests still pass

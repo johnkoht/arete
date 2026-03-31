@@ -85,3 +85,24 @@ export function runCliRaw(
 ): { stdout: string; stderr: string; code: number | null } {
   return runCliInternal(args, options);
 }
+
+/**
+ * Capture console.log output while executing an async task.
+ * Returns both the captured stdout and the task result.
+ */
+export async function captureConsole<T>(
+  task: () => Promise<T>,
+): Promise<{ stdout: string; result: T }> {
+  const logs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map(String).join(' '));
+  };
+
+  try {
+    const result = await task();
+    return { stdout: logs.join('\n'), result };
+  } finally {
+    console.log = originalLog;
+  }
+}

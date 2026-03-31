@@ -11,6 +11,7 @@ The `now/week.md` file has specific sections with defined purposes:
 | Section | Purpose | Format | Populated By |
 |---------|---------|--------|--------------|
 | **Weekly Priorities** | Top 3-5 high-level goals for the week | Numbered list (1. 2. 3.) | week-plan skill |
+| **Key Meetings** | Prep-worthy meetings flagged by importance inference | `- [ ] Day Time: Title (attendees) — prep: [link] or "needs prep"` | week-plan skill (Step 2.5 → Step 4) |
 | **Today** | Current day's focus and meetings | Focus line + meeting list | daily-plan skill |
 | **Inbox** | Quick capture during daily winddown | Plain text, no metadata required | User (via daily-winddown) |
 | **Notes** | Working notes throughout the week | Free-form, preserved across updates | User |
@@ -54,6 +55,7 @@ Before modifying week.md template or parsing:
 
 - [ ] Check if `parseWeekPriorities()` in backend uses any section headers (currently: no)
 - [ ] Check if daily-plan skill assumes specific section names (references Today, Notes, Daily Progress)
+- [ ] Check if Key Meetings section is parsed by any skill or backend route
 - [ ] Verify Notes section preservation logic in daily-plan
 - [ ] Test with existing week.md files to ensure backward compatibility
 
