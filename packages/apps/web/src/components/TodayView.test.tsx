@@ -25,9 +25,12 @@ import type { Task, SuggestedTask } from '@/api/types.js';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-// Mock sonner toast
-const mockToastSuccess = vi.fn();
-const mockToastError = vi.fn();
+// Mock sonner toast - use vi.hoisted to allow mock access at module level
+const { mockToastSuccess, mockToastError } = vi.hoisted(() => ({
+  mockToastSuccess: vi.fn(),
+  mockToastError: vi.fn(),
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     success: mockToastSuccess,
@@ -35,27 +38,21 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock useTasks hook
-const mockUseTasks = vi.fn();
-
-// Mock useTaskSuggestions hook
-const mockUseTaskSuggestions = vi.fn();
-
-// Mock useUpdateTask hook
-const mockUpdateMutate = vi.fn();
-const mockUseUpdateTask = vi.fn(() => ({
-  mutate: mockUpdateMutate,
-  isPending: false,
-  isError: false,
-  error: null,
-}));
-
-// Mock useCompleteTask hook
-const mockCompleteMutate = vi.fn();
-const mockUseCompleteTask = vi.fn(() => ({
-  mutate: mockCompleteMutate,
-  isPending: false,
-  pendingTaskId: null as string | null,
+// Mock task hooks - use vi.hoisted
+const {
+  mockUseTasks,
+  mockUseTaskSuggestions,
+  mockUpdateMutate,
+  mockUseUpdateTask,
+  mockCompleteMutate,
+  mockUseCompleteTask,
+} = vi.hoisted(() => ({
+  mockUseTasks: vi.fn(),
+  mockUseTaskSuggestions: vi.fn(),
+  mockUpdateMutate: vi.fn(),
+  mockUseUpdateTask: vi.fn(),
+  mockCompleteMutate: vi.fn(),
+  mockUseCompleteTask: vi.fn(),
 }));
 
 vi.mock('@/hooks/tasks.js', () => ({
@@ -469,11 +466,16 @@ describe('TodayView', () => {
       const scheduleButtons = screen.getAllByRole('button', { name: /schedule/i });
       await user.click(scheduleButtons[0]);
 
-      // Click a date in the calendar (tomorrow's date button)
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayButton = screen.getByRole('gridcell', { name: String(tomorrow.getDate()) });
-      await user.click(dayButton);
+      // Click a date in the calendar - get the 15th to avoid edge cases with month boundaries
+      // and find only enabled (not disabled) gridcells
+      const calendar = screen.getByTestId('schedule-calendar');
+      const enabledDays = within(calendar).getAllByRole('gridcell').filter(
+        (el) => !el.hasAttribute('disabled') && !el.classList.contains('day-outside')
+      );
+      
+      // Pick the first enabled day that's not outside the current month
+      const targetDay = enabledDays[0];
+      await user.click(targetDay);
 
       expect(mockUpdateMutate).toHaveBeenCalledWith(
         expect.objectContaining({

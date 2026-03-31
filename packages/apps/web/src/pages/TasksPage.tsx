@@ -3,6 +3,7 @@
  *
  * Features:
  * - Four tabs: Today, Upcoming, Anytime, Someday
+ * - Today tab uses TodayView with tasks + AI suggestions
  * - Tab state synced to URL param ?tab=
  * - Waiting On filter toggle synced to URL param ?waitingOn=true
  * - Empty states per tab with role='status' for accessibility
@@ -12,6 +13,7 @@
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { TaskList } from "@/components/TaskList.js";
+import { TodayView } from "@/components/TodayView.js";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,8 +57,9 @@ export default function TasksPage() {
   const activeTab: TabValue = isValidTab(tabParam) ? tabParam : "today";
   const waitingOn = searchParams.get("waitingOn") === "true";
 
-  // Fetch tasks with current filter
-  const filter: TasksFilter = activeTab;
+  // Fetch tasks with current filter (for non-Today tabs)
+  // Today tab uses TodayView which has its own data fetching
+  const filter: TasksFilter = activeTab === "today" ? "upcoming" : activeTab;
   const { data, isLoading, error, refetch } = useTasks(filter, { waitingOn });
 
   // Tab change handler
@@ -103,25 +106,32 @@ export default function TasksPage() {
               ))}
             </TabsList>
 
-            {/* Waiting On toggle */}
-            <div className="flex items-center gap-2">
-              <Switch
-                id="waiting-on-toggle"
-                checked={waitingOn}
-                onCheckedChange={handleWaitingOnChange}
-                aria-label="Waiting On"
-              />
-              <label
-                htmlFor="waiting-on-toggle"
-                className="text-sm text-muted-foreground cursor-pointer"
-              >
-                Waiting On
-              </label>
-            </div>
+            {/* Waiting On toggle (hidden on Today tab since it has its own view) */}
+            {activeTab !== "today" && (
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="waiting-on-toggle"
+                  checked={waitingOn}
+                  onCheckedChange={handleWaitingOnChange}
+                  aria-label="Waiting On"
+                />
+                <label
+                  htmlFor="waiting-on-toggle"
+                  className="text-sm text-muted-foreground cursor-pointer"
+                >
+                  Waiting On
+                </label>
+              </div>
+            )}
           </div>
 
-          {/* Tab content panels */}
-          {TAB_VALUES.map((tab) => (
+          {/* Today tab content - uses TodayView with suggestions */}
+          <TabsContent value="today">
+            <TodayView />
+          </TabsContent>
+
+          {/* Other tab content panels */}
+          {TAB_VALUES.filter((tab) => tab !== "today").map((tab) => (
             <TabsContent key={tab} value={tab}>
               {/* Loading state */}
               {isLoading && <LoadingSkeleton />}
