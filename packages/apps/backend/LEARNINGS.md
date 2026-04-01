@@ -23,6 +23,19 @@ is **not** re-exported from `packages/core/src/index.ts`. If you need it in back
 define it inline or import directly from the staged-items source (but avoid deep imports in
 production code — inline definition is cleaner).
 
+### Rebuild Core After Adding Exports (2026-03-31)
+
+When adding new exports to `packages/core/src/services/index.ts` (or any core barrel export),
+the backend won't see them until you rebuild core:
+
+```bash
+npm run build:packages   # Rebuilds core + cli
+npm run build:apps:backend  # Then rebuild backend
+```
+
+Just running `npm run build:apps:backend` alone will fail with "Module has no exported member"
+errors because it reads the compiled `.js` and `.d.ts` files from `packages/core/dist/`.
+
 ### gray-matter vs yaml for Frontmatter
 
 The backend uses `gray-matter` for frontmatter parsing (available in package.json). The core

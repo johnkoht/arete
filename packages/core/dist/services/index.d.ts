@@ -37,7 +37,7 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
 export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
-export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 export type { CompleteTaskResult } from './tasks.js';
 export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from '../models/tasks.js';
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';

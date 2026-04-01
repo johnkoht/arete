@@ -4,6 +4,22 @@ Component-specific gotchas and patterns discovered during development.
 
 ## Gotchas
 
+### jsdom lacks scrollIntoView (first use: task-11, 2026-03-31)
+
+jsdom (used by vitest for DOM testing) doesn't implement `Element.scrollIntoView()`.
+Components using it will throw `TypeError: scrollIntoView is not a function` in tests.
+
+**Pattern**: Use optional chaining on `scrollIntoView`:
+```typescript
+// ✗ Throws in jsdom
+element.scrollIntoView({ block: 'nearest' });
+
+// ✓ Safe in jsdom
+element.scrollIntoView?.({ block: 'nearest' });
+```
+
+This makes the component work in both browser (scrolls) and test (no-op) environments.
+
 ### DELETE endpoints returning 204 No Content (first use: task-5, 2026-03-31)
 
 Some DELETE endpoints return `204 No Content` (empty body) per REST conventions.

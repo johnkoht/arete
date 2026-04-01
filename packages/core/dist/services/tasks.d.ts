@@ -9,6 +9,18 @@ import type { WorkspacePaths } from '../models/workspace.js';
 import type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions } from '../models/tasks.js';
 import type { CommitmentsService } from './commitments.js';
 /**
+ * Thrown when a task ID does not match any task.
+ */
+export declare class TaskNotFoundError extends Error {
+    constructor(id: string);
+}
+/**
+ * Thrown when a task ID prefix matches multiple tasks.
+ */
+export declare class AmbiguousIdError extends Error {
+    constructor(id: string, matchCount: number, matchedIds: string[]);
+}
+/**
  * Compute task ID from normalized text.
  * Returns 8-char prefix of sha256 hash (like commitments).
  */
@@ -87,6 +99,17 @@ export declare class TaskService {
      * Move a task from its current location to a new destination.
      */
     moveTask(taskId: string, destination: TaskDestination): Promise<WorkspaceTask>;
+    /**
+     * Update task metadata.
+     * Currently supports updating the due date.
+     * - Pass `{ due: 'YYYY-MM-DD' }` to set/change due date
+     * - Pass `{ due: null }` to remove due date
+     *
+     * Atomic: validates before writing — file unchanged on validation error.
+     */
+    updateTask(taskId: string, updates: {
+        due?: string | null;
+    }): Promise<WorkspaceTask>;
     /**
      * Find a task by ID (prefix match supported).
      */

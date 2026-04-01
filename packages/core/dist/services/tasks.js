@@ -7,6 +7,27 @@
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 // ---------------------------------------------------------------------------
+// Error classes
+// ---------------------------------------------------------------------------
+/**
+ * Thrown when a task ID does not match any task.
+ */
+export class TaskNotFoundError extends Error {
+    constructor(id) {
+        super(`No task found matching id "${id}"`);
+        this.name = 'TaskNotFoundError';
+    }
+}
+/**
+ * Thrown when a task ID prefix matches multiple tasks.
+ */
+export class AmbiguousIdError extends Error {
+    constructor(id, matchCount, matchedIds) {
+        super(`Ambiguous prefix "${id}" matches ${matchCount} tasks: ${matchedIds.join(', ')}`);
+        this.name = 'AmbiguousIdError';
+    }
+}
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 /** Bucket-to-file and section mapping */
@@ -396,6 +417,65 @@ export class TaskService {
         }
         // Add to destination (handles cross-file moves)
         return this.addTask(task.text, destination, task.metadata);
+    }
+    /**
+     * Update task metadata.
+     * Currently supports updating the due date.
+     * - Pass `{ due: 'YYYY-MM-DD' }` to set/change due date
+     * - Pass `{ due: null }` to remove due date
+     *
+     * Atomic: validates before writing — file unchanged on validation error.
+     */
+    async updateTask(taskId, updates) {
+        // Search all tasks for the match
+        const allTasks = await this.listTasks();
+        const matches = allTasks.filter((t) => t.id === taskId || t.id.startsWith(taskId));
+        if (matches.length === 0) {
+            throw new TaskNotFoundError(taskId);
+        }
+        if (matches.length > 1) {
+            const ids = matches.map((t) => t.id);
+            throw new AmbiguousIdError(taskId, matches.length, ids);
+        }
+        const task = matches[0];
+        const filePath = task.source.file;
+        const lines = await this.readFile(filePath);
+        // Find the section and task line
+        const section = findSection(lines, task.source.section);
+        if (!section) {
+            throw new TaskNotFoundError(taskId);
+        }
+        let found = false;
+        let updatedTask = null;
+        for (let i = section.start + 1; i < section.end; i++) {
+            const parsed = parseTaskLine(lines[i]);
+            if (parsed && computeTaskId(parsed.text) === task.id) {
+                // Apply updates to metadata
+                const newMetadata = { ...task.metadata };
+                if ('due' in updates) {
+                    if (updates.due === null) {
+                        delete newMetadata.due;
+                    }
+                    else if (updates.due !== undefined) {
+                        newMetadata.due = updates.due;
+                    }
+                }
+                // Format the updated task line
+                lines[i] = formatTask(parsed.text, newMetadata, parsed.completed);
+                found = true;
+                updatedTask = {
+                    ...task,
+                    metadata: newMetadata,
+                };
+                break;
+            }
+        }
+        if (!found || !updatedTask) {
+            throw new TaskNotFoundError(taskId);
+        }
+        // Atomic: only write after validation succeeds
+        await this.writeFile(filePath, lines);
+        return updatedTask;
     }
     /**
      * Find a task by ID (prefix match supported).
