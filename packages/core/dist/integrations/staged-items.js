@@ -239,6 +239,52 @@ function formatActionItemWithOwner(item) {
     }
     return `${item.text} (@${item.ownerSlug})`;
 }
+/**
+ * Extract meeting metadata from frontmatter for memory file entries.
+ */
+function extractMeetingMetadata(data) {
+    const title = typeof data['title'] === 'string' ? data['title'] : 'Unknown Meeting';
+    // Parse date - handle ISO strings and YYYY-MM-DD
+    let date = 'Unknown';
+    if (typeof data['date'] === 'string') {
+        // Extract YYYY-MM-DD from ISO string or use as-is
+        const dateMatch = data['date'].match(/^(\d{4}-\d{2}-\d{2})/);
+        date = dateMatch ? dateMatch[1] : data['date'].slice(0, 10);
+    }
+    // Build attendee names list
+    const attendeeNames = [];
+    const attendees = data['attendees'];
+    if (Array.isArray(attendees)) {
+        for (const att of attendees) {
+            if (typeof att === 'string') {
+                attendeeNames.push(att);
+            }
+            else if (att && typeof att === 'object' && 'name' in att && typeof att.name === 'string') {
+                attendeeNames.push(att.name);
+            }
+        }
+    }
+    // Build source string: "Meeting Title (Attendee1, Attendee2)"
+    const source = attendeeNames.length > 0
+        ? `${title} (${attendeeNames.join(', ')})`
+        : title;
+    return { title, date, source };
+}
+/**
+ * Generate a short title from item text (first sentence or truncated).
+ */
+function generateEntryTitle(text) {
+    // Take first sentence or first 80 chars, whichever is shorter
+    const firstSentence = text.match(/^[^.!?]+[.!?]?/);
+    const candidate = firstSentence ? firstSentence[0].trim() : text;
+    if (candidate.length <= 80) {
+        // Remove trailing punctuation for cleaner headers
+        return candidate.replace(/[.!?]+$/, '').trim();
+    }
+    // Truncate at word boundary
+    const truncated = candidate.slice(0, 77).replace(/\s+\S*$/, '');
+    return truncated + '...';
+}
 // ---------------------------------------------------------------------------
 // commitApprovedItems
 // ---------------------------------------------------------------------------
@@ -260,6 +306,8 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     if (raw === null)
         throw new Error(`Meeting file not found: ${filePath}`);
     const { data, body } = parseFrontmatter(raw);
+    // Extract meeting metadata for memory file entries
+    const meetingMeta = extractMeetingMetadata(data);
     // ── 1. Collect approved IDs ──────────────────────────────────────────────
     const statusMap = data['staged_item_status'] ?? {};
     const editsMap = data['staged_item_edits'] ?? {};
@@ -300,8 +348,8 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     }
     // ── 3. Append to memory files ────────────────────────────────────────────
     // Action items stay in the meeting file (not in memory)
-    await appendToMemoryFile(storage, memoryDir, 'decisions.md', approvedDecisions);
-    await appendToMemoryFile(storage, memoryDir, 'learnings.md', approvedLearnings);
+    await appendToMemoryFile(storage, memoryDir, 'decisions.md', approvedDecisions, meetingMeta);
+    await appendToMemoryFile(storage, memoryDir, 'learnings.md', approvedLearnings, meetingMeta);
     // ── 4. Strip staged sections from body ──────────────────────────────────
     let cleanedBody = removeStagedSections(body);
     // ── 4.5 Write approved items to markdown sections ──
@@ -384,15 +432,32 @@ function removeStagedSections(body) {
 /**
  * Append a list of approved items to a memory file.
  * Creates the file + directory if they don't exist.
+ *
+ * Each item is formatted as a proper entry:
+ * ```
+ * ## [Title derived from item text]
+ * - **Date**: YYYY-MM-DD
+ * - **Source**: Meeting Title (Attendees)
+ * - Item content
+ * ```
  */
-async function appendToMemoryFile(storage, memoryDir, filename, items) {
+async function appendToMemoryFile(storage, memoryDir, filename, items, meta) {
     if (items.length === 0)
         return;
     const filePath = join(memoryDir, filename);
     await storage.mkdir(memoryDir);
     const existing = (await storage.read(filePath)) ?? '';
-    const lines = items.map((item) => `- ${item.text}`).join('\n');
-    const separator = existing.endsWith('\n') || existing === '' ? '' : '\n';
-    await storage.write(filePath, `${existing}${separator}${lines}\n`);
+    // Format each item as a proper memory entry
+    const entries = items.map((item) => {
+        const entryTitle = generateEntryTitle(item.text);
+        return [
+            `## ${entryTitle}`,
+            `- **Date**: ${meta.date}`,
+            `- **Source**: ${meta.source}`,
+            `- ${item.text}`,
+        ].join('\n');
+    }).join('\n\n');
+    const separator = existing.endsWith('\n') || existing === '' ? '\n' : '\n\n';
+    await storage.write(filePath, `${existing}${separator}${entries}\n`);
 }
 //# sourceMappingURL=staged-items.js.map

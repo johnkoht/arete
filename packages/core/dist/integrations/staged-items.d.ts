@@ -52,6 +52,17 @@ export type WriteItemStatusOptions = {
  */
 export declare function writeItemStatusToFile(storage: StorageAdapter, filePath: string, itemId: string, options: WriteItemStatusOptions): Promise<void>;
 /**
+ * Metadata extracted from meeting frontmatter for memory file entries.
+ */
+export type MeetingMetadata = {
+    /** Meeting title */
+    title: string;
+    /** Meeting date (YYYY-MM-DD) */
+    date: string;
+    /** Source string: "Meeting Title (Attendee1, Attendee2)" */
+    source: string;
+};
+/**
  * Commit all approved staged items:
  *
  * 1. Collect approved item IDs from `staged_item_status`

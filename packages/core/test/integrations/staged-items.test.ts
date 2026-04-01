@@ -97,6 +97,11 @@ title: "Strategy Review"
 date: "2026-03-01"
 source: Krisp
 status: processed
+attendees:
+  - name: John Koht
+    email: john@example.com
+  - name: Jamie Burk
+    email: jamie@example.com
 staged_item_status:
   ai_001: approved
   de_001: approved
@@ -407,20 +412,28 @@ describe('commitApprovedItems', () => {
     storage.files.set(MEETING_FILE, FULL_MEETING);
   });
 
-  it('(13) writes approved decisions to decisions.md', async () => {
+  it('(13) writes approved decisions to decisions.md with proper format', async () => {
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
     assert.ok(decisions, 'decisions.md should be created');
-    assert.ok(decisions.includes('Prioritize enterprise tier'), 'approved decision should be present');
+    // Check proper entry format: ## Title, - **Date**, - **Source**, - content
+    assert.ok(decisions.includes('## Prioritize enterprise tier'), 'should have entry header');
+    assert.ok(decisions.includes('- **Date**: 2026-03-01'), 'should have date line');
+    assert.ok(decisions.includes('- **Source**: Strategy Review (John Koht, Jamie Burk)'), 'should have source line with attendees');
+    assert.ok(decisions.includes('- Prioritize enterprise tier'), 'should have content line');
   });
 
-  it('(14) writes approved learnings to learnings.md', async () => {
+  it('(14) writes approved learnings to learnings.md with proper format', async () => {
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`);
     assert.ok(learnings, 'learnings.md should be created');
-    assert.ok(learnings.includes('Enterprise customers care about audit logs'), 'approved learning should be present');
+    // Check proper entry format: ## Title, - **Date**, - **Source**, - content
+    assert.ok(learnings.includes('## Enterprise customers care about audit logs'), 'should have entry header');
+    assert.ok(learnings.includes('- **Date**: 2026-03-01'), 'should have date line');
+    assert.ok(learnings.includes('- **Source**: Strategy Review (John Koht, Jamie Burk)'), 'should have source line with attendees');
+    assert.ok(learnings.includes('- Enterprise customers care about audit logs'), 'should have content line');
   });
 
   it('(15) does NOT write action items to any memory file', async () => {
@@ -476,8 +489,12 @@ describe('commitApprovedItems', () => {
 
     const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
     assert.ok(
-      decisions.includes('Custom edited decision'),
-      'should use the edited text, not the original staged text'
+      decisions.includes('## Custom edited decision'),
+      'should use the edited text in header'
+    );
+    assert.ok(
+      decisions.includes('- Custom edited decision'),
+      'should use the edited text in content'
     );
     assert.ok(
       !decisions.includes('Prioritize enterprise tier'),
@@ -516,13 +533,97 @@ staged_item_status:
   });
 
   it('appends to existing memory files (does not overwrite)', async () => {
-    storage.files.set(`${MEMORY_DIR}/decisions.md`, '- Existing decision\n');
+    storage.files.set(`${MEMORY_DIR}/decisions.md`, '# Decisions\n\n## Existing decision\n- **Date**: 2026-02-01\n- **Source**: Old Meeting\n- Existing decision content\n');
 
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
     assert.ok(decisions.includes('Existing decision'), 'existing content must be preserved');
-    assert.ok(decisions.includes('Prioritize enterprise tier'), 'new decision must be appended');
+    assert.ok(decisions.includes('## Prioritize enterprise tier'), 'new decision must be appended with header');
+  });
+
+  it('(28) handles attendees as plain strings (not objects)', async () => {
+    const meetingWithStringAttendees = `---
+title: "Simple Meeting"
+date: "2026-03-15"
+attendees:
+  - Alice Smith
+  - Bob Jones
+staged_item_status:
+  le_001: approved
+---
+
+## Staged Learnings
+- le_001: Teams prefer async communication
+`;
+    storage.files.set(MEETING_FILE, meetingWithStringAttendees);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`) ?? '';
+    assert.ok(learnings.includes('- **Source**: Simple Meeting (Alice Smith, Bob Jones)'), 'should extract names from string attendees');
+  });
+
+  it('(29) handles missing attendees gracefully', async () => {
+    const meetingWithoutAttendees = `---
+title: "Solo Meeting"
+date: "2026-03-20"
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Decision without attendees
+`;
+    storage.files.set(MEETING_FILE, meetingWithoutAttendees);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    // Source should just be the title when no attendees
+    assert.ok(decisions.includes('- **Source**: Solo Meeting'), 'should use just title when no attendees');
+    assert.ok(!decisions.includes('()'), 'should not have empty parentheses');
+  });
+
+  it('(30) truncates long item text for entry title', async () => {
+    const meetingWithLongItem = `---
+title: "Long Item Meeting"
+date: "2026-03-25"
+staged_item_status:
+  le_001: approved
+---
+
+## Staged Learnings
+- le_001: This is a very long learning item that exceeds eighty characters and should be truncated in the header but preserved in full in the content line below
+`;
+    storage.files.set(MEETING_FILE, meetingWithLongItem);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`) ?? '';
+    // Header should be truncated (at word boundary around 77 chars + ...)
+    assert.ok(learnings.includes('## This is a very long learning item that exceeds eighty characters and should...'), 'header should be truncated with ellipsis');
+    // Full content should be preserved
+    assert.ok(learnings.includes('- This is a very long learning item that exceeds eighty characters and should be truncated in the header but preserved in full in the content line below'), 'full content should be preserved');
+  });
+
+  it('(31) parses ISO date strings correctly', async () => {
+    const meetingWithISODate = `---
+title: "ISO Date Meeting"
+date: "2026-04-01T14:30:00.000Z"
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Decision with ISO date
+`;
+    storage.files.set(MEETING_FILE, meetingWithISODate);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`) ?? '';
+    assert.ok(decisions.includes('- **Date**: 2026-04-01'), 'should extract YYYY-MM-DD from ISO string');
   });
 
   it('(20) writes ## Approved Action Items section to meeting body', async () => {

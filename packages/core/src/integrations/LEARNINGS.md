@@ -90,6 +90,8 @@ Integrations follow a provider pattern: a factory function reads `AreteConfig` a
 
 - **Owner metadata must be read from `staged_item_owner` frontmatter during commit** (2026-03-12): The `commitApprovedItems()` function must read `staged_item_owner` from frontmatter and merge it onto `StagedItem` objects before writing to `## Approved Action Items`. The owner metadata is NOT stored inline in the staged section text — it's only in frontmatter. Failing to read it causes action items to lose their owner annotation, breaking downstream commitment sync in `parseActionItemsFromMeeting()`. Added `parseStagedItemOwner()` and `formatActionItemWithOwner()` for this purpose.
 
+- **Memory file entry format is required** (2026-04-01): `appendToMemoryFile()` must format each item as a complete entry with `## [Title]`, `- **Date**: YYYY-MM-DD`, `- **Source**: Meeting (Attendees)`, and `- [content]`. Appending raw bullets (`- item text`) causes the item to be parsed as continuation of the previous entry, corrupting the memory file structure. The `extractMeetingMetadata()` and `generateEntryTitle()` helpers exist to support this format. Always pass `MeetingMetadata` to `appendToMemoryFile()`.
+
 ## Pre-Edit Checklist
 
 - [ ] If adding a new calendar config field: check every consumer in `pull.ts`, `integration.ts`, `status.ts` for alignment
