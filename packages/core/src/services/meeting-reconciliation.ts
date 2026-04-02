@@ -65,6 +65,9 @@ export type WorkspaceMatch = {
 /** Similarity threshold for considering an item a workspace duplicate. */
 const WORKSPACE_MATCH_THRESHOLD = 0.85;
 
+/** Similarity threshold for matching items against completed tasks. */
+const COMPLETED_MATCH_THRESHOLD = 0.6;
+
 /**
  * Match items against prior workspace content using semantic search.
  *
@@ -98,6 +101,66 @@ export async function matchPriorWorkspace(
           itemIndex: i,
           matchedPath: result.path,
           similarity: result.score,
+        });
+        break; // One match per item
+      }
+    }
+  }
+
+  return matches;
+}
+
+// ---------------------------------------------------------------------------
+// Completed task matching
+// ---------------------------------------------------------------------------
+
+/**
+ * A match between an extracted item and a completed task.
+ */
+export type CompletedMatch = {
+  itemIndex: number;
+  completedOn: string;
+  matchedTask: string;
+};
+
+/**
+ * Match items against completed tasks using Jaccard similarity.
+ *
+ * Items are matched if:
+ * - Jaccard similarity > COMPLETED_MATCH_THRESHOLD (0.6)
+ * - Owner check: if both item and task have owners, they must match
+ *
+ * Each item matches at most one completed task (first match wins).
+ *
+ * @param items - Flattened items from extractions
+ * @param completedTasks - Completed tasks from reconciliation context
+ * @returns Matches found
+ */
+export function matchCompletedTasks(
+  items: FlattenedItem[],
+  completedTasks: ReconciliationContext['completedTasks'],
+): CompletedMatch[] {
+  const matches: CompletedMatch[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    for (const task of completedTasks) {
+      // Owner check: if both have owners, they must match
+      if (item.owner && task.owner && item.owner !== task.owner) {
+        continue;
+      }
+
+      const similarity = jaccardSimilarity(
+        normalizeForJaccard(item.text),
+        normalizeForJaccard(task.text),
+      );
+
+      if (similarity > COMPLETED_MATCH_THRESHOLD) {
+        matches.push({
+          itemIndex: i,
+          completedOn: task.completedOn,
+          matchedTask: task.text,
         });
         break; // One match per item
       }
@@ -306,8 +369,12 @@ export function reconcileMeetingBatch(
     duplicateGroups.flatMap((g) => g.duplicates),
   );
 
+  // Step 3: Match completed tasks
+  const completedMatches = matchCompletedTasks(allItems, context.completedTasks);
+  const completedIndices = new Set(completedMatches.map((m) => m.itemIndex));
+
   // Steps 3-6: Process each item
-  const reconciled: ReconciledItem[] = allItems.map((item) => {
+  const reconciled: ReconciledItem[] = allItems.map((item, index) => {
     let status: ReconciledItem['status'] = 'keep';
     const annotations: ReconciledItem['annotations'] = { why: '' };
 
@@ -320,7 +387,16 @@ export function reconcileMeetingBatch(
       }
     }
 
-    // TODO: completion matching (P2-5), memory matching (P2-6)
+    // Step 3: Check completed tasks
+    if (completedIndices.has(index)) {
+      status = 'completed';
+      const match = completedMatches.find((m) => m.itemIndex === index);
+      if (match) {
+        annotations.completedOn = match.completedOn;
+      }
+    }
+
+    // TODO: memory matching (P2-6)
 
     // Step 5: Score relevance
     const { score, tier, matchedArea, matchedPerson } = scoreRelevance(item, context);
@@ -357,4 +433,4 @@ export function reconcileMeetingBatch(
 }
 
 // Export internals for testing
-export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD };
+export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD, COMPLETED_MATCH_THRESHOLD };

@@ -6,10 +6,13 @@ import {
   scoreRelevance,
   generateWhy,
   findDuplicates,
+  matchCompletedTasks,
   matchPriorWorkspace,
   WORKSPACE_MATCH_THRESHOLD,
+  COMPLETED_MATCH_THRESHOLD,
   type MeetingExtractionBatch,
   type DuplicateGroup,
+  type CompletedMatch,
   type WorkspaceMatch,
 } from '../../src/services/meeting-reconciliation.js';
 import type {
@@ -666,6 +669,202 @@ describe('matchPriorWorkspace', () => {
 
   it('threshold constant is 0.85', () => {
     assert.equal(WORKSPACE_MATCH_THRESHOLD, 0.85);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchCompletedTasks
+// ---------------------------------------------------------------------------
+
+describe('matchCompletedTasks', () => {
+  it('matches item against completed task with high similarity', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Send API docs to the team', completedOn: '2026-03-28', owner: 'alice' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[0].completedOn, '2026-03-28');
+    assert.equal(matches[0].matchedTask, 'Send API docs to the team');
+  });
+
+  it('does not match when similarity is below threshold', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Review PR', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    // Very different text → low Jaccard
+    const completedTasks = [
+      { text: 'Deploy the production service to AWS infrastructure', completedOn: '2026-03-28', owner: 'alice' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 0);
+  });
+
+  it('skips match when both have owners that differ', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Send API docs to the team', completedOn: '2026-03-28', owner: 'bob' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 0);
+  });
+
+  it('matches when item has no owner', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Migrate to PostgreSQL database'],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Migrate to PostgreSQL database', completedOn: '2026-03-25', owner: 'alice' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 1);
+  });
+
+  it('matches when task has no owner', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Send API docs to the team', completedOn: '2026-03-28' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 1);
+  });
+
+  it('returns only one match per item (first match wins)', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Send API docs to the team', completedOn: '2026-03-25', owner: 'alice' },
+      { text: 'Send API docs to the team members', completedOn: '2026-03-28', owner: 'alice' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].completedOn, '2026-03-25');
+  });
+
+  it('returns empty array for empty inputs', () => {
+    assert.deepStrictEqual(matchCompletedTasks([], []), []);
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Some decision'] }),
+    ]);
+    assert.deepStrictEqual(matchCompletedTasks(items, []), []);
+  });
+
+  it('matches multiple items independently', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+          { owner: 'Bob', ownerSlug: 'bob', description: 'Deploy the production service', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const completedTasks = [
+      { text: 'Send API docs to the team', completedOn: '2026-03-25', owner: 'alice' },
+      { text: 'Deploy the production service', completedOn: '2026-03-26', owner: 'bob' },
+    ];
+
+    const matches = matchCompletedTasks(items, completedTasks);
+    assert.equal(matches.length, 2);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[1].itemIndex, 1);
+  });
+
+  it('threshold constant is 0.6', () => {
+    assert.equal(COMPLETED_MATCH_THRESHOLD, 0.6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reconcileMeetingBatch completed task integration
+// ---------------------------------------------------------------------------
+
+describe('reconcileMeetingBatch completed task integration', () => {
+  it('marks matching items as completed with completedOn annotation', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ];
+
+    const context = makeContext({
+      completedTasks: [
+        { text: 'Send API docs to the team', completedOn: '2026-03-28', owner: 'alice' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.items[0].status, 'completed');
+    assert.equal(result.items[0].annotations.completedOn, '2026-03-28');
+    assert.equal(result.stats.completedMatched, 1);
+  });
+
+  it('does not mark non-matching items as completed', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Review the pull request', direction: 'i_owe_them' },
+        ],
+      }),
+    ];
+
+    const context = makeContext({
+      completedTasks: [
+        { text: 'Deploy production infrastructure to cloud', completedOn: '2026-03-28', owner: 'alice' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.items[0].status, 'keep');
+    assert.equal(result.items[0].annotations.completedOn, undefined);
+    assert.equal(result.stats.completedMatched, 0);
   });
 });
 
