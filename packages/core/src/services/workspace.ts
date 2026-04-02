@@ -551,6 +551,8 @@ export class WorkspaceService {
     }
 
 
+    // TODO: Copy memory.md template to areas/ on workspace update (P1-3)
+
     // Regenerate AGENTS.md / CLAUDE.md on update (always refreshes to latest version)
     const rootFiles = adapter.generateRootFiles(config, workspaceRoot);
     for (const [filename, content] of Object.entries(rootFiles)) {
