@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-04-02: [enhance-review-skill-learnings](entries/2026-04-02_enhance-review-skill-learnings.md) — Enhanced /review skill with tiered paths (Quick/Full), AC validation rubric, expertise profile loading, pre-mortem gating. 6/6 tasks direct execution, 0/7 pre-mortem risks. Key: documentation tasks skip worktree/subagents.
 - 2026-03-30: [week-plan-meeting-section-learnings](entries/2026-03-30_week-plan-meeting-section-learnings.md) — Key Meetings section for week-plan skill: calendar JSON exposes importance/organizer/notes/hasAgenda, skill classifies by priority, template captures confirmed meetings. 4/4 tasks, 100% first-attempt, +12 tests. Key: PullNotionDeps pattern for testability.
 - 2026-03-28: [build-context-injection-learnings](entries/2026-03-28_build-context-injection-learnings.md) — Profile injection for reviewers: execute-prd Steps 11/13 and /ship Phase 4.2 now receive expertise profiles. 4/4 tasks, 0/5 pre-mortem risks. Key: review caught CLI profile structure mismatch.
 - 2026-03-28: [documentation-audit-learnings](entries/2026-03-28_documentation-audit-learnings.md) — Audit skill: orchestrate domain experts to audit/fix docs. 8/8 tasks, 100% first-attempt, 0/8 pre-mortem risks. Profile injection pattern, manifest.yaml for declarative inventory, approval gates with deferred items.

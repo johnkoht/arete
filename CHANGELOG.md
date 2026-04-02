@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Enhanced `/review` skill with tiered review paths (Quick for tiny/small, Full for medium+)
+- AC validation rubric with anti-pattern detection and good/bad examples
+- Expertise profile loading in reviews for domain-aware validation
+- Pre-mortem gating by complexity (Large plans require pre-mortem before approval)
+- Two output modes: Direct Refinement vs Structured Suggestions
+- LEARNINGS.md for review-plan skill with gotchas and invariants
 - `[Build Principles]` section in AGENTS.md with 6 execution principles for autonomous work
 - Integrity check in `build-agents.ts` to prevent root AGENTS.md from being overwritten with GUIDE content
 
