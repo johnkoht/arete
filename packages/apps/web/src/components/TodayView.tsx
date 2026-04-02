@@ -298,25 +298,16 @@ interface SuggestionRowProps {
 }
 
 function SuggestionRow({ suggestion }: SuggestionRowProps) {
-  const { mutate } = useUpdateTask();
+  const { mutate, isError } = useUpdateTask();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Set Today action
   const handleSetToday = useCallback(() => {
-    mutate(
-      {
-        id: suggestion.id,
-        updates: { due: getTodayString() },
-      },
-      {
-        onSuccess: () => {
-          toast.success('Task set for today');
-        },
-        onError: () => {
-          toast.error('Failed to update task');
-        },
-      }
-    );
+    mutate({
+      id: suggestion.id,
+      updates: { due: getTodayString() },
+    });
+    toast.success('Task set for today');
   }, [suggestion.id, mutate]);
 
   // Schedule action (date selected from calendar)
@@ -324,41 +315,23 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
     (date: Date | undefined) => {
       if (!date) return;
 
-      mutate(
-        {
-          id: suggestion.id,
-          updates: { due: formatDate(date) },
-        },
-        {
-          onSuccess: () => {
-            toast.success('Task scheduled');
-            setCalendarOpen(false);
-          },
-          onError: () => {
-            toast.error('Failed to schedule task');
-          },
-        }
-      );
+      mutate({
+        id: suggestion.id,
+        updates: { due: formatDate(date) },
+      });
+      toast.success('Task scheduled');
+      setCalendarOpen(false);
     },
     [suggestion.id, mutate]
   );
 
   // Punt action
   const handlePunt = useCallback(() => {
-    mutate(
-      {
-        id: suggestion.id,
-        updates: { destination: 'anytime', due: null },
-      },
-      {
-        onSuccess: () => {
-          toast.success('Moved to Anytime');
-        },
-        onError: () => {
-          toast.error('Failed to move task');
-        },
-      }
-    );
+    mutate({
+      id: suggestion.id,
+      updates: { destination: 'anytime', due: null },
+    });
+    toast.success('Moved to Anytime');
   }, [suggestion.id, mutate]);
 
   return (
