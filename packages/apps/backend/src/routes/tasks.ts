@@ -433,37 +433,37 @@ export function createTasksRouter(workspaceRoot: string): Hono {
 
     try {
       const services = await createServices(workspaceRoot);
-      let task: WorkspaceTask;
+      const foundTask = await services.tasks.findTask(id);
+      if (!foundTask) {
+        return c.json({ error: `No task found matching id "${id}"` }, 404);
+      }
 
+      let task = foundTask;
+
+      // 1. Move first (changes file path)
       if (body.destination !== undefined) {
-        // Move task — need to find task first to get file path for lock
-        const foundTask = await services.tasks.findTask(id);
-        if (!foundTask) {
-          return c.json({ error: `No task found matching id "${id}"` }, 404);
-        }
-        task = await withFileLock(foundTask.source.file, () =>
-          services.tasks.moveTask(id, body.destination!),
+        task = await withFileLock(task.source.file, () =>
+          services.tasks.moveTask(task.id, body.destination!),
         );
-      } else if (body.completed !== undefined) {
-        // Complete task
-        const foundTask = await services.tasks.findTask(id);
-        if (!foundTask) {
-          return c.json({ error: `No task found matching id "${id}"` }, 404);
-        }
-        const result = await withFileLock(foundTask.source.file, () =>
-          services.tasks.completeTask(id),
+      }
+
+      // 2. Update due (use new file path after move)
+      if ('due' in body) {
+        task = await withFileLock(task.source.file, () =>
+          services.tasks.updateTask(task.id, { due: body.due }),
+        );
+      }
+
+      // 3. Complete last (triggers side effects like completedAt)
+      if (body.completed !== undefined && body.completed) {
+        const result = await withFileLock(task.source.file, () =>
+          services.tasks.completeTask(task.id),
         );
         task = result.task;
-      } else if ('due' in body) {
-        // Update due date
-        const foundTask = await services.tasks.findTask(id);
-        if (!foundTask) {
-          return c.json({ error: `No task found matching id "${id}"` }, 404);
-        }
-        task = await withFileLock(foundTask.source.file, () =>
-          services.tasks.updateTask(id, { due: body.due }),
-        );
-      } else {
+      }
+
+      // If nothing was processed
+      if (body.destination === undefined && !('due' in body) && body.completed === undefined) {
         return c.json({ error: 'No valid updates provided' }, 400);
       }
 
