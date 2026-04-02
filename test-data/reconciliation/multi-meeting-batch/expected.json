@@ -1,0 +1,102 @@
+{
+  "items": [
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-25-product-sync.md",
+      "status": "keep",
+      "relevanceScore": 0.6,
+      "relevanceTier": "normal",
+      "annotations": {
+        "areaSlug": "frontend",
+        "personSlug": "alice-wong",
+        "why": "NORMAL: Keyword match (frontend)"
+      }
+    },
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-25-product-sync.md",
+      "status": "keep",
+      "relevanceScore": 0.6,
+      "relevanceTier": "normal",
+      "annotations": {
+        "areaSlug": "platform",
+        "personSlug": "bob-smith",
+        "why": "NORMAL: Keyword match (platform)"
+      }
+    },
+    {
+      "type": "decision",
+      "meetingPath": "meetings/2026-03-25-product-sync.md",
+      "status": "keep",
+      "relevanceScore": 0.3,
+      "relevanceTier": "low",
+      "annotations": {
+        "areaSlug": "frontend",
+        "why": "LOW: Keyword match (frontend)"
+      }
+    },
+    {
+      "type": "learning",
+      "meetingPath": "meetings/2026-03-25-product-sync.md",
+      "status": "keep",
+      "relevanceScore": 0,
+      "relevanceTier": "low",
+      "annotations": {
+        "why": "LOW: No area/person/keyword matches"
+      }
+    },
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-26-engineering-standup.md",
+      "status": "duplicate",
+      "relevanceScore": 0.6,
+      "relevanceTier": "normal",
+      "annotations": {
+        "areaSlug": "frontend",
+        "personSlug": "alice-wong",
+        "duplicateOf": "meetings/2026-03-25-product-sync.md:action",
+        "why": "NORMAL: Keyword match (frontend)"
+      }
+    },
+    {
+      "type": "decision",
+      "meetingPath": "meetings/2026-03-26-engineering-standup.md",
+      "status": "duplicate",
+      "relevanceScore": 0.3,
+      "relevanceTier": "low",
+      "annotations": {
+        "areaSlug": "frontend",
+        "duplicateOf": "meetings/2026-03-25-product-sync.md:decision",
+        "why": "LOW: Keyword match (frontend)"
+      }
+    },
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-27-platform-review.md",
+      "status": "keep",
+      "relevanceScore": 1.0,
+      "relevanceTier": "high",
+      "annotations": {
+        "areaSlug": "platform",
+        "personSlug": "carol-lee",
+        "why": "HIGH: Area match (platform)"
+      }
+    },
+    {
+      "type": "learning",
+      "meetingPath": "meetings/2026-03-27-platform-review.md",
+      "status": "keep",
+      "relevanceScore": 0.7,
+      "relevanceTier": "high",
+      "annotations": {
+        "areaSlug": "platform",
+        "why": "HIGH: Area match (platform)"
+      }
+    }
+  ],
+  "stats": {
+    "duplicatesRemoved": 2,
+    "completedMatched": 0,
+    "lowRelevanceCount": 3
+  }
+}

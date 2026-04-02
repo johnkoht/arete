@@ -1,0 +1,20 @@
+{
+  "areaMemories": {
+    "frontend": {
+      "keywords": ["react", "dashboard", "api"],
+      "activePeople": ["alice-wong", "sarah-chen"],
+      "openWork": ["Dashboard redesign", "API v2 migration"],
+      "recentlyCompleted": [],
+      "recentDecisions": []
+    },
+    "platform": {
+      "keywords": ["deploy", "infrastructure", "database", "migration"],
+      "activePeople": ["bob-smith", "carol-lee"],
+      "openWork": ["Staging environment setup", "Database migration"],
+      "recentlyCompleted": [],
+      "recentDecisions": []
+    }
+  },
+  "recentCommittedItems": [],
+  "completedTasks": []
+}

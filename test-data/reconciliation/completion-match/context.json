@@ -1,0 +1,25 @@
+{
+  "areaMemories": {
+    "frontend": {
+      "keywords": ["api", "documentation", "oauth"],
+      "activePeople": ["alice-wong"],
+      "openWork": [],
+      "recentlyCompleted": [],
+      "recentDecisions": []
+    }
+  },
+  "recentCommittedItems": [
+    {
+      "text": "Migrate user authentication to OAuth 2.0 provider",
+      "date": "2026-03-25",
+      "source": ".arete/memory/items/decisions.md"
+    }
+  ],
+  "completedTasks": [
+    {
+      "text": "Send updated API documentation to the frontend team",
+      "completedOn": "2026-03-27",
+      "owner": "alice-wong"
+    }
+  ]
+}

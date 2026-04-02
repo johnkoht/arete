@@ -1,0 +1,32 @@
+[
+  {
+    "meetingPath": "meetings/2026-03-28-weekly-sync.md",
+    "extraction": {
+      "summary": "Weekly sync reviewing completed work and new priorities",
+      "actionItems": [
+        {
+          "owner": "Alice Wong",
+          "ownerSlug": "alice-wong",
+          "description": "Send updated API documentation to the frontend team",
+          "direction": "i_owe_them",
+          "counterpartySlug": "sarah-chen",
+          "confidence": 0.9
+        },
+        {
+          "owner": "Bob Smith",
+          "ownerSlug": "bob-smith",
+          "description": "Set up monitoring dashboards for the new staging environment",
+          "direction": "i_owe_them",
+          "confidence": 0.85
+        }
+      ],
+      "nextSteps": [],
+      "decisions": [
+        "Migrate user authentication to OAuth 2.0 provider"
+      ],
+      "learnings": [
+        "Feature flags reduced deployment risk significantly in the last quarter"
+      ]
+    }
+  }
+]

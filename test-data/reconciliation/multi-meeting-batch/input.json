@@ -1,0 +1,73 @@
+[
+  {
+    "meetingPath": "meetings/2026-03-25-product-sync.md",
+    "extraction": {
+      "summary": "Product sync covering API redesign and deployment timeline",
+      "actionItems": [
+        {
+          "owner": "Alice Wong",
+          "ownerSlug": "alice-wong",
+          "description": "Send updated API documentation to the frontend team",
+          "direction": "i_owe_them",
+          "counterpartySlug": "sarah-chen",
+          "confidence": 0.95
+        },
+        {
+          "owner": "Bob Smith",
+          "ownerSlug": "bob-smith",
+          "description": "Deploy staging environment for partner integration testing",
+          "direction": "i_owe_them",
+          "confidence": 0.9
+        }
+      ],
+      "nextSteps": [],
+      "decisions": [
+        "Adopt React Server Components for the new dashboard"
+      ],
+      "learnings": [
+        "Users prefer dark mode by a 3:1 ratio in our latest survey"
+      ]
+    }
+  },
+  {
+    "meetingPath": "meetings/2026-03-26-engineering-standup.md",
+    "extraction": {
+      "summary": "Engineering standup with deployment updates",
+      "actionItems": [
+        {
+          "owner": "Alice Wong",
+          "ownerSlug": "alice-wong",
+          "description": "Send updated API documentation to the frontend team now",
+          "direction": "i_owe_them",
+          "counterpartySlug": "sarah-chen",
+          "confidence": 0.85
+        }
+      ],
+      "nextSteps": [],
+      "decisions": [
+        "Adopt React Server Components for the new dashboard"
+      ],
+      "learnings": []
+    }
+  },
+  {
+    "meetingPath": "meetings/2026-03-27-platform-review.md",
+    "extraction": {
+      "summary": "Platform review discussing infrastructure and deployment",
+      "actionItems": [
+        {
+          "owner": "Carol Lee",
+          "ownerSlug": "carol-lee",
+          "description": "Review the database migration plan for Q2",
+          "direction": "i_owe_them",
+          "confidence": 0.8
+        }
+      ],
+      "nextSteps": [],
+      "decisions": [],
+      "learnings": [
+        "Database connection pooling reduced latency by 40%"
+      ]
+    }
+  }
+]

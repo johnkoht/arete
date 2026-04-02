@@ -1,0 +1,54 @@
+{
+  "items": [
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-28-weekly-sync.md",
+      "status": "completed",
+      "relevanceScore": 0.6,
+      "relevanceTier": "normal",
+      "annotations": {
+        "areaSlug": "frontend",
+        "personSlug": "alice-wong",
+        "completedOn": "2026-03-27",
+        "why": "NORMAL: Keyword match (frontend)"
+      }
+    },
+    {
+      "type": "action",
+      "meetingPath": "meetings/2026-03-28-weekly-sync.md",
+      "status": "keep",
+      "relevanceScore": 0,
+      "relevanceTier": "low",
+      "annotations": {
+        "why": "LOW: No area/person/keyword matches"
+      }
+    },
+    {
+      "type": "decision",
+      "meetingPath": "meetings/2026-03-28-weekly-sync.md",
+      "status": "duplicate",
+      "relevanceScore": 0.3,
+      "relevanceTier": "low",
+      "annotations": {
+        "areaSlug": "frontend",
+        "duplicateOf": ".arete/memory/items/decisions.md",
+        "why": "Similar to: \"Migrate user authentication to OAuth 2.0 provider...\" from .arete/memory/items/decisions.md"
+      }
+    },
+    {
+      "type": "learning",
+      "meetingPath": "meetings/2026-03-28-weekly-sync.md",
+      "status": "keep",
+      "relevanceScore": 0,
+      "relevanceTier": "low",
+      "annotations": {
+        "why": "LOW: No area/person/keyword matches"
+      }
+    }
+  ],
+  "stats": {
+    "duplicatesRemoved": 1,
+    "completedMatched": 1,
+    "lowRelevanceCount": 3
+  }
+}
