@@ -297,6 +297,23 @@ export type AreaSections = {
 };
 
 /**
+ * Memory context for an area, parsed from areas/{slug}/memory.md.
+ * Used for relevance scoring in meeting reconciliation.
+ */
+export type AreaMemory = {
+  /** Keywords that indicate relevance to this area */
+  keywords: string[];
+  /** Person slugs of people actively working in this area */
+  activePeople: string[];
+  /** Current open work items/tasks */
+  openWork: string[];
+  /** Recently completed work (for completion matching) */
+  recentlyCompleted: string[];
+  /** Recent decisions made in this area */
+  recentDecisions: string[];
+};
+
+/**
  * Complete parsed context for an area.
  */
 export type AreaContext = {
@@ -312,4 +329,6 @@ export type AreaContext = {
   filePath: string;
   /** Parsed markdown sections */
   sections: AreaSections;
+  /** Parsed memory context from areas/{slug}/memory.md */
+  memory?: AreaMemory;
 };

@@ -107,6 +107,7 @@ export type {
   AreaFrontmatter,
   AreaMatch,
   AreaSections,
+  AreaMemory,
   AreaContext,
 } from './entities.js';
 
