@@ -1,0 +1,32 @@
+**Sarah Chen | 00:00:15**
+Welcome everyone to the weekly product sync. Let's run through what we've got this week.
+
+**John Smith | 00:00:28**
+Sure. So the API redesign is mostly done. I still need to send the updated API documentation to the frontend team by Friday so they can start integrating.
+
+**Sarah Chen | 00:00:45**
+Great. Can you also make sure the Swagger spec is updated?
+
+**John Smith | 00:00:52**
+Yeah, that's part of the docs update. I'll include it.
+
+**Alice Wong | 00:01:05**
+On my end, the user research findings are ready. I'll share the summary deck with the team by end of day tomorrow.
+
+**Sarah Chen | 00:01:18**
+Perfect. Let's make sure we schedule a meeting to go over those findings next week.
+
+**John Smith | 00:01:30**
+We should also touch base with the design team about the new onboarding flow.
+
+**Alice Wong | 00:01:42**
+Agreed. Oh, and one thing — we decided to go with REST over GraphQL for the partner integration. The team felt it was simpler and better documented.
+
+**Sarah Chen | 00:01:58**
+Good call. And from my side, I learned that our enterprise customers strongly prefer batch processing over real-time updates. That came from the last three customer calls.
+
+**John Smith | 00:02:15**
+Interesting. We should follow up on that insight with the architecture team.
+
+**Sarah Chen | 00:02:28**
+Alright, I think we're good. Let's wrap up.

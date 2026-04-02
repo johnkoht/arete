@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   buildMeetingExtractionPrompt,
   buildLightExtractionPrompt,
@@ -3278,5 +3280,215 @@ describe('extractMeetingIntelligence - mode parameter', () => {
 
     // Normal limits = 10 action items
     assert.equal(result.intelligence.actionItems.length, 10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Golden file tests — extraction validation/filtering pipeline
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper to load golden file test data.
+ * Paths are relative to the repository root (test-data/meetings/extraction-tests/).
+ */
+function loadGoldenFile(subpath: string): string {
+  // Resolve from package root (packages/core/) up to repo root
+  const repoRoot = resolve(import.meta.dirname, '..', '..', '..', '..');
+  return readFileSync(resolve(repoRoot, 'test-data', 'meetings', 'extraction-tests', subpath), 'utf8');
+}
+
+type ExpectedOutput = {
+  summary: string;
+  actionItems: Array<{
+    owner: string;
+    ownerSlug: string;
+    description: string;
+    direction: string;
+    counterpartySlug?: string;
+    due?: string;
+    confidence?: number;
+  }>;
+  decisions: string[];
+  learnings: string[];
+};
+
+describe('golden file tests — extraction filtering pipeline', () => {
+  it('normal meeting: filters trivial items, keeps valid ones', async () => {
+    const transcript = loadGoldenFile('normal-meeting.transcript.txt');
+    const mockResponse = loadGoldenFile('mock-responses/normal-meeting.json');
+    const expected: ExpectedOutput = JSON.parse(loadGoldenFile('expected/normal-meeting.json'));
+
+    const mockLLM: LLMCallFn = async () => mockResponse;
+    const result = await extractMeetingIntelligence(transcript, mockLLM);
+
+    // Verify summary
+    assert.equal(result.intelligence.summary, expected.summary);
+
+    // Verify action item counts and content
+    assert.equal(
+      result.intelligence.actionItems.length,
+      expected.actionItems.length,
+      `Expected ${expected.actionItems.length} action items, got ${result.intelligence.actionItems.length}`,
+    );
+
+    // Verify each action item matches (order-sensitive since LLM order is preserved)
+    for (let i = 0; i < expected.actionItems.length; i++) {
+      const actual = result.intelligence.actionItems[i];
+      const exp = expected.actionItems[i];
+      assert.equal(actual.owner, exp.owner, `AI[${i}] owner mismatch`);
+      assert.equal(actual.ownerSlug, exp.ownerSlug, `AI[${i}] ownerSlug mismatch`);
+      assert.equal(actual.description, exp.description, `AI[${i}] description mismatch`);
+      assert.equal(actual.direction, exp.direction, `AI[${i}] direction mismatch`);
+      if (exp.counterpartySlug) {
+        assert.equal(actual.counterpartySlug, exp.counterpartySlug, `AI[${i}] counterpartySlug mismatch`);
+      }
+      if (exp.due) {
+        assert.equal(actual.due, exp.due, `AI[${i}] due mismatch`);
+      }
+      if (exp.confidence !== undefined) {
+        assert.equal(actual.confidence, exp.confidence, `AI[${i}] confidence mismatch`);
+      }
+    }
+
+    // Verify decisions and learnings
+    assert.deepEqual(result.intelligence.decisions, expected.decisions);
+    assert.deepEqual(result.intelligence.learnings, expected.learnings);
+
+    // Verify that trivial items were filtered (should have validation warnings)
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('trivial pattern')),
+      'Expected at least one trivial pattern warning',
+    );
+  });
+
+  it('high-item meeting: enforces category limits after filtering', async () => {
+    const transcript = loadGoldenFile('high-item-meeting.transcript.txt');
+    const mockResponse = loadGoldenFile('mock-responses/high-item-meeting.json');
+    const expected: ExpectedOutput = JSON.parse(loadGoldenFile('expected/high-item-meeting.json'));
+
+    const mockLLM: LLMCallFn = async () => mockResponse;
+    const result = await extractMeetingIntelligence(transcript, mockLLM);
+
+    // Verify limits enforced
+    assert.equal(
+      result.intelligence.actionItems.length,
+      CATEGORY_LIMITS.actionItems,
+      `Action items should be capped at ${CATEGORY_LIMITS.actionItems}`,
+    );
+    assert.equal(
+      result.intelligence.decisions.length,
+      CATEGORY_LIMITS.decisions,
+      `Decisions should be capped at ${CATEGORY_LIMITS.decisions}`,
+    );
+    assert.equal(
+      result.intelligence.learnings.length,
+      CATEGORY_LIMITS.learnings,
+      `Learnings should be capped at ${CATEGORY_LIMITS.learnings}`,
+    );
+
+    // Verify the specific items that survived (first N in order)
+    for (let i = 0; i < expected.actionItems.length; i++) {
+      const actual = result.intelligence.actionItems[i];
+      const exp = expected.actionItems[i];
+      assert.equal(actual.owner, exp.owner, `AI[${i}] owner mismatch`);
+      assert.equal(actual.description, exp.description, `AI[${i}] description mismatch`);
+      assert.equal(actual.direction, exp.direction, `AI[${i}] direction mismatch`);
+    }
+
+    assert.deepEqual(result.intelligence.decisions, expected.decisions);
+    assert.deepEqual(result.intelligence.learnings, expected.learnings);
+
+    // Verify trivial items were filtered
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('trivial pattern')),
+      'Expected trivial pattern warnings',
+    );
+
+    // Verify limit enforcement warnings
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('exceeds action item limit')),
+      'Expected action item limit warning',
+    );
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('exceeds decision limit')),
+      'Expected decision limit warning',
+    );
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('exceeds learning limit')),
+      'Expected learning limit warning',
+    );
+
+    // Verify near-duplicate detection (decisions and learnings had near-dupes)
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('near-duplicate')),
+      'Expected near-duplicate warnings',
+    );
+
+    // Verify raw items captured all LLM output
+    assert.ok(
+      result.rawItems.length > result.intelligence.actionItems.length,
+      'Raw items should be more than filtered action items',
+    );
+  });
+
+  it('1:1 meeting: filters garbage prefixes and trivial patterns', async () => {
+    const transcript = loadGoldenFile('one-on-one.transcript.txt');
+    const mockResponse = loadGoldenFile('mock-responses/one-on-one.json');
+    const expected: ExpectedOutput = JSON.parse(loadGoldenFile('expected/one-on-one.json'));
+
+    const mockLLM: LLMCallFn = async () => mockResponse;
+    const result = await extractMeetingIntelligence(transcript, mockLLM);
+
+    // Verify summary
+    assert.equal(result.intelligence.summary, expected.summary);
+
+    // Verify action item count
+    assert.equal(
+      result.intelligence.actionItems.length,
+      expected.actionItems.length,
+      `Expected ${expected.actionItems.length} action items, got ${result.intelligence.actionItems.length}`,
+    );
+
+    // Verify each action item with direction (important for 1:1s)
+    for (let i = 0; i < expected.actionItems.length; i++) {
+      const actual = result.intelligence.actionItems[i];
+      const exp = expected.actionItems[i];
+      assert.equal(actual.owner, exp.owner, `AI[${i}] owner mismatch`);
+      assert.equal(actual.ownerSlug, exp.ownerSlug, `AI[${i}] ownerSlug mismatch`);
+      assert.equal(actual.description, exp.description, `AI[${i}] description mismatch`);
+      assert.equal(actual.direction, exp.direction, `AI[${i}] direction mismatch`);
+      if (exp.counterpartySlug) {
+        assert.equal(actual.counterpartySlug, exp.counterpartySlug, `AI[${i}] counterpartySlug mismatch`);
+      }
+      if (exp.due) {
+        assert.equal(actual.due, exp.due, `AI[${i}] due mismatch`);
+      }
+    }
+
+    // Verify decisions and learnings
+    assert.deepEqual(result.intelligence.decisions, expected.decisions);
+    assert.deepEqual(result.intelligence.learnings, expected.learnings);
+
+    // Verify garbage prefix filtering (um, so the way)
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('"um"')),
+      'Expected "um" garbage prefix warning',
+    );
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('"so the way"')),
+      'Expected "so the way" garbage prefix warning',
+    );
+
+    // Verify trivial pattern filtering (follow up)
+    assert.ok(
+      result.validationWarnings.some(w => w.reason.includes('trivial pattern')),
+      'Expected trivial pattern warning for "Follow up"',
+    );
+
+    // Verify direction classification: mix of i_owe_them and they_owe_me
+    const iOweThem = result.intelligence.actionItems.filter(a => a.direction === 'i_owe_them');
+    const theyOweMe = result.intelligence.actionItems.filter(a => a.direction === 'they_owe_me');
+    assert.ok(iOweThem.length > 0, 'Expected at least one i_owe_them item');
+    assert.ok(theyOweMe.length > 0, 'Expected at least one they_owe_me item');
   });
 });

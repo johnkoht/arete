@@ -1,0 +1,137 @@
+{
+  "summary": "Quarterly planning session covering Q2 deliverables, architectural decisions, and team learnings from the past quarter.",
+  "action_items": [
+    {
+      "owner": "David Park",
+      "owner_slug": "david-park",
+      "description": "Migrate auth service to new OAuth provider",
+      "direction": "they_owe_me",
+      "due": "April 15",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Lisa Tran",
+      "owner_slug": "lisa-tran",
+      "description": "Complete database schema migration",
+      "direction": "they_owe_me",
+      "due": "April 30",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Lisa Tran",
+      "owner_slug": "lisa-tran",
+      "description": "Write data migration scripts and run in staging",
+      "direction": "they_owe_me",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Tom Wilson",
+      "owner_slug": "tom-wilson",
+      "description": "Set up new CI pipeline for monorepo",
+      "direction": "they_owe_me",
+      "due": "mid-April",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Tom Wilson",
+      "owner_slug": "tom-wilson",
+      "description": "Update deployment scripts for new infrastructure",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Rachel Kim",
+      "owner_slug": "rachel-kim",
+      "description": "Finalize Q2 roadmap document",
+      "direction": "they_owe_me",
+      "due": "next Friday",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Rachel Kim",
+      "owner_slug": "rachel-kim",
+      "description": "Conduct user interviews for new dashboard feature",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Rachel Kim",
+      "owner_slug": "rachel-kim",
+      "description": "Compile competitive analysis report",
+      "direction": "they_owe_me",
+      "confidence": 0.8
+    },
+    {
+      "owner": "David Park",
+      "owner_slug": "david-park",
+      "description": "Review security audit findings and prepare remediation plan",
+      "direction": "they_owe_me",
+      "confidence": 0.9
+    },
+    {
+      "owner": "David Park",
+      "owner_slug": "david-park",
+      "description": "Update API rate limiting configuration for new tier",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Maria Garcia",
+      "owner_slug": "maria-garcia",
+      "description": "Schedule a meeting to follow up on infrastructure changes",
+      "direction": "i_owe_them",
+      "confidence": 0.4
+    },
+    {
+      "owner": "David Park",
+      "owner_slug": "david-park",
+      "description": "Touch base about the budget next week",
+      "direction": "they_owe_me",
+      "confidence": 0.4
+    },
+    {
+      "owner": "Maria Garcia",
+      "owner_slug": "maria-garcia",
+      "description": "Coordinate Q2 kickoff with all team leads",
+      "direction": "i_owe_them",
+      "confidence": 0.75
+    },
+    {
+      "owner": "Lisa Tran",
+      "owner_slug": "lisa-tran",
+      "description": "Document database migration rollback procedures",
+      "direction": "they_owe_me",
+      "confidence": 0.7
+    },
+    {
+      "owner": "Tom Wilson",
+      "owner_slug": "tom-wilson",
+      "description": "Configure monitoring alerts for new CI pipeline",
+      "direction": "they_owe_me",
+      "confidence": 0.7
+    }
+  ],
+  "decisions": [
+    "Standardize on PostgreSQL for all new services",
+    "Adopt trunk-based development starting next sprint",
+    "Implement feature flags for all new releases",
+    "Require code review from two approvers for security-sensitive changes",
+    "Deprecate legacy REST v1 API by end of Q2",
+    "Move to biweekly releases instead of weekly",
+    "Adopt OpenTelemetry for observability",
+    "Require integration tests for all new endpoints",
+    "Standardize on PostgreSQL for all new services forward"
+  ],
+  "learnings": [
+    "Database connection pooling is critical at scale",
+    "Feature flags reduced rollback rate by 60%",
+    "Migration to TypeScript strict mode caught 23 bugs before production",
+    "Pair programming on complex migrations reduces errors significantly",
+    "Automated canary deployments saved us twice last quarter",
+    "New monitoring dashboard reduced mean time to detection by 40%",
+    "Onboarding completion correlates strongly with first-week retention",
+    "NPS scores improved after simplifying the settings page",
+    "Cross-team code reviews improve knowledge sharing",
+    "Database connection pooling is critical at scale today"
+  ]
+}

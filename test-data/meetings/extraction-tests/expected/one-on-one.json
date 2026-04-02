@@ -1,0 +1,53 @@
+{
+  "summary": "1:1 check-in covering auth integration status, load testing plans, and release date adjustment. Jane to review Alex's rate limiter PR.",
+  "actionItems": [
+    {
+      "owner": "Alex Eng",
+      "ownerSlug": "alex-eng",
+      "description": "Write load test scripts and run before production deployment",
+      "direction": "they_owe_me",
+      "due": "Wednesday",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Alex Eng",
+      "ownerSlug": "alex-eng",
+      "description": "Share load test results with Jane once complete",
+      "direction": "they_owe_me",
+      "counterpartySlug": "jane-doe",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Jane Doe",
+      "ownerSlug": "jane-doe",
+      "description": "Review Alex's PR for the rate limiter",
+      "direction": "i_owe_them",
+      "counterpartySlug": "alex-eng",
+      "due": "tomorrow morning",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Alex Eng",
+      "ownerSlug": "alex-eng",
+      "description": "Update architecture doc to reflect new connection pooling approach",
+      "direction": "they_owe_me",
+      "due": "end of week",
+      "confidence": 0.85
+    }
+  ],
+  "decisions": [
+    "Move release date to March 15th instead of March 10th"
+  ],
+  "learnings": [
+    "New connection pooling library handles failover better than custom solution"
+  ],
+  "_comments": {
+    "filteredGarbage": [
+      "Um, I was also thinking we should look into the caching issue (starts with 'um')",
+      "So the way the system works is it automatically retries on secondary (starts with 'so the way')"
+    ],
+    "filteredTrivial": [
+      "Follow up on the deployment timeline next week"
+    ]
+  }
+}

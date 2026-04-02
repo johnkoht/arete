@@ -1,0 +1,32 @@
+**Jane Doe | 00:00:10**
+Hey Alex, thanks for making time. Let's catch up on where things stand.
+
+**Alex Eng | 00:00:18**
+Sure. So the auth integration is done and deployed to staging. I still need to write the load test scripts and run them before we go to production.
+
+**Jane Doe | 00:00:35**
+Nice work. When do you think you can have the load tests ready?
+
+**Alex Eng | 00:00:42**
+I can have them done by Wednesday. I'll share the results with you once they're complete.
+
+**Jane Doe | 00:00:55**
+Great. On my end, I need to review your PR for the rate limiter. I'll get to it by tomorrow morning.
+
+**Alex Eng | 00:01:08**
+Thanks. Um, I was also thinking we should probably look into the caching issue, but I'm not sure where to start.
+
+**Jane Doe | 00:01:22**
+Yeah, let's not worry about that right now. One thing I wanted to mention — we decided to move the release date to March 15th instead of March 10th. That gives us the buffer we discussed.
+
+**Alex Eng | 00:01:40**
+Makes sense. I also realized that the new connection pooling library handles failover much better than our custom solution. That's a good learning for future services.
+
+**Jane Doe | 00:01:58**
+Agreed. So the way the system works is it automatically retries on the secondary connection.
+
+**Alex Eng | 00:02:10**
+Right. I'll update the architecture doc to reflect that by end of week.
+
+**Jane Doe | 00:02:22**
+Sounds good. Let's follow up on the deployment timeline next week.

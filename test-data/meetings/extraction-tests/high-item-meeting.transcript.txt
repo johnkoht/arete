@@ -1,0 +1,62 @@
+**Maria Garcia | 00:00:10**
+Alright team, this is our quarterly planning session. We have a lot to cover today so let's dive right in.
+
+**David Park | 00:00:25**
+Starting with the platform team — we have several deliverables lined up for Q2.
+
+**Maria Garcia | 00:00:38**
+Let's go through them one by one and assign owners.
+
+**David Park | 00:01:00**
+First up, I need to migrate the auth service to the new OAuth provider by April 15th. Then Lisa needs to complete the database schema migration by April 30th.
+
+**Lisa Tran | 00:01:20**
+Right, and I also need to write the data migration scripts and run them in staging first.
+
+**David Park | 00:01:35**
+Tom should set up the new CI pipeline for the monorepo by mid-April.
+
+**Tom Wilson | 00:01:45**
+Got it. I'll also need to update the deployment scripts for the new infrastructure.
+
+**Maria Garcia | 00:02:00**
+On the product side, Rachel needs to finalize the Q2 roadmap document by next Friday.
+
+**Rachel Kim | 00:02:12**
+Will do. I also need to conduct user interviews for the new dashboard feature and compile the competitive analysis report.
+
+**Maria Garcia | 00:02:30**
+David, can you review the security audit findings and prepare remediation plan?
+
+**David Park | 00:02:42**
+Yes, and I should also update the API rate limiting configuration for the new tier.
+
+**Lisa Tran | 00:02:55**
+We also decided to standardize on PostgreSQL for all new services going forward. And we're adopting trunk-based development starting next sprint.
+
+**Tom Wilson | 00:03:10**
+The team agreed to implement feature flags for all new releases. We also decided to require code review from two approvers for security-sensitive changes.
+
+**Maria Garcia | 00:03:28**
+Good. We also decided to deprecate the legacy REST v1 API by end of Q2, move to biweekly releases instead of weekly, adopt OpenTelemetry for observability, and require integration tests for all new endpoints.
+
+**David Park | 00:03:52**
+From a learnings perspective — our last incident showed that database connection pooling is critical at scale. Also, feature flags reduced our rollback rate by 60%.
+
+**Lisa Tran | 00:04:10**
+The migration to TypeScript strict mode caught 23 bugs before production. And we found that pair programming on complex migrations reduces errors significantly.
+
+**Tom Wilson | 00:04:28**
+Automated canary deployments saved us twice last quarter. Also, the new monitoring dashboard reduced our mean time to detection by 40%.
+
+**Rachel Kim | 00:04:45**
+User research showed that onboarding completion correlates strongly with first-week retention. And NPS scores improved after we simplified the settings page.
+
+**Maria Garcia | 00:05:00**
+We also learned that cross-team code reviews improve knowledge sharing. Let's make sure we capture all of these.
+
+**David Park | 00:05:15**
+Oh, and someone should schedule a meeting to follow up on the infrastructure changes. We should also touch base about the budget next week.
+
+**Maria Garcia | 00:05:30**
+Alright, let's wrap up. Good session everyone.

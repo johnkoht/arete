@@ -1,0 +1,61 @@
+{
+  "summary": "Weekly product sync covering API redesign progress, user research findings, and partner integration decisions.",
+  "action_items": [
+    {
+      "owner": "John Smith",
+      "owner_slug": "john-smith",
+      "description": "Send updated API documentation to the frontend team by Friday",
+      "direction": "i_owe_them",
+      "counterparty_slug": "sarah-chen",
+      "due": "Friday",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Alice Wong",
+      "owner_slug": "alice-wong",
+      "description": "Share user research summary deck with team by end of day tomorrow",
+      "direction": "they_owe_me",
+      "due": "tomorrow",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Sarah Chen",
+      "owner_slug": "sarah-chen",
+      "description": "Schedule a meeting to review user research findings",
+      "direction": "i_owe_them",
+      "confidence": 0.6
+    },
+    {
+      "owner": "John Smith",
+      "owner_slug": "john-smith",
+      "description": "Touch base with design team about onboarding flow",
+      "direction": "i_owe_them",
+      "confidence": 0.5
+    },
+    {
+      "owner": "John Smith",
+      "owner_slug": "john-smith",
+      "description": "Send the updated API docs to frontend team",
+      "direction": "i_owe_them",
+      "counterparty_slug": "sarah-chen",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Sarah Chen",
+      "owner_slug": "sarah-chen",
+      "description": "Follow up on batch processing insight with architecture team",
+      "direction": "i_owe_them",
+      "confidence": 0.5
+    }
+  ],
+  "next_steps": [
+    "Review user research findings next week",
+    "Coordinate with design team on onboarding flow"
+  ],
+  "decisions": [
+    "Use REST over GraphQL for partner integration"
+  ],
+  "learnings": [
+    "Enterprise customers strongly prefer batch processing over real-time updates"
+  ]
+}

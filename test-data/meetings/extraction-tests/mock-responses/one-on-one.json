@@ -1,0 +1,69 @@
+{
+  "summary": "1:1 check-in covering auth integration status, load testing plans, and release date adjustment. Jane to review Alex's rate limiter PR.",
+  "action_items": [
+    {
+      "owner": "Alex Eng",
+      "owner_slug": "alex-eng",
+      "description": "Write load test scripts and run before production deployment",
+      "direction": "they_owe_me",
+      "due": "Wednesday",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Alex Eng",
+      "owner_slug": "alex-eng",
+      "description": "Share load test results with Jane once complete",
+      "direction": "they_owe_me",
+      "counterparty_slug": "jane-doe",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Jane Doe",
+      "owner_slug": "jane-doe",
+      "description": "Review Alex's PR for the rate limiter",
+      "direction": "i_owe_them",
+      "counterparty_slug": "alex-eng",
+      "due": "tomorrow morning",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Alex Eng",
+      "owner_slug": "alex-eng",
+      "description": "Um, I was also thinking we should look into the caching issue",
+      "direction": "they_owe_me",
+      "confidence": 0.3
+    },
+    {
+      "owner": "Alex Eng",
+      "owner_slug": "alex-eng",
+      "description": "Update architecture doc to reflect new connection pooling approach",
+      "direction": "they_owe_me",
+      "due": "end of week",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Jane Doe",
+      "owner_slug": "jane-doe",
+      "description": "Follow up on the deployment timeline next week",
+      "direction": "i_owe_them",
+      "confidence": 0.4
+    },
+    {
+      "owner": "Jane Doe",
+      "owner_slug": "jane-doe",
+      "description": "So the way the system works is it automatically retries on secondary",
+      "direction": "i_owe_them",
+      "confidence": 0.1
+    }
+  ],
+  "next_steps": [
+    "Run load tests before production deployment",
+    "Review rate limiter PR"
+  ],
+  "decisions": [
+    "Move release date to March 15th instead of March 10th"
+  ],
+  "learnings": [
+    "New connection pooling library handles failover better than custom solution"
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "summary": "Quarterly planning session covering Q2 deliverables, architectural decisions, and team learnings from the past quarter.",
+  "actionItems": [
+    {
+      "owner": "David Park",
+      "ownerSlug": "david-park",
+      "description": "Migrate auth service to new OAuth provider",
+      "direction": "they_owe_me",
+      "due": "April 15",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Lisa Tran",
+      "ownerSlug": "lisa-tran",
+      "description": "Complete database schema migration",
+      "direction": "they_owe_me",
+      "due": "April 30",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Lisa Tran",
+      "ownerSlug": "lisa-tran",
+      "description": "Write data migration scripts and run in staging",
+      "direction": "they_owe_me",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Tom Wilson",
+      "ownerSlug": "tom-wilson",
+      "description": "Set up new CI pipeline for monorepo",
+      "direction": "they_owe_me",
+      "due": "mid-April",
+      "confidence": 0.9
+    },
+    {
+      "owner": "Tom Wilson",
+      "ownerSlug": "tom-wilson",
+      "description": "Update deployment scripts for new infrastructure",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Rachel Kim",
+      "ownerSlug": "rachel-kim",
+      "description": "Finalize Q2 roadmap document",
+      "direction": "they_owe_me",
+      "due": "next Friday",
+      "confidence": 0.95
+    },
+    {
+      "owner": "Rachel Kim",
+      "ownerSlug": "rachel-kim",
+      "description": "Conduct user interviews for new dashboard feature",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    },
+    {
+      "owner": "Rachel Kim",
+      "ownerSlug": "rachel-kim",
+      "description": "Compile competitive analysis report",
+      "direction": "they_owe_me",
+      "confidence": 0.8
+    },
+    {
+      "owner": "David Park",
+      "ownerSlug": "david-park",
+      "description": "Review security audit findings and prepare remediation plan",
+      "direction": "they_owe_me",
+      "confidence": 0.9
+    },
+    {
+      "owner": "David Park",
+      "ownerSlug": "david-park",
+      "description": "Update API rate limiting configuration for new tier",
+      "direction": "they_owe_me",
+      "confidence": 0.85
+    }
+  ],
+  "decisions": [
+    "Standardize on PostgreSQL for all new services",
+    "Adopt trunk-based development starting next sprint",
+    "Implement feature flags for all new releases",
+    "Require code review from two approvers for security-sensitive changes",
+    "Deprecate legacy REST v1 API by end of Q2",
+    "Move to biweekly releases instead of weekly",
+    "Adopt OpenTelemetry for observability"
+  ],
+  "learnings": [
+    "Database connection pooling is critical at scale",
+    "Feature flags reduced rollback rate by 60%",
+    "Migration to TypeScript strict mode caught 23 bugs before production",
+    "Pair programming on complex migrations reduces errors significantly",
+    "Automated canary deployments saved us twice last quarter",
+    "New monitoring dashboard reduced mean time to detection by 40%",
+    "Onboarding completion correlates strongly with first-week retention"
+  ],
+  "_comments": {
+    "filteredTrivial": [
+      "Schedule a meeting to follow up on infrastructure changes",
+      "Touch base about the budget next week"
+    ],
+    "filteredOverLimit": {
+      "actionItems": "13 after dedup -> capped to 10",
+      "decisions": "8 after dedup -> capped to 7",
+      "learnings": "9 after dedup -> capped to 7"
+    },
+    "filteredDuplicates": {
+      "decisions": "Standardize on PostgreSQL for all new services forward (near-dupe)",
+      "learnings": "Database connection pooling is critical at scale today (near-dupe)"
+    }
+  }
+}
