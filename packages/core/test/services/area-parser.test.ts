@@ -471,6 +471,279 @@ Test.
   });
 });
 
+describe('AreaParserService - parseMemoryFile', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let parser: AreaParserService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'area-memory-'));
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications.md',
+      `---
+area: Glance Communications
+status: active
+recurring_meetings: []
+---
+
+# Glance Communications
+
+## Current State
+Active.
+`
+    );
+    storage = new FileStorageAdapter();
+    parser = new AreaParserService(storage, tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('parses a valid memory.md with all sections', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Glance Communications Memory
+
+## Keywords
+- CoverWhale
+- insurance
+- API integration
+
+## Active People
+- john-doe
+- jane-smith
+
+## Open Work
+- Integration testing
+- Documentation updates
+
+## Recently Completed
+- API endpoint implementation
+- Auth flow
+
+## Recent Decisions
+- Use REST over GraphQL
+- Monthly partner reviews
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['CoverWhale', 'insurance', 'API integration']);
+    assert.deepEqual(memory.activePeople, ['john-doe', 'jane-smith']);
+    assert.deepEqual(memory.openWork, ['Integration testing', 'Documentation updates']);
+    assert.deepEqual(memory.recentlyCompleted, ['API endpoint implementation', 'Auth flow']);
+    assert.deepEqual(memory.recentDecisions, ['Use REST over GraphQL', 'Monthly partner reviews']);
+  });
+
+  it('returns null when memory.md does not exist', async () => {
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.equal(memory, null);
+  });
+
+  it('returns null for non-existent area slug', async () => {
+    const memory = await parser.parseMemoryFile('non-existent-area');
+
+    assert.equal(memory, null);
+  });
+
+  it('returns empty arrays for missing sections', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+- CoverWhale
+
+## Active People
+- john-doe
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['CoverWhale']);
+    assert.deepEqual(memory.activePeople, ['john-doe']);
+    // Missing sections → empty arrays
+    assert.deepEqual(memory.openWork, []);
+    assert.deepEqual(memory.recentlyCompleted, []);
+    assert.deepEqual(memory.recentDecisions, []);
+  });
+
+  it('handles case-insensitive section matching', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## KEYWORDS
+- term1
+- term2
+
+## active people
+- alice
+
+## Open Work
+- task1
+
+## RECENTLY COMPLETED
+- done1
+
+## recent decisions
+- decision1
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+    assert.deepEqual(memory.activePeople, ['alice']);
+    assert.deepEqual(memory.openWork, ['task1']);
+    assert.deepEqual(memory.recentlyCompleted, ['done1']);
+    assert.deepEqual(memory.recentDecisions, ['decision1']);
+  });
+
+  it('handles malformed content gracefully (no bullet items)', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+Just some random text without bullets.
+And another line.
+
+## Active People
+Also no bullets here.
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, []);
+    assert.deepEqual(memory.activePeople, []);
+  });
+
+  it('handles asterisk bullet markers', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+* term1
+* term2
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+
+  it('handles empty memory.md file (no sections at all)', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+Nothing here yet.
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, []);
+    assert.deepEqual(memory.activePeople, []);
+    assert.deepEqual(memory.openWork, []);
+    assert.deepEqual(memory.recentlyCompleted, []);
+    assert.deepEqual(memory.recentDecisions, []);
+  });
+
+  it('skips empty bullet items', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+- term1
+- 
+-   
+- term2
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+
+  it('includes memory in getAreaContext when memory.md exists', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+- CoverWhale
+- insurance
+
+## Active People
+- john-doe
+`
+    );
+
+    const context = await parser.getAreaContext('glance-communications');
+
+    assert.ok(context);
+    assert.ok(context.memory);
+    assert.deepEqual(context.memory.keywords, ['CoverWhale', 'insurance']);
+    assert.deepEqual(context.memory.activePeople, ['john-doe']);
+    assert.deepEqual(context.memory.openWork, []);
+  });
+
+  it('getAreaContext has no memory when memory.md does not exist', async () => {
+    const context = await parser.getAreaContext('glance-communications');
+
+    assert.ok(context);
+    assert.equal(context.memory, undefined);
+  });
+
+  it('handles mixed content: bullets + non-bullet lines', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+Some intro text
+- term1
+More text
+- term2
+Final text
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+});
+
 describe('AreaParserService - AC validation', () => {
   let tmpDir: string;
   let storage: FileStorageAdapter;

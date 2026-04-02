@@ -10,7 +10,7 @@
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
-import type { AreaMatch, AreaContext, RecurringMeeting, AreaFrontmatter } from '../models/entities.js';
+import type { AreaMatch, AreaContext, AreaMemory, RecurringMeeting, AreaFrontmatter } from '../models/entities.js';
 
 /**
  * Result of frontmatter parsing.
@@ -151,6 +151,9 @@ export class AreaParserService {
     const openCommitments = extractSection(body, 'Open Commitments');
     const notes = extractSection(body, 'Notes');
 
+    // Parse memory.md for this area (areas/{slug}/memory.md)
+    const memory = await this.parseMemoryFile(slug);
+
     return {
       slug,
       name: typeof frontmatter.area === 'string' ? frontmatter.area : slug,
@@ -166,7 +169,57 @@ export class AreaParserService {
         openCommitments,
         notes,
       },
+      memory: memory ?? undefined,
     };
+  }
+
+  /**
+   * Parse a memory.md file for an area.
+   * Returns null if file doesn't exist.
+   * Lenient: missing sections return empty arrays.
+   */
+  async parseMemoryFile(areaSlug: string): Promise<AreaMemory | null> {
+    const memoryPath = join(this.areasDir, areaSlug, 'memory.md');
+    const content = await this.storage.read(memoryPath);
+    if (!content) return null;
+
+    return {
+      keywords: this.parseListSection(content, 'keywords') ?? [],
+      activePeople: this.parseListSection(content, 'active people') ?? [],
+      openWork: this.parseListSection(content, 'open work') ?? [],
+      recentlyCompleted: this.parseListSection(content, 'recently completed') ?? [],
+      recentDecisions: this.parseListSection(content, 'recent decisions') ?? [],
+    };
+  }
+
+  /**
+   * Parse a markdown section as a bullet list.
+   * Case-insensitive matching. Returns null if section not found.
+   * Logs warning for malformed sections (no error thrown).
+   */
+  private parseListSection(content: string, sectionName: string): string[] | null {
+    const regex = new RegExp(`^##\\s+${escapeRegExp(sectionName)}\\s*$`, 'im');
+    const match = content.match(regex);
+    if (!match) return null;
+
+    const startIndex = content.indexOf(match[0]) + match[0].length;
+    const nextSection = content.slice(startIndex).search(/^##\s/m);
+    const sectionContent = nextSection === -1
+      ? content.slice(startIndex)
+      : content.slice(startIndex, startIndex + nextSection);
+
+    const items: string[] = [];
+    const lines = sectionContent.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        const item = trimmed.slice(2).trim();
+        if (item) {
+          items.push(item);
+        }
+      }
+    }
+    return items;
   }
 
   /**
