@@ -332,3 +332,89 @@ export type AreaContext = {
   /** Parsed memory context from areas/{slug}/memory.md */
   memory?: AreaMemory;
 };
+
+// ---------------------------------------------------------------------------
+// Reconciliation domain
+// ---------------------------------------------------------------------------
+
+/**
+ * A structured action item for reconciliation.
+ *
+ * Mirrors the ActionItem shape from meeting-extraction but lives in models
+ * to keep the models layer free of service imports.
+ */
+export type ReconciliationActionItem = {
+  owner: string;
+  ownerSlug: string;
+  description: string;
+  direction: 'i_owe_them' | 'they_owe_me';
+  counterpartySlug?: string;
+  due?: string;
+  confidence?: number;
+};
+
+/**
+ * Item types that can be reconciled from meeting extractions.
+ */
+export type ExtractedItemType = 'action' | 'decision' | 'learning';
+
+/**
+ * A single item being reconciled, with its status and annotations.
+ */
+export type ReconciledItem = {
+  /** The original extracted item (action item struct, or decision/learning text) */
+  original: ReconciliationActionItem | string;
+  /** Type of item */
+  type: ExtractedItemType;
+  /** Source meeting path */
+  meetingPath: string;
+  /** Reconciliation status */
+  status: 'keep' | 'duplicate' | 'completed' | 'irrelevant';
+  /** Relevance score (0-1) */
+  relevanceScore: number;
+  /** Relevance tier derived from score */
+  relevanceTier: 'high' | 'normal' | 'low';
+  /** Annotations explaining the reconciliation */
+  annotations: {
+    areaSlug?: string;
+    projectSlug?: string;
+    personSlug?: string;
+    duplicateOf?: string;
+    completedOn?: string;
+    why: string;
+  };
+};
+
+/**
+ * Result of reconciling a batch of meeting extractions.
+ */
+export type ReconciliationResult = {
+  /** All reconciled items */
+  items: ReconciledItem[];
+  /** Summary statistics */
+  stats: {
+    duplicatesRemoved: number;
+    completedMatched: number;
+    lowRelevanceCount: number;
+  };
+};
+
+/**
+ * Context used for reconciliation scoring and matching.
+ */
+export type ReconciliationContext = {
+  /** Area memories keyed by area slug */
+  areaMemories: Map<string, AreaMemory>;
+  /** Recently committed memory items for duplicate detection */
+  recentCommittedItems: Array<{
+    text: string;
+    date: string;
+    source: string;
+  }>;
+  /** Completed tasks for completion matching */
+  completedTasks: Array<{
+    text: string;
+    completedOn: string;
+    owner?: string;
+  }>;
+};

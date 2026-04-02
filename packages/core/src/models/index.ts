@@ -109,6 +109,12 @@ export type {
   AreaSections,
   AreaMemory,
   AreaContext,
+  // Reconciliation domain
+  ReconciliationActionItem,
+  ExtractedItemType,
+  ReconciledItem,
+  ReconciliationResult,
+  ReconciliationContext,
 } from './entities.js';
 
 // Intelligence domain
