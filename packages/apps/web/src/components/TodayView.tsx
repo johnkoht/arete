@@ -150,7 +150,7 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
           next.delete(taskId);
           return next;
         });
-      }, 2000);
+      }, 3500);
     },
     [completeMutate]
   );
@@ -209,7 +209,7 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
                 data-task-id={task.id}
                 className={`
                   flex items-center gap-3 p-3 border rounded-md 
-                  transition-all duration-[1500ms] ease-out
+                  transition-all duration-[3000ms] ease-out
                   ${isFading ? 'opacity-50' : isTaskPending ? 'opacity-75' : 'opacity-100'}
                 `}
               >
@@ -233,17 +233,10 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
                   />
                 )}
 
-                {/* Avatar */}
-                {task.person && (
-                  <div className="flex-shrink-0">
-                    <Avatar name={task.person.name} size="sm" />
-                  </div>
-                )}
-
                 {/* Task text */}
                 <span 
                   data-testid="task-text" 
-                  className={`flex-1 text-sm truncate transition-all duration-[1500ms] ${
+                  className={`flex-1 text-sm truncate transition-all duration-[3000ms] ${
                     isFading ? 'line-through text-muted-foreground' : ''
                   }`}
                 >
@@ -271,6 +264,13 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
                     <Badge variant="destructive" className="text-xs">
                       {daysOverdue} day{daysOverdue > 1 ? 's' : ''} overdue
                     </Badge>
+                  )}
+
+                  {/* Avatar (if person exists) */}
+                  {task.person && (
+                    <div className="flex-shrink-0">
+                      <Avatar name={task.person.name} size="sm" />
+                    </div>
                   )}
 
                   {/* Schedule popup for rescheduling */}
@@ -413,13 +413,6 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
 
   return (
     <div className="flex items-center gap-3 p-3 border rounded-md">
-      {/* Avatar */}
-      {suggestion.person && (
-        <div className="flex-shrink-0">
-          <Avatar name={suggestion.person.name} size="sm" />
-        </div>
-      )}
-
       {/* Task text */}
       <span data-testid="suggestion-text" className="flex-1 text-sm truncate">
         {suggestion.text}
@@ -429,6 +422,13 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
       <Badge variant="secondary" className="text-xs">
         {suggestion.score}
       </Badge>
+
+      {/* Avatar (if person exists) */}
+      {suggestion.person && (
+        <div className="flex-shrink-0">
+          <Avatar name={suggestion.person.name} size="sm" />
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -519,13 +519,6 @@ function CompletedSection({ tasks }: CompletedSectionProps) {
                   <Check className="h-3 w-3 text-primary-foreground" />
                 </div>
 
-                {/* Avatar */}
-                {task.person && (
-                  <div className="flex-shrink-0">
-                    <Avatar name={task.person.name} size="sm" />
-                  </div>
-                )}
-
                 {/* Task text with strikethrough */}
                 <span className="flex-1 text-sm truncate line-through text-muted-foreground">
                   {task.text}
@@ -543,6 +536,13 @@ function CompletedSection({ tasks }: CompletedSectionProps) {
                   <Badge variant="outline" className="text-xs">
                     {task.project}
                   </Badge>
+                )}
+
+                {/* Avatar (if person exists) */}
+                {task.person && (
+                  <div className="flex-shrink-0">
+                    <Avatar name={task.person.name} size="sm" />
+                  </div>
                 )}
               </div>
             ))}

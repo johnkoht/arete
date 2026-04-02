@@ -49,7 +49,7 @@ export function TaskList({ tasks }: TaskListProps) {
             next.delete(taskId);
             return next;
           });
-        }, 2000);
+        }, 3500);
       } catch {
         toast.error('Failed to complete task');
       }
@@ -85,7 +85,7 @@ export function TaskList({ tasks }: TaskListProps) {
             onKeyDown={(e) => handleKeyDown(e, task.id)}
             className={`
               flex items-center gap-3 p-3 border rounded-md
-              transition-all duration-[1500ms] ease-out
+              transition-all duration-[3000ms] ease-out
               focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2
               ${isFading ? 'opacity-50' : 'opacity-100'}
             `}
@@ -110,16 +110,9 @@ export function TaskList({ tasks }: TaskListProps) {
               )}
             </div>
 
-            {/* Avatar (if person exists) */}
-            {task.person && (
-              <div className="flex-shrink-0">
-                <Avatar name={task.person.name} size="sm" />
-              </div>
-            )}
-
             {/* Task text */}
             <span 
-              className={`flex-1 text-sm truncate transition-all duration-[1500ms] ${
+              className={`flex-1 text-sm truncate transition-all duration-[3000ms] ${
                 isFading ? 'line-through text-muted-foreground' : ''
               }`}
             >
@@ -147,6 +140,13 @@ export function TaskList({ tasks }: TaskListProps) {
                 <Badge variant="outline" className="text-xs">
                   commitment
                 </Badge>
+              )}
+
+              {/* Avatar (if person exists) */}
+              {task.person && (
+                <div className="flex-shrink-0">
+                  <Avatar name={task.person.name} size="sm" />
+                </div>
               )}
 
               {/* Schedule popup (replaces static badge) */}
