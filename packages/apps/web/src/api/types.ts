@@ -260,7 +260,7 @@ export type SuggestedTask = Task & {
 };
 
 /** Filter param for fetchTasks */
-export type TasksFilter = 'today' | 'upcoming' | 'anytime' | 'someday';
+export type TasksFilter = 'today' | 'upcoming' | 'anytime' | 'someday' | 'completed';
 
 /** Options for fetchTasks */
 export type FetchTasksOptions = {

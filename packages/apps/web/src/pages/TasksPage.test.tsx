@@ -93,7 +93,7 @@ describe("TasksPage", () => {
   });
 
   describe("tab rendering", () => {
-    it("renders all four tabs: Today, Upcoming, Anytime, Someday", async () => {
+    it("renders all five tabs: Today, Upcoming, Anytime, Someday, Completed", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
 
       renderPage();
@@ -103,6 +103,7 @@ describe("TasksPage", () => {
         expect(screen.getByRole("tab", { name: "Upcoming" })).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: "Anytime" })).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: "Someday" })).toBeInTheDocument();
+        expect(screen.getByRole("tab", { name: "Completed" })).toBeInTheDocument();
       });
     });
 
@@ -147,6 +148,17 @@ describe("TasksPage", () => {
       await waitFor(() => {
         const somedayTab = screen.getByRole("tab", { name: "Someday" });
         expect(somedayTab).toHaveAttribute("aria-selected", "true");
+      });
+    });
+
+    it("selects correct tab from URL param ?tab=completed", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
+
+      renderPage("/tasks?tab=completed");
+
+      await waitFor(() => {
+        const completedTab = screen.getByRole("tab", { name: "Completed" });
+        expect(completedTab).toHaveAttribute("aria-selected", "true");
       });
     });
   });
@@ -215,13 +227,39 @@ describe("TasksPage", () => {
         expect(somedayTab).toHaveAttribute("aria-selected", "true");
       });
     });
+
+    it("clicking Completed tab updates URL and fetches with filter=completed", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE));
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderPage("/tasks");
+
+      await waitFor(() => {
+        expect(screen.getByRole("tab", { name: "Completed" })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("tab", { name: "Completed" }));
+
+      await waitFor(() => {
+        const completedTab = screen.getByRole("tab", { name: "Completed" });
+        expect(completedTab).toHaveAttribute("aria-selected", "true");
+      });
+
+      // Verify fetch was called with completed filter
+      await waitFor(() => {
+        const calls = fetchMock.mock.calls;
+        const lastCall = calls[calls.length - 1]?.[0] as string;
+        expect(lastCall).toMatch(/filter=completed/);
+      });
+    });
   });
 
   describe("Waiting On toggle", () => {
-    it("renders Waiting On toggle", async () => {
+    it("renders Waiting On toggle (on tabs other than Today/Completed)", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
 
-      renderPage();
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         expect(screen.getByRole("switch", { name: /waiting on/i })).toBeInTheDocument();
@@ -231,7 +269,7 @@ describe("TasksPage", () => {
     it("toggle is off by default", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
 
-      renderPage("/tasks");
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         const toggle = screen.getByRole("switch", { name: /waiting on/i });
@@ -242,7 +280,7 @@ describe("TasksPage", () => {
     it("toggle is on when ?waitingOn=true in URL", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
 
-      renderPage("/tasks?waitingOn=true");
+      renderPage("/tasks?tab=upcoming&waitingOn=true");
 
       await waitFor(() => {
         const toggle = screen.getByRole("switch", { name: /waiting on/i });
@@ -255,7 +293,7 @@ describe("TasksPage", () => {
       const fetchMock = vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE));
       vi.stubGlobal("fetch", fetchMock);
 
-      renderPage("/tasks");
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         expect(screen.getByRole("switch", { name: /waiting on/i })).toBeInTheDocument();
@@ -269,16 +307,37 @@ describe("TasksPage", () => {
         expect(lastCall).toMatch(/waitingOn=true/);
       });
     });
+
+    it("toggle is hidden on Today tab", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
+
+      renderPage("/tasks");
+
+      await waitFor(() => {
+        expect(screen.queryByRole("switch", { name: /waiting on/i })).not.toBeInTheDocument();
+      });
+    });
+
+    it("toggle is hidden on Completed tab", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(MOCK_TASKS_RESPONSE)));
+
+      renderPage("/tasks?tab=completed");
+
+      await waitFor(() => {
+        expect(screen.queryByRole("switch", { name: /waiting on/i })).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe("empty states", () => {
-    it("shows 'No tasks due today' for Today tab", async () => {
+    // Note: Today tab uses TodayView which has its own empty state: "No tasks for today"
+    it("shows 'No tasks for today' for Today tab (via TodayView)", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(EMPTY_TASKS_RESPONSE)));
 
       renderPage("/tasks?tab=today");
 
       await waitFor(() => {
-        expect(screen.getByText("No tasks due today")).toBeInTheDocument();
+        expect(screen.getByText("No tasks for today")).toBeInTheDocument();
       });
     });
 
@@ -312,15 +371,26 @@ describe("TasksPage", () => {
       });
     });
 
+    it("shows 'No completed tasks' for Completed tab", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(EMPTY_TASKS_RESPONSE)));
+
+      renderPage("/tasks?tab=completed");
+
+      await waitFor(() => {
+        expect(screen.getByText("No completed tasks")).toBeInTheDocument();
+      });
+    });
+
     it("empty states have role='status' for accessibility", async () => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(EMPTY_TASKS_RESPONSE)));
 
-      renderPage("/tasks?tab=today");
+      // Use upcoming tab to test TasksPage's empty state (Today uses TodayView)
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         const emptyState = screen.getByRole("status");
         expect(emptyState).toBeInTheDocument();
-        expect(emptyState).toHaveTextContent("No tasks due today");
+        expect(emptyState).toHaveTextContent("No upcoming tasks scheduled");
       });
     });
   });
@@ -338,13 +408,15 @@ describe("TasksPage", () => {
   });
 
   describe("error state", () => {
+    // Note: Today tab uses TodayView with its own error handling
+    // Use upcoming tab to test TasksPage's error state
     it("shows error message on API failure", async () => {
       vi.stubGlobal(
         "fetch",
         vi.fn().mockResolvedValue(mockResponse({ error: "Server error" }, 500))
       );
 
-      renderPage();
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         expect(screen.getByText(/failed to load tasks/i)).toBeInTheDocument();
@@ -357,7 +429,7 @@ describe("TasksPage", () => {
         vi.fn().mockResolvedValue(mockResponse({ error: "Server error" }, 500))
       );
 
-      renderPage();
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
@@ -369,7 +441,7 @@ describe("TasksPage", () => {
       const fetchMock = vi.fn().mockResolvedValue(mockResponse({ error: "Server error" }, 500));
       vi.stubGlobal("fetch", fetchMock);
 
-      renderPage();
+      renderPage("/tasks?tab=upcoming");
 
       await waitFor(() => {
         expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
@@ -397,6 +469,7 @@ describe("TasksPage", () => {
         expect(screen.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
         expect(screen.getByRole("tab", { name: "Anytime" })).toHaveAttribute("aria-selected", "false");
         expect(screen.getByRole("tab", { name: "Someday" })).toHaveAttribute("aria-selected", "false");
+        expect(screen.getByRole("tab", { name: "Completed" })).toHaveAttribute("aria-selected", "false");
       });
     });
 

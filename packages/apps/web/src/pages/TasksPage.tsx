@@ -24,7 +24,7 @@ import type { TasksFilter } from "@/api/types.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const TAB_VALUES = ["today", "upcoming", "anytime", "someday"] as const;
+const TAB_VALUES = ["today", "upcoming", "anytime", "someday", "completed"] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 const TAB_LABELS: Record<TabValue, string> = {
@@ -32,6 +32,7 @@ const TAB_LABELS: Record<TabValue, string> = {
   upcoming: "Upcoming",
   anytime: "Anytime",
   someday: "Someday",
+  completed: "Completed",
 };
 
 const EMPTY_MESSAGES: Record<TabValue, string> = {
@@ -39,6 +40,7 @@ const EMPTY_MESSAGES: Record<TabValue, string> = {
   upcoming: "No upcoming tasks scheduled",
   anytime: "No tasks in Anytime",
   someday: "No tasks in Someday",
+  completed: "No completed tasks",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ export default function TasksPage() {
 
   // Fetch tasks with current filter (for non-Today tabs)
   // Today tab uses TodayView which has its own data fetching
+  // Use 'upcoming' as fallback when on Today tab (unused, TodayView handles its own fetching)
   const filter: TasksFilter = activeTab === "today" ? "upcoming" : activeTab;
   const { data, isLoading, error, refetch } = useTasks(filter, { waitingOn });
 
@@ -106,8 +109,8 @@ export default function TasksPage() {
               ))}
             </TabsList>
 
-            {/* Waiting On toggle (hidden on Today tab since it has its own view) */}
-            {activeTab !== "today" && (
+            {/* Waiting On toggle (hidden on Today and Completed tabs) */}
+            {activeTab !== "today" && activeTab !== "completed" && (
               <div className="flex items-center gap-2">
                 <Switch
                   id="waiting-on-toggle"
