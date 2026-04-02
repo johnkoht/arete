@@ -316,6 +316,9 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
 
     // Validate and save area to frontmatter before processing (R4: withSlugLock)
     if (area) {
+      const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+
       const areaParser = new AreaParserService(new FileStorageAdapter(), workspaceRoot);
       const areas = await areaParser.listAreas();
       const valid = areas.some(a => a.slug === area);

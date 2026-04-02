@@ -206,6 +206,9 @@ function buildTestApp(
 
     // Validate area if provided
     if (area) {
+      const meeting = await ws.getMeeting(slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+
       const areas = await ws.listAreas();
       const valid = areas.some(a => a.slug === area);
       if (!valid) {
@@ -215,9 +218,6 @@ function buildTestApp(
         );
       }
 
-      // Save area to meeting frontmatter (with lock, before processing)
-      const meeting = await ws.getMeeting(slug);
-      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
       await ws.updateMeeting(slug, { area });
     }
 
@@ -604,6 +604,21 @@ describe('POST /api/meetings/:slug/process (area integration)', () => {
     const body = json as { error: string; validAreas: string[] };
     assert.equal(body.error, 'Invalid area');
     assert.deepEqual(body.validAreas, ['alpha-project', 'beta-project']);
+  });
+
+  it('returns 404 when area provided for non-existent meeting', async () => {
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(null),
+      listAreas: () => Promise.resolve([
+        { slug: 'alpha-project', name: 'Alpha Project' },
+      ]),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/nonexistent-meeting/process', {
+      area: 'alpha-project',
+    });
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Meeting not found');
   });
 
   it('works without area (backward compatible)', async () => {
