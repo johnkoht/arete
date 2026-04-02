@@ -1192,6 +1192,111 @@ describe('TaskService.updateTask', () => {
 });
 
 // ---------------------------------------------------------------------------
+// parseMetadata: @completedAt tests
+// ---------------------------------------------------------------------------
+
+describe('parseMetadata @completedAt', () => {
+  it('extracts @completedAt tag', () => {
+    const result = parseMetadata('Done task @completedAt(2026-04-02)');
+    assert.equal(result.cleanText, 'Done task');
+    assert.equal(result.metadata.completedAt, '2026-04-02');
+  });
+
+  it('extracts @completedAt with other tags', () => {
+    const result = parseMetadata('Done task @area(eng) @completedAt(2026-04-02) @due(2026-04-01)');
+    assert.equal(result.cleanText, 'Done task');
+    assert.equal(result.metadata.completedAt, '2026-04-02');
+    assert.equal(result.metadata.area, 'eng');
+    assert.equal(result.metadata.due, '2026-04-01');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatTask: @completedAt tests
+// ---------------------------------------------------------------------------
+
+describe('formatTask @completedAt', () => {
+  it('writes @completedAt tag', () => {
+    const result = formatTask('Done task', { completedAt: '2026-04-02' }, true);
+    assert.equal(result, '- [x] Done task @completedAt(2026-04-02)');
+  });
+
+  it('writes @completedAt with other metadata', () => {
+    const result = formatTask('Done task', {
+      area: 'eng',
+      due: '2026-04-01',
+      completedAt: '2026-04-02',
+    }, true);
+    assert.ok(result.includes('@completedAt(2026-04-02)'));
+    assert.ok(result.includes('@area(eng)'));
+    assert.ok(result.includes('@due(2026-04-01)'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TaskService.completeTask: completedAt tests
+// ---------------------------------------------------------------------------
+
+describe('TaskService.completeTask completedAt', () => {
+  it('sets completedAt to today when completing a task', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task to complete
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const { task } = await service.completeTask(tasks[0].id);
+
+    assert.equal(task.completed, true);
+    const today = new Date().toISOString().split('T')[0];
+    assert.equal(task.metadata.completedAt, today);
+
+    // Verify the file was written with the @completedAt tag
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes(`@completedAt(${today})`));
+  });
+
+  it('sets completedAt and preserves existing metadata', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task @area(eng) @due(2026-04-01)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const { task } = await service.completeTask(tasks[0].id);
+
+    assert.equal(task.metadata.area, 'eng');
+    assert.equal(task.metadata.due, '2026-04-01');
+    assert.ok(task.metadata.completedAt);
+
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(eng)'));
+    assert.ok(content?.includes('@due(2026-04-01)'));
+    assert.ok(content?.includes('@completedAt('));
+  });
+
+  it('reads back completedAt from already-completed tasks', async () => {
+    const weekContent = `# Week
+## Inbox
+- [x] Old completed task @completedAt(2026-03-15)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks({ completed: true });
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].metadata.completedAt, '2026-03-15');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Edge cases
 // ---------------------------------------------------------------------------
 

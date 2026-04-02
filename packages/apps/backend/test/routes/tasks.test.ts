@@ -19,6 +19,7 @@ type TaskWire = {
   text: string;
   destination: TaskDestination;
   due: string | null;
+  completedAt: string | null;
   area: string | null;
   project: string | null;
   person: { slug: string; name: string } | null;
@@ -144,6 +145,7 @@ function buildTestApp(options: {
       project: task.metadata.project ?? null,
       person,
       from,
+      completedAt: (task.metadata as Record<string, unknown>).completedAt as string ?? null,
       completed: task.completed,
       source: task.source,
     };
@@ -157,7 +159,7 @@ function buildTestApp(options: {
     const offset = parseInt(c.req.query('offset') ?? '0', 10);
 
     // Validate filter param
-    const validFilters = ['today', 'upcoming', 'anytime', 'someday'];
+    const validFilters = ['today', 'upcoming', 'anytime', 'someday', 'completed', 'completed-today'];
     if (filterParam && !validFilters.includes(filterParam)) {
       return c.json({ error: `Invalid filter: ${filterParam}. Valid filters: ${validFilters.join(', ')}` }, 400);
     }
@@ -227,6 +229,21 @@ function buildTestApp(options: {
       filteredTasks = allTasks.filter(t => t.source.section === '## Anytime' && !t.completed);
     } else if (filterParam === 'someday') {
       filteredTasks = allTasks.filter(t => t.source.section === '## Someday' && !t.completed);
+    } else if (filterParam === 'completed') {
+      filteredTasks = allTasks.filter(t => t.completed);
+      // Sort by completedAt descending (most recent first), tasks without completedAt last
+      filteredTasks.sort((a, b) => {
+        const aDate = (a.metadata as Record<string, unknown>).completedAt as string | undefined;
+        const bDate = (b.metadata as Record<string, unknown>).completedAt as string | undefined;
+        if (aDate && bDate) return bDate.localeCompare(aDate);
+        if (aDate && !bDate) return -1;
+        if (!aDate && bDate) return 1;
+        return 0;
+      });
+    } else if (filterParam === 'completed-today') {
+      filteredTasks = allTasks.filter(t =>
+        t.completed && (t.metadata as Record<string, unknown>).completedAt === today
+      );
     } else {
       // No filter: all tasks
       filteredTasks = allTasks;
@@ -557,6 +574,94 @@ describe('GET /api/tasks', () => {
   });
 });
 
+describe('GET /api/tasks filter=completed', () => {
+  it('returns only completed tasks', async () => {
+    const completedTask = makeTask({ id: 'done1111', text: 'Done task', completed: true, metadata: { completedAt: '2026-04-02' } });
+    const incompleteTask = makeTask({ id: 'open1111', text: 'Open task', completed: false });
+
+    const app = buildTestApp({
+      taskService: { listTasks: () => Promise.resolve([completedTask, incompleteTask]) },
+    });
+
+    const res = await app.request('/api/tasks?filter=completed');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: TaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.equal(data.tasks[0].id, 'done1111');
+    assert.equal(data.tasks[0].completed, true);
+  });
+
+  it('returns legacy completed tasks without completedAt', async () => {
+    const legacyCompleted = makeTask({ id: 'legacy11', text: 'Old done', completed: true });
+
+    const app = buildTestApp({
+      taskService: { listTasks: () => Promise.resolve([legacyCompleted]) },
+    });
+
+    const res = await app.request('/api/tasks?filter=completed');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: TaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.equal(data.tasks[0].id, 'legacy11');
+  });
+
+  it('sorts by completedAt descending (most recent first)', async () => {
+    const olderTask = makeTask({ id: 'older111', text: 'Older', completed: true, metadata: { completedAt: '2026-03-01' } });
+    const newerTask = makeTask({ id: 'newer111', text: 'Newer', completed: true, metadata: { completedAt: '2026-04-01' } });
+    const legacyTask = makeTask({ id: 'legacy11', text: 'Legacy', completed: true });
+
+    const app = buildTestApp({
+      taskService: { listTasks: () => Promise.resolve([olderTask, newerTask, legacyTask]) },
+    });
+
+    const res = await app.request('/api/tasks?filter=completed');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: TaskWire[] };
+    assert.equal(data.tasks.length, 3);
+    // Newer first, then older, then legacy (no date) last
+    assert.equal(data.tasks[0].id, 'newer111');
+    assert.equal(data.tasks[1].id, 'older111');
+    assert.equal(data.tasks[2].id, 'legacy11');
+  });
+});
+
+describe('GET /api/tasks filter=completed-today', () => {
+  it('returns only tasks completed today', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const completedToday = makeTask({ id: 'today111', text: 'Today', completed: true, metadata: { completedAt: today } });
+    const completedYesterday = makeTask({ id: 'yester11', text: 'Yesterday', completed: true, metadata: { completedAt: '2020-01-01' } });
+    const incompleteTask = makeTask({ id: 'open1111', text: 'Open', completed: false });
+
+    const app = buildTestApp({
+      taskService: { listTasks: () => Promise.resolve([completedToday, completedYesterday, incompleteTask]) },
+    });
+
+    const res = await app.request('/api/tasks?filter=completed-today');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: TaskWire[] };
+    assert.equal(data.tasks.length, 1);
+    assert.equal(data.tasks[0].id, 'today111');
+  });
+
+  it('excludes legacy completed tasks without completedAt', async () => {
+    const legacyCompleted = makeTask({ id: 'legacy11', text: 'Legacy', completed: true });
+
+    const app = buildTestApp({
+      taskService: { listTasks: () => Promise.resolve([legacyCompleted]) },
+    });
+
+    const res = await app.request('/api/tasks?filter=completed-today');
+    assert.equal(res.status, 200);
+
+    const data = await res.json() as { tasks: TaskWire[] };
+    assert.equal(data.tasks.length, 0);
+  });
+});
+
 describe('PATCH /api/tasks/:id', () => {
   it('updates completion status', async () => {
     const task = makeTask({ id: 'task1111', text: 'Test task' });
@@ -883,6 +988,7 @@ function buildSuggestionsTestApp(options: {
       project: task.metadata.project ?? null,
       person,
       from,
+      completedAt: (task.metadata as Record<string, unknown>).completedAt as string ?? null,
       completed: task.completed,
       source: task.source,
     };
