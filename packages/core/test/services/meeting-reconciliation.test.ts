@@ -7,12 +7,15 @@ import {
   generateWhy,
   findDuplicates,
   matchCompletedTasks,
+  matchRecentMemory,
   matchPriorWorkspace,
   WORKSPACE_MATCH_THRESHOLD,
   COMPLETED_MATCH_THRESHOLD,
+  MEMORY_MATCH_THRESHOLD,
   type MeetingExtractionBatch,
   type DuplicateGroup,
   type CompletedMatch,
+  type MemoryMatch,
   type WorkspaceMatch,
 } from '../../src/services/meeting-reconciliation.js';
 import type {
@@ -865,6 +868,210 @@ describe('reconcileMeetingBatch completed task integration', () => {
     assert.equal(result.items[0].status, 'keep');
     assert.equal(result.items[0].annotations.completedOn, undefined);
     assert.equal(result.stats.completedMatched, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchRecentMemory
+// ---------------------------------------------------------------------------
+
+describe('matchRecentMemory', () => {
+  it('matches item against recent memory with high similarity', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Migrate to PostgreSQL database for production'],
+      }),
+    ]);
+
+    const recentMemory = [
+      { text: 'Migrate to PostgreSQL database for production', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+    ];
+
+    const matches = matchRecentMemory(items, recentMemory);
+
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[0].source, '.arete/memory/items/decisions.md');
+    assert.equal(matches[0].text, 'Migrate to PostgreSQL database for production');
+  });
+
+  it('does not match when similarity is below threshold', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Review PR'],
+      }),
+    ]);
+
+    // Very different text → low Jaccard
+    const recentMemory = [
+      { text: 'Deploy the production service to AWS infrastructure', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+    ];
+
+    const matches = matchRecentMemory(items, recentMemory);
+    assert.equal(matches.length, 0);
+  });
+
+  it('returns only one match per item (first match wins)', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Send API docs to the team'],
+      }),
+    ]);
+
+    const recentMemory = [
+      { text: 'Send API docs to the team', date: '2026-03-25', source: '.arete/memory/items/decisions.md' },
+      { text: 'Send API docs to the team members', date: '2026-03-28', source: '.arete/memory/items/learnings.md' },
+    ];
+
+    const matches = matchRecentMemory(items, recentMemory);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].source, '.arete/memory/items/decisions.md');
+  });
+
+  it('returns empty array for empty inputs', () => {
+    assert.deepStrictEqual(matchRecentMemory([], []), []);
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Some decision'] }),
+    ]);
+    assert.deepStrictEqual(matchRecentMemory(items, []), []);
+  });
+
+  it('matches multiple items independently', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Migrate to PostgreSQL database for production', 'Use React Server Components for frontend'],
+      }),
+    ]);
+
+    const recentMemory = [
+      { text: 'Migrate to PostgreSQL database for production', date: '2026-03-25', source: '.arete/memory/items/decisions.md' },
+      { text: 'Use React Server Components for frontend', date: '2026-03-26', source: '.arete/memory/items/learnings.md' },
+    ];
+
+    const matches = matchRecentMemory(items, recentMemory);
+    assert.equal(matches.length, 2);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[1].itemIndex, 1);
+  });
+
+  it('matches near-duplicates above threshold', () => {
+    // "Send API docs to Sarah" (5 words) vs "Send API docs to Sarah now" (6 words)
+    // Jaccard = 5/6 = 0.833 > 0.7
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to Sarah', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const recentMemory = [
+      { text: 'Send API docs to Sarah now', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+    ];
+
+    const matches = matchRecentMemory(items, recentMemory);
+    assert.equal(matches.length, 1);
+  });
+
+  it('threshold constant is 0.7', () => {
+    assert.equal(MEMORY_MATCH_THRESHOLD, 0.7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reconcileMeetingBatch recent memory integration
+// ---------------------------------------------------------------------------
+
+describe('reconcileMeetingBatch recent memory integration', () => {
+  it('marks matching items as duplicate with source reference', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        decisions: ['Migrate to PostgreSQL database for production'],
+      }),
+    ];
+
+    const context = makeContext({
+      recentCommittedItems: [
+        { text: 'Migrate to PostgreSQL database for production', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.items[0].status, 'duplicate');
+    assert.equal(result.items[0].annotations.duplicateOf, '.arete/memory/items/decisions.md');
+    assert.ok(result.items[0].annotations.why.includes('Similar to:'));
+    assert.ok(result.items[0].annotations.why.includes('.arete/memory/items/decisions.md'));
+    assert.equal(result.stats.duplicatesRemoved, 1);
+  });
+
+  it('does not mark non-matching items as duplicate', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        decisions: ['Review the pull request'],
+      }),
+    ];
+
+    const context = makeContext({
+      recentCommittedItems: [
+        { text: 'Deploy production infrastructure to cloud service', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.items[0].status, 'keep');
+    assert.equal(result.stats.duplicatesRemoved, 0);
+  });
+
+  it('why annotation truncates long memory text', () => {
+    const longText = 'This is a very long memory item text that should be truncated in the annotation to avoid excessively long why strings';
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        decisions: [longText],
+      }),
+    ];
+
+    const context = makeContext({
+      recentCommittedItems: [
+        { text: longText, date: '2026-03-28', source: 'memory/items/decisions.md' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.items[0].status, 'duplicate');
+    // The text in the why annotation should be truncated to 50 chars
+    assert.ok(result.items[0].annotations.why.includes('...'));
+    // The source should still be complete
+    assert.ok(result.items[0].annotations.why.includes('memory/items/decisions.md'));
+  });
+
+  it('completed match takes priority over memory match', () => {
+    // When both completed task and memory match, completed should win
+    // because completed check runs after memory in the map
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to the team', direction: 'i_owe_them' },
+        ],
+      }),
+    ];
+
+    const context = makeContext({
+      recentCommittedItems: [
+        { text: 'Send API docs to the team', date: '2026-03-28', source: '.arete/memory/items/decisions.md' },
+      ],
+      completedTasks: [
+        { text: 'Send API docs to the team', completedOn: '2026-03-29', owner: 'alice' },
+      ],
+    });
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    // Completed check runs after memory check in the code, so completed wins
+    assert.equal(result.items[0].status, 'completed');
   });
 });
 

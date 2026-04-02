@@ -42,6 +42,15 @@ type FlattenedItem = {
 };
 
 /**
+ * A match between an extracted item and a recent memory item.
+ */
+export type MemoryMatch = {
+  itemIndex: number;
+  source: string;
+  text: string;
+};
+
+/**
  * Duplicate group: canonical item + its duplicates.
  */
 export type DuplicateGroup = {
@@ -67,6 +76,9 @@ const WORKSPACE_MATCH_THRESHOLD = 0.85;
 
 /** Similarity threshold for matching items against completed tasks. */
 const COMPLETED_MATCH_THRESHOLD = 0.6;
+
+/** Similarity threshold for matching items against recent memory. */
+const MEMORY_MATCH_THRESHOLD = 0.7;
 
 /**
  * Match items against prior workspace content using semantic search.
@@ -277,6 +289,50 @@ export function findDuplicates(
 }
 
 // ---------------------------------------------------------------------------
+// Recent memory matching
+// ---------------------------------------------------------------------------
+
+/**
+ * Match items against recently committed memory items using Jaccard similarity.
+ *
+ * Items that are similar to recent memory are considered duplicates — they
+ * have already been captured. Each item matches at most one memory item
+ * (first match wins).
+ *
+ * @param items - Flattened items from extractions
+ * @param recentMemory - Recently committed memory items from context
+ * @returns Matches found
+ */
+export function matchRecentMemory(
+  items: FlattenedItem[],
+  recentMemory: ReconciliationContext['recentCommittedItems'],
+): MemoryMatch[] {
+  const matches: MemoryMatch[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    for (const memory of recentMemory) {
+      const similarity = jaccardSimilarity(
+        normalizeForJaccard(item.text),
+        normalizeForJaccard(memory.text),
+      );
+
+      if (similarity > MEMORY_MATCH_THRESHOLD) {
+        matches.push({
+          itemIndex: i,
+          source: memory.source,
+          text: memory.text,
+        });
+        break;
+      }
+    }
+  }
+
+  return matches;
+}
+
+// ---------------------------------------------------------------------------
 // Scoring
 // ---------------------------------------------------------------------------
 
@@ -373,6 +429,10 @@ export function reconcileMeetingBatch(
   const completedMatches = matchCompletedTasks(allItems, context.completedTasks);
   const completedIndices = new Set(completedMatches.map((m) => m.itemIndex));
 
+  // Step 4: Match recent memory
+  const memoryMatches = matchRecentMemory(allItems, context.recentCommittedItems);
+  const memoryMatchedIndices = new Set(memoryMatches.map((m) => m.itemIndex));
+
   // Steps 3-6: Process each item
   const reconciled: ReconciledItem[] = allItems.map((item, index) => {
     let status: ReconciledItem['status'] = 'keep';
@@ -387,7 +447,17 @@ export function reconcileMeetingBatch(
       }
     }
 
-    // Step 3: Check completed tasks
+    // Step 3: Check recent memory (before completed — completed takes priority)
+    if (memoryMatchedIndices.has(index)) {
+      status = 'duplicate';
+      const match = memoryMatches.find((m) => m.itemIndex === index);
+      if (match) {
+        annotations.duplicateOf = match.source;
+        annotations.why = `Similar to: "${match.text.slice(0, 50)}..." from ${match.source}`;
+      }
+    }
+
+    // Step 4: Check completed tasks (overrides memory match)
     if (completedIndices.has(index)) {
       status = 'completed';
       const match = completedMatches.find((m) => m.itemIndex === index);
@@ -395,8 +465,6 @@ export function reconcileMeetingBatch(
         annotations.completedOn = match.completedOn;
       }
     }
-
-    // TODO: memory matching (P2-6)
 
     // Step 5: Score relevance
     const { score, tier, matchedArea, matchedPerson } = scoreRelevance(item, context);
@@ -408,8 +476,10 @@ export function reconcileMeetingBatch(
       annotations.personSlug = matchedPerson;
     }
 
-    // Step 6: Generate annotation
-    annotations.why = generateWhy(tier, annotations);
+    // Step 6: Generate annotation (preserve memory match why)
+    if (!annotations.why) {
+      annotations.why = generateWhy(tier, annotations);
+    }
 
     return {
       original: item.original,
@@ -433,4 +503,4 @@ export function reconcileMeetingBatch(
 }
 
 // Export internals for testing
-export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD, COMPLETED_MATCH_THRESHOLD };
+export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD, COMPLETED_MATCH_THRESHOLD, MEMORY_MATCH_THRESHOLD };
