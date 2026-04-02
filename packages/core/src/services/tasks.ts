@@ -60,7 +60,7 @@ const DESTINATION_MAP: Record<TaskDestination, { file: 'week.md' | 'tasks.md'; s
 const TASK_LINE_PATTERN = /^- \[([ xX])\] (.+)$/;
 
 /** Pattern for @tag(value) extraction */
-const TAG_PATTERN = /@([a-z]+)\(([^)]*)\)/g;
+const TAG_PATTERN = /@([a-zA-Z]+)\(([^)]*)\)/g;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers
@@ -97,6 +97,9 @@ function parseMetadata(text: string): { cleanText: string; metadata: TaskMetadat
         break;
       case 'due':
         metadata.due = value.trim();
+        break;
+      case 'completedAt':
+        metadata.completedAt = value.trim();
         break;
       case 'from': {
         // Parse type:id format
@@ -152,6 +155,7 @@ function formatTask(text: string, metadata: TaskMetadata, completed: boolean = f
   if (metadata.person) parts.push(`@person(${metadata.person})`);
   if (metadata.from) parts.push(`@from(${metadata.from.type}:${metadata.from.id})`);
   if (metadata.due) parts.push(`@due(${metadata.due})`);
+  if (metadata.completedAt) parts.push(`@completedAt(${metadata.completedAt})`);
   
   return `- ${checkbox} ${parts.join(' ')}`;
 }
@@ -441,12 +445,14 @@ export class TaskService {
       throw new Error(`Section "${task.source.section}" not found in ${filePath}`);
     }
 
+    const today = new Date().toISOString().split('T')[0];
     let found = false;
     for (let i = section.start + 1; i < section.end; i++) {
       const parsed = parseTaskLine(lines[i]);
       if (parsed && computeTaskId(parsed.text) === task.id) {
-        // Replace [ ] with [x]
-        lines[i] = lines[i].replace('[ ]', '[x]');
+        // Set completed and add @completedAt tag
+        const newMetadata = { ...parsed.metadata, completedAt: today };
+        lines[i] = formatTask(parsed.text, newMetadata, true);
         found = true;
         break;
       }
@@ -458,7 +464,11 @@ export class TaskService {
 
     await this.writeFile(filePath, lines);
 
-    const updatedTask: WorkspaceTask = { ...task, completed: true };
+    const updatedTask: WorkspaceTask = {
+      ...task,
+      completed: true,
+      metadata: { ...task.metadata, completedAt: today },
+    };
     const linkedCommitmentId = task.metadata.from?.type === 'commitment'
       ? task.metadata.from.id
       : undefined;

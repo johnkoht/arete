@@ -36,6 +36,7 @@ interface TaskWire {
   text: string;
   destination: TaskDestination;
   due: string | null;
+  completedAt: string | null;
   area: string | null;
   project: string | null;
   person: { slug: string; name: string } | null;
@@ -163,6 +164,7 @@ async function enrichTask(
     text: task.text,
     destination: sectionToDestination(task.source.section),
     due: task.metadata.due ?? null,
+    completedAt: task.metadata.completedAt ?? null,
     area: task.metadata.area ?? null,
     project: task.metadata.project ?? null,
     person,
@@ -238,7 +240,7 @@ export function createTasksRouter(workspaceRoot: string): Hono {
       const offset = parseInt(c.req.query('offset') ?? '0', 10);
 
       // Validate filter param
-      const validFilters = ['today', 'upcoming', 'anytime', 'someday'];
+      const validFilters = ['today', 'upcoming', 'anytime', 'someday', 'completed', 'completed-today'];
       if (filterParam && !validFilters.includes(filterParam)) {
         return c.json(
           {
@@ -322,6 +324,21 @@ export function createTasksRouter(workspaceRoot: string): Hono {
       } else if (filterParam === 'someday') {
         filteredTasks = allTasks.filter(
           (t) => t.source.section === '## Someday' && !t.completed,
+        );
+      } else if (filterParam === 'completed') {
+        filteredTasks = allTasks.filter((t) => t.completed);
+        // Sort by completedAt descending (most recent first), tasks without completedAt last
+        filteredTasks.sort((a, b) => {
+          const aDate = a.metadata.completedAt;
+          const bDate = b.metadata.completedAt;
+          if (aDate && bDate) return bDate.localeCompare(aDate);
+          if (aDate && !bDate) return -1;
+          if (!aDate && bDate) return 1;
+          return 0;
+        });
+      } else if (filterParam === 'completed-today') {
+        filteredTasks = allTasks.filter(
+          (t) => t.completed && t.metadata.completedAt === today,
         );
       } else {
         // No filter: all tasks
