@@ -13,7 +13,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import { useTasks, useTaskSuggestions, useUpdateTask, useCompleteTask } from "@/hooks/tasks.js";
-import type { TasksResponse, Task, SuggestedTask } from "@/api/types.js";
+import type { TasksResponse, Task, TasksFilter, SuggestedTask } from "@/api/types.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,7 +163,7 @@ describe("useTasks", () => {
     const { wrapper } = createWrapper();
     const { result, rerender } = renderHook(
       ({ filter }) => useTasks(filter),
-      { wrapper, initialProps: { filter: "today" as const } }
+      { wrapper, initialProps: { filter: "today" as TasksFilter } }
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
