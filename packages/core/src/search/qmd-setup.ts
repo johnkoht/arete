@@ -412,6 +412,9 @@ export const SCOPE_PATHS: Record<QmdScope, string> = {
   context: 'context',
   projects: 'projects',
   people: 'people',
+  areas: 'areas',
+  goals: 'goals',
+  now: 'now',
 };
 
 /** All scopes in order of creation */
@@ -422,6 +425,9 @@ export const ALL_SCOPES: readonly QmdScope[] = [
   'context',
   'projects',
   'people',
+  'areas',
+  'goals',
+  'now',
 ] as const;
 
 /** Result for a single scope's collection setup */
@@ -484,13 +490,16 @@ export function generateScopedCollectionName(
 /**
  * Ensure QMD collections exist for all scopes where the path exists.
  *
- * Creates 6 scope-based collections:
+ * Creates 9 scope-based collections:
  * - "all" → workspace root (entire workspace)
  * - "memory" → .arete/memory/items/
  * - "meetings" → resources/meetings/
  * - "context" → context/
  * - "projects" → projects/
  * - "people" → people/
+ * - "areas" → areas/
+ * - "goals" → goals/
+ * - "now" → now/
  *
  * Scopes with non-existent paths are skipped (expected for fresh workspaces).
  *

@@ -46,7 +46,7 @@ export type IntelligenceConfig = {
 };
 
 /** QMD collection scope identifiers */
-export type QmdScope = 'all' | 'memory' | 'meetings' | 'context' | 'projects' | 'people';
+export type QmdScope = 'all' | 'memory' | 'meetings' | 'context' | 'projects' | 'people' | 'areas' | 'goals' | 'now';
 
 /** Map of scope to collection name. Partial because some scopes may be skipped if path doesn't exist. */
 export type QmdCollections = Partial<Record<QmdScope, string>>;
