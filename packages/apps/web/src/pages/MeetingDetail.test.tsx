@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type { Meeting } from '@/api/types.js';
@@ -80,6 +81,11 @@ const mockUseApproveItem = vi.fn(() => ({ mutate: vi.fn(), isPending: false }));
 const mockUseSaveApprove = vi.fn(() => ({ mutate: vi.fn(), isPending: false, isSuccess: false }));
 const mockUseProcessMeeting = vi.fn(() => ({ mutate: vi.fn(), isPending: false }));
 const mockUseDeleteMeeting = vi.fn(() => ({ mutate: vi.fn(), isPending: false }));
+const mockUseAreaSuggestion = vi.fn(() => ({
+  data: { suggestion: { areaSlug: 'growth', confidence: 0.8 }, areas: ['growth', 'platform', 'retention'] },
+  isLoading: false,
+  error: null,
+}));
 
 vi.mock('@/hooks/meetings.js', () => ({
   useMeeting: (slug: string) => mockUseMeeting(slug),
@@ -88,6 +94,7 @@ vi.mock('@/hooks/meetings.js', () => ({
   useSaveApprove: () => mockUseSaveApprove(),
   useProcessMeeting: () => mockUseProcessMeeting(),
   useDeleteMeeting: () => mockUseDeleteMeeting(),
+  useAreaSuggestion: () => mockUseAreaSuggestion(),
 }));
 
 // Import after mocks are set up
@@ -123,6 +130,12 @@ describe('MeetingDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Reset area suggestion mock — clearAllMocks removes return values
+    mockUseAreaSuggestion.mockReturnValue({
+      data: { suggestion: { areaSlug: 'growth', confidence: 0.8 }, areas: ['growth', 'platform', 'retention'] },
+      isLoading: false,
+      error: null,
+    });
   });
 
   describe('approved status rendering', () => {
@@ -296,6 +309,195 @@ describe('MeetingDetail', () => {
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('process meeting dialog with area selection', () => {
+    beforeEach(() => {
+      mockUseMeeting.mockReturnValue({
+        data: baseMeeting,
+        isLoading: false,
+        error: null,
+      });
+    });
+
+    it('shows Process Meeting dialog when Process button is clicked', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready to process')).toBeInTheDocument();
+      });
+
+      // Click Process Meeting button in MetadataPanel
+      const processButton = screen.getByRole('button', { name: /process meeting/i });
+      await user.click(processButton);
+
+      await waitFor(() => {
+        // Dialog title appears (along with button text) — use heading role
+        expect(screen.getByRole('heading', { name: 'Process Meeting' })).toBeInTheDocument();
+        expect(screen.getByText(/analyze the transcript/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows area dropdown with areas from suggestion hook', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready to process')).toBeInTheDocument();
+      });
+
+      const processButton = screen.getByRole('button', { name: /process meeting/i });
+      await user.click(processButton);
+
+      await waitFor(() => {
+        // Area label present in dialog
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByText('Area')).toBeInTheDocument();
+        expect(within(dialog).getByText(/product area to provide richer context/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows loading spinner when areas are loading', async () => {
+      mockUseAreaSuggestion.mockReturnValue({
+        data: undefined,
+        isLoading: true,
+        error: null,
+      });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready to process')).toBeInTheDocument();
+      });
+
+      const processButton = screen.getByRole('button', { name: /process meeting/i });
+      await user.click(processButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Loading areas…')).toBeInTheDocument();
+      });
+    });
+
+    it('calls processMutation with area when Process is clicked', async () => {
+      const mutate = vi.fn((_opts?: unknown, _callbacks?: unknown) => {});
+      mockUseProcessMeeting.mockReturnValue({ mutate, isPending: false });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready to process')).toBeInTheDocument();
+      });
+
+      const processButton = screen.getByRole('button', { name: /process meeting/i });
+      await user.click(processButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Process Meeting' })).toBeInTheDocument();
+      });
+
+      // Click the "Process" button in the dialog (has Sparkles icon prefix)
+      const dialog = screen.getByRole('dialog');
+      const dialogProcessButton = within(dialog).getByRole('button', { name: /process/i });
+      await user.click(dialogProcessButton);
+
+      expect(mutate).toHaveBeenCalled();
+      const callArgs = mutate.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.area).toBe('growth'); // Pre-filled from suggestion
+    });
+
+    it('sends undefined area when None is selected', async () => {
+      mockUseAreaSuggestion.mockReturnValue({
+        data: { suggestion: null, areas: ['growth', 'platform'] },
+        isLoading: false,
+        error: null,
+      });
+      const mutate = vi.fn((_opts?: unknown, _callbacks?: unknown) => {});
+      mockUseProcessMeeting.mockReturnValue({ mutate, isPending: false });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByText('Ready to process')).toBeInTheDocument();
+      });
+
+      const processButton = screen.getByRole('button', { name: /process meeting/i });
+      await user.click(processButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Process Meeting' })).toBeInTheDocument();
+      });
+
+      // No suggestion, so default should be None → area undefined
+      const dialog = screen.getByRole('dialog');
+      const dialogProcessButton = within(dialog).getByRole('button', { name: /process/i });
+      await user.click(dialogProcessButton);
+
+      // No suggestion → default is __none__ → area should be omitted
+      expect(mutate).toHaveBeenCalled();
+      const callArgs = mutate.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.area).toBeUndefined();
+    });
+  });
+
+  describe('reprocess dialog area selection', () => {
+    beforeEach(() => {
+      // Use approved meeting (Reprocess button only visible for approved meetings)
+      mockUseMeeting.mockReturnValue({
+        data: approvedMeeting,
+        isLoading: false,
+        error: null,
+      });
+    });
+
+    it('shows area dropdown in reprocess dialog', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /reprocess meeting/i })).toBeInTheDocument();
+      });
+
+      const reprocessButton = screen.getByRole('button', { name: /reprocess meeting/i });
+      await user.click(reprocessButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Reprocess Meeting' })).toBeInTheDocument();
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByText('Area')).toBeInTheDocument();
+      });
+    });
+
+    it('calls processMutation with area on reprocess', async () => {
+      const mutate = vi.fn((_opts?: unknown, _callbacks?: unknown) => {});
+      mockUseProcessMeeting.mockReturnValue({ mutate, isPending: false });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /reprocess meeting/i })).toBeInTheDocument();
+      });
+
+      const reprocessButton = screen.getByRole('button', { name: /reprocess meeting/i });
+      await user.click(reprocessButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Reprocess Meeting' })).toBeInTheDocument();
+      });
+
+      // Click Reprocess in dialog
+      const dialog = screen.getByRole('dialog');
+      const dialogReprocessButton = within(dialog).getByRole('button', { name: /reprocess/i });
+      await user.click(dialogReprocessButton);
+
+      expect(mutate).toHaveBeenCalled();
+      const callArgs = mutate.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.area).toBe('growth'); // Pre-filled from suggestion
     });
   });
 });

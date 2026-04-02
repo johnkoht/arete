@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchMeeting } from './meetings.js';
+import { fetchMeeting, fetchAreaSuggestion } from './meetings.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,5 +118,60 @@ describe('fetchMeeting area mapping', () => {
     const meeting = await fetchMeeting('test-meeting');
     expect(meeting.area).toBeUndefined();
     expect(meeting.suggestedArea).toBeUndefined();
+  });
+});
+
+describe('fetchAreaSuggestion', () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns suggestion and areas from backend', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          suggestion: { areaSlug: 'growth', confidence: 0.85 },
+          areas: ['design', 'growth', 'platform'],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await fetchAreaSuggestion('test-meeting');
+    expect(result.suggestion).toEqual({ areaSlug: 'growth', confidence: 0.85 });
+    expect(result.areas).toEqual(['design', 'growth', 'platform']);
+  });
+
+  it('returns null suggestion when no match', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ suggestion: null, areas: ['design', 'growth'] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await fetchAreaSuggestion('test-meeting');
+    expect(result.suggestion).toBeNull();
+    expect(result.areas).toEqual(['design', 'growth']);
+  });
+
+  it('handles empty areas list', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ suggestion: null, areas: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const result = await fetchAreaSuggestion('test-meeting');
+    expect(result.suggestion).toBeNull();
+    expect(result.areas).toEqual([]);
   });
 });
