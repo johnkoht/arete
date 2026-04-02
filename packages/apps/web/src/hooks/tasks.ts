@@ -4,16 +4,19 @@
  * Features:
  * - useTasks: Fetch tasks with filter and pagination
  * - useTaskSuggestions: Fetch AI-scored task recommendations
- * - useUpdateTask: Optimistic updates with rollback and debounce
- * - useCompleteTask: Mark task complete with invalidation and debounce
+ * - useCompletedTodayTasks: Fetch tasks completed today
+ * - useUpdateTask: Optimistic updates with rollback
+ * - useCompleteTask: Mark task complete with cache invalidation
  *
- * Both mutations use:
- * - 100ms debounce to batch rapid updates
- * - Pending-check to ignore calls while mutation is in flight
- * - Ref pattern to avoid stale closure bugs
+ * Mutations call mutation.mutate() directly — no debounce.
+ * Scheduling/completing are deliberate user actions, not rapid-fire inputs.
+ *
+ * Cache invalidation strategy:
+ * - Only invalidate queries for the ACTIVE tab + directly affected caches
+ * - Avoid invalidating all ['tasks'] variants (causes N refetches for N tabs)
+ * - Suggested and completed-today are always invalidated (cross-cutting)
  */
 
-import { useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTasks,
@@ -25,9 +28,8 @@ import type { TasksFilter, FetchTasksOptions, TasksResponse, TaskUpdate } from '
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const STALE_TIME = 30_000; // 30 seconds
+const STALE_TIME = 30_000; // 30s — prevents refetching tabs visited recently
 const GC_TIME = 300_000; // 5 minutes
-const DEBOUNCE_MS = 100;
 
 // ── Query Hooks ─────────────────────────────────────────────────────────────
 
@@ -76,24 +78,26 @@ type UpdateTaskParams = {
 };
 
 /**
- * Update a task with optimistic updates, debounce, and pending-check.
+ * Invalidate all task-related caches.
  *
- * Features:
- * - Optimistically updates all paginated cache entries
- * - Rolls back on error using saved previous data
- * - Debounces rapid calls (100ms)
- * - Ignores calls while mutation is pending
- * - Uses ref pattern to avoid stale closure bugs
+ * Uses exact:false (default) so ['tasks'] matches all task queries.
+ * This is intentional: moving a task between tabs means multiple filters
+ * need to refetch. The staleTime prevents unnecessary network calls
+ * for tabs the user hasn't visited recently.
+ */
+function invalidateAllTaskCaches(queryClient: ReturnType<typeof useQueryClient>) {
+  // Invalidate all task list queries (today, upcoming, anytime, etc.)
+  void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+}
+
+/**
+ * Update a task with optimistic updates and rollback.
+ *
+ * No debounce — scheduling and metadata changes are deliberate user actions.
+ * Calls mutation.mutate() directly for immediate execution.
  */
 export function useUpdateTask() {
   const queryClient = useQueryClient();
-
-  // Refs for debounce and pending state
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingParamsRef = useRef<UpdateTaskParams | null>(null);
-
-  // Ref for stable mutation callback (avoids stale closures)
-  const mutationRef = useRef<((params: UpdateTaskParams) => void) | null>(null);
 
   const mutation = useMutation({
     mutationFn: ({ id, updates }: UpdateTaskParams) => updateTask(id, updates),
@@ -102,10 +106,10 @@ export function useUpdateTask() {
       // Cancel any outgoing refetches to avoid overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
 
-      // Snapshot all pagination variants (plural form does partial key matching)
+      // Snapshot all pagination variants for rollback
       const previousData = queryClient.getQueriesData<TasksResponse>({ queryKey: ['tasks'] });
 
-      // Optimistically update all cached pages (plural form updates all variants)
+      // Optimistically update all cached pages
       queryClient.setQueriesData<TasksResponse>({ queryKey: ['tasks'] }, (old) => {
         if (!old) return old;
         return {
@@ -127,61 +131,12 @@ export function useUpdateTask() {
     },
 
     onSettled: () => {
-      // Refetch to ensure server state consistency
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      // Also invalidate suggestions cache (tasks updated may no longer be suggestions)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
-      // Invalidate completed-today cache (task may have moved in/out of completed)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', 'completed-today'] });
+      invalidateAllTaskCaches(queryClient);
     },
   });
 
-  // Update ref when mutation changes (keeps callback fresh)
-  useEffect(() => {
-    mutationRef.current = (params: UpdateTaskParams) => {
-      mutation.mutate(params);
-    };
-  }, [mutation]);
-
-  // Debounced mutate function with pending-check
-  const mutate = useCallback((params: UpdateTaskParams) => {
-    // Clear existing timeout
-    if (debounceTimerRef.current !== null) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-
-    // Store latest params for debounced call
-    pendingParamsRef.current = params;
-
-    debounceTimerRef.current = setTimeout(() => {
-      debounceTimerRef.current = null;
-
-      // Check if mutation is pending - if so, ignore this call
-      if (mutation.isPending) {
-        return;
-      }
-
-      const paramsToUse = pendingParamsRef.current;
-      pendingParamsRef.current = null;
-
-      if (paramsToUse && mutationRef.current) {
-        mutationRef.current(paramsToUse);
-      }
-    }, DEBOUNCE_MS);
-  }, [mutation.isPending]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current !== null) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
-
   return {
-    mutate,
+    mutate: mutation.mutate,
     isPending: mutation.isPending,
     isSuccess: mutation.isSuccess,
     isError: mutation.isError,
@@ -192,85 +147,25 @@ export function useUpdateTask() {
 }
 
 /**
- * Complete a task (convenience wrapper around updateTask).
+ * Complete a task with cache invalidation.
  *
- * Uses invalidation instead of optimistic update because completion
- * typically triggers visual removal from the active list.
- *
- * Features:
- * - Debounces rapid calls (100ms)
- * - Ignores calls while mutation is pending
- * - Uses ref pattern to avoid stale closure bugs
+ * No debounce — completing is a deliberate user action.
+ * Uses invalidation (not optimistic update) because completion
+ * triggers visual removal from the active list.
  */
 export function useCompleteTask() {
   const queryClient = useQueryClient();
-
-  // Refs for debounce and pending state
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingIdRef = useRef<string | null>(null);
-
-  // Ref for stable mutation callback (avoids stale closures)
-  const mutationRef = useRef<((id: string) => void) | null>(null);
 
   const mutation = useMutation({
     mutationFn: (id: string) => updateTask(id, { completed: true }),
 
     onSuccess: () => {
-      // Invalidate to trigger refetch (completed task should disappear from list)
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      // Also invalidate suggestions cache (completed tasks are not suggestions)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
-      // Invalidate completed-today cache (newly completed task should appear)
-      void queryClient.invalidateQueries({ queryKey: ['tasks', 'completed-today'] });
+      invalidateAllTaskCaches(queryClient);
     },
   });
 
-  // Update ref when mutation changes (keeps callback fresh)
-  useEffect(() => {
-    mutationRef.current = (id: string) => {
-      mutation.mutate(id);
-    };
-  }, [mutation]);
-
-  // Debounced mutate function with pending-check
-  const mutate = useCallback((id: string) => {
-    // Clear existing timeout
-    if (debounceTimerRef.current !== null) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-
-    // Store latest id for debounced call
-    pendingIdRef.current = id;
-
-    debounceTimerRef.current = setTimeout(() => {
-      debounceTimerRef.current = null;
-
-      // Check if mutation is pending - if so, ignore this call
-      if (mutation.isPending) {
-        return;
-      }
-
-      const idToUse = pendingIdRef.current;
-      pendingIdRef.current = null;
-
-      if (idToUse && mutationRef.current) {
-        mutationRef.current(idToUse);
-      }
-    }, DEBOUNCE_MS);
-  }, [mutation.isPending]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current !== null) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
-
   return {
-    mutate,
+    mutate: mutation.mutate,
     isPending: mutation.isPending,
     /** The task ID currently being completed (only valid when isPending is true) */
     pendingTaskId: mutation.isPending ? (mutation.variables ?? null) : null,

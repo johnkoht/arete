@@ -97,8 +97,12 @@ git status, git add, git commit, git branch
 ├── 5.2 Update LEARNINGS.md
 ├── 5.3 Commit Implementation
 ├── 5.4 Verify with /wrap
+<<<<<<< Updated upstream
 ├── 5.5 Generate Ship Report
 └── 5.6 Prompt for Merge → INTERACTIVE
+=======
+└── 5.5 Generate Ship Report
+>>>>>>> Stashed changes
 
 [PHASE 6] Cleanup (after merge)
 └── 6.1 Remove Worktree & Branch ← runs automatically after successful merge
@@ -1148,6 +1152,7 @@ echo "✅ PRD ready: ${prd_path}"
 
 Proceeding to execute PRD...
 ```
+<<<<<<< Updated upstream
 
 ##### 5. Error Recovery
 
@@ -1156,13 +1161,18 @@ Proceeding to execute PRD...
 | cd fails | Verify worktree was created in Phase 3.1 |
 | Wrong branch | `git checkout feature/{slug}` |
 | PRD files missing | Artifacts may not have synced; check Phase 2.3 |
+=======
+>>>>>>> Stashed changes
 
 **Exit Conditions**:
 - CWD is the worktree directory
 - On correct feature branch
 - PRD files verified accessible
+<<<<<<< Updated upstream
 
 **Build Log**: Update to Phase 3.2, State IN_PROGRESS on start. On complete: Outcome "Switched to worktree, PRD verified".
+=======
+>>>>>>> Stashed changes
 
 **Handoff to 4.1**: 
 - PRD path: `dev/work/plans/{slug}/prd.md`
