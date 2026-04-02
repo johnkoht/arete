@@ -2,6 +2,12 @@ import type { Meeting } from "@/api/types.js";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ExternalLink, Trash2, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MetadataPanelProps {
   meeting: Meeting;
@@ -65,6 +71,13 @@ export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onR
         </div>
       </div>
 
+      <div>
+        <h4 className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Area
+        </h4>
+        <AreaDisplay area={meeting.area} suggestedArea={meeting.suggestedArea} />
+      </div>
+
       {meeting.recordingUrl ? (
         <a
           href={meeting.recordingUrl}
@@ -104,6 +117,45 @@ export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onR
           Delete Meeting
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ── Area display helper ─────────────────────────────────────────────────────
+
+function AreaDisplay({ area, suggestedArea }: { area?: string; suggestedArea?: string }) {
+  const areaName = area ?? suggestedArea;
+  const isSuggested = !area && !!suggestedArea;
+
+  if (!areaName) {
+    return <span className="text-sm text-muted-foreground">None</span>;
+  }
+
+  // Format slug to display name: "product-strategy" → "product-strategy"
+  // We show the slug as-is since that's what the backend provides
+  const displayName = areaName;
+
+  return (
+    <div className="flex items-center gap-2">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={`text-sm truncate max-w-[180px] ${isSuggested ? "text-muted-foreground" : "font-medium"}`}
+            >
+              {displayName}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{displayName}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {isSuggested && (
+        <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          suggested
+        </span>
+      )}
     </div>
   );
 }

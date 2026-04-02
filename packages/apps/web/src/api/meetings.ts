@@ -82,6 +82,8 @@ type RawFullMeeting = RawMeetingSummary & {
   stagedItemEdits: Record<string, string>;
   approvedItems: RawApprovedItems;
   parsedSections: RawParsedSections;
+  area?: string;
+  suggestedArea?: { areaSlug: string; confidence: number } | null;
 };
 
 // ── Mapping helpers ─────────────────────────────────────────────────────────
@@ -151,6 +153,8 @@ function mapFullMeeting(raw: RawFullMeeting): Meeting {
     reviewItems: flattenStagedItems(raw),
     approvedItems: raw.approvedItems,
     parsedSections: raw.parsedSections,
+    area: raw.area,
+    suggestedArea: raw.suggestedArea?.areaSlug,
   };
 }
 
