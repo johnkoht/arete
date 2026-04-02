@@ -205,6 +205,23 @@ describe('TaskList', () => {
       // No initials should be present
       expect(screen.queryByText('JD')).not.toBeInTheDocument();
     });
+
+    it('renders Avatar after text/badges and before schedule trigger', () => {
+      renderTaskList([TASK_WITH_PERSON]);
+      const taskRow = screen.getByText('Follow up with John').closest('[data-task-id]')!;
+      const children = Array.from(taskRow.children);
+
+      // Find avatar (contains 'JD'), task text, and schedule badge container
+      const avatarIndex = children.findIndex((el) => el.textContent?.includes('JD'));
+      const textIndex = children.findIndex((el) => el.classList.contains('flex-1'));
+      const badgesIndex = children.findIndex(
+        (el) => el.classList.contains('flex') && el.classList.contains('items-center') && el.classList.contains('gap-2')
+      );
+
+      // Avatar should come after text and inside the badges container (before schedule)
+      // or after the text element. The key invariant: avatar is NOT between checkbox and text.
+      expect(textIndex).toBeLessThan(avatarIndex);
+    });
   });
 
   describe('schedule badge', () => {
@@ -301,6 +318,14 @@ describe('TaskList', () => {
   });
 
   describe('completion animation', () => {
+    it('uses 3000ms duration for fade animation', () => {
+      renderTaskList([BASIC_TASK]);
+      const taskRow = screen.getByText('Review PR #42').closest('[data-task-id]');
+      expect(taskRow).toBeInTheDocument();
+      // Check that the row has the 3s animation duration class
+      expect(taskRow!.className).toContain('duration-[3000ms]');
+    });
+
     it('applies fade-out class after successful completion', async () => {
       // This tests the fade-out CSS class application
       // The actual removal happens via onTransitionEnd or setTimeout

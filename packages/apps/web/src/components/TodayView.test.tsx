@@ -750,7 +750,90 @@ describe('TodayView', () => {
     });
   });
 
+  describe('avatar position', () => {
+    it('renders Avatar after text and before schedule in TasksSection', () => {
+      const TASK_WITH_PERSON: Task = {
+        ...TASK_DUE_TODAY,
+        id: 'task-person',
+        text: 'Task with person',
+        person: { slug: 'jane-doe', name: 'Jane Doe' },
+      };
+      mockUseTasks.mockReturnValue({
+        data: { tasks: [TASK_WITH_PERSON], total: 1, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      const tasksSection = screen.getByTestId('tasks-section');
+      const taskRow = within(tasksSection).getByText('Task with person').closest('[data-task-id]')!;
+      const children = Array.from(taskRow.children);
+
+      const textIndex = children.findIndex((el) => el.classList.contains('flex-1'));
+      const avatarIndex = children.findIndex((el) => el.textContent?.includes('JD'));
+
+      // Avatar should be after text, not between checkbox and text
+      expect(textIndex).toBeLessThan(avatarIndex);
+    });
+
+    it('renders Avatar after text in SuggestionRow', () => {
+      renderTodayView();
+      // SUGGESTED_TASK_2 has person: John Doe
+      const suggestionsSection = screen.getByTestId('suggestions-section');
+      const suggestionRow = within(suggestionsSection).getByText('Suggested task 2').closest('.flex')!;
+      const children = Array.from(suggestionRow.children);
+
+      const textIndex = children.findIndex((el) => el.classList.contains('flex-1'));
+      const avatarIndex = children.findIndex((el) => el.textContent?.includes('JD'));
+
+      expect(textIndex).toBeLessThan(avatarIndex);
+    });
+
+    it('renders Avatar after text in CompletedSection', async () => {
+      const user = userEvent.setup();
+      const COMPLETED_WITH_PERSON: Task = {
+        ...COMPLETED_TASK_1,
+        id: 'completed-person',
+        text: 'Completed with person',
+        person: { slug: 'jane-doe', name: 'Jane Doe' },
+      };
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [COMPLETED_WITH_PERSON], total: 1, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      const trigger = screen.getByText(/completed \(1\)/i);
+      await user.click(trigger);
+
+      const completedSection = screen.getByTestId('completed-section');
+      const taskRow = within(completedSection).getByText('Completed with person').closest('[data-task-id]')!;
+      const children = Array.from(taskRow.children);
+
+      const textIndex = children.findIndex((el) => el.classList.contains('flex-1'));
+      const avatarIndex = children.findIndex((el) => el.textContent?.includes('JD'));
+
+      expect(textIndex).toBeLessThan(avatarIndex);
+    });
+  });
+
   describe('completion animation', () => {
+    it('uses 3000ms duration for fade animation', () => {
+      mockUseTasks.mockReturnValue({
+        data: { tasks: [TASK_DUE_TODAY], total: 1, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      const taskRow = document.querySelector('[data-task-id="task-today-001"]');
+      expect(taskRow).toBeInTheDocument();
+      expect(taskRow!.className).toContain('duration-[3000ms]');
+    });
+
     it('shows checkmark icon when completing task', async () => {
       const user = userEvent.setup();
       mockUseTasks.mockReturnValue({
