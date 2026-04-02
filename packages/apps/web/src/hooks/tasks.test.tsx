@@ -61,6 +61,7 @@ const MOCK_TASK: Task = {
   person: { slug: "john-doe", name: "John Doe" },
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: "goals/weekly.md", section: "Tasks" },
 };
 
@@ -74,6 +75,7 @@ const MOCK_TASK_2: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: "now/tasks.md", section: "Backlog" },
 };
 
@@ -168,7 +170,7 @@ describe("useTasks", () => {
     const initialCallCount = fetchMock.mock.calls.length;
 
     // Change filter
-    rerender({ filter: "upcoming" as const });
+    rerender({ filter: "upcoming" });
 
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(initialCallCount));
     expect(fetchMock).toHaveBeenLastCalledWith(
