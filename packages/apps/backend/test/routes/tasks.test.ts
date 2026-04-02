@@ -1134,6 +1134,7 @@ function buildSuggestionsTestApp(options: {
 
   const tasks: MockTaskService = {
     listTasks: options.taskService?.listTasks ?? (() => Promise.resolve([])),
+    findTask: options.taskService?.findTask ?? (() => Promise.resolve(null)),
     completeTask: options.taskService?.completeTask ?? (() => Promise.reject(new Error('Not found'))),
     updateTask: options.taskService?.updateTask ?? (() => Promise.reject(new Error('Not found'))),
     moveTask: options.taskService?.moveTask ?? (() => Promise.reject(new Error('Not found'))),
@@ -1262,7 +1263,7 @@ function buildSuggestionsTestApp(options: {
       const dateParam = c.req.query('date');
 
       // Parse week priorities
-      const weekPriorities = parseWeekPriorities(weekContent);
+      const weekPriorities = parseWeekPriorities(weekContent ?? null);
 
       // Build scoring context
       const referenceDate = dateParam ? new Date(dateParam) : new Date();

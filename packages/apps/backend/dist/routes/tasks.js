@@ -86,6 +86,7 @@ async function enrichTask(task, allCommitments, workspaceRoot) {
         text: task.text,
         destination: sectionToDestination(task.source.section),
         due: task.metadata.due ?? null,
+        completedAt: task.metadata.completedAt ?? null,
         area: task.metadata.area ?? null,
         project: task.metadata.project ?? null,
         person,
@@ -145,7 +146,7 @@ export function createTasksRouter(workspaceRoot) {
             const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100);
             const offset = parseInt(c.req.query('offset') ?? '0', 10);
             // Validate filter param
-            const validFilters = ['today', 'upcoming', 'anytime', 'someday'];
+            const validFilters = ['today', 'upcoming', 'anytime', 'someday', 'completed', 'completed-today'];
             if (filterParam && !validFilters.includes(filterParam)) {
                 return c.json({
                     error: `Invalid filter: ${filterParam}. Valid filters: ${validFilters.join(', ')}`,
@@ -216,6 +217,24 @@ export function createTasksRouter(workspaceRoot) {
             else if (filterParam === 'someday') {
                 filteredTasks = allTasks.filter((t) => t.source.section === '## Someday' && !t.completed);
             }
+            else if (filterParam === 'completed') {
+                filteredTasks = allTasks.filter((t) => t.completed);
+                // Sort by completedAt descending (most recent first), tasks without completedAt last
+                filteredTasks.sort((a, b) => {
+                    const aDate = a.metadata.completedAt;
+                    const bDate = b.metadata.completedAt;
+                    if (aDate && bDate)
+                        return bDate.localeCompare(aDate);
+                    if (aDate && !bDate)
+                        return -1;
+                    if (!aDate && bDate)
+                        return 1;
+                    return 0;
+                });
+            }
+            else if (filterParam === 'completed-today') {
+                filteredTasks = allTasks.filter((t) => t.completed && t.metadata.completedAt === today);
+            }
             else {
                 // No filter: all tasks
                 filteredTasks = allTasks;
@@ -285,33 +304,26 @@ export function createTasksRouter(workspaceRoot) {
         }
         try {
             const services = await createServices(workspaceRoot);
-            let task;
-            if (body.destination !== undefined) {
-                // Move task — need to find task first to get file path for lock
-                const foundTask = await services.tasks.findTask(id);
-                if (!foundTask) {
-                    return c.json({ error: `No task found matching id "${id}"` }, 404);
-                }
-                task = await withFileLock(foundTask.source.file, () => services.tasks.moveTask(id, body.destination));
+            const foundTask = await services.tasks.findTask(id);
+            if (!foundTask) {
+                return c.json({ error: `No task found matching id "${id}"` }, 404);
             }
-            else if (body.completed !== undefined) {
-                // Complete task
-                const foundTask = await services.tasks.findTask(id);
-                if (!foundTask) {
-                    return c.json({ error: `No task found matching id "${id}"` }, 404);
-                }
-                const result = await withFileLock(foundTask.source.file, () => services.tasks.completeTask(id));
+            let task = foundTask;
+            // 1. Move first (changes file path)
+            if (body.destination !== undefined) {
+                task = await withFileLock(task.source.file, () => services.tasks.moveTask(task.id, body.destination));
+            }
+            // 2. Update due (use new file path after move)
+            if ('due' in body) {
+                task = await withFileLock(task.source.file, () => services.tasks.updateTask(task.id, { due: body.due }));
+            }
+            // 3. Complete last (triggers side effects like completedAt)
+            if (body.completed !== undefined && body.completed) {
+                const result = await withFileLock(task.source.file, () => services.tasks.completeTask(task.id));
                 task = result.task;
             }
-            else if ('due' in body) {
-                // Update due date
-                const foundTask = await services.tasks.findTask(id);
-                if (!foundTask) {
-                    return c.json({ error: `No task found matching id "${id}"` }, 404);
-                }
-                task = await withFileLock(foundTask.source.file, () => services.tasks.updateTask(id, { due: body.due }));
-            }
-            else {
+            // If nothing was processed
+            if (body.destination === undefined && !('due' in body) && body.completed === undefined) {
                 return c.json({ error: 'No valid updates provided' }, 400);
             }
             const allCommitments = await services.commitments.listOpen();
