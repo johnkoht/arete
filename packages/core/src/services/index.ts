@@ -77,6 +77,10 @@ export type {
   UrgencyBucket,
 } from './meeting-processing.js';
 
+// Meeting reconciliation
+export { reconcileMeetingBatch } from './meeting-reconciliation.js';
+export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
+
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
