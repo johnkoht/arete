@@ -521,7 +521,7 @@ export async function deleteMeeting(
 export async function updateMeeting(
   workspaceRoot: string,
   slug: string,
-  updates: { title?: string; summary?: string }
+  updates: { title?: string; summary?: string; area?: string }
 ): Promise<void> {
   const filePath = slugToPath(workspaceRoot, slug);
   const raw = await fs.readFile(filePath, 'utf8');
@@ -530,6 +530,7 @@ export async function updateMeeting(
 
   if (updates.title !== undefined) fm['title'] = updates.title;
   if (updates.summary !== undefined) fm['summary'] = updates.summary;
+  if (updates.area !== undefined) fm['area'] = updates.area;
 
   const updated = matter.stringify(parsed.content, fm);
   await fs.writeFile(filePath, updated, 'utf8');
