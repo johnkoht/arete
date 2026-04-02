@@ -60,6 +60,7 @@ function makeCommitment(overrides: Partial<Commitment> = {}): Commitment {
 
 type MockTaskService = {
   listTasks: () => Promise<WorkspaceTask[]>;
+  findTask: (id: string) => Promise<WorkspaceTask | null>;
   completeTask: (id: string) => Promise<{ task: WorkspaceTask }>;
   updateTask: (id: string, updates: { due?: string | null }) => Promise<WorkspaceTask>;
   moveTask: (id: string, dest: TaskDestination) => Promise<WorkspaceTask>;
@@ -100,6 +101,7 @@ function buildTestApp(options: {
 
   const tasks: MockTaskService = {
     listTasks: options.taskService?.listTasks ?? (() => Promise.resolve([])),
+    findTask: options.taskService?.findTask ?? (() => Promise.resolve(null)),
     completeTask: options.taskService?.completeTask ?? (() => Promise.reject(new Error('Not found'))),
     updateTask: options.taskService?.updateTask ?? (() => Promise.reject(new Error('Not found'))),
     moveTask: options.taskService?.moveTask ?? (() => Promise.reject(new Error('Not found'))),
@@ -281,16 +283,37 @@ function buildTestApp(options: {
     }
 
     try {
-      let task: WorkspaceTask;
+      const foundTask = await tasks.findTask(id);
+      if (!foundTask) {
+        return c.json({ error: `No task found matching id "${id}"` }, 404);
+      }
 
+      let task = foundTask;
+
+      // 1. Move first (changes file path)
       if (body.destination !== undefined) {
-        task = await withFileLock('tasks', () => tasks.moveTask(id, body.destination!));
-      } else if (body.completed !== undefined) {
-        const result = await withFileLock('tasks', () => tasks.completeTask(id));
+        task = await withFileLock(task.source.file, () =>
+          tasks.moveTask(task.id, body.destination!),
+        );
+      }
+
+      // 2. Update due (use new file path after move)
+      if ('due' in body) {
+        task = await withFileLock(task.source.file, () =>
+          tasks.updateTask(task.id, { due: body.due }),
+        );
+      }
+
+      // 3. Complete last (triggers side effects like completedAt)
+      if (body.completed !== undefined && body.completed) {
+        const result = await withFileLock(task.source.file, () =>
+          tasks.completeTask(task.id),
+        );
         task = result.task;
-      } else if ('due' in body) {
-        task = await withFileLock('tasks', () => tasks.updateTask(id, { due: body.due }));
-      } else {
+      }
+
+      // If nothing was processed
+      if (body.destination === undefined && !('due' in body) && body.completed === undefined) {
         return c.json({ error: 'No valid updates provided' }, 400);
       }
 
@@ -662,6 +685,179 @@ describe('GET /api/tasks filter=completed-today', () => {
   });
 });
 
+describe('PATCH /api/tasks/:id multi-field', () => {
+  it('handles due + destination together', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task', source: { file: 'week.md', section: '### Should complete' } });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id: string) => id === 'task1111' ? task : null,
+        moveTask: async (id, dest) => {
+          if (id === 'task1111') return { ...task, source: { file: 'week.md', section: '### Must complete' } };
+          throw new Error('No task found');
+        },
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') return { ...task, metadata: { due: updates.due ?? undefined }, source: { file: 'week.md', section: '### Must complete' } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ due: '2026-04-05', destination: 'must' }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.destination, 'must');
+    assert.equal(data.task.due, '2026-04-05');
+  });
+
+  it('handles destination only', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task' });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id: string) => id === 'task1111' ? task : null,
+        moveTask: async (id, dest) => {
+          if (id === 'task1111') return { ...task, source: { file: 'tasks.md', section: '## Anytime' } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destination: 'anytime' }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.destination, 'anytime');
+  });
+
+  it('handles due only', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task' });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id: string) => id === 'task1111' ? task : null,
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') return { ...task, metadata: { due: updates.due ?? undefined } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ due: '2026-04-05' }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.due, '2026-04-05');
+  });
+
+  it('handles completed only (sets completedAt)', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task' });
+    const today = new Date().toISOString().split('T')[0];
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id: string) => id === 'task1111' ? task : null,
+        completeTask: async (id) => {
+          if (id === 'task1111') return { task: { ...task, completed: true, metadata: { completedAt: today } } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: true }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.completed, true);
+  });
+
+  it('handles all three: due + destination + completed', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task', source: { file: 'week.md', section: '### Should complete' } });
+    const today = new Date().toISOString().split('T')[0];
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id: string) => id === 'task1111' ? task : null,
+        moveTask: async (id, dest) => {
+          return { ...task, source: { file: 'week.md', section: '### Must complete' } };
+        },
+        updateTask: async (id, updates) => {
+          return { ...task, metadata: { due: updates.due ?? undefined }, source: { file: 'week.md', section: '### Must complete' } };
+        },
+        completeTask: async (id) => {
+          return { task: { ...task, completed: true, metadata: { completedAt: today }, source: { file: 'week.md', section: '### Must complete' } } };
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ due: '2026-04-05', destination: 'must', completed: true }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.completed, true);
+  });
+
+  it('returns 400 for empty body', async () => {
+    const app = buildTestApp({
+      taskService: {
+        findTask: async () => makeTask({ id: 'task1111' }),
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    assert.equal(res.status, 400);
+    const data = await res.json() as { error: string };
+    assert.ok(data.error.includes('No valid updates'));
+  });
+
+  it('returns 404 for nonexistent task', async () => {
+    const app = buildTestApp({
+      taskService: {
+        findTask: async () => null,
+      },
+    });
+
+    const res = await app.request('/api/tasks/nonexistent', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ due: '2026-04-05' }),
+    });
+
+    assert.equal(res.status, 404);
+  });
+});
+
 describe('PATCH /api/tasks/:id', () => {
   it('updates completion status', async () => {
     const task = makeTask({ id: 'task1111', text: 'Test task' });
@@ -669,6 +865,7 @@ describe('PATCH /api/tasks/:id', () => {
     const app = buildTestApp({
       taskService: {
         listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
         completeTask: async (id) => {
           if (id === 'task1111') return { task: { ...task, completed: true } };
           throw new Error('No task found');
@@ -693,6 +890,7 @@ describe('PATCH /api/tasks/:id', () => {
     const app = buildTestApp({
       taskService: {
         listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
         updateTask: async (id, updates) => {
           if (id === 'task1111') return { ...task, metadata: { ...task.metadata, due: updates.due ?? undefined } };
           throw new Error('No task found');
@@ -717,6 +915,7 @@ describe('PATCH /api/tasks/:id', () => {
     const app = buildTestApp({
       taskService: {
         listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
         updateTask: async (id, updates) => {
           if (id === 'task1111') {
             const newMetadata = { ...task.metadata };
@@ -749,6 +948,7 @@ describe('PATCH /api/tasks/:id', () => {
     const app = buildTestApp({
       taskService: {
         listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
         moveTask: async (id, dest) => {
           if (id === 'task1111') {
             return { ...task, source: { file: 'tasks.md', section: '## Someday' } };
@@ -772,7 +972,7 @@ describe('PATCH /api/tasks/:id', () => {
   it('returns 404 for unknown ID', async () => {
     const app = buildTestApp({
       taskService: {
-        completeTask: async () => { throw new Error('No task found matching id "unknown"'); },
+        findTask: async () => null,
       },
     });
 
@@ -800,8 +1000,10 @@ describe('PATCH /api/tasks/:id', () => {
   });
 
   it('returns 400 for AmbiguousIdError (lists matched IDs)', async () => {
+    const task = makeTask({ id: 'task1111' });
     const app = buildTestApp({
       taskService: {
+        findTask: async () => task,
         completeTask: async () => {
           throw new Error('Ambiguous prefix "task" matches 2 tasks: task1111, task2222');
         },
@@ -829,6 +1031,7 @@ describe('PATCH /api/tasks/:id', () => {
     const app = buildTestApp({
       taskService: {
         listTasks: () => Promise.resolve([makeTask({ id: 'task1111' })]),
+        findTask: async (id) => makeTask({ id: 'task1111' }),
         completeTask: async (id) => {
           calls.push(`start-${id}`);
           if (calls.length === 1) {
