@@ -18,6 +18,7 @@ import type {
   AreaMemory,
 } from '../models/entities.js';
 import type { MeetingIntelligence, ActionItem } from './meeting-extraction.js';
+import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
 
 /**
  * Input structure for a batch of meeting extractions.
@@ -37,6 +38,14 @@ type FlattenedItem = {
   meetingPath: string;
   text: string; // Normalized text for matching
   owner?: string;
+};
+
+/**
+ * Duplicate group: canonical item + its duplicates.
+ */
+export type DuplicateGroup = {
+  canonical: FlattenedItem;
+  duplicates: FlattenedItem[];
 };
 
 // ---------------------------------------------------------------------------
@@ -80,6 +89,69 @@ function flattenExtractions(extractions: MeetingExtractionBatch[]): FlattenedIte
   }
 
   return items;
+}
+
+// ---------------------------------------------------------------------------
+// Deduplication
+// ---------------------------------------------------------------------------
+
+/**
+ * Find duplicates within a batch using Jaccard similarity.
+ *
+ * Items are compared pairwise. Only items of the same type are compared.
+ * Different owners are never considered duplicates (even if text matches).
+ * First occurrence is kept as canonical; later occurrences are duplicates.
+ *
+ * @param items - Flattened items from extractions
+ * @param threshold - Jaccard threshold (default 0.7)
+ * @returns Groups of duplicates (first occurrence is canonical)
+ */
+export function findDuplicates(
+  items: FlattenedItem[],
+  threshold: number = 0.7,
+): DuplicateGroup[] {
+  const groups: DuplicateGroup[] = [];
+  const assigned = new Set<number>();
+
+  for (let i = 0; i < items.length; i++) {
+    if (assigned.has(i)) continue;
+
+    const canonical = items[i];
+    const duplicates: FlattenedItem[] = [];
+
+    for (let j = i + 1; j < items.length; j++) {
+      if (assigned.has(j)) continue;
+
+      const candidate = items[j];
+
+      // Different owners = not duplicates
+      if (canonical.owner && candidate.owner && canonical.owner !== candidate.owner) {
+        continue;
+      }
+
+      // Same type only (don't match action to decision)
+      if (canonical.type !== candidate.type) {
+        continue;
+      }
+
+      const similarity = jaccardSimilarity(
+        normalizeForJaccard(canonical.text),
+        normalizeForJaccard(candidate.text),
+      );
+
+      if (similarity > threshold) {
+        duplicates.push(candidate);
+        assigned.add(j);
+      }
+    }
+
+    if (duplicates.length > 0) {
+      assigned.add(i);
+      groups.push({ canonical, duplicates });
+    }
+  }
+
+  return groups;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,12 +241,27 @@ export function reconcileMeetingBatch(
   // Step 1: Flatten all items
   const allItems = flattenExtractions(extractions);
 
-  // Steps 2-6: Process each item
+  // Step 2: Find duplicates within batch
+  const duplicateGroups = findDuplicates(allItems);
+  const duplicateSet = new Set<FlattenedItem>(
+    duplicateGroups.flatMap((g) => g.duplicates),
+  );
+
+  // Steps 3-6: Process each item
   const reconciled: ReconciledItem[] = allItems.map((item) => {
-    const status: ReconciledItem['status'] = 'keep';
+    let status: ReconciledItem['status'] = 'keep';
     const annotations: ReconciledItem['annotations'] = { why: '' };
 
-    // TODO: Dedup (P2-3), completion matching (P2-5), memory matching (P2-6)
+    // Step 2: Check if this is a duplicate (not canonical)
+    if (duplicateSet.has(item)) {
+      status = 'duplicate';
+      const group = duplicateGroups.find((g) => g.duplicates.includes(item));
+      if (group) {
+        annotations.duplicateOf = `${group.canonical.meetingPath}:${group.canonical.type}`;
+      }
+    }
+
+    // TODO: completion matching (P2-5), memory matching (P2-6)
 
     // Step 5: Score relevance
     const { score, tier, matchedArea, matchedPerson } = scoreRelevance(item, context);

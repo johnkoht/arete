@@ -5,7 +5,9 @@ import {
   flattenExtractions,
   scoreRelevance,
   generateWhy,
+  findDuplicates,
   type MeetingExtractionBatch,
+  type DuplicateGroup,
 } from '../../src/services/meeting-reconciliation.js';
 import type {
   ReconciliationContext,
@@ -323,6 +325,197 @@ describe('scoreRelevance', () => {
     assert.equal(result.score, 0);
     assert.equal(result.tier, 'low');
     assert.equal(result.matchedArea, undefined);
+  });
+});
+
+describe('findDuplicates', () => {
+  it('groups exact duplicates', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Use React for frontend'],
+      }),
+      makeBatch('meetings/m2.md', {
+        decisions: ['Use React for frontend'],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].canonical.meetingPath, 'meetings/m1.md');
+    assert.equal(groups[0].duplicates.length, 1);
+    assert.equal(groups[0].duplicates[0].meetingPath, 'meetings/m2.md');
+  });
+
+  it('groups near-duplicates above threshold', () => {
+    // "Send API docs to Sarah" (5 words) vs "Send API docs to Sarah now" (6 words)
+    // Jaccard = 5/6 = 0.833 > 0.7
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to Sarah', direction: 'i_owe_them' },
+        ],
+      }),
+      makeBatch('meetings/m2.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to Sarah now', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].canonical.text, 'Send API docs to Sarah');
+    assert.equal(groups[0].duplicates[0].text, 'Send API docs to Sarah now');
+  });
+
+  it('does not group items below threshold', () => {
+    // "Review PR" (2 words) vs "Review the pull request" (4 words)
+    // Jaccard: intersection={review} = 1, union={review, pr, the, pull, request} = 5
+    // 1/5 = 0.2 < 0.7
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Bob', ownerSlug: 'bob', description: 'Review PR', direction: 'i_owe_them' },
+        ],
+      }),
+      makeBatch('meetings/m2.md', {
+        actionItems: [
+          { owner: 'Bob', ownerSlug: 'bob', description: 'Review the pull request', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 0);
+  });
+
+  it('does not group items with different owners', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send API docs to Sarah', direction: 'i_owe_them' },
+        ],
+      }),
+      makeBatch('meetings/m2.md', {
+        actionItems: [
+          { owner: 'Bob', ownerSlug: 'bob', description: 'Send API docs to Sarah', direction: 'i_owe_them' },
+        ],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 0);
+  });
+
+  it('does not group items with different types', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Deploy the service', direction: 'i_owe_them' },
+        ],
+        decisions: ['Deploy the service'],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 0);
+  });
+
+  it('respects threshold boundary (0.69 vs 0.71)', () => {
+    // "send api docs" (3 words) vs "send api docs to sarah" (5 words)
+    // Jaccard = 3/5 = 0.6 — below both thresholds
+    // Use precise boundary: "a b c d e f g" (7) vs "a b c d e f g h" (8) = 7/8 = 0.875
+    // And "a b c" (3) vs "a b c d e" (5) = 3/5 = 0.6
+
+    // Below 0.7: "update docs" (2) vs "update docs for api release" (5) = 2/5 = 0.4
+    const itemsBelow = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['update docs'] }),
+      makeBatch('meetings/m2.md', { decisions: ['update docs for api release'] }),
+    ]);
+    assert.equal(findDuplicates(itemsBelow, 0.7).length, 0);
+
+    // Above 0.7: "update docs for the api" (5) vs "update docs for the api release" (6) = 5/6 = 0.833
+    const itemsAbove = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['update docs for the api'] }),
+      makeBatch('meetings/m2.md', { decisions: ['update docs for the api release'] }),
+    ]);
+    assert.equal(findDuplicates(itemsAbove, 0.7).length, 1);
+  });
+
+  it('returns empty for single item', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Only one decision'] }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 0);
+  });
+
+  it('handles multiple duplicate groups', () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Use React for frontend', 'Deploy to AWS'],
+      }),
+      makeBatch('meetings/m2.md', {
+        decisions: ['Use React for frontend', 'Deploy to AWS'],
+      }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 2);
+  });
+
+  it('allows items without owners to be grouped', () => {
+    // decisions/learnings have no owner — should still be compared
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { learnings: ['Users prefer dark mode'] }),
+      makeBatch('meetings/m2.md', { learnings: ['Users prefer dark mode'] }),
+    ]);
+
+    const groups = findDuplicates(items);
+    assert.equal(groups.length, 1);
+  });
+});
+
+describe('reconcileMeetingBatch deduplication integration', () => {
+  it('marks duplicates in reconciled output', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        decisions: ['Use React for frontend'],
+      }),
+      makeBatch('meetings/m2.md', {
+        decisions: ['Use React for frontend'],
+      }),
+    ];
+
+    const result = reconcileMeetingBatch(batch, makeContext());
+
+    const kept = result.items.filter((i) => i.status === 'keep');
+    const dupes = result.items.filter((i) => i.status === 'duplicate');
+
+    assert.equal(kept.length, 1);
+    assert.equal(dupes.length, 1);
+    assert.equal(dupes[0].annotations.duplicateOf, 'meetings/m1.md:decision');
+    assert.equal(result.stats.duplicatesRemoved, 1);
+  });
+
+  it('does not mark different-owner action items as duplicates', () => {
+    const batch = [
+      makeBatch('meetings/m1.md', {
+        actionItems: [
+          { owner: 'Alice', ownerSlug: 'alice', description: 'Send report', direction: 'i_owe_them' },
+        ],
+      }),
+      makeBatch('meetings/m2.md', {
+        actionItems: [
+          { owner: 'Bob', ownerSlug: 'bob', description: 'Send report', direction: 'i_owe_them' },
+        ],
+      }),
+    ];
+
+    const result = reconcileMeetingBatch(batch, makeContext());
+    assert.equal(result.items.every((i) => i.status === 'keep'), true);
+    assert.equal(result.stats.duplicatesRemoved, 0);
   });
 });
 
