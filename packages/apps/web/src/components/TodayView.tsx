@@ -179,10 +179,20 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
             return (
               <div
                 key={task.id}
-                className="flex items-center gap-3 p-3 border rounded-md"
+                className={`flex items-center gap-3 p-3 border rounded-md transition-opacity duration-300 ${
+                  isTaskPending ? 'opacity-50' : ''
+                }`}
               >
-                {/* Checkbox placeholder - could add completion later */}
-                <div className="flex-shrink-0 h-4 w-4 rounded border border-muted-foreground/50" />
+                {/* Checkbox */}
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={task.completed}
+                  aria-label={`Complete task: ${task.text}`}
+                  disabled={isTaskPending}
+                  onClick={() => handleComplete(task.id)}
+                  className="flex-shrink-0 h-4 w-4 rounded border border-muted-foreground/50 hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
 
                 {/* Avatar */}
                 {task.person && (
