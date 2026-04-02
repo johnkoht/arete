@@ -78,7 +78,7 @@ export type {
 } from './meeting-processing.js';
 
 // Meeting reconciliation
-export { reconcileMeetingBatch } from './meeting-reconciliation.js';
+export { reconcileMeetingBatch, loadReconciliationContext } from './meeting-reconciliation.js';
 export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
 
 // Pattern detection

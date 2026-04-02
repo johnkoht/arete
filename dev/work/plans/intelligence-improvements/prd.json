@@ -6,7 +6,7 @@
     {
       "id": "P0-1",
       "title": "Raise Extraction Limits",
-      "description": "Raise THOROUGH_LIMITS from 10→20 and CATEGORY_LIMITS from 7→10 to stop silent truncation of items.",
+      "description": "Raise THOROUGH_LIMITS from 10\u219220 and CATEGORY_LIMITS from 7\u219210 to stop silent truncation of items.",
       "acceptanceCriteria": [
         "THOROUGH_LIMITS.actionItems === 20 (was 10)",
         "CATEGORY_LIMITS === 10 (was 7)",
@@ -16,9 +16,10 @@
       "filesToRead": [
         "packages/core/src/services/meeting-extraction.ts"
       ],
-      "status": "pending",
+      "status": "complete",
       "passes": false,
-      "attemptCount": 0
+      "attemptCount": 0,
+      "commitSha": "243e7d2"
     },
     {
       "id": "P0-2",
@@ -35,14 +36,15 @@
         "packages/core/src/services/meeting-extraction.ts",
         "packages/core/src/services/LEARNINGS.md"
       ],
-      "status": "pending",
+      "status": "complete",
       "passes": false,
-      "attemptCount": 0
+      "attemptCount": 0,
+      "commitSha": "b59ccbd"
     },
     {
       "id": "P0-3",
       "title": "Add Golden File Tests for Extraction",
-      "description": "Add golden file tests to establish extraction quality baseline using synthetic/anonymized transcripts. ⚠️ Pre-Mortem Warning (R2): Use synthetic transcripts, not real meeting content. Mock LLM calls in tests.",
+      "description": "Add golden file tests to establish extraction quality baseline using synthetic/anonymized transcripts. \u26a0\ufe0f Pre-Mortem Warning (R2): Use synthetic transcripts, not real meeting content. Mock LLM calls in tests.",
       "acceptanceCriteria": [
         "3+ synthetic meeting transcripts in test-data/meetings/ (anonymized, not real content)",
         "Golden files in test-data/meetings/expected/ with expected extraction outputs",
@@ -79,12 +81,12 @@
     {
       "id": "P1-2",
       "title": "Add memory.md Parser",
-      "description": "Add memory.md parser to AreaParserService that reads and parses area memory files. ⚠️ Pre-Mortem Warning (R8): Parser must be lenient. Test with malformed input.",
+      "description": "Add memory.md parser to AreaParserService that reads and parses area memory files. \u26a0\ufe0f Pre-Mortem Warning (R8): Parser must be lenient. Test with malformed input.",
       "acceptanceCriteria": [
         "parseMemoryFile(areaSlug: string): Promise<AreaMemory | null> method added to AreaParserService",
         "Memory file location: areas/{slug}/memory.md",
         "Returns null when file doesn't exist (no error thrown)",
-        "Parser is lenient: missing sections → empty arrays (not error)",
+        "Parser is lenient: missing sections \u2192 empty arrays (not error)",
         "Case-insensitive section matching",
         "getAreaContext() includes parsed memory when available",
         "Log warning (not error) for malformed sections"
@@ -136,13 +138,13 @@
     {
       "id": "P2-2",
       "title": "Implement reconcileMeetingBatch",
-      "description": "Implement the core reconcileMeetingBatch() function that orchestrates deduplication, completion matching, and relevance scoring. ⚠️ Pre-Mortem Warning (R1): Read meeting-extraction.ts first for extraction output shapes.",
+      "description": "Implement the core reconcileMeetingBatch() function that orchestrates deduplication, completion matching, and relevance scoring. \u26a0\ufe0f Pre-Mortem Warning (R1): Read meeting-extraction.ts first for extraction output shapes.",
       "acceptanceCriteria": [
         "Function signature: reconcileMeetingBatch(extractions: MeetingExtractionBatch[], context: ReconciliationContext): ReconciliationResult",
-        "Pure function — no storage/search access (all data passed in)",
+        "Pure function \u2014 no storage/search access (all data passed in)",
         "Calls internal functions: findDuplicates, matchCompletedTasks, matchRecentMemory, scoreRelevance, annotateItems",
         "Returns ReconciliationResult with all items annotated",
-        "Items processed in order: dedup → completion → memory → score → annotate"
+        "Items processed in order: dedup \u2192 completion \u2192 memory \u2192 score \u2192 annotate"
       ],
       "filesToRead": [
         "packages/core/src/services/meeting-processing.ts",
@@ -155,11 +157,11 @@
     {
       "id": "P2-3",
       "title": "Implement Jaccard Deduplication",
-      "description": "Implement within-batch deduplication using Jaccard similarity. ⚠️ Pre-Mortem Warning (R6): Test strings must be mathematically verified.",
+      "description": "Implement within-batch deduplication using Jaccard similarity. \u26a0\ufe0f Pre-Mortem Warning (R6): Test strings must be mathematically verified.",
       "acceptanceCriteria": [
         "findDuplicates(items: ExtractedItem[]): DuplicateGroup[] function",
         "Reuses existing normalizeForJaccard() and jaccardSimilarity() from meeting-extraction.ts",
-        "Threshold: Jaccard > 0.7 → duplicate",
+        "Threshold: Jaccard > 0.7 \u2192 duplicate",
         "First occurrence kept as status: 'keep'; later occurrences marked status: 'duplicate'",
         "Different owners = NOT duplicates (even if text matches)",
         "Items grouped by duplicate set; each group has one canonical item"
@@ -175,7 +177,7 @@
     {
       "id": "P2-4",
       "title": "Implement QMD Workspace Matching",
-      "description": "Implement matching against prior workspace content using QMD vsearch. ⚠️ Pre-Mortem Warning (R4): When QMD unavailable, items retain status: 'keep'. Log warning for visibility.",
+      "description": "Implement matching against prior workspace content using QMD vsearch. \u26a0\ufe0f Pre-Mortem Warning (R4): When QMD unavailable, items retain status: 'keep'. Log warning for visibility.",
       "acceptanceCriteria": [
         "matchPriorWorkspace(items: ExtractedItem[], searchProvider: SearchProvider | null): Promise<WorkspaceMatch[]>",
         "Uses QMD vsearch against 'all' scope for semantic matching",
@@ -187,9 +189,10 @@
         "packages/core/src/search/types.ts",
         "packages/core/src/search/providers/qmd.ts"
       ],
-      "status": "pending",
+      "status": "complete",
       "passes": false,
-      "attemptCount": 0
+      "attemptCount": 0,
+      "commitSha": "7937e61"
     },
     {
       "id": "P2-5",
@@ -229,12 +232,12 @@
     {
       "id": "P2-7",
       "title": "Implement Relevance Scoring",
-      "description": "Implement relevance scoring based on area/project/person matches. ⚠️ Pre-Mortem Warning (R6): Conservative thresholds. Log scoring details with ARETE_DEBUG=1.",
+      "description": "Implement relevance scoring based on area/project/person matches. \u26a0\ufe0f Pre-Mortem Warning (R6): Conservative thresholds. Log scoring details with ARETE_DEBUG=1.",
       "acceptanceCriteria": [
         "scoreRelevance(item: ExtractedItem, context: ReconciliationContext): RelevanceScore",
         "Scoring formula: keywordMatch (0.3), personMatch (0.3), areaMatch (0.4)",
         "Returns score 0-1 and breakdown of contributing factors",
-        "Tiers: score >= 0.7 → 'high', >= 0.4 → 'normal', else 'low'"
+        "Tiers: score >= 0.7 \u2192 'high', >= 0.4 \u2192 'normal', else 'low'"
       ],
       "filesToRead": [
         "packages/core/src/services/task-scoring.ts"
@@ -246,7 +249,7 @@
     {
       "id": "P2-8",
       "title": "Implement Annotations",
-      "description": "Implement 'why' annotations for reconciled items. ⚠️ Pre-Mortem Warning (R7): Cap to ONE primary reason per item.",
+      "description": "Implement 'why' annotations for reconciled items. \u26a0\ufe0f Pre-Mortem Warning (R7): Cap to ONE primary reason per item.",
       "acceptanceCriteria": [
         "annotateItem(item: ReconciledItem, context: ReconciliationContext): ReconciledItem",
         "Populates annotations.why with human-readable explanation",
@@ -255,14 +258,15 @@
         "Compute why AFTER tier is determined"
       ],
       "filesToRead": [],
-      "status": "pending",
+      "status": "complete",
       "passes": false,
-      "attemptCount": 0
+      "attemptCount": 0,
+      "commitSha": "9248b19"
     },
     {
       "id": "P2-9",
       "title": "Wire Reconciliation into pullFathom",
-      "description": "Integrate reconciliation into the arete pull fathom command. ⚠️ Pre-Mortem Warning (R5): Add test with --reconcile=false FIRST to verify existing behavior.",
+      "description": "Integrate reconciliation into the arete pull fathom command. \u26a0\ufe0f Pre-Mortem Warning (R5): Add test with --reconcile=false FIRST to verify existing behavior.",
       "acceptanceCriteria": [
         "pullFathom() accepts options.reconcile?: boolean (default: false)",
         "When reconcile=true: after all meetings saved, load batch, reconcile, update staged items",
@@ -275,9 +279,10 @@
         "packages/core/src/integrations/fathom/index.ts",
         "packages/cli/src/commands/pull.ts"
       ],
-      "status": "pending",
+      "status": "complete",
       "passes": false,
-      "attemptCount": 0
+      "attemptCount": 0,
+      "commitSha": "1a3588e"
     },
     {
       "id": "P2-10",
@@ -287,8 +292,8 @@
         "Format includes tier indicator: [HIGH], [NORMAL], [LOW]",
         "Format includes area/project annotation when present",
         "Duplicate items excluded from main output (noted in stats summary)",
-        "Example: - ai_001: [HIGH] [@owner → @counterparty] Description (area: communications)",
-        "Stats summary: Processed: 40 items → 15 shown (8 duplicates, 12 low-relevance, 5 completed)"
+        "Example: - ai_001: [HIGH] [@owner \u2192 @counterparty] Description (area: communications)",
+        "Stats summary: Processed: 40 items \u2192 15 shown (8 duplicates, 12 low-relevance, 5 completed)"
       ],
       "filesToRead": [
         "packages/cli/src/formatters/"
@@ -355,10 +360,45 @@
     "completedTasks": 0,
     "failedTasks": 0,
     "phases": [
-      {"name": "Phase 0: Extraction Fixes", "tasks": ["P0-1", "P0-2", "P0-3"]},
-      {"name": "Phase 1: Context Cards", "tasks": ["P1-1", "P1-2", "P1-3"]},
-      {"name": "Phase 2: Reconciliation Pass", "tasks": ["P2-1", "P2-2", "P2-3", "P2-4", "P2-5", "P2-6", "P2-7", "P2-8", "P2-9", "P2-10", "P2-11"]},
-      {"name": "Phase 3: QMD Scope Expansion", "tasks": ["P3-1", "P3-2"]}
+      {
+        "name": "Phase 0: Extraction Fixes",
+        "tasks": [
+          "P0-1",
+          "P0-2",
+          "P0-3"
+        ]
+      },
+      {
+        "name": "Phase 1: Context Cards",
+        "tasks": [
+          "P1-1",
+          "P1-2",
+          "P1-3"
+        ]
+      },
+      {
+        "name": "Phase 2: Reconciliation Pass",
+        "tasks": [
+          "P2-1",
+          "P2-2",
+          "P2-3",
+          "P2-4",
+          "P2-5",
+          "P2-6",
+          "P2-7",
+          "P2-8",
+          "P2-9",
+          "P2-10",
+          "P2-11"
+        ]
+      },
+      {
+        "name": "Phase 3: QMD Scope Expansion",
+        "tasks": [
+          "P3-1",
+          "P3-2"
+        ]
+      }
     ]
   }
 }

@@ -24,6 +24,7 @@ export function registerPullCommand(program: Command): void {
     .option('--destination <path>', 'Destination path for Notion pulls', DEFAULT_NOTION_DESTINATION)
     .option('--dry-run', 'Fetch + convert and print markdown without saving (notion only)')
     .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--reconcile', 'Run reconciliation after Fathom pull (cross-meeting dedup and scoring)')
     .option('--json', 'Output as JSON')
     .action(
       async (
@@ -35,6 +36,7 @@ export function registerPullCommand(program: Command): void {
           destination?: string;
           dryRun?: boolean;
           skipQmd?: boolean;
+          reconcile?: boolean;
           json?: boolean;
         },
       ) => {
@@ -68,7 +70,7 @@ export function registerPullCommand(program: Command): void {
 
         if (integration === 'fathom' || !integration) {
           const config = await loadConfig(services.storage, root);
-          const result = await services.integrations.pull(root, 'fathom', { integration: 'fathom', days });
+          const result = await services.integrations.pull(root, 'fathom', { integration: 'fathom', days, reconcile: opts.reconcile });
 
           // Auto-refresh qmd index after write (skip if nothing new or --skip-qmd)
           let qmdResult: QmdRefreshResult | undefined;
@@ -85,6 +87,7 @@ export function registerPullCommand(program: Command): void {
                   itemsProcessed: result.itemsProcessed,
                   itemsCreated: result.itemsCreated,
                   errors: result.errors,
+                  reconciliation: result.reconciliation ? result.reconciliation.stats : undefined,
                   qmd: qmdResult ?? { indexed: false, skipped: true },
                 },
                 null,
@@ -103,6 +106,11 @@ export function registerPullCommand(program: Command): void {
             success(`Fathom pull complete! ${result.itemsCreated} item(s) saved.`);
           } else {
             error(`Fathom pull failed: ${result.errors.join(', ')}`);
+          }
+          if (result.reconciliation) {
+            const s = result.reconciliation.stats;
+            console.log('');
+            info(`Reconciliation: ${result.reconciliation.items.length} items processed, ${s.duplicatesRemoved} duplicates removed, ${s.completedMatched} matched to completed, ${s.lowRelevanceCount} low relevance`);
           }
           displayQmdResult(qmdResult);
           return;

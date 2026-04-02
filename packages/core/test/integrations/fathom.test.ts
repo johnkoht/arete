@@ -376,3 +376,194 @@ describe('pullFathom importance inference', () => {
     assert.ok(savedFile.includes('importance: light'), 'should have importance: light (large audience, no agenda)');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Reconciliation wiring tests (P2-9)
+// ---------------------------------------------------------------------------
+
+describe('pullFathom reconciliation', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    paths = makeTestPaths(WORKSPACE);
+    setupFetchMock();
+  });
+
+  afterEach(() => {
+    teardownFetchMock();
+  });
+
+  /** Helper: queue a standard Fathom API response with one meeting */
+  function queueOneMeeting(overrides?: Partial<Record<string, unknown>>): void {
+    queueFetch({
+      items: [
+        {
+          recording_id: 99001,
+          title: 'Reconcile Test Meeting',
+          created_at: '2026-02-01T10:00:00Z',
+          recording_start_time: '2026-02-01T10:00:00Z',
+          recording_end_time: '2026-02-01T11:00:00Z',
+          default_summary: { markdown_formatted: 'Test summary' },
+          transcript: [],
+          action_items: [
+            { description: 'Follow up on API design' },
+            { description: 'Send docs to team' },
+          ],
+          calendar_invitees: [],
+          url: 'https://fathom.video/meeting/99001',
+          ...overrides,
+        },
+      ],
+    });
+  }
+
+  it('works without --reconcile (backward compatibility)', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+    queueOneMeeting();
+
+    // No reconcile option → should work exactly as before
+    const result = await pullFathom(storage, WORKSPACE, paths, 7);
+
+    assert.equal(result.saved, 1);
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.success, true);
+    assert.equal(result.reconciliation, undefined, 'no reconciliation when option not set');
+  });
+
+  it('works with reconcile=false (explicit)', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+    queueOneMeeting();
+
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: false });
+
+    assert.equal(result.saved, 1);
+    assert.equal(result.reconciliation, undefined, 'no reconciliation when reconcile=false');
+  });
+
+  it('runs reconciliation when reconcile=true and meetings saved', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+    queueOneMeeting();
+
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: true });
+
+    assert.equal(result.saved, 1);
+    assert.ok(result.reconciliation, 'reconciliation should be present');
+    assert.ok(Array.isArray(result.reconciliation.items), 'should have reconciled items');
+    // 2 action items from the meeting
+    assert.equal(result.reconciliation.items.length, 2);
+    assert.ok(result.reconciliation.stats, 'should have stats');
+  });
+
+  it('skips reconciliation when no meetings saved (all duplicates)', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+
+    // First pull: save the meeting
+    queueOneMeeting();
+    await pullFathom(storage, WORKSPACE, paths, 7);
+
+    // Second pull: same meeting → already exists → saved=0
+    queueOneMeeting();
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: true });
+
+    assert.equal(result.saved, 0, 'no new meetings saved');
+    assert.equal(result.reconciliation, undefined, 'no reconciliation when saved=0');
+  });
+
+  it('uses area memories for relevance scoring', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+
+    // Create an area with memory containing a keyword that matches an action item
+    storage.files.set(
+      `${WORKSPACE}/areas/engineering.md`,
+      '---\narea: Engineering\nstatus: active\n---\n\n# Engineering\n'
+    );
+    storage.files.set(
+      `${WORKSPACE}/areas/engineering/memory.md`,
+      '## Keywords\n\n- API design\n- architecture\n\n## Active People\n\n- john\n\n## Open Work\n\n## Recently Completed\n\n## Recent Decisions\n'
+    );
+
+    queueOneMeeting();
+
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: true });
+
+    assert.ok(result.reconciliation, 'reconciliation should be present');
+    // First action item ("Follow up on API design") should match keyword "API design"
+    const apiItem = result.reconciliation.items.find(
+      (i) => typeof i.original !== 'string' && i.original.description === 'Follow up on API design'
+    );
+    assert.ok(apiItem, 'should have the API design action item');
+    assert.ok(apiItem.relevanceScore > 0, 'should have non-zero relevance due to keyword match');
+    assert.equal(apiItem.annotations.areaSlug, 'engineering', 'should be matched to engineering area');
+  });
+
+  it('handles reconciliation errors gracefully (non-blocking)', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+    queueOneMeeting();
+
+    // Sabotage storage.list to throw when trying to list area files
+    const originalList = storage.list.bind(storage);
+    let callCount = 0;
+    storage.list = async (dir: string, opts?: { extensions?: string[] }) => {
+      callCount++;
+      // The first list call is for agendas (in pullFathom save loop).
+      // Area listing happens during loadReconciliationContext.
+      // Throw on calls that look like areas directory listing.
+      if (dir.includes('/areas')) {
+        throw new Error('Simulated area listing failure');
+      }
+      return originalList(dir, opts);
+    };
+
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: true });
+
+    // Pull itself should succeed despite reconciliation failure
+    assert.equal(result.saved, 1, 'meeting should still be saved');
+    assert.equal(result.success, true, 'pull should succeed');
+    assert.equal(result.reconciliation, undefined, 'reconciliation should be undefined on error');
+  });
+
+  it('reconciles multiple meetings as a batch', async () => {
+    storage.files.set(CRED_PATH, 'fathom:\n  api_key: test-key');
+
+    queueFetch({
+      items: [
+        {
+          recording_id: 99002,
+          title: 'Meeting A',
+          created_at: '2026-02-01T10:00:00Z',
+          recording_start_time: '2026-02-01T10:00:00Z',
+          recording_end_time: '2026-02-01T11:00:00Z',
+          default_summary: { markdown_formatted: 'Meeting A summary' },
+          transcript: [],
+          action_items: [{ description: 'Task from meeting A' }],
+          calendar_invitees: [],
+          url: 'https://fathom.video/meeting/99002',
+        },
+        {
+          recording_id: 99003,
+          title: 'Meeting B',
+          created_at: '2026-02-02T10:00:00Z',
+          recording_start_time: '2026-02-02T10:00:00Z',
+          recording_end_time: '2026-02-02T11:00:00Z',
+          default_summary: { markdown_formatted: 'Meeting B summary' },
+          transcript: [],
+          action_items: [{ description: 'Task from meeting B' }],
+          calendar_invitees: [],
+          url: 'https://fathom.video/meeting/99003',
+        },
+      ],
+    });
+
+    const result = await pullFathom(storage, WORKSPACE, paths, 7, { reconcile: true });
+
+    assert.equal(result.saved, 2);
+    assert.ok(result.reconciliation, 'reconciliation should be present');
+    // 1 action item per meeting = 2 total
+    assert.equal(result.reconciliation.items.length, 2);
+    // Verify items come from different meetings
+    const meetingPaths = new Set(result.reconciliation.items.map((i) => i.meetingPath));
+    assert.equal(meetingPaths.size, 2, 'items should come from different meetings');
+  });
+});

@@ -20,6 +20,8 @@ import type {
 import type { MeetingIntelligence, ActionItem } from './meeting-extraction.js';
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
 import type { SearchProvider, SearchResult } from '../search/types.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+import { AreaParserService } from './area-parser.js';
 
 /**
  * Input structure for a batch of meeting extractions.
@@ -570,6 +572,45 @@ export function reconcileMeetingBatch(
   };
 
   return { items: reconciled, stats };
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation context loader
+// ---------------------------------------------------------------------------
+
+/**
+ * Load reconciliation context from workspace.
+ *
+ * Reads area memory files to build the context needed for reconciliation
+ * scoring and matching. For now, completedTasks and recentCommittedItems
+ * return empty arrays — these will be populated when area task list and
+ * .arete/memory/ integrations are implemented.
+ *
+ * @param storage - StorageAdapter for file access
+ * @param workspaceRoot - Workspace root path
+ * @returns ReconciliationContext for use with reconcileMeetingBatch
+ */
+export async function loadReconciliationContext(
+  storage: StorageAdapter,
+  workspaceRoot: string,
+): Promise<ReconciliationContext> {
+  const areaParser = new AreaParserService(storage, workspaceRoot);
+  const areas = await areaParser.listAreas();
+
+  const areaMemories = new Map<string, AreaMemory>();
+  for (const area of areas) {
+    if (area.memory) {
+      areaMemories.set(area.slug, area.memory);
+    }
+  }
+
+  // For now, return empty arrays for completed tasks and recent memory.
+  // These would be loaded from area task lists and .arete/memory/ in future.
+  return {
+    areaMemories,
+    recentCommittedItems: [],
+    completedTasks: [],
+  };
 }
 
 // Export internals for testing
