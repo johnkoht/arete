@@ -426,19 +426,40 @@ function scoreRelevance(
 // ---------------------------------------------------------------------------
 
 /**
- * Generate human-readable "why" annotation for a reconciled item.
+ * Generate a human-readable "why" annotation.
+ * Uses ONE primary reason (highest contributing factor from breakdown).
  */
 function generateWhy(
   tier: 'high' | 'normal' | 'low',
-  annotations: Partial<ReconciledItem['annotations']>,
+  breakdown: RelevanceScore['breakdown'],
+  matchedArea?: string,
+  matchedPerson?: string,
 ): string {
-  if (annotations.areaSlug) {
-    return `${tier.toUpperCase()}: Area match (${annotations.areaSlug})`;
+  const tierLabel = tier.toUpperCase();
+
+  // Find primary reason (highest score)
+  const factors = [
+    { name: 'area', score: breakdown.areaMatch },
+    { name: 'keyword', score: breakdown.keywordMatch },
+    { name: 'person', score: breakdown.personMatch },
+  ].sort((a, b) => b.score - a.score);
+
+  const primary = factors[0];
+
+  if (primary.score === 0) {
+    return `${tierLabel}: No area/person/keyword matches`;
   }
-  if (annotations.personSlug) {
-    return `${tier.toUpperCase()}: Person match (${annotations.personSlug})`;
+
+  switch (primary.name) {
+    case 'area':
+      return `${tierLabel}: Area match (${matchedArea ?? 'unknown'})`;
+    case 'keyword':
+      return `${tierLabel}: Keyword match (${matchedArea ?? 'unknown'})`;
+    case 'person':
+      return `${tierLabel}: Person match (${matchedPerson ?? 'unknown'})`;
+    default:
+      return `${tierLabel}: Matched`;
   }
-  return `${tier.toUpperCase()}: No area/person/keyword matches`;
 }
 
 // ---------------------------------------------------------------------------
@@ -527,7 +548,7 @@ export function reconcileMeetingBatch(
 
     // Step 6: Generate annotation (preserve memory match why)
     if (!annotations.why) {
-      annotations.why = generateWhy(tier, annotations);
+      annotations.why = generateWhy(tier, relevance.breakdown, matchedArea, matchedPerson);
     }
 
     return {
