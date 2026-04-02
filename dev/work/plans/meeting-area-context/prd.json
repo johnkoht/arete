@@ -1,0 +1,163 @@
+{
+  "name": "meeting-area-context",
+  "branchName": "feature/meeting-area-context",
+  "goal": "Enable meeting-to-area association before processing so area context (current state, recent decisions) can be injected into the extraction prompt. Support both agent mode (batch confirmation) and UI mode (sidebar display + modal selection).",
+  "userStories": [
+    {
+      "id": "task-1-frontmatter",
+      "title": "Add area field to meeting frontmatter",
+      "description": "Add support for explicit `area` field in meeting YAML frontmatter. Update `buildMeetingContext()` to check frontmatter `area` first, falling back to title matching. Files: packages/core/src/integrations/meetings.ts, packages/core/src/services/meeting-context.ts",
+      "acceptanceCriteria": [
+        "MeetingForSave.area is optional string",
+        "ParsedMeetingFrontmatter interface includes area?: string",
+        "Meeting files can have area: slug in YAML frontmatter",
+        "Valid area slug must match an existing area file (areas/{slug}.md)",
+        "Frontmatter area takes precedence over getAreaForMeeting() title matching",
+        "When area slug doesn't match existing area: log warning, areaContext is null, no error thrown",
+        "buildMeetingContext() returns areaContext when frontmatter area matches valid area",
+        "Existing meetings without area field continue to work (backward compatible)",
+        "Tests written BEFORE implementation: meeting with area uses that context, without area falls back, invalid slug logs warning",
+        "npm run typecheck && npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-suggestion",
+      "title": "Create area suggestion function",
+      "description": "Add suggestAreaForMeeting() to AreaParserService for content-based area matching. Export confidence constants. Implement Jaccard similarity for keyword overlap. File: packages/core/src/services/area-parser.ts",
+      "acceptanceCriteria": [
+        "Function exported from area-parser.ts",
+        "Confidence constants exported: EXACT_TITLE_MATCH_CONFIDENCE=1.0, AREA_NAME_MATCH_CONFIDENCE=0.8, KEYWORD_OVERLAP_MAX_CONFIDENCE=0.7, MINIMUM_KEYWORD_OVERLAP=2, SUGGESTION_THRESHOLD=0.5",
+        "Returns null rather than low-confidence guesses (< SUGGESTION_THRESHOLD)",
+        "Pure string matching (no LLM calls)",
+        "Keyword matching uses stop word filtering",
+        "All matching is case-insensitive",
+        "Handles missing/empty meeting content gracefully",
+        "Only uses first 500 chars of transcript (truncates longer)",
+        "Tests written BEFORE implementation covering all heuristics",
+        "npm run typecheck && npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-backend",
+      "title": "Backend area suggestion endpoint",
+      "description": "Add GET /api/meetings/:slug/suggest-area endpoint and update POST /process to accept optional area param. Use withSlugLock() for atomic operations. File: packages/apps/backend/src/routes/meetings.ts",
+      "acceptanceCriteria": [
+        "GET /suggest-area returns { suggestion: { areaSlug, confidence } | null, areas: string[] }",
+        "Areas list sorted alphabetically",
+        "GET /suggest-area handles missing meeting (404), missing areas (empty list)",
+        "POST /process accepts { area?: string } in body",
+        "POST /process uses withSlugLock() for atomic operation",
+        "Area saved to frontmatter before runProcessingSession() starts",
+        "Invalid area returns 400 with error message including valid areas list",
+        "GET /:slug includes area and suggestedArea in response",
+        "NO separate POST /area endpoint (save atomically with process)",
+        "Tests written BEFORE implementation",
+        "npm run typecheck && npm test passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-ui-display",
+      "title": "UI MetadataPanel area display",
+      "description": "Add area field to meeting sidebar showing confirmed or suggested area. Files: packages/apps/web/src/api/types.ts, packages/apps/web/src/api/meetings.ts, packages/apps/web/src/components/MetadataPanel.tsx",
+      "acceptanceCriteria": [
+        "Meeting type includes area?: string and suggestedArea?: string",
+        "MetadataPanel shows area below Attendees",
+        "Visual distinction between confirmed and suggested (badge styling)",
+        "Sidebar area is read-only (no onClick, no edit capability)",
+        "Shows Loading placeholder while fetching",
+        "If suggestion fetch fails, shows Area: —",
+        "Long area names truncated with tooltip on hover",
+        "Tests written BEFORE implementation",
+        "All tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-ui-modal",
+      "title": "UI Process Meeting modal area selection",
+      "description": "Add area dropdown to Process Meeting modal with pre-filled suggestion. File: packages/apps/web/src/pages/MeetingDetail.tsx",
+      "acceptanceCriteria": [
+        "Process modal includes area dropdown above Process button",
+        "Dropdown populated with all workspace areas + None option",
+        "Dropdown label shows area name, value is slug",
+        "Pre-fills with suggested area when available",
+        "Process mutation sends { area: selectedSlug } (or area: null if None)",
+        "Reprocess modal has identical area selection",
+        "Dropdown disabled while mutation is in-flight",
+        "Keyboard accessible (arrow keys, enter to select)",
+        "Tests written BEFORE implementation",
+        "All tests pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-skills",
+      "title": "Agent skill updates",
+      "description": "Update daily-winddown and process-meetings skills with area confirmation checkpoint. Files: packages/runtime/skills/daily-winddown/SKILL.md, packages/runtime/skills/process-meetings/SKILL.md",
+      "acceptanceCriteria": [
+        "daily-winddown has Area Association checkpoint in Phase 1",
+        "process-meetings has similar checkpoint",
+        "Agent presents suggestions in table format (Title | Date | Suggested Area | Confidence)",
+        "Single batch prompt (not N prompts for N meetings)",
+        "User can skip area association entirely",
+        "User can provide custom area not in suggestions",
+        "Gracefully handles case where all suggestions are null"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-catalog",
+      "title": "Update capabilities.json",
+      "description": "Update capability catalog with area field documentation. File: dev/catalog/capabilities.json",
+      "acceptanceCriteria": [
+        "meeting-extraction capability notes mention area field and suggestion feature",
+        "readBeforeChange includes packages/core/src/services/area-parser.ts",
+        "All quality gates pass (npm run typecheck && npm test)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8-e2e",
+      "title": "E2E verification",
+      "description": "Manual verification of full flow before merge. Test: sync meeting, see suggested area, process with area, verify frontmatter, agent mode confirmation.",
+      "acceptanceCriteria": [
+        "Sync a meeting via Krisp/Fathom",
+        "Open meeting in UI → see suggested area in sidebar",
+        "Open Process modal → see area dropdown pre-filled",
+        "Change area selection → process meeting",
+        "Verify area in frontmatter (resources/meetings/{slug}.md)",
+        "Verify area context was injected in extraction",
+        "Reprocess with different area → verify frontmatter updated",
+        "Reprocess with None → verify area cleared",
+        "Agent mode: Run daily-winddown → verify area confirmation step",
+        "No regressions in existing meeting processing flow"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-02T02:50:00Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
