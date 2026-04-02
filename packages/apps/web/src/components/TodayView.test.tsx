@@ -41,6 +41,7 @@ vi.mock('sonner', () => ({
 // Mock task hooks - use vi.hoisted
 const {
   mockUseTasks,
+  mockUseCompletedTodayTasks,
   mockUseTaskSuggestions,
   mockUpdateMutate,
   mockUseUpdateTask,
@@ -48,6 +49,7 @@ const {
   mockUseCompleteTask,
 } = vi.hoisted(() => ({
   mockUseTasks: vi.fn(),
+  mockUseCompletedTodayTasks: vi.fn(),
   mockUseTaskSuggestions: vi.fn(),
   mockUpdateMutate: vi.fn(),
   mockUseUpdateTask: vi.fn(),
@@ -57,6 +59,7 @@ const {
 
 vi.mock('@/hooks/tasks.js', () => ({
   useTasks: () => mockUseTasks(),
+  useCompletedTodayTasks: () => mockUseCompletedTodayTasks(),
   useTaskSuggestions: () => mockUseTaskSuggestions(),
   useUpdateTask: () => mockUseUpdateTask(),
   useCompleteTask: () => mockUseCompleteTask(),
@@ -228,6 +231,32 @@ const SUGGESTED_TASK_2: SuggestedTask = {
   },
 };
 
+const COMPLETED_TASK_1: Task = {
+  id: 'completed-001',
+  text: 'Completed task 1',
+  destination: 'must',
+  due: getToday(),
+  area: null,
+  project: null,
+  person: null,
+  from: null,
+  completed: true,
+  source: { file: 'now/tasks.md', section: 'Tasks' },
+};
+
+const COMPLETED_TASK_2: Task = {
+  id: 'completed-002',
+  text: 'Completed task 2',
+  destination: 'must',
+  due: getToday(),
+  area: 'Engineering',
+  project: null,
+  person: null,
+  from: null,
+  completed: true,
+  source: { file: 'now/tasks.md', section: 'Tasks' },
+};
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TodayView', () => {
@@ -240,6 +269,13 @@ describe('TodayView', () => {
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+    });
+
+    // Default: no completed tasks today
+    mockUseCompletedTodayTasks.mockReturnValue({
+      data: { tasks: [], total: 0, offset: 0, limit: 50 },
+      isLoading: false,
+      error: null,
     });
 
     mockUseTaskSuggestions.mockReturnValue({
@@ -792,6 +828,80 @@ describe('TodayView', () => {
       // Task row should have reduced opacity
       const taskRow = document.querySelector('[data-task-id="task-today-001"]');
       expect(taskRow).toHaveClass('opacity-50');
+    });
+  });
+
+  describe('completed section', () => {
+    it('shows "Completed (N)" section when there are completed tasks today', () => {
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [COMPLETED_TASK_1, COMPLETED_TASK_2], total: 2, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      expect(screen.getByText(/completed \(2\)/i)).toBeInTheDocument();
+    });
+
+    it('hides completed section when there are no completed tasks', () => {
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [], total: 0, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      expect(screen.queryByText(/completed \(/i)).not.toBeInTheDocument();
+    });
+
+    it('section is collapsed by default', () => {
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [COMPLETED_TASK_1], total: 1, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      // The completed task text should not be visible when collapsed
+      expect(screen.queryByText('Completed task 1')).not.toBeInTheDocument();
+    });
+
+    it('clicking expands to show completed tasks', async () => {
+      const user = userEvent.setup();
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [COMPLETED_TASK_1, COMPLETED_TASK_2], total: 2, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      
+      // Click on the collapsible trigger
+      const trigger = screen.getByText(/completed \(2\)/i);
+      await user.click(trigger);
+      
+      // Completed tasks should now be visible
+      expect(screen.getByText('Completed task 1')).toBeInTheDocument();
+      expect(screen.getByText('Completed task 2')).toBeInTheDocument();
+    });
+
+    it('completed tasks show strikethrough styling', async () => {
+      const user = userEvent.setup();
+      mockUseCompletedTodayTasks.mockReturnValue({
+        data: { tasks: [COMPLETED_TASK_1], total: 1, offset: 0, limit: 50 },
+        isLoading: false,
+        error: null,
+      });
+
+      renderTodayView();
+      
+      // Expand the section
+      const trigger = screen.getByText(/completed \(1\)/i);
+      await user.click(trigger);
+      
+      // Completed task should have strikethrough
+      const taskText = screen.getByText('Completed task 1');
+      expect(taskText).toHaveClass('line-through');
     });
   });
 });

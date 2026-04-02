@@ -17,6 +17,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchTasks,
+  fetchCompletedTodayTasks,
   fetchTaskSuggestions,
   updateTask,
 } from '@/api/tasks.js';
@@ -51,6 +52,19 @@ export function useTaskSuggestions() {
     queryKey: ['tasks', 'suggested'],
     queryFn: fetchTaskSuggestions,
     staleTime: STALE_TIME,
+  });
+}
+
+/**
+ * Fetch tasks completed today.
+ * Uses dedicated query key for proper cache isolation.
+ */
+export function useCompletedTodayTasks() {
+  return useQuery({
+    queryKey: ['tasks', 'completed-today'],
+    queryFn: fetchCompletedTodayTasks,
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
   });
 }
 
@@ -117,6 +131,8 @@ export function useUpdateTask() {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       // Also invalidate suggestions cache (tasks updated may no longer be suggestions)
       void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
+      // Invalidate completed-today cache (task may have moved in/out of completed)
+      void queryClient.invalidateQueries({ queryKey: ['tasks', 'completed-today'] });
     },
   });
 
@@ -204,6 +220,8 @@ export function useCompleteTask() {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       // Also invalidate suggestions cache (completed tasks are not suggestions)
       void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
+      // Invalidate completed-today cache (newly completed task should appear)
+      void queryClient.invalidateQueries({ queryKey: ['tasks', 'completed-today'] });
     },
   });
 

@@ -12,16 +12,17 @@
  */
 
 import { useState, useCallback } from 'react';
-import { RefreshCw, Sun, CalendarIcon, Forward, Check } from 'lucide-react';
+import { RefreshCw, Sun, CalendarIcon, Forward, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Calendar } from '@/components/ui/calendar.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.js';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible.js';
 import { Avatar } from '@/components/Avatar.js';
 import { SchedulePopup } from '@/components/SchedulePopup.js';
-import { useTasks, useTaskSuggestions, useUpdateTask, useCompleteTask } from '@/hooks/tasks.js';
+import { useTasks, useCompletedTodayTasks, useTaskSuggestions, useUpdateTask, useCompleteTask } from '@/hooks/tasks.js';
 import type { Task, SuggestedTask } from '@/api/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,6 +82,11 @@ export function TodayView() {
   } = useTasks('today');
 
   const {
+    data: completedData,
+    isLoading: completedLoading,
+  } = useCompletedTodayTasks();
+
+  const {
     data: suggestions,
     isLoading: suggestionsLoading,
     error: suggestionsError,
@@ -89,6 +95,7 @@ export function TodayView() {
 
   const tasks = tasksData?.tasks ?? [];
   const sortedTasks = sortTasksForToday(tasks);
+  const completedTasks = completedData?.tasks ?? [];
 
   return (
     <div className="space-y-8">
@@ -107,6 +114,11 @@ export function TodayView() {
         error={suggestionsError}
         refetch={refetchSuggestions}
       />
+
+      {/* Completed Section - only show when there are completed tasks */}
+      {!completedLoading && completedTasks.length > 0 && (
+        <CompletedSection tasks={completedTasks} />
+      )}
     </div>
   );
 }
@@ -471,5 +483,72 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Completed Section ────────────────────────────────────────────────────────
+
+interface CompletedSectionProps {
+  tasks: Task[];
+}
+
+function CompletedSection({ tasks }: CompletedSectionProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <section data-testid="completed-section">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+          <ChevronRight 
+            className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`} 
+          />
+          Completed ({tasks.length})
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-3">
+          <div className="space-y-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                data-task-id={task.id}
+                className="flex items-center gap-3 p-3 border rounded-md opacity-75"
+              >
+                {/* Checkmark icon */}
+                <div 
+                  className="flex-shrink-0 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+                >
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
+
+                {/* Avatar */}
+                {task.person && (
+                  <div className="flex-shrink-0">
+                    <Avatar name={task.person.name} size="sm" />
+                  </div>
+                )}
+
+                {/* Task text with strikethrough */}
+                <span className="flex-1 text-sm truncate line-through text-muted-foreground">
+                  {task.text}
+                </span>
+
+                {/* Area badge */}
+                {task.area && (
+                  <Badge variant="outline" className="text-xs">
+                    {task.area}
+                  </Badge>
+                )}
+
+                {/* Project badge */}
+                {task.project && (
+                  <Badge variant="outline" className="text-xs">
+                    {task.project}
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </section>
   );
 }

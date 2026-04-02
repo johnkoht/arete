@@ -147,6 +147,22 @@ export async function fetchTaskSuggestions(): Promise<SuggestedTask[]> {
 }
 
 /**
+ * GET /api/tasks?filter=completed-today — get tasks completed today.
+ *
+ * @returns TasksResponse with completed tasks from today
+ * @throws Error with context on network error or 5xx
+ */
+export async function fetchCompletedTodayTasks(): Promise<TasksResponse> {
+  const raw = await apiFetch<TasksWireResponse>('/api/tasks?filter=completed-today');
+  return {
+    tasks: raw.tasks.map(mapTask),
+    total: raw.total,
+    offset: raw.offset,
+    limit: raw.limit,
+  };
+}
+
+/**
  * PATCH /api/tasks/:id — update task properties.
  *
  * @param id - Task ID (can be prefix)
