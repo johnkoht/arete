@@ -12,7 +12,7 @@
  */
 
 import { useState, useCallback, type KeyboardEvent } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox.js';
 import { Badge } from '@/components/ui/badge.js';
@@ -42,14 +42,14 @@ export function TaskList({ tasks }: TaskListProps) {
         // Mark task as fading (optimistic UI)
         setFadingTasks((prev) => new Set(prev).add(taskId));
 
-        // Remove from set after animation completes
+        // Remove from set after animation completes (1.5s fade + buffer)
         setTimeout(() => {
           setFadingTasks((prev) => {
             const next = new Set(prev);
             next.delete(taskId);
             return next;
           });
-        }, 300);
+        }, 2000);
       } catch {
         toast.error('Failed to complete task');
       }
@@ -85,15 +85,22 @@ export function TaskList({ tasks }: TaskListProps) {
             onKeyDown={(e) => handleKeyDown(e, task.id)}
             className={`
               flex items-center gap-3 p-3 border rounded-md
-              transition-opacity duration-300
+              transition-all duration-[1500ms] ease-out
               focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2
-              ${isFading ? 'opacity-0' : 'opacity-100'}
+              ${isFading ? 'opacity-50' : 'opacity-100'}
             `}
           >
-            {/* Checkbox or Spinner */}
+            {/* Checkbox, Spinner, or Checkmark */}
             <div className="flex-shrink-0">
               {isTaskPending ? (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : isFading ? (
+                <div 
+                  data-testid="check-icon"
+                  className="h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+                >
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
               ) : (
                 <Checkbox
                   checked={false}
@@ -111,10 +118,30 @@ export function TaskList({ tasks }: TaskListProps) {
             )}
 
             {/* Task text */}
-            <span className="flex-1 text-sm truncate">{task.text}</span>
+            <span 
+              className={`flex-1 text-sm truncate transition-all duration-[1500ms] ${
+                isFading ? 'line-through text-muted-foreground' : ''
+              }`}
+            >
+              {task.text}
+            </span>
 
             {/* Badges */}
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Area badge */}
+              {task.area && (
+                <Badge variant="outline" className="text-xs">
+                  {task.area}
+                </Badge>
+              )}
+
+              {/* Project badge */}
+              {task.project && (
+                <Badge variant="outline" className="text-xs">
+                  {task.project}
+                </Badge>
+              )}
+
               {/* Commitment badge */}
               {task.from?.type === 'commitment' && (
                 <Badge variant="outline" className="text-xs">

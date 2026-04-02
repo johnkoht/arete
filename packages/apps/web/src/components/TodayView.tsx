@@ -12,7 +12,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { RefreshCw, Sun, CalendarIcon, Forward } from 'lucide-react';
+import { RefreshCw, Sun, CalendarIcon, Forward, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge.js';
 import { Calendar } from '@/components/ui/calendar.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.js';
 import { Avatar } from '@/components/Avatar.js';
+import { SchedulePopup } from '@/components/SchedulePopup.js';
 import { useTasks, useTaskSuggestions, useUpdateTask, useCompleteTask } from '@/hooks/tasks.js';
 import type { Task, SuggestedTask } from '@/api/types.js';
 
@@ -121,10 +122,23 @@ interface TasksSectionProps {
 
 function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
   const { mutate: completeMutate, isPending, pendingTaskId } = useCompleteTask();
+  const [fadingTasks, setFadingTasks] = useState<Set<string>>(new Set());
 
   const handleComplete = useCallback(
     (taskId: string) => {
       completeMutate(taskId);
+      
+      // Mark task as fading (optimistic UI)
+      setFadingTasks((prev) => new Set(prev).add(taskId));
+
+      // Remove from set after animation completes (1.5s fade + buffer)
+      setTimeout(() => {
+        setFadingTasks((prev) => {
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
+      }, 2000);
     },
     [completeMutate]
   );
@@ -175,24 +189,37 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
           {tasks.map((task) => {
             const daysOverdue = task.due ? getDaysOverdue(task.due) : 0;
             const isTaskPending = isPending && pendingTaskId === task.id;
+            const isFading = fadingTasks.has(task.id);
 
             return (
               <div
                 key={task.id}
-                className={`flex items-center gap-3 p-3 border rounded-md transition-opacity duration-300 ${
-                  isTaskPending ? 'opacity-50' : ''
-                }`}
+                data-task-id={task.id}
+                className={`
+                  flex items-center gap-3 p-3 border rounded-md 
+                  transition-all duration-[1500ms] ease-out
+                  ${isFading ? 'opacity-50' : isTaskPending ? 'opacity-75' : 'opacity-100'}
+                `}
               >
-                {/* Checkbox */}
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={task.completed}
-                  aria-label={`Complete task: ${task.text}`}
-                  disabled={isTaskPending}
-                  onClick={() => handleComplete(task.id)}
-                  className="flex-shrink-0 h-4 w-4 rounded border border-muted-foreground/50 hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
+                {/* Checkbox, Spinner indicator, or Checkmark */}
+                {isFading ? (
+                  <div 
+                    data-testid="check-icon"
+                    className="flex-shrink-0 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+                  >
+                    <Check className="h-3 w-3 text-primary-foreground" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={task.completed}
+                    aria-label={`Complete task: ${task.text}`}
+                    disabled={isTaskPending}
+                    onClick={() => handleComplete(task.id)}
+                    className="flex-shrink-0 h-4 w-4 rounded border border-muted-foreground/50 hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                )}
 
                 {/* Avatar */}
                 {task.person && (
@@ -202,16 +229,45 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
                 )}
 
                 {/* Task text */}
-                <span data-testid="task-text" className="flex-1 text-sm truncate">
+                <span 
+                  data-testid="task-text" 
+                  className={`flex-1 text-sm truncate transition-all duration-[1500ms] ${
+                    isFading ? 'line-through text-muted-foreground' : ''
+                  }`}
+                >
                   {task.text}
                 </span>
 
-                {/* Overdue badge */}
-                {daysOverdue > 0 && (
-                  <Badge variant="destructive" className="text-xs">
-                    {daysOverdue} day{daysOverdue > 1 ? 's' : ''} overdue
-                  </Badge>
-                )}
+                {/* Badges */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Area badge */}
+                  {task.area && (
+                    <Badge variant="outline" className="text-xs">
+                      {task.area}
+                    </Badge>
+                  )}
+
+                  {/* Project badge */}
+                  {task.project && (
+                    <Badge variant="outline" className="text-xs">
+                      {task.project}
+                    </Badge>
+                  )}
+
+                  {/* Overdue badge */}
+                  {daysOverdue > 0 && (
+                    <Badge variant="destructive" className="text-xs">
+                      {daysOverdue} day{daysOverdue > 1 ? 's' : ''} overdue
+                    </Badge>
+                  )}
+
+                  {/* Schedule popup for rescheduling */}
+                  <SchedulePopup
+                    taskId={task.id}
+                    currentDestination={task.destination}
+                    currentDue={task.due}
+                  />
+                </div>
               </div>
             );
           })}

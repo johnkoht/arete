@@ -149,6 +149,45 @@ const TASK_OVERDUE_3_DAYS: Task = {
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
+const TASK_WITH_AREA: Task = {
+  id: 'task-with-area',
+  text: 'Task with area tag',
+  destination: 'must',
+  due: getToday(),
+  area: 'Engineering',
+  project: null,
+  person: null,
+  from: null,
+  completed: false,
+  source: { file: 'now/tasks.md', section: 'Tasks' },
+};
+
+const TASK_WITH_PROJECT: Task = {
+  id: 'task-with-project',
+  text: 'Task with project tag',
+  destination: 'must',
+  due: getToday(),
+  area: null,
+  project: 'Website Redesign',
+  person: null,
+  from: null,
+  completed: false,
+  source: { file: 'now/tasks.md', section: 'Tasks' },
+};
+
+const TASK_WITH_BOTH_TAGS: Task = {
+  id: 'task-with-both',
+  text: 'Task with both tags',
+  destination: 'must',
+  due: getToday(),
+  area: 'Product',
+  project: 'Mobile App',
+  person: null,
+  from: null,
+  completed: false,
+  source: { file: 'now/tasks.md', section: 'Tasks' },
+};
+
 const SUGGESTED_TASK_1: SuggestedTask = {
   id: 'suggested-001',
   text: 'Suggested task 1',
@@ -394,7 +433,9 @@ describe('TodayView', () => {
 
     it('renders Schedule button for each suggestion', () => {
       renderTodayView();
-      const scheduleButtons = screen.getAllByRole('button', { name: /schedule/i });
+      // Find Schedule buttons within the suggestions section only
+      const suggestionsSection = screen.getByTestId('suggestions-section');
+      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
       expect(scheduleButtons).toHaveLength(2);
     });
 
@@ -436,7 +477,9 @@ describe('TodayView', () => {
       const user = userEvent.setup();
       renderTodayView();
 
-      const scheduleButtons = screen.getAllByRole('button', { name: /schedule/i });
+      // Find Schedule buttons within the suggestions section only
+      const suggestionsSection = screen.getByTestId('suggestions-section');
+      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
       await user.click(scheduleButtons[0]);
 
       // Date picker / calendar should be visible
@@ -447,7 +490,9 @@ describe('TodayView', () => {
       const user = userEvent.setup();
       renderTodayView();
 
-      const scheduleButtons = screen.getAllByRole('button', { name: /schedule/i });
+      // Find Schedule buttons within the suggestions section only
+      const suggestionsSection = screen.getByTestId('suggestions-section');
+      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
       await user.click(scheduleButtons[0]);
 
       // Click a date in the calendar - get the 15th to avoid edge cases with month boundaries
@@ -515,6 +560,238 @@ describe('TodayView', () => {
 
       renderTodayView();
       expect(screen.getByText(/3 days overdue/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('schedule trigger for today items', () => {
+    it('renders schedule popup trigger for each task', () => {
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // SchedulePopup shows badge with destination
+      expect(screen.getByText('must')).toBeInTheDocument();
+    });
+
+    it('opens schedule popup when clicked', async () => {
+      const user = userEvent.setup();
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // Click the schedule badge trigger
+      const scheduleBadge = screen.getByText('must');
+      await user.click(scheduleBadge);
+      
+      // Popup should show options
+      expect(screen.getByText('Tomorrow')).toBeInTheDocument();
+      expect(screen.getByText('Anytime')).toBeInTheDocument();
+      expect(screen.getByText('Someday')).toBeInTheDocument();
+    });
+
+    it('updates task when reschedule option is selected', async () => {
+      const user = userEvent.setup();
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // Click the schedule badge trigger
+      const scheduleBadge = screen.getByText('must');
+      await user.click(scheduleBadge);
+      
+      // Click "Anytime" option
+      const anytimeOption = screen.getByText('Anytime');
+      await user.click(anytimeOption);
+      
+      // Should call update mutation
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: 'task-today-001',
+        updates: { due: null, destination: 'anytime' },
+      });
+    });
+  });
+
+  describe('area/project tags', () => {
+    it('renders area badge when task has area', () => {
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_WITH_AREA],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      expect(screen.getByText('Engineering')).toBeInTheDocument();
+    });
+
+    it('renders project badge when task has project', () => {
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_WITH_PROJECT],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+    });
+
+    it('renders both area and project badges when task has both', () => {
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_WITH_BOTH_TAGS],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      expect(screen.getByText('Product')).toBeInTheDocument();
+      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+    });
+
+    it('does not render area/project badges when both are null', () => {
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      // Area and project badges should not be present
+      expect(screen.queryByText('Engineering')).not.toBeInTheDocument();
+      expect(screen.queryByText('Website Redesign')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('completion animation', () => {
+    it('shows checkmark icon when completing task', async () => {
+      const user = userEvent.setup();
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // Get the checkbox button within tasks section
+      const tasksSection = screen.getByTestId('tasks-section');
+      const checkbox = within(tasksSection).getByRole('checkbox');
+      await user.click(checkbox);
+      
+      // Check icon should appear
+      const checkIcon = document.querySelector('[data-testid="check-icon"]');
+      expect(checkIcon).toBeInTheDocument();
+    });
+
+    it('applies strikethrough to task text when completing', async () => {
+      const user = userEvent.setup();
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // Get the checkbox button within tasks section
+      const tasksSection = screen.getByTestId('tasks-section');
+      const checkbox = within(tasksSection).getByRole('checkbox');
+      await user.click(checkbox);
+      
+      // Task text should have strikethrough
+      const taskText = screen.getByText('Task due today');
+      expect(taskText).toHaveClass('line-through');
+      expect(taskText).toHaveClass('text-muted-foreground');
+    });
+
+    it('applies fade-out opacity to task row when completing', async () => {
+      const user = userEvent.setup();
+      mockUseTasks.mockReturnValue({
+        data: {
+          tasks: [TASK_DUE_TODAY],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+      renderTodayView();
+      
+      // Get the checkbox button within tasks section
+      const tasksSection = screen.getByTestId('tasks-section');
+      const checkbox = within(tasksSection).getByRole('checkbox');
+      await user.click(checkbox);
+      
+      // Task row should have reduced opacity
+      const taskRow = document.querySelector('[data-task-id="task-today-001"]');
+      expect(taskRow).toHaveClass('opacity-50');
     });
   });
 });

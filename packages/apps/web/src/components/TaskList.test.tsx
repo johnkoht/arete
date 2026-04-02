@@ -116,6 +116,28 @@ const LONG_TEXT_TASK: Task = {
   text: 'This is a very long task description that should be truncated with an ellipsis when it exceeds the available width in the task list row component',
 };
 
+const TASK_WITH_AREA: Task = {
+  ...BASIC_TASK,
+  id: 'task-005',
+  text: 'Task with area',
+  area: 'Engineering',
+};
+
+const TASK_WITH_PROJECT: Task = {
+  ...BASIC_TASK,
+  id: 'task-006',
+  text: 'Task with project',
+  project: 'Website Redesign',
+};
+
+const TASK_WITH_BOTH: Task = {
+  ...BASIC_TASK,
+  id: 'task-007',
+  text: 'Task with area and project',
+  area: 'Product',
+  project: 'Mobile App',
+};
+
 // Create tasks for each destination type
 function createTaskWithDestination(destination: Task['destination']): Task {
   return {
@@ -291,6 +313,43 @@ describe('TaskList', () => {
       // Initially should not have opacity-0
       expect(taskRow).not.toHaveClass('opacity-0');
     });
+
+    it('adds task to fadingTasks set on completion', async () => {
+      const user = userEvent.setup();
+      renderTaskList([BASIC_TASK]);
+
+      const checkbox = screen.getByRole('checkbox');
+      await user.click(checkbox);
+
+      // Task row should have fade-out classes applied
+      const taskRow = screen.getByText('Review PR #42').closest('[data-task-id]');
+      expect(taskRow).toHaveClass('opacity-50');
+    });
+
+    it('applies strikethrough and muted text to completing task', async () => {
+      const user = userEvent.setup();
+      renderTaskList([BASIC_TASK]);
+
+      const checkbox = screen.getByRole('checkbox');
+      await user.click(checkbox);
+
+      // Task text should have strikethrough styling
+      const taskText = screen.getByText('Review PR #42');
+      expect(taskText).toHaveClass('line-through');
+      expect(taskText).toHaveClass('text-muted-foreground');
+    });
+
+    it('shows checkmark icon when task is completing', async () => {
+      const user = userEvent.setup();
+      renderTaskList([BASIC_TASK]);
+
+      const checkbox = screen.getByRole('checkbox');
+      await user.click(checkbox);
+
+      // Check icon should be visible
+      const checkIcon = document.querySelector('[data-testid="check-icon"]');
+      expect(checkIcon).toBeInTheDocument();
+    });
   });
 
   describe('error handling', () => {
@@ -362,6 +421,31 @@ describe('TaskList', () => {
       const textElement = screen.getByText(/This is a very long task description/);
       // Should have truncate or text-truncate class
       expect(textElement).toHaveClass('truncate');
+    });
+  });
+
+  describe('area/project badges', () => {
+    it('renders area badge when task has area', () => {
+      renderTaskList([TASK_WITH_AREA]);
+      expect(screen.getByText('Engineering')).toBeInTheDocument();
+    });
+
+    it('renders project badge when task has project', () => {
+      renderTaskList([TASK_WITH_PROJECT]);
+      expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+    });
+
+    it('renders both area and project badges when task has both', () => {
+      renderTaskList([TASK_WITH_BOTH]);
+      expect(screen.getByText('Product')).toBeInTheDocument();
+      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+    });
+
+    it('does not render area/project badges when both are null', () => {
+      renderTaskList([BASIC_TASK]);
+      // Only 'must' badge should be present (from SchedulePopup)
+      const badges = screen.getAllByText(/must|commitment/);
+      expect(badges).toHaveLength(1); // Only destination badge
     });
   });
 });
