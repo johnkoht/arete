@@ -19,6 +19,7 @@ import type {
 } from '../models/entities.js';
 import type { MeetingIntelligence, ActionItem } from './meeting-extraction.js';
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
+import type { SearchProvider, SearchResult } from '../search/types.js';
 
 /**
  * Input structure for a batch of meeting extractions.
@@ -47,6 +48,64 @@ export type DuplicateGroup = {
   canonical: FlattenedItem;
   duplicates: FlattenedItem[];
 };
+
+// ---------------------------------------------------------------------------
+// Workspace matching (QMD semantic search)
+// ---------------------------------------------------------------------------
+
+/**
+ * A match between an extracted item and prior workspace content.
+ */
+export type WorkspaceMatch = {
+  itemIndex: number;
+  matchedPath: string;
+  similarity: number;
+};
+
+/** Similarity threshold for considering an item a workspace duplicate. */
+const WORKSPACE_MATCH_THRESHOLD = 0.85;
+
+/**
+ * Match items against prior workspace content using semantic search.
+ *
+ * Uses the search provider's semanticSearch to find high-similarity matches
+ * in prior meetings. When the search provider is unavailable (null), items
+ * retain their current status (graceful skip per pre-mortem R4).
+ *
+ * @param items - Items to match
+ * @param searchProvider - QMD search provider (null = graceful skip)
+ * @returns Matches found in workspace
+ */
+export async function matchPriorWorkspace(
+  items: FlattenedItem[],
+  searchProvider: SearchProvider | null,
+): Promise<WorkspaceMatch[]> {
+  if (!searchProvider) {
+    console.warn('[meeting-reconciliation] No search provider - skipping workspace matching');
+    return [];
+  }
+
+  const matches: WorkspaceMatch[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const results = await searchProvider.semanticSearch(item.text, { limit: 3 });
+
+    // Check for high-similarity matches in prior meetings
+    for (const result of results) {
+      if (result.score > WORKSPACE_MATCH_THRESHOLD && result.path.includes('/meetings/')) {
+        matches.push({
+          itemIndex: i,
+          matchedPath: result.path,
+          similarity: result.score,
+        });
+        break; // One match per item
+      }
+    }
+  }
+
+  return matches;
+}
 
 // ---------------------------------------------------------------------------
 // Flatten
@@ -298,4 +357,4 @@ export function reconcileMeetingBatch(
 }
 
 // Export internals for testing
-export { flattenExtractions, scoreRelevance, generateWhy };
+export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD };

@@ -6,14 +6,18 @@ import {
   scoreRelevance,
   generateWhy,
   findDuplicates,
+  matchPriorWorkspace,
+  WORKSPACE_MATCH_THRESHOLD,
   type MeetingExtractionBatch,
   type DuplicateGroup,
+  type WorkspaceMatch,
 } from '../../src/services/meeting-reconciliation.js';
 import type {
   ReconciliationContext,
   AreaMemory,
 } from '../../src/models/entities.js';
 import type { MeetingIntelligence } from '../../src/services/meeting-extraction.js';
+import type { SearchProvider, SearchResult } from '../../src/search/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -516,6 +520,152 @@ describe('reconcileMeetingBatch deduplication integration', () => {
     const result = reconcileMeetingBatch(batch, makeContext());
     assert.equal(result.items.every((i) => i.status === 'keep'), true);
     assert.equal(result.stats.duplicatesRemoved, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchPriorWorkspace
+// ---------------------------------------------------------------------------
+
+function makeMockSearchProvider(results: SearchResult[]): SearchProvider {
+  return {
+    name: 'mock-qmd',
+    async isAvailable() { return true; },
+    async search() { return results; },
+    async semanticSearch() { return results; },
+  };
+}
+
+describe('matchPriorWorkspace', () => {
+  it('returns empty array when searchProvider is null', async () => {
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Use React'] }),
+    ]);
+
+    // Capture console.warn
+    const warnings: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(String(args[0])); };
+
+    const matches = await matchPriorWorkspace(items, null);
+
+    console.warn = origWarn;
+
+    assert.deepStrictEqual(matches, []);
+    assert.ok(warnings.some(w => w.includes('No search provider')));
+  });
+
+  it('returns matches for high-similarity results in meetings path', async () => {
+    const provider = makeMockSearchProvider([
+      { path: 'resources/meetings/2026-03-01-sync.md', content: 'Use React for frontend', score: 0.92, matchType: 'semantic' },
+    ]);
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Use React for frontend'] }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[0].matchedPath, 'resources/meetings/2026-03-01-sync.md');
+    assert.equal(matches[0].similarity, 0.92);
+  });
+
+  it('returns no matches when similarity is below threshold', async () => {
+    const provider = makeMockSearchProvider([
+      { path: 'resources/meetings/2026-03-01-sync.md', content: 'Something', score: 0.60, matchType: 'semantic' },
+    ]);
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Use React for frontend'] }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.deepStrictEqual(matches, []);
+  });
+
+  it('returns no matches when path is not in meetings directory', async () => {
+    const provider = makeMockSearchProvider([
+      { path: 'resources/context/product.md', content: 'React stuff', score: 0.95, matchType: 'semantic' },
+    ]);
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Use React for frontend'] }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.deepStrictEqual(matches, []);
+  });
+
+  it('returns only one match per item (first high-similarity meeting match)', async () => {
+    const provider: SearchProvider = {
+      name: 'mock-qmd',
+      async isAvailable() { return true; },
+      async search() { return []; },
+      async semanticSearch() {
+        return [
+          { path: 'resources/meetings/m-old-1.md', content: 'Match 1', score: 0.90, matchType: 'semantic' as const },
+          { path: 'resources/meetings/m-old-2.md', content: 'Match 2', score: 0.88, matchType: 'semantic' as const },
+        ];
+      },
+    };
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Use React for frontend'] }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].matchedPath, 'resources/meetings/m-old-1.md');
+  });
+
+  it('matches multiple items independently', async () => {
+    let callCount = 0;
+    const provider: SearchProvider = {
+      name: 'mock-qmd',
+      async isAvailable() { return true; },
+      async search() { return []; },
+      async semanticSearch() {
+        callCount++;
+        if (callCount === 1) {
+          return [{ path: 'resources/meetings/prior.md', content: 'Item 1', score: 0.91, matchType: 'semantic' as const }];
+        }
+        // Second item: no match (below threshold)
+        return [{ path: 'resources/meetings/other.md', content: 'Item 2', score: 0.50, matchType: 'semantic' as const }];
+      },
+    };
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', {
+        decisions: ['Decision A', 'Decision B'],
+      }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].itemIndex, 0);
+    assert.equal(matches[0].matchedPath, 'resources/meetings/prior.md');
+  });
+
+  it('handles empty search results gracefully', async () => {
+    const provider = makeMockSearchProvider([]);
+
+    const items = flattenExtractions([
+      makeBatch('meetings/m1.md', { decisions: ['Some decision'] }),
+    ]);
+
+    const matches = await matchPriorWorkspace(items, provider);
+
+    assert.deepStrictEqual(matches, []);
+  });
+
+  it('threshold constant is 0.85', () => {
+    assert.equal(WORKSPACE_MATCH_THRESHOLD, 0.85);
   });
 });
 
