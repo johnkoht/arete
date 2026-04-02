@@ -98,6 +98,35 @@ onSettled: () => {
 **Why?** Prefix matching (`['tasks']`) doesn't catch all variations. Each distinct query key 
 (like `['tasks', 'completed-today']`) needs explicit invalidation to avoid stale data.
 
+### Don't debounce deliberate user actions (first use: task-ui-v2, 2026-04-02)
+
+**Problem**: `useUpdateTask` and `useCompleteTask` had a 100ms debounce + `mutation.isPending` guard
+that silently dropped calls. When user clicked "Tomorrow" in SchedulePopup:
+1. Optimistic update flashed the new state
+2. Debounced mutation was dropped (isPending from a prior mutation)
+3. `onSettled` refetched old state → task snapped back
+
+**Root cause**: Debounce pattern was designed for rapid-fire inputs (typing, sliders), not
+one-shot button clicks (schedule, complete, assign). The `isPending` guard made it worse —
+any in-flight mutation caused ALL subsequent mutations to be silently dropped.
+
+**Pattern**: Call `mutation.mutate()` directly for button-click actions:
+```typescript
+// ✗ Over-engineered — drops calls silently
+const mutate = useCallback((params) => {
+  debounceTimerRef.current = setTimeout(() => {
+    if (mutation.isPending) return; // DROPS THE CALL!
+    mutation.mutate(params);
+  }, 100);
+}, [mutation.isPending]);
+
+// ✓ Direct — TanStack Query handles concurrent mutations
+return { mutate: mutation.mutate };
+```
+
+**When to debounce**: Text inputs, search-as-you-type, sliders — high-frequency events.
+**When NOT to debounce**: Button clicks, checkbox toggles, dropdown selections — deliberate actions.
+
 ## Invariants
 
 ### Task scheduling requires destination for cross-tab visibility
