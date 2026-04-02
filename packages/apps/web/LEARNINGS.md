@@ -81,6 +81,23 @@ onSettled: () => {
 Invalidating `{ queryKey: ['tasks'] }` alone uses prefix matching, but suggestions uses `['tasks', 'suggested']` 
 which needs explicit invalidation to ensure updated tasks disappear from suggestions.
 
+### Multi-query cache invalidation pattern (first use: task-8, 2026-04-02)
+
+When a task mutation affects multiple query caches (e.g., completing a task affects both active tasks 
+AND completed-today list), invalidate ALL related query keys explicitly.
+
+**Pattern**: Extend mutation handlers to invalidate all affected caches:
+```typescript
+onSettled: () => {
+  void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
+  void queryClient.invalidateQueries({ queryKey: ['tasks', 'completed-today'] });
+}
+```
+
+**Why?** Prefix matching (`['tasks']`) doesn't catch all variations. Each distinct query key 
+(like `['tasks', 'completed-today']`) needs explicit invalidation to avoid stale data.
+
 ## Invariants
 
 ### Task scheduling requires destination for cross-tab visibility
