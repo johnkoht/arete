@@ -633,6 +633,43 @@ Also no bullets here.
     assert.deepEqual(memory.activePeople, []);
   });
 
+  it('logs warning for sections found but containing no bullet items', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+No bullets here, just text.
+
+## Active People
+- valid-person
+`
+    );
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(String(args[0])); };
+
+    try {
+      const memory = await parser.parseMemoryFile('glance-communications');
+
+      assert.ok(memory);
+      assert.deepEqual(memory.keywords, []);
+      assert.deepEqual(memory.activePeople, ['valid-person']);
+
+      // Should warn about "keywords" section having no bullets
+      const keywordsWarning = warnings.find(w => w.includes('keywords') && w.includes('no bullet items'));
+      assert.ok(keywordsWarning, `Expected warning about "keywords" section, got: ${JSON.stringify(warnings)}`);
+
+      // Should NOT warn about "active people" since it has valid items
+      const peopleWarning = warnings.find(w => w.includes('active people') && w.includes('no bullet items'));
+      assert.equal(peopleWarning, undefined, 'Should not warn for sections with valid bullet items');
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   it('handles asterisk bullet markers', async () => {
     const fixture = createTestWorkspace(tmpDir);
     fixture.writeFile(

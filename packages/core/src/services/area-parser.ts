@@ -219,6 +219,11 @@ export class AreaParserService {
         }
       }
     }
+
+    if (items.length === 0) {
+      console.warn(`[area-parser] Section "${sectionName}" found but contains no bullet items`);
+    }
+
     return items;
   }
 
