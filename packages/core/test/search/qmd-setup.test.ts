@@ -564,8 +564,8 @@ describe('generateScopedCollectionName', () => {
 });
 
 describe('SCOPE_PATHS', () => {
-  it('has 9 scopes', () => {
-    assert.equal(Object.keys(SCOPE_PATHS).length, 9);
+  it('has 10 scopes', () => {
+    assert.equal(Object.keys(SCOPE_PATHS).length, 10);
   });
 
   it('has all expected scopes', () => {
@@ -578,12 +578,13 @@ describe('SCOPE_PATHS', () => {
     assert.equal(SCOPE_PATHS.areas, 'areas');
     assert.equal(SCOPE_PATHS.goals, 'goals');
     assert.equal(SCOPE_PATHS.now, 'now');
+    assert.equal(SCOPE_PATHS.resources, 'resources');
   });
 });
 
 describe('ALL_SCOPES', () => {
-  it('has 9 scopes', () => {
-    assert.equal(ALL_SCOPES.length, 9);
+  it('has 10 scopes', () => {
+    assert.equal(ALL_SCOPES.length, 10);
   });
 
   it('includes all expected scopes', () => {
@@ -596,6 +597,7 @@ describe('ALL_SCOPES', () => {
     assert.ok(ALL_SCOPES.includes('areas'));
     assert.ok(ALL_SCOPES.includes('goals'));
     assert.ok(ALL_SCOPES.includes('now'));
+    assert.ok(ALL_SCOPES.includes('resources'));
   });
 });
 
@@ -735,7 +737,7 @@ describe('ensureQmdCollections', () => {
     }
   });
 
-  it('creates all 9 collections when all paths exist', async () => {
+  it('creates all 10 collections when all paths exist', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',  // all
@@ -747,6 +749,7 @@ describe('ensureQmdCollections', () => {
       '/workspace/areas',
       '/workspace/goals',
       '/workspace/now',
+      '/workspace/resources',
     ]);
     const deps = makeCollectionsDeps({ calls, existingPaths });
     const prev = process.env.ARETE_SEARCH_FALLBACK;
@@ -754,7 +757,7 @@ describe('ensureQmdCollections', () => {
       delete process.env.ARETE_SEARCH_FALLBACK;
       const result = await ensureQmdCollections('/workspace', undefined, deps);
 
-      assert.equal(Object.keys(result.collections).length, 9);
+      assert.equal(Object.keys(result.collections).length, 10);
       assert.ok(result.collections.all);
       assert.ok(result.collections.memory);
       assert.ok(result.collections.meetings);
@@ -764,6 +767,7 @@ describe('ensureQmdCollections', () => {
       assert.ok(result.collections.areas);
       assert.ok(result.collections.goals);
       assert.ok(result.collections.now);
+      assert.ok(result.collections.resources);
 
       // All scopes should not be skipped
       for (const scope of result.scopes) {
