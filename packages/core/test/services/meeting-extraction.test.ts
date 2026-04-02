@@ -78,7 +78,47 @@ describe('buildMeetingExtractionPrompt', () => {
   it('includes owner slug when provided', () => {
     const prompt = buildMeetingExtractionPrompt('content', undefined, 'john-smith');
     assert.ok(prompt.includes('john-smith'));
-    assert.ok(prompt.includes('Workspace owner slug'));
+    assert.ok(prompt.includes('Workspace owner'));
+  });
+
+  it('includes owner synthesis context when ownerSlug and ownerName provided', () => {
+    const transcript = '**John Smith | 0:00** We need to ship the feature.\n**Sarah | 0:01** Agreed, let me handle the docs.';
+    const prompt = buildMeetingExtractionPrompt(transcript, undefined, 'john-smith', undefined, undefined, 'John Smith');
+    assert.ok(prompt.includes('@john-smith'));
+    assert.ok(prompt.includes('(John Smith)'));
+    assert.ok(prompt.includes('Speaking ratio:'));
+    assert.ok(prompt.includes('include a sentence about what this meeting means specifically for the workspace owner'));
+  });
+
+  it('includes owner synthesis with zero speaking ratio when ownerName not in transcript speakers', () => {
+    const transcript = '**Alice | 0:00** Hello.\n**Bob | 0:01** Hi there.';
+    const prompt = buildMeetingExtractionPrompt(transcript, undefined, 'john-smith', undefined, undefined, 'John Smith');
+    assert.ok(prompt.includes('@john-smith'));
+    assert.ok(prompt.includes('(John Smith)'));
+    // Speaking ratio is 0% since owner didn't speak but labels exist
+    assert.ok(prompt.includes('Speaking ratio: 0%'));
+    assert.ok(prompt.includes('include a sentence about what this meeting means specifically for the workspace owner'));
+  });
+
+  it('omits speaking ratio when transcript has no speaker labels', () => {
+    const transcript = 'Just some plain text without speaker labels.';
+    const prompt = buildMeetingExtractionPrompt(transcript, undefined, 'john-smith', undefined, undefined, 'John Smith');
+    assert.ok(prompt.includes('@john-smith'));
+    // No speaker labels → calculateSpeakingRatio returns undefined → no ratio shown
+    assert.ok(!prompt.includes('Speaking ratio:'));
+    assert.ok(prompt.includes('include a sentence about what this meeting means specifically for the workspace owner'));
+  });
+
+  it('has no owner context when ownerSlug is not provided (backward compat)', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    assert.ok(!prompt.includes('Workspace owner:'));
+    assert.ok(!prompt.includes('Speaking ratio:'));
+    assert.ok(!prompt.includes('include a sentence about what this meeting means specifically for the workspace owner'));
+  });
+
+  it('includes owner perspective instruction in summary schema', () => {
+    const prompt = buildMeetingExtractionPrompt('content');
+    assert.ok(prompt.includes('If workspace owner participated, include their perspective'));
   });
 
   it('instructs to return only JSON', () => {

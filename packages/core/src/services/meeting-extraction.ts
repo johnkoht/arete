@@ -20,6 +20,7 @@
  */
 
 import type { MeetingContextBundle } from './meeting-context.js';
+import { calculateSpeakingRatio } from './meeting-processing.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -526,6 +527,7 @@ function buildAttendeeSlugLookup(context: MeetingContextBundle): Map<string, str
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
  * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
+ * @param ownerName - Owner's full name for speaking ratio and owner synthesis
  */
 export function buildMeetingExtractionPrompt(
   transcript: string,
@@ -533,13 +535,18 @@ export function buildMeetingExtractionPrompt(
   ownerSlug?: string,
   context?: MeetingContextBundle,
   priorItems?: PriorItem[],
+  ownerName?: string,
 ): string {
   const attendeeContext = attendees?.length
     ? `\n\nMeeting attendees: ${attendees.join(', ')}`
     : '';
 
+  const speakingRatio = ownerName ? calculateSpeakingRatio(transcript, ownerName) : undefined;
+
   const ownerContext = ownerSlug
-    ? `\nWorkspace owner slug: ${ownerSlug} (use for direction classification)`
+    ? `\nWorkspace owner: @${ownerSlug}${ownerName ? ` (${ownerName})` : ''}
+${speakingRatio !== undefined ? `Speaking ratio: ${(speakingRatio * 100).toFixed(0)}%
+` : ''}In the summary, include a sentence about what this meeting means specifically for the workspace owner.`
     : '';
 
   // Build enhanced context section if context bundle is provided
@@ -561,7 +568,7 @@ ${attendeeContext}${ownerContext}
 
 JSON schema:
 {
-  "summary": "string — 2-3 sentence summary of the meeting",
+  "summary": "string — 2-3 sentence summary. If workspace owner participated, include their perspective.",
   "action_items": [
     {
       "owner": "string — full name of person who owns this action",
@@ -934,6 +941,8 @@ export async function extractMeetingIntelligence(
     priorItems?: PriorItem[];
     /** Extraction mode: 'light' for minimal, 'normal' (default), 'thorough' for comprehensive */
     mode?: ExtractionMode;
+    /** Owner's full name for speaking ratio */
+    ownerName?: string;
   },
 ): Promise<MeetingExtractionResult> {
   if (!transcript || transcript.trim() === '') {
@@ -970,6 +979,7 @@ export async function extractMeetingIntelligence(
         options?.ownerSlug,
         options?.context,
         options?.priorItems,
+        options?.ownerName,
       );
       limits = THOROUGH_LIMITS;
       break;
@@ -982,6 +992,7 @@ export async function extractMeetingIntelligence(
         options?.ownerSlug,
         options?.context,
         options?.priorItems,
+        options?.ownerName,
       );
       limits = CATEGORY_LIMITS;
       break;
