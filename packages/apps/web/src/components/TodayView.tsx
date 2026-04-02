@@ -23,7 +23,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Avatar } from '@/components/Avatar.js';
 import { SchedulePopup } from '@/components/SchedulePopup.js';
 import { useTasks, useCompletedTodayTasks, useTaskSuggestions, useUpdateTask, useCompleteTask } from '@/hooks/tasks.js';
-import type { Task, SuggestedTask } from '@/api/types.js';
+import { useAreas } from '@/hooks/areas.js';
+import { useProjects } from '@/hooks/projects.js';
+import { AssignmentSelector } from '@/components/AssignmentSelector.js';
+import type { Task, SuggestedTask, AreaSummary, ProjectSummary } from '@/api/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +96,9 @@ export function TodayView() {
     refetch: refetchSuggestions,
   } = useTaskSuggestions();
 
+  const { data: areas = [] } = useAreas();
+  const { data: projects = [] } = useProjects();
+
   const tasks = tasksData?.tasks ?? [];
   const sortedTasks = sortTasksForToday(tasks);
   const completedTasks = completedData?.tasks ?? [];
@@ -105,6 +111,8 @@ export function TodayView() {
         isLoading={tasksLoading}
         error={tasksError}
         refetch={refetchTasks}
+        areas={areas}
+        projects={projects}
       />
 
       {/* Suggestions Section */}
@@ -113,6 +121,8 @@ export function TodayView() {
         isLoading={suggestionsLoading}
         error={suggestionsError}
         refetch={refetchSuggestions}
+        areas={areas}
+        projects={projects}
       />
 
       {/* Completed Section - only show when there are completed tasks */}
@@ -130,10 +140,13 @@ interface TasksSectionProps {
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  areas: AreaSummary[];
+  projects: ProjectSummary[];
 }
 
-function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
+function TasksSection({ tasks, isLoading, error, refetch, areas, projects }: TasksSectionProps) {
   const { mutate: completeMutate, isPending, pendingTaskId } = useCompleteTask();
+  const { mutate: updateMutate } = useUpdateTask();
   const [fadingTasks, setFadingTasks] = useState<Set<string>>(new Set());
 
   const handleComplete = useCallback(
@@ -245,19 +258,25 @@ function TasksSection({ tasks, isLoading, error, refetch }: TasksSectionProps) {
 
                 {/* Badges */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Area badge */}
-                  {task.area && (
-                    <Badge variant="outline" className="text-xs">
-                      {task.area}
-                    </Badge>
-                  )}
+                  {/* Area selector */}
+                  <AssignmentSelector
+                    type="area"
+                    current={task.area}
+                    options={areas}
+                    onAssign={(slug) =>
+                      updateMutate({ id: task.id, updates: { area: slug } })
+                    }
+                  />
 
-                  {/* Project badge */}
-                  {task.project && (
-                    <Badge variant="outline" className="text-xs">
-                      {task.project}
-                    </Badge>
-                  )}
+                  {/* Project selector */}
+                  <AssignmentSelector
+                    type="project"
+                    current={task.project}
+                    options={projects.map((p) => ({ slug: p.slug, name: p.name }))}
+                    onAssign={(slug) =>
+                      updateMutate({ id: task.id, updates: { project: slug } })
+                    }
+                  />
 
                   {/* Overdue badge */}
                   {daysOverdue > 0 && (
@@ -296,6 +315,8 @@ interface SuggestionsSectionProps {
   isLoading: boolean;
   error: Error | null;
   refetch: () => void;
+  areas: AreaSummary[];
+  projects: ProjectSummary[];
 }
 
 function SuggestionsSection({
@@ -303,6 +324,8 @@ function SuggestionsSection({
   isLoading,
   error,
   refetch,
+  areas,
+  projects,
 }: SuggestionsSectionProps) {
   return (
     <section data-testid="suggestions-section">
@@ -351,7 +374,7 @@ function SuggestionsSection({
       {!isLoading && !error && suggestions.length > 0 && (
         <div className="space-y-2">
           {suggestions.map((suggestion) => (
-            <SuggestionRow key={suggestion.id} suggestion={suggestion} />
+            <SuggestionRow key={suggestion.id} suggestion={suggestion} areas={areas} projects={projects} />
           ))}
         </div>
       )}
@@ -363,9 +386,11 @@ function SuggestionsSection({
 
 interface SuggestionRowProps {
   suggestion: SuggestedTask;
+  areas: AreaSummary[];
+  projects: ProjectSummary[];
 }
 
-function SuggestionRow({ suggestion }: SuggestionRowProps) {
+function SuggestionRow({ suggestion, areas, projects }: SuggestionRowProps) {
   const { mutate, isError } = useUpdateTask();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -417,6 +442,26 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
       <span data-testid="suggestion-text" className="flex-1 text-sm truncate">
         {suggestion.text}
       </span>
+
+      {/* Area selector */}
+      <AssignmentSelector
+        type="area"
+        current={suggestion.area}
+        options={areas}
+        onAssign={(slug) =>
+          mutate({ id: suggestion.id, updates: { area: slug } })
+        }
+      />
+
+      {/* Project selector */}
+      <AssignmentSelector
+        type="project"
+        current={suggestion.project}
+        options={projects.map((p) => ({ slug: p.slug, name: p.name }))}
+        onAssign={(slug) =>
+          mutate({ id: suggestion.id, updates: { project: slug } })
+        }
+      />
 
       {/* Score badge */}
       <Badge variant="secondary" className="text-xs">

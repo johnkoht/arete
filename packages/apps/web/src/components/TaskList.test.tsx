@@ -53,6 +53,21 @@ vi.mock('@/hooks/tasks.js', () => ({
   useUpdateTask: () => mockUseUpdateTask(),
 }));
 
+// Mock useAreas and useProjects hooks
+vi.mock('@/hooks/areas.js', () => ({
+  useAreas: () => ({ data: [
+    { slug: 'engineering', name: 'Engineering' },
+    { slug: 'sales', name: 'Sales' },
+  ], isLoading: false }),
+}));
+
+vi.mock('@/hooks/projects.js', () => ({
+  useProjects: () => ({ data: [
+    { slug: 'task-ui', name: 'Task UI', lastModified: '2026-01-01', status: 'Active', description: '' },
+    { slug: 'web-redesign', name: 'Web Redesign', lastModified: '2026-01-01', status: 'Active', description: '' },
+  ], isLoading: false }),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function createWrapper() {
@@ -120,22 +135,22 @@ const TASK_WITH_AREA: Task = {
   ...BASIC_TASK,
   id: 'task-005',
   text: 'Task with area',
-  area: 'Engineering',
+  area: 'engineering',
 };
 
 const TASK_WITH_PROJECT: Task = {
   ...BASIC_TASK,
   id: 'task-006',
   text: 'Task with project',
-  project: 'Website Redesign',
+  project: 'web-redesign',
 };
 
 const TASK_WITH_BOTH: Task = {
   ...BASIC_TASK,
   id: 'task-007',
   text: 'Task with area and project',
-  area: 'Product',
-  project: 'Mobile App',
+  area: 'engineering',
+  project: 'task-ui',
 };
 
 // Create tasks for each destination type
@@ -449,28 +464,74 @@ describe('TaskList', () => {
     });
   });
 
-  describe('area/project badges', () => {
-    it('renders area badge when task has area', () => {
+  describe('area/project assignment', () => {
+    it('renders area name when task has area assigned', () => {
       renderTaskList([TASK_WITH_AREA]);
       expect(screen.getByText('Engineering')).toBeInTheDocument();
     });
 
-    it('renders project badge when task has project', () => {
+    it('renders project name when task has project assigned', () => {
       renderTaskList([TASK_WITH_PROJECT]);
-      expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      expect(screen.getByText('Web Redesign')).toBeInTheDocument();
     });
 
-    it('renders both area and project badges when task has both', () => {
+    it('renders both area and project names when task has both', () => {
       renderTaskList([TASK_WITH_BOTH]);
-      expect(screen.getByText('Product')).toBeInTheDocument();
-      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+      expect(screen.getByText('Engineering')).toBeInTheDocument();
+      expect(screen.getByText('Task UI')).toBeInTheDocument();
     });
 
-    it('does not render area/project badges when both are null', () => {
+    it('shows assign area button when no area assigned', () => {
       renderTaskList([BASIC_TASK]);
-      // Only 'must' badge should be present (from SchedulePopup)
-      const badges = screen.getAllByText(/must|commitment/);
-      expect(badges).toHaveLength(1); // Only destination badge
+      expect(screen.getByLabelText('Assign Area')).toBeInTheDocument();
+    });
+
+    it('shows assign project button when no project assigned', () => {
+      renderTaskList([BASIC_TASK]);
+      expect(screen.getByLabelText('Assign Project')).toBeInTheDocument();
+    });
+
+    it('shows change area badge when area assigned', () => {
+      renderTaskList([TASK_WITH_AREA]);
+      expect(screen.getByLabelText('Change Area: Engineering')).toBeInTheDocument();
+    });
+
+    it('calls updateTask when area is selected from dropdown', async () => {
+      const user = userEvent.setup();
+      renderTaskList([BASIC_TASK]);
+
+      // Click the assign area button
+      await user.click(screen.getByLabelText('Assign Area'));
+
+      // Wait for popover to open and click an option
+      await waitFor(() => {
+        expect(screen.getByText('Engineering')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('Engineering'));
+
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: 'task-001',
+        updates: { area: 'engineering' },
+      });
+    });
+
+    it('calls updateTask with null when area is cleared', async () => {
+      const user = userEvent.setup();
+      renderTaskList([TASK_WITH_AREA]);
+
+      // Click the area badge to open dropdown
+      await user.click(screen.getByLabelText('Change Area: Engineering'));
+
+      // Click "None" to clear
+      await waitFor(() => {
+        expect(screen.getByText('None')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('None'));
+
+      expect(mockUpdateMutate).toHaveBeenCalledWith({
+        id: 'task-005',
+        updates: { area: null },
+      });
     });
   });
 });

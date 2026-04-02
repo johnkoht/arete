@@ -18,7 +18,10 @@ import { Checkbox } from '@/components/ui/checkbox.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Avatar } from '@/components/Avatar.js';
 import { SchedulePopup } from '@/components/SchedulePopup.js';
-import { useCompleteTask } from '@/hooks/tasks.js';
+import { AssignmentSelector } from '@/components/AssignmentSelector.js';
+import { useCompleteTask, useUpdateTask } from '@/hooks/tasks.js';
+import { useAreas } from '@/hooks/areas.js';
+import { useProjects } from '@/hooks/projects.js';
 import type { Task } from '@/api/types.js';
 
 
@@ -31,6 +34,9 @@ interface TaskListProps {
 
 export function TaskList({ tasks }: TaskListProps) {
   const { mutate, isPending, pendingTaskId } = useCompleteTask();
+  const { mutate: updateMutate } = useUpdateTask();
+  const { data: areas = [] } = useAreas();
+  const { data: projects = [] } = useProjects();
   const [fadingTasks, setFadingTasks] = useState<Set<string>>(new Set());
 
   const handleComplete = useCallback(
@@ -121,19 +127,25 @@ export function TaskList({ tasks }: TaskListProps) {
 
             {/* Badges */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Area badge */}
-              {task.area && (
-                <Badge variant="outline" className="text-xs">
-                  {task.area}
-                </Badge>
-              )}
+              {/* Area selector */}
+              <AssignmentSelector
+                type="area"
+                current={task.area}
+                options={areas}
+                onAssign={(slug) =>
+                  updateMutate({ id: task.id, updates: { area: slug } })
+                }
+              />
 
-              {/* Project badge */}
-              {task.project && (
-                <Badge variant="outline" className="text-xs">
-                  {task.project}
-                </Badge>
-              )}
+              {/* Project selector */}
+              <AssignmentSelector
+                type="project"
+                current={task.project}
+                options={projects.map((p) => ({ slug: p.slug, name: p.name }))}
+                onAssign={(slug) =>
+                  updateMutate({ id: task.id, updates: { project: slug } })
+                }
+              />
 
               {/* Commitment badge */}
               {task.from?.type === 'commitment' && (

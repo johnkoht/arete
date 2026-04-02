@@ -13,6 +13,14 @@ import { TooltipProvider } from "@/components/ui/tooltip.js";
 import TasksPage from "./TasksPage.js";
 import type { TasksResponse } from "@/api/types.js";
 
+// Mock areas and projects hooks to prevent uncontrolled fetch calls
+vi.mock("@/hooks/areas.js", () => ({
+  useAreas: () => ({ data: [], isLoading: false }),
+}));
+vi.mock("@/hooks/projects.js", () => ({
+  useProjects: () => ({ data: [], isLoading: false }),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function mockResponse(body: unknown, status = 200): Response {

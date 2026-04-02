@@ -281,7 +281,15 @@ export type TasksResponse = {
 export type TaskUpdate = {
   completed?: boolean;
   due?: string | null;
+  area?: string | null;
+  project?: string | null;
   destination?: Task['destination'];
+};
+
+/** Summary of an area for assignment dropdowns */
+export type AreaSummary = {
+  slug: string;
+  name: string;
 };
 
 // ── Review types ──────────────────────────────────────────────────────────────

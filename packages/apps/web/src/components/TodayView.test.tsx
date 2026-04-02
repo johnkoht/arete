@@ -65,6 +65,20 @@ vi.mock('@/hooks/tasks.js', () => ({
   useCompleteTask: () => mockUseCompleteTask(),
 }));
 
+// Mock useAreas and useProjects hooks
+vi.mock('@/hooks/areas.js', () => ({
+  useAreas: () => ({ data: [
+    { slug: 'engineering', name: 'Engineering' },
+    { slug: 'sales', name: 'Sales' },
+  ], isLoading: false }),
+}));
+
+vi.mock('@/hooks/projects.js', () => ({
+  useProjects: () => ({ data: [
+    { slug: 'task-ui', name: 'Task UI', lastModified: '2026-01-01', status: 'Active', description: '' },
+  ], isLoading: false }),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function createWrapper() {
@@ -157,7 +171,7 @@ const TASK_WITH_AREA: Task = {
   text: 'Task with area tag',
   destination: 'must',
   due: getToday(),
-  area: 'Engineering',
+  area: 'engineering',
   project: null,
   person: null,
   from: null,
@@ -171,7 +185,7 @@ const TASK_WITH_PROJECT: Task = {
   destination: 'must',
   due: getToday(),
   area: null,
-  project: 'Website Redesign',
+  project: 'task-ui',
   person: null,
   from: null,
   completed: false,
@@ -183,8 +197,8 @@ const TASK_WITH_BOTH_TAGS: Task = {
   text: 'Task with both tags',
   destination: 'must',
   due: getToday(),
-  area: 'Product',
-  project: 'Mobile App',
+  area: 'engineering',
+  project: 'task-ui',
   person: null,
   from: null,
   completed: false,
@@ -249,7 +263,7 @@ const COMPLETED_TASK_2: Task = {
   text: 'Completed task 2',
   destination: 'must',
   due: getToday(),
-  area: 'Engineering',
+  area: 'engineering',
   project: null,
   person: null,
   from: null,
@@ -709,7 +723,7 @@ describe('TodayView', () => {
       });
 
       renderTodayView();
-      expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      expect(screen.getByText('Task UI')).toBeInTheDocument();
     });
 
     it('renders both area and project badges when task has both', () => {
@@ -726,8 +740,8 @@ describe('TodayView', () => {
       });
 
       renderTodayView();
-      expect(screen.getByText('Product')).toBeInTheDocument();
-      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+      expect(screen.getByText('Engineering')).toBeInTheDocument();
+      expect(screen.getByText('Task UI')).toBeInTheDocument();
     });
 
     it('does not render area/project badges when both are null', () => {
@@ -746,7 +760,7 @@ describe('TodayView', () => {
       renderTodayView();
       // Area and project badges should not be present
       expect(screen.queryByText('Engineering')).not.toBeInTheDocument();
-      expect(screen.queryByText('Website Redesign')).not.toBeInTheDocument();
+      expect(screen.queryByText('Task UI')).not.toBeInTheDocument();
     });
   });
 

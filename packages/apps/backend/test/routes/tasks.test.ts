@@ -62,7 +62,7 @@ type MockTaskService = {
   listTasks: () => Promise<WorkspaceTask[]>;
   findTask: (id: string) => Promise<WorkspaceTask | null>;
   completeTask: (id: string) => Promise<{ task: WorkspaceTask }>;
-  updateTask: (id: string, updates: { due?: string | null }) => Promise<WorkspaceTask>;
+  updateTask: (id: string, updates: { due?: string | null; area?: string | null; project?: string | null }) => Promise<WorkspaceTask>;
   moveTask: (id: string, dest: TaskDestination) => Promise<WorkspaceTask>;
   deleteTask: (id: string) => Promise<WorkspaceTask>;
 };
@@ -272,6 +272,8 @@ function buildTestApp(options: {
     const body = await c.req.json<{
       completed?: boolean;
       due?: string | null;
+      area?: string | null;
+      project?: string | null;
       destination?: TaskDestination;
     }>();
 
@@ -297,10 +299,15 @@ function buildTestApp(options: {
         );
       }
 
-      // 2. Update due (use new file path after move)
-      if ('due' in body) {
+      // 2. Update metadata (due, area, project)
+      const metadataUpdates: { due?: string | null; area?: string | null; project?: string | null } = {};
+      if ('due' in body) metadataUpdates.due = body.due;
+      if ('area' in body) metadataUpdates.area = body.area;
+      if ('project' in body) metadataUpdates.project = body.project;
+
+      if (Object.keys(metadataUpdates).length > 0) {
         task = await withFileLock(task.source.file, () =>
-          tasks.updateTask(task.id, { due: body.due }),
+          tasks.updateTask(task.id, metadataUpdates),
         );
       }
 
@@ -313,7 +320,7 @@ function buildTestApp(options: {
       }
 
       // If nothing was processed
-      if (body.destination === undefined && !('due' in body) && body.completed === undefined) {
+      if (body.destination === undefined && !('due' in body) && !('area' in body) && !('project' in body) && body.completed === undefined) {
         return c.json({ error: 'No valid updates provided' }, 400);
       }
 
@@ -983,6 +990,114 @@ describe('PATCH /api/tasks/:id', () => {
     });
 
     assert.equal(res.status, 404);
+  });
+
+  it('updates area', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task' });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') return { ...task, metadata: { ...task.metadata, area: updates.area ?? undefined } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: 'engineering' }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.area, 'engineering');
+  });
+
+  it('clears area when area=null', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task', metadata: { area: 'engineering' } });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') {
+            const newMetadata = { ...task.metadata };
+            if (updates.area === null) delete newMetadata.area;
+            return { ...task, metadata: newMetadata };
+          }
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ area: null }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.area, null);
+  });
+
+  it('updates project', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task' });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') return { ...task, metadata: { ...task.metadata, project: updates.project ?? undefined } };
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: 'task-ui' }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.project, 'task-ui');
+  });
+
+  it('clears project when project=null', async () => {
+    const task = makeTask({ id: 'task1111', text: 'Test task', metadata: { project: 'task-ui' } });
+
+    const app = buildTestApp({
+      taskService: {
+        listTasks: () => Promise.resolve([task]),
+        findTask: async (id) => id === 'task1111' ? task : null,
+        updateTask: async (id, updates) => {
+          if (id === 'task1111') {
+            const newMetadata = { ...task.metadata };
+            if (updates.project === null) delete newMetadata.project;
+            return { ...task, metadata: newMetadata };
+          }
+          throw new Error('No task found');
+        },
+      },
+    });
+
+    const res = await app.request('/api/tasks/task1111', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: null }),
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json() as { task: TaskWire };
+    assert.equal(data.task.project, null);
   });
 
   it('returns 400 for invalid due date format', async () => {

@@ -1192,6 +1192,157 @@ describe('TaskService.updateTask', () => {
 });
 
 // ---------------------------------------------------------------------------
+// TaskService.updateTask: area/project tests
+// ---------------------------------------------------------------------------
+
+describe('TaskService.updateTask area/project', () => {
+  it('adds @area to task without existing area', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task without area
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: 'engineering' });
+
+    assert.equal(updated.metadata.area, 'engineering');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(engineering)'));
+  });
+
+  it('changes existing @area', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task with area @area(sales)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: 'engineering' });
+
+    assert.equal(updated.metadata.area, 'engineering');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(engineering)'));
+    assert.ok(!content?.includes('@area(sales)'));
+  });
+
+  it('removes @area when area=null', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task with area @area(sales)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: null });
+
+    assert.equal(updated.metadata.area, undefined);
+    const content = store.get(WEEK_FILE);
+    assert.ok(!content?.includes('@area'));
+  });
+
+  it('adds @project to task without existing project', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task without project
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { project: 'task-ui' });
+
+    assert.equal(updated.metadata.project, 'task-ui');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@project(task-ui)'));
+  });
+
+  it('removes @project when project=null', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task with project @project(task-ui)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { project: null });
+
+    assert.equal(updated.metadata.project, undefined);
+    const content = store.get(WEEK_FILE);
+    assert.ok(!content?.includes('@project'));
+  });
+
+  it('preserves existing metadata when updating area', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Complex task @person(john) @due(2026-03-01) @from(commitment:abc123)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: 'engineering' });
+
+    assert.equal(updated.metadata.area, 'engineering');
+    assert.equal(updated.metadata.person, 'john');
+    assert.equal(updated.metadata.due, '2026-03-01');
+    assert.deepEqual(updated.metadata.from, { type: 'commitment', id: 'abc123' });
+
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(engineering)'));
+    assert.ok(content?.includes('@person(john)'));
+    assert.ok(content?.includes('@due(2026-03-01)'));
+    assert.ok(content?.includes('@from(commitment:abc123)'));
+  });
+
+  it('can update area and project together', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Task to assign
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: 'engineering', project: 'task-ui' });
+
+    assert.equal(updated.metadata.area, 'engineering');
+    assert.equal(updated.metadata.project, 'task-ui');
+    const content = store.get(WEEK_FILE);
+    assert.ok(content?.includes('@area(engineering)'));
+    assert.ok(content?.includes('@project(task-ui)'));
+  });
+
+  it('can update area and due together', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Multi-update task
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    const tasks = await service.listTasks();
+    const updated = await service.updateTask(tasks[0].id, { area: 'sales', due: '2026-05-01' });
+
+    assert.equal(updated.metadata.area, 'sales');
+    assert.equal(updated.metadata.due, '2026-05-01');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // parseMetadata: @completedAt tests
 // ---------------------------------------------------------------------------
 

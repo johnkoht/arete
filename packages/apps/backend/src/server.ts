@@ -12,6 +12,7 @@ import jobsRouter from './routes/jobs.js';
 import { createIntelligenceRouter, createCommitmentsRouter } from './routes/intelligence.js';
 import { createCalendarRouter } from './routes/calendar.js';
 import { createProjectsRouter } from './routes/projects.js';
+import { createAreasRouter } from './routes/areas.js';
 import { createMemoryRouter } from './routes/memory.js';
 import { createPeopleRouter } from './routes/people.js';
 import { createGoalsRouter } from './routes/goals.js';
@@ -108,6 +109,7 @@ export function createApp(workspaceRoot: string): Hono {
   app.route('/api/intelligence', createIntelligenceRouter(workspaceRoot));
   app.route('/api/commitments', createCommitmentsRouter(workspaceRoot));
   app.route('/api/calendar', createCalendarRouter(workspaceRoot));
+  app.route('/api/areas', createAreasRouter(workspaceRoot));
   app.route('/api/projects', createProjectsRouter(workspaceRoot));
   app.route('/api/memory', createMemoryRouter(workspaceRoot));
   app.route('/api/people', createPeopleRouter(workspaceRoot));
