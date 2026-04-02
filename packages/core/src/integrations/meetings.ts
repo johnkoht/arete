@@ -37,6 +37,8 @@ export interface MeetingForSave {
   importance?: Importance;
   /** ID of the recurring event series (for recurring meeting detection). */
   recurring_series_id?: string;
+  /** Explicit area slug for meeting-to-area association. */
+  area?: string;
 }
 
 /**
@@ -428,6 +430,10 @@ export async function saveMeetingFile(
 
   if (meeting.recurring_series_id) {
     frontmatterData['recurring_series_id'] = meeting.recurring_series_id;
+  }
+
+  if (meeting.area) {
+    frontmatterData['area'] = meeting.area;
   }
 
   // Write structured attendees array
