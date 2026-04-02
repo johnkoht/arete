@@ -471,6 +471,333 @@ Test.
   });
 });
 
+describe('suggestAreaForMeeting', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let parser: AreaParserService;
+
+  const GLANCE_AREA = `---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "CoverWhale Sync"
+    attendees:
+      - john-doe
+    frequency: weekly
+---
+
+# Glance Communications
+
+## Current State
+API integration complete. Partnership progressing well with quarterly reviews.
+Working on feature enhancements and performance improvements.
+`;
+
+  const PLATFORM_AREA = `---
+area: Platform Infrastructure
+status: active
+recurring_meetings:
+  - title: "Platform Standup"
+    attendees:
+      - dev-team
+    frequency: daily
+---
+
+# Platform Infrastructure
+
+## Current State
+Kubernetes migration underway. Monitoring systems stable.
+Infrastructure automation and deployment pipelines running smoothly.
+`;
+
+  const ANALYTICS_AREA = `---
+area: Data Analytics
+status: active
+recurring_meetings: []
+---
+
+# Data Analytics
+
+## Current State
+Building dashboard widgets for metrics visualization.
+Data pipeline processing and reporting systems active.
+`;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'area-suggest-'));
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile('areas/glance-communications.md', GLANCE_AREA);
+    fixture.writeFile('areas/platform-infrastructure.md', PLATFORM_AREA);
+    fixture.writeFile('areas/data-analytics.md', ANALYTICS_AREA);
+    storage = new FileStorageAdapter();
+    parser = new AreaParserService(storage, tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  describe('exact recurring meeting title match', () => {
+    it('returns confidence 1.0 for exact recurring meeting title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'CoverWhale Sync' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.matchType, 'recurring');
+      assert.equal(match.confidence, 1.0);
+    });
+
+    it('matches recurring meeting title case-insensitively', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'COVERWHALE SYNC' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.confidence, 1.0);
+    });
+
+    it('matches recurring meeting as substring', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'Weekly CoverWhale Sync - March 2026' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.confidence, 1.0);
+    });
+  });
+
+  describe('area name match', () => {
+    it('returns confidence 0.8 when area name appears in meeting title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'Glance Communications Review' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.matchType, 'inferred');
+      assert.equal(match.confidence, 0.8);
+    });
+
+    it('returns confidence 0.8 when area name appears in summary', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'External Meeting',
+        summary: 'Discussed Platform Infrastructure roadmap with the team',
+      });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'platform-infrastructure');
+      assert.equal(match.matchType, 'inferred');
+      assert.equal(match.confidence, 0.8);
+    });
+
+    it('matches area name case-insensitively', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'DATA ANALYTICS planning session' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'data-analytics');
+      assert.equal(match.confidence, 0.8);
+    });
+  });
+
+  describe('keyword overlap', () => {
+    it('returns lower confidence (0.5-0.7) for keyword overlap with currentState', async () => {
+      // Glance currentState tokens: api, integration, complete, partnership, progressing, 
+      //   well, quarterly, reviews, working, feature, enhancements, performance, improvements (13 words)
+      // To get confidence >= 0.5, need Jaccard >= 0.714 (0.5/0.7)
+      // Use 10 of those 13 words exactly (no extra words): 10/13 = 0.769 → confidence 0.538
+      const match = await parser.suggestAreaForMeeting({
+        title: 'api integration complete partnership progressing well quarterly reviews working feature',
+      });
+
+      assert.ok(match, 'Expected a match from keyword overlap');
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.matchType, 'inferred');
+      assert.ok(match.confidence >= 0.5 && match.confidence <= 0.7, 
+        `Expected confidence between 0.5-0.7, got ${match.confidence}`);
+    });
+
+    it('requires minimum 2 keyword overlap', async () => {
+      // Only one content word - should not match
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Random',
+        summary: 'xyz',  // only one content word, no overlap
+      });
+
+      assert.equal(match, null);
+    });
+
+    it('filters stop words (sync/meeting/weekly are not matches)', async () => {
+      // Contains only stop words and common meeting words (all filtered)
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Weekly Sync',
+        summary: 'the team will sync on the meeting status check update',  // all stop words
+      });
+
+      assert.equal(match, null);
+    });
+  });
+
+  describe('confidence threshold', () => {
+    it('returns null when confidence below SUGGESTION_THRESHOLD (0.5)', async () => {
+      // Very low overlap - shouldn't match
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Completely Unrelated Topic',
+        summary: 'Nothing about any area here',
+      });
+
+      assert.equal(match, null);
+    });
+
+    it('does not return low-confidence guesses', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Miscellaneous Discussion',
+      });
+
+      // Should return null, not a low-confidence guess
+      assert.equal(match, null);
+    });
+  });
+
+  describe('multiple matches', () => {
+    it('returns highest confidence match', async () => {
+      // "CoverWhale Sync" matches exactly (1.0) even though "Platform" appears too
+      const match = await parser.suggestAreaForMeeting({
+        title: 'CoverWhale Sync',
+        summary: 'Also discussed Platform Infrastructure updates',
+      });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+      assert.equal(match.confidence, 1.0);
+    });
+
+    it('prefers exact match over area name match', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Platform Standup',  // Exact recurring match
+        summary: 'Discussion about Data Analytics',  // Area name match
+      });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'platform-infrastructure');
+      assert.equal(match.confidence, 1.0);
+    });
+  });
+
+  describe('empty/missing content handling', () => {
+    it('returns null for empty title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: '' });
+
+      assert.equal(match, null);
+    });
+
+    it('returns null for whitespace-only title', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: '   ' });
+
+      assert.equal(match, null);
+    });
+
+    it('handles missing summary gracefully', async () => {
+      const match = await parser.suggestAreaForMeeting({ title: 'CoverWhale Sync' });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+    });
+
+    it('handles missing transcript gracefully', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Platform Infrastructure Sync',
+        summary: 'Weekly sync',
+      });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'platform-infrastructure');
+    });
+  });
+
+  describe('transcript truncation', () => {
+    it('only uses first 500 chars of transcript', async () => {
+      // Create a long transcript where matching keywords appear after 500 chars
+      const longPrefix = 'x '.repeat(260);  // 520 chars - exceeds 500
+      const transcript = longPrefix + 'kubernetes migration monitoring infrastructure automation deployment pipelines';
+
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Random',
+        summary: 'abc',  // no content words
+        transcript,
+      });
+
+      // Should not match platform-infrastructure because keywords are after 500 chars
+      // The first 500 chars are just "x x x x..."
+      if (match) {
+        assert.notEqual(match.areaSlug, 'platform-infrastructure');
+      }
+    });
+
+    it('uses transcript keywords within first 500 chars', async () => {
+      // Platform currentState: "Kubernetes migration underway. Monitoring systems stable.
+      //   Infrastructure automation and deployment pipelines running smoothly."
+      // Use most of the same keywords in transcript for high Jaccard
+      const transcript = 'kubernetes migration monitoring systems stable infrastructure automation deployment pipelines running';
+
+      const match = await parser.suggestAreaForMeeting({
+        title: 'Random',
+        summary: 'xyz',  // no meaningful content
+        transcript,
+      });
+
+      assert.ok(match, 'Expected match from transcript keyword overlap');
+      assert.equal(match.areaSlug, 'platform-infrastructure');
+      assert.equal(match.matchType, 'inferred');
+    });
+  });
+
+  describe('case-insensitivity', () => {
+    it('matches area name regardless of case', async () => {
+      const match = await parser.suggestAreaForMeeting({
+        title: 'GLANCE COMMUNICATIONS planning',
+      });
+
+      assert.ok(match);
+      assert.equal(match.areaSlug, 'glance-communications');
+    });
+
+    it('matches keywords regardless of case', async () => {
+      // Platform currentState tokens: kubernetes, migration, underway, monitoring, systems, 
+      //   stable, infrastructure, automation, deployment, pipelines, running, smoothly (12 words)
+      // Use 10 of those 12 words in UPPERCASE: 10/12 = 0.833 → confidence 0.583
+      const match = await parser.suggestAreaForMeeting({
+        title: 'KUBERNETES MIGRATION UNDERWAY MONITORING SYSTEMS STABLE INFRASTRUCTURE AUTOMATION DEPLOYMENT PIPELINES',
+      });
+
+      assert.ok(match, 'Expected keyword match regardless of case');
+      assert.equal(match.areaSlug, 'platform-infrastructure');
+    });
+  });
+});
+
+describe('confidence constants exports', () => {
+  it('exports EXACT_TITLE_MATCH_CONFIDENCE = 1.0', async () => {
+    const { EXACT_TITLE_MATCH_CONFIDENCE } = await import('../../src/services/area-parser.js');
+    assert.equal(EXACT_TITLE_MATCH_CONFIDENCE, 1.0);
+  });
+
+  it('exports AREA_NAME_MATCH_CONFIDENCE = 0.8', async () => {
+    const { AREA_NAME_MATCH_CONFIDENCE } = await import('../../src/services/area-parser.js');
+    assert.equal(AREA_NAME_MATCH_CONFIDENCE, 0.8);
+  });
+
+  it('exports KEYWORD_OVERLAP_MAX_CONFIDENCE = 0.7', async () => {
+    const { KEYWORD_OVERLAP_MAX_CONFIDENCE } = await import('../../src/services/area-parser.js');
+    assert.equal(KEYWORD_OVERLAP_MAX_CONFIDENCE, 0.7);
+  });
+
+  it('exports MINIMUM_KEYWORD_OVERLAP = 2', async () => {
+    const { MINIMUM_KEYWORD_OVERLAP } = await import('../../src/services/area-parser.js');
+    assert.equal(MINIMUM_KEYWORD_OVERLAP, 2);
+  });
+
+  it('exports SUGGESTION_THRESHOLD = 0.5', async () => {
+    const { SUGGESTION_THRESHOLD } = await import('../../src/services/area-parser.js');
+    assert.equal(SUGGESTION_THRESHOLD, 0.5);
+  });
+});
+
 describe('AreaParserService - AC validation', () => {
   let tmpDir: string;
   let storage: FileStorageAdapter;
