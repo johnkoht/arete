@@ -133,10 +133,10 @@ const VALID_DIRECTIONS = new Set<string>(['i_owe_them', 'they_owe_me']);
 // ---------------------------------------------------------------------------
 
 /** Category limits: max items per category (keep first N in LLM response order). */
-const CATEGORY_LIMITS = {
-  actionItems: 7,
-  decisions: 5,
-  learnings: 5,
+export const CATEGORY_LIMITS = {
+  actionItems: 10,
+  decisions: 7,
+  learnings: 7,
 };
 
 /** Light mode limits: summary + minimal learnings only. */
@@ -148,9 +148,9 @@ export const LIGHT_LIMITS = {
 
 /** Thorough mode limits: higher caps for comprehensive extraction. */
 export const THOROUGH_LIMITS = {
-  actionItems: 10,
-  decisions: 7,
-  learnings: 7,
+  actionItems: 20,
+  decisions: 10,
+  learnings: 10,
 };
 
 /** Type for category limits. */

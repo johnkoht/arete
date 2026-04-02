@@ -10,6 +10,7 @@ import {
   buildExclusionListSection,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
+  CATEGORY_LIMITS,
 } from '../../src/services/meeting-extraction.js';
 import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
@@ -876,32 +877,32 @@ describe('parseMeetingExtractionResponse - category limits', () => {
     const response = JSON.stringify({ action_items: items });
 
     const result = parseMeetingExtractionResponse(response);
-    assert.equal(result.intelligence.actionItems.length, 7);
-    // Warnings for exceeded items
-    assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds action item limit')));
+    assert.equal(result.intelligence.actionItems.length, 10);
+    // All 10 fit within the new limit of 10, so no warning
+    assert.ok(!result.validationWarnings.some(w => w.reason.includes('exceeds action item limit')));
   });
 
-  it('enforces decision limit of 5', () => {
+  it('enforces decision limit of 7', () => {
     const decisions = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
       decisions.push(`Unique distinct decision number ${i}`);
     }
     const response = JSON.stringify({ decisions });
 
     const result = parseMeetingExtractionResponse(response);
-    assert.equal(result.intelligence.decisions.length, 5);
+    assert.equal(result.intelligence.decisions.length, 7);
     assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds decision limit')));
   });
 
-  it('enforces learning limit of 5', () => {
+  it('enforces learning limit of 7', () => {
     const learnings = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 10; i++) {
       learnings.push(`Unique distinct learning number ${i}`);
     }
     const response = JSON.stringify({ learnings });
 
     const result = parseMeetingExtractionResponse(response);
-    assert.equal(result.intelligence.learnings.length, 5);
+    assert.equal(result.intelligence.learnings.length, 7);
     assert.ok(result.validationWarnings.some(w => w.reason.includes('exceeds learning limit')));
   });
 
@@ -917,8 +918,8 @@ describe('parseMeetingExtractionResponse - category limits', () => {
     const response = JSON.stringify({ action_items: items });
 
     const result = parseMeetingExtractionResponse(response);
-    // Should keep items 0-6 (first 7)
-    for (let i = 0; i < 7; i++) {
+    // Should keep items 0-9 (first 10)
+    for (let i = 0; i < 10; i++) {
       assert.ok(
         result.intelligence.actionItems[i].description.includes(`Unique item ${i}`),
         `Item ${i} should be preserved`,
@@ -2995,9 +2996,15 @@ describe('Extraction mode limits', () => {
   });
 
   it('THOROUGH_LIMITS has correct values', () => {
-    assert.equal(THOROUGH_LIMITS.actionItems, 10);
-    assert.equal(THOROUGH_LIMITS.decisions, 7);
-    assert.equal(THOROUGH_LIMITS.learnings, 7);
+    assert.equal(THOROUGH_LIMITS.actionItems, 20);
+    assert.equal(THOROUGH_LIMITS.decisions, 10);
+    assert.equal(THOROUGH_LIMITS.learnings, 10);
+  });
+
+  it('CATEGORY_LIMITS has correct values', () => {
+    assert.equal(CATEGORY_LIMITS.actionItems, 10);
+    assert.equal(CATEGORY_LIMITS.decisions, 7);
+    assert.equal(CATEGORY_LIMITS.learnings, 7);
   });
 });
 
@@ -3040,18 +3047,18 @@ describe('parseMeetingExtractionResponse with limits', () => {
     assert.equal(result.intelligence.learnings.length, 2);
   });
 
-  it('applies THOROUGH_LIMITS correctly (10 action items, 7 decisions, 7 learnings)', () => {
+  it('applies THOROUGH_LIMITS correctly (20 action items, 10 decisions, 10 learnings)', () => {
     // Create response with more than normal limits
     const actionItems = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       actionItems.push({ owner: `Person ${i}`, description: `Unique task ${i} here`, direction: 'i_owe_them' });
     }
     const decisions = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 10; i++) {
       decisions.push(`Unique decision ${i} made`);
     }
     const learnings = [];
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 10; i++) {
       learnings.push(`Unique learning ${i} shared`);
     }
 
@@ -3064,12 +3071,12 @@ describe('parseMeetingExtractionResponse with limits', () => {
 
     const result = parseMeetingExtractionResponse(response, THOROUGH_LIMITS);
 
-    // All 10 action items should be kept (normal limit is 7)
-    assert.equal(result.intelligence.actionItems.length, 10);
-    // All 7 decisions should be kept (normal limit is 5)
-    assert.equal(result.intelligence.decisions.length, 7);
-    // All 7 learnings should be kept (normal limit is 5)
-    assert.equal(result.intelligence.learnings.length, 7);
+    // All 20 action items should be kept (normal limit is 10)
+    assert.equal(result.intelligence.actionItems.length, 20);
+    // All 10 decisions should be kept (normal limit is 7)
+    assert.equal(result.intelligence.decisions.length, 10);
+    // All 10 learnings should be kept (normal limit is 7)
+    assert.equal(result.intelligence.learnings.length, 10);
   });
 
   it('defaults to CATEGORY_LIMITS when no limits provided', () => {
@@ -3083,10 +3090,10 @@ describe('parseMeetingExtractionResponse with limits', () => {
       action_items: actionItems,
     });
 
-    // Call without limits parameter (should default to CATEGORY_LIMITS = 7 action items)
+    // Call without limits parameter (should default to CATEGORY_LIMITS = 10 action items)
     const result = parseMeetingExtractionResponse(response);
 
-    assert.equal(result.intelligence.actionItems.length, 7);
+    assert.equal(result.intelligence.actionItems.length, 10);
   });
 });
 
@@ -3164,7 +3171,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
     assert.ok(capturedPrompt.includes('Confidence Guide'));
     assert.ok(capturedPrompt.includes('"action_items"'));
 
-    // But with thorough limits (10 action items, 7 decisions, 7 learnings)
+    // But with thorough limits (20 action items, 10 decisions, 10 learnings)
     assert.equal(result.intelligence.actionItems.length, 10);
     assert.equal(result.intelligence.decisions.length, 7);
     assert.equal(result.intelligence.learnings.length, 7);
@@ -3189,7 +3196,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
 
     const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'thorough' });
 
-    // All 10 should be kept (vs normal mode which would cap at 7)
+    // All 10 should be kept (vs normal mode which would cap at 10)
     assert.equal(result.intelligence.actionItems.length, 10);
     // Verify no limit warnings
     const limitWarnings = result.validationWarnings.filter(w => w.reason.includes('exceeds'));
@@ -3229,7 +3236,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
 
     const result = await extractMeetingIntelligence('transcript', mockLLM, { mode: 'normal' });
 
-    // Normal limits = 7 action items
-    assert.equal(result.intelligence.actionItems.length, 7);
+    // Normal limits = 10 action items
+    assert.equal(result.intelligence.actionItems.length, 10);
   });
 });
