@@ -301,11 +301,11 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
   const { mutate, isError } = useUpdateTask();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  // Set Today action
+  // Set Today action - moves to must bucket to ensure it appears in Today view
   const handleSetToday = useCallback(() => {
     mutate({
       id: suggestion.id,
-      updates: { due: getTodayString() },
+      updates: { due: getTodayString(), destination: 'must' },
     });
     toast.success('Task set for today');
   }, [suggestion.id, mutate]);
@@ -315,9 +315,18 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
     (date: Date | undefined) => {
       if (!date) return;
 
+      const today = getToday();
+      const dateStr = formatDate(date);
+      const todayStr = formatDate(today);
+
+      // Determine destination based on selected date:
+      // - Today's date → must (appears in Today view)
+      // - Tomorrow or later → should (appears in Upcoming view)
+      const destination = dateStr === todayStr ? 'must' : 'should';
+
       mutate({
         id: suggestion.id,
-        updates: { due: formatDate(date) },
+        updates: { due: dateStr, destination },
       });
       toast.success('Task scheduled');
       setCalendarOpen(false);
@@ -374,7 +383,14 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
               Schedule
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent 
+            className="w-auto p-0" 
+            align="start"
+            side="bottom"
+            sideOffset={4}
+            collisionPadding={8}
+            avoidCollisions={true}
+          >
             <div data-testid="schedule-calendar">
               <Calendar
                 mode="single"

@@ -159,11 +159,11 @@ describe('SchedulePopup', () => {
   });
 
   describe('date selection', () => {
-    it('selecting Today sets due to today\'s date', async () => {
+    it('selecting Today sets due to today\'s date and destination to must', async () => {
       const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
-        currentDestination: 'must',
+        currentDestination: 'someday',
         currentDue: null,
       });
 
@@ -173,15 +173,15 @@ describe('SchedulePopup', () => {
 
       expect(mockMutate).toHaveBeenCalledWith({
         id: 'task-001',
-        updates: { due: formatDate(getToday()) },
+        updates: { due: formatDate(getToday()), destination: 'must' },
       });
     });
 
-    it('selecting Tomorrow sets due to tomorrow\'s date', async () => {
+    it('selecting Tomorrow sets due to tomorrow\'s date and destination to should', async () => {
       const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
-        currentDestination: 'must',
+        currentDestination: 'someday',
         currentDue: null,
       });
 
@@ -191,7 +191,7 @@ describe('SchedulePopup', () => {
 
       expect(mockMutate).toHaveBeenCalledWith({
         id: 'task-001',
-        updates: { due: formatDate(getTomorrow()) },
+        updates: { due: formatDate(getTomorrow()), destination: 'should' },
       });
     });
 
@@ -383,11 +383,11 @@ describe('SchedulePopup', () => {
       });
     });
 
-    it('selecting date from calendar calls updateTask', async () => {
+    it('selecting date from calendar calls updateTask with destination', async () => {
       const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
-        currentDestination: 'must',
+        currentDestination: 'someday',
         currentDue: null,
       });
 
@@ -414,12 +414,14 @@ describe('SchedulePopup', () => {
         // Click the first enabled day
         await user.click(dayButtons[0]);
 
-        // Should have called mutate with a date
+        // Should have called mutate with a date and destination
         await waitFor(() => {
           expect(mockMutate).toHaveBeenCalled();
           const call = mockMutate.mock.calls[0][0];
           expect(call.id).toBe('task-001');
           expect(call.updates.due).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+          // Destination should be set (must for today, should for future dates)
+          expect(['must', 'should']).toContain(call.updates.destination);
         });
       }
     });

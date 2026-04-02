@@ -126,17 +126,19 @@ export function SchedulePopup({ taskId, currentDestination, currentDue: _current
   const handleSelect = useCallback((action: ScheduleOption['action']) => {
     switch (action) {
       case 'today':
+        // Set due date AND move to must bucket to ensure task appears in Today view
         mutate({
           id: taskId,
-          updates: { due: formatDate(getToday()) },
+          updates: { due: formatDate(getToday()), destination: 'must' },
         });
         closePopover();
         break;
 
       case 'tomorrow':
+        // Set due date AND move to should bucket to ensure task appears in Upcoming view
         mutate({
           id: taskId,
-          updates: { due: formatDate(getTomorrow()) },
+          updates: { due: formatDate(getTomorrow()), destination: 'should' },
         });
         closePopover();
         break;
@@ -165,9 +167,23 @@ export function SchedulePopup({ taskId, currentDestination, currentDue: _current
 
   const handleCalendarSelect = useCallback((date: Date | undefined) => {
     if (date) {
+      const today = getToday();
+      const tomorrow = getTomorrow();
+      const dateStr = formatDate(date);
+      const todayStr = formatDate(today);
+      const tomorrowStr = formatDate(tomorrow);
+
+      // Determine destination based on selected date:
+      // - Today's date → must (appears in Today view)
+      // - Tomorrow or later → should (appears in Upcoming view)
+      let destination: 'must' | 'should' = 'should';
+      if (dateStr === todayStr) {
+        destination = 'must';
+      }
+
       mutate({
         id: taskId,
-        updates: { due: formatDate(date) },
+        updates: { due: dateStr, destination },
       });
       closePopover();
     }
@@ -240,6 +256,10 @@ export function SchedulePopup({ taskId, currentDestination, currentDue: _current
       <PopoverContent 
         className="w-48 p-1"
         align="start"
+        side="bottom"
+        sideOffset={4}
+        collisionPadding={8}
+        avoidCollisions={true}
         onKeyDown={handleKeyDown}
       >
         {showCalendar ? (
