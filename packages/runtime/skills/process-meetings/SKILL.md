@@ -82,6 +82,58 @@ Filtering options:
 
 **Legacy meetings** (no YAML frontmatter): Parse title from first `#` heading, date from filename, attendees from body ("**Attendees**: ..." or "Attendees: ...").
 
+### 1b. Area Association (Checkpoint — multiple meetings only)
+
+When processing **multiple meetings** (batch mode, `today`, or `--days-back`), present a single area association checkpoint before per-meeting processing. This ensures area context is available during extraction without prompting N times for N meetings (⚠️ Pre-Mortem R3).
+
+**Skip this step** when processing a single meeting with `--file` — step 2b handles area mapping inline.
+
+**Get suggestions**: Use `suggestAreaForMeeting()` from AreaParserService for all gathered meetings:
+
+```typescript
+// Conceptual — agent uses available tools
+const areas = await areaParser.listAreas(); // all area slugs
+for (const meetingPath of gatheredMeetings) {
+  const meeting = parseMeetingFile(meetingPath);
+  const suggestion = await areaParser.suggestAreaForMeeting({
+    title: meeting.title,
+    summary: meeting.summary,
+    transcript: meeting.transcript,
+  });
+}
+```
+
+**Present as a single batch table**:
+
+```
+I'll be processing {N} meetings. Here are my area suggestions:
+
+| Meeting Title | Date | Suggested Area | Confidence |
+|--------------|------|----------------|------------|
+| Weekly Sync  | 2026-04-01 | team-meetings | 1.0 |
+| Acme Intro   | 2026-04-01 | — | — |
+| Product Review | 2026-04-01 | product-dev | 0.8 |
+
+Areas available: {comma-separated list of all area slugs}
+
+Options:
+1. **Confirm** — proceed with these associations
+2. **Adjust** — specify different areas (format: "Meeting Title → area-slug")
+3. **Skip** — process without area associations
+
+Your choice?
+```
+
+**After confirmation**: Save confirmed areas to meeting frontmatter (`area: <slug>`) before proceeding to per-meeting processing. Step 2b will detect the frontmatter area and skip its own area mapping prompt.
+
+**Edge cases**:
+- **All suggestions null**: "No area suggestions available for these meetings. Would you like to assign areas manually, or skip area association? Available areas: {list}"
+- **User provides invalid area**: "'{area}' not found. Available areas: {list}. Please try again."
+- **User provides custom area not in suggestions**: Valid — any area slug from the available list can be used.
+- **Single meeting via `--file`**: Skip this step; step 2b handles it inline.
+
+---
+
 ### 2. For Each Meeting — Build Context
 
 Run the context primitive to assemble meeting context:
@@ -154,6 +206,8 @@ If user skips:
 **Tip**: To avoid manual linking, ensure agendas include `meeting_title` in frontmatter when created via `prepare-meeting-agenda` skill. This enables exact matching.
 
 ### 2b. For Each Meeting — Map to Area
+
+> **Note**: If step 1b (batch checkpoint) already saved an area to this meeting's frontmatter, the context command will detect it automatically. No additional mapping is needed — skip to step 3. This step only applies when processing a single meeting via `--file` or when area was not set in the batch checkpoint.
 
 Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to identify which area this meeting belongs to:
 

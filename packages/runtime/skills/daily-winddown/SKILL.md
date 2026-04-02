@@ -45,7 +45,8 @@ ORCHESTRATOR (you)
 │   ├─ 1a. Pull recordings
 │   ├─ 1b. Read local state (week.md, goals/)
 │   ├─ 1c. ⚠️ MERGE AGENDAS into meeting files (CRITICAL — do not skip)
-│   └─ 1d. Process inbox (triage captured items)
+│   ├─ 1d. Process inbox (triage captured items)
+│   └─ 1e. Area association checkpoint (batch confirm areas for today's meetings)
 │
 ├─ ✅ CHECKPOINT ────────────────── verify Phase 1 complete before proceeding
 │
@@ -301,6 +302,56 @@ If inbox has >5 items, offer batch mode:
 
 ---
 
+#### 1e. Area Association (Checkpoint)
+
+Before processing meetings, associate each meeting with a workspace area so that area context (current state, recent decisions) can be injected into extraction.
+
+**Get suggestions**: Use `suggestAreaForMeeting()` from AreaParserService to get area suggestions for all today's meetings in a single pass:
+
+```typescript
+// Conceptual — agent uses available tools
+const areas = await areaParser.listAreas(); // all area slugs
+for (const meetingPath of todaysMeetings) {
+  const meeting = parseMeetingFile(meetingPath);
+  const suggestion = await areaParser.suggestAreaForMeeting({
+    title: meeting.title,
+    summary: meeting.summary,
+    transcript: meeting.transcript,
+  });
+}
+```
+
+**Present as a single batch table** (⚠️ Pre-Mortem R3: one prompt, not N prompts for N meetings):
+
+```
+I've gathered {N} meetings for processing. Here are my area suggestions:
+
+| Meeting Title | Date | Suggested Area | Confidence |
+|--------------|------|----------------|------------|
+| Weekly Sync  | 2026-04-01 | team-meetings | 1.0 |
+| Acme Intro   | 2026-04-01 | — | — |
+| Product Review | 2026-04-01 | product-dev | 0.8 |
+
+Areas available: {comma-separated list of all area slugs}
+
+Options:
+1. **Confirm** — proceed with these associations
+2. **Adjust** — specify different areas (format: "Meeting Title → area-slug")
+3. **Skip** — process without area associations
+
+Your choice?
+```
+
+**After confirmation**: Save confirmed areas to meeting frontmatter (`area: <slug>`) before dispatching Phase 2 processing subagents. Include the area in each subagent's prompt context.
+
+**Edge cases**:
+- **All suggestions null**: "No area suggestions available for today's meetings. Would you like to assign areas manually, or skip area association? Available areas: {list}"
+- **User provides invalid area**: "'{area}' not found. Available areas: {list}. Please try again."
+- **User provides custom area not in suggestions**: Valid — any area slug from the available list can be used, not just the suggested ones.
+- **No meetings today**: Skip this step entirely (Phase 2 will also be skipped).
+
+---
+
 ### ✅ Phase 1 Checkpoint — VERIFY BEFORE PROCEEDING
 
 **STOP. Before starting Phase 2, verify all Phase 1 steps completed:**
@@ -318,6 +369,10 @@ grep -l "## Agenda" resources/meetings/YYYY-MM-DD-*.md
 
 # 4. Confirm inbox was processed (or empty)
 # Check ## Inbox section in week.md
+
+# 5. Confirm area associations were offered (or no meetings)
+# Meetings with confirmed areas should have area: in frontmatter
+grep -l "^area:" resources/meetings/YYYY-MM-DD-*.md
 ```
 
 **Checklist:**
@@ -325,6 +380,7 @@ grep -l "## Agenda" resources/meetings/YYYY-MM-DD-*.md
 - [ ] 1b. Local state read (week.md, goals/)
 - [ ] 1c. Agendas merged into meeting files (or confirmed none exist for today)
 - [ ] 1d. Inbox processed (or confirmed empty)
+- [ ] 1e. Area associations confirmed (or skipped, or no meetings)
 
 **If agendas exist but weren't merged**: GO BACK and complete step 1c now.
 
