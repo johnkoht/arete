@@ -431,9 +431,13 @@ export class TaskService {
     }
     /**
      * Update task metadata.
-     * Currently supports updating the due date.
+     * Supports updating due date, area, and project.
      * - Pass `{ due: 'YYYY-MM-DD' }` to set/change due date
      * - Pass `{ due: null }` to remove due date
+     * - Pass `{ area: 'slug' }` to set/change area
+     * - Pass `{ area: null }` to remove area
+     * - Pass `{ project: 'slug' }` to set/change project
+     * - Pass `{ project: null }` to remove project
      *
      * Atomic: validates before writing — file unchanged on validation error.
      */
@@ -469,6 +473,22 @@ export class TaskService {
                     }
                     else if (updates.due !== undefined) {
                         newMetadata.due = updates.due;
+                    }
+                }
+                if ('area' in updates) {
+                    if (updates.area === null) {
+                        delete newMetadata.area;
+                    }
+                    else if (updates.area !== undefined) {
+                        newMetadata.area = updates.area;
+                    }
+                }
+                if ('project' in updates) {
+                    if (updates.project === null) {
+                        delete newMetadata.project;
+                    }
+                    else if (updates.project !== undefined) {
+                        newMetadata.project = updates.project;
                     }
                 }
                 // Format the updated task line

@@ -313,9 +313,16 @@ export function createTasksRouter(workspaceRoot) {
             if (body.destination !== undefined) {
                 task = await withFileLock(task.source.file, () => services.tasks.moveTask(task.id, body.destination));
             }
-            // 2. Update due (use new file path after move)
-            if ('due' in body) {
-                task = await withFileLock(task.source.file, () => services.tasks.updateTask(task.id, { due: body.due }));
+            // 2. Update metadata (due, area, project — use new file path after move)
+            const metadataUpdates = {};
+            if ('due' in body)
+                metadataUpdates.due = body.due;
+            if ('area' in body)
+                metadataUpdates.area = body.area;
+            if ('project' in body)
+                metadataUpdates.project = body.project;
+            if (Object.keys(metadataUpdates).length > 0) {
+                task = await withFileLock(task.source.file, () => services.tasks.updateTask(task.id, metadataUpdates));
             }
             // 3. Complete last (triggers side effects like completedAt)
             if (body.completed !== undefined && body.completed) {
@@ -323,7 +330,7 @@ export function createTasksRouter(workspaceRoot) {
                 task = result.task;
             }
             // If nothing was processed
-            if (body.destination === undefined && !('due' in body) && body.completed === undefined) {
+            if (body.destination === undefined && !('due' in body) && !('area' in body) && !('project' in body) && body.completed === undefined) {
                 return c.json({ error: 'No valid updates provided' }, 400);
             }
             const allCommitments = await services.commitments.listOpen();

@@ -101,14 +101,20 @@ export declare class TaskService {
     moveTask(taskId: string, destination: TaskDestination): Promise<WorkspaceTask>;
     /**
      * Update task metadata.
-     * Currently supports updating the due date.
+     * Supports updating due date, area, and project.
      * - Pass `{ due: 'YYYY-MM-DD' }` to set/change due date
      * - Pass `{ due: null }` to remove due date
+     * - Pass `{ area: 'slug' }` to set/change area
+     * - Pass `{ area: null }` to remove area
+     * - Pass `{ project: 'slug' }` to set/change project
+     * - Pass `{ project: null }` to remove project
      *
      * Atomic: validates before writing — file unchanged on validation error.
      */
     updateTask(taskId: string, updates: {
         due?: string | null;
+        area?: string | null;
+        project?: string | null;
     }): Promise<WorkspaceTask>;
     /**
      * Find a task by ID (prefix match supported).

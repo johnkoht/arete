@@ -7,7 +7,7 @@
  */
 
 import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent } from 'react';
-import { Check, FolderOpen, Briefcase, Plus, X, Search } from 'lucide-react';
+import { Check, FolderOpen, Briefcase, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.js';

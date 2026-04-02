@@ -242,6 +242,7 @@ export type Task = {
     daysOpen: number;
   } | null;
   completed: boolean;
+  completedAt: string | null;
   source: { file: string; section: string };
 };
 
