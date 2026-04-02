@@ -115,6 +115,8 @@ export function useUpdateTask() {
     onSettled: () => {
       // Refetch to ensure server state consistency
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      // Also invalidate suggestions cache (tasks updated may no longer be suggestions)
+      void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
     },
   });
 
@@ -200,6 +202,8 @@ export function useCompleteTask() {
     onSuccess: () => {
       // Invalidate to trigger refetch (completed task should disappear from list)
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      // Also invalidate suggestions cache (completed tasks are not suggestions)
+      void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
     },
   });
 

@@ -452,6 +452,49 @@ describe("useUpdateTask", () => {
     expect(patchCalls).toHaveLength(1);
   });
 
+  it("invalidates suggestions cache on success", async () => {
+    const invalidateQueriesSpy = vi.fn();
+    const originalInvalidateQueries = QueryClient.prototype.invalidateQueries;
+    QueryClient.prototype.invalidateQueries = function (...args: Parameters<typeof originalInvalidateQueries>) {
+      invalidateQueriesSpy(...args);
+      return originalInvalidateQueries.apply(this, args);
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockResponse({ task: { ...MOCK_TASK, destination: "should" } })
+      )
+    );
+
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(["tasks", undefined, undefined], MOCK_TASKS_RESPONSE);
+    queryClient.setQueryData(["tasks", "suggested"], [MOCK_SUGGESTED_TASK]);
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper });
+
+    act(() => {
+      result.current.mutate({ id: "task-001", updates: { destination: "should" } });
+    });
+
+    // Advance past debounce
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    // Verify both ['tasks'] and ['tasks', 'suggested'] were invalidated
+    const invalidateCalls = invalidateQueriesSpy.mock.calls;
+    const invalidatedKeys = invalidateCalls.map((call) => call[0]?.queryKey);
+    
+    expect(invalidatedKeys).toContainEqual(['tasks']);
+    expect(invalidatedKeys).toContainEqual(['tasks', 'suggested']);
+
+    // Restore
+    QueryClient.prototype.invalidateQueries = originalInvalidateQueries;
+  });
+
   it("handles multiple paginated cache entries", async () => {
     // Track getQueriesData and setQueriesData calls
     const getQueriesDataSpy = vi.fn();
