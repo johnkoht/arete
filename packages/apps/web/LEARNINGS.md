@@ -42,3 +42,53 @@ export async function deleteTask(id: string): Promise<void> {
 
 **Why not extend apiFetch?** Adding special 204 handling would complicate the common case.
 Most endpoints return JSON; only DELETE with 204 needs this pattern.
+
+### Date string consistency in tests (first use: task-ui-bugs, 2026-04-02)
+
+When comparing dates between components and tests, ensure both use the same date calculation logic.
+
+**Problem**: Component uses `new Date(year, month, date)` (local midnight) then `toISOString()`, 
+which shifts dates when local midnight is "yesterday" in UTC (e.g., timezone UTC-8 at 3am local).
+
+**Pattern**: Test helpers should match component logic exactly:
+```typescript
+// ✗ May differ from component due to timezone
+function getToday(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ✓ Matches component's getToday() logic
+function getToday(): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return today.toISOString().split('T')[0];
+}
+```
+
+### React Query cache invalidation for related queries (first use: task-ui-bugs, 2026-04-02)
+
+When a mutation affects data shown in multiple query types, invalidate all related caches.
+
+**Pattern**: In `useUpdateTask`/`useCompleteTask`, invalidate both main tasks and suggestions:
+```typescript
+onSettled: () => {
+  void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  void queryClient.invalidateQueries({ queryKey: ['tasks', 'suggested'] });
+}
+```
+
+**Why?** The `['tasks', 'suggested']` query key is a different query than `['tasks', filter, options]`.
+Invalidating `{ queryKey: ['tasks'] }` alone uses prefix matching, but suggestions uses `['tasks', 'suggested']` 
+which needs explicit invalidation to ensure updated tasks disappear from suggestions.
+
+## Invariants
+
+### Task scheduling requires destination for cross-tab visibility
+
+When scheduling a task from Someday/Anytime via SchedulePopup or TodayView:
+- **Today** → Set `destination: 'must'` + `due: today` — ensures task appears in Today tab
+- **Tomorrow** → Set `destination: 'should'` + `due: tomorrow` — ensures task appears in Upcoming tab
+- **Pick date** → Set `destination: 'must'` (if today) or `'should'` (if future)
+
+The backend filters tasks by both `due` date AND `source.section` (destination). Setting only `due` 
+would make the task appear in both original tab AND destination tab (duplicate).
