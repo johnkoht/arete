@@ -95,9 +95,10 @@ function flattenExtractions(extractions: MeetingExtractionBatch[]): FlattenedIte
 function scoreRelevance(
   item: FlattenedItem,
   context: ReconciliationContext,
-): { score: number; tier: 'high' | 'normal' | 'low'; matchedArea?: string } {
+): { score: number; tier: 'high' | 'normal' | 'low'; matchedArea?: string; matchedPerson?: string } {
   let score = 0;
   let matchedArea: string | undefined;
+  let matchedPerson: string | undefined;
 
   for (const [slug, memory] of context.areaMemories) {
     const keywordScore = memory.keywords.some((kw) =>
@@ -113,12 +114,13 @@ function scoreRelevance(
     if (areaScore > score) {
       score = areaScore;
       matchedArea = slug;
+      matchedPerson = personScore > 0 ? item.owner : undefined;
     }
   }
 
   const tier = score >= 0.7 ? 'high' : score >= 0.4 ? 'normal' : 'low';
 
-  return { score, tier, matchedArea };
+  return { score, tier, matchedArea, matchedPerson };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,10 +177,13 @@ export function reconcileMeetingBatch(
     // TODO: Dedup (P2-3), completion matching (P2-5), memory matching (P2-6)
 
     // Step 5: Score relevance
-    const { score, tier, matchedArea } = scoreRelevance(item, context);
+    const { score, tier, matchedArea, matchedPerson } = scoreRelevance(item, context);
 
     if (matchedArea) {
       annotations.areaSlug = matchedArea;
+    }
+    if (matchedPerson) {
+      annotations.personSlug = matchedPerson;
     }
 
     // Step 6: Generate annotation

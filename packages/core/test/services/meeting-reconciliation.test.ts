@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   reconcileMeetingBatch,
   flattenExtractions,
@@ -66,8 +67,8 @@ describe('reconcileMeetingBatch', () => {
   it('returns empty result for empty batch', () => {
     const result = reconcileMeetingBatch([], makeContext());
 
-    expect(result.items).toEqual([]);
-    expect(result.stats).toEqual({
+    assert.deepStrictEqual(result.items, []);
+    assert.deepStrictEqual(result.stats, {
       duplicatesRemoved: 0,
       completedMatched: 0,
       lowRelevanceCount: 0,
@@ -92,13 +93,13 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext());
 
-    expect(result.items).toHaveLength(3);
-    expect(result.items[0].type).toBe('action');
-    expect(result.items[0].meetingPath).toBe('meetings/2026-04-01-standup.md');
-    expect(result.items[1].type).toBe('decision');
-    expect(result.items[1].original).toBe('Use React for frontend');
-    expect(result.items[2].type).toBe('learning');
-    expect(result.items[2].original).toBe('Users prefer dark mode');
+    assert.equal(result.items.length, 3);
+    assert.equal(result.items[0].type, 'action');
+    assert.equal(result.items[0].meetingPath, 'meetings/2026-04-01-standup.md');
+    assert.equal(result.items[1].type, 'decision');
+    assert.equal(result.items[1].original, 'Use React for frontend');
+    assert.equal(result.items[2].type, 'learning');
+    assert.equal(result.items[2].original, 'Users prefer dark mode');
   });
 
   it('flattens items from multiple meetings', () => {
@@ -122,12 +123,12 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext());
 
-    expect(result.items).toHaveLength(4);
+    assert.equal(result.items.length, 4);
     // Verify source meeting paths
-    expect(result.items[0].meetingPath).toBe('meetings/m1.md');
-    expect(result.items[1].meetingPath).toBe('meetings/m1.md');
-    expect(result.items[2].meetingPath).toBe('meetings/m2.md');
-    expect(result.items[3].meetingPath).toBe('meetings/m2.md');
+    assert.equal(result.items[0].meetingPath, 'meetings/m1.md');
+    assert.equal(result.items[1].meetingPath, 'meetings/m1.md');
+    assert.equal(result.items[2].meetingPath, 'meetings/m2.md');
+    assert.equal(result.items[3].meetingPath, 'meetings/m2.md');
   });
 
   it('all items default to status=keep', () => {
@@ -148,7 +149,7 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext());
     for (const item of result.items) {
-      expect(item.status).toBe('keep');
+      assert.equal(item.status, 'keep');
     }
   });
 
@@ -165,10 +166,10 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext({ areaMemories }));
 
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].relevanceScore).toBe(0.3);
-    expect(result.items[0].annotations.areaSlug).toBe('frontend');
-    expect(result.items[0].annotations.why).toContain('Area match');
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].relevanceScore, 0.3);
+    assert.equal(result.items[0].annotations.areaSlug, 'frontend');
+    assert.ok(result.items[0].annotations.why.includes('Area match'));
   });
 
   it('scores items with person matching', () => {
@@ -191,8 +192,9 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext({ areaMemories }));
 
-    expect(result.items[0].relevanceScore).toBe(0.3);
-    expect(result.items[0].annotations.areaSlug).toBe('backend');
+    assert.equal(result.items[0].relevanceScore, 0.3);
+    assert.equal(result.items[0].annotations.areaSlug, 'backend');
+    assert.equal(result.items[0].annotations.personSlug, 'alice');
   });
 
   it('scores keyword + person match as 0.6', () => {
@@ -221,8 +223,8 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext({ areaMemories }));
 
-    expect(result.items[0].relevanceScore).toBe(0.6);
-    expect(result.items[0].relevanceTier).toBe('normal');
+    assert.equal(result.items[0].relevanceScore, 0.6);
+    assert.equal(result.items[0].relevanceTier, 'normal');
   });
 
   it('marks items with no area match as low relevance', () => {
@@ -234,9 +236,9 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext());
 
-    expect(result.items[0].relevanceScore).toBe(0);
-    expect(result.items[0].relevanceTier).toBe('low');
-    expect(result.items[0].annotations.why).toContain('No area/person/keyword matches');
+    assert.equal(result.items[0].relevanceScore, 0);
+    assert.equal(result.items[0].relevanceTier, 'low');
+    assert.ok(result.items[0].annotations.why.includes('No area/person/keyword matches'));
   });
 
   it('counts low relevance items in stats', () => {
@@ -249,9 +251,9 @@ describe('reconcileMeetingBatch', () => {
 
     const result = reconcileMeetingBatch(batch, makeContext());
 
-    expect(result.stats.lowRelevanceCount).toBe(3);
-    expect(result.stats.duplicatesRemoved).toBe(0);
-    expect(result.stats.completedMatched).toBe(0);
+    assert.equal(result.stats.lowRelevanceCount, 3);
+    assert.equal(result.stats.duplicatesRemoved, 0);
+    assert.equal(result.stats.completedMatched, 0);
   });
 
   it('picks highest-scoring area when multiple match', () => {
@@ -282,14 +284,14 @@ describe('reconcileMeetingBatch', () => {
     const result = reconcileMeetingBatch(batch, makeContext({ areaMemories }));
 
     // platform matches both keyword and person (0.6) vs frontend keyword only (0.3)
-    expect(result.items[0].annotations.areaSlug).toBe('platform');
-    expect(result.items[0].relevanceScore).toBe(0.6);
+    assert.equal(result.items[0].annotations.areaSlug, 'platform');
+    assert.equal(result.items[0].relevanceScore, 0.6);
   });
 });
 
 describe('flattenExtractions', () => {
   it('returns empty array for empty batch', () => {
-    expect(flattenExtractions([])).toEqual([]);
+    assert.deepStrictEqual(flattenExtractions([]), []);
   });
 
   it('preserves action item owner slug', () => {
@@ -306,8 +308,8 @@ describe('flattenExtractions', () => {
       }),
     ]);
 
-    expect(items[0].owner).toBe('bob');
-    expect(items[0].text).toBe('Task');
+    assert.equal(items[0].owner, 'bob');
+    assert.equal(items[0].text, 'Task');
   });
 });
 
@@ -318,27 +320,30 @@ describe('scoreRelevance', () => {
       makeContext(),
     );
 
-    expect(result.score).toBe(0);
-    expect(result.tier).toBe('low');
-    expect(result.matchedArea).toBeUndefined();
+    assert.equal(result.score, 0);
+    assert.equal(result.tier, 'low');
+    assert.equal(result.matchedArea, undefined);
   });
 });
 
 describe('generateWhy', () => {
   it('includes area slug when present', () => {
-    expect(generateWhy('high', { areaSlug: 'frontend' })).toBe(
+    assert.equal(
+      generateWhy('high', { areaSlug: 'frontend' }),
       'HIGH: Area match (frontend)',
     );
   });
 
   it('includes person slug when present', () => {
-    expect(generateWhy('normal', { personSlug: 'alice' })).toBe(
+    assert.equal(
+      generateWhy('normal', { personSlug: 'alice' }),
       'NORMAL: Person match (alice)',
     );
   });
 
   it('generates default message for no matches', () => {
-    expect(generateWhy('low', {})).toBe(
+    assert.equal(
+      generateWhy('low', {}),
       'LOW: No area/person/keyword matches',
     );
   });
