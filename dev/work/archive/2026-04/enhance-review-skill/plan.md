@@ -1,12 +1,12 @@
 ---
 title: Enhance Review Skill
 slug: enhance-review-skill
-status: building
+status: complete
 size: large
 tags: []
 created: 2026-04-02T02:45:38.702Z
-updated: 2026-04-02T03:16:24.959Z
-completed: null
+updated: 2026-04-02T03:35:03.375Z
+completed: 2026-04-02T03:35:03.375Z
 execution: null
 has_review: true
 has_pre_mortem: true
