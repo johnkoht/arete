@@ -12,11 +12,13 @@ import {
   WORKSPACE_MATCH_THRESHOLD,
   COMPLETED_MATCH_THRESHOLD,
   MEMORY_MATCH_THRESHOLD,
+  RELEVANCE_WEIGHTS,
   type MeetingExtractionBatch,
   type DuplicateGroup,
   type CompletedMatch,
   type MemoryMatch,
   type WorkspaceMatch,
+  type RelevanceScore,
 } from '../../src/services/meeting-reconciliation.js';
 import type {
   ReconciliationContext,
@@ -335,6 +337,174 @@ describe('scoreRelevance', () => {
     assert.equal(result.score, 0);
     assert.equal(result.tier, 'low');
     assert.equal(result.matchedArea, undefined);
+    assert.deepStrictEqual(result.breakdown, { keywordMatch: 0, personMatch: 0, areaMatch: 0 });
+  });
+
+  it('returns breakdown with keyword match', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([['frontend', makeAreaMemory({ keywords: ['react'] })]]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'm.md', text: 'Use React for rendering' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.3);
+    assert.equal(result.breakdown.keywordMatch, 0.3);
+    assert.equal(result.breakdown.personMatch, 0);
+    assert.equal(result.breakdown.areaMatch, 0);
+    assert.equal(result.matchedArea, 'frontend');
+  });
+
+  it('returns breakdown with person match', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([['backend', makeAreaMemory({ activePeople: ['alice'] })]]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'action', meetingPath: 'm.md', text: 'Deploy service', owner: 'alice' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.3);
+    assert.equal(result.breakdown.personMatch, 0.3);
+    assert.equal(result.breakdown.keywordMatch, 0);
+    assert.equal(result.breakdown.areaMatch, 0);
+    assert.equal(result.matchedPerson, 'alice');
+  });
+
+  it('returns breakdown with area path match', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([['platform', makeAreaMemory()]]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'meetings/platform-sync.md', text: 'Some decision' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.4);
+    assert.equal(result.breakdown.areaMatch, 0.4);
+    assert.equal(result.breakdown.keywordMatch, 0);
+    assert.equal(result.breakdown.personMatch, 0);
+    assert.equal(result.tier, 'normal');
+    assert.equal(result.matchedArea, 'platform');
+  });
+
+  it('scores all three factors for high tier', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([
+        ['platform', makeAreaMemory({ keywords: ['deploy'], activePeople: ['alice'] })],
+      ]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'action', meetingPath: 'meetings/platform-sync.md', text: 'Deploy the service', owner: 'alice' },
+      ctx,
+    );
+
+    assert.equal(result.score, 1.0);
+    assert.equal(result.tier, 'high');
+    assert.equal(result.breakdown.keywordMatch, 0.3);
+    assert.equal(result.breakdown.personMatch, 0.3);
+    assert.equal(result.breakdown.areaMatch, 0.4);
+    assert.equal(result.matchedArea, 'platform');
+    assert.equal(result.matchedPerson, 'alice');
+  });
+
+  it('keyword + person = 0.6 is normal tier', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([
+        ['platform', makeAreaMemory({ keywords: ['deploy'], activePeople: ['alice'] })],
+      ]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'action', meetingPath: 'm.md', text: 'Deploy the service', owner: 'alice' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.6);
+    assert.equal(result.tier, 'normal');
+  });
+
+  it('area path match alone = 0.4 is normal tier', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([['frontend', makeAreaMemory()]]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'meetings/frontend-review.md', text: 'Something unrelated' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.4);
+    assert.equal(result.tier, 'normal');
+  });
+
+  it('area + keyword = 0.7 is high tier', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([
+        ['frontend', makeAreaMemory({ keywords: ['react'] })],
+      ]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'meetings/frontend-sync.md', text: 'Use React components' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.7);
+    assert.equal(result.tier, 'high');
+  });
+
+  it('picks highest-scoring area across multiple', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([
+        ['frontend', makeAreaMemory({ keywords: ['react'] })],
+        ['platform', makeAreaMemory({ keywords: ['react'], activePeople: ['alice'] })],
+      ]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'action', meetingPath: 'm.md', text: 'Fix React bug', owner: 'alice' },
+      ctx,
+    );
+
+    assert.equal(result.score, 0.6);
+    assert.equal(result.matchedArea, 'platform');
+    assert.equal(result.matchedPerson, 'alice');
+  });
+
+  it('logs debug output when debug option is true', () => {
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => { logs.push(String(args[0])); };
+
+    const ctx = makeContext({
+      areaMemories: new Map([['frontend', makeAreaMemory({ keywords: ['react'] })]]),
+    });
+    scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'm.md', text: 'Use React components' },
+      ctx,
+      { debug: true },
+    );
+
+    console.log = origLog;
+
+    assert.ok(logs.some(l => l.includes('[reconciliation]')));
+    assert.ok(logs.some(l => l.includes('0.30')));
+  });
+
+  it('RELEVANCE_WEIGHTS has correct values', () => {
+    assert.equal(RELEVANCE_WEIGHTS.keyword, 0.3);
+    assert.equal(RELEVANCE_WEIGHTS.person, 0.3);
+    assert.equal(RELEVANCE_WEIGHTS.area, 0.4);
+  });
+
+  it('area path match is case-insensitive', () => {
+    const ctx = makeContext({
+      areaMemories: new Map([['Frontend', makeAreaMemory()]]),
+    });
+    const result = scoreRelevance(
+      { original: 'test', type: 'decision', meetingPath: 'meetings/frontend-review.md', text: 'Something' },
+      ctx,
+    );
+
+    assert.equal(result.breakdown.areaMatch, 0.4);
   });
 });
 

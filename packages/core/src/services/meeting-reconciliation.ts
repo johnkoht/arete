@@ -337,40 +337,88 @@ export function matchRecentMemory(
 // ---------------------------------------------------------------------------
 
 /**
+ * Relevance score with weighted breakdown.
+ */
+export type RelevanceScore = {
+  score: number;
+  tier: 'high' | 'normal' | 'low';
+  breakdown: {
+    keywordMatch: number;
+    personMatch: number;
+    areaMatch: number;
+  };
+  matchedArea?: string;
+  matchedPerson?: string;
+};
+
+export const RELEVANCE_WEIGHTS = {
+  keyword: 0.3,
+  person: 0.3,
+  area: 0.4,
+} as const;
+
+/**
  * Score relevance of an item against area memories.
  *
- * Placeholder scoring — will be enhanced in P2-7.
- * Currently uses keyword and person matching.
+ * Uses a weighted formula:
+ * - keywordMatch (0.3): any area keyword found in item text
+ * - personMatch (0.3): item owner is in area's activePeople
+ * - areaMatch (0.4): meeting path contains area slug
+ *
+ * Returns the best score across all areas.
+ *
+ * Tiers: score >= 0.7 → 'high', >= 0.4 → 'normal', else 'low'
  */
 function scoreRelevance(
   item: FlattenedItem,
   context: ReconciliationContext,
-): { score: number; tier: 'high' | 'normal' | 'low'; matchedArea?: string; matchedPerson?: string } {
-  let score = 0;
+  options?: { debug?: boolean },
+): RelevanceScore {
+  let bestScore = 0;
+  let bestBreakdown = { keywordMatch: 0, personMatch: 0, areaMatch: 0 };
   let matchedArea: string | undefined;
   let matchedPerson: string | undefined;
 
   for (const [slug, memory] of context.areaMemories) {
-    const keywordScore = memory.keywords.some((kw) =>
+    // Keyword match: any keyword found in item text
+    const hasKeyword = memory.keywords.some((kw) =>
       item.text.toLowerCase().includes(kw.toLowerCase()),
-    )
-      ? 0.3
-      : 0;
+    );
+    const keywordScore = hasKeyword ? RELEVANCE_WEIGHTS.keyword : 0;
 
-    const personScore =
-      item.owner && memory.activePeople.includes(item.owner) ? 0.3 : 0;
+    // Person match: owner in activePeople
+    const hasPerson = !!(item.owner && memory.activePeople.includes(item.owner));
+    const personScore = hasPerson ? RELEVANCE_WEIGHTS.person : 0;
 
-    const areaScore = keywordScore + personScore;
-    if (areaScore > score) {
-      score = areaScore;
+    // Area match: meeting path contains area slug (simple heuristic)
+    const hasAreaPath = item.meetingPath.toLowerCase().includes(slug.toLowerCase());
+    const areaScore = hasAreaPath ? RELEVANCE_WEIGHTS.area : 0;
+
+    const totalScore = keywordScore + personScore + areaScore;
+
+    if (totalScore > bestScore) {
+      bestScore = totalScore;
+      bestBreakdown = { keywordMatch: keywordScore, personMatch: personScore, areaMatch: areaScore };
       matchedArea = slug;
-      matchedPerson = personScore > 0 ? item.owner : undefined;
+      if (hasPerson) matchedPerson = item.owner;
     }
   }
 
-  const tier = score >= 0.7 ? 'high' : score >= 0.4 ? 'normal' : 'low';
+  const tier = bestScore >= 0.7 ? 'high' : bestScore >= 0.4 ? 'normal' : 'low';
 
-  return { score, tier, matchedArea, matchedPerson };
+  if (options?.debug || process.env.ARETE_DEBUG === '1') {
+    console.log(
+      `[reconciliation] Score for "${item.text.slice(0, 30)}...": ${bestScore.toFixed(2)} (${tier})`,
+    );
+  }
+
+  return {
+    score: bestScore,
+    tier,
+    breakdown: bestBreakdown,
+    matchedArea,
+    matchedPerson,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -467,7 +515,8 @@ export function reconcileMeetingBatch(
     }
 
     // Step 5: Score relevance
-    const { score, tier, matchedArea, matchedPerson } = scoreRelevance(item, context);
+    const relevance = scoreRelevance(item, context);
+    const { score, tier, matchedArea, matchedPerson } = relevance;
 
     if (matchedArea) {
       annotations.areaSlug = matchedArea;
