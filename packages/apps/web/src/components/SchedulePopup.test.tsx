@@ -360,8 +360,8 @@ describe('SchedulePopup', () => {
     });
   });
 
-  describe('calendar date picker', () => {
-    it('Pick date option opens calendar', async () => {
+  describe('full calendar via expand button', () => {
+    it('expand button opens full month calendar', async () => {
       const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
@@ -371,11 +371,11 @@ describe('SchedulePopup', () => {
 
       await user.click(screen.getByRole('button'));
 
-      // Click Pick date option
-      const pickDateOption = screen.getByRole('option', { name: /pick date/i });
-      await user.click(pickDateOption);
+      // Click expand button to show full calendar
+      const expandButton = screen.getByRole('button', { name: /full calendar/i });
+      await user.click(expandButton);
 
-      // Calendar should appear (data-testid="calendar" or role="grid")
+      // Full calendar should appear (data-testid="calendar" or role="grid")
       await waitFor(() => {
         const calendar = screen.queryByTestId('calendar') ||
                          screen.queryByRole('grid');
@@ -383,7 +383,7 @@ describe('SchedulePopup', () => {
       });
     });
 
-    it('selecting date from calendar calls updateTask with destination', async () => {
+    it('selecting date from full calendar calls updateTask with destination', async () => {
       const user = userEvent.setup();
       renderSchedulePopup({
         taskId: 'task-001',
@@ -393,9 +393,9 @@ describe('SchedulePopup', () => {
 
       await user.click(screen.getByRole('button'));
 
-      // Click Pick date option
-      const pickDateOption = screen.getByRole('option', { name: /pick date/i });
-      await user.click(pickDateOption);
+      // Click expand button
+      const expandButton = screen.getByRole('button', { name: /full calendar/i });
+      await user.click(expandButton);
 
       // Wait for calendar to appear
       await waitFor(() => {
@@ -426,4 +426,93 @@ describe('SchedulePopup', () => {
       }
     });
   });
+
+  describe('Things 3 style layout', () => {
+    it('shows Today and Tomorrow as quick options at top', async () => {
+      const user = userEvent.setup();
+      renderSchedulePopup({
+        taskId: 'task-001',
+        currentDestination: 'must',
+        currentDue: null,
+      });
+
+      await user.click(screen.getByRole('button'));
+
+      // Today and Tomorrow should be the first two options
+      const options = screen.getAllByRole('option');
+      expect(options[0]).toHaveTextContent(/today/i);
+      expect(options[1]).toHaveTextContent(/tomorrow/i);
+    });
+
+    it('shows inline mini calendar in the popup', async () => {
+      const user = userEvent.setup();
+      renderSchedulePopup({
+        taskId: 'task-001',
+        currentDestination: 'must',
+        currentDue: null,
+      });
+
+      await user.click(screen.getByRole('button'));
+
+      // Mini calendar should be visible immediately (not hidden behind Pick date)
+      await waitFor(() => {
+        expect(screen.getByTestId('mini-calendar')).toBeInTheDocument();
+      });
+    });
+
+    it('shows Someday and Anytime at bottom', async () => {
+      const user = userEvent.setup();
+      renderSchedulePopup({
+        taskId: 'task-001',
+        currentDestination: 'must',
+        currentDue: null,
+      });
+
+      await user.click(screen.getByRole('button'));
+
+      // Check that Someday and Anytime are present
+      expect(screen.getByRole('option', { name: /someday/i })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /anytime/i })).toBeInTheDocument();
+    });
+
+    it('clicking date in mini calendar updates task and closes popup', async () => {
+      const user = userEvent.setup();
+      renderSchedulePopup({
+        taskId: 'task-001',
+        currentDestination: 'someday',
+        currentDue: null,
+      });
+
+      await user.click(screen.getByRole('button'));
+
+      // Wait for mini calendar
+      await waitFor(() => {
+        expect(screen.getByTestId('mini-calendar')).toBeInTheDocument();
+      });
+
+      // Find clickable day buttons in the mini calendar (not disabled)
+      const miniCalendar = screen.getByTestId('mini-calendar');
+      const dayButtons = Array.from(miniCalendar.querySelectorAll('button[data-day]')).filter(
+        (btn) => !btn.hasAttribute('disabled')
+      );
+      
+      expect(dayButtons.length).toBeGreaterThan(0);
+      
+      // Click the first enabled day
+      await user.click(dayButtons[0]);
+
+      // Should have called mutate
+      await waitFor(() => {
+        expect(mockMutate).toHaveBeenCalled();
+        const call = mockMutate.mock.calls[0][0];
+        expect(call.updates.due).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      });
+
+      // Popup should close
+      await waitFor(() => {
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      });
+    });
+
+    });
 });
