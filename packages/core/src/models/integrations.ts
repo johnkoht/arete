@@ -119,8 +119,6 @@ export type PullOptions = {
   pages?: string[];
   /** Notion: where to save pulled pages */
   destination?: string;
-  /** Fathom: run reconciliation after saving meetings */
-  reconcile?: boolean;
 };
 
 /** Result of a pull operation */
@@ -130,8 +128,6 @@ export type PullResult = {
   itemsCreated: number;
   itemsUpdated: number;
   errors: string[];
-  /** Present when reconciliation was requested and ran */
-  reconciliation?: import('./entities.js').ReconciliationResult;
 };
 
 /** Integration status from config file */

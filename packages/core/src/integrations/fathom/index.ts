@@ -16,11 +16,6 @@ import {
   type MeetingForSave,
 } from '../meetings.js';
 import type { CalendarEvent } from '../calendar/types.js';
-import { loadReconciliationContext, reconcileMeetingBatch } from '../../services/meeting-reconciliation.js';
-import type { MeetingExtractionBatch } from '../../services/meeting-reconciliation.js';
-import type { MeetingIntelligence } from '../../services/meeting-extraction.js';
-import type { ReconciliationResult } from '../../models/entities.js';
-
 const DEFAULT_TEMPLATE = `# {title}
 
 **Date**: {date}
@@ -66,15 +61,14 @@ function dateRange(days: number): { startDate: string; endDate: string } {
 export interface PullFathomOptions {
   /** Calendar events for importance inference (optional) */
   calendarEvents?: CalendarEvent[];
-  /** Run reconciliation after saving meetings (default: false) */
-  reconcile?: boolean;
+
 }
 
 export type PullFathomResult = {
   success: boolean;
   saved: number;
   errors: string[];
-  reconciliation?: ReconciliationResult;
+
 };
 
 export async function pullFathom(
@@ -147,57 +141,10 @@ export async function pullFathom(
     }
   }
 
-  // Reconciliation: batch operation AFTER all meetings are saved
-  let reconciliation: ReconciliationResult | undefined;
-  if (options?.reconcile && saved > 0) {
-    try {
-      const context = await loadReconciliationContext(storage, workspaceRoot);
-
-      // Build extraction batches from saved meetings.
-      // Fathom meetings have raw action items (strings) — convert to
-      // MeetingIntelligence shape for reconciliation.
-      const batches: MeetingExtractionBatch[] = [];
-      for (const m of meetings) {
-        const meeting = meetingFromListItem(m);
-        const meetingPath = join(
-          paths.resources,
-          'meetings',
-          meetingFilename(meeting),
-        );
-
-        const actionItems = (meeting.action_items ?? []).map((desc, idx) => ({
-          owner: '',
-          ownerSlug: '',
-          description: desc,
-          direction: 'i_owe_them' as const,
-          confidence: 0.5,
-        }));
-
-        const intelligence: MeetingIntelligence = {
-          summary: meeting.summary ?? '',
-          actionItems,
-          nextSteps: [],
-          decisions: [],
-          learnings: [],
-        };
-
-        batches.push({ meetingPath, extraction: intelligence });
-      }
-
-      if (batches.length > 0) {
-        reconciliation = reconcileMeetingBatch(batches, context);
-      }
-    } catch (e) {
-      // Graceful degradation: reconciliation errors don't fail the pull
-      console.warn('[fathom] Reconciliation failed (non-blocking):', (e as Error).message);
-    }
-  }
-
   return {
     success: errors.length === 0,
     saved,
     errors,
-    reconciliation,
   };
 }
 

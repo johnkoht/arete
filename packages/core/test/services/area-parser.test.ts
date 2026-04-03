@@ -798,93 +798,6 @@ describe('confidence constants exports', () => {
   });
 });
 
-describe('AreaParserService - AC validation', () => {
-  let tmpDir: string;
-  let storage: FileStorageAdapter;
-  let parser: AreaParserService;
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'area-ac-'));
-    const fixture = createTestWorkspace(tmpDir);
-
-    // Create glance-communications.md with CoverWhale Sync as specified in AC
-    fixture.writeFile(
-      'areas/glance-communications.md',
-      `---
-area: Glance Communications
-status: active
-recurring_meetings:
-  - title: "CoverWhale Sync"
-    attendees:
-      - john-doe
-    frequency: weekly
----
-
-# Glance Communications
-
-## Current State
-Active partnership.
-
-## Key Decisions
-- 2026-03-01: Decision here
-
-## Backlog
-- Future work
-`
-    );
-
-    storage = new FileStorageAdapter();
-    parser = new AreaParserService(storage, tmpDir);
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('AC13: Given "CoverWhale Sync" in areas/glance-communications.md, returns correct AreaMatch', async () => {
-    const match = await parser.getAreaForMeeting('CoverWhale Sync');
-
-    assert.ok(match, 'Should return a match');
-    assert.equal(match.areaSlug, 'glance-communications');
-    assert.equal(match.matchType, 'recurring');
-    assert.equal(match.confidence, 1.0);
-  });
-
-  it('AC6: getAreaForMeeting returns null when no match', async () => {
-    const match = await parser.getAreaForMeeting('Non-existent Meeting');
-
-    assert.equal(match, null, 'Should return null, not { confidence: 0 }');
-  });
-
-  it('AC4: AreaMatch type structure is correct', async () => {
-    const match = await parser.getAreaForMeeting('CoverWhale Sync');
-
-    assert.ok(match);
-    // Verify type structure
-    assert.ok('areaSlug' in match);
-    assert.ok('matchType' in match);
-    assert.ok('confidence' in match);
-    assert.ok(
-      match.matchType === 'recurring' || match.matchType === 'inferred',
-      'matchType should be recurring or inferred'
-    );
-    assert.ok(
-      typeof match.confidence === 'number' && match.confidence >= 0 && match.confidence <= 1,
-      'confidence should be a number between 0 and 1'
-    );
-  });
-
-  it('AC9: getAreaContext returns parsed area content', async () => {
-    const context = await parser.getAreaContext('glance-communications');
-
-    assert.ok(context);
-    assert.equal(context.slug, 'glance-communications');
-    assert.equal(context.name, 'Glance Communications');
-    assert.ok(context.sections.currentState);
-    assert.ok(context.sections.keyDecisions);
-    assert.ok(context.sections.backlog);
-  });
-});
 
 describe('AreaParserService - parseMemoryFile', () => {
   let tmpDir: string;
@@ -1030,3 +943,257 @@ Active.
     const fixture = createTestWorkspace(tmpDir);
     fixture.writeFile(
       'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+Just some random text without bullets.
+And another line.
+
+## Active People
+Also no bullets here.
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, []);
+    assert.deepEqual(memory.activePeople, []);
+  });
+
+  it('logs warning for sections found but containing no bullet items', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+No bullets here, just text.
+
+## Active People
+- valid-person
+`
+    );
+
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(String(args[0])); };
+
+    try {
+      const memory = await parser.parseMemoryFile('glance-communications');
+
+      assert.ok(memory);
+      assert.deepEqual(memory.keywords, []);
+      assert.deepEqual(memory.activePeople, ['valid-person']);
+
+      // Should warn about "keywords" section having no bullets
+      const keywordsWarning = warnings.find(w => w.includes('keywords') && w.includes('no bullet items'));
+      assert.ok(keywordsWarning, `Expected warning about "keywords" section, got: ${JSON.stringify(warnings)}`);
+
+      // Should NOT warn about "active people" since it has valid items
+      const peopleWarning = warnings.find(w => w.includes('active people') && w.includes('no bullet items'));
+      assert.equal(peopleWarning, undefined, 'Should not warn for sections with valid bullet items');
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it('handles asterisk bullet markers', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+* term1
+* term2
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+
+  it('handles empty memory.md file (no sections at all)', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+Nothing here yet.
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, []);
+    assert.deepEqual(memory.activePeople, []);
+    assert.deepEqual(memory.openWork, []);
+    assert.deepEqual(memory.recentlyCompleted, []);
+    assert.deepEqual(memory.recentDecisions, []);
+  });
+
+  it('skips empty bullet items', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+- term1
+- 
+-   
+- term2
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+
+  it('includes memory in getAreaContext when memory.md exists', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+- CoverWhale
+- insurance
+
+## Active People
+- john-doe
+`
+    );
+
+    const context = await parser.getAreaContext('glance-communications');
+
+    assert.ok(context);
+    assert.ok(context.memory);
+    assert.deepEqual(context.memory.keywords, ['CoverWhale', 'insurance']);
+    assert.deepEqual(context.memory.activePeople, ['john-doe']);
+    assert.deepEqual(context.memory.openWork, []);
+  });
+
+  it('getAreaContext has no memory when memory.md does not exist', async () => {
+    const context = await parser.getAreaContext('glance-communications');
+
+    assert.ok(context);
+    assert.equal(context.memory, undefined);
+  });
+
+  it('handles mixed content: bullets + non-bullet lines', async () => {
+    const fixture = createTestWorkspace(tmpDir);
+    fixture.writeFile(
+      'areas/glance-communications/memory.md',
+      `# Memory
+
+## Keywords
+Some intro text
+- term1
+More text
+- term2
+Final text
+`
+    );
+
+    const memory = await parser.parseMemoryFile('glance-communications');
+
+    assert.ok(memory);
+    assert.deepEqual(memory.keywords, ['term1', 'term2']);
+  });
+});
+
+
+describe('AreaParserService - AC validation', () => {
+  let tmpDir: string;
+  let storage: FileStorageAdapter;
+  let parser: AreaParserService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'area-ac-'));
+    const fixture = createTestWorkspace(tmpDir);
+
+    // Create glance-communications.md with CoverWhale Sync as specified in AC
+    fixture.writeFile(
+      'areas/glance-communications.md',
+      `---
+area: Glance Communications
+status: active
+recurring_meetings:
+  - title: "CoverWhale Sync"
+    attendees:
+      - john-doe
+    frequency: weekly
+---
+
+# Glance Communications
+
+## Current State
+Active partnership.
+
+## Key Decisions
+- 2026-03-01: Decision here
+
+## Backlog
+- Future work
+`
+    );
+
+    storage = new FileStorageAdapter();
+    parser = new AreaParserService(storage, tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('AC13: Given "CoverWhale Sync" in areas/glance-communications.md, returns correct AreaMatch', async () => {
+    const match = await parser.getAreaForMeeting('CoverWhale Sync');
+
+    assert.ok(match, 'Should return a match');
+    assert.equal(match.areaSlug, 'glance-communications');
+    assert.equal(match.matchType, 'recurring');
+    assert.equal(match.confidence, 1.0);
+  });
+
+  it('AC6: getAreaForMeeting returns null when no match', async () => {
+    const match = await parser.getAreaForMeeting('Non-existent Meeting');
+
+    assert.equal(match, null, 'Should return null, not { confidence: 0 }');
+  });
+
+  it('AC4: AreaMatch type structure is correct', async () => {
+    const match = await parser.getAreaForMeeting('CoverWhale Sync');
+
+    assert.ok(match);
+    // Verify type structure
+    assert.ok('areaSlug' in match);
+    assert.ok('matchType' in match);
+    assert.ok('confidence' in match);
+    assert.ok(
+      match.matchType === 'recurring' || match.matchType === 'inferred',
+      'matchType should be recurring or inferred'
+    );
+    assert.ok(
+      typeof match.confidence === 'number' && match.confidence >= 0 && match.confidence <= 1,
+      'confidence should be a number between 0 and 1'
+    );
+  });
+
+  it('AC9: getAreaContext returns parsed area content', async () => {
+    const context = await parser.getAreaContext('glance-communications');
+
+    assert.ok(context);
+    assert.equal(context.slug, 'glance-communications');
+    assert.equal(context.name, 'Glance Communications');
+    assert.ok(context.sections.currentState);
+    assert.ok(context.sections.keyDecisions);
+    assert.ok(context.sections.backlog);
+  });
+});

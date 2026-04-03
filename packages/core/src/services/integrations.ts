@@ -53,7 +53,7 @@ export class IntegrationService {
         workspaceRoot,
         paths,
         days,
-        { reconcile: options.reconcile },
+        {},
       );
       return {
         integration,
@@ -61,7 +61,6 @@ export class IntegrationService {
         itemsCreated: result.saved,
         itemsUpdated: 0,
         errors: result.errors,
-        reconciliation: result.reconciliation,
       };
     }
 
