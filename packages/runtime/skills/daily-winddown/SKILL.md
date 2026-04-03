@@ -1,4 +1,3 @@
-<!-- Adapted from arete-reserv/.agents/skills/daily-winddown/ -->
 ---
 name: daily-winddown
 description: End-of-day reconciliation — pull recordings, process inbox, process meetings, triage action items, update weekly plan, and prime intelligence for tomorrow.
@@ -82,9 +81,17 @@ This phase runs in the orchestrator. Pull recordings, read local state, merge ag
 
 #### 1a. Pull Recordings
 
+Check `arete.yaml` for active recording integrations (under `integrations:`). Pull from whichever are configured:
+
 ```bash
+# If krisp is configured:
+arete pull krisp --days 1
+
+# If fathom is configured:
 arete pull fathom --days 1
 ```
+
+Pull from **all** configured recording integrations (krisp, fathom, or both). If a pull fails or an integration is not configured, note the error and continue with the next integration.
 
 Then list today's meeting files:
 
@@ -96,9 +103,9 @@ ls resources/meetings/YYYY-MM-DD-*.md
 
 Capture:
 - List of today's meeting file paths
-- Count of recordings pulled
+- Count of recordings pulled (across all integrations)
 
-If pull fails, note the error and continue — meetings already in `resources/meetings/` can still be processed.
+If all pulls fail or no recording integrations are configured, continue — meetings already in `resources/meetings/` can still be processed.
 
 #### 1b. Read Local State
 
@@ -828,7 +835,7 @@ The skip option is critical for maintaining flow:
 
 ## References
 
-- **Recordings**: `arete pull fathom --days 1`
+- **Recordings**: `arete pull krisp --days 1` / `arete pull fathom --days 1` (whichever integrations are active in `arete.yaml`)
 - **Process-meetings skill**: [process-meetings](../process-meetings/SKILL.md) — Phase 2 delegates to steps 1-4
 - **CLI commands**:
   - `arete meeting context <file> --json` — build context bundle
