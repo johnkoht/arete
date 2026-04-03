@@ -96,6 +96,10 @@ export declare class TaskService {
      */
     completeTask(taskId: string): Promise<CompleteTaskResult>;
     /**
+     * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
+     */
+    uncompleteTask(taskId: string): Promise<WorkspaceTask>;
+    /**
      * Move a task from its current location to a new destination.
      */
     moveTask(taskId: string, destination: TaskDestination): Promise<WorkspaceTask>;

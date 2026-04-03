@@ -333,12 +333,12 @@ describe('TaskList', () => {
   });
 
   describe('completion animation', () => {
-    it('uses 3000ms duration for fade animation', () => {
+    it('uses 8000ms duration for fade animation', () => {
       renderTaskList([BASIC_TASK]);
       const taskRow = screen.getByText('Review PR #42').closest('[data-task-id]');
       expect(taskRow).toBeInTheDocument();
       // Check that the row has the 3s animation duration class
-      expect(taskRow!.className).toContain('duration-[3000ms]');
+      expect(taskRow!.className).toContain('duration-[8000ms]');
     });
 
     it('applies fade-out class after successful completion', async () => {

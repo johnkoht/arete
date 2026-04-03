@@ -55,7 +55,7 @@ export function TaskList({ tasks }: TaskListProps) {
             next.delete(taskId);
             return next;
           });
-        }, 3500);
+        }, 9000);
       } catch {
         toast.error('Failed to complete task');
       }
@@ -91,7 +91,7 @@ export function TaskList({ tasks }: TaskListProps) {
             onKeyDown={(e) => handleKeyDown(e, task.id)}
             className={`
               flex items-center gap-3 p-3 border rounded-md
-              transition-all duration-[3000ms] ease-out
+              transition-all duration-[8000ms] ease-out
               focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2
               ${isFading ? 'opacity-50' : 'opacity-100'}
             `}
@@ -118,7 +118,7 @@ export function TaskList({ tasks }: TaskListProps) {
 
             {/* Task text */}
             <span 
-              className={`flex-1 text-sm truncate transition-all duration-[3000ms] ${
+              className={`flex-1 text-sm truncate transition-all duration-[8000ms] ${
                 isFading ? 'line-through text-muted-foreground' : ''
               }`}
             >

@@ -404,7 +404,7 @@ describe('TodayView', () => {
   describe('suggestions section', () => {
     it('renders suggestions section with "Suggested" heading', () => {
       renderTodayView();
-      expect(screen.getByRole('heading', { name: /suggested/i })).toBeInTheDocument();
+      expect(screen.getByText('Suggested')).toBeInTheDocument();
     });
 
     it('renders suggested tasks', () => {
@@ -491,12 +491,12 @@ describe('TodayView', () => {
       expect(setTodayButtons).toHaveLength(2);
     });
 
-    it('renders Schedule button for each suggestion', () => {
+    it('renders schedule popup for each suggestion', () => {
       renderTodayView();
-      // Find Schedule buttons within the suggestions section only
+      // SchedulePopup renders a badge trigger with the destination label
       const suggestionsSection = screen.getByTestId('suggestions-section');
-      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
-      expect(scheduleButtons).toHaveLength(2);
+      const scheduleBadges = within(suggestionsSection).getAllByLabelText(/schedule:/i);
+      expect(scheduleBadges).toHaveLength(2);
     });
 
     it('renders Punt button for each suggestion', () => {
@@ -533,38 +533,30 @@ describe('TodayView', () => {
   });
 
   describe('Schedule action', () => {
-    it('opens date picker when Schedule button is clicked', async () => {
+    it('opens schedule popup when schedule badge is clicked', async () => {
       const user = userEvent.setup();
       renderTodayView();
 
-      // Find Schedule buttons within the suggestions section only
+      // SchedulePopup renders a badge trigger
       const suggestionsSection = screen.getByTestId('suggestions-section');
-      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
-      await user.click(scheduleButtons[0]);
+      const scheduleBadges = within(suggestionsSection).getAllByLabelText(/schedule:/i);
+      await user.click(scheduleBadges[0]);
 
-      // Date picker / calendar should be visible
-      expect(screen.getByTestId('schedule-calendar')).toBeInTheDocument();
+      // Schedule popup options should be visible
+      expect(screen.getByText('Tomorrow')).toBeInTheDocument();
     });
 
-    it('updates task due date and sets destination when date is selected', async () => {
+    it('schedules task when option is selected from popup', async () => {
       const user = userEvent.setup();
       renderTodayView();
 
-      // Find Schedule buttons within the suggestions section only
+      // Open schedule popup
       const suggestionsSection = screen.getByTestId('suggestions-section');
-      const scheduleButtons = within(suggestionsSection).getAllByRole('button', { name: /^schedule$/i });
-      await user.click(scheduleButtons[0]);
+      const scheduleBadges = within(suggestionsSection).getAllByLabelText(/schedule:/i);
+      await user.click(scheduleBadges[0]);
 
-      // Click a date in the calendar - get the 15th to avoid edge cases with month boundaries
-      // and find only enabled (not disabled) gridcells
-      const calendar = screen.getByTestId('schedule-calendar');
-      const enabledDays = within(calendar).getAllByRole('gridcell').filter(
-        (el) => !el.hasAttribute('disabled') && !el.classList.contains('day-outside')
-      );
-      
-      // Pick the first enabled day that's not outside the current month
-      const targetDay = enabledDays[0];
-      await user.click(targetDay);
+      // Click Tomorrow
+      await user.click(screen.getByText('Tomorrow'));
 
       expect(mockUpdateMutate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -639,8 +631,10 @@ describe('TodayView', () => {
 
       renderTodayView();
       
-      // SchedulePopup shows badge with destination
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      // SchedulePopup shows badge with schedule trigger
+      const tasksSection = screen.getByTestId('tasks-section');
+      const scheduleBadge = within(tasksSection).getByLabelText(/schedule:/i);
+      expect(scheduleBadge).toBeInTheDocument();
     });
 
     it('opens schedule popup when clicked', async () => {
@@ -660,13 +654,12 @@ describe('TodayView', () => {
       renderTodayView();
       
       // Click the schedule badge trigger
-      const scheduleBadge = screen.getByText('Today');
+      const tasksSection = screen.getByTestId('tasks-section');
+      const scheduleBadge = within(tasksSection).getByLabelText(/schedule:/i);
       await user.click(scheduleBadge);
       
-      // Popup should show options
-      expect(screen.getByText('Tomorrow')).toBeInTheDocument();
-      expect(screen.getByText('Anytime')).toBeInTheDocument();
-      expect(screen.getByText('Someday')).toBeInTheDocument();
+      // Popup should show schedule options (use role="option" to target popup items)
+      expect(screen.getByRole('option', { name: /tomorrow/i })).toBeInTheDocument();
     });
 
     it('updates task when reschedule option is selected', async () => {
@@ -686,11 +679,12 @@ describe('TodayView', () => {
       renderTodayView();
       
       // Click the schedule badge trigger
-      const scheduleBadge = screen.getByText('Today');
+      const tasksSection = screen.getByTestId('tasks-section');
+      const scheduleBadge = within(tasksSection).getByLabelText(/schedule:/i);
       await user.click(scheduleBadge);
       
-      // Click "Anytime" option
-      const anytimeOption = screen.getByText('Anytime');
+      // Click "Anytime" option in the popup
+      const anytimeOption = screen.getByRole('option', { name: /anytime/i });
       await user.click(anytimeOption);
       
       // Should call update mutation
@@ -844,7 +838,7 @@ describe('TodayView', () => {
   });
 
   describe('completion animation', () => {
-    it('uses 3000ms duration for fade animation', () => {
+    it('uses 8000ms duration for fade animation', () => {
       mockUseTasks.mockReturnValue({
         data: { tasks: [TASK_DUE_TODAY], total: 1, offset: 0, limit: 50 },
         isLoading: false,
@@ -855,7 +849,7 @@ describe('TodayView', () => {
       renderTodayView();
       const taskRow = document.querySelector('[data-task-id="task-today-001"]');
       expect(taskRow).toBeInTheDocument();
-      expect(taskRow!.className).toContain('duration-[3000ms]');
+      expect(taskRow!.className).toContain('duration-[8000ms]');
     });
 
     it('shows checkmark icon when completing task', async () => {

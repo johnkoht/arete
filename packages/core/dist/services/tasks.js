@@ -392,6 +392,47 @@ export class TaskService {
         return { task: updatedTask, linkedCommitmentId, resolvedCommitment };
     }
     /**
+     * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
+     */
+    async uncompleteTask(taskId) {
+        const allTasks = await this.listTasks();
+        const matches = allTasks.filter((t) => t.id === taskId || t.id.startsWith(taskId));
+        if (matches.length === 0) {
+            throw new TaskNotFoundError(taskId);
+        }
+        if (matches.length > 1) {
+            throw new AmbiguousIdError(taskId, matches.length, matches.map((t) => t.id));
+        }
+        const task = matches[0];
+        const filePath = task.source.file;
+        const lines = await this.readFile(filePath);
+        const section = findSection(lines, task.source.section);
+        if (!section) {
+            throw new TaskNotFoundError(taskId);
+        }
+        let found = false;
+        for (let i = section.start + 1; i < section.end; i++) {
+            const parsed = parseTaskLine(lines[i]);
+            if (parsed && computeTaskId(parsed.text) === task.id) {
+                // Remove completedAt and set uncompleted
+                const newMetadata = { ...parsed.metadata };
+                delete newMetadata.completedAt;
+                lines[i] = formatTask(parsed.text, newMetadata, false);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            throw new TaskNotFoundError(taskId);
+        }
+        await this.writeFile(filePath, lines);
+        return {
+            ...task,
+            completed: false,
+            metadata: { ...task.metadata, completedAt: undefined },
+        };
+    }
+    /**
      * Move a task from its current location to a new destination.
      */
     async moveTask(taskId, destination) {

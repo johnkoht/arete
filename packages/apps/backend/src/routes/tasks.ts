@@ -463,11 +463,17 @@ export function createTasksRouter(workspaceRoot: string): Hono {
       }
 
       // 3. Complete last (triggers side effects like completedAt)
-      if (body.completed !== undefined && body.completed) {
-        const result = await withFileLock(task.source.file, () =>
-          services.tasks.completeTask(task.id),
-        );
-        task = result.task;
+      if (body.completed !== undefined) {
+        if (body.completed) {
+          const result = await withFileLock(task.source.file, () =>
+            services.tasks.completeTask(task.id),
+          );
+          task = result.task;
+        } else {
+          task = await withFileLock(task.source.file, () =>
+            services.tasks.uncompleteTask(task.id),
+          );
+        }
       }
 
       // If nothing was processed

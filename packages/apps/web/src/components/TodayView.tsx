@@ -12,13 +12,12 @@
  */
 
 import { useState, useCallback } from 'react';
-import { RefreshCw, Sun, CalendarIcon, Forward, Check, ChevronRight } from 'lucide-react';
+import { RefreshCw, Sun, Forward, Check, ChevronRight, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.js';
 import { Skeleton } from '@/components/ui/skeleton.js';
 import { Badge } from '@/components/ui/badge.js';
-import { Calendar } from '@/components/ui/calendar.js';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.js';
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible.js';
 import { Avatar } from '@/components/Avatar.js';
 import { SchedulePopup } from '@/components/SchedulePopup.js';
@@ -163,7 +162,7 @@ function TasksSection({ tasks, isLoading, error, refetch, areas, projects }: Tas
           next.delete(taskId);
           return next;
         });
-      }, 3500);
+      }, 9000);
     },
     [completeMutate]
   );
@@ -222,7 +221,7 @@ function TasksSection({ tasks, isLoading, error, refetch, areas, projects }: Tas
                 data-task-id={task.id}
                 className={`
                   flex items-center gap-3 p-3 border rounded-md 
-                  transition-all duration-[3000ms] ease-out
+                  transition-all duration-[8000ms] ease-out
                   ${isFading ? 'opacity-50' : isTaskPending ? 'opacity-75' : 'opacity-100'}
                 `}
               >
@@ -249,7 +248,7 @@ function TasksSection({ tasks, isLoading, error, refetch, areas, projects }: Tas
                 {/* Task text */}
                 <span 
                   data-testid="task-text" 
-                  className={`flex-1 text-sm truncate transition-all duration-[3000ms] ${
+                  className={`flex-1 text-sm truncate transition-all duration-[8000ms] ${
                     isFading ? 'line-through text-muted-foreground' : ''
                   }`}
                 >
@@ -329,7 +328,12 @@ function SuggestionsSection({
 }: SuggestionsSectionProps) {
   return (
     <section data-testid="suggestions-section">
-      <h2 className="text-lg font-semibold mb-4">Suggested</h2>
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="flex items-center gap-2 text-lg font-semibold mb-4 cursor-pointer hover:text-foreground/80 transition-colors">
+          <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+          Suggested
+        </CollapsibleTrigger>
+        <CollapsibleContent>
 
       {/* Loading state */}
       {isLoading && (
@@ -378,6 +382,8 @@ function SuggestionsSection({
           ))}
         </div>
       )}
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
@@ -391,8 +397,7 @@ interface SuggestionRowProps {
 }
 
 function SuggestionRow({ suggestion, areas, projects }: SuggestionRowProps) {
-  const { mutate, isError } = useUpdateTask();
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const { mutate } = useUpdateTask();
 
   // Set Today action - moves to must bucket to ensure it appears in Today view
   const handleSetToday = useCallback(() => {
@@ -402,30 +407,6 @@ function SuggestionRow({ suggestion, areas, projects }: SuggestionRowProps) {
     });
     toast.success('Task set for today');
   }, [suggestion.id, mutate]);
-
-  // Schedule action (date selected from calendar)
-  const handleSchedule = useCallback(
-    (date: Date | undefined) => {
-      if (!date) return;
-
-      const today = getToday();
-      const dateStr = formatDate(date);
-      const todayStr = formatDate(today);
-
-      // Determine destination based on selected date:
-      // - Today's date → must (appears in Today view)
-      // - Tomorrow or later → should (appears in Upcoming view)
-      const destination = dateStr === todayStr ? 'must' : 'should';
-
-      mutate({
-        id: suggestion.id,
-        updates: { due: dateStr, destination },
-      });
-      toast.success('Task scheduled');
-      setCalendarOpen(false);
-    },
-    [suggestion.id, mutate]
-  );
 
   // Punt action
   const handlePunt = useCallback(() => {
@@ -485,36 +466,15 @@ function SuggestionRow({ suggestion, areas, projects }: SuggestionRowProps) {
           aria-label="Set Today"
         >
           <Sun className="h-4 w-4 mr-1" />
-          Set Today
+          Today
         </Button>
 
-        {/* Schedule */}
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" aria-label="Schedule">
-              <CalendarIcon className="h-4 w-4 mr-1" />
-              Schedule
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent 
-            className="w-auto p-0" 
-            align="start"
-            side="bottom"
-            sideOffset={4}
-            collisionPadding={8}
-            avoidCollisions={true}
-          >
-            <div data-testid="schedule-calendar">
-              <Calendar
-                mode="single"
-                selected={undefined}
-                onSelect={handleSchedule}
-                disabled={(date) => date < getToday()}
-                initialFocus
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Move — uses SchedulePopup for full scheduling options */}
+        <SchedulePopup
+          taskId={suggestion.id}
+          currentDestination={suggestion.destination}
+          currentDue={suggestion.due}
+        />
 
         {/* Punt */}
         <Button
@@ -539,6 +499,15 @@ interface CompletedSectionProps {
 
 function CompletedSection({ tasks }: CompletedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { mutate } = useUpdateTask();
+
+  const handleUncomplete = useCallback((taskId: string) => {
+    mutate({
+      id: taskId,
+      updates: { completed: false },
+    });
+    toast.success('Task restored');
+  }, [mutate]);
 
   return (
     <section data-testid="completed-section">
@@ -557,12 +526,17 @@ function CompletedSection({ tasks }: CompletedSectionProps) {
                 data-task-id={task.id}
                 className="flex items-center gap-3 p-3 border rounded-md opacity-75"
               >
-                {/* Checkmark icon */}
-                <div 
-                  className="flex-shrink-0 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+                {/* Checked checkbox — click to uncomplete */}
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={true}
+                  aria-label={`Restore task: ${task.text}`}
+                  onClick={() => handleUncomplete(task.id)}
+                  className="flex-shrink-0 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                 >
                   <Check className="h-3 w-3 text-primary-foreground" />
-                </div>
+                </button>
 
                 {/* Task text with strikethrough */}
                 <span className="flex-1 text-sm truncate line-through text-muted-foreground">
