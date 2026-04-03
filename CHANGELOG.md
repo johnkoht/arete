@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Cross-meeting reconciliation in backend (`runProcessingSessionTestable`) — deduplicates items across meetings, skips completed tasks
+- `--reconcile` flag for CLI `meeting extract` command with relevance scoring and tier badges
+- `loadRecentMeetingBatch()` helper in core for loading processed meetings
 - Enhanced `/review` skill with tiered review paths (Quick for tiny/small, Full for medium+)
 - AC validation rubric with anti-pattern detection and good/bad examples
 - Expertise profile loading in reviews for domain-aware validation

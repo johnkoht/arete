@@ -4,6 +4,27 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 3, 2026
+
+### Cross-Meeting Deduplication in Web UI
+
+**The web UI now automatically deduplicates items across meetings.** When you process a meeting, Areté checks recent meetings (last 7 days) for duplicate action items, decisions, and learnings — and skips items you've already captured.
+
+**What gets deduplicated:**
+- 🔄 **Duplicate items** — Same action item mentioned in multiple meetings (>70% text similarity)
+- ✅ **Completed tasks** — Items that match tasks you've already done (from `week.md` or `scratchpad.md`)
+
+**How it works:**
+- Processing shows "Cross-meeting: N duplicates, M completed" in the progress log
+- Deduplicated items are auto-skipped (marked as `source: 'reconciled'`)
+- You can still manually approve skipped items if needed
+
+**No setup required.** Reconciliation runs automatically whenever you process a meeting in `arete view`.
+
+**CLI users:** Use `arete meeting extract <file> --stage --reconcile` to get the same behavior.
+
+---
+
 ## Week of March 30, 2026
 
 ### Key Meetings Section in Week Plan
