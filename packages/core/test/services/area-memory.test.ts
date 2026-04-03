@@ -268,6 +268,28 @@ describe('AreaMemoryService', () => {
       assert.ok(content.includes('Adopt new email template'), 'Should include matched decision');
       assert.ok(!content.includes('Unrelated decision'), 'Should not include unrelated decision');
     });
+
+    it('parses real memory format (## heading + Date line)', async () => {
+      const areaContext = makeAreaContext({ slug: 'glance-comms', name: 'Glance Communications' });
+      const areaParser = createStubAreaParser([areaContext]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().split('T')[0];
+      // Real format: ## heading, then - **Date**: on a separate line
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/decisions.md'),
+        `# Decisions\n\n## Email template rollout for Glance Communications\n- **Date**: ${today}\n- **Source**: Email Templates Deep Dive (Jamie Burk)\n- Phase 1: POP team first.\n\n## Unrelated widget decision\n- **Date**: ${today}\n- **Source**: Widget Sync\n- Chose widget framework.\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const outputPath = join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md');
+      const content = storage.store.get(outputPath)!;
+      assert.ok(content.includes('Email template rollout'), 'Should include matched decision with ## heading');
+      assert.ok(!content.includes('widget decision'), 'Should not include unrelated decision');
+    });
   });
 
   describe('refreshAllAreaMemory', () => {

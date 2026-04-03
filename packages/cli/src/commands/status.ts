@@ -357,7 +357,7 @@ export function registerStatusCommand(program: Command): void {
 
       // Recommendations
       if (areaMemoryStale > 0) {
-        console.log(chalk.yellow(`  Run \`arete memory refresh\` to update ${areaMemoryStale} stale area memorie(s).`));
+        console.log(chalk.yellow(`  Run \`arete memory refresh\` to update ${areaMemoryStale} stale area memory file(s).`));
       }
       console.log(chalk.dim('  Run `arete daily` for your morning brief.'));
       console.log(chalk.dim('  Run `arete momentum` for commitment and relationship momentum.'));

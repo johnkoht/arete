@@ -91,7 +91,7 @@ function parseMemorySections(content: string): DecisionEntry[] {
   let current: { title: string; date?: string; bodyLines: string[]; rawLines: string[] } | null = null;
 
   for (const line of lines) {
-    const headingMatch = line.match(/^###\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?(.+)/);
+    const headingMatch = line.match(/^#{2,3}\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?(.+)/);
     if (headingMatch) {
       if (current) {
         sections.push({
@@ -108,6 +108,13 @@ function parseMemorySections(content: string): DecisionEntry[] {
         rawLines: [line],
       };
     } else if (current) {
+      // Extract date from "- **Date**: YYYY-MM-DD" body lines (real memory format)
+      if (!current.date) {
+        const dateMatch = line.match(/^-\s+\*\*Date\*\*:\s*(\d{4}-\d{2}-\d{2})/);
+        if (dateMatch) {
+          current.date = dateMatch[1];
+        }
+      }
       current.bodyLines.push(line);
       current.rawLines.push(line);
     }
@@ -469,7 +476,6 @@ export class AreaMemoryService {
 
     // 3. Commitments for this area
     const openCommitments = await this.commitments.listOpen({ area: areaContext.slug });
-    const allCommitments = await this.commitments.listOpen();
     // Get recently resolved — load all and filter
     // Note: listOpen only returns open, so we read the file for resolved ones
     const recentlyCompleted = await this.getRecentlyCompleted(areaContext.slug, workspacePaths);
