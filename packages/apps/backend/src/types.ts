@@ -48,4 +48,6 @@ export type FullMeeting = MeetingSummary & {
   approvedItems: ApprovedItems;
   /** Parsed sections from body (for old meetings or viewing approved items) */
   parsedSections: ParsedSections;
+  /** Area slug from frontmatter (set during processing or manually) */
+  area?: string;
 };

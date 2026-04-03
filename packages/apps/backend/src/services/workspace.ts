@@ -499,6 +499,7 @@ export async function getMeeting(
     stagedItemEdits,
     approvedItems,
     parsedSections,
+    area: typeof fm['area'] === 'string' ? fm['area'] : undefined,
   };
 }
 
