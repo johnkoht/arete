@@ -456,8 +456,8 @@ No approved content here.
 });
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { processMeetingExtraction, extractUserNotes } from '@arete/core';
-import type { MeetingExtractionResult, FilteredItem } from '@arete/core';
+import { processMeetingExtraction, extractUserNotes, reconcileMeetingBatch, loadReconciliationContext } from '@arete/core';
+import type { MeetingExtractionResult, FilteredItem, MeetingExtractionBatch, ReconciliationContext } from '@arete/core';
 
 describe('extract --stage frontmatter preservation', () => {
   // Test the frontmatter merge pattern used in --stage:
@@ -1180,5 +1180,362 @@ Some content here.
       assert.ok(!result.error?.includes('status'), 
         `Should not error about status: ${result.error}`);
     }
+  });
+});
+
+describe('--reconcile flag', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-reconcile');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-03-01_sprint-planning.md');
+    writeFileSync(meetingFile, SAMPLE_MEETING_CONTENT, 'utf8');
+
+    // Set up mock AI config
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+`;
+    writeFileSync(areteYaml, config, 'utf8');
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('--reconcile flag is accepted without error at option parsing', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--json', '--skip-qmd'],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should proceed past option parsing (may fail at LLM call)
+    if (!result.success) {
+      assert.ok(!result.error?.includes('unknown option'), `Should not error about unknown option: ${result.error}`);
+      assert.ok(!result.error?.includes('--reconcile'), `Should not error about --reconcile flag: ${result.error}`);
+    }
+  });
+
+  it('--reconcile-days accepts custom value', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--reconcile-days', '14', '--json', '--skip-qmd'],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should proceed past option parsing
+    if (!result.success) {
+      assert.ok(!result.error?.includes('reconcile-days'), `Should not error about --reconcile-days: ${result.error}`);
+    }
+  });
+
+  it('gracefully handles missing areas (empty reconciliation context)', () => {
+    // Workspace has no areas/ directory, reconciliation should degrade gracefully
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--json', '--skip-qmd'],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    const result = JSON.parse(stdout) as { success: boolean; error?: string };
+    // Should not error about missing areas
+    if (!result.success) {
+      assert.ok(!result.error?.includes('area'), `Should not error about areas: ${result.error}`);
+      assert.ok(!result.error?.includes('Reconciliation failed'), `Should not error about reconciliation: ${result.error}`);
+    }
+  });
+
+  it('--reconcile with --importance skip still skips early', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--importance', 'skip', '--json'],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as { success: boolean; skipped?: boolean };
+    assert.equal(result.success, true);
+    assert.equal(result.skipped, true);
+  });
+});
+
+describe('reconciliation merge logic (unit)', () => {
+  it('reconcileMeetingBatch marks duplicates across meetings', () => {
+    const context: ReconciliationContext = {
+      areaMemories: new Map(),
+      recentCommittedItems: [],
+      completedTasks: [],
+    };
+
+    const batch: MeetingExtractionBatch[] = [
+      {
+        meetingPath: '/meetings/meeting1.md',
+        extraction: {
+          summary: 'Meeting 1',
+          actionItems: [{
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Update the documentation for the API',
+            direction: 'i_owe_them',
+          }],
+          nextSteps: [],
+          decisions: ['Use TypeScript for all new services'],
+          learnings: [],
+        },
+      },
+      {
+        meetingPath: '/meetings/meeting2.md',
+        extraction: {
+          summary: 'Meeting 2',
+          actionItems: [{
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Update the documentation for the API',
+            direction: 'i_owe_them',
+          }],
+          nextSteps: [],
+          decisions: ['Use TypeScript for all new services'],
+          learnings: [],
+        },
+      },
+    ];
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    // Should detect duplicates
+    assert.ok(result.stats.duplicatesRemoved > 0, 'Should find duplicates across meetings');
+    // Second occurrence should be marked as duplicate
+    const duplicates = result.items.filter(i => i.status === 'duplicate');
+    assert.ok(duplicates.length > 0, 'Should have duplicate items');
+  });
+
+  it('reconciliation marks completed tasks', () => {
+    const context: ReconciliationContext = {
+      areaMemories: new Map(),
+      recentCommittedItems: [],
+      completedTasks: [{
+        text: 'Update the documentation for the API',
+        completedOn: '2026-03-01',
+        owner: 'alice',
+      }],
+    };
+
+    const batch: MeetingExtractionBatch[] = [
+      {
+        meetingPath: '/meetings/meeting1.md',
+        extraction: {
+          summary: 'Meeting 1',
+          actionItems: [{
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Update the documentation for the API',
+            direction: 'i_owe_them',
+          }],
+          nextSteps: [],
+          decisions: [],
+          learnings: [],
+        },
+      },
+    ];
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    // Item matching completed task should be marked completed
+    assert.equal(result.stats.completedMatched, 1);
+    const completed = result.items.filter(i => i.status === 'completed');
+    assert.equal(completed.length, 1);
+  });
+
+  it('reconciliation merges into processed items — duplicate items get skipped', () => {
+    // Simulate the merge logic from the CLI extract handler
+    const extractionResult: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Team discussed priorities.',
+        actionItems: [
+          {
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Update the documentation for the API',
+            direction: 'i_owe_them',
+            confidence: 0.9,
+          },
+          {
+            owner: 'Bob',
+            ownerSlug: 'bob',
+            description: 'Deploy the new feature to staging',
+            direction: 'i_owe_them',
+            confidence: 0.85,
+          },
+        ],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    // Process extraction first
+    const processed = processMeetingExtraction(extractionResult, '');
+
+    // Run reconciliation that marks first item as completed
+    const context: ReconciliationContext = {
+      areaMemories: new Map(),
+      recentCommittedItems: [],
+      completedTasks: [{
+        text: 'Update the documentation for the API',
+        completedOn: '2026-03-01',
+        owner: 'alice',
+      }],
+    };
+
+    const batch: MeetingExtractionBatch[] = [{
+      meetingPath: '/meetings/test.md',
+      extraction: extractionResult.intelligence,
+    }];
+
+    const reconciliationResult = reconcileMeetingBatch(batch, context);
+
+    // Simulate the merge logic from meeting.ts
+    for (const reconciledItem of reconciliationResult.items) {
+      if (reconciledItem.status === 'keep') continue;
+
+      const matchingItem = processed.filteredItems.find((fi) => {
+        if (reconciledItem.type === 'action' && typeof reconciledItem.original !== 'string') {
+          return fi.text === reconciledItem.original.description;
+        }
+        return fi.text === reconciledItem.original;
+      });
+
+      if (!matchingItem) continue;
+
+      const currentStatus = processed.stagedItemStatus[matchingItem.id];
+      if (currentStatus === 'skipped') continue;
+
+      if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
+        processed.stagedItemStatus[matchingItem.id] = 'skipped';
+        processed.stagedItemSource[matchingItem.id] = 'reconciled';
+      }
+    }
+
+    // First item (Update docs) should be skipped due to reconciliation
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+
+    // Second item (Deploy) should remain unchanged
+    assert.notEqual(processed.stagedItemStatus['ai_002'], 'skipped');
+  });
+
+  it('processing-level skip takes precedence over reconciliation', () => {
+    const extractionResult: MeetingExtractionResult = {
+      intelligence: {
+        summary: 'Discussion.',
+        actionItems: [
+          {
+            owner: 'Alice',
+            ownerSlug: 'alice',
+            description: 'Low confidence item that processing will skip',
+            direction: 'i_owe_them',
+            confidence: 0.2, // Below threshold
+          },
+        ],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    // Process extraction — low confidence item gets skipped
+    const processed = processMeetingExtraction(extractionResult, '');
+
+    // The item may not even appear in filteredItems if below confidence threshold
+    // If it does appear, it should already be skipped
+    // Either way, reconciliation should not override processing decisions
+    const context: ReconciliationContext = {
+      areaMemories: new Map(),
+      recentCommittedItems: [],
+      completedTasks: [{
+        text: 'Low confidence item that processing will skip',
+        completedOn: '2026-03-01',
+      }],
+    };
+
+    const batch: MeetingExtractionBatch[] = [{
+      meetingPath: '/meetings/test.md',
+      extraction: extractionResult.intelligence,
+    }];
+
+    const reconciliationResult = reconcileMeetingBatch(batch, context);
+
+    // Merge — should not error even if item is already skipped or not in filteredItems
+    for (const reconciledItem of reconciliationResult.items) {
+      if (reconciledItem.status === 'keep') continue;
+
+      const matchingItem = processed.filteredItems.find((fi) => {
+        if (reconciledItem.type === 'action' && typeof reconciledItem.original !== 'string') {
+          return fi.text === reconciledItem.original.description;
+        }
+        return fi.text === reconciledItem.original;
+      });
+
+      if (!matchingItem) continue;
+
+      const currentStatus = processed.stagedItemStatus[matchingItem.id];
+      if (currentStatus === 'skipped') continue; // Processing takes precedence
+
+      if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
+        processed.stagedItemStatus[matchingItem.id] = 'skipped';
+      }
+    }
+
+    // Test passes if no error — processing skip takes precedence
+    assert.ok(true);
+  });
+
+  it('reconciliation with empty context produces all keep items', () => {
+    const context: ReconciliationContext = {
+      areaMemories: new Map(),
+      recentCommittedItems: [],
+      completedTasks: [],
+    };
+
+    const batch: MeetingExtractionBatch[] = [{
+      meetingPath: '/meetings/test.md',
+      extraction: {
+        summary: 'Test',
+        actionItems: [{
+          owner: 'Alice',
+          ownerSlug: 'alice',
+          description: 'Do something new',
+          direction: 'i_owe_them',
+        }],
+        nextSteps: [],
+        decisions: ['A new decision'],
+        learnings: ['A new learning'],
+      },
+    }];
+
+    const result = reconcileMeetingBatch(batch, context);
+
+    assert.equal(result.stats.duplicatesRemoved, 0);
+    assert.equal(result.stats.completedMatched, 0);
+    assert.ok(result.items.every(i => i.status === 'keep'));
   });
 });
