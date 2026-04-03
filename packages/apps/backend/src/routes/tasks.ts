@@ -397,8 +397,24 @@ export function createTasksRouter(workspaceRoot: string): Hono {
         return c.json({ tasks: [] });
       }
 
+      // Filter out tasks that are already explicitly scheduled or in today's view.
+      // Suggestions should surface tasks the user hasn't acted on yet.
+      const now = new Date();
+      const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const unscheduledTasks = allTasks.filter((t) => {
+        // Exclude tasks with explicit due dates (user already scheduled them)
+        if (t.metadata.due) return false;
+        // Exclude tasks in 'must' bucket (already in Today view)
+        if (t.source.section === '### Must complete') return false;
+        return true;
+      });
+
+      if (unscheduledTasks.length === 0) {
+        return c.json({ tasks: [] });
+      }
+
       // Score and sort tasks
-      const scoredTasks = scoreTasks(allTasks, context);
+      const scoredTasks = scoreTasks(unscheduledTasks, context);
 
       // Take top 10
       const topTasks = scoredTasks.slice(0, 10);

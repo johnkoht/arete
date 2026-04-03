@@ -13,6 +13,7 @@
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { TaskList } from "@/components/TaskList.js";
+import { GroupedTaskList } from "@/components/GroupedTaskList.js";
 import { TodayView } from "@/components/TodayView.js";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -173,7 +174,9 @@ export default function TasksPage() {
 
               {/* Task list */}
               {!isLoading && !error && tasks.length > 0 && (
-                <TaskList tasks={tasks} />
+                tab === 'upcoming'
+                  ? <GroupedTaskList tasks={tasks} />
+                  : <TaskList tasks={tasks} />
               )}
             </TabsContent>
           ))}
