@@ -197,3 +197,4 @@ Only `commitment` type triggers auto-resolution; `meeting` type references are i
 - [ ] If changing `AreteServices` type: search for all `createServices()` call sites in `packages/cli/src/commands/` and update destructuring
 - [ ] If adding new user-facing capabilities (CLI, skill, tool): verify `arete route` finds them with natural queries; update triggers/keywords if not
 - [ ] When integration pull functions return new fields, verify `IntegrationService.pull()` maps them into `PullResult` — otherwise they're silently dropped (e.g. `reconciliation` field was lost in the `pullFathom → PullResult` mapping)
+- [ ] `parseFrontmatter` is duplicated 9 times across packages/core/src/ — consider extracting to `utils/frontmatter.ts` if adding another use. Current locations: staged-items.ts, momentum.ts, meeting-reconciliation.ts, and others.
