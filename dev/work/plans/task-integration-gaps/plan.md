@@ -1,7 +1,7 @@
 ---
 title: Task Integration Gaps
 slug: task-integration-gaps
-status: building
+status: complete
 size: small
 steps: 4
 ---

@@ -1,7 +1,7 @@
 ---
 title: "L3 Memory Revamp — Computed Area Memory & Decision Compaction"
 slug: memory-l3-revamp
-status: building
+status: complete
 size: medium
 tags: [memory, l3, area-memory, search, cli]
 steps: 7
