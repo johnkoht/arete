@@ -98,6 +98,35 @@ onSettled: () => {
 **Why?** Prefix matching (`['tasks']`) doesn't catch all variations. Each distinct query key 
 (like `['tasks', 'completed-today']`) needs explicit invalidation to avoid stale data.
 
+### setQueriesData with broad queryKey can crash on mismatched cache shapes (first use: task-ui-v2, 2026-04-02)
+
+**Problem**: `queryClient.setQueriesData({ queryKey: ['tasks'] }, ...)` matches ALL caches
+starting with `['tasks']` — including `['tasks', 'suggested']` which stores `SuggestedTask[]`
+(a flat array), not `TasksResponse` (object with `.tasks` property). Calling `old.tasks.map()`
+on an array throws TypeError, which crashes `onMutate` and **prevents mutationFn from firing**.
+
+The user sees: optimistic flash (partial update before crash) → refetch returns old data → snap back.
+
+**Pattern**: Always guard `setQueriesData` against unexpected cache shapes:
+```typescript
+// ✗ Crashes when cache stores SuggestedTask[] (array, not object)
+queryClient.setQueriesData<TasksResponse>({ queryKey: ['tasks'] }, (old) => {
+  if (!old) return old;
+  return { ...old, tasks: old.tasks.map(...) }; // old.tasks is undefined on arrays!
+});
+
+// ✓ Safe — skips caches that don't match expected shape
+queryClient.setQueriesData<TasksResponse>({ queryKey: ['tasks'] }, (old) => {
+  if (!old || !('tasks' in old) || !Array.isArray(old.tasks)) return old;
+  return { ...old, tasks: old.tasks.map(...) };
+});
+```
+
+**Why tests didn't catch this**: Tests seed cache with `setQueryData(['tasks', undefined, undefined], mockResponse)`
+which always matches the expected shape. The `['tasks', 'suggested']` cache is only populated
+when both `useTasks()` and `useTaskSuggestions()` hooks are mounted — which doesn't happen in
+isolated hook tests.
+
 ### Don't debounce deliberate user actions (first use: task-ui-v2, 2026-04-02)
 
 **Problem**: `useUpdateTask` and `useCompleteTask` had a 100ms debounce + `mutation.isPending` guard

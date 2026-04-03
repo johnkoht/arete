@@ -109,9 +109,11 @@ export function useUpdateTask() {
       // Snapshot all pagination variants for rollback
       const previousData = queryClient.getQueriesData<TasksResponse>({ queryKey: ['tasks'] });
 
-      // Optimistically update all cached pages
+      // Optimistically update all cached pages.
+      // Guard: ['tasks'] prefix matches both TasksResponse caches (today, upcoming, etc.)
+      // AND SuggestedTask[] caches (['tasks', 'suggested']). Only update objects with .tasks array.
       queryClient.setQueriesData<TasksResponse>({ queryKey: ['tasks'] }, (old) => {
-        if (!old) return old;
+        if (!old || !('tasks' in old) || !Array.isArray(old.tasks)) return old;
         return {
           ...old,
           tasks: old.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
