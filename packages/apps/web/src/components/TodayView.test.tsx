@@ -630,7 +630,7 @@ describe('TodayView', () => {
       renderTodayView();
       
       // SchedulePopup shows badge with destination
-      expect(screen.getByText('must')).toBeInTheDocument();
+      expect(screen.getByText('Today')).toBeInTheDocument();
     });
 
     it('opens schedule popup when clicked', async () => {
@@ -650,7 +650,7 @@ describe('TodayView', () => {
       renderTodayView();
       
       // Click the schedule badge trigger
-      const scheduleBadge = screen.getByText('must');
+      const scheduleBadge = screen.getByText('Today');
       await user.click(scheduleBadge);
       
       // Popup should show options
@@ -676,7 +676,7 @@ describe('TodayView', () => {
       renderTodayView();
       
       // Click the schedule badge trigger
-      const scheduleBadge = screen.getByText('must');
+      const scheduleBadge = screen.getByText('Today');
       await user.click(scheduleBadge);
       
       // Click "Anytime" option

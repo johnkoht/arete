@@ -253,7 +253,10 @@ export function createTasksRouter(workspaceRoot: string): Hono {
       const services = await createServices(workspaceRoot);
       const allTasks = await services.tasks.listTasks();
       const allCommitments = await services.commitments.listOpen();
-      const today = new Date().toISOString().split('T')[0];
+      // Use local date, not UTC — prevents timezone mismatch where server
+      // thinks it's tomorrow (UTC) while user is still on today (local).
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       let filteredTasks: WorkspaceTask[];
 
@@ -299,14 +302,12 @@ export function createTasksRouter(workspaceRoot: string): Hono {
 
         filteredTasks = todayTasks;
       } else if (filterParam === 'upcoming') {
-        // upcoming: @due in next 7 days, excluding today
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        // upcoming: @due in next 14 days, excluding today (use local dates, not UTC)
+        const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
 
-        const weekFromNow = new Date();
-        weekFromNow.setDate(weekFromNow.getDate() + 7);
-        const weekStr = weekFromNow.toISOString().split('T')[0];
+        const weekFromNowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 14);
+        const weekStr = `${weekFromNowDate.getFullYear()}-${String(weekFromNowDate.getMonth() + 1).padStart(2, '0')}-${String(weekFromNowDate.getDate()).padStart(2, '0')}`;
 
         filteredTasks = allTasks
           .filter(

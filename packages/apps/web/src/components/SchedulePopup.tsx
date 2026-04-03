@@ -26,6 +26,7 @@ import {
   Clock,
   Archive,
   ChevronRight,
+  ChevronLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.js';
@@ -120,9 +121,36 @@ function isPastDay(date: Date): boolean {
   return date < today;
 }
 
+/**
+ * Human-friendly label for a task's current schedule.
+ * Shows "Today", "Tomorrow", or the destination name.
+ */
+function destinationLabel(destination: Task['destination'], due: string | null): string {
+  if (due) {
+    const today = getToday();
+    const todayStr = formatDate(today);
+    const tomorrowStr = formatDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1));
+    if (due === todayStr) return 'Today';
+    if (due === tomorrowStr) return 'Tomorrow';
+    // Show the date for other specific dates
+    const d = new Date(due + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  // No due date — show friendly destination name
+  const labels: Record<string, string> = {
+    must: 'Today',
+    should: 'Upcoming',
+    could: 'Upcoming',
+    inbox: 'Inbox',
+    anytime: 'Anytime',
+    someday: 'Someday',
+  };
+  return labels[destination] ?? destination;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function SchedulePopup({ taskId, currentDestination, currentDue: _currentDue }: SchedulePopupProps) {
+export function SchedulePopup({ taskId, currentDestination, currentDue }: SchedulePopupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFullCalendar, setShowFullCalendar] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -281,7 +309,7 @@ export function SchedulePopup({ taskId, currentDestination, currentDue: _current
         >
           <Badge variant="secondary" className="text-xs flex items-center gap-1 cursor-pointer hover:bg-secondary/80">
             <CalendarDays className="h-3 w-3" />
-            {currentDestination}
+            {destinationLabel(currentDestination, currentDue)}
           </Badge>
         </button>
       </PopoverTrigger>
@@ -297,6 +325,18 @@ export function SchedulePopup({ taskId, currentDestination, currentDue: _current
       >
         {showFullCalendar ? (
           <div data-testid="calendar" className="p-1">
+            <div className="flex items-center px-2 pt-1 pb-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFullCalendar(false)}
+                aria-label="Back to options"
+                className="h-6 px-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Button>
+            </div>
             <Calendar
               mode="single"
               selected={undefined}

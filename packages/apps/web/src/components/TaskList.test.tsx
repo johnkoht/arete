@@ -240,35 +240,34 @@ describe('TaskList', () => {
   });
 
   describe('schedule badge', () => {
-    it('renders badge with correct icon for inbox destination', () => {
+    it('renders badge with correct label for inbox destination', () => {
       renderTaskList([createTaskWithDestination('inbox')]);
-      // Badge should be present with destination label
-      expect(screen.getByText('inbox')).toBeInTheDocument();
+      expect(screen.getByText('Inbox')).toBeInTheDocument();
     });
 
-    it('renders badge with correct icon for must destination', () => {
+    it('renders badge with correct label for must destination', () => {
       renderTaskList([createTaskWithDestination('must')]);
-      expect(screen.getByText('must')).toBeInTheDocument();
+      expect(screen.getByText('Today')).toBeInTheDocument();
     });
 
-    it('renders badge with correct icon for should destination', () => {
+    it('renders badge with correct label for should destination', () => {
       renderTaskList([createTaskWithDestination('should')]);
-      expect(screen.getByText('should')).toBeInTheDocument();
+      expect(screen.getByText('Upcoming')).toBeInTheDocument();
     });
 
-    it('renders badge with correct icon for could destination', () => {
+    it('renders badge with correct label for could destination', () => {
       renderTaskList([createTaskWithDestination('could')]);
-      expect(screen.getByText('could')).toBeInTheDocument();
+      expect(screen.getByText('Upcoming')).toBeInTheDocument();
     });
 
-    it('renders badge with correct icon for anytime destination', () => {
+    it('renders badge with correct label for anytime destination', () => {
       renderTaskList([createTaskWithDestination('anytime')]);
-      expect(screen.getByText('anytime')).toBeInTheDocument();
+      expect(screen.getByText('Anytime')).toBeInTheDocument();
     });
 
-    it('renders badge with correct icon for someday destination', () => {
+    it('renders badge with correct label for someday destination', () => {
       renderTaskList([createTaskWithDestination('someday')]);
-      expect(screen.getByText('someday')).toBeInTheDocument();
+      expect(screen.getByText('Someday')).toBeInTheDocument();
     });
   });
 

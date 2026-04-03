@@ -24,7 +24,7 @@ import {
   fetchTaskSuggestions,
   updateTask,
 } from '@/api/tasks.js';
-import type { TasksFilter, FetchTasksOptions, TasksResponse, TaskUpdate } from '@/api/types.js';
+import type { TasksFilter, FetchTasksOptions, TasksResponse, TaskUpdate, SuggestedTask } from '@/api/types.js';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -80,14 +80,18 @@ type UpdateTaskParams = {
 /**
  * Invalidate all task-related caches.
  *
- * Uses exact:false (default) so ['tasks'] matches all task queries.
- * This is intentional: moving a task between tabs means multiple filters
- * need to refetch. The staleTime prevents unnecessary network calls
- * for tabs the user hasn't visited recently.
+ * Uses refetchType: 'active' to only refetch queries that have active
+ * observers (mounted components). Inactive tab caches are marked stale
+ * and will refetch when the user navigates to them.
+ *
+ * This prevents the "N API calls per mutation" problem where every tab's
+ * cache refetches simultaneously even though only 1-2 are visible.
  */
 function invalidateAllTaskCaches(queryClient: ReturnType<typeof useQueryClient>) {
-  // Invalidate all task list queries (today, upcoming, anytime, etc.)
-  void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  void queryClient.invalidateQueries({
+    queryKey: ['tasks'],
+    refetchType: 'active',
+  });
 }
 
 /**
@@ -109,15 +113,20 @@ export function useUpdateTask() {
       // Snapshot all pagination variants for rollback
       const previousData = queryClient.getQueriesData<TasksResponse>({ queryKey: ['tasks'] });
 
-      // Optimistically update all cached pages.
-      // Guard: ['tasks'] prefix matches both TasksResponse caches (today, upcoming, etc.)
-      // AND SuggestedTask[] caches (['tasks', 'suggested']). Only update objects with .tasks array.
+      // Optimistically update task list caches (TasksResponse objects with .tasks array).
+      // Guard needed: ['tasks'] prefix also matches SuggestedTask[] caches.
       queryClient.setQueriesData<TasksResponse>({ queryKey: ['tasks'] }, (old) => {
         if (!old || !('tasks' in old) || !Array.isArray(old.tasks)) return old;
         return {
           ...old,
           tasks: old.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
         };
+      });
+
+      // Optimistically remove updated task from suggestions (it's being acted on)
+      queryClient.setQueryData<SuggestedTask[]>(['tasks', 'suggested'], (old) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.filter((t) => t.id !== id);
       });
 
       return { previousData };
