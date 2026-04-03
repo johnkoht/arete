@@ -24,39 +24,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.4.0] - 2026-04-03
 
 ### Added
-- Cross-meeting reconciliation in backend (`runProcessingSessionTestable`) — deduplicates items across meetings, skips completed tasks
-- `--reconcile` flag for CLI `meeting extract` command with relevance scoring and tier badges
-- `loadRecentMeetingBatch()` helper in core for loading processed meetings
-- Enhanced `/review` skill with tiered review paths (Quick for tiny/small, Full for medium+)
-- AC validation rubric with anti-pattern detection and good/bad examples
-- Expertise profile loading in reviews for domain-aware validation
-- Pre-mortem gating by complexity (Large plans require pre-mortem before approval)
-- Two output modes: Direct Refinement vs Structured Suggestions
-- LEARNINGS.md for review-plan skill with gotchas and invariants
-- `[Build Principles]` section in AGENTS.md with 6 execution principles for autonomous work
-- Integrity check in `build-agents.ts` to prevent root AGENTS.md from being overwritten with GUIDE content
-
-### Fixed
-- Restored BUILD mode AGENTS.md that had been accidentally overwritten with GUIDE content (commit c57e944)
-- AGENTS.md now correctly includes `[Identity]`, `[Expertise]`, `[Roles]`, and all 10 build skills
-- Added missing expertise profiles (backend, web) and roles (gitboss) to AGENTS.md
-
-### Added
+- **AreaMemoryService** — computed L3 area summaries from existing data (keywords, active people, open work, recently completed, recent decisions)
+- **`arete memory refresh`** CLI command — unified L3 refresh for area memory + person memory
+- **Decision compaction** — groups old decisions by area, archives to `.arete/memory/archive/`
+- **L3 freshness signals** — `arete status` shows stale area memory count with refresh recommendation
+- **SSE task file watchers** — backend watches `now/week.md` and `now/tasks.md`, emits `task:changed` events
+- **Task Management UI** — web UI for tasks with Today/Upcoming/Anytime/Someday/Completed views, task scoring engine, commitment-task linking
+- Cross-meeting reconciliation in backend — deduplicates items across meetings, skips completed tasks
+- `--reconcile` flag for CLI `meeting extract` with relevance scoring and tier badges
+- `loadRecentMeetingBatch()` helper for loading processed meetings
+- Enhanced `/review` skill with tiered review paths (Quick/Full)
+- `[Build Principles]` section in AGENTS.md
 - `pullCalendarHelper()` with DI pattern for testable calendar pulls
 - Calendar JSON output includes `importance`, `organizer`, `notes`, `hasAgenda` fields
-- Agenda lookup caching (caller-side) for performance optimization
-- `captureConsole<T>` shared test helper in `packages/cli/test/helpers.ts`
-- Integration test for calendar pull CLI error paths
 
 ### Changed
-- Week-plan skill Step 2.5 now classifies meetings by importance (🔴 High priority / 🟡 Prep-worthy)
-- Week template includes `## Key Meetings` section between Weekly Priorities and Today
+- **L3 searchable** — QMD memory scope widened from `.arete/memory/items` to `.arete/memory` (includes areas + summaries)
+- **Daily-winddown** integration-agnostic recording pull (checks arete.yaml for krisp/fathom)
+- **Daily-plan** skill adds `@due(YYYY-MM-DD)` to focus tasks for Task UI Today view alignment
+- **Daily-winddown** clears stale `@due` tags from previous day
+- **Weekly-winddown** Phase 7 now calls `arete memory refresh`
+- **Agent-memory rule** updated to reflect computed L3 architecture
+- Week-plan skill classifies meetings by importance
 
 ### Fixed
-- Unused `Importance` type import removed from pull.ts
+- `parseMemorySections` heading level mismatch — now matches real `##` format with `- **Date**:` body lines
+- Restored BUILD mode AGENTS.md from accidental GUIDE content overwrite
+- Task UI: timezone dates, suggestions filtering, debounce removal, badge labels
 
 ---
 
