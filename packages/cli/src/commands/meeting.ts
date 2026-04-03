@@ -61,6 +61,7 @@ import chalk from 'chalk';
 import { success, error, info, warn, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 import type { StorageAdapter } from '@arete/core';
+import { displayReconciliationDetails, displayReconciledCompletedItems } from '../lib/reconciliation-output.js';
 
 /**
  * Format a person slug as a display name.
@@ -967,22 +968,11 @@ export function registerMeetingCommands(program: Command): void {
         console.log('');
         console.log(stagedSections);
 
-        // Display reconciled items in dry-run too
-        if (reconciled.length > 0) {
-          console.log('');
-          console.log(chalk.bold('Reconciled Action Items'));
-          console.log(chalk.dim('─'.repeat(40)));
-          for (const item of reconciled) {
-            console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
-          }
-        }
+        // Display reconciliation details
         if (reconciliationResult) {
-          console.log('');
-          console.log(chalk.bold('Cross-Meeting Reconciliation'));
-          console.log(chalk.dim('─'.repeat(40)));
-          listItem('Duplicates removed', String(reconciliationResult.stats.duplicatesRemoved));
-          listItem('Completed matched', String(reconciliationResult.stats.completedMatched));
-          listItem('Low relevance', String(reconciliationResult.stats.lowRelevanceCount));
+          displayReconciliationDetails(reconciliationResult, reconciled);
+        } else if (reconciled.length > 0) {
+          displayReconciledCompletedItems(reconciled);
         }
         return;
       }
@@ -990,22 +980,11 @@ export function registerMeetingCommands(program: Command): void {
       if (shouldStage) {
         success(`Staged sections written to: ${meetingPath}`);
 
-        // Display reconciled items (action items matched to completed tasks)
-        if (reconciled.length > 0) {
-          console.log('');
-          console.log(chalk.bold('Reconciled Action Items'));
-          console.log(chalk.dim('─'.repeat(40)));
-          for (const item of reconciled) {
-            console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
-          }
-        }
+        // Display reconciliation details
         if (reconciliationResult) {
-          console.log('');
-          console.log(chalk.bold('Cross-Meeting Reconciliation'));
-          console.log(chalk.dim('─'.repeat(40)));
-          listItem('Duplicates removed', String(reconciliationResult.stats.duplicatesRemoved));
-          listItem('Completed matched', String(reconciliationResult.stats.completedMatched));
-          listItem('Low relevance', String(reconciliationResult.stats.lowRelevanceCount));
+          displayReconciliationDetails(reconciliationResult, reconciled);
+        } else if (reconciled.length > 0) {
+          displayReconciledCompletedItems(reconciled);
         }
 
         displayQmdResult(qmdResult);
