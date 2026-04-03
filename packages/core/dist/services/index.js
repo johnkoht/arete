@@ -38,7 +38,7 @@ export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.j
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 // Task management
-export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 // Task scoring
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
 //# sourceMappingURL=index.js.map

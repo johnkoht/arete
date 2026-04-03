@@ -18,6 +18,8 @@ export type TaskMetadata = {
   from?: { type: 'commitment' | 'meeting'; id: string };
   /** Due date from @due(YYYY-MM-DD), ISO date string */
   due?: string;
+  /** Completion date from @completedAt(YYYY-MM-DD), set when task is completed */
+  completedAt?: string;
 };
 
 /**

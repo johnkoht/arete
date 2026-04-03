@@ -137,7 +137,7 @@ export { AreaParserService } from './area-parser.js';
 export type { AreaContext } from '../models/index.js';
 
 // Task management
-export { TaskService, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
+export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 export type { CompleteTaskResult } from './tasks.js';
 export type {
   TaskMetadata,

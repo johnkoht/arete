@@ -11,12 +11,14 @@ import jobsRouter from './routes/jobs.js';
 import { createIntelligenceRouter, createCommitmentsRouter } from './routes/intelligence.js';
 import { createCalendarRouter } from './routes/calendar.js';
 import { createProjectsRouter } from './routes/projects.js';
+import { createAreasRouter } from './routes/areas.js';
 import { createMemoryRouter } from './routes/memory.js';
 import { createPeopleRouter } from './routes/people.js';
 import { createGoalsRouter } from './routes/goals.js';
 import { createSearchRouter } from './routes/search.js';
 import { createSettingsRouter } from './routes/settings.js';
 import { createReviewRouter } from './routes/review.js';
+import { createTasksRouter } from './routes/tasks.js';
 import { readActivityEvents } from './services/activity.js';
 // Absolute path to packages/apps/web/dist/ — resolved from this file's location
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +88,7 @@ export function createApp(workspaceRoot) {
     app.route('/api/intelligence', createIntelligenceRouter(workspaceRoot));
     app.route('/api/commitments', createCommitmentsRouter(workspaceRoot));
     app.route('/api/calendar', createCalendarRouter(workspaceRoot));
+    app.route('/api/areas', createAreasRouter(workspaceRoot));
     app.route('/api/projects', createProjectsRouter(workspaceRoot));
     app.route('/api/memory', createMemoryRouter(workspaceRoot));
     app.route('/api/people', createPeopleRouter(workspaceRoot));
@@ -93,6 +96,7 @@ export function createApp(workspaceRoot) {
     app.route('/api/search', createSearchRouter(workspaceRoot));
     app.route('/api/settings', createSettingsRouter(workspaceRoot));
     app.route('/api/review', createReviewRouter(workspaceRoot));
+    app.route('/api/tasks', createTasksRouter(workspaceRoot));
     // GET /api/activity?limit=10 — recent activity events
     app.get('/api/activity', async (c) => {
         try {

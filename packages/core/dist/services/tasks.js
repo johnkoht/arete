@@ -7,6 +7,27 @@
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 // ---------------------------------------------------------------------------
+// Error classes
+// ---------------------------------------------------------------------------
+/**
+ * Thrown when a task ID does not match any task.
+ */
+export class TaskNotFoundError extends Error {
+    constructor(id) {
+        super(`No task found matching id "${id}"`);
+        this.name = 'TaskNotFoundError';
+    }
+}
+/**
+ * Thrown when a task ID prefix matches multiple tasks.
+ */
+export class AmbiguousIdError extends Error {
+    constructor(id, matchCount, matchedIds) {
+        super(`Ambiguous prefix "${id}" matches ${matchCount} tasks: ${matchedIds.join(', ')}`);
+        this.name = 'AmbiguousIdError';
+    }
+}
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 /** Bucket-to-file and section mapping */
@@ -21,7 +42,7 @@ const DESTINATION_MAP = {
 /** Pattern for task checkbox lines */
 const TASK_LINE_PATTERN = /^- \[([ xX])\] (.+)$/;
 /** Pattern for @tag(value) extraction */
-const TAG_PATTERN = /@([a-z]+)\(([^)]*)\)/g;
+const TAG_PATTERN = /@([a-zA-Z]+)\(([^)]*)\)/g;
 // ---------------------------------------------------------------------------
 // Parsing helpers
 // ---------------------------------------------------------------------------
@@ -54,6 +75,9 @@ function parseMetadata(text) {
                 break;
             case 'due':
                 metadata.due = value.trim();
+                break;
+            case 'completedAt':
+                metadata.completedAt = value.trim();
                 break;
             case 'from': {
                 // Parse type:id format
@@ -109,6 +133,8 @@ function formatTask(text, metadata, completed = false) {
         parts.push(`@from(${metadata.from.type}:${metadata.from.id})`);
     if (metadata.due)
         parts.push(`@due(${metadata.due})`);
+    if (metadata.completedAt)
+        parts.push(`@completedAt(${metadata.completedAt})`);
     return `- ${checkbox} ${parts.join(' ')}`;
 }
 /**
@@ -327,12 +353,14 @@ export class TaskService {
         if (!section) {
             throw new Error(`Section "${task.source.section}" not found in ${filePath}`);
         }
+        const today = new Date().toISOString().split('T')[0];
         let found = false;
         for (let i = section.start + 1; i < section.end; i++) {
             const parsed = parseTaskLine(lines[i]);
             if (parsed && computeTaskId(parsed.text) === task.id) {
-                // Replace [ ] with [x]
-                lines[i] = lines[i].replace('[ ]', '[x]');
+                // Set completed and add @completedAt tag
+                const newMetadata = { ...parsed.metadata, completedAt: today };
+                lines[i] = formatTask(parsed.text, newMetadata, true);
                 found = true;
                 break;
             }
@@ -341,7 +369,11 @@ export class TaskService {
             throw new Error(`Task line not found in section "${task.source.section}"`);
         }
         await this.writeFile(filePath, lines);
-        const updatedTask = { ...task, completed: true };
+        const updatedTask = {
+            ...task,
+            completed: true,
+            metadata: { ...task.metadata, completedAt: today },
+        };
         const linkedCommitmentId = task.metadata.from?.type === 'commitment'
             ? task.metadata.from.id
             : undefined;
@@ -358,6 +390,47 @@ export class TaskService {
             }
         }
         return { task: updatedTask, linkedCommitmentId, resolvedCommitment };
+    }
+    /**
+     * Uncomplete a task — change [x] back to [ ] and remove @completedAt.
+     */
+    async uncompleteTask(taskId) {
+        const allTasks = await this.listTasks();
+        const matches = allTasks.filter((t) => t.id === taskId || t.id.startsWith(taskId));
+        if (matches.length === 0) {
+            throw new TaskNotFoundError(taskId);
+        }
+        if (matches.length > 1) {
+            throw new AmbiguousIdError(taskId, matches.length, matches.map((t) => t.id));
+        }
+        const task = matches[0];
+        const filePath = task.source.file;
+        const lines = await this.readFile(filePath);
+        const section = findSection(lines, task.source.section);
+        if (!section) {
+            throw new TaskNotFoundError(taskId);
+        }
+        let found = false;
+        for (let i = section.start + 1; i < section.end; i++) {
+            const parsed = parseTaskLine(lines[i]);
+            if (parsed && computeTaskId(parsed.text) === task.id) {
+                // Remove completedAt and set uncompleted
+                const newMetadata = { ...parsed.metadata };
+                delete newMetadata.completedAt;
+                lines[i] = formatTask(parsed.text, newMetadata, false);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            throw new TaskNotFoundError(taskId);
+        }
+        await this.writeFile(filePath, lines);
+        return {
+            ...task,
+            completed: false,
+            metadata: { ...task.metadata, completedAt: undefined },
+        };
     }
     /**
      * Move a task from its current location to a new destination.
@@ -396,6 +469,85 @@ export class TaskService {
         }
         // Add to destination (handles cross-file moves)
         return this.addTask(task.text, destination, task.metadata);
+    }
+    /**
+     * Update task metadata.
+     * Supports updating due date, area, and project.
+     * - Pass `{ due: 'YYYY-MM-DD' }` to set/change due date
+     * - Pass `{ due: null }` to remove due date
+     * - Pass `{ area: 'slug' }` to set/change area
+     * - Pass `{ area: null }` to remove area
+     * - Pass `{ project: 'slug' }` to set/change project
+     * - Pass `{ project: null }` to remove project
+     *
+     * Atomic: validates before writing — file unchanged on validation error.
+     */
+    async updateTask(taskId, updates) {
+        // Search all tasks for the match
+        const allTasks = await this.listTasks();
+        const matches = allTasks.filter((t) => t.id === taskId || t.id.startsWith(taskId));
+        if (matches.length === 0) {
+            throw new TaskNotFoundError(taskId);
+        }
+        if (matches.length > 1) {
+            const ids = matches.map((t) => t.id);
+            throw new AmbiguousIdError(taskId, matches.length, ids);
+        }
+        const task = matches[0];
+        const filePath = task.source.file;
+        const lines = await this.readFile(filePath);
+        // Find the section and task line
+        const section = findSection(lines, task.source.section);
+        if (!section) {
+            throw new TaskNotFoundError(taskId);
+        }
+        let found = false;
+        let updatedTask = null;
+        for (let i = section.start + 1; i < section.end; i++) {
+            const parsed = parseTaskLine(lines[i]);
+            if (parsed && computeTaskId(parsed.text) === task.id) {
+                // Apply updates to metadata
+                const newMetadata = { ...task.metadata };
+                if ('due' in updates) {
+                    if (updates.due === null) {
+                        delete newMetadata.due;
+                    }
+                    else if (updates.due !== undefined) {
+                        newMetadata.due = updates.due;
+                    }
+                }
+                if ('area' in updates) {
+                    if (updates.area === null) {
+                        delete newMetadata.area;
+                    }
+                    else if (updates.area !== undefined) {
+                        newMetadata.area = updates.area;
+                    }
+                }
+                if ('project' in updates) {
+                    if (updates.project === null) {
+                        delete newMetadata.project;
+                    }
+                    else if (updates.project !== undefined) {
+                        newMetadata.project = updates.project;
+                    }
+                }
+                // Format the updated task line
+                lines[i] = formatTask(parsed.text, newMetadata, parsed.completed);
+                found = true;
+                updatedTask = {
+                    ...task,
+                    metadata: newMetadata,
+                };
+                break;
+            }
+        }
+        if (!found || !updatedTask) {
+            throw new TaskNotFoundError(taskId);
+        }
+        // Atomic: only write after validation succeeds
+        await this.writeFile(filePath, lines);
+        return updatedTask;
     }
     /**
      * Find a task by ID (prefix match supported).
