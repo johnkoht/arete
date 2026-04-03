@@ -10,6 +10,7 @@
  * No storage/search access — all data passed in via ReconciliationContext.
  */
 
+import { parse as parseYaml } from 'yaml';
 import type {
   ReconciliationContext,
   ReconciliationResult,
@@ -613,5 +614,127 @@ export async function loadReconciliationContext(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Recent meetings loader
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse YAML frontmatter from markdown content.
+ * Returns parsed data object (empty if no frontmatter found).
+ */
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+  return {
+    frontmatter: parseYaml(match[1]) as Record<string, unknown>,
+    body: match[2],
+  };
+}
+
+/**
+ * Extract MeetingIntelligence from meeting frontmatter staged items.
+ */
+function extractIntelligenceFromFrontmatter(
+  frontmatter: Record<string, unknown>,
+): MeetingIntelligence | null {
+  const stagedItems = frontmatter.staged_items as Record<string, unknown>[] | undefined;
+  if (!stagedItems || !Array.isArray(stagedItems)) return null;
+
+  const actionItems: ActionItem[] = [];
+  const decisions: string[] = [];
+  const learnings: string[] = [];
+
+  for (const item of stagedItems) {
+    const type = item.type as string;
+    const text = (item.description || item.text) as string;
+    if (!text) continue;
+
+    if (type === 'action') {
+      actionItems.push({
+        owner: (item.owner_name as string) || '',
+        ownerSlug: (item.owner as string) || '',
+        description: text,
+        direction: (item.direction as ActionItem['direction']) || 'i_owe_them',
+        counterpartySlug: item.counterparty as string | undefined,
+      });
+    } else if (type === 'decision') {
+      decisions.push(text);
+    } else if (type === 'learning') {
+      learnings.push(text);
+    }
+  }
+
+  if (actionItems.length === 0 && decisions.length === 0 && learnings.length === 0) {
+    return null;
+  }
+
+  return {
+    summary: '',
+    actionItems,
+    nextSteps: [],
+    decisions,
+    learnings,
+  };
+}
+
+/**
+ * Load recent processed meetings as extraction batches for reconciliation.
+ *
+ * Scans a meetings directory for `.md` files with a `YYYY-MM-DD` date prefix,
+ * filters by recency and status (`processed` or `approved`), and extracts
+ * staged intelligence items from frontmatter.
+ *
+ * @param storage - Storage adapter for file access
+ * @param meetingsDir - Path to meetings directory (e.g., resources/meetings)
+ * @param days - Lookback window in days (default: 7)
+ * @returns Array of extraction batches from recent meetings
+ */
+export async function loadRecentMeetingBatch(
+  storage: StorageAdapter,
+  meetingsDir: string,
+  days: number = 7,
+): Promise<MeetingExtractionBatch[]> {
+  const batches: MeetingExtractionBatch[] = [];
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  // Zero out time for date-only comparison
+  cutoffDate.setHours(0, 0, 0, 0);
+
+  // List meeting files (storage.list returns full paths)
+  const files = await storage.list(meetingsDir, { extensions: ['.md'] });
+
+  for (const filePath of files) {
+    // Extract filename from full path for date parsing
+    const filename = filePath.split('/').pop() ?? '';
+
+    // Parse date from filename (YYYY-MM-DD-title.md format)
+    const dateMatch = filename.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (!dateMatch) continue;
+
+    const fileDate = new Date(dateMatch[1] + 'T00:00:00');
+    if (fileDate < cutoffDate) continue;
+
+    // Read and parse frontmatter
+    const content = await storage.read(filePath);
+    if (!content) continue;
+
+    const { frontmatter } = parseFrontmatter(content);
+
+    // Only include processed/approved meetings
+    if (!['processed', 'approved'].includes(frontmatter.status as string)) continue;
+
+    // Extract staged items from frontmatter
+    const intelligence = extractIntelligenceFromFrontmatter(frontmatter);
+    if (!intelligence) continue;
+
+    batches.push({
+      meetingPath: filePath,
+      extraction: intelligence,
+    });
+  }
+
+  return batches;
+}
+
 // Export internals for testing
-export { flattenExtractions, scoreRelevance, generateWhy, WORKSPACE_MATCH_THRESHOLD, COMPLETED_MATCH_THRESHOLD, MEMORY_MATCH_THRESHOLD };
+export { flattenExtractions, scoreRelevance, generateWhy, extractIntelligenceFromFrontmatter, WORKSPACE_MATCH_THRESHOLD, COMPLETED_MATCH_THRESHOLD, MEMORY_MATCH_THRESHOLD };
