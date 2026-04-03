@@ -176,13 +176,17 @@ export declare function generateScopedCollectionName(workspaceRoot: string, scop
 /**
  * Ensure QMD collections exist for all scopes where the path exists.
  *
- * Creates 6 scope-based collections:
+ * Creates 10 scope-based collections:
  * - "all" → workspace root (entire workspace)
  * - "memory" → .arete/memory/items/
  * - "meetings" → resources/meetings/
  * - "context" → context/
  * - "projects" → projects/
  * - "people" → people/
+ * - "areas" → areas/
+ * - "goals" → goals/
+ * - "now" → now/
+ * - "resources" → resources/ (conversations, notes, meetings)
  *
  * Scopes with non-existent paths are skipped (expected for fresh workspaces).
  *

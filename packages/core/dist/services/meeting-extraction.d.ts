@@ -74,7 +74,7 @@ export type MeetingExtractionResult = {
     rawItems: RawExtractedItem[];
 };
 /** Category limits: max items per category (keep first N in LLM response order). */
-declare const CATEGORY_LIMITS: {
+export declare const CATEGORY_LIMITS: {
     actionItems: number;
     decisions: number;
     learnings: number;
@@ -126,8 +126,9 @@ export declare function buildExclusionListSection(context?: MeetingContextBundle
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
  * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
+ * @param ownerName - Owner's full name for speaking ratio and owner synthesis
  */
-export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[]): string;
+export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[], ownerName?: string): string;
 /**
  * Build a lightweight LLM prompt for minimal extraction.
  * ~50% shorter than normal prompt, focused on summary + domain learnings.
@@ -161,6 +162,8 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
     priorItems?: PriorItem[];
     /** Extraction mode: 'light' for minimal, 'normal' (default), 'thorough' for comprehensive */
     mode?: ExtractionMode;
+    /** Owner's full name for speaking ratio */
+    ownerName?: string;
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.
@@ -180,5 +183,4 @@ export declare function formatStagedSections(result: MeetingExtractionResult): s
  * @returns Updated content with staged sections replaced/inserted
  */
 export declare function updateMeetingContent(originalContent: string, stagedSections: string): string;
-export {};
 //# sourceMappingURL=meeting-extraction.d.ts.map

@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, calculateSpeakingRatio, inferUrgency, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, getCompletedItems, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -9,6 +9,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import chalk from 'chalk';
 import { success, error, info, warn, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
+import { displayReconciliationDetails, displayReconciledCompletedItems } from '../lib/reconciliation-output.js';
 /**
  * Format a person slug as a display name.
  * E.g., 'john-smith' → 'John Smith'
@@ -331,6 +332,8 @@ export function registerMeetingCommands(program) {
         .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
         .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
         .option('--importance <level>', 'Override importance level (skip, light, normal, important)')
+        .option('--reconcile', 'Run cross-meeting reconciliation (dedup + relevance scoring)')
+        .option('--reconcile-days <n>', 'Days of recent meetings to include (default: 7)', '7')
         .action(async (file, opts) => {
         const services = await createServices(process.cwd());
         // Early check: --clear-approved requires --stage
@@ -649,6 +652,32 @@ export function registerMeetingCommands(program) {
             }
             process.exit(1);
         }
+        // Run cross-meeting reconciliation if requested
+        let reconciliationResult;
+        if (opts.reconcile) {
+            try {
+                // Load reconciliation context (area memories)
+                const reconciliationContext = await loadReconciliationContext(services.storage, root);
+                // Load recent meetings batch
+                const meetingsDir = join(root, paths.resources, 'meetings');
+                const days = parseInt(opts.reconcileDays || '7', 10);
+                const recentBatch = await loadRecentMeetingBatch(services.storage, meetingsDir, days);
+                // Add current extraction to batch
+                const currentBatch = {
+                    meetingPath: meetingPath,
+                    extraction: extractionResult.intelligence,
+                };
+                // Run reconciliation
+                reconciliationResult = reconcileMeetingBatch([...recentBatch, currentBatch], reconciliationContext);
+            }
+            catch (err) {
+                // Graceful degradation: log warning but continue without reconciliation
+                const msg = err instanceof Error ? err.message : String(err);
+                if (!opts.json) {
+                    warn(`Reconciliation failed, continuing without it: ${msg}`);
+                }
+            }
+        }
         // Handle --stage (write to file with full metadata)
         let qmdResult;
         const dryRun = Boolean(opts.dryRun);
@@ -671,6 +700,32 @@ export function registerMeetingCommands(program) {
                 completedItems,
                 importance: effectiveImportance,
             });
+            // Merge reconciliation decisions into processed items
+            if (reconciliationResult) {
+                for (const reconciledItem of reconciliationResult.items) {
+                    // Skip items that reconciliation wants to keep
+                    if (reconciledItem.status === 'keep')
+                        continue;
+                    // Find matching filtered item by text
+                    const matchingItem = processed.filteredItems.find((fi) => {
+                        if (reconciledItem.type === 'action' && typeof reconciledItem.original !== 'string') {
+                            return fi.text === reconciledItem.original.description;
+                        }
+                        return fi.text === reconciledItem.original;
+                    });
+                    if (!matchingItem)
+                        continue;
+                    // Only override if processing didn't already skip this item
+                    const currentStatus = processed.stagedItemStatus[matchingItem.id];
+                    if (currentStatus === 'skipped')
+                        continue;
+                    // Items flagged 'duplicate' or 'completed' → skipped
+                    if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
+                        processed.stagedItemStatus[matchingItem.id] = 'skipped';
+                        processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                    }
+                }
+            }
             // Format body sections from filtered items (IDs in body match IDs in metadata)
             stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary);
             if (!dryRun) {
@@ -723,6 +778,20 @@ export function registerMeetingCommands(program) {
             reconciled,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
+        // Add reconciliation stats when reconciliation was run
+        if (reconciliationResult) {
+            response.reconciliation = {
+                enabled: true,
+                stats: reconciliationResult.stats,
+                items: reconciliationResult.items.map((item) => ({
+                    type: item.type,
+                    status: item.status,
+                    relevanceTier: item.relevanceTier,
+                    relevanceScore: item.relevanceScore,
+                    annotations: item.annotations,
+                })),
+            };
+        }
         if (opts.json) {
             console.log(JSON.stringify(response, null, 2));
             return;
@@ -732,27 +801,23 @@ export function registerMeetingCommands(program) {
             info('Dry run — would write the following staged sections:');
             console.log('');
             console.log(stagedSections);
-            // Display reconciled items in dry-run too
-            if (reconciled.length > 0) {
-                console.log('');
-                console.log(chalk.bold('Reconciled Action Items'));
-                console.log(chalk.dim('─'.repeat(40)));
-                for (const item of reconciled) {
-                    console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
-                }
+            // Display reconciliation details
+            if (reconciliationResult) {
+                displayReconciliationDetails(reconciliationResult, reconciled);
+            }
+            else if (reconciled.length > 0) {
+                displayReconciledCompletedItems(reconciled);
             }
             return;
         }
         if (shouldStage) {
             success(`Staged sections written to: ${meetingPath}`);
-            // Display reconciled items (action items matched to completed tasks)
-            if (reconciled.length > 0) {
-                console.log('');
-                console.log(chalk.bold('Reconciled Action Items'));
-                console.log(chalk.dim('─'.repeat(40)));
-                for (const item of reconciled) {
-                    console.log(`  ${chalk.green('✓')} ${item.id}: Already done (matched: "${item.matchedText}")`);
-                }
+            // Display reconciliation details
+            if (reconciliationResult) {
+                displayReconciliationDetails(reconciliationResult, reconciled);
+            }
+            else if (reconciled.length > 0) {
+                displayReconciledCompletedItems(reconciled);
             }
             displayQmdResult(qmdResult);
             return;

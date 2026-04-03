@@ -20,6 +20,8 @@ export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
 export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
 export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, UrgencyBucket, } from './meeting-processing.js';
+export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch } from './meeting-reconciliation.js';
+export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
 export { detectCrossPersonPatterns } from './patterns.js';
 export type { SignalPattern } from './patterns.js';
 export { computeCommitmentMomentum, computeRelationshipMomentum } from './momentum.js';

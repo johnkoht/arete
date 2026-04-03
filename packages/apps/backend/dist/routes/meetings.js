@@ -4,7 +4,7 @@
 import { Hono } from 'hono';
 import { spawn } from 'node:child_process';
 import { getEnvApiKey } from '@mariozechner/pi-ai';
-import { hasOAuthCredentials } from '@arete/core';
+import { hasOAuthCredentials, FileStorageAdapter, AreaParserService } from '@arete/core';
 import * as workspaceService from '../services/workspace.js';
 import * as jobsService from '../services/jobs.js';
 import { runProcessingSession } from '../services/agent.js';
@@ -74,13 +74,52 @@ export function createMeetingsRouter(workspaceRoot) {
         return c.json({ jobId }, 202);
     });
     // GET /api/meetings/:slug — full meeting with staged items
+    // GET /api/meetings/:slug/suggest-area — suggest area for a meeting
+    app.get('/:slug/suggest-area', async (c) => {
+        const slug = c.req.param('slug');
+        try {
+            const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
+            if (!meeting)
+                return c.json({ error: 'Meeting not found' }, 404);
+            const areaParser = new AreaParserService(new FileStorageAdapter(), workspaceRoot);
+            const areas = await areaParser.listAreas();
+            const sortedSlugs = areas.map(a => a.slug).sort();
+            const suggestion = await areaParser.suggestAreaForMeeting({
+                title: meeting.title,
+                summary: meeting.summary,
+                transcript: meeting.transcript,
+            });
+            return c.json({
+                suggestion: suggestion ? { areaSlug: suggestion.areaSlug, confidence: suggestion.confidence } : null,
+                areas: sortedSlugs,
+            });
+        }
+        catch (err) {
+            console.error('[meetings] suggest-area error:', err);
+            return c.json({ error: 'Failed to suggest area' }, 500);
+        }
+    });
     app.get('/:slug', async (c) => {
         const slug = c.req.param('slug');
         try {
             const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
             if (!meeting)
                 return c.json({ error: 'Meeting not found' }, 404);
-            return c.json(meeting);
+            // Compute suggestedArea on-the-fly
+            let suggestedArea = null;
+            try {
+                const areaParser = new AreaParserService(new FileStorageAdapter(), workspaceRoot);
+                const suggestion = await areaParser.suggestAreaForMeeting({
+                    title: meeting.title,
+                    summary: meeting.summary,
+                    transcript: meeting.transcript,
+                });
+                suggestedArea = suggestion ? { areaSlug: suggestion.areaSlug, confidence: suggestion.confidence } : null;
+            }
+            catch (err) {
+                console.error('[meetings] suggestArea error (non-fatal):', err);
+            }
+            return c.json({ ...meeting, suggestedArea });
         }
         catch (err) {
             console.error('[meetings] getMeeting error:', err);
@@ -214,19 +253,37 @@ export function createMeetingsRouter(workspaceRoot) {
             }, 503);
         }
         const slug = c.req.param('slug');
-        // Parse optional body for clearApproved and mode
+        // Parse optional body for clearApproved, mode, and area
         let clearApproved = false;
         let mode;
+        let area;
         try {
             const body = await c.req.json();
             clearApproved = body.clearApproved ?? false;
             mode = body.mode;
+            area = body.area;
         }
         catch {
             // No body or invalid JSON — use defaults
         }
+        // Validate and save area to frontmatter before processing (R4: withSlugLock)
+        if (area) {
+            const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
+            if (!meeting)
+                return c.json({ error: 'Meeting not found' }, 404);
+            const areaParser = new AreaParserService(new FileStorageAdapter(), workspaceRoot);
+            const areas = await areaParser.listAreas();
+            const valid = areas.some(a => a.slug === area);
+            if (!valid) {
+                return c.json({ error: 'Invalid area', validAreas: areas.map(a => a.slug).sort() }, 400);
+            }
+            // Atomic area update with slug lock — before fire-and-forget processing
+            await withSlugLock(slug, async () => {
+                await workspaceService.updateMeeting(workspaceRoot, slug, { area });
+            });
+        }
         const jobId = jobsService.createJob('process');
-        // Fire and forget — return 202 immediately
+        // Fire and forget — return 202 immediately (NOT inside the lock)
         runProcessingSession(workspaceRoot, slug, jobId, jobsService, { clearApproved, mode }).catch((err) => {
             console.error('[process] Agent error:', err);
             jobsService.setJobStatus(jobId, 'error');

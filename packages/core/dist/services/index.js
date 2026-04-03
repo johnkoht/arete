@@ -18,6 +18,8 @@ export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingE
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
 export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
+// Meeting reconciliation
+export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch } from './meeting-reconciliation.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis

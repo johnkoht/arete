@@ -472,6 +472,8 @@ export async function updateMeeting(workspaceRoot, slug, updates) {
         fm['title'] = updates.title;
     if (updates.summary !== undefined)
         fm['summary'] = updates.summary;
+    if (updates.area !== undefined)
+        fm['area'] = updates.area;
     const updated = matter.stringify(parsed.content, fm);
     await fs.writeFile(filePath, updated, 'utf8');
 }

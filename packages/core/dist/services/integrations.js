@@ -33,7 +33,7 @@ export class IntegrationService {
         }
         if (integration === 'fathom') {
             const days = options.days ?? 7;
-            const result = await pullFathom(this.storage, workspaceRoot, paths, days);
+            const result = await pullFathom(this.storage, workspaceRoot, paths, days, {});
             return {
                 integration,
                 itemsProcessed: result.saved + result.errors.length,

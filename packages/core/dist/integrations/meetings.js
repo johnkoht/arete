@@ -315,6 +315,9 @@ export async function saveMeetingFile(storage, meeting, outputDir, templateConte
     if (meeting.recurring_series_id) {
         frontmatterData['recurring_series_id'] = meeting.recurring_series_id;
     }
+    if (meeting.area) {
+        frontmatterData['area'] = meeting.area;
+    }
     // Write structured attendees array
     const rawAttendees = meeting.attendees ?? [];
     frontmatterData['attendees'] = buildAttendeesYaml(rawAttendees);

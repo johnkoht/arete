@@ -18,6 +18,7 @@
  *   - Related goals for context-aware extraction
  *   - Unchecked agenda items that become action item candidates
  */
+import { calculateSpeakingRatio } from './meeting-processing.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -39,10 +40,10 @@ const VALID_DIRECTIONS = new Set(['i_owe_them', 'they_owe_me']);
 // Post-processing filters
 // ---------------------------------------------------------------------------
 /** Category limits: max items per category (keep first N in LLM response order). */
-const CATEGORY_LIMITS = {
-    actionItems: 7,
-    decisions: 5,
-    learnings: 5,
+export const CATEGORY_LIMITS = {
+    actionItems: 10,
+    decisions: 7,
+    learnings: 7,
 };
 /** Light mode limits: summary + minimal learnings only. */
 export const LIGHT_LIMITS = {
@@ -52,9 +53,9 @@ export const LIGHT_LIMITS = {
 };
 /** Thorough mode limits: higher caps for comprehensive extraction. */
 export const THOROUGH_LIMITS = {
-    actionItems: 10,
-    decisions: 7,
-    learnings: 7,
+    actionItems: 20,
+    decisions: 10,
+    learnings: 10,
 };
 /** Jaccard threshold for near-duplicate detection. */
 const JACCARD_DEDUP_THRESHOLD = 0.8;
@@ -367,13 +368,17 @@ function buildAttendeeSlugLookup(context) {
  * @param ownerSlug - Workspace owner's slug (for direction classification)
  * @param context - Optional MeetingContextBundle for enhanced extraction
  * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
+ * @param ownerName - Owner's full name for speaking ratio and owner synthesis
  */
-export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context, priorItems) {
+export function buildMeetingExtractionPrompt(transcript, attendees, ownerSlug, context, priorItems, ownerName) {
     const attendeeContext = attendees?.length
         ? `\n\nMeeting attendees: ${attendees.join(', ')}`
         : '';
+    const speakingRatio = ownerName ? calculateSpeakingRatio(transcript, ownerName) : undefined;
     const ownerContext = ownerSlug
-        ? `\nWorkspace owner slug: ${ownerSlug} (use for direction classification)`
+        ? `\nWorkspace owner: @${ownerSlug}${ownerName ? ` (${ownerName})` : ''}
+${speakingRatio !== undefined ? `Speaking ratio: ${(speakingRatio * 100).toFixed(0)}%
+` : ''}In the summary, include a sentence about what this meeting means specifically for the workspace owner.`
         : '';
     // Build enhanced context section if context bundle is provided
     const enhancedContext = context ? buildContextSection(context) : '';
@@ -392,7 +397,7 @@ ${attendeeContext}${ownerContext}
 
 JSON schema:
 {
-  "summary": "string — 2-3 sentence summary of the meeting",
+  "summary": "string — 2-3 sentence summary. If workspace owner participated, include their perspective.",
   "action_items": [
     {
       "owner": "string — full name of person who owns this action",
@@ -747,13 +752,13 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             break;
         case 'thorough':
             // Thorough mode: full prompt with higher limits
-            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName);
             limits = THOROUGH_LIMITS;
             break;
         case 'normal':
         default:
             // Normal mode: full prompt with standard limits
-            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems);
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName);
             limits = CATEGORY_LIMITS;
             break;
     }

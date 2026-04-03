@@ -35,6 +35,8 @@ export interface MeetingForSave {
     importance?: Importance;
     /** ID of the recurring event series (for recurring meeting detection). */
     recurring_series_id?: string;
+    /** Explicit area slug for meeting-to-area association. */
+    area?: string;
 }
 /**
  * Result of agenda matching with metadata for user prompting.
