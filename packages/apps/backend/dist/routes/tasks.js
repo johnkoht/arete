@@ -155,7 +155,10 @@ export function createTasksRouter(workspaceRoot) {
             const services = await createServices(workspaceRoot);
             const allTasks = await services.tasks.listTasks();
             const allCommitments = await services.commitments.listOpen();
-            const today = new Date().toISOString().split('T')[0];
+            // Use local date, not UTC — prevents timezone mismatch where server
+            // thinks it's tomorrow (UTC) while user is still on today (local).
+            const now = new Date();
+            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             let filteredTasks;
             if (filterParam === 'today') {
                 // today: @due(today) or overdue UNION must bucket, deduped
@@ -197,13 +200,11 @@ export function createTasksRouter(workspaceRoot) {
                 filteredTasks = todayTasks;
             }
             else if (filterParam === 'upcoming') {
-                // upcoming: @due in next 7 days, excluding today
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
-                const weekFromNow = new Date();
-                weekFromNow.setDate(weekFromNow.getDate() + 7);
-                const weekStr = weekFromNow.toISOString().split('T')[0];
+                // upcoming: @due in next 14 days, excluding today (use local dates, not UTC)
+                const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+                const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+                const weekFromNowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 14);
+                const weekStr = `${weekFromNowDate.getFullYear()}-${String(weekFromNowDate.getMonth() + 1).padStart(2, '0')}-${String(weekFromNowDate.getDate()).padStart(2, '0')}`;
                 filteredTasks = allTasks
                     .filter((t) => t.metadata.due &&
                     t.metadata.due >= tomorrowStr &&
@@ -278,8 +279,24 @@ export function createTasksRouter(workspaceRoot) {
             if (allTasks.length === 0) {
                 return c.json({ tasks: [] });
             }
+            // Filter out tasks that are already explicitly scheduled or in today's view.
+            // Suggestions should surface tasks the user hasn't acted on yet.
+            const now = new Date();
+            const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const unscheduledTasks = allTasks.filter((t) => {
+                // Exclude tasks with explicit due dates (user already scheduled them)
+                if (t.metadata.due)
+                    return false;
+                // Exclude tasks in 'must' bucket (already in Today view)
+                if (t.source.section === '### Must complete')
+                    return false;
+                return true;
+            });
+            if (unscheduledTasks.length === 0) {
+                return c.json({ tasks: [] });
+            }
             // Score and sort tasks
-            const scoredTasks = scoreTasks(allTasks, context);
+            const scoredTasks = scoreTasks(unscheduledTasks, context);
             // Take top 10
             const topTasks = scoredTasks.slice(0, 10);
             // Enrich and transform to wire format
@@ -325,9 +342,14 @@ export function createTasksRouter(workspaceRoot) {
                 task = await withFileLock(task.source.file, () => services.tasks.updateTask(task.id, metadataUpdates));
             }
             // 3. Complete last (triggers side effects like completedAt)
-            if (body.completed !== undefined && body.completed) {
-                const result = await withFileLock(task.source.file, () => services.tasks.completeTask(task.id));
-                task = result.task;
+            if (body.completed !== undefined) {
+                if (body.completed) {
+                    const result = await withFileLock(task.source.file, () => services.tasks.completeTask(task.id));
+                    task = result.task;
+                }
+                else {
+                    task = await withFileLock(task.source.file, () => services.tasks.uncompleteTask(task.id));
+                }
             }
             // If nothing was processed
             if (body.destination === undefined && !('due' in body) && !('area' in body) && !('project' in body) && body.completed === undefined) {
