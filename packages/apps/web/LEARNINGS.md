@@ -156,6 +156,22 @@ return { mutate: mutation.mutate };
 **When to debounce**: Text inputs, search-as-you-type, sliders — high-frequency events.
 **When NOT to debounce**: Button clicks, checkbox toggles, dropdown selections — deliberate actions.
 
+### Backend date filters must use local dates, not UTC (first use: task-ui-v2, 2026-04-02)
+
+**Problem**: Backend used `new Date().toISOString().split('T')[0]` for "today" which returns UTC date.
+At 9 PM CDT (UTC-5), UTC is already the next day. So the "today" filter thought today was April 3
+while the user was on April 2. The "upcoming" filter's `tomorrow` was April 4, missing April 3.
+
+**Pattern**: Use local date construction in Node.js:
+```typescript
+// ✗ UTC — wrong after ~7pm in US timezones
+const today = new Date().toISOString().split('T')[0];
+
+// ✓ Local — matches user's actual date
+const now = new Date();
+const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+```
+
 ## Invariants
 
 ### Task scheduling requires destination for cross-tab visibility
