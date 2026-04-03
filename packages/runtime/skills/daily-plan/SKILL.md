@@ -106,6 +106,33 @@ After presenting recommendations, confirm:
 
 The confirmed tasks become the **Focus** section content in the Today update.
 
+### 3.6. Tag Selected Tasks with @due
+
+After the user confirms their focus tasks, tag each selected task in `now/week.md` with `@due(YYYY-MM-DD)` using today's actual date (or tomorrow's if planning ahead).
+
+**Why**: `@due(YYYY-MM-DD)` is the canonical source for the Task UI's Today view. The web UI filters Must/Should items by `@due(today)` to build the Today panel. Without this tag, selected tasks won't appear in the Today view.
+
+**How**:
+1. For each confirmed focus task, find its line in `now/week.md` (in Must/Should/Could sections)
+2. If the task already has `@due(...)`, update it to today's date
+3. If the task has no `@due(...)`, append `@due(YYYY-MM-DD)` to the task line
+4. Only tag tasks the user confirmed — do NOT tag tasks they removed from focus
+
+**Example**:
+```markdown
+### Must complete
+- [ ] Send API docs to Sarah @area(product) @person(sarah-chen) @due(2026-04-02)
+- [ ] Review compliance checklist @area(coverwhale) @due(2026-04-02)
+
+### Should complete
+- [ ] Update project status @area(product)
+- [ ] Draft transformer spec @area(coverwhale) @due(2026-04-02)
+```
+
+In this example, "Update project status" was NOT selected for today's focus, so it has no `@due` tag.
+
+**Lifecycle**: `@due` tags are set by daily-plan and cleared by daily-winddown for incomplete items. Tasks completed during the day keep their `@due` tag (it becomes historical metadata on the `[x]` line).
+
 ### 4. For Each Meeting
 
 - Resolve attendees and run **get_meeting_context** pattern (see [PATTERNS.md](../PATTERNS.md)).
@@ -175,7 +202,9 @@ For **prep-worthy meetings** (QBR, customer, leadership, 1:1, planning, etc.):
 
 ### 7. Write Today Section
 
-Replace `## Today — {old date}` with new content:
+Replace `## Today — {old date}` with new content.
+
+> **Important**: The `## Today` section is a **generated read-only snapshot** — a quick-glance summary of today's plan. The canonical source of truth for today's tasks is the `@due(YYYY-MM-DD)` tags on tasks in the Must/Should/Could sections (set in step 3.6). The Task UI's Today view reads from those `@due` tags, not from this section.
 
 **Header format**: `## Today — {Day} {Mon} {DD}` (e.g., `## Today — Tue Mar 25`)
 
@@ -183,6 +212,11 @@ Replace `## Today — {old date}` with new content:
 ```markdown
 ## Today — Tue Mar 25
 **Focus**: CoverWhale transformer sync. First shadow session.
+
+**Tasks** _(from @due tagged items — edit in Must/Should/Could sections)_:
+- Send API docs to Sarah
+- Review compliance checklist
+- Draft transformer spec
 
 **Meetings**:
 - 10:00 Anthony 1:1 → [agenda](now/agendas/2026-03-25-anthony-1-1.md) ⭐
@@ -193,6 +227,7 @@ Replace `## Today — {old date}` with new content:
 
 **Format guidelines**:
 - **Focus**: 1-2 sentences from week outcomes or tasks. What's the main thing today?
+- **Tasks**: List the tasks tagged with today's `@due` date. This is a snapshot — the actual tasks live in Must/Should/Could sections. Include a note directing users to edit there.
 - **Meetings**: Time + title + optional markers:
   - `→ [agenda](path)` — Link to agenda if exists
   - `→ [area: Name]` — Area association from `getAreaForMeeting()`
@@ -224,6 +259,17 @@ After writing, confirm:
 | Week.md doesn't exist | Create minimal file with new structure |
 | Planning for tomorrow | Archive today if different, write tomorrow's date |
 
+## @due Tag Lifecycle
+
+| Phase | Action | Who |
+|-------|--------|-----|
+| Daily plan (step 3.6) | Add `@due(YYYY-MM-DD)` to selected focus tasks | daily-plan skill |
+| During the day | Task UI Today view shows `@due(today)` items | web UI |
+| Task completion | `@due` tag preserved on `[x]` completed line | user / TaskService |
+| Daily winddown | Clear `@due` from previous day's incomplete items | daily-winddown skill |
+
+This lifecycle ensures the Today view always reflects the current day's focus without stale items accumulating.
+
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_meeting_context
@@ -233,4 +279,4 @@ After writing, confirm:
 - **Agendas**: `now/agendas/`
 - **Scratchpad**: `now/scratchpad.md`
 - **Areas**: `areas/*.md`
-- **Related**: week-plan, week-review, prepare-meeting-agenda
+- **Related**: week-plan, week-review, prepare-meeting-agenda, daily-winddown

@@ -196,4 +196,44 @@ describe("useProcessingEvents", () => {
     // If no errors, multiple successful events should be fine
     expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(2);
   });
+
+  it("invalidates task-related queries on task:changed event", async () => {
+    const wrapper = createWrapper(queryClient);
+    renderHook(() => useProcessingEvents(), { wrapper });
+
+    const instance = mockClass.getLastInstance()!;
+
+    await act(async () => {
+      instance.emit("task:changed", { file: "week.md" });
+    });
+
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["review", "pending"] })
+    );
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["goals", "week"] })
+    );
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["commitments"] })
+    );
+  });
+
+  it("does not throw when task:changed data is not valid JSON", async () => {
+    const wrapper = createWrapper(queryClient);
+    renderHook(() => useProcessingEvents(), { wrapper });
+
+    const instance = mockClass.getLastInstance()!;
+
+    const badEvent = new MessageEvent("task:changed", { data: "not-json" });
+    const handlers = instance.listeners.get("task:changed") ?? [];
+
+    await act(async () => {
+      for (const handler of handlers) {
+        handler(badEvent);
+      }
+    });
+
+    // Should still invalidate queries (file will be '')
+    expect(queryClient.invalidateQueries).toHaveBeenCalled();
+  });
 });

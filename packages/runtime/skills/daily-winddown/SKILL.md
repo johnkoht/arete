@@ -708,6 +708,28 @@ Build:
 
 Read `now/week.md` and update with today's progress:
 
+0. **Clear stale `@due` tags** from previous day's incomplete items:
+
+   Before updating anything else, scan Must/Should/Could sections for `@due(YYYY-MM-DD)` tags where the date is **before today**. For each incomplete task (`- [ ]`) with a stale `@due` tag, remove the `@due(...)` portion from the line.
+
+   **Why**: The daily-plan skill tags focus tasks with `@due(today's date)`. If those tasks aren't completed by end of day, the stale `@due` tag would cause them to show as "overdue" in the Today view indefinitely. Clearing stale tags lets the next daily-plan session re-select and re-tag as appropriate.
+
+   **Rules**:
+   - Only clear `@due` from **incomplete** tasks (`- [ ]`). Completed tasks (`- [x]`) keep their `@due` tag as historical metadata.
+   - Only clear `@due` tags with dates **before today**. Today's `@due` tags are still active.
+   - Preserve all other metadata tags (`@area`, `@project`, `@person`, `@from`).
+
+   **Example**:
+   ```markdown
+   ### Must complete
+   - [ ] Send API docs to Sarah @area(product) @person(sarah-chen) @due(2026-04-01)
+   ```
+   Becomes (if today is 2026-04-02):
+   ```markdown
+   ### Must complete
+   - [ ] Send API docs to Sarah @area(product) @person(sarah-chen)
+   ```
+
 1. **Update `## Today` section** with actual focus and outcomes
 
 2. **Add entry to `## Daily Progress`** (matching daily-plan format):

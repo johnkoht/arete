@@ -4,7 +4,7 @@
 
 import { serve } from '@hono/node-server';
 import { createApp, broadcastSseEvent } from './server.js';
-import { startMeetingWatcher } from './services/watcher.js';
+import { startMeetingWatcher, startTaskFileWatcher } from './services/watcher.js';
 import * as jobsService from './services/jobs.js';
 import { runProcessingSession, initializeAIService } from './services/agent.js';
 import { writeActivityEvent } from './services/activity.js';
@@ -73,14 +73,22 @@ const server = serve({ fetch: app.fetch, port }, () => {
     }
   });
 
-  // Clean up watcher on process exit
+  // Start the task file watcher — emits SSE events when week.md or tasks.md change
+  const stopTaskWatcher = startTaskFileWatcher(workspaceRoot, (filename) => {
+    console.log(`[task-watcher] File changed: ${filename}`);
+    broadcastSseEvent('task:changed', { file: filename, changedAt: new Date().toISOString() });
+  });
+
+  // Clean up watchers on process exit
   process.on('SIGTERM', () => {
     stopWatcher();
+    stopTaskWatcher();
     process.exit(0);
   });
 
   process.on('SIGINT', () => {
     stopWatcher();
+    stopTaskWatcher();
     process.exit(0);
   });
 });

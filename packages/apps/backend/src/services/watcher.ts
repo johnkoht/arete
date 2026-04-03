@@ -1,6 +1,10 @@
 /**
- * Meeting file watcher — watches resources/meetings/ for new synced files
- * and queues them for auto-processing.
+ * File watchers for the backend:
+ *
+ * 1. Meeting file watcher — watches resources/meetings/ for new synced files
+ *    and queues them for auto-processing.
+ * 2. Task file watcher — watches now/week.md and now/tasks.md for changes
+ *    and broadcasts SSE events for UI cache invalidation.
  *
  * Uses Node.js fs.watch (no external deps). Debounces reads to handle
  * partial-write races.
@@ -124,6 +128,88 @@ export function startMeetingWatcher(
     // Meetings dir doesn't exist yet — watcher not started, return noop
     return () => {
       // Clear any pending timers
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+    };
+  }
+
+  return () => {
+    watcher?.close();
+    for (const t of timers.values()) clearTimeout(t);
+    timers.clear();
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Task file watcher
+// ---------------------------------------------------------------------------
+
+export type TaskWatcherDeps = {
+  fswatchFn?: WatcherFsWatchFn;
+};
+
+/**
+ * Start watching task files (now/week.md and now/tasks.md) for changes.
+ *
+ * When either file changes, calls `onChange(filename)` with the base filename
+ * (e.g. 'week.md' or 'tasks.md'). Debounced at 500ms per file to coalesce
+ * rapid writes.
+ *
+ * Watches the `now/` directory rather than individual files so that file
+ * creation/deletion is also detected (fs.watch on a nonexistent file would fail).
+ *
+ * Returns a cleanup function that stops the watcher.
+ *
+ * @param workspaceRoot - Absolute path to workspace root
+ * @param onChange - Callback invoked with the changed filename ('week.md' or 'tasks.md')
+ * @param deps - Injectable dependencies for testing
+ */
+export function startTaskFileWatcher(
+  workspaceRoot: string,
+  onChange: (filename: string) => void,
+  deps: TaskWatcherDeps = {},
+): () => void {
+  const {
+    fswatchFn = watch as WatcherFsWatchFn,
+  } = deps;
+
+  const nowDir = join(workspaceRoot, 'now');
+
+  // Only watch these specific files
+  const WATCHED_FILES = new Set(['week.md', 'tasks.md']);
+
+  // Debounce timers per filename
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function handleFile(filename: string): void {
+    if (!WATCHED_FILES.has(filename)) return;
+
+    // Clear existing debounce timer for this file
+    const existing = timers.get(filename);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      timers.delete(filename);
+      onChange(filename);
+    }, 500);
+
+    timers.set(filename, timer);
+  }
+
+  let watcher: { close: () => void } | null = null;
+
+  try {
+    watcher = fswatchFn(nowDir, { recursive: false }, (_event, filename) => {
+      if (!filename) return;
+      // Normalize path separators (Windows compat)
+      const normalized = filename.replace(/\\/g, '/');
+      const base = normalized.split('/').pop();
+      if (!base) return;
+      handleFile(base);
+    });
+  } catch {
+    // now/ dir doesn't exist yet — watcher not started, return noop
+    return () => {
       for (const t of timers.values()) clearTimeout(t);
       timers.clear();
     };
