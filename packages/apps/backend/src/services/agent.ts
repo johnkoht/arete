@@ -31,7 +31,13 @@ import {
   createServices,
   getWorkspacePaths,
   getCompletedItems,
+  reconcileMeetingBatch,
+  loadReconciliationContext,
+  loadRecentMeetingBatch,
+  FileStorageAdapter,
   type ExtractionMode,
+  type MeetingExtractionBatch,
+  type ReconciliationContext,
 } from '@arete/core';
 import type {
   AIService,
@@ -103,6 +109,9 @@ export interface ProcessingDeps {
   aiService: {
     call: (task: AITask, prompt: string) => Promise<{ text: string }>;
   };
+  // Optional reconciliation deps (for testability)
+  loadReconciliationContext?: () => Promise<ReconciliationContext>;
+  loadRecentBatch?: () => Promise<MeetingExtractionBatch[]>;
 }
 
 /** Options for processing session */
@@ -269,16 +278,72 @@ export async function runProcessingSessionTestable(
       jobs.appendEvent(jobId, `Auto-approved ${highConfidenceApproved} high-confidence items.`);
     }
 
-    // 9. Format staged sections
+    // 9b. Run cross-meeting reconciliation
+    let reconciliationStats = { duplicates: 0, completed: 0, lowRelevance: 0 };
+    if (deps.loadReconciliationContext && deps.loadRecentBatch) {
+      try {
+        jobs.appendEvent(jobId, 'Running cross-meeting reconciliation...');
+        const context = await deps.loadReconciliationContext();
+        const recentBatch = await deps.loadRecentBatch();
+
+        // Build current meeting batch entry
+        const currentBatch: MeetingExtractionBatch = {
+          meetingPath: meetingPath,
+          extraction: coreResult.intelligence,
+        };
+
+        const reconciliation = reconcileMeetingBatch(
+          [...recentBatch, currentBatch],
+          context,
+        );
+
+        // Merge reconciliation decisions into processed maps
+        for (const item of reconciliation.items) {
+          // Extract text from ReconciledItem.original
+          const itemText = typeof item.original === 'string'
+            ? item.original
+            : item.original.description;
+
+          // Find matching processed item by text
+          const matchingItem = processed.filteredItems.find(
+            fi => fi.text === itemText,
+          );
+          if (!matchingItem) continue;
+
+          // Skip if already skipped by processing
+          if (processed.stagedItemStatus[matchingItem.id] === 'skipped') continue;
+
+          if (item.status === 'duplicate' || item.status === 'completed') {
+            processed.stagedItemStatus[matchingItem.id] = 'skipped';
+            processed.stagedItemSource[matchingItem.id] = 'reconciled';
+            if (item.status === 'duplicate') reconciliationStats.duplicates++;
+            else reconciliationStats.completed++;
+          } else if (item.relevanceTier === 'low') {
+            reconciliationStats.lowRelevance++;
+          }
+        }
+
+        // Log reconciliation stats
+        if (reconciliationStats.duplicates > 0 || reconciliationStats.completed > 0) {
+          jobs.appendEvent(jobId, `Cross-meeting: ${reconciliationStats.duplicates} duplicates, ${reconciliationStats.completed} completed`);
+        }
+      } catch (err) {
+        // Graceful degradation — log warning and continue
+        console.warn('[agent] reconciliation failed:', err);
+        jobs.appendEvent(jobId, 'Warning: Cross-meeting reconciliation skipped due to error');
+      }
+    }
+
+    // 10. Format staged sections
     const stagedSections = formatFilteredStagedSections(
       processed.filteredItems,
       coreResult.intelligence.summary,
     );
 
-    // 10. Update content with staged sections
+    // 11. Update content with staged sections
     const updatedContent = updateMeetingContent(content, stagedSections);
 
-    // 11. Update frontmatter with status, sources, confidence, owner, and item status
+    // 12. Update frontmatter with status, sources, confidence, owner, and item status
     // Note: Core returns camelCase; backend frontmatter uses snake_case
     fm['status'] = 'processed';
     fm['processed_at'] = new Date().toISOString();
@@ -294,12 +359,12 @@ export async function runProcessingSessionTestable(
       fm['staged_item_matched_text'] = processed.stagedItemMatchedText;
     }
 
-    // 12. Write updated file
+    // 13. Write updated file
     jobs.appendEvent(jobId, 'Writing staged sections...');
     const updatedFile = matter.stringify(updatedContent, fm);
     await deps.writeFile(meetingPath, updatedFile);
 
-    // 13. Mark job done
+    // 14. Mark job done
     jobs.setJobStatus(jobId, 'done');
     jobs.appendEvent(jobId, 'Meeting processed successfully.');
 
@@ -314,7 +379,8 @@ export async function runProcessingSessionTestable(
 /**
  * Default dependencies using real fs and provided AIService.
  */
-function createDefaultDeps(aiService: AIService): ProcessingDeps {
+function createDefaultDeps(aiService: AIService, workspaceRoot: string): ProcessingDeps {
+  const storage = new FileStorageAdapter();
   return {
     readFile: (path: string) => fs.readFile(path, 'utf8'),
     writeFile: (path: string, content: string) => fs.writeFile(path, content, 'utf8'),
@@ -324,6 +390,8 @@ function createDefaultDeps(aiService: AIService): ProcessingDeps {
         return { text: result.text };
       },
     },
+    loadReconciliationContext: () => loadReconciliationContext(storage, workspaceRoot),
+    loadRecentBatch: () => loadRecentMeetingBatch(storage, join(workspaceRoot, 'resources', 'meetings'), 7),
   };
 }
 
@@ -416,7 +484,7 @@ export async function runProcessingSession(
     context = options.context;
   }
 
-  const deps = createDefaultDeps(moduleAiService);
+  const deps = createDefaultDeps(moduleAiService, workspaceRoot);
   const optionsWithContext: ProcessingOptions = { ...options, context };
   return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, optionsWithContext);
 }

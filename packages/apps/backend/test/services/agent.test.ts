@@ -931,4 +931,242 @@ Some transcript.
       assert.equal(result.filteredItems.length, 1);
     });
   });
+
+  describe('cross-meeting reconciliation', () => {
+    /** Helper to build deps with reconciliation callbacks */
+    function makeDepsWithReconciliation(
+      options: MockDepsOptions & {
+        reconciliationContext?: {
+          areaMemories?: Map<string, unknown>;
+          recentCommittedItems?: Array<{ text: string; date: string; source: string }>;
+          completedTasks?: Array<{ text: string; completedOn: string; owner?: string }>;
+        };
+        recentBatch?: Array<{
+          meetingPath: string;
+          extraction: MeetingIntelligence;
+        }>;
+        reconciliationError?: Error;
+      } = {},
+    ) {
+      const baseDeps = makeMockDeps(options);
+      const ctx = options.reconciliationContext ?? {
+        areaMemories: new Map(),
+        recentCommittedItems: [],
+        completedTasks: [],
+      };
+      return {
+        ...baseDeps,
+        loadReconciliationContext: options.reconciliationError
+          ? async () => { throw options.reconciliationError!; }
+          : async () => ctx as unknown as import('@arete/core').ReconciliationContext,
+        loadRecentBatch: async () =>
+          (options.recentBatch ?? []) as unknown as import('@arete/core').MeetingExtractionBatch[],
+      };
+    }
+
+    it('skips reconciliation when deps callbacks are not provided', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('Some action', { confidence: 0.9 })],
+        }),
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      // Should NOT have reconciliation event when deps are absent
+      assert.ok(!events.some((e) => e.includes('cross-meeting reconciliation')));
+      assert.ok(!events.some((e) => e.includes('Cross-meeting')));
+    });
+
+    it('marks duplicate items as skipped with reconciled source', async () => {
+      const jobs = makeMockJobs();
+      // Action item text matches one in a prior meeting batch
+      const actionText = 'Send report to Alice by Friday';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+        }),
+        // Prior meeting has the same action item → will be detected as duplicate
+        recentBatch: [
+          {
+            meetingPath: '/workspace/resources/meetings/2024-01-14-prior.md',
+            extraction: mockCoreExtractionResponse({
+              summary: 'Prior meeting.',
+              actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+            }),
+          },
+        ],
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      // The current meeting's item is the later occurrence → marked duplicate
+      assert.ok(content.includes('ai_001: skipped'), 'Duplicate item should be skipped');
+      assert.ok(content.includes('ai_001: reconciled'), 'Duplicate item should have reconciled source');
+    });
+
+    it('marks completed items as skipped with reconciled source', async () => {
+      const jobs = makeMockJobs();
+      const actionText = 'Draft the Q2 plan';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+        }),
+        reconciliationContext: {
+          areaMemories: new Map(),
+          recentCommittedItems: [],
+          completedTasks: [
+            { text: 'Draft the Q2 plan', completedOn: '2024-01-14', owner: 'me' },
+          ],
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('ai_001: skipped'), 'Completed item should be skipped');
+      assert.ok(content.includes('ai_001: reconciled'), 'Completed item should have reconciled source');
+    });
+
+    it('logs reconciliation stats in job events', async () => {
+      const jobs = makeMockJobs();
+      const actionText = 'Send report to Alice by Friday';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+        }),
+        recentBatch: [
+          {
+            meetingPath: '/workspace/resources/meetings/2024-01-14-prior.md',
+            extraction: mockCoreExtractionResponse({
+              summary: 'Prior meeting.',
+              actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+            }),
+          },
+        ],
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(events.some((e) => e.includes('Running cross-meeting reconciliation')));
+      assert.ok(events.some((e) => e.includes('Cross-meeting:') && e.includes('duplicate')));
+    });
+
+    it('does not overwrite already-skipped items from processing', async () => {
+      const jobs = makeMockJobs();
+      // An item with low confidence will be filtered out by processMeetingExtraction,
+      // so it won't appear in filteredItems at all. Use a completed item from workspace
+      // to test the precedence: processing skips it first, reconciliation shouldn't touch it.
+      const actionText = 'Already completed task';
+      const deps = makeDepsWithReconciliation({
+        fileContent: `---
+title: Test Meeting
+status: pending
+---
+
+## Transcript
+Discussion about tasks.
+`,
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [
+            mockActionItem(actionText, { confidence: 0.9 }),
+            mockActionItem('New unique action', { confidence: 0.9 }),
+          ],
+        }),
+        reconciliationContext: {
+          areaMemories: new Map(),
+          recentCommittedItems: [],
+          completedTasks: [
+            { text: 'Already completed task', completedOn: '2024-01-14', owner: 'me' },
+          ],
+        },
+      });
+
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      // Both items should be in the result
+      assert.equal(result.filteredItems.length, 2);
+      // The already-completed item was reconciled by processMeetingExtraction first
+      // and then reconcileMeetingBatch confirms it — both set 'skipped'/'reconciled'
+      assert.equal(result.stagedItemStatus['ai_001'], 'skipped');
+      assert.equal(result.stagedItemSource['ai_001'], 'reconciled');
+      // The unique action should remain untouched
+      assert.equal(result.stagedItemSource['ai_002'], 'ai');
+    });
+
+    it('gracefully degrades when reconciliation throws an error', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('Some action', { confidence: 0.9 })],
+        }),
+        reconciliationError: new Error('Storage unavailable'),
+      });
+
+      // Should NOT throw — processing should complete
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(events.some((e) => e.includes('Warning: Cross-meeting reconciliation skipped')));
+      // Should still produce a valid result
+      assert.equal(result.filteredItems.length, 1);
+      assert.ok(events.some((e) => e.includes('processed successfully')));
+    });
+
+    it('does not log stats when no duplicates or completed items found', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('Unique action item', { confidence: 0.9 })],
+        }),
+        // Empty batch and context — no matches expected
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(events.some((e) => e.includes('Running cross-meeting reconciliation')));
+      // Should NOT have the stats line since there were 0 duplicates and 0 completed
+      assert.ok(!events.some((e) => e.includes('Cross-meeting:')));
+    });
+
+    it('reconciles decision items across meetings', async () => {
+      const jobs = makeMockJobs();
+      const decisionText = 'We decided to use React for the frontend';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [],
+          decisions: [decisionText],
+        }),
+        recentBatch: [
+          {
+            meetingPath: '/workspace/resources/meetings/2024-01-14-prior.md',
+            extraction: mockCoreExtractionResponse({
+              summary: 'Prior meeting.',
+              actionItems: [],
+              decisions: [decisionText],
+            }),
+          },
+        ],
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('de_001: skipped'), 'Duplicate decision should be skipped');
+      assert.ok(content.includes('de_001: reconciled'), 'Duplicate decision should have reconciled source');
+    });
+  });
 });
