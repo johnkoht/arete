@@ -451,6 +451,51 @@ describe('saveMeetingFile', () => {
     assert.ok(content);
     assert.ok(content.includes('recurring_series_id: abc123xyz'), 'should include recurring_series_id');
   });
+
+  it('includes area in frontmatter when provided', async () => {
+    const meeting = makeMeeting({ area: 'customer-success' });
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    assert.ok(content.includes('area: customer-success'), 'should include area in frontmatter');
+  });
+
+  it('does not include area in frontmatter when absent', async () => {
+    const meeting = makeMeeting();
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    assert.ok(!content.includes('area:'), 'should not include area when absent');
+  });
+
+  it('includes area with other frontmatter fields without clobbering', async () => {
+    const meeting = makeMeeting({
+      area: 'engineering',
+      agenda: 'now/agendas/standup.md',
+      importance: 'important',
+      recurring_series_id: 'series-123',
+    });
+    const outputDir = `${WORKSPACE}/resources/meetings`;
+
+    const result = await saveMeetingFile(storage, meeting, outputDir, template);
+
+    assert.ok(result);
+    const content = storage.files.get(result);
+    assert.ok(content);
+    // All fields should be present
+    assert.ok(content.includes('area: engineering'), 'should include area');
+    assert.ok(content.includes('agenda: now/agendas/standup.md'), 'should include agenda');
+    assert.ok(content.includes('importance: important'), 'should include importance');
+    assert.ok(content.includes('recurring_series_id: series-123'), 'should include recurring_series_id');
+  });
 });
 
 // ---------------------------------------------------------------------------

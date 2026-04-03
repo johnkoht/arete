@@ -82,6 +82,8 @@ type RawFullMeeting = RawMeetingSummary & {
   stagedItemEdits: Record<string, string>;
   approvedItems: RawApprovedItems;
   parsedSections: RawParsedSections;
+  area?: string;
+  suggestedArea?: { areaSlug: string; confidence: number } | null;
 };
 
 // ── Mapping helpers ─────────────────────────────────────────────────────────
@@ -151,6 +153,8 @@ function mapFullMeeting(raw: RawFullMeeting): Meeting {
     reviewItems: flattenStagedItems(raw),
     approvedItems: raw.approvedItems,
     parsedSections: raw.parsedSections,
+    area: raw.area,
+    suggestedArea: raw.suggestedArea?.areaSlug,
   };
 }
 
@@ -235,6 +239,8 @@ export interface ProcessMeetingOptions {
   clearApproved?: boolean;
   /** Extraction mode: 'normal' (default), 'thorough' (more items), or 'light' (minimal) */
   mode?: 'normal' | 'thorough' | 'light';
+  /** Area slug to associate with this meeting before processing */
+  area?: string;
 }
 
 /** POST /api/meetings/:slug/process — start Pi SDK agent processing job */
@@ -244,6 +250,24 @@ export async function processMeeting(slug: string, options?: ProcessMeetingOptio
     headers: options ? { 'Content-Type': 'application/json' } : undefined,
     body: options ? JSON.stringify(options) : undefined,
   });
+}
+
+// ── Area suggestion types ───────────────────────────────────────────────────
+
+type RawAreaSuggestion = {
+  suggestion: { areaSlug: string; confidence: number } | null;
+  areas: string[];
+};
+
+export type AreaSuggestionResponse = {
+  suggestion: { areaSlug: string; confidence: number } | null;
+  areas: string[];
+};
+
+/** GET /api/meetings/:slug/suggest-area — fetch area suggestion and list of areas */
+export async function fetchAreaSuggestion(slug: string): Promise<AreaSuggestionResponse> {
+  const raw = await apiFetch<RawAreaSuggestion>(`/api/meetings/${slug}/suggest-area`);
+  return { suggestion: raw.suggestion, areas: raw.areas };
 }
 
 /** DELETE /api/meetings/:slug — delete meeting file */

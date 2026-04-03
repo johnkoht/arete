@@ -97,6 +97,17 @@ create one per request — it has no state and is safe to reuse. The `@arete/cor
 that require a `StorageAdapter` (writeItemStatusToFile, commitApprovedItems, loadConfig)
 all use this shared instance.
 
+### Area Suggestion — On-the-Fly Computation in GET /:slug (2026-04-02)
+
+GET /:slug computes `suggestedArea` on every request via `AreaParserService.suggestAreaForMeeting()`.
+This is intentional — areas and meeting content can change, so caching at process time would go stale.
+The computation is wrapped in a non-fatal try/catch: if suggestion fails, the meeting still returns
+with `suggestedArea: null`. This prevents area-related errors from breaking the meeting detail view.
+
+`AreaParserService` is instantiated directly in route handlers (not via workspaceService) because
+it only needs `FileStorageAdapter` + `workspaceRoot`, both already available in the route closure.
+Adding workspace service wrappers for two pass-through methods would be over-abstraction.
+
 ---
 
 ## Invariants

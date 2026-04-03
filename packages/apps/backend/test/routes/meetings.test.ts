@@ -56,6 +56,9 @@ function makeMeeting(overrides: Partial<MockMeeting> = {}): MockMeeting {
 import { Hono } from 'hono';
 import * as jobsService from '../../src/services/jobs.js';
 
+type MockAreaSuggestion = { areaSlug: string; matchType: string; confidence: number } | null;
+type MockArea = { slug: string; name: string };
+
 function buildTestApp(
   meetingsMock: {
     listMeetings?: () => Promise<unknown[]>;
@@ -64,6 +67,8 @@ function buildTestApp(
     updateMeeting?: (slug: string, updates: unknown) => Promise<void>;
     updateItemStatus?: (slug: string, id: string, opts: unknown) => Promise<void>;
     approveMeeting?: (slug: string) => Promise<MockMeeting>;
+    suggestAreaForMeeting?: (input: { title: string; summary?: string; transcript?: string }) => Promise<MockAreaSuggestion>;
+    listAreas?: () => Promise<MockArea[]>;
   }
 ) {
   const app = new Hono();
@@ -75,6 +80,8 @@ function buildTestApp(
     updateMeeting: meetingsMock.updateMeeting ?? (() => Promise.resolve()),
     updateItemStatus: meetingsMock.updateItemStatus ?? (() => Promise.resolve()),
     approveMeeting: meetingsMock.approveMeeting ?? (() => Promise.reject(new Error('not found'))),
+    suggestAreaForMeeting: meetingsMock.suggestAreaForMeeting ?? (() => Promise.resolve(null)),
+    listAreas: meetingsMock.listAreas ?? (() => Promise.resolve([])),
   };
 
   app.get('/api/meetings', async (c) => {
@@ -93,11 +100,41 @@ function buildTestApp(
     return c.json({ jobId }, 202);
   });
 
+  app.get('/api/meetings/:slug/suggest-area', async (c) => {
+    const slug = c.req.param('slug');
+    const meeting = await ws.getMeeting(slug);
+    if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+
+    const areas = await ws.listAreas();
+    const sortedSlugs = areas.map(a => a.slug).sort();
+    const suggestion = await ws.suggestAreaForMeeting({
+      title: meeting.title,
+      summary: meeting.summary,
+      transcript: (meeting as Record<string, unknown>).transcript as string | undefined,
+    });
+
+    return c.json({
+      suggestion: suggestion ? { areaSlug: suggestion.areaSlug, confidence: suggestion.confidence } : null,
+      areas: sortedSlugs,
+    });
+  });
+
   app.get('/api/meetings/:slug', async (c) => {
     const slug = c.req.param('slug');
     const meeting = await ws.getMeeting(slug);
     if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
-    return c.json(meeting);
+
+    // Compute suggestedArea on-the-fly
+    const suggestion = await ws.suggestAreaForMeeting({
+      title: meeting.title,
+      summary: meeting.summary,
+      transcript: (meeting as Record<string, unknown>).transcript as string | undefined,
+    });
+
+    return c.json({
+      ...meeting,
+      suggestedArea: suggestion ? { areaSlug: suggestion.areaSlug, confidence: suggestion.confidence } : null,
+    });
   });
 
   app.delete('/api/meetings/:slug', async (c) => {
@@ -152,7 +189,40 @@ function buildTestApp(
   });
 
   app.post('/api/meetings/:slug/process', async (c) => {
+    const slug = c.req.param('slug');
+
+    // Parse optional body
+    let area: string | undefined;
+    let clearApproved = false;
+    let mode: string | undefined;
+    try {
+      const body = await c.req.json() as { area?: string; clearApproved?: boolean; mode?: string };
+      area = body.area;
+      clearApproved = body.clearApproved ?? false;
+      mode = body.mode;
+    } catch {
+      // No body or invalid JSON — use defaults
+    }
+
+    // Validate area if provided
+    if (area) {
+      const meeting = await ws.getMeeting(slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+
+      const areas = await ws.listAreas();
+      const valid = areas.some(a => a.slug === area);
+      if (!valid) {
+        return c.json(
+          { error: 'Invalid area', validAreas: areas.map(a => a.slug).sort() },
+          400
+        );
+      }
+
+      await ws.updateMeeting(slug, { area });
+    }
+
     const jobId = jobsService.createJob('process');
+    // Fire and forget — return 202 immediately
     return c.json({ jobId }, 202);
   });
 
@@ -414,5 +484,186 @@ describe('GET /api/jobs/:id', () => {
     const body = json as { status: string; output: string };
     assert.ok(['running', 'done', 'error'].includes(body.status), 'status should be valid');
     assert.ok(typeof body.output === 'string', 'output should be a string');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Area suggestion & process integration tests (Task 3)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('GET /api/meetings/:slug/suggest-area', () => {
+  it('returns suggestion with confidence for matching meeting', async () => {
+    const meeting = makeMeeting({ title: 'Glance Weekly Sync', summary: 'Discussed communications' });
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve({ areaSlug: 'glance-communications', matchType: 'recurring', confidence: 1.0 }),
+      listAreas: () => Promise.resolve([
+        { slug: 'glance-communications', name: 'Glance Communications' },
+        { slug: 'alpha-project', name: 'Alpha Project' },
+      ]),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup/suggest-area');
+    assert.equal(status, 200);
+    const body = json as { suggestion: { areaSlug: string; confidence: number } | null; areas: string[] };
+    assert.ok(body.suggestion);
+    assert.equal(body.suggestion.areaSlug, 'glance-communications');
+    assert.equal(body.suggestion.confidence, 1.0);
+  });
+
+  it('returns null suggestion for non-matching meeting', async () => {
+    const meeting = makeMeeting({ title: 'Random Chat' });
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve(null),
+      listAreas: () => Promise.resolve([{ slug: 'alpha-project', name: 'Alpha Project' }]),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup/suggest-area');
+    assert.equal(status, 200);
+    const body = json as { suggestion: null; areas: string[] };
+    assert.equal(body.suggestion, null);
+  });
+
+  it('returns areas list sorted alphabetically', async () => {
+    const meeting = makeMeeting();
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve(null),
+      listAreas: () => Promise.resolve([
+        { slug: 'zebra-project', name: 'Zebra' },
+        { slug: 'alpha-project', name: 'Alpha' },
+        { slug: 'middle-project', name: 'Middle' },
+      ]),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup/suggest-area');
+    assert.equal(status, 200);
+    const body = json as { suggestion: null; areas: string[] };
+    assert.deepEqual(body.areas, ['alpha-project', 'middle-project', 'zebra-project']);
+  });
+
+  it('returns 404 when meeting file does not exist', async () => {
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(null),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/missing-meeting/suggest-area');
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Meeting not found');
+  });
+
+  it('returns empty areas list when no areas exist', async () => {
+    const meeting = makeMeeting();
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve(null),
+      listAreas: () => Promise.resolve([]),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup/suggest-area');
+    assert.equal(status, 200);
+    const body = json as { suggestion: null; areas: string[] };
+    assert.equal(body.suggestion, null);
+    assert.deepEqual(body.areas, []);
+  });
+});
+
+describe('POST /api/meetings/:slug/process (area integration)', () => {
+  it('saves area to frontmatter before processing', async () => {
+    const meeting = makeMeeting();
+    let savedArea: string | undefined;
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      updateMeeting: (_slug: string, updates: unknown) => {
+        savedArea = (updates as { area?: string }).area;
+        return Promise.resolve();
+      },
+      listAreas: () => Promise.resolve([
+        { slug: 'glance-communications', name: 'Glance Communications' },
+      ]),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/process', {
+      area: 'glance-communications',
+    });
+    assert.equal(status, 202);
+    const body = json as { jobId: string };
+    assert.ok(typeof body.jobId === 'string');
+    assert.equal(savedArea, 'glance-communications');
+  });
+
+  it('returns 400 with valid areas list for invalid area slug', async () => {
+    const meeting = makeMeeting();
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      listAreas: () => Promise.resolve([
+        { slug: 'alpha-project', name: 'Alpha Project' },
+        { slug: 'beta-project', name: 'Beta Project' },
+      ]),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/process', {
+      area: 'nonexistent-area',
+    });
+    assert.equal(status, 400);
+    const body = json as { error: string; validAreas: string[] };
+    assert.equal(body.error, 'Invalid area');
+    assert.deepEqual(body.validAreas, ['alpha-project', 'beta-project']);
+  });
+
+  it('returns 404 when area provided for non-existent meeting', async () => {
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(null),
+      listAreas: () => Promise.resolve([
+        { slug: 'alpha-project', name: 'Alpha Project' },
+      ]),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/nonexistent-meeting/process', {
+      area: 'alpha-project',
+    });
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Meeting not found');
+  });
+
+  it('works without area (backward compatible)', async () => {
+    const app = buildTestApp({});
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/process', {
+      clearApproved: true,
+    });
+    assert.equal(status, 202);
+    const body = json as { jobId: string };
+    assert.ok(typeof body.jobId === 'string');
+  });
+
+  it('works with no body at all (backward compatible)', async () => {
+    const app = buildTestApp({});
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/process');
+    assert.equal(status, 202);
+    const body = json as { jobId: string };
+    assert.ok(typeof body.jobId === 'string');
+  });
+});
+
+describe('GET /api/meetings/:slug (suggestedArea)', () => {
+  it('includes suggestedArea field when suggestion exists', async () => {
+    const meeting = makeMeeting({ title: 'Glance Sync' });
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve({ areaSlug: 'glance-communications', matchType: 'recurring', confidence: 1.0 }),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup');
+    assert.equal(status, 200);
+    const body = json as MockMeeting & { suggestedArea: { areaSlug: string; confidence: number } | null };
+    assert.ok(body.suggestedArea);
+    assert.equal(body.suggestedArea.areaSlug, 'glance-communications');
+    assert.equal(body.suggestedArea.confidence, 1.0);
+  });
+
+  it('includes null suggestedArea when no suggestion', async () => {
+    const meeting = makeMeeting({ title: 'Random Chat' });
+    const app = buildTestApp({
+      getMeeting: () => Promise.resolve(meeting),
+      suggestAreaForMeeting: () => Promise.resolve(null),
+    });
+    const { status, json } = await req(app, 'GET', '/api/meetings/2024-01-15-team-standup');
+    assert.equal(status, 200);
+    const body = json as MockMeeting & { suggestedArea: null };
+    assert.equal(body.suggestedArea, null);
   });
 });

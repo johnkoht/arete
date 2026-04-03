@@ -341,6 +341,7 @@
         "packages/cli/src/commands/meeting.ts",
         "packages/core/src/services/meeting-extraction.ts",
         "packages/core/src/services/meeting-processing.ts",
+        "packages/core/src/services/area-parser.ts",
         "packages/cli/src/commands/LEARNINGS.md"
       ],
       "testCommands": [
@@ -353,7 +354,10 @@
         "extract --clear-approved clears approved sections before re-extracting",
         "approve commits staged items to memory files (decisions.md, learnings.md)",
         "processMeetingExtraction() in core used by both CLI and backend for consistency",
-        "Decisions and learnings default to 0.9 confidence when extracted"
+        "Decisions and learnings default to 0.9 confidence when extracted",
+        "Meetings support optional area: slug in YAML frontmatter for area association before processing",
+        "suggestAreaForMeeting() in area-parser.ts provides content-based area suggestions with confidence scores",
+        "Area context (current state, recent decisions) is injected into extraction prompt when area is set"
       ],
       "lastVerified": "2026-03-16"
     },

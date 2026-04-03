@@ -1458,3 +1458,224 @@ We are focused on customer retention.
     assert.equal(bundle.areaContext!.slug, 'product-team');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Frontmatter area field tests
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingContext frontmatter area field', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let deps: MeetingContextDeps;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'meeting-ctx-frontmatter-area-'));
+    paths = makePaths(tmpDir);
+    deps = createDeps(tmpDir, paths);
+    // Create workspace marker
+    mkdirSync(join(tmpDir, '.arete'), { recursive: true });
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'version: 1\n', 'utf8');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('uses frontmatter area field when present', async () => {
+    // Create area file
+    writeAreaFile(tmpDir, 'customer-success', {
+      area: 'Customer Success',
+      status: 'active',
+      recurring_meetings: [], // No recurring meetings
+    }, '## Current State\n\nCustomer retention focus.');
+
+    // Create meeting with explicit area in frontmatter (no title match needed)
+    writeMeetingFile(tmpDir, '2026-03-20-random-meeting.md', {
+      title: 'Random Meeting Title', // Does NOT match any area's recurring_meetings
+      date: '2026-03-20',
+      attendees: [],
+      area: 'customer-success', // Explicit area in frontmatter
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-random-meeting.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is populated via frontmatter area
+    assert.ok(bundle.areaContext, 'areaContext should be populated via frontmatter area');
+    assert.equal(bundle.areaContext!.slug, 'customer-success');
+    assert.equal(bundle.areaContext!.name, 'Customer Success');
+  });
+
+  it('frontmatter area takes precedence over title matching', async () => {
+    // Create two area files
+    writeAreaFile(tmpDir, 'engineering', {
+      area: 'Engineering',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Standup', frequency: 'daily' }, // Would match title
+      ],
+    }, '## Current State\n\nEngineering work.');
+
+    writeAreaFile(tmpDir, 'product', {
+      area: 'Product',
+      status: 'active',
+      recurring_meetings: [], // No recurring meetings
+    }, '## Current State\n\nProduct planning.');
+
+    // Create meeting with title matching engineering but frontmatter pointing to product
+    writeMeetingFile(tmpDir, '2026-03-20-standup.md', {
+      title: 'Daily Standup', // Matches engineering recurring_meetings
+      date: '2026-03-20',
+      attendees: [],
+      area: 'product', // Explicit area overrides title match
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-standup.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify frontmatter area wins over title matching
+    assert.ok(bundle.areaContext, 'areaContext should be populated');
+    assert.equal(bundle.areaContext!.slug, 'product', 'frontmatter area should take precedence');
+    assert.equal(bundle.areaContext!.name, 'Product');
+  });
+
+  it('falls back to title matching when no frontmatter area', async () => {
+    // Create area file with recurring meetings
+    writeAreaFile(tmpDir, 'sales', {
+      area: 'Sales',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Sales Review', frequency: 'weekly' },
+      ],
+    }, '## Current State\n\nSales pipeline.');
+
+    // Create meeting without frontmatter area but with matching title
+    writeMeetingFile(tmpDir, '2026-03-20-sales-review.md', {
+      title: 'Weekly Sales Review',
+      date: '2026-03-20',
+      attendees: [],
+      // No area field - should fall back to title matching
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-sales-review.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is populated via title matching fallback
+    assert.ok(bundle.areaContext, 'areaContext should be populated via title matching');
+    assert.equal(bundle.areaContext!.slug, 'sales');
+  });
+
+  it('logs warning and falls back to title matching for invalid area slug', async () => {
+    // Create area file
+    writeAreaFile(tmpDir, 'engineering', {
+      area: 'Engineering',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Standup', frequency: 'daily' },
+      ],
+    }, '## Current State\n\nEngineering work.');
+
+    // Create meeting with invalid area slug in frontmatter
+    writeMeetingFile(tmpDir, '2026-03-20-standup.md', {
+      title: 'Daily Standup', // Matches engineering
+      date: '2026-03-20',
+      attendees: [],
+      area: 'nonexistent-area', // Invalid slug - should warn and fallback
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-standup.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify fallback to title matching
+    assert.ok(bundle.areaContext, 'areaContext should be populated via fallback');
+    assert.equal(bundle.areaContext!.slug, 'engineering', 'should fallback to title matching');
+
+    // Verify warning is present
+    assert.ok(
+      bundle.warnings.some((w) => w.includes('Frontmatter area') && w.includes('nonexistent-area')),
+      `Expected warning about invalid frontmatter area, got: ${bundle.warnings.join(', ')}`
+    );
+  });
+
+  it('treats empty string area as no area and falls back to title matching', async () => {
+    // Create area file
+    writeAreaFile(tmpDir, 'marketing', {
+      area: 'Marketing',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Marketing Sync', frequency: 'weekly' },
+      ],
+    }, '## Current State\n\nMarketing campaigns.');
+
+    // Create meeting with empty area field
+    writeMeetingFile(tmpDir, '2026-03-20-marketing-sync.md', {
+      title: 'Weekly Marketing Sync',
+      date: '2026-03-20',
+      attendees: [],
+      area: '', // Empty string - should be treated as no area
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-marketing-sync.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify fallback to title matching (empty string is ignored)
+    assert.ok(bundle.areaContext, 'areaContext should be populated via title matching');
+    assert.equal(bundle.areaContext!.slug, 'marketing');
+  });
+
+  it('returns null areaContext when no frontmatter area and no title match', async () => {
+    // Create area file that doesn't match
+    writeAreaFile(tmpDir, 'finance', {
+      area: 'Finance',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Budget Review', frequency: 'quarterly' },
+      ],
+    }, '## Current State\n\nFinance ops.');
+
+    // Create meeting with no frontmatter area and non-matching title
+    writeMeetingFile(tmpDir, '2026-03-20-random.md', {
+      title: 'Unrelated Meeting',
+      date: '2026-03-20',
+      attendees: [],
+      // No area field, title doesn't match any recurring_meetings
+    }, 'Meeting content.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-20-random.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify areaContext is null
+    assert.equal(bundle.areaContext, null);
+  });
+
+  it('existing meetings without area field continue to work (backward compatible)', async () => {
+    // Create area file
+    writeAreaFile(tmpDir, 'operations', {
+      area: 'Operations',
+      status: 'active',
+      recurring_meetings: [
+        { title: 'Ops Standup', frequency: 'daily' },
+      ],
+    }, '## Current State\n\nOperations management.');
+
+    // Create legacy meeting without area field (pre-existing format)
+    const meetingsDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingsDir, { recursive: true });
+    // Manually write a meeting file without the area field to simulate legacy format
+    const legacyContent = `---
+title: "Daily Ops Standup"
+date: "2026-03-20"
+attendees: []
+---
+
+Legacy meeting content.`;
+    writeFileSync(join(meetingsDir, '2026-03-20-ops-standup.md'), legacyContent, 'utf8');
+
+    const meetingPath = join(meetingsDir, '2026-03-20-ops-standup.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    // Verify backward compatibility - title matching still works
+    assert.ok(bundle.areaContext, 'areaContext should be populated via title matching for legacy meetings');
+    assert.equal(bundle.areaContext!.slug, 'operations');
+  });
+});

@@ -29,12 +29,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   useMeeting,
   useMeetings,
   useApproveItem,
   useSaveApprove,
   useProcessMeeting,
   useDeleteMeeting,
+  useAreaSuggestion,
 } from "@/hooks/meetings.js";
 import type { ReviewItem, ApprovedItems } from "@/api/types.js";
 import { BASE_URL } from "@/api/client.js";
@@ -93,10 +101,27 @@ export default function MeetingDetail() {
   const [navConfirmOpen, setNavConfirmOpen] = useState(false);
   const [pendingNavSlug, setPendingNavSlug] = useState<string | null>(null);
 
+  // Process confirmation dialog (first-time processing)
+  const [processDialogOpen, setProcessDialogOpen] = useState(false);
+  const [processAreaSlug, setProcessAreaSlug] = useState<string>('__none__');
+
   // Reprocess confirmation dialog
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [clearApprovedOnReprocess, setClearApprovedOnReprocess] = useState(true);
   const [extractionMode, setExtractionMode] = useState<'normal' | 'thorough'>('thorough');
+  const [reprocessAreaSlug, setReprocessAreaSlug] = useState<string>('__none__');
+
+  // Area suggestion
+  const areaSuggestion = useAreaSuggestion(safeSlug);
+
+  // Pre-fill area dropdowns with suggestion when it loads
+  useEffect(() => {
+    if (areaSuggestion.data?.suggestion) {
+      const slug = areaSuggestion.data.suggestion.areaSlug;
+      setProcessAreaSlug(slug);
+      setReprocessAreaSlug(slug);
+    }
+  }, [areaSuggestion.data]);
 
   // Cleanup SSE on unmount
   useEffect(() => {
@@ -245,7 +270,7 @@ export default function MeetingDetail() {
   };
 
   // Process Meeting — start job, open SSE stream modal
-  const handleProcessClick = (options?: { clearApproved?: boolean; mode?: 'normal' | 'thorough' }) => {
+  const handleProcessClick = (options?: { clearApproved?: boolean; mode?: 'normal' | 'thorough'; area?: string }) => {
     processMutation.mutate(options, {
       onSuccess: (data) => {
         setStreamOutput("");
@@ -501,7 +526,7 @@ export default function MeetingDetail() {
               meeting={meeting}
               isSynced={isSynced}
               approved={isApproved || saveApproveMutation.isSuccess}
-              onProcessClick={() => handleProcessClick()}
+              onProcessClick={() => setProcessDialogOpen(true)}
               onReprocessClick={() => setReprocessDialogOpen(true)}
               onDeleteClick={handleDeleteClick}
             />
@@ -597,6 +622,49 @@ export default function MeetingDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Process confirmation dialog (first-time) */}
+      <Dialog open={processDialogOpen} onOpenChange={setProcessDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Process Meeting</DialogTitle>
+            <DialogDescription>
+              The AI will analyze the transcript and extract action items, decisions, and learnings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {/* Area selection */}
+            <AreaDropdown
+              value={processAreaSlug}
+              onChange={setProcessAreaSlug}
+              areas={areaSuggestion.data?.areas}
+              isLoading={areaSuggestion.isLoading}
+              disabled={processMutation.isPending}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setProcessDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setProcessDialogOpen(false);
+                handleProcessClick({
+                  area: processAreaSlug !== '__none__' ? processAreaSlug : undefined,
+                });
+              }}
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Process
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Reprocess confirmation dialog */}
       <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
         <DialogContent className="sm:max-w-md">
@@ -659,6 +727,15 @@ export default function MeetingDetail() {
                 If unchecked, new items will be added alongside existing approved items.
               </p>
             </div>
+
+            {/* Area selection */}
+            <AreaDropdown
+              value={reprocessAreaSlug}
+              onChange={setReprocessAreaSlug}
+              areas={areaSuggestion.data?.areas}
+              isLoading={areaSuggestion.isLoading}
+              disabled={processMutation.isPending}
+            />
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -672,7 +749,11 @@ export default function MeetingDetail() {
               size="sm"
               onClick={() => {
                 setReprocessDialogOpen(false);
-                handleProcessClick({ clearApproved: clearApprovedOnReprocess, mode: extractionMode });
+                handleProcessClick({
+                  clearApproved: clearApprovedOnReprocess,
+                  mode: extractionMode,
+                  area: reprocessAreaSlug !== '__none__' ? reprocessAreaSlug : undefined,
+                });
               }}
             >
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -747,6 +828,50 @@ function SummarySection({
             </p>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/** Shared area selection dropdown used in both process and reprocess dialogs. */
+function AreaDropdown({
+  value,
+  onChange,
+  areas,
+  isLoading,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  areas: string[] | undefined;
+  isLoading: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">Area</p>
+      <p className="text-xs text-muted-foreground">
+        Associate this meeting with a product area to provide richer context during extraction.
+      </p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 h-10 px-3 rounded-md border text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading areas…
+        </div>
+      ) : (
+        <Select value={value} onValueChange={onChange} disabled={disabled}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select area…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None</SelectItem>
+            {areas?.map((slug) => (
+              <SelectItem key={slug} value={slug}>
+                {slug}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

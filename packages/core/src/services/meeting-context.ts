@@ -131,6 +131,7 @@ interface ParsedMeetingFrontmatter {
   attendees: Array<{ name: string; email: string }>;
   attendee_ids?: string[];
   agenda?: string;
+  area?: string;
 }
 
 interface ParsedMeetingFile {
@@ -191,8 +192,11 @@ function parseMeetingFile(content: string): ParsedMeetingFile | null {
     // Parse agenda path if present
     const agenda = typeof fm.agenda === 'string' ? fm.agenda : undefined;
 
+    // Parse area slug if present
+    const area = typeof fm.area === 'string' && fm.area.trim() !== '' ? fm.area.trim() : undefined;
+
     return {
-      frontmatter: { title, date, attendees, attendee_ids, agenda },
+      frontmatter: { title, date, attendees, attendee_ids, agenda, area },
       body,
     };
   } catch {
@@ -816,17 +820,34 @@ export async function buildMeetingContext(
     }
   }
 
-  // 4. Area context resolution
+  // 4. Area context resolution — frontmatter area takes precedence over title matching
   let areaContext: AreaContext | null = null;
-  const areaMatch = await resolvedAreaParser.getAreaForMeeting(frontmatter.title);
-  if (areaMatch) {
+
+  // Try frontmatter area first
+  if (frontmatter.area) {
     try {
-      areaContext = await resolvedAreaParser.getAreaContext(areaMatch.areaSlug);
+      areaContext = await resolvedAreaParser.getAreaContext(frontmatter.area);
       if (!areaContext) {
-        warnings.push(`Area file not found: ${areaMatch.areaSlug}`);
+        // Frontmatter area slug doesn't match existing area file — warn and fall back
+        warnings.push(`Frontmatter area '${frontmatter.area}' not found, falling back to title matching`);
       }
     } catch (err) {
-      warnings.push(`Failed to load area context: ${areaMatch.areaSlug}`);
+      warnings.push(`Failed to load frontmatter area context: ${frontmatter.area}`);
+    }
+  }
+
+  // Fall back to title matching if no frontmatter area or frontmatter area invalid
+  if (!areaContext) {
+    const areaMatch = await resolvedAreaParser.getAreaForMeeting(frontmatter.title);
+    if (areaMatch) {
+      try {
+        areaContext = await resolvedAreaParser.getAreaContext(areaMatch.areaSlug);
+        if (!areaContext) {
+          warnings.push(`Area file not found: ${areaMatch.areaSlug}`);
+        }
+      } catch (err) {
+        warnings.push(`Failed to load area context: ${areaMatch.areaSlug}`);
+      }
     }
   }
 

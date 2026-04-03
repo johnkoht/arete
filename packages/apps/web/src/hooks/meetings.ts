@@ -17,7 +17,9 @@ import {
   processPeople,
   processMeeting,
   deleteMeeting,
+  fetchAreaSuggestion,
 } from '@/api/meetings.js';
+import type { ProcessMeetingOptions } from '@/api/meetings.js';
 import type { FetchMeetingsParams } from '@/api/meetings.js';
 import type { PatchItemParams } from '@/api/types.js';
 
@@ -114,9 +116,25 @@ export function useProcessPeople(slug: string) {
  * Start the Pi SDK agent processing session for a meeting.
  * Returns { jobId }. Caller should open an SSE stream via EventSource.
  */
+/**
+ * Fetch area suggestion + available areas for a meeting.
+ * Returns { suggestion, areas }. Enabled only when slug is truthy.
+ */
+export function useAreaSuggestion(slug: string) {
+  return useQuery({
+    queryKey: ['area-suggestion', slug],
+    queryFn: () => fetchAreaSuggestion(slug),
+    enabled: !!slug,
+  });
+}
+
+/**
+ * Start the Pi SDK agent processing session for a meeting.
+ * Returns { jobId }. Caller should open an SSE stream via EventSource.
+ */
 export function useProcessMeeting(slug: string) {
   return useMutation({
-    mutationFn: (options?: { clearApproved?: boolean }) => processMeeting(slug, options),
+    mutationFn: (options?: ProcessMeetingOptions) => processMeeting(slug, options),
   });
 }
 

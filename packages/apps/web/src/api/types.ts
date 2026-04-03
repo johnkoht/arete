@@ -369,6 +369,10 @@ export type Meeting = {
   approvedItems?: ApprovedItems;
   /** Parsed sections from body (for viewing approved items) */
   parsedSections?: ParsedSections;
+  /** Confirmed area slug (from frontmatter) */
+  area?: string;
+  /** Suggested area slug (from content-based matching) */
+  suggestedArea?: string;
 };
 
 export type JobStatus = 'running' | 'done' | 'error';
