@@ -19,6 +19,7 @@ import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
+import { AreaMemoryService } from './services/area-memory.js';
 /**
  * All services created by the factory, keyed by role.
  */
@@ -35,6 +36,7 @@ export type AreteServices = {
     integrations: IntegrationService;
     commitments: CommitmentsService;
     areaParser: AreaParserService;
+    areaMemory: AreaMemoryService;
     ai: AIService;
     tasks: TaskService;
 };

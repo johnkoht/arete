@@ -37,6 +37,8 @@ export { buildMeetingContext } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
+// Area memory (L3 computed summaries)
+export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 // Task management
 export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 // Task scoring

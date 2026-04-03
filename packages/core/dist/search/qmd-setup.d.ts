@@ -178,7 +178,7 @@ export declare function generateScopedCollectionName(workspaceRoot: string, scop
  *
  * Creates 10 scope-based collections:
  * - "all" → workspace root (entire workspace)
- * - "memory" → .arete/memory/items/
+ * - "memory" → .arete/memory/ (includes items/, areas/, summaries/)
  * - "meetings" → resources/meetings/
  * - "context" → context/
  * - "projects" → projects/

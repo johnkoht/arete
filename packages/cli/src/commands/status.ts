@@ -205,6 +205,15 @@ export function registerStatusCommand(program: Command): void {
       const decisionsCount = countMemoryItems(join(memoryItemsDir, 'decisions.md'));
       const learningsCount = countMemoryItems(join(memoryItemsDir, 'learnings.md'));
 
+      // Area memory staleness (best-effort)
+      let areaMemoryStale = 0;
+      let areaMemoryTotal = 0;
+      try {
+        const areaStatuses = await services.areaMemory.listAreaMemoryStatus(basePaths);
+        areaMemoryTotal = areaStatuses.length;
+        areaMemoryStale = areaStatuses.filter(s => s.stale).length;
+      } catch { /* non-critical */ }
+
       // Pattern detection (best-effort, don't fail status if it errors)
       let patternCount = 0;
       try {
@@ -247,6 +256,7 @@ export function registerStatusCommand(program: Command): void {
         memory: {
           decisions: decisionsCount,
           learnings: learningsCount,
+          areaMemory: { total: areaMemoryTotal, stale: areaMemoryStale },
         },
         intelligence: {
           patterns: patternCount,
@@ -293,6 +303,18 @@ export function registerStatusCommand(program: Command): void {
       console.log(
         `  ${chalk.dim('🧠 Memory:')} ${chalk.bold(String(decisionsCount))} decisions, ${chalk.bold(String(learningsCount))} learnings`,
       );
+      if (areaMemoryTotal > 0) {
+        const staleBadge = areaMemoryStale > 0
+          ? chalk.yellow(` (${areaMemoryStale} stale)`)
+          : chalk.green(' (all fresh)');
+        console.log(
+          `  ${chalk.dim('📦 Area Memory:')} ${chalk.bold(String(areaMemoryTotal))} areas${staleBadge}`,
+        );
+      } else {
+        console.log(
+          `  ${chalk.dim('📦 Area Memory:')} ${chalk.dim('none — run `arete memory refresh`')}`,
+        );
+      }
       console.log(
         `  ${chalk.dim('⚡ Intelligence:')} Patterns detected in last 30 days: ${chalk.bold(String(patternCount))}`,
       );
@@ -334,6 +356,9 @@ export function registerStatusCommand(program: Command): void {
       console.log('');
 
       // Recommendations
+      if (areaMemoryStale > 0) {
+        console.log(chalk.yellow(`  Run \`arete memory refresh\` to update ${areaMemoryStale} stale area memorie(s).`));
+      }
       console.log(chalk.dim('  Run `arete daily` for your morning brief.'));
       console.log(chalk.dim('  Run `arete momentum` for commitment and relationship momentum.'));
       console.log('');

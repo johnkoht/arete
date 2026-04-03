@@ -534,13 +534,13 @@ Reference the [week-plan](../week-plan/SKILL.md) skill for the full week.md temp
 
 ### Phase 7: Finalize (orchestrator)
 
-#### 7a. Global People Refresh
+#### 7a. Global Memory Refresh
 
 ```bash
-arete people memory refresh
+arete memory refresh
 ```
 
-Refreshes all people with stale memory highlights so next week's intelligence is current.
+Refreshes all L3 computed memory: area summaries (`.arete/memory/areas/`) and person memory highlights. Ensures next week's intelligence is current.
 
 #### 7b. Re-index
 
@@ -567,10 +567,11 @@ Makes all content from this session searchable for next week.
 - Already processed (scanned for decisions/learnings): Z
 - Subagents: X spawned, X succeeded, X failed
 
-### People Updated
-- Created: <list of new person files>
-- Updated: <list with new interaction log entries>
-- Global refresh: <count> people refreshed
+### Memory Refreshed
+- Area memories updated: <count>
+- People memories updated: <count>
+- New person files: <list>
+- Updated person files: <list with new interaction log entries>
 
 ### Commitments Reconciled
 - Resolved: X | New created: Y | Carried: Z
