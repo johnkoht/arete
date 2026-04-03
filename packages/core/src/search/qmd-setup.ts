@@ -407,7 +407,7 @@ export async function ensureQmdCollection(
  */
 export const SCOPE_PATHS: Record<QmdScope, string> = {
   all: '.', // workspace root
-  memory: '.arete/memory/items',
+  memory: '.arete/memory', // includes items/ (L2) + areas/ (L3) + summaries/ (L3)
   meetings: 'resources/meetings',
   context: 'context',
   projects: 'projects',
@@ -494,7 +494,7 @@ export function generateScopedCollectionName(
  *
  * Creates 10 scope-based collections:
  * - "all" → workspace root (entire workspace)
- * - "memory" → .arete/memory/items/
+ * - "memory" → .arete/memory/ (includes items/, areas/, summaries/)
  * - "meetings" → resources/meetings/
  * - "context" → context/
  * - "projects" → projects/

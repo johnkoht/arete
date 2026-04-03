@@ -570,7 +570,7 @@ describe('SCOPE_PATHS', () => {
 
   it('has all expected scopes', () => {
     assert.equal(SCOPE_PATHS.all, '.');
-    assert.equal(SCOPE_PATHS.memory, '.arete/memory/items');
+    assert.equal(SCOPE_PATHS.memory, '.arete/memory');
     assert.equal(SCOPE_PATHS.meetings, 'resources/meetings');
     assert.equal(SCOPE_PATHS.context, 'context');
     assert.equal(SCOPE_PATHS.projects, 'projects');
@@ -694,7 +694,7 @@ describe('ensureQmdCollections', () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',  // all (join('/workspace', '.') returns '/workspace')
-      '/workspace/.arete/memory/items',  // memory
+      '/workspace/.arete/memory',  // memory
       '/workspace/context',  // context
       '/workspace/projects',  // projects
       '/workspace/people',  // people
@@ -741,7 +741,7 @@ describe('ensureQmdCollections', () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',  // all
-      '/workspace/.arete/memory/items',
+      '/workspace/.arete/memory',
       '/workspace/resources/meetings',
       '/workspace/context',
       '/workspace/projects',
@@ -786,7 +786,7 @@ describe('ensureQmdCollections', () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',
-      '/workspace/.arete/memory/items',
+      '/workspace/.arete/memory',
       '/workspace/context',
     ]);
     // Simulate that 'all' collection already exists
@@ -830,7 +830,7 @@ describe('ensureQmdCollections', () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',
-      '/workspace/.arete/memory/items',
+      '/workspace/.arete/memory',
     ]);
     const deps = makeCollectionsDeps({
       calls,
@@ -945,7 +945,7 @@ describe('ensureQmdCollections', () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',
-      '/workspace/.arete/memory/items',
+      '/workspace/.arete/memory',
       '/workspace/resources/meetings',
       '/workspace/context',
       '/workspace/projects',
@@ -972,7 +972,7 @@ describe('ensureQmdCollections', () => {
       });
 
       assert.ok(paths.includes('/workspace'));
-      assert.ok(paths.includes('/workspace/.arete/memory/items'));
+      assert.ok(paths.includes('/workspace/.arete/memory'));
       assert.ok(paths.includes('/workspace/resources/meetings'));
       assert.ok(paths.includes('/workspace/context'));
       assert.ok(paths.includes('/workspace/projects'));

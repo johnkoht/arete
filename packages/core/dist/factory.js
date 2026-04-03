@@ -19,6 +19,7 @@ import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
+import { AreaMemoryService } from './services/area-memory.js';
 /**
  * Create all Areté services wired with correct dependencies.
  *
@@ -47,6 +48,8 @@ export async function createServices(workspaceRoot, options) {
     const integrations = new IntegrationService(storage, config);
     const commitments = new CommitmentsService(storage, workspaceRoot);
     const areaParser = new AreaParserService(storage, workspaceRoot);
+    // Area memory (depends on storage + areaParser + commitments + memory)
+    const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
     // Task management (depends on storage + workspace paths + commitments for auto-resolution)
     const workspacePaths = workspace.getPaths(workspaceRoot);
     const tasks = new TaskService(storage, workspacePaths, commitments);
@@ -72,6 +75,7 @@ export async function createServices(workspaceRoot, options) {
         integrations,
         commitments,
         areaParser,
+        areaMemory,
         ai,
         tasks,
     };

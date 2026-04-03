@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-04-03: [product-simplification-learnings](entries/2026-04-03_product-simplification-learnings.md) — Phase 1: winddown source sync, task integration gaps (@due lifecycle, SSE watchers), memory L3 revamp (AreaMemoryService, `arete memory refresh`, L3 searchable, freshness signals). 3/3 plans, 30 new tests, 1 critical review fix.
 - 2026-04-03: [wire-reconciliation-into-backend](entries/2026-04-03_wire-reconciliation-into-backend.md) — Wired cross-meeting reconciliation into backend `runProcessingSessionTestable()`. Always-on dedup for web UI. 8 new tests.
 - 2026-04-03: [wire-meeting-reconciliation-into-cli](entries/2026-04-03_wire-meeting-reconciliation-into-cli.md) — Wired reconciliation module into `arete meeting extract --reconcile`. Cross-meeting dedup, relevance scoring, tier badges. 4/4 tasks, ~37 new tests. Key: reconciliation runs before processMeetingExtraction, processing decisions take precedence.
 - 2026-04-02: [enhance-review-skill-learnings](entries/2026-04-02_enhance-review-skill-learnings.md) — Enhanced /review skill with tiered paths (Quick/Full), AC validation rubric, expertise profile loading, pre-mortem gating. 6/6 tasks direct execution, 0/7 pre-mortem risks. Key: documentation tasks skip worktree/subagents.

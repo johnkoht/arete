@@ -134,6 +134,15 @@ export type {
 
 // Area parsing
 export { AreaParserService } from './area-parser.js';
+
+// Area memory (L3 computed summaries)
+export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
+export type {
+  RefreshAreaMemoryOptions,
+  RefreshAreaMemoryResult,
+  CompactDecisionsOptions,
+  CompactDecisionsResult,
+} from './area-memory.js';
 export type { AreaContext } from '../models/index.js';
 
 // Task management

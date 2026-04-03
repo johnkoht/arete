@@ -1,4 +1,3 @@
-<!-- Adapted from arete-reserv/.agents/skills/daily-winddown/ -->
 ---
 name: daily-winddown
 description: End-of-day reconciliation — pull recordings, process inbox, process meetings, triage action items, update weekly plan, and prime intelligence for tomorrow.
@@ -83,9 +82,17 @@ This phase runs in the orchestrator. Pull recordings, read local state, merge ag
 
 #### 1a. Pull Recordings
 
+Check `arete.yaml` for active recording integrations (under `integrations:`). Pull from whichever are configured:
+
 ```bash
+# If krisp is configured:
+arete pull krisp --days 1
+
+# If fathom is configured:
 arete pull fathom --days 1
 ```
+
+Pull from **all** configured recording integrations (krisp, fathom, or both). If a pull fails or an integration is not configured, note the error and continue with the next integration.
 
 Then list today's meeting files:
 
@@ -97,9 +104,9 @@ ls resources/meetings/YYYY-MM-DD-*.md
 
 Capture:
 - List of today's meeting file paths
-- Count of recordings pulled
+- Count of recordings pulled (across all integrations)
 
-If pull fails, note the error and continue — meetings already in `resources/meetings/` can still be processed.
+If all pulls fail or no recording integrations are configured, continue — meetings already in `resources/meetings/` can still be processed.
 
 #### 1b. Read Local State
 
@@ -701,6 +708,28 @@ Build:
 
 Read `now/week.md` and update with today's progress:
 
+0. **Clear stale `@due` tags** from previous day's incomplete items:
+
+   Before updating anything else, scan Must/Should/Could sections for `@due(YYYY-MM-DD)` tags where the date is **before today**. For each incomplete task (`- [ ]`) with a stale `@due` tag, remove the `@due(...)` portion from the line.
+
+   **Why**: The daily-plan skill tags focus tasks with `@due(today's date)`. If those tasks aren't completed by end of day, the stale `@due` tag would cause them to show as "overdue" in the Today view indefinitely. Clearing stale tags lets the next daily-plan session re-select and re-tag as appropriate.
+
+   **Rules**:
+   - Only clear `@due` from **incomplete** tasks (`- [ ]`). Completed tasks (`- [x]`) keep their `@due` tag as historical metadata.
+   - Only clear `@due` tags with dates **before today**. Today's `@due` tags are still active.
+   - Preserve all other metadata tags (`@area`, `@project`, `@person`, `@from`).
+
+   **Example**:
+   ```markdown
+   ### Must complete
+   - [ ] Send API docs to Sarah @area(product) @person(sarah-chen) @due(2026-04-01)
+   ```
+   Becomes (if today is 2026-04-02):
+   ```markdown
+   ### Must complete
+   - [ ] Send API docs to Sarah @area(product) @person(sarah-chen)
+   ```
+
 1. **Update `## Today` section** with actual focus and outcomes
 
 2. **Add entry to `## Daily Progress`** (matching daily-plan format):
@@ -884,7 +913,7 @@ The skip option is critical for maintaining flow:
 
 ## References
 
-- **Recordings**: `arete pull fathom --days 1`
+- **Recordings**: `arete pull krisp --days 1` / `arete pull fathom --days 1` (whichever integrations are active in `arete.yaml`)
 - **Process-meetings skill**: [process-meetings](../process-meetings/SKILL.md) — Phase 2 delegates to steps 1-4
 - **CLI commands**:
   - `arete meeting context <file> --json` — build context bundle

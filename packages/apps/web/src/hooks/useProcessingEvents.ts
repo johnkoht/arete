@@ -20,6 +20,10 @@ type ProcessedEventData = {
   slug?: string;
 };
 
+type TaskChangedEventData = {
+  file?: string;
+};
+
 export function useProcessingEvents(): void {
   const queryClient = useQueryClient();
   const esRef = useRef<EventSource | null>(null);
@@ -50,6 +54,26 @@ export function useProcessingEvents(): void {
         void queryClient.invalidateQueries({ queryKey: ['memory', 'recent'] });
 
         toast.success(slug ? `Meeting processed: ${slug}` : 'Meeting processed');
+
+        // Reset backoff on successful event
+        retryRef.current = 0;
+      });
+
+      es.addEventListener('task:changed', (event: MessageEvent<string>) => {
+        let file = '';
+        try {
+          const data = JSON.parse(event.data) as TaskChangedEventData;
+          file = data.file ?? '';
+        } catch {
+          // ignore parse errors
+        }
+
+        // Invalidate task-related query caches
+        void queryClient.invalidateQueries({ queryKey: ['review', 'pending'] });
+        void queryClient.invalidateQueries({ queryKey: ['goals', 'week'] });
+        void queryClient.invalidateQueries({ queryKey: ['commitments'] });
+
+        toast.info(file ? `Tasks updated: ${file}` : 'Tasks updated');
 
         // Reset backoff on successful event
         retryRef.current = 0;

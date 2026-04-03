@@ -1,12 +1,12 @@
 /**
- * Tests for services/watcher.ts — meeting file watcher.
+ * Tests for services/watcher.ts — meeting and task file watchers.
  *
  * Mocks fs.watch and readFile to test watcher behavior without filesystem access.
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { startMeetingWatcher } from '../../src/services/watcher.js';
+import { startMeetingWatcher, startTaskFileWatcher } from '../../src/services/watcher.js';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -263,5 +263,158 @@ status: synced
     const stop = startMeetingWatcher(workspaceRoot, () => {}, { fswatchFn, readFileFn });
     assert.equal(typeof stop, 'function');
     stop(); // Should not throw
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task file watcher tests
+// ---------------------------------------------------------------------------
+
+describe('startTaskFileWatcher', () => {
+  const workspaceRoot = '/workspace';
+
+  it('returns a cleanup function', () => {
+    const { fswatchFn } = createMockFsWatch();
+    const stop = startTaskFileWatcher(workspaceRoot, () => {}, { fswatchFn });
+    assert.equal(typeof stop, 'function');
+    stop();
+  });
+
+  it('calls onChange when week.md changes', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    trigger('change', 'week.md');
+    await waitFor(() => called.length > 0);
+    stop();
+
+    assert.equal(called.length, 1);
+    assert.equal(called[0], 'week.md');
+  });
+
+  it('calls onChange when tasks.md changes', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    trigger('change', 'tasks.md');
+    await waitFor(() => called.length > 0);
+    stop();
+
+    assert.equal(called.length, 1);
+    assert.equal(called[0], 'tasks.md');
+  });
+
+  it('ignores non-task files', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    trigger('change', 'scratchpad.md');
+    trigger('change', 'goals.md');
+    trigger('change', 'random.txt');
+
+    await new Promise((r) => setTimeout(r, 600));
+    stop();
+
+    assert.equal(called.length, 0, 'Should only watch week.md and tasks.md');
+  });
+
+  it('debounces rapid changes to the same file', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    // Rapid-fire changes to week.md
+    trigger('change', 'week.md');
+    trigger('change', 'week.md');
+    trigger('change', 'week.md');
+
+    await waitFor(() => called.length > 0);
+    // Wait extra to confirm no more calls
+    await new Promise((r) => setTimeout(r, 600));
+    stop();
+
+    assert.equal(called.length, 1, 'Should debounce multiple rapid changes');
+    assert.equal(called[0], 'week.md');
+  });
+
+  it('handles both files changing independently', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    trigger('change', 'week.md');
+    trigger('change', 'tasks.md');
+
+    await waitFor(() => called.length >= 2);
+    stop();
+
+    assert.equal(called.length, 2);
+    assert.ok(called.includes('week.md'));
+    assert.ok(called.includes('tasks.md'));
+  });
+
+  it('returns noop cleanup when now/ dir does not exist', () => {
+    const fswatchFn = () => {
+      throw new Error('ENOENT: no such file or directory');
+    };
+
+    const stop = startTaskFileWatcher(workspaceRoot, () => {}, { fswatchFn });
+    assert.equal(typeof stop, 'function');
+    stop(); // Should not throw
+  });
+
+  it('stops the watcher when cleanup function is called', () => {
+    const { fswatchFn, closed } = createMockFsWatch();
+
+    assert.equal(closed(), false);
+    const stop = startTaskFileWatcher(workspaceRoot, () => {}, { fswatchFn });
+    stop();
+    assert.equal(closed(), true, 'Watcher should be closed after cleanup');
+  });
+
+  it('ignores null filenames', async () => {
+    const { fswatchFn, trigger } = createMockFsWatch();
+    const called: string[] = [];
+
+    const stop = startTaskFileWatcher(
+      workspaceRoot,
+      (filename) => called.push(filename),
+      { fswatchFn },
+    );
+
+    trigger('change', null as unknown as string);
+
+    await new Promise((r) => setTimeout(r, 600));
+    stop();
+
+    assert.equal(called.length, 0, 'Should ignore null filenames');
   });
 });

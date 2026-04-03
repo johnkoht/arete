@@ -22,6 +22,7 @@ import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
+import { AreaMemoryService } from './services/area-memory.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -39,6 +40,7 @@ export type AreteServices = {
   integrations: IntegrationService;
   commitments: CommitmentsService;
   areaParser: AreaParserService;
+  areaMemory: AreaMemoryService;
   ai: AIService;
   tasks: TaskService;
 };
@@ -87,6 +89,9 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
+  // Area memory (depends on storage + areaParser + commitments + memory)
+  const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
+
   // Task management (depends on storage + workspace paths + commitments for auto-resolution)
   const workspacePaths = workspace.getPaths(workspaceRoot);
   const tasks = new TaskService(storage, workspacePaths, commitments);
@@ -115,6 +120,7 @@ export async function createServices(
     integrations,
     commitments,
     areaParser,
+    areaMemory,
     ai,
     tasks,
   };

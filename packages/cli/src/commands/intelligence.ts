@@ -2,10 +2,10 @@
  * Intelligence commands — context, memory, resolve, brief
  */
 
-import { createServices, PRODUCT_PRIMITIVES } from '@arete/core';
+import { createServices, PRODUCT_PRIMITIVES, loadConfig, refreshQmdIndex } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import type { ProductPrimitive } from '@arete/core';
+import type { ProductPrimitive, QmdRefreshResult } from '@arete/core';
 import {
   header,
   info,
@@ -15,6 +15,7 @@ import {
   listItem,
   deprecated,
 } from '../formatters.js';
+import { displayQmdResult } from '../lib/qmd-output.js';
 
 function parsePrimitives(raw?: string): ProductPrimitive[] | undefined {
   if (!raw) return undefined;
@@ -454,6 +455,92 @@ export function registerMemoryCommand(program: Command): void {
         console.log('');
       },
     );
+
+  memoryCmd
+    .command('refresh')
+    .description('Refresh all L3 computed memory (area summaries + person memory)')
+    .option('--area <slug>', 'Refresh only this area')
+    .option('--dry-run', 'Preview what would be refreshed without writing')
+    .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { area?: string; dryRun?: boolean; skipQmd?: boolean; json?: boolean }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const paths = services.workspace.getPaths(root);
+
+      // 1. Refresh area memory
+      const areaResult = await services.areaMemory.refreshAllAreaMemory(paths, {
+        areaSlug: opts.area,
+        dryRun: opts.dryRun,
+      });
+
+      // 2. Refresh person memory (unless targeting a specific area)
+      let personResult: { updated: number; scannedPeople: number; scannedMeetings: number } | undefined;
+      if (!opts.area) {
+        personResult = await services.entity.refreshPersonMemory(paths, {
+          dryRun: opts.dryRun,
+          commitments: services.commitments,
+        });
+      }
+
+      // 3. Refresh QMD index
+      let qmdResult: QmdRefreshResult | undefined;
+      const totalUpdated = areaResult.updated + (personResult?.updated ?? 0);
+      if (totalUpdated > 0 && !opts.skipQmd && !opts.dryRun) {
+        const config = await loadConfig(services.storage, root);
+        qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({
+          success: true,
+          dryRun: Boolean(opts.dryRun),
+          areas: areaResult,
+          people: personResult ?? null,
+          qmd: qmdResult ?? { indexed: false, skipped: true },
+        }, null, 2));
+        return;
+      }
+
+      if (opts.dryRun) {
+        header('Memory Refresh (dry run)');
+      } else {
+        header('Memory Refresh');
+      }
+
+      // Area results
+      if (opts.dryRun) {
+        info(`[dry-run] Would update ${areaResult.updated} area memory file(s).`);
+      } else {
+        success(`Updated ${areaResult.updated} area memory file(s).`);
+      }
+      listItem('Areas scanned', String(areaResult.scannedAreas));
+      listItem('Areas skipped', String(areaResult.skipped));
+
+      // Person results
+      if (personResult) {
+        console.log('');
+        if (opts.dryRun) {
+          info(`[dry-run] Would update ${personResult.updated} person file(s).`);
+        } else {
+          success(`Updated ${personResult.updated} person memory file(s).`);
+        }
+        listItem('People scanned', String(personResult.scannedPeople));
+        listItem('Meetings scanned', String(personResult.scannedMeetings));
+      }
+
+      displayQmdResult(qmdResult);
+      console.log('');
+    });
 }
 
 export function registerResolveCommand(program: Command): void {
