@@ -102,6 +102,7 @@ const BASIC_TASK: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 

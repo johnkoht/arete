@@ -137,6 +137,7 @@ const TASK_DUE_TODAY: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -150,6 +151,7 @@ const TASK_OVERDUE_1_DAY: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -163,6 +165,7 @@ const TASK_OVERDUE_3_DAYS: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -176,6 +179,7 @@ const TASK_WITH_AREA: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -189,6 +193,7 @@ const TASK_WITH_PROJECT: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -202,6 +207,7 @@ const TASK_WITH_BOTH_TAGS: Task = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -215,6 +221,7 @@ const SUGGESTED_TASK_1: SuggestedTask = {
   person: null,
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
   score: 85,
   breakdown: {
@@ -235,6 +242,7 @@ const SUGGESTED_TASK_2: SuggestedTask = {
   person: { slug: 'john-doe', name: 'John Doe' },
   from: null,
   completed: false,
+  completedAt: null,
   source: { file: 'now/tasks.md', section: 'Tasks' },
   score: 72,
   breakdown: {
@@ -255,6 +263,7 @@ const COMPLETED_TASK_1: Task = {
   person: null,
   from: null,
   completed: true,
+  completedAt: '2026-04-02',
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
@@ -268,6 +277,7 @@ const COMPLETED_TASK_2: Task = {
   person: null,
   from: null,
   completed: true,
+  completedAt: '2026-04-02',
   source: { file: 'now/tasks.md', section: 'Tasks' },
 };
 
