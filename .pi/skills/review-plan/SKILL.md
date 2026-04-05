@@ -291,6 +291,18 @@ Choose the appropriate verdict based on findings and plan complexity.
 
 If a Large plan has no pre-mortem, the verdict MUST be "Approve pending pre-mortem" or "Revise", never "Approve".
 
+### Recommended Execution Track
+
+Include a `recommended_track` in the review output, based on complexity tier:
+
+| Complexity | Steps | Files | `recommended_track` |
+|------------|-------|-------|---------------------|
+| Tiny/Small | 1-3 | ≤2 | `express` — developer + reviewer only, no artifacts, no worktree |
+| Medium | 4-6 | 3+ | `standard` — full /ship flow |
+| Large | 7+ | any | `full` — /ship + project orchestration for multi-phase |
+
+**Override**: Builder can always request `--track standard` to force the full flow.
+
 ---
 
 ## Step 9: Output the Review
@@ -333,6 +345,7 @@ Provide concrete, actionable feedback the orchestrator can apply:
 **Audience**: Builder / User / Unclear
 **Review Path**: Quick / Full
 **Complexity**: Tiny / Small / Medium / Large
+**Recommended Track**: express / standard / full
 
 ### Concerns
 

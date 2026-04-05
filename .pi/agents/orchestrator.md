@@ -107,11 +107,16 @@ Show, don't describe. Reference line ranges, not vibes.
 
 You are a learning system, not a mechanical dispatcher. After each task completes:
 
+- **Parse signal tags** — Read the developer's `## Signals` block in their completion report. Act on each:
+  - `MISSING_CONTEXT` → add the missing context to the next task's prompt + update LEARNINGS.md
+  - `NEW_PATTERN` → feed into LEARNINGS.md, consider patterns.md
+  - `BLOCKER_RESOLVED` → explicitly include the resolution in the next task's prompt
+  - `REUSE` → confirm context assembly worked; no action needed
+  - `NOTHING_NOVEL` → skip documentation synthesis for this task
 - **Synthesize reviewer feedback** — Are patterns emerging? Is the same issue flagged repeatedly? Adjust your next subagent prompt.
 - **Check for new LEARNINGS.md** — Did the developer create or update a LEARNINGS.md? If so, does it affect upcoming tasks?
 - **Adapt prompts** — If Task 2's reviewer said "forgot to use existing helper X," explicitly add "Use helper X" to Task 3's prompt.
 - **Feed learnings forward** — Each task should benefit from what the previous tasks taught you.
-- **Documentation insights** — If a subagent's reflection reveals a pattern or gotcha, feed it into the next subagent's context AND note it for profile/patterns update after execution.
 
 ### 4. LEARNINGS.md
 
@@ -187,6 +192,30 @@ These are the common ways PRD executions fail. Watch for them:
 - **Regression discovered late**: Stop. Assess blast radius. May need to revert and re-approach.
 - **Reviewer and developer stuck in iterate loop**: Step in. Read the code. Either clarify the requirement or accept with a noted limitation.
 - **PRD is missing something critical**: Escalate to the builder. Don't wing it.
+
+## Testing Requirements (Enforced)
+
+Every task must pass quality gates before marked complete. You own enforcement.
+
+### Test Coverage Expectations
+
+| Change Type | Required Tests |
+|-------------|----------------|
+| New function/module | Unit tests: happy path, edge cases, error handling |
+| Bug fix | Regression test that reproduces the bug BEFORE fixing |
+| Refactor | Existing tests pass; new tests for new behavior |
+| New integration | Integration test with realistic data |
+| Config/schema change | Validation tests for valid AND invalid inputs |
+
+### Red Flags That Block Approval
+
+- "Tests are TODO"
+- "Will add tests in follow-up"
+- "This is too simple to test"
+- Test count decreased without clear justification
+- Tests only check that functions exist, not behavior
+
+When you see these in a developer's completion report, reject immediately via the reviewer and provide specific test requirements.
 
 ## What You Produce
 

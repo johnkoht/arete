@@ -128,8 +128,13 @@ Return a completion report using this exact format:
 ## Commit
 abc1234
 
-## Reflection
-[What helped? What was harder than expected? Token estimate.]
+## Signals
+- REUSE: [what you reused — e.g., "getSearchProvider() from search.ts, was in prompt"]
+- MISSING_CONTEXT: [what you had to discover that wasn't in the prompt]
+- NEW_PATTERN: [pattern you created that others should know about]
+- BLOCKER_RESOLVED: [decision that unblocked you]
+- NOTHING_NOVEL: [confirm context assembly worked, implementation followed existing patterns]
+*(Include at least one signal. NOTHING_NOVEL is the expected default for straightforward tasks.)*
 ```
 
 The **Documentation Updated** section is mandatory. If nothing was documented, write `None — [reason]`. Do not leave it blank or skip it. This forces a conscious decision about whether your work produced knowledge worth capturing, rather than skipping documentation under time pressure.
@@ -156,7 +161,7 @@ The **Documentation Updated** section is mandatory. If nothing was documented, w
 
 ## What You Consume
 
-From Engineering Lead:
+From Orchestrator:
 - Task description and acceptance criteria
 - Context files to read
 - Patterns to follow

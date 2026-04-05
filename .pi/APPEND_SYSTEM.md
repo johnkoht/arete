@@ -53,12 +53,18 @@ User reports a bug
  └─ Load hotfix skill → Diagnose → Present game plan
     └─ User approves → Implement → Review (spawn or self) → Close with LEARNINGS.md
 
-User approves plan
- ├─ Tiny (1-2 steps) → Direct execution → quality gates
- ├─ Small (2-3 steps) → Offer pre-mortem → quality gates → offer memory capture
- ├─ Medium (3-5 steps) → /ship (full workflow) OR /build (just execute-prd, worktree already set up)
- └─ Large (6+ steps) → /ship mandatory (pre-mortem + review + PRD + worktree + build + wrap)
+User approves plan → review-plan outputs `recommended_track`
+ ├─ **Express** (Tiny/Small: 1-3 steps, ≤2 files, no arch decisions)
+ │    → Phantom check → Developer dispatch → Reviewer post-work code review → Commit → 1-line memory note
+ │    → No worktree, no PRD artifacts, no pre-mortem
+ │    → Reviewer can escalate to Standard if post-work review finds concerns
+ ├─ **Standard** (Medium: 4-6 steps, 3+ files)
+ │    → /ship full workflow (pre-mortem + review + PRD + worktree + build + wrap)
+ └─ **Full** (Large: 7+ steps, architectural, multi-phase)
+      → /ship + project-level orchestration for multi-phase builds
 ```
+
+**Track override**: Builder can request `--track standard` to force full workflow for any plan size.
 
 **Bug fixes require structure.** Do not make ad-hoc code changes. Load the hotfix skill and follow its process.
 
@@ -70,7 +76,7 @@ User approves plan
 
 ## Direct Execution Protocol (non-PRD)
 
-1. Implement → 2. Test → 3. Verify (`npm run typecheck && npm test`) → 4. Review (spawn engineering-lead) → 5. Fix feedback → 6. Commit → 7. Report → 8. Maintenance
+1. Implement → 2. Test → 3. Verify (`npm run typecheck && npm test`) → 4. Review (spawn orchestrator for code review) → 5. Fix feedback → 6. Commit → 7. Report → 8. Maintenance
 
 **Step 8 — Maintenance** (light mode applies for direct execution): Update nearest LEARNINGS.md if you found a gotcha. Flag profile inaccuracies if noticed. See `.pi/standards/maintenance.md` § Light Mode.
 

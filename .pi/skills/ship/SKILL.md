@@ -177,11 +177,11 @@ Load `.pi/skills/execute-prd/SKILL.md`. Pass PRD at `dev/work/plans/{slug}/prd.m
 **Build log**: Outcome "Executed {N}/{N} tasks, {N} iterations".
 
 ### 4.2 Final Review
-Dispatch engineering-lead subagent for holistic review:
+Dispatch orchestrator subagent for holistic review:
 
 ```typescript
 subagent({
-  agent: "engineering-lead",
+  agent: "orchestrator",
   agentScope: "project",
   task: `Final review for ${slug}.
 
