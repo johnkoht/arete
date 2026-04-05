@@ -26,24 +26,11 @@ Run a structured pre-mortem risk analysis before starting multi-step development
 
 ## Workflow
 
-### 1. Load the Template
+### 1. Load Risk Categories
 
-Read `dev/autonomous/templates/PRE-MORTEM-TEMPLATE.md` — this is the source of truth for risk categories and format.
+Read `.pi/standards/pre-mortem-categories.md` — the canonical list of 11 risk categories with examples and proven mitigation patterns.
 
-### 2. Review the 8 Risk Categories
-
-Work through each category from the template:
-
-| Category | Key Question |
-|----------|-------------|
-| **Context Gaps** | Will future you/subagents have enough context? |
-| **Test Patterns** | Do we have test patterns to follow? |
-| **Integration** | How will pieces fit together? |
-| **Scope Creep** | How to prevent over-implementation? |
-| **Code Quality** | What patterns must be followed? |
-| **Dependencies** | Are task dependencies clear? Check `dev/catalog/capabilities.json` for affected capabilities — verify `readBeforeChange` paths and provenance (`built`/`customized`/`external`) before assessing risk. |
-| **Platform Issues** | Any platform-specific risks? |
-| **State Tracking** | How to track progress across sessions? |
+### 2. Work Through Each Category
 
 ### 3. Identify Risks
 

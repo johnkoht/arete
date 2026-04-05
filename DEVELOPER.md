@@ -77,7 +77,6 @@ The `.pi/` directory at the repo root configures pi for this project:
 │   ├── reviewer.md     # Sr. Engineer — code review + AC verification
 │   ├── developer.md    # Task execution agent
 │   ├── product-manager.md
-│   ├── engineering-lead.md
 │   └── gitboss.md      # Git gatekeeper agent
 ├── expertise/          # Domain profiles (core/, cli/, web/, backend/)
 ├── standards/          # Build standards (build-standards.md, patterns.md, maintenance.md)
@@ -110,7 +109,7 @@ These skills in `.pi/skills/` are used during development, not shipped to users:
 | `prd-to-json` | Convert markdown PRD → JSON task list |
 | `prd-post-mortem` | Post-mortem analysis after PRD execution |
 | `review-plan` | Cross-model second-opinion review |
-| `run-pre-mortem` | Pre-mortem risk analysis (8 categories) |
+| `run-pre-mortem` | Pre-mortem risk analysis (11 categories) |
 | `hotfix` | Structured bug fix process with diagnosis and review |
 | `ship` | Mega-build: plan-to-merge workflow automation |
 | `synthesize-collaboration-profile` | Update builder collaboration profile from entries |
@@ -625,7 +624,7 @@ Date: YYYY-MM-DD
 For complex features, use the PRD execution system:
 
 1. **Write PRD**: `dev/work/plans/{feature}/prd.md`
-2. **Convert to tasks**: Run `prd-to-json` skill
+2. **Convert to tasks**: Run `plan-to-prd` skill (emits prd.md + prd.json in one pass)
 3. **Review plan**: Run `review-plan` skill
 4. **Execute**: Run `execute-prd` skill
 5. **Review commits**: Check each task's commit

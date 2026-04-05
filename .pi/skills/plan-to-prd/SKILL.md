@@ -1,99 +1,124 @@
 ---
 name: plan-to-prd
-description: Convert an approved plan into a PRD, prd.json, and handoff prompt for autonomous execution via execute-prd.
+description: Convert an approved plan into both prd.md and prd.json simultaneously, plus an optional EXECUTE.md handoff. Outputs all execution artifacts in one pass.
 category: build
 work_type: development
 ---
 
 # Plan to PRD Skill
 
-Convert an approved plan (from Plan Mode or a multi-step markdown plan) into a proper PRD, generate prd.json for the autonomous agent loop, and create a handoff prompt for a new agent to execute via execute-prd.
+Convert an approved plan into a PRD (`prd.md`), structured task list (`prd.json`), and optional handoff prompt (`EXECUTE.md`) — all in one pass.
 
 ⚠️ **INTERNAL TOOLING** — For developing Areté itself, not for end users.
 
 ## When to Use
 
 - User chose "Convert to PRD" when offered the PRD path in Plan Mode
-- After the plan-pre-mortem rule offers the choice and user selects the PRD path
+- Ship Phase 2.2: converting plan artifacts to execution-ready PRD
 
 ## Prerequisites
 
-- An approved plan is in context (the markdown plan with steps)
+- An approved plan is in context or at `dev/work/plans/{slug}/plan.md`
 - You are in BUILDER mode (Areté development repo)
 
 ## Workflow
 
 ### 1. Derive Feature Name
 
-From the plan title or first step, derive a kebab-case feature name (e.g. `slack-integration`, `search-provider-upgrade`).
+From the plan title, derive a kebab-case slug (e.g. `slack-integration`, `search-provider-upgrade`). Use this as the directory name under `dev/work/plans/`.
 
-### 2. Create PRD File
+### 2. Create prd.md
 
-Create `dev/work/plans/{feature-name}/prd.md` with this structure:
+Create `dev/work/plans/{slug}/prd.md`:
 
-- **Goal** — One or two sentences summarizing what this work achieves (from the plan)
-- **User Stories / Tasks** — One per plan step (or group related steps)
-- **Acceptance Criteria** — For each task: explicit criteria. If inferred from the plan, add a note: `<!-- inferred from plan -->`
+- **Goal** — One or two sentences summarizing what this work achieves
+- **Tasks** — One per plan step (group sub-steps where they naturally belong together)
+- **Acceptance Criteria** — Explicit, testable criteria per task. If inferred from plan, flag: `<!-- inferred from plan -->`
 
-Reference `dev/work/archive/intelligence-and-calendar/prd.md` for format. Ensure each task has:
-- Clear title
-- Description
-- At least one acceptance criterion
+Each task must have: clear title, description, at least one acceptance criterion.
 
-### 3. Run prd-to-json
+**Reference format**: `dev/work/archive/2026-04/meeting-extraction-improvements/prd.md` (or any recent PRD in that directory)
 
-Load `.pi/skills/prd-to-json/SKILL.md` and follow its workflow to convert the PRD to `dev/work/plans/{feature-name}/prd.json`. Use the PRD you just created at `dev/work/plans/{feature-name}/prd.md`.
+**Parsing tips**:
+- One plan step → one task (or group small sub-steps into one task with multiple ACs)
+- Look for "should", "must", "will" in step text for acceptance criteria
+- If none: derive from step description and flag with `<!-- inferred -->`
 
-### 4. Create Handoff File (Optional)
+### 3. Generate prd.json
 
-> **Note**: When using Pi with plan mode, you can use `/build` to start execution directly. The handoff file is optional — useful for manual execution or Cursor-based workflows.
+**Immediately after creating prd.md**, generate `dev/work/plans/{slug}/prd.json` from the same internal representation — do NOT re-parse the markdown. The structured data (tasks, ACs, dependencies) is already in context.
 
-Create `dev/work/plans/{feature-name}/EXECUTE.md` with this content (replace `{feature-name}`):
+Use this schema:
+
+```json
+{
+  "name": "{slug}",
+  "branchName": "feature/{slug}",
+  "goal": "High-level goal from PRD",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Task title",
+      "description": "Detailed description",
+      "acceptanceCriteria": ["Criterion 1", "Criterion 2"],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "{ISO timestamp}",
+    "totalTasks": N,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
+```
+
+**Validation before writing**:
+- [ ] All tasks have unique IDs (kebab-case: `task-1`, `add-utility-function`, etc.)
+- [ ] All tasks have at least one acceptance criterion
+- [ ] All tasks have `status: "pending"`, `attemptCount: 0`
+- [ ] `metadata.totalTasks` matches array length
+- [ ] `branchName` follows `feature/{slug}` convention
+
+> **Note**: `progress.md` is created by execute-prd at execution time. Do not create it here.
+
+### 4. Create EXECUTE.md (Optional)
+
+> Skip if using `/ship` — it handles execution via `/build` directly.
+
+Create `dev/work/plans/{slug}/EXECUTE.md`:
 
 ```markdown
-# Execute {feature-name} PRD
+# Execute {slug} PRD
 
 ## Pi (preferred)
 
-Open the plan in plan mode and use `/build`:
-
-```
-/plan open {feature-name}
+/plan open {slug}
 /build
-```
 
 ## Manual (fallback)
 
-Execute the {feature-name} PRD. Load the execute-prd skill from `.pi/skills/execute-prd/SKILL.md`. The PRD is at `dev/work/plans/{feature-name}/prd.md` and the task list is at `dev/work/plans/{feature-name}/prd.json`. Run the full workflow: pre-mortem → task execution loop → holistic review.
+Load `.pi/skills/execute-prd/SKILL.md`. PRD at `dev/work/plans/{slug}/prd.md`, tasks at `dev/work/plans/{slug}/prd.json`.
 ```
 
-### 5. Present Summary to User
-
-Output:
+### 5. Present Summary
 
 ```
-✅ PRD and execution artifacts created
+✅ PRD artifacts created
 
-**Feature**: {feature-name}
-**PRD**: dev/work/plans/{feature-name}/prd.md
-**Task list**: dev/work/plans/{feature-name}/prd.json
-**Handoff prompt**: dev/work/plans/{feature-name}/EXECUTE.md (optional)
+Feature: {slug}
+PRD:      dev/work/plans/{slug}/prd.md
+Tasks:    dev/work/plans/{slug}/prd.json ({N} tasks)
+Handoff:  dev/work/plans/{slug}/EXECUTE.md (optional)
 
-**Next step**: Use `/plan open {feature-name}` then `/build`, or start a new Pi session and invoke execute-prd manually.
+Next step: /plan open {slug} then /build, or /ship for full automation.
 ```
-
-## Parsing Tips
-
-When converting plan steps to PRD tasks:
-
-- **One step → one task**: If the plan has discrete steps, map each to a task
-- **Group related steps**: Small sub-steps can be combined (e.g. "Add tests" + "Run typecheck" → one task with both as acceptance criteria)
-- **Acceptance criteria**: Look for "should", "must", "will" in step text. If missing, derive from the step description and flag with `<!-- inferred -->`
-- **Dependencies**: If steps clearly depend on each other, note in task descriptions; prd-to-json will create ordered tasks
 
 ## References
 
-- **PRD example**: `dev/work/archive/intelligence-and-calendar/prd.md`
-- **prd-to-json skill**: `.pi/skills/prd-to-json/SKILL.md`
-- **execute-prd skill**: `.pi/skills/execute-prd/SKILL.md`
-- **Schema**: `dev/autonomous/schema.ts` (may move in Phase 2)
+- **PRD example**: `dev/work/archive/2026-04/meeting-extraction-improvements/prd.md`
+- **Schema**: `dev/autonomous/schema.ts`
+- **Standalone JSON-only conversion**: `.pi/skills/prd-to-json/SKILL.md`
+- **execute-prd**: `.pi/skills/execute-prd/SKILL.md`

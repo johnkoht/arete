@@ -223,46 +223,7 @@ Use the appropriate checklist based on review type. **For Plans and PRDs, also a
 
 ## AC Validation Rubric
 
-**Apply this rubric to every acceptance criterion in Plans and PRDs.**
-
-### The Rubric (Mechanical Checklist)
-
-For each AC, verify:
-
-- [ ] **Independently verifiable**: Can this criterion be checked without checking other criteria?
-- [ ] **Specific**: Does it state exactly what must be true, not a vague direction?
-- [ ] **Testable**: Could you write a test or verification step for this?
-- [ ] **Single concern**: Does it test one thing, not multiple things combined?
-- [ ] **No vague language**: Free of anti-pattern phrases (see below)?
-
-### Anti-Pattern Phrases to Flag
-
-| Phrase | Problem | Better Alternative |
-|--------|---------|-------------------|
-| "should work" | Untestable | "returns success response with status 200" |
-| "properly handles" | Vague | "returns error message when input is null" |
-| "as expected" | Undefined expectation | "matches the format defined in schema.ts" |
-| "is correct" | No verification criteria | "equals the value from config.yaml" |
-| "appropriately" | Subjective | "within 100ms" or "following pattern from X" |
-| "etc." | Incomplete | List all cases explicitly |
-| "and/or" | Ambiguous scope | Split into separate criteria |
-
-### Good vs Bad Examples
-
-| ❌ Bad AC | Why It's Bad | ✅ Good AC |
-|----------|--------------|-----------|
-| "Authentication works properly" | Vague, untestable | "User with valid token receives 200; invalid token receives 401" |
-| "Handles edge cases" | No specific cases | "Returns empty array when no results; returns error when query is malformed" |
-| "Performance is acceptable" | Subjective | "Response time < 200ms for 95th percentile" |
-| "Form validates input correctly" | Multiple concerns | "Email field rejects invalid format"; "Required fields show error when empty" |
-| "Data is saved as expected" | Undefined expectation | "Record appears in database with all fields matching input" |
-| "Error handling is implemented" | No specifics | "Network errors display user-friendly message and log to console" |
-
-### Documentation-Only Exception
-
-For tasks that only modify documentation (markdown, comments, README):
-- Test coverage is NOT required
-- AC should focus on content accuracy, completeness, and correct file locations
+**Read `.pi/standards/ac-rubric.md` for the full rubric** — mechanical checklist, anti-pattern phrases, good/bad examples, and documentation-only exceptions. Apply it to every acceptance criterion in Plans and PRDs.
 
 ---
 
@@ -330,6 +291,18 @@ Choose the appropriate verdict based on findings and plan complexity.
 
 If a Large plan has no pre-mortem, the verdict MUST be "Approve pending pre-mortem" or "Revise", never "Approve".
 
+### Recommended Execution Track
+
+Include a `recommended_track` in the review output, based on complexity tier:
+
+| Complexity | Steps | Files | `recommended_track` |
+|------------|-------|-------|---------------------|
+| Tiny/Small | 1-3 | ≤2 | `express` — developer + reviewer only, no artifacts, no worktree |
+| Medium | 4-6 | 3+ | `standard` — full /ship flow |
+| Large | 7+ | any | `full` — /ship + project orchestration for multi-phase |
+
+**Override**: Builder can always request `--track standard` to force the full flow.
+
 ---
 
 ## Step 9: Output the Review
@@ -372,6 +345,7 @@ Provide concrete, actionable feedback the orchestrator can apply:
 **Audience**: Builder / User / Unclear
 **Review Path**: Quick / Full
 **Complexity**: Tiny / Small / Medium / Large
+**Recommended Track**: express / standard / full
 
 ### Concerns
 

@@ -36,7 +36,7 @@ You are one layer in a 4-layer context stack:
 ### 1. Understand the Task
 Before writing code:
 - Read the task description and acceptance criteria carefully
-- Read the context files the Engineering Lead provided
+- Read the context files the Orchestrator provided
 - Look at the patterns they pointed to
 - Understand the pre-mortem mitigations relevant to your task
 - **Check for LEARNINGS.md** in the working directory and parent directories — read it before making changes. It contains component-specific gotchas, invariants, and pre-edit checklists from past incidents.
@@ -128,8 +128,14 @@ Return a completion report using this exact format:
 ## Commit
 abc1234
 
-## Reflection
-[What helped? What was harder than expected? Token estimate.]
+## Signals
+- REUSE: [what you reused — e.g., "getSearchProvider() from search.ts, was in prompt"]
+- MISSING_CONTEXT: [what you had to discover that wasn't in the prompt]
+- NEW_PATTERN: [pattern you created that others should know about]
+- BLOCKER_RESOLVED: [decision that unblocked you]
+- NOTHING_NOVEL: [confirm context assembly worked, implementation followed existing patterns]
+- OTHER: [anything that doesn't fit the above tags]
+*(Include at least one signal. NOTHING_NOVEL is the expected default for straightforward tasks.)*
 ```
 
 The **Documentation Updated** section is mandatory. If nothing was documented, write `None — [reason]`. Do not leave it blank or skip it. This forces a conscious decision about whether your work produced knowledge worth capturing, rather than skipping documentation under time pressure.
@@ -141,7 +147,7 @@ The **Documentation Updated** section is mandatory. If nothing was documented, w
 - **When tests are hard to write**: That usually means the code needs refactoring. Consider extracting pure functions that are easier to test.
 - **When existing tests break**: Fix them. Don't delete or skip them. If they're genuinely obsolete, explain why in your report.
 - **When you're stuck**: Report the blocker. Don't spin.
-- **When you discover the task is bigger than expected**: Report it. The Engineering Lead may need to split it.
+- **When you discover the task is bigger than expected**: Report it. The Orchestrator may need to split it.
 
 ## What You Produce
 
@@ -156,7 +162,7 @@ The **Documentation Updated** section is mandatory. If nothing was documented, w
 
 ## What You Consume
 
-From Engineering Lead:
+From Orchestrator:
 - Task description and acceptance criteria
 - Context files to read
 - Patterns to follow

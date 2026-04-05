@@ -29,10 +29,9 @@
 |when:attached to subagent context as Layer 4 when task touches that domain (see APPEND_SYSTEM.md § Composition)
 
 [Roles]|behavioral definitions for subagent personas — `.pi/agents/{role}.md`
-|orchestrator:Sr. Eng Manager — owns PRD execution, task breakdown, context assembly
+|orchestrator:Sr. Eng Manager — owns PRD execution, task breakdown, context assembly, holistic review
 |reviewer:Sr. Engineer — code review, AC verification, quality gates
 |developer:Task executor — implements one task from PRD
-|engineering-lead:Technical lead — architecture review, direct execution review
 |product-manager:PM — cross-model review, product decisions
 |gitboss:Git gatekeeper — pre-merge verification, diff review, versioning decisions
 

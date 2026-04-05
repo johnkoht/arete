@@ -22,6 +22,10 @@
 - Before spawning subagents: if builder asks about constraints (e.g. install-count filtering) or access (e.g. "do subagents have Task tool?"), add those to the plan/prompts and confirm before proceeding; "no Task tool visible" should trigger tool introspection.
 - Prefers fast/cheaper models for subagents when the task is structured and doesn't require heavy reasoning.
 - **CLI: established patterns over bare minimum** (2026-02-11): When updating or adding CLI features, use **established design patterns and experience** (e.g. setup, seed) rather than the bare minimum or whatever the agent wants. Check how similar flows work first; match their UX (checkbox, copy, pageSize). Don't invent a lesser experience. After meaningful fixes—especially when the user had to report a gap—add a dated entry and a Learnings section.
+- **Explicit file reading lists in subagent prompts** (2026-03-xx, 90%+ evidence): The single highest-impact practice for subagent success. Every developer prompt must list exact files to read before starting. "Read these files first: [path1], [path2]" in the prompt prevents context gaps. This appeared in >90% of "what worked" sections across 51 PRDs.
+- **Pre-mortem mitigations embedded in task prompts** (2026-03-xx, 15+ PRDs): When mitigations live only in pre-mortem.md (not in each task prompt), they don't get applied. When mitigations are embedded directly in the developer's task prompt, 0 risks materialized across 15+ PRDs. Always copy relevant mitigations into the developer prompt.
+- **Phantom task detection saves 80% of planned work** (2026-03-07, reimagine-v2): Before implementing ANY task, verify the proposed output doesn't already exist (ls the output files, grep for proposed function/class names). In reimagine-v2, this saved ~80% of the planned work. Now a mandatory pre-execution check.
+- **Sequential subagent execution, never parallel** (2026-03-05 reimagine-v1, 2026-03-25 workspace-areas): Running subagents in parallel on the same codebase causes lock contention and failures. Always dispatch subagents sequentially. This is a hard constraint, not a preference.
 
 ---
 
@@ -62,7 +66,7 @@
 
 - Values conciseness: one comprehensive report organized by theme (e.g. Metrics → Pre-mortem → Learnings → Recommendations → Next Steps), not separate sections that duplicate content. Long, repetitive reports reduce signal.
 - Prefers actionable recommendations over abstract learnings; wants self-learning mechanisms (reflection, skills, rules) that improve the system over time, not one-off reports.
-- For PRD/orchestration: scale reflection requests by task complexity — small tasks 1-2 sentences (what helped, token estimate); large tasks 3-5 sentences (memory impact, rule effectiveness, suggestions).
+- For PRD/orchestration: use structured signal tags instead of freeform reflections — REUSE/MISSING_CONTEXT/NEW_PATTERN/BLOCKER_RESOLVED/NOTHING_NOVEL/OTHER. Token estimates are noise and have never been meaningfully used; signals are immediately actionable (updated 2026-04-04).
 - For large architectural changes, update AGENTS.md mid-execution (after core architecture phase) rather than deferring to post-execution.
 
 ---
@@ -93,6 +97,6 @@ Things the builder has corrected — important context for avoiding repeat mista
 
 ## Last Synthesized
 
-2026-02-10 — Added: Writing & Communication (conciseness, one report by theme, reflection scaling, doc timing); Working Patterns (confirms quickly, subagent constraints/access, fast model for subagents); Process (build-only rules in repo, pre-mortem+doc+file-deletion mitigations); Corrections (report format, reflection scaling, documentation timing). Sources: multi-ide-support-learnings, doc-completeness-and-file-deletion-safety, auto-capture-corrections, memory-boundaries-and-path-cleanup, skills-evaluation-learnings, skills-sh-evaluation-synthesis.
+2026-04-04 — Added: Working Patterns (explicit file reading lists, pre-mortem mitigations in prompts, phantom task detection, sequential subagent constraint); Writing & Communication (signal tags replace token estimates/freeform reflections). Sources: build-skills-tighten plan analysis of 51 PRD entries (2026-02-10 through 2026-04-03). Corrections 9-12 from 2026-03-25 were already added manually. Full entry-by-entry synthesis pending — see `memory/entries/` for individual learnings.
 
 ---

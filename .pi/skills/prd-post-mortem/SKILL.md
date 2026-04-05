@@ -81,59 +81,53 @@ Identify:
 Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 
 ```markdown
-# {Feature Name} - PRD Execution Learnings
+# {Feature Name} — PRD Execution Learnings
 **Date**: YYYY-MM-DD
 **PRD**: dev/work/plans/{feature-name}/prd.md
 **Branch**: {branch-name}
 **Status**: Complete
 
 ## Metrics
-- Tasks: X/Y (Z% success rate)
-- Iterations: N required
-- Tests: +X tests (total: Y/Y passing)
-- Pre-mortem: A/B risks materialized
-- Commits: N commits
-- Token usage: ~XK tokens
+| Metric | Value |
+|--------|-------|
+| Tasks | X/Y (Z% first-attempt success) |
+| Iterations | N |
+| Tests Added | +X |
+| Pre-mortem | A/B risks materialized |
+| Commits | N |
+
+## Signal Patterns
+Aggregated from developer signals in `dev/executions/{slug}/progress.md`:
+| Signal | Count | Notable Examples |
+|--------|-------|-----------------|
+| MISSING_CONTEXT | N | [what was missing] |
+| NEW_PATTERN | N | [patterns created] |
+| REUSE | N | [what was reused] |
+| OTHER | N | [summary of miscellaneous signals] |
+*(Omit rows with count=0. NOTHING_NOVEL/BLOCKER_RESOLVED don't need examples.)*
 
 ## Pre-Mortem Effectiveness
-| Risk | Materialized? | Mitigation Effective? | Evidence |
-|------|--------------|----------------------|----------|
-| ... | ... | ... | ... |
+| Risk | Materialized? | Mitigation Applied? | Effective? |
+|------|--------------|---------------------|-----------|
+| ... | Yes/No | Yes/No | Yes/Partial/No |
 
-## What Worked Well
-1. [Specific pattern] - [Evidence/outcome]
-2. ...
-
-## What Didn't Work
-1. [Issue] - [Impact]
-2. ...
-
-## Subagent Insights
-- Memory: X% found progress.md valuable; Y% referenced MEMORY.md
-- Rules: Most helpful = {rule names}; confusion = {issues if any}
-- Common suggestions: [list]
-- Token patterns: Tiny=XK, Small=YK, Medium=ZK, Large=AK
-
-## Collaboration Patterns
-- Builder interactions: [observations]
-- Preferences: [what builder valued]
+## What Worked / What Didn't
++ [Pattern that worked — be specific]
++ [Another win]
+- [Issue that caused friction]
+- [Approach that needed iteration]
+*(Surprises belong here too — just prefix with ⭐ if unexpected)*
 
 ## Recommendations
-### Immediate
-1. [Update] - [Why] - [Where]
+**Continue**: [patterns to repeat]
+**Stop**: [patterns to avoid]
+**Start**: [new practices to adopt]
 
-### For Next PRD
-1. [Improvement] - [Rationale]
-
-## Refactor Backlog
-- [Item 1] - Priority: Low/Medium/High
-- [Item 2] - ...
-
-## Catalog Updates Needed
-Did this PRD add, change, or remove any capabilities tracked in `dev/catalog/capabilities.json`? If yes, list what needs updating.
-
-## Learnings
-[Key insights for collaboration.md or future reference]
+## Follow-ups
+- [ ] Refactor: [item] — `dev/work/plans/refactor-{name}/plan.md`
+- [ ] Doc gap: [file that needs update] — [what to add]
+- [ ] Catalog: [capability added/changed/removed in `dev/catalog/capabilities.json`]
+*(Delete rows that don't apply)*
 ```
 
 ### 8. Update Build Memory Index
@@ -145,7 +139,7 @@ Add line to `memory/MEMORY.md`:
 
 ### 9. Update Collaboration Profile
 
-Run the **synthesize-collaboration-profile** skill (`.pi/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry (and any other recent entries) into `memory/collaboration.md`. If the builder prefers to defer, end with: "Consider running **synthesize-collaboration-profile** when convenient to update the profile from entry learnings."
+Run the **synthesize-collaboration-profile** skill (`.pi/skills/synthesize-collaboration-profile/SKILL.md`) to push learnings from the new entry into `memory/collaboration.md`. This is automatic — do not make it optional or suggest it. The collaboration profile must be current after every post-mortem.
 
 ## Output Format
 
@@ -158,7 +152,7 @@ Show progress briefly (don't repeat entire workflow).
 
 **Memory entry created**: memory/entries/{date}_{name}-learnings.md
 **MEMORY.md updated**: Added entry line
-**Collaboration**: [Ran synthesize-collaboration-profile — profile updated | Consider running synthesize-collaboration-profile to update profile from entry learnings]
+**Collaboration**: Ran synthesize-collaboration-profile — profile updated
 
 ## Quick Summary
 - {X}/{Y} tasks successful ({Z}% first-attempt)
@@ -171,7 +165,7 @@ See the memory entry for full analysis.
 
 ## Success Criteria
 
-- ✅ Memory entry created with all 9 sections
+- ✅ Memory entry created with 5 sections
 - ✅ MEMORY.md updated with entry line
-- ✅ Learnings extracted and actionable
-- ✅ Recommendations specific and prioritized
+- ✅ synthesize-collaboration-profile run (not optional)
+- ✅ Recommendations specific and actionable
