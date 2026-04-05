@@ -698,6 +698,8 @@ Meeting content.
       async delete(): Promise<void> {},
       async mkdir(): Promise<void> {},
       async copy(): Promise<void> {},
+      async listSubdirectories(): Promise<string[]> { return []; },
+      async getModified(): Promise<Date | null> { return null; },
     };
   }
 
@@ -984,6 +986,8 @@ Meeting content.
       async delete(): Promise<void> {},
       async mkdir(): Promise<void> {},
       async copy(): Promise<void> {},
+      async listSubdirectories(): Promise<string[]> { return []; },
+      async getModified(): Promise<Date | null> { return null; },
     };
   }
 
@@ -1271,11 +1275,11 @@ describe('buildMeetingContext area context', () => {
       recurring_meetings: [
         { title: 'Customer Sync', frequency: 'weekly' },
       ],
-    }, `## Current State
+    }, `## Focus
 
 We are focused on customer retention.
 
-## Key Decisions
+## Goal
 
 - Decision 1: Focus on enterprise customers
 `);
@@ -1295,8 +1299,8 @@ We are focused on customer retention.
     assert.equal(bundle.areaContext!.slug, 'customer-success');
     assert.equal(bundle.areaContext!.name, 'Customer Success');
     assert.equal(bundle.areaContext!.status, 'active');
-    assert.ok(bundle.areaContext!.sections.currentState?.includes('customer retention'));
-    assert.ok(bundle.areaContext!.sections.keyDecisions?.includes('enterprise customers'));
+    assert.ok(bundle.areaContext!.sections.focus?.includes('customer retention'));
+    assert.ok(bundle.areaContext!.sections.goal?.includes('enterprise customers'));
 
     // Verify no area-related warnings
     const areaWarnings = bundle.warnings.filter((w) =>
@@ -1313,7 +1317,7 @@ We are focused on customer retention.
       recurring_meetings: [
         { title: 'Engineering Standup', frequency: 'daily' },
       ],
-    }, '## Current State\n\nEngineering notes.');
+    }, '## Focus\n\nEngineering notes.');
 
     // Create meeting with title that doesn't match any area
     writeMeetingFile(tmpDir, '2026-03-19-random-meeting.md', {
@@ -1349,7 +1353,7 @@ We are focused on customer retention.
         // Simulate file not found (returns null)
         return null;
       },
-    } as AreaParserService;
+    } as unknown as AreaParserService;
 
     // Create deps with mock areaParser
     const depsWithMock: MeetingContextDeps = {
@@ -1389,7 +1393,7 @@ We are focused on customer retention.
       async getAreaContext(_slug: string) {
         throw new Error('Simulated read error');
       },
-    } as AreaParserService;
+    } as unknown as AreaParserService;
 
     // Create deps with mock areaParser
     const depsWithMock: MeetingContextDeps = {
@@ -1441,7 +1445,7 @@ We are focused on customer retention.
       recurring_meetings: [
         { title: 'product', frequency: 'weekly' }, // Lowercase
       ],
-    }, '## Current State\n\nProduct roadmap planning.');
+    }, '## Focus\n\nProduct roadmap planning.');
 
     // Create meeting with title containing the recurring meeting title (case different)
     writeMeetingFile(tmpDir, '2026-03-19-weekly-product-review.md', {
@@ -1487,7 +1491,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       area: 'Customer Success',
       status: 'active',
       recurring_meetings: [], // No recurring meetings
-    }, '## Current State\n\nCustomer retention focus.');
+    }, '## Focus\n\nCustomer retention focus.');
 
     // Create meeting with explicit area in frontmatter (no title match needed)
     writeMeetingFile(tmpDir, '2026-03-20-random-meeting.md', {
@@ -1514,13 +1518,13 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Standup', frequency: 'daily' }, // Would match title
       ],
-    }, '## Current State\n\nEngineering work.');
+    }, '## Focus\n\nEngineering work.');
 
     writeAreaFile(tmpDir, 'product', {
       area: 'Product',
       status: 'active',
       recurring_meetings: [], // No recurring meetings
-    }, '## Current State\n\nProduct planning.');
+    }, '## Focus\n\nProduct planning.');
 
     // Create meeting with title matching engineering but frontmatter pointing to product
     writeMeetingFile(tmpDir, '2026-03-20-standup.md', {
@@ -1547,7 +1551,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Sales Review', frequency: 'weekly' },
       ],
-    }, '## Current State\n\nSales pipeline.');
+    }, '## Focus\n\nSales pipeline.');
 
     // Create meeting without frontmatter area but with matching title
     writeMeetingFile(tmpDir, '2026-03-20-sales-review.md', {
@@ -1573,7 +1577,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Standup', frequency: 'daily' },
       ],
-    }, '## Current State\n\nEngineering work.');
+    }, '## Focus\n\nEngineering work.');
 
     // Create meeting with invalid area slug in frontmatter
     writeMeetingFile(tmpDir, '2026-03-20-standup.md', {
@@ -1605,7 +1609,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Marketing Sync', frequency: 'weekly' },
       ],
-    }, '## Current State\n\nMarketing campaigns.');
+    }, '## Focus\n\nMarketing campaigns.');
 
     // Create meeting with empty area field
     writeMeetingFile(tmpDir, '2026-03-20-marketing-sync.md', {
@@ -1631,7 +1635,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Budget Review', frequency: 'quarterly' },
       ],
-    }, '## Current State\n\nFinance ops.');
+    }, '## Focus\n\nFinance ops.');
 
     // Create meeting with no frontmatter area and non-matching title
     writeMeetingFile(tmpDir, '2026-03-20-random.md', {
@@ -1656,7 +1660,7 @@ describe('buildMeetingContext frontmatter area field', () => {
       recurring_meetings: [
         { title: 'Ops Standup', frequency: 'daily' },
       ],
-    }, '## Current State\n\nOperations management.');
+    }, '## Focus\n\nOperations management.');
 
     // Create legacy meeting without area field (pre-existing format)
     const meetingsDir = join(tmpDir, 'resources', 'meetings');

@@ -224,6 +224,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -252,6 +253,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -313,6 +315,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -344,6 +347,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -374,6 +378,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -434,6 +439,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -491,6 +497,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -531,6 +538,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -794,6 +802,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -842,6 +851,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -878,6 +888,7 @@ describe('WorkspaceService', () => {
           integrations: join(sourceRoot, 'integrations'),
           templates: join(sourceRoot, 'templates'),
           guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
         },
       });
 
@@ -923,12 +934,12 @@ describe('workspace-structure constants', () => {
     it('areas template has required markdown sections', () => {
       const template = DEFAULT_FILES['areas/_template.md'];
       const requiredSections = [
-        '## Active Goals',
-        '## Current State',
-        '## Active Work',
-        '## Key Decisions',
-        '## Open Commitments',
+        '## Goal',
+        '## Focus',
+        '## Horizon',
+        '## Projects',
         '## Backlog',
+        '## Stakeholders',
         '## Notes',
       ];
 
@@ -990,7 +1001,7 @@ describe('WorkspaceService areas integration', () => {
 
       const content = readFileSync(templatePath, 'utf8');
       assert.ok(content.includes('area: {name}'), 'Template should have area placeholder');
-      assert.ok(content.includes('## Key Decisions'), 'Template should have Key Decisions section');
+      assert.ok(content.includes('## Focus'), 'Template should have Focus section');
     });
   });
 

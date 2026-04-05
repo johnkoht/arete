@@ -284,11 +284,11 @@ describe('create area command', () => {
       const content = readFileSync(areaPath, 'utf8');
 
       // Check for all expected sections from the template
-      assert.ok(content.includes('## Active Goals'), 'Should have Active Goals section');
-      assert.ok(content.includes('## Current State'), 'Should have Current State section');
-      assert.ok(content.includes('## Active Work'), 'Should have Active Work section');
-      assert.ok(content.includes('## Key Decisions'), 'Should have Key Decisions section');
-      assert.ok(content.includes('## Open Commitments'), 'Should have Open Commitments section');
+      assert.ok(content.includes('## Goal'), 'Should have Goal section');
+      assert.ok(content.includes('## Focus'), 'Should have Focus section');
+      assert.ok(content.includes('## Horizon'), 'Should have Horizon section');
+      assert.ok(content.includes('## Projects'), 'Should have Projects section');
+      assert.ok(content.includes('## Stakeholders'), 'Should have Stakeholders section');
       assert.ok(content.includes('## Backlog'), 'Should have Backlog section');
       assert.ok(content.includes('## Notes'), 'Should have Notes section');
     });

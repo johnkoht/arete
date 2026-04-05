@@ -908,7 +908,7 @@ describe('parseMeetingExtractionResponse - near-duplicate deduplication', () => 
 
 describe('parseMeetingExtractionResponse - category limits', () => {
   it('enforces action item limit of 7', () => {
-    const items = [];
+    const items: Array<{ owner: string; description: string; direction: string }> = [];
     for (let i = 0; i < 10; i++) {
       items.push({
         owner: `Person ${i}`,
@@ -925,7 +925,7 @@ describe('parseMeetingExtractionResponse - category limits', () => {
   });
 
   it('enforces decision limit of 7', () => {
-    const decisions = [];
+    const decisions: string[] = [];
     for (let i = 0; i < 10; i++) {
       decisions.push(`Unique distinct decision number ${i}`);
     }
@@ -937,7 +937,7 @@ describe('parseMeetingExtractionResponse - category limits', () => {
   });
 
   it('enforces learning limit of 7', () => {
-    const learnings = [];
+    const learnings: string[] = [];
     for (let i = 0; i < 10; i++) {
       learnings.push(`Unique distinct learning number ${i}`);
     }
@@ -949,7 +949,7 @@ describe('parseMeetingExtractionResponse - category limits', () => {
   });
 
   it('keeps first N items in LLM response order', () => {
-    const items = [];
+    const items: Array<{ owner: string; description: string; direction: string }> = [];
     for (let i = 0; i < 10; i++) {
       items.push({
         owner: `Person ${i}`,
@@ -1182,6 +1182,7 @@ describe('formatStagedSections - action item formatting', () => {
         learnings,
       },
       validationWarnings: [],
+      rawItems: [],
     };
   }
 
@@ -1294,6 +1295,7 @@ describe('formatStagedSections - ID zero-padding', () => {
         learnings,
       },
       validationWarnings: [],
+      rawItems: [],
     };
   }
 
@@ -1387,6 +1389,7 @@ describe('formatStagedSections - section inclusion', () => {
         learnings: ['Learning 1'],
       },
       validationWarnings: [],
+      rawItems: [],
     };
 
     const output = formatStagedSections(result);
@@ -1408,6 +1411,7 @@ describe('formatStagedSections - section inclusion', () => {
         learnings: [],
       },
       validationWarnings: [],
+      rawItems: [],
     };
 
     const output = formatStagedSections(result);
@@ -1428,6 +1432,7 @@ describe('formatStagedSections - section inclusion', () => {
         learnings: ['Learning 1'],
       },
       validationWarnings: [],
+      rawItems: [],
     };
 
     const output = formatStagedSections(result);
@@ -1447,6 +1452,7 @@ describe('formatStagedSections - section inclusion', () => {
         learnings: [],
       },
       validationWarnings: [],
+      rawItems: [],
     };
 
     const output = formatStagedSections(result);
@@ -1465,6 +1471,7 @@ describe('formatStagedSections - section inclusion', () => {
         learnings: [],
       },
       validationWarnings: [],
+      rawItems: [],
     };
 
     const output = formatStagedSections(result);
@@ -1959,7 +1966,7 @@ describe('buildMeetingExtractionPrompt - context enhancement', () => {
   });
 
   it('limits goals to first 5', () => {
-    const goals = [];
+    const goals: Array<{ slug: string; title: string; summary: string }> = [];
     for (let i = 1; i <= 8; i++) {
       goals.push({ slug: `goal-${i}`, title: `Goal Number ${i}`, summary: '' });
     }
@@ -2595,12 +2602,12 @@ describe('buildMeetingExtractionPrompt - area context', () => {
     recurringMeetings: Array<{ title: string; attendees: string[]; frequency?: string }>;
     filePath: string;
     sections: {
-      currentState: string | null;
-      keyDecisions: string | null;
+      goal: string | null;
+      focus: string | null;
+      horizon: string | null;
+      projects: string | null;
       backlog: string | null;
-      activeGoals: string | null;
-      activeWork: string | null;
-      openCommitments: string | null;
+      stakeholders: string | null;
       notes: string | null;
     };
   } | undefined): MeetingContextBundle {
@@ -2634,12 +2641,12 @@ describe('buildMeetingExtractionPrompt - area context', () => {
       recurringMeetings: [],
       filePath: '/areas/product-development.md',
       sections: {
-        currentState: 'Working on v2.0 release',
-        keyDecisions: null,
+        goal: null,
+        focus: 'Working on v2.0 release',
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2647,7 +2654,7 @@ describe('buildMeetingExtractionPrompt - area context', () => {
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
     assert.ok(prompt.includes('### Area Context (Product Development)'));
-    assert.ok(prompt.includes('**Current State**: Working on v2.0 release'));
+    assert.ok(prompt.includes('**Focus**: Working on v2.0 release'));
   });
 
   it('omits area context section when areaContext is not present', () => {
@@ -2658,8 +2665,8 @@ describe('buildMeetingExtractionPrompt - area context', () => {
     assert.ok(!prompt.includes('### Area Context'));
   });
 
-  it('truncates current state to 500 characters', () => {
-    const longCurrentState = 'A'.repeat(600);
+  it('truncates focus to 500 characters', () => {
+    const longFocus = 'A'.repeat(600);
     const context = makeContextWithArea({
       slug: 'test-area',
       name: 'Test Area',
@@ -2667,12 +2674,12 @@ describe('buildMeetingExtractionPrompt - area context', () => {
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: longCurrentState,
-        keyDecisions: null,
+        goal: null,
+        focus: longFocus,
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2685,8 +2692,8 @@ describe('buildMeetingExtractionPrompt - area context', () => {
     assert.ok(!prompt.includes('A'.repeat(600)));
   });
 
-  it('does not truncate current state under 500 characters', () => {
-    const shortCurrentState = 'A'.repeat(400);
+  it('does not truncate focus under 500 characters', () => {
+    const shortFocus = 'A'.repeat(400);
     const context = makeContextWithArea({
       slug: 'test-area',
       name: 'Test Area',
@@ -2694,12 +2701,12 @@ describe('buildMeetingExtractionPrompt - area context', () => {
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: shortCurrentState,
-        keyDecisions: null,
+        goal: null,
+        focus: shortFocus,
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2712,12 +2719,12 @@ describe('buildMeetingExtractionPrompt - area context', () => {
     assert.ok(!prompt.includes('A'.repeat(400) + '...'));
   });
 
-  it('parses bullet points from keyDecisions markdown string', () => {
-    const keyDecisionsMarkdown = `Some intro text
-- Decision to use TypeScript
-- Decision to adopt GraphQL
-* Another decision with asterisk
-- Final important decision`;
+  it('parses bullet points from goal markdown string', () => {
+    const goalMarkdown = `Some intro text
+- [Ship CoverWhale integration](../goals/cw.md) (Q1 2026)
+- [Launch email feature](../goals/email.md) (Q2 2026)
+* Another goal with asterisk
+- Final important goal`;
 
     const context = makeContextWithArea({
       slug: 'tech-area',
@@ -2726,36 +2733,36 @@ describe('buildMeetingExtractionPrompt - area context', () => {
       recurringMeetings: [],
       filePath: '/areas/tech-area.md',
       sections: {
-        currentState: null,
-        keyDecisions: keyDecisionsMarkdown,
+        goal: goalMarkdown,
+        focus: null,
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
 
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
-    assert.ok(prompt.includes('**Recent Area Decisions**:'));
-    assert.ok(prompt.includes('- Decision to use TypeScript'));
-    assert.ok(prompt.includes('- Decision to adopt GraphQL'));
-    assert.ok(prompt.includes('* Another decision with asterisk'));
-    assert.ok(prompt.includes('- Final important decision'));
+    assert.ok(prompt.includes('**Area Goals**:'));
+    assert.ok(prompt.includes('Ship CoverWhale integration'));
+    assert.ok(prompt.includes('Launch email feature'));
+    assert.ok(prompt.includes('* Another goal with asterisk'));
+    assert.ok(prompt.includes('- Final important goal'));
     // Should NOT include non-bullet text
     assert.ok(!prompt.includes('Some intro text'));
   });
 
-  it('limits key decisions to last 5 bullet points', () => {
-    const manyDecisions = `
-- Decision 1
-- Decision 2
-- Decision 3
-- Decision 4
-- Decision 5
-- Decision 6
-- Decision 7`;
+  it('limits goals to first 5 bullet points', () => {
+    const manyGoals = `
+- Goal 1
+- Goal 2
+- Goal 3
+- Goal 4
+- Goal 5
+- Goal 6
+- Goal 7`;
 
     const context = makeContextWithArea({
       slug: 'test-area',
@@ -2764,27 +2771,27 @@ describe('buildMeetingExtractionPrompt - area context', () => {
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: null,
-        keyDecisions: manyDecisions,
+        goal: manyGoals,
+        focus: null,
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
 
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
-    // Should include last 5 (3, 4, 5, 6, 7)
-    assert.ok(prompt.includes('Decision 3'));
-    assert.ok(prompt.includes('Decision 7'));
-    // Should NOT include first 2 (1, 2)
-    assert.ok(!prompt.includes('Decision 1'));
-    assert.ok(!prompt.includes('Decision 2'));
+    // Should include first 5 (1, 2, 3, 4, 5)
+    assert.ok(prompt.includes('Goal 1'));
+    assert.ok(prompt.includes('Goal 5'));
+    // Should NOT include 6, 7
+    assert.ok(!prompt.includes('Goal 6'));
+    assert.ok(!prompt.includes('Goal 7'));
   });
 
-  it('omits key decisions subsection if no bullet points found', () => {
+  it('omits goals subsection if no bullet points found', () => {
     const noBullets = `This is just some text
 without any bullet points
 just regular paragraphs.`;
@@ -2796,12 +2803,12 @@ just regular paragraphs.`;
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: 'Some current state',
-        keyDecisions: noBullets,
+        goal: noBullets,
+        focus: 'Some focus state',
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2809,11 +2816,11 @@ just regular paragraphs.`;
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
     assert.ok(prompt.includes('### Area Context'));
-    assert.ok(prompt.includes('**Current State**'));
-    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+    assert.ok(prompt.includes('**Focus**'));
+    assert.ok(!prompt.includes('**Area Goals**'));
   });
 
-  it('omits key decisions subsection if keyDecisions is null', () => {
+  it('omits goals subsection if goal is null', () => {
     const context = makeContextWithArea({
       slug: 'test-area',
       name: 'Test Area',
@@ -2821,12 +2828,12 @@ just regular paragraphs.`;
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: 'Some current state',
-        keyDecisions: null,
+        goal: null,
+        focus: 'Some focus state',
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2834,10 +2841,10 @@ just regular paragraphs.`;
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
     assert.ok(prompt.includes('### Area Context'));
-    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+    assert.ok(!prompt.includes('**Area Goals**'));
   });
 
-  it('omits key decisions subsection if keyDecisions is empty string', () => {
+  it('omits goals subsection if goal is empty string', () => {
     const context = makeContextWithArea({
       slug: 'test-area',
       name: 'Test Area',
@@ -2845,22 +2852,22 @@ just regular paragraphs.`;
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: 'Some state',
-        keyDecisions: '',
+        goal: '',
+        focus: 'Some state',
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
 
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
-    assert.ok(!prompt.includes('**Recent Area Decisions**'));
+    assert.ok(!prompt.includes('**Area Goals**'));
   });
 
-  it('includes area context with only keyDecisions (no currentState)', () => {
+  it('includes area context with only goal (no focus)', () => {
     const context = makeContextWithArea({
       slug: 'test-area',
       name: 'Test Area',
@@ -2868,12 +2875,12 @@ just regular paragraphs.`;
       recurringMeetings: [],
       filePath: '/areas/test-area.md',
       sections: {
-        currentState: null,
-        keyDecisions: '- Important decision',
+        goal: '- [Important goal](../goals/important.md)',
+        focus: null,
+        horizon: null,
+        projects: null,
         backlog: null,
-        activeGoals: null,
-        activeWork: null,
-        openCommitments: null,
+        stakeholders: null,
         notes: null,
       },
     });
@@ -2881,9 +2888,9 @@ just regular paragraphs.`;
     const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
 
     assert.ok(prompt.includes('### Area Context (Test Area)'));
-    assert.ok(!prompt.includes('**Current State**'));
-    assert.ok(prompt.includes('**Recent Area Decisions**'));
-    assert.ok(prompt.includes('- Important decision'));
+    assert.ok(!prompt.includes('**Focus**'));
+    assert.ok(prompt.includes('**Area Goals**'));
+    assert.ok(prompt.includes('Important goal'));
   });
 
   it('combines area context with other context sections', () => {
@@ -2925,12 +2932,12 @@ just regular paragraphs.`;
         recurringMeetings: [],
         filePath: '/areas/product-area.md',
         sections: {
-          currentState: 'Building features',
-          keyDecisions: '- Decided on approach',
+          goal: '- [Ship v2](../goals/v2.md)',
+          focus: 'Building features',
+          horizon: null,
+          projects: null,
           backlog: null,
-          activeGoals: null,
-          activeWork: null,
-          openCommitments: null,
+          stakeholders: null,
           notes: null,
         },
       },
@@ -3091,15 +3098,15 @@ describe('parseMeetingExtractionResponse with limits', () => {
 
   it('applies THOROUGH_LIMITS correctly (20 action items, 10 decisions, 10 learnings)', () => {
     // Create response with more than normal limits
-    const actionItems = [];
+    const actionItems: Array<{ owner: string; description: string; direction: string }> = [];
     for (let i = 0; i < 20; i++) {
       actionItems.push({ owner: `Person ${i}`, description: `Unique task ${i} here`, direction: 'i_owe_them' });
     }
-    const decisions = [];
+    const decisions: string[] = [];
     for (let i = 0; i < 10; i++) {
       decisions.push(`Unique decision ${i} made`);
     }
-    const learnings = [];
+    const learnings: string[] = [];
     for (let i = 0; i < 10; i++) {
       learnings.push(`Unique learning ${i} shared`);
     }
@@ -3122,7 +3129,7 @@ describe('parseMeetingExtractionResponse with limits', () => {
   });
 
   it('defaults to CATEGORY_LIMITS when no limits provided', () => {
-    const actionItems = [];
+    const actionItems: Array<{ owner: string; description: string; direction: string }> = [];
     for (let i = 0; i < 10; i++) {
       actionItems.push({ owner: `Person ${i}`, description: `Unique task number ${i}`, direction: 'i_owe_them' });
     }
@@ -3195,7 +3202,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
     const mockLLM: LLMCallFn = async (prompt) => {
       capturedPrompt = prompt;
       // Return 10 action items
-      const actionItems = [];
+      const actionItems: Array<{ owner: string; description: string; direction: string }> = [];
       for (let i = 0; i < 10; i++) {
         actionItems.push({ owner: `Person ${i}`, description: `Unique action ${i}`, direction: 'i_owe_them' });
       }
@@ -3221,7 +3228,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
 
   it('thorough mode keeps all 10 items when LLM returns 10', async () => {
     const mockLLM: LLMCallFn = async () => {
-      const actionItems = [];
+      const actionItems: Array<{ owner: string; description: string; direction: string; confidence: number }> = [];
       for (let i = 0; i < 10; i++) {
         actionItems.push({
           owner: `Person ${i}`,
@@ -3269,7 +3276,7 @@ describe('extractMeetingIntelligence - mode parameter', () => {
 
   it('mode=normal uses standard limits', async () => {
     const mockLLM: LLMCallFn = async () => {
-      const actionItems = [];
+      const actionItems: Array<{ owner: string; description: string; direction: string }> = [];
       for (let i = 0; i < 10; i++) {
         actionItems.push({ owner: `P${i}`, description: `Normal mode task ${i}`, direction: 'i_owe_them' });
       }

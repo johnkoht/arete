@@ -41,27 +41,33 @@ recurring_meetings:
 
 Strategic partnership with Glance for CoverWhale integration.
 
-## Active Goals
-<!-- Link to goals with area: field pointing here -->
-- Q1-2: Ship CoverWhale integration
+## Goal
+- [Ship CoverWhale integration](../goals/2026-Q1-2-coverwhale.md) (Q1 2026)
 
-## Current State
-Partnership is progressing well. API integration complete.
+## Focus
+- **Cover Whale production launch** — Templates finalized, targeting go-live
+- **Email template playbook** — Documenting process for distribution
 
-## Active Work
-- Integration testing phase
-- Documentation updates
+## Horizon
+- LEAP rollout (highest volume account, Phase 2)
+- Foxen rollout (similar claim type, Phase 2)
 
-## Key Decisions
-- 2026-03-01: Use REST API instead of GraphQL
-- 2026-02-15: Monthly partner reviews
+## Projects
 
-## Open Commitments
-<!-- Auto-filtered from commitments by area -->
+| Project | Status |
+| ------- | ------ |
+| [Comms Domain](../projects/active/glance-comms/README.md) | Active |
 
 ## Backlog
 - Add webhook support
 - Performance optimization
+
+## Stakeholders
+
+| Person | Role |
+| ------ | ---- |
+| Lindsay Gray | PM lead |
+| Anthony Avina | Engineering |
 
 ## Notes
 Working observations and context here.
@@ -81,11 +87,9 @@ recurring_meetings:
 
 Core platform engineering work.
 
-## Current State
-Stable. No major incidents.
-
-## Key Decisions
-- 2026-03-10: Migrate to Kubernetes
+## Focus
+- **Kubernetes migration** — Underway, targeting Q2 completion
+- **Monitoring** — Systems stable, no major incidents
 
 ## Backlog
 - Monitoring improvements
@@ -101,7 +105,7 @@ recurring_meetings: []
 
 Archived work.
 
-## Current State
+## Focus
 No longer active.
 `;
 
@@ -169,20 +173,36 @@ No longer active.
   });
 
   describe('markdown section extraction', () => {
-    it('extracts Current State section', async () => {
+    it('extracts Goal section', async () => {
       const context = await parser.getAreaContext('glance-communications');
 
       assert.ok(context);
-      assert.ok(context.sections.currentState);
-      assert.ok(context.sections.currentState.includes('Partnership is progressing well'));
+      assert.ok(context.sections.goal);
+      assert.ok(context.sections.goal.includes('Ship CoverWhale integration'));
     });
 
-    it('extracts Key Decisions section', async () => {
+    it('extracts Focus section', async () => {
       const context = await parser.getAreaContext('glance-communications');
 
       assert.ok(context);
-      assert.ok(context.sections.keyDecisions);
-      assert.ok(context.sections.keyDecisions.includes('2026-03-01: Use REST API'));
+      assert.ok(context.sections.focus);
+      assert.ok(context.sections.focus.includes('Cover Whale production launch'));
+    });
+
+    it('extracts Horizon section', async () => {
+      const context = await parser.getAreaContext('glance-communications');
+
+      assert.ok(context);
+      assert.ok(context.sections.horizon);
+      assert.ok(context.sections.horizon.includes('LEAP rollout'));
+    });
+
+    it('extracts Projects section', async () => {
+      const context = await parser.getAreaContext('glance-communications');
+
+      assert.ok(context);
+      assert.ok(context.sections.projects);
+      assert.ok(context.sections.projects.includes('Comms Domain'));
     });
 
     it('extracts Backlog section', async () => {
@@ -193,20 +213,12 @@ No longer active.
       assert.ok(context.sections.backlog.includes('Add webhook support'));
     });
 
-    it('extracts Active Goals section', async () => {
+    it('extracts Stakeholders section', async () => {
       const context = await parser.getAreaContext('glance-communications');
 
       assert.ok(context);
-      assert.ok(context.sections.activeGoals);
-      assert.ok(context.sections.activeGoals.includes('Q1-2: Ship CoverWhale integration'));
-    });
-
-    it('extracts Active Work section', async () => {
-      const context = await parser.getAreaContext('glance-communications');
-
-      assert.ok(context);
-      assert.ok(context.sections.activeWork);
-      assert.ok(context.sections.activeWork.includes('Integration testing phase'));
+      assert.ok(context.sections.stakeholders);
+      assert.ok(context.sections.stakeholders.includes('Lindsay Gray'));
     });
 
     it('extracts Notes section', async () => {
@@ -221,8 +233,8 @@ No longer active.
       const context = await parser.getAreaContext('platform-infrastructure');
 
       assert.ok(context);
-      // Platform area doesn't have Active Goals section
-      assert.equal(context.sections.activeGoals, null);
+      // Platform area doesn't have Goal section
+      assert.equal(context.sections.goal, null);
     });
   });
 
@@ -316,7 +328,7 @@ recurring_meetings:
 
 # Another Area
 
-## Current State
+## Focus
 Test area.
 `
       );
@@ -353,7 +365,7 @@ Test area.
       assert.equal(context.name, 'Glance Communications');
       assert.equal(context.status, 'active');
       assert.equal(context.recurringMeetings.length, 2);
-      assert.ok(context.sections.currentState);
+      assert.ok(context.sections.focus);
     });
 
     it('returns null for non-existent slug', async () => {
@@ -422,7 +434,7 @@ recurring_meetings:
 
 # Missing Title
 
-## Current State
+## Focus
 Test.
 `
       );
@@ -438,12 +450,11 @@ Test.
       const context = await parser.getAreaContext('platform-infrastructure');
 
       assert.ok(context);
-      assert.ok(context.sections.currentState);
-      assert.ok(context.sections.keyDecisions);
+      assert.ok(context.sections.focus);
       assert.ok(context.sections.backlog);
       // Missing sections
-      assert.equal(context.sections.activeGoals, null);
-      assert.equal(context.sections.activeWork, null);
+      assert.equal(context.sections.goal, null);
+      assert.equal(context.sections.horizon, null);
       assert.equal(context.sections.notes, null);
     });
 
@@ -458,7 +469,7 @@ recurring_meetings: []
 
 # No Name Area
 
-## Current State
+## Focus
 Test.
 `
       );
@@ -488,7 +499,7 @@ recurring_meetings:
 
 # Glance Communications
 
-## Current State
+## Focus
 API integration complete. Partnership progressing well with quarterly reviews.
 Working on feature enhancements and performance improvements.
 `;
@@ -505,7 +516,7 @@ recurring_meetings:
 
 # Platform Infrastructure
 
-## Current State
+## Focus
 Kubernetes migration underway. Monitoring systems stable.
 Infrastructure automation and deployment pipelines running smoothly.
 `;
@@ -518,7 +529,7 @@ recurring_meetings: []
 
 # Data Analytics
 
-## Current State
+## Focus
 Building dashboard widgets for metrics visualization.
 Data pipeline processing and reporting systems active.
 `;
@@ -596,8 +607,8 @@ Data pipeline processing and reporting systems active.
   });
 
   describe('keyword overlap', () => {
-    it('returns lower confidence (0.5-0.7) for keyword overlap with currentState', async () => {
-      // Glance currentState tokens: api, integration, complete, partnership, progressing, 
+    it('returns lower confidence (0.5-0.7) for keyword overlap with focus', async () => {
+      // Glance focus tokens: api, integration, complete, partnership, progressing, 
       //   well, quarterly, reviews, working, feature, enhancements, performance, improvements (13 words)
       // To get confidence >= 0.5, need Jaccard >= 0.714 (0.5/0.7)
       // Use 10 of those 13 words exactly (no extra words): 10/13 = 0.769 → confidence 0.538
@@ -730,7 +741,7 @@ Data pipeline processing and reporting systems active.
     });
 
     it('uses transcript keywords within first 500 chars', async () => {
-      // Platform currentState: "Kubernetes migration underway. Monitoring systems stable.
+      // Platform focus: "Kubernetes migration underway. Monitoring systems stable.
       //   Infrastructure automation and deployment pipelines running smoothly."
       // Use most of the same keywords in transcript for high Jaccard
       const transcript = 'kubernetes migration monitoring systems stable infrastructure automation deployment pipelines running';
@@ -758,7 +769,7 @@ Data pipeline processing and reporting systems active.
     });
 
     it('matches keywords regardless of case', async () => {
-      // Platform currentState tokens: kubernetes, migration, underway, monitoring, systems, 
+      // Platform focus tokens: kubernetes, migration, underway, monitoring, systems, 
       //   stable, infrastructure, automation, deployment, pipelines, running, smoothly (12 words)
       // Use 10 of those 12 words in UPPERCASE: 10/12 = 0.833 → confidence 0.583
       const match = await parser.suggestAreaForMeeting({
@@ -817,7 +828,7 @@ recurring_meetings: []
 
 # Glance Communications
 
-## Current State
+## Focus
 Active.
 `
     );
@@ -1134,11 +1145,8 @@ recurring_meetings:
 
 # Glance Communications
 
-## Current State
+## Focus
 Active partnership.
-
-## Key Decisions
-- 2026-03-01: Decision here
 
 ## Backlog
 - Future work
@@ -1192,8 +1200,7 @@ Active partnership.
     assert.ok(context);
     assert.equal(context.slug, 'glance-communications');
     assert.equal(context.name, 'Glance Communications');
-    assert.ok(context.sections.currentState);
-    assert.ok(context.sections.keyDecisions);
+    assert.ok(context.sections.focus);
     assert.ok(context.sections.backlog);
   });
 });
