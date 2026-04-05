@@ -115,3 +115,39 @@ export interface DocsProvider {
   getDocContent(docId: string): Promise<string>;
   getRecentDocs(options?: { maxResults?: number }): Promise<DocMetadata[]>;
 }
+
+// ---------------------------------------------------------------------------
+// Sheets types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export type SheetRange = {
+  range: string;
+  values: string[][];
+};
+
+export interface SheetsProvider {
+  name: string;
+  isAvailable(): Promise<boolean>;
+  getSpreadsheet(spreadsheetId: string): Promise<{ id: string; title: string; sheets: string[] }>;
+  getRange(spreadsheetId: string, range: string): Promise<SheetRange>;
+}
+
+// ---------------------------------------------------------------------------
+// Directory / People types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export type DirectoryPerson = {
+  email: string;
+  name: string;
+  title?: string;
+  department?: string;
+  manager?: string;
+  photoUrl?: string;
+};
+
+export interface DirectoryProvider {
+  name: string;
+  isAvailable(): Promise<boolean>;
+  lookupPerson(email: string): Promise<DirectoryPerson | null>;
+  searchDirectory(query: string, options?: { maxResults?: number }): Promise<DirectoryPerson[]>;
+}

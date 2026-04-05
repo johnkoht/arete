@@ -1,0 +1,14 @@
+{
+  "people": [
+    {
+      "emailAddresses": [{ "value": "jane@example.com" }],
+      "names": [{ "displayName": "Jane Smith" }],
+      "organizations": [{ "title": "Senior Engineer", "department": "Engineering" }]
+    },
+    {
+      "emailAddresses": [{ "value": "jane.doe@example.com" }],
+      "names": [{ "displayName": "Jane Doe" }],
+      "organizations": [{ "title": "Product Manager", "department": "Product" }]
+    }
+  ]
+}

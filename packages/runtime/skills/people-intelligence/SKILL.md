@@ -56,10 +56,26 @@ Each suggestion includes:
 - evidence[] with source pointers
 - queue destination (`internal`, `customers`, `users`, or `unknown_queue`)
 
+## Directory Enrichment (Phase 3)
+
+When Google Workspace is configured (`gws` integration active), enrich candidate data
+with Directory information before classification:
+
+1. For each candidate with an email address, look up the person in the GWS Directory
+2. If found, add title, department, and manager as enrichment evidence
+3. Use enrichment data to improve affiliation and role lens confidence:
+   - Known department/title increases confidence for internal vs external classification
+   - Manager relationship provides org-structure context
+4. Set `enrichmentApplied: true` on suggestions that received directory data
+
+Directory enrichment is best-effort. If GWS is not configured or lookup fails,
+the skill falls back to the existing evidence-only pipeline without interruption.
+
 ## Contract Notes
 
 This skill consumes optional hints from:
 - `context/profile.md` (Stream A)
 - `context/domain-hints.md` (Stream B)
+- GWS Directory (Phase 3) — title, department, manager for email-matched candidates
 
 If hints are missing, degrade gracefully and rely on direct evidence only.

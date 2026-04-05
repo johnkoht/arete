@@ -16,9 +16,13 @@ export type {
   EmailThread,
   DriveFile,
   DocMetadata,
+  SheetRange,
+  DirectoryPerson,
   EmailProvider,
   DriveProvider,
   DocsProvider,
+  SheetsProvider,
+  DirectoryProvider,
 } from './types.js';
 
 export {
@@ -33,6 +37,8 @@ export { gwsExec } from './client.js';
 export { GmailProvider, getGmailProvider } from './gmail.js';
 export { GwsDriveProvider, getGwsDriveProvider } from './drive.js';
 export { GwsDocsProvider, getGwsDocsProvider } from './docs.js';
+export { GwsSheetsProvider, getGwsSheetsProvider } from './sheets.js';
+export { GwsDirectoryProvider, getGwsDirectoryProvider } from './people.js';
 
 // ---------------------------------------------------------------------------
 // Provider factories
@@ -73,6 +79,32 @@ export async function getDocsProvider(
   if (gwsConfig && gwsConfig.status === 'active') {
     const { getGwsDocsProvider } = await import('./docs.js');
     return getGwsDocsProvider();
+  }
+  return null;
+}
+
+export async function getSheetsProvider(
+  config: AreteConfig,
+  _storage: StorageAdapter,
+  _workspaceRoot: string,
+): Promise<import('./types.js').SheetsProvider | null> {
+  const gwsConfig = config.integrations?.['google-workspace'] as { status?: string } | undefined;
+  if (gwsConfig && gwsConfig.status === 'active') {
+    const { getGwsSheetsProvider } = await import('./sheets.js');
+    return getGwsSheetsProvider();
+  }
+  return null;
+}
+
+export async function getDirectoryProvider(
+  config: AreteConfig,
+  _storage: StorageAdapter,
+  _workspaceRoot: string,
+): Promise<import('./types.js').DirectoryProvider | null> {
+  const gwsConfig = config.integrations?.['google-workspace'] as { status?: string } | undefined;
+  if (gwsConfig && gwsConfig.status === 'active') {
+    const { getGwsDirectoryProvider } = await import('./people.js');
+    return getGwsDirectoryProvider();
   }
   return null;
 }
