@@ -37,7 +37,7 @@ Create `dev/work/plans/{slug}/prd.md`:
 
 Each task must have: clear title, description, at least one acceptance criterion.
 
-**Reference format**: `dev/work/archive/intelligence-and-calendar/prd.md`
+**Reference format**: `dev/work/archive/2026-04/meeting-extraction-improvements/prd.md` (or any recent PRD in that directory)
 
 **Parsing tips**:
 - One plan step → one task (or group small sub-steps into one task with multiple ACs)
@@ -118,7 +118,7 @@ Next step: /plan open {slug} then /build, or /ship for full automation.
 
 ## References
 
-- **PRD example**: `dev/work/archive/intelligence-and-calendar/prd.md`
+- **PRD example**: `dev/work/archive/2026-04/meeting-extraction-improvements/prd.md`
 - **Schema**: `dev/autonomous/schema.ts`
 - **Standalone JSON-only conversion**: `.pi/skills/prd-to-json/SKILL.md`
 - **execute-prd**: `.pi/skills/execute-prd/SKILL.md`

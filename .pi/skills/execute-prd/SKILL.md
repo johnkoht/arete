@@ -160,7 +160,7 @@ For each pending task (in dependency order):
    
    **Use the prompt template from `.pi/standards/subagent-dispatch.md`**. It includes expertise profile selection, proven patterns, and the signals format.
    
-   See `orchestrator.md` § Expertise Profiles for the full heuristic and `.pi/standards/subagent-dispatch.md` § Expertise Profile Selection for the mapping table.
+   See `.pi/standards/subagent-dispatch.md` § Expertise Profile Selection for the full heuristic and mapping table.
    
    Use this template (scale reflection based on task complexity):
    
