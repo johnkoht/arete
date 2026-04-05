@@ -34,8 +34,7 @@ See routing-mandatory.mdc for details. The full workflow and patterns are below.
 product-workspace/
 ├── now/               # Start here. Current focus and working surface.
 │   ├── scratchpad.md  # Quick capture, parking lot, working notes.
-│   ├── week.md        # This week's priorities and outcomes.
-│   └── today.md       # Today's focus (populated by daily-plan skill).
+│   └── week.md        # This week's priorities, outcomes, and daily plan.
 ├── goals/             # Strategy and goals. What you're optimizing for.
 │   ├── strategy.md    # Org strategy, OKRs, pillars.
 │   ├── quarter.md     # Current quarter goals.

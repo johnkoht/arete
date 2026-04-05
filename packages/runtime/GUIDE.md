@@ -60,8 +60,7 @@ Areté is an AI-native workspace for product managers that helps you:
 your-workspace/
 ├── now/                     # Current focus (start here)
 │   ├── scratchpad.md        # Quick capture, parking lot
-│   ├── week.md              # This week's priorities
-│   ├── today.md             # Today's focus
+│   ├── week.md              # This week's priorities and daily plan
 │   └── agendas/             # Meeting agendas
 
 ├── goals/                   # Strategy and goals
@@ -180,7 +179,7 @@ Create → Accumulate Intelligence → Archive (optional)
 1. **Create** — Run `arete create area <slug>` to scaffold both `areas/{slug}.md` and `context/{slug}/`
 2. **Accumulate** — As you work in the area:
    - Recurring meetings map to the area (via frontmatter)
-   - Decisions extracted from meetings are written to `## Key Decisions`
+   - Goals link to the area via the `## Goal` section
    - Commitments are tagged with the area
    - Projects link via `area:` field
 3. **Archive** — When an area becomes inactive (partnership ends, initiative completes), set `status: archived` in frontmatter
@@ -254,28 +253,37 @@ recurring_meetings:
 
 Partnership with Glance for embedded communications features.
 
-## Active Goals
-<!-- Link to goals with area: field pointing here -->
+## Goal
+<!-- Link to goals: - [Goal name](../goals/slug.md) (quarter) — one-liner -->
+- [Ship CoverWhale integration](../goals/2026-Q1-2-coverwhale.md) (Q1 2026)
 
-## Current State
-<!-- Key status points about this area -->
-API integration complete. Partnership progressing to Phase 2.
+## Focus
+<!-- Current priorities and active work streams -->
+- **Cover Whale production launch** — Templates finalized, targeting go-live
+- **API integration Phase 2** — Partnership progressing to next phase
 
-## Active Work
-<!-- Current projects and initiatives -->
+## Horizon
+<!-- Upcoming work, next phases, future priorities -->
+- LEAP rollout (Phase 2)
+- Webhook support evaluation
 
-## Key Decisions
-<!-- Date-prefixed decisions: YYYY-MM-DD: Decision description -->
-- 2026-03-01: Use REST API instead of GraphQL for initial integration
-- 2026-02-15: Monthly partner reviews instead of weekly
+## Projects
 
-## Open Commitments
-<!-- Auto-filtered from commitments by area -->
+| Project | Status |
+| ------- | ------ |
+| [Comms Domain](../projects/active/glance-comms/README.md) | Active |
 
 ## Backlog
 <!-- Future work items for this area -->
 - Add webhook support
 - Performance optimization for high-volume sync
+
+## Stakeholders
+
+| Person | Role |
+| ------ | ---- |
+| Lindsay Gray | PM lead |
+| Anthony Avina | Engineering |
 
 ## Notes
 <!-- Working observations and context -->
@@ -350,8 +358,7 @@ arete commitments list --area glance-communications
 ```
 User: "What's on my plate today?"
 ```
-- Shows today's focus from `now/today.md`
-- Lists week priorities from `now/week.md`
+- Shows today's focus and week priorities from `now/week.md`
 - Provides context for each meeting (who, recent history, prep suggestions)
 - Shows commitments due
 - Suggests carry-overs from yesterday
