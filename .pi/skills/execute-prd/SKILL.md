@@ -207,7 +207,12 @@ For each pending task (in dependency order):
    
    **Execution State Path**: dev/executions/{plan-slug}/
    
-   **Working Memory**: Before starting, read `dev/executions/{plan-slug}/working-memory.md` — it contains patterns, gotchas, and shared utilities from prior tasks. After completing, update it with anything the next developer should know (new patterns, resolved gotchas, shared utilities created).
+   **Working Memory**: Before starting, read `dev/executions/{plan-slug}/working-memory.md` — it contains patterns, gotchas, and utilities from prior tasks. After completing, add entries to the relevant section(s):
+   - `## Discovered Patterns` — pattern-name: description at file:line
+   - `## Active Gotchas` — [issue]: what the next developer must know
+   - `## Shared Utilities Created` — functionName() in path/to/file.ts
+   - `## Context Corrections` — MISSING_CONTEXT: what was missing and where to find it
+   If nothing new was discovered, write `NOTHING_NOVEL — Task {N}` under `## Task Notes`.
    
    **Context - Read These Files First**:
    1. `dev/executions/{plan-slug}/working-memory.md` — cross-task knowledge from prior tasks

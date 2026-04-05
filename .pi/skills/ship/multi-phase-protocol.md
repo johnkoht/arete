@@ -102,8 +102,18 @@ Return GATE_PASS or GATE_FAIL with specific feedback.`
 |--------|--------|
 | GATE_PASS | Merge phase branch → update project-working-memory.md → proceed to Phase N+1 |
 | GATE_FAIL (attempt 1) | Send back to sub-orchestrator with reviewer feedback |
-| GATE_FAIL (attempt 2) | **PAUSE**: report to builder with options (fix/skip/abort phase) |
+| GATE_FAIL (attempt 2) | **PAUSE**: report to builder with options (see below) |
 | Builder interrupts | Pause at next gate boundary |
+
+**GATE_FAIL escalation options** (present all three — do not choose for the builder):
+
+| Option | Meaning | When appropriate |
+|--------|---------|-----------------|
+| **Fix** | Re-brief sub-orchestrator with reviewer findings + builder guidance | Failure is scoped; clear path to resolution |
+| **Abort phase** | Stop the entire ship run; leave feature/{slug} at last GATE_PASS state | Phase goals conflict with reality; too risky to continue |
+| **Override** | Accept the phase output as-is with documented limitations | Reviewer concern is stylistic or low-risk; builder accepts the trade-off |
+
+**Phase failure cascade**: If a phase is aborted, all subsequent phases that depend on its outputs must also be aborted. Report which phases are affected before the builder decides.
 
 ### Merge After Gate Pass
 
