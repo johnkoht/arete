@@ -273,10 +273,12 @@ export class IntelligenceService {
     context;
     memory;
     entities;
-    constructor(context, memory, entities) {
+    emailProvider;
+    constructor(context, memory, entities, emailProvider) {
         this.context = context;
         this.memory = memory;
         this.entities = entities;
+        this.emailProvider = emailProvider;
     }
     async assembleBriefing(request) {
         const now = new Date().toISOString();
@@ -320,6 +322,12 @@ export class IntelligenceService {
                 }
             }
         }
+        // 5b. Email context — if emailProvider is available, search for recent threads
+        //     related to resolved entities that have email addresses.
+        const emailContext = await this.searchEntityEmails(entities);
+        if (emailContext.length > 0) {
+            mergedContext.files.push(...emailContext);
+        }
         // 6. Gather entity relationships
         const relationships = [];
         for (const entity of entities) {
@@ -350,6 +358,37 @@ export class IntelligenceService {
             relationships,
             markdown,
         };
+    }
+    /**
+     * Search for recent email threads related to resolved entities.
+     * Only runs if emailProvider is available; returns empty array otherwise.
+     */
+    async searchEntityEmails(entities) {
+        if (!this.emailProvider)
+            return [];
+        const results = [];
+        const emailEntities = entities.filter(e => e.type === 'person' && e.metadata.email);
+        if (emailEntities.length === 0)
+            return [];
+        for (const entity of emailEntities.slice(0, 5)) {
+            try {
+                const email = String(entity.metadata.email);
+                const threads = await this.emailProvider.searchThreads(`from:${email} OR to:${email}`, { maxResults: 5 });
+                for (const thread of threads) {
+                    results.push({
+                        path: `email:${thread.id}`,
+                        relativePath: `email/${thread.id}`,
+                        category: 'resources',
+                        summary: `Email: ${thread.subject} — from ${thread.from} (${thread.date})`,
+                        relevanceScore: 0.5,
+                    });
+                }
+            }
+            catch {
+                // Best-effort — don't fail briefing if email search fails for an entity
+            }
+        }
+        return results;
     }
     /**
      * Proactively search meeting transcripts for content matching the task.

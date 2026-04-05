@@ -144,6 +144,8 @@ export type ResolvedEntity = {
     slug?: string;
     metadata: Record<string, unknown>;
     score: number;
+    /** Source of the resolution (e.g. 'local', 'directory') */
+    source?: string;
 };
 /** Source type classification for entity mentions */
 export type MentionSourceType = 'context' | 'meeting' | 'memory' | 'project' | 'conversation';

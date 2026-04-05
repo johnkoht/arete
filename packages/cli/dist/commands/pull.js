@@ -1,7 +1,7 @@
 /**
  * arete pull [integration] — fetch data from integrations
  */
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider, getDriveProvider } from '@arete/core';
 import { isAbsolute, join, basename } from 'path';
 import { tmpdir } from 'os';
 import { header, listItem, success, error, info } from '../formatters.js';
@@ -20,6 +20,7 @@ export function registerPullCommand(program) {
         .option('--dry-run', 'Fetch + convert and print markdown without saving (notion only)')
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--json', 'Output as JSON')
+        .option('--query <q>', 'Search query (drive, gmail)')
         .action(async (integration, opts) => {
         const services = await createServices(process.cwd());
         const root = await services.workspace.findRoot();
@@ -44,6 +45,19 @@ export function registerPullCommand(program) {
                 dryRun: Boolean(opts.dryRun),
                 skipQmd: Boolean(opts.skipQmd),
                 json: Boolean(opts.json),
+            });
+        }
+        if (integration === 'gmail') {
+            return pullGmailHelper(services, root, {
+                days,
+                json: opts.json ?? false,
+            });
+        }
+        if (integration === 'drive') {
+            return pullDriveHelper(services, root, {
+                days,
+                json: opts.json ?? false,
+                query: opts.query,
             });
         }
         if (integration === 'fathom' || !integration) {
@@ -116,12 +130,12 @@ export function registerPullCommand(program) {
             console.log(JSON.stringify({
                 success: false,
                 error: `Unknown integration: ${integration}`,
-                available: ['calendar', 'fathom', 'krisp', 'notion'],
+                available: ['calendar', 'drive', 'fathom', 'gmail', 'krisp', 'notion'],
             }));
         }
         else {
             error(`Unknown integration: ${integration}`);
-            info('Available: calendar, fathom, krisp, notion');
+            info('Available: calendar, drive, fathom, gmail, krisp, notion');
         }
         process.exit(1);
     });
@@ -402,6 +416,153 @@ export async function pullCalendarHelper(services, workspaceRoot, opts, deps = {
         console.log('');
     }
     console.log(`Total: ${enrichedEvents.length} event(s)`);
+    console.log('');
+}
+// ---------------------------------------------------------------------------
+// Gmail helper
+// ---------------------------------------------------------------------------
+export async function pullGmailHelper(services, workspaceRoot, opts) {
+    const config = await loadConfig(services.storage, workspaceRoot);
+    const provider = await getEmailProvider(config, services.storage, workspaceRoot);
+    if (!provider) {
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: false,
+                error: 'Google Workspace integration not configured',
+                message: 'Run: arete integration configure google-workspace',
+            }));
+        }
+        else {
+            error('Google Workspace integration not configured');
+            info('Run: arete integration configure google-workspace');
+        }
+        process.exit(1);
+    }
+    const available = await provider.isAvailable();
+    if (!available) {
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: false,
+                error: 'Gmail provider not available',
+                message: 'Ensure gws CLI is installed and authenticated: gws auth login',
+            }));
+        }
+        else {
+            error('Gmail provider not available');
+            info('Ensure gws CLI is installed and authenticated: gws auth login');
+        }
+        process.exit(1);
+    }
+    // Build date query if --days specified
+    let queryExtra = '';
+    if (opts.days > 0) {
+        const afterDate = new Date();
+        afterDate.setDate(afterDate.getDate() - opts.days);
+        const yyyy = afterDate.getFullYear();
+        const mm = String(afterDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(afterDate.getDate()).padStart(2, '0');
+        queryExtra = ` after:${yyyy}/${mm}/${dd}`;
+    }
+    // getImportantUnread will add the base query; if we have a date filter,
+    // use searchThreads directly with the combined query
+    let threads;
+    if (queryExtra) {
+        threads = await provider.searchThreads(`is:important is:unread -category:promotions -category:social${queryExtra}`, { maxResults: 20 });
+    }
+    else {
+        threads = await provider.getImportantUnread({ maxResults: 20 });
+    }
+    if (opts.json) {
+        console.log(JSON.stringify({
+            success: true,
+            integration: 'gmail',
+            threads,
+        }, null, 2));
+        return;
+    }
+    header('Gmail — Important Unread');
+    console.log('');
+    if (threads.length === 0) {
+        info('No important unread threads found.');
+        return;
+    }
+    for (const thread of threads) {
+        console.log(`  * [${thread.subject}] — from ${thread.from}, ${thread.date}`);
+        if (thread.snippet) {
+            console.log(`    ${thread.snippet}`);
+        }
+        console.log('');
+    }
+    console.log(`Total: ${threads.length} thread(s)`);
+    console.log('');
+}
+// ---------------------------------------------------------------------------
+// Drive helper
+// ---------------------------------------------------------------------------
+export async function pullDriveHelper(services, workspaceRoot, opts) {
+    const config = await loadConfig(services.storage, workspaceRoot);
+    const provider = await getDriveProvider(config, services.storage, workspaceRoot);
+    if (!provider) {
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: false,
+                error: 'Google Workspace integration not configured',
+                message: 'Run: arete integration configure google-workspace',
+            }));
+        }
+        else {
+            error('Google Workspace integration not configured');
+            info('Run: arete integration configure google-workspace');
+        }
+        process.exit(1);
+    }
+    const available = await provider.isAvailable();
+    if (!available) {
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: false,
+                error: 'Drive provider not available',
+                message: 'Ensure gws CLI is installed and authenticated: gws auth login',
+            }));
+        }
+        else {
+            error('Drive provider not available');
+            info('Ensure gws CLI is installed and authenticated: gws auth login');
+        }
+        process.exit(1);
+    }
+    let files;
+    if (opts.query) {
+        files = await provider.search(opts.query, { maxResults: 25 });
+    }
+    else {
+        // Default: recent files within --days range
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - opts.days);
+        const iso = cutoff.toISOString();
+        files = await provider.search(`modifiedTime > '${iso}'`, { maxResults: 25 });
+    }
+    if (opts.json) {
+        console.log(JSON.stringify({
+            success: true,
+            integration: 'drive',
+            files,
+        }, null, 2));
+        return;
+    }
+    header('Google Drive Files');
+    console.log('');
+    if (files.length === 0) {
+        info('No files found matching the query.');
+        return;
+    }
+    for (const file of files) {
+        const modified = file.modifiedTime ? file.modifiedTime.split('T')[0] : 'unknown';
+        const link = file.webViewLink ? ` — ${file.webViewLink}` : '';
+        console.log(`  * [${file.name}] (${file.mimeType}) — modified ${modified}${link}`);
+    }
+    console.log('');
+    console.log(`Total: ${files.length} file(s)`);
     console.log('');
 }
 //# sourceMappingURL=pull.js.map

@@ -25,4 +25,13 @@ export declare function pullCalendarHelper(services: Awaited<ReturnType<typeof i
     today: boolean;
     json: boolean;
 }, deps?: PullCalendarDeps): Promise<void>;
+export declare function pullGmailHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
+    days: number;
+    json: boolean;
+}): Promise<void>;
+export declare function pullDriveHelper(services: Awaited<ReturnType<typeof import('@arete/core').createServices>>, workspaceRoot: string, opts: {
+    days: number;
+    json: boolean;
+    query?: string;
+}): Promise<void>;
 //# sourceMappingURL=pull.d.ts.map

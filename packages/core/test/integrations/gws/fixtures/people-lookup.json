@@ -1,0 +1,7 @@
+{
+  "emailAddresses": [{ "value": "jane@example.com" }],
+  "names": [{ "displayName": "Jane Smith" }],
+  "organizations": [{ "title": "Senior Engineer", "department": "Engineering" }],
+  "relations": [{ "person": "bob@example.com", "type": "manager" }],
+  "photos": [{ "url": "https://photos.example.com/jane.jpg" }]
+}
