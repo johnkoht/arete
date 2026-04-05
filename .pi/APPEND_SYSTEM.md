@@ -62,6 +62,8 @@ User approves plan
 
 **Bug fixes require structure.** Do not make ad-hoc code changes. Load the hotfix skill and follow its process.
 
+**Phantom task check (mandatory before execution)**: Before starting ANY plan task, verify the output doesn't already exist. Check proposed output files with `ls` and grep for proposed function/class names. If >50% of a task's work already exists, report it to the builder before building. Evidence: reimagine-v2 (2026-03-07) — phantom detection saved ~80% of planned work.
+
 **When in doubt**: Offer both paths and let builder choose.
 
 ---

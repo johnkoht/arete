@@ -208,19 +208,18 @@ For each pending task (in dependency order):
    4. Update dev/executions/{plan-slug}/prd.json — set this task's status to "complete" and record commitSha
    5. Append to dev/executions/{plan-slug}/progress.md
    
-   **Post-Task Reflection** (include in your completion report):
+   **Post-Task Signals** (include in your completion report):
    
-   [FOR SMALL TASKS (<20 lines, 1-2 files):]
-   - What helped: Which rule/memory item guided you?
-   - Token estimate: e.g., "~5K tokens"
-   Format: 1-2 sentences
-   
-   [FOR MEDIUM/LARGE TASKS (multiple files, new systems):]
-   1. Memory impact: Did learnings from progress.md/MEMORY.md/collaboration.md affect your approach? What specifically?
-   2. Rule effectiveness: Which rules helped? Which created confusion?
-   3. Suggestions: Improvements to task prompt or workflow?
-   4. Token estimate: e.g., "~25K tokens"
-   Format: 3-5 sentences
+   Use signal tags — one per line, with a brief note:
+   ```
+   REUSE: [what you reused — e.g., "getSearchProvider() from search.ts, was in prompt"]
+   MISSING_CONTEXT: [what you had to discover — e.g., "testDeps pattern, had to read qmd.ts"]
+   NEW_PATTERN: [pattern you created — e.g., "sentinel-comment for non-destructive updates"]
+   BLOCKER_RESOLVED: [decision that unblocked you — e.g., "light meetings need 'processed' status"]
+   NOTHING_NOVEL: [confirm context assembly worked, no surprises]
+   OTHER: [anything that doesn't fit above]
+   ```
+   Include at least one signal. NOTHING_NOVEL is the expected default for straightforward tasks.
    
    Proceed with implementation.
    ```
@@ -421,16 +420,12 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     
     1. **Create entry**: `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md`
        
-       Include:
-       - **Metrics**: Tasks completed, success rate, iterations, tests added, token usage
-       - **Pre-mortem analysis**: Risks vs outcomes (table), which mitigations were effective
-       - **What worked well**: Patterns to repeat (be specific: "Show-don't-tell with line ranges")
-       - **What didn't work**: Patterns to avoid or issues encountered
-       - **Subagent insights**: Synthesize reflections across all tasks (what helped them most, common suggestions)
-       - **Collaboration patterns**: How did builder respond? What did they prefer?
-       - **Recommendations for next PRD**: Specific improvements (prompts, workflow, rules)
-       - **Refactor items**: Count and paths (if any)
-       - **Documentation gaps**: Files that should be updated (AGENTS.md, README, etc.)
+       Follow the 5-section template from `.pi/skills/prd-post-mortem/SKILL.md`:
+       - **Metrics**: Tasks, success rate, iterations, tests added
+       - **Pre-mortem effectiveness**: Risk table (materialized? effective?)
+       - **What worked / what didn't**: Combined +/- format; surprises go here too
+       - **Recommendations**: continue/stop/start format
+       - **Follow-ups**: Refactor items, doc gaps, catalog updates
     
     2. **Add index line** to `memory/MEMORY.md` (one line per entry; add at top of Index section). See MEMORY.md conventions for format.
     
@@ -451,7 +446,7 @@ Before diving into the detailed steps below, verify you'll cover all of these:
     **Tests**: [Total] passing (+[New] added)
     **Pre-mortem**: [A]/[B] risks materialized
     **Commits**: [N] commits
-    **Token usage**: ~[X]K total (~[Y]K orchestrator + ~[Z]K subagents)
+    **Signals**: [common signal tags from tasks — e.g., "3x MISSING_CONTEXT: testDeps pattern"]
     **Build memory**: ✅ Entry `memory/entries/YYYY-MM-DD_[prd-name]-learnings.md` created; MEMORY.md updated
     
     ## Deliverables

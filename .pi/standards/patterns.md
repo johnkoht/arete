@@ -195,6 +195,34 @@ _Example_: `packages/core/src/config.ts` — `resolveConfig(storage, workspaceRo
 
 ---
 
+## Build Process Patterns
+
+### Fallback-First Migration Design
+
+When migrating data formats, schema versions, or file structures: always read the old format as a fallback. Never require a migration script to run first before the code works.
+
+```typescript
+// ✅ Fallback-first: reads new format, falls back to old
+async function loadConfig(): Promise<Config> {
+  try {
+    const v2 = await readV2Config();
+    if (v2) return v2;
+  } catch {}
+  return readV1Config(); // fallback
+}
+
+// ❌ Migration-first: breaks if migration hasn't run
+async function loadConfig(): Promise<Config> {
+  return readV2Config(); // throws if not migrated
+}
+```
+
+**Anti-pattern**: Requiring `npm run migrate` before a feature works. Users miss migration steps; CI environments may not run them.
+
+**Evidence**: goals-refactor (2026-03-19), monorepo migration (2026-02-15), priority-toggle (2026-03-07) — all three required rework when fallback was omitted.
+
+---
+
 ## Adding New Patterns
 
 When you discover a recurring pattern not documented here:

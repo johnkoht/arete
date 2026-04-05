@@ -15,13 +15,13 @@ Systematically update `memory/collaboration.md` from **Learnings** and **Correct
 
 **Run this skill when:**
 
-1. **Builder asks** — "Synthesize collaboration profile", "Update collaboration from entries", "Extract learnings to collaboration.md", "Refresh collaboration.md"
-2. **After PRD post-mortem** — prd-post-mortem skill suggests: "Consider running synthesize-collaboration-profile to push learnings into collaboration.md"
-3. **Several entries with Learnings** — 5+ new entries (since last synthesis) include Learnings or Corrections sections
-4. **After a major build phase** — Large feature complete, multi-PRD run done, or quarterly review
-5. **Periodic** — Monthly or every 10 entries with Learnings (builder's preference)
+1. **After every PRD post-mortem** — prd-post-mortem runs this automatically as Step 9. Not optional.
+2. **Builder asks** — "Synthesize collaboration profile", "Update collaboration from entries", "Refresh collaboration.md"
 
-**Do not run** after every single entry; batch so the profile evolves in coherent passes.
+**Removed triggers** (evidence they don't work):
+- ~~"5+ entries" threshold~~ — vague, never triggered naturally (collaboration.md went 2 months stale despite 30+ qualifying entries)
+- ~~"After a major build phase"~~ — approximation of "after post-mortem," now handled directly
+- ~~"Monthly/periodic"~~ — approximation of "after post-mortem," now handled directly
 
 ## Workflow
 

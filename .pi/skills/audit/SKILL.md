@@ -25,7 +25,29 @@ Systematically audit project documentation and capability registries by dispatch
 ## Prerequisites
 
 - Working directory is the Areté repository
-- `subagent` tool is available for dispatching domain experts
+
+## Pre-Flight Check (MANDATORY — Before Dispatching Any Expert)
+
+**Check 1: Subagent tool availability**
+
+```
+subagent tool available? → Dispatch domain experts normally (standard mode)
+subagent tool unavailable? → Single-agent fallback mode
+```
+
+If subagent tool is unavailable, run each domain audit sequentially as the orchestrator — no expert dispatch. Output audit findings directly. Prepend the final report:
+
+```
+⚠️ Single-agent fallback mode (subagent tool unavailable). All domains audited sequentially by orchestrator. Expert depth may be reduced.
+```
+
+**Check 2: manifest.yaml existence**
+
+```bash
+ls .pi/skills/audit/manifest.yaml
+```
+
+If missing: use the inline domain table (Domain Assignments section below) as the configuration. No HALT — the domain defaults in SKILL.md are sufficient for a full audit.
 
 ## Tool Reference
 
