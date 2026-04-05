@@ -216,23 +216,29 @@ recurring_meetings:
 
 {description}
 
-## Active Goals
-<!-- Link to goals with area: field pointing here -->
+## Goal
+<!-- Link to goals: - [Goal name](../goals/slug.md) (quarter) — one-liner -->
 
-## Current State
-<!-- Key status points about this area -->
+## Focus
+<!-- Current priorities and active work streams -->
 
-## Active Work
-<!-- Current projects and initiatives -->
+## Horizon
+<!-- Upcoming work, next phases, future priorities -->
 
-## Key Decisions
-<!-- Date-prefixed decisions: YYYY-MM-DD: Decision description -->
+## Projects
 
-## Open Commitments
-<!-- Auto-filtered from commitments by area -->
+<!-- Active projects table -->
+| Project | Status |
+| ------- | ------ |
 
 ## Backlog
 <!-- Future work items for this area -->
+
+## Stakeholders
+
+<!-- Key people and their roles -->
+| Person | Role |
+| ------ | ---- |
 
 ## Notes
 <!-- Working observations and context -->
