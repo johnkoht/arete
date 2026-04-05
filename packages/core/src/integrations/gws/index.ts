@@ -30,18 +30,23 @@ export {
 
 export { detectGws } from './detection.js';
 export { gwsExec } from './client.js';
+export { GmailProvider, getGmailProvider } from './gmail.js';
 
 // ---------------------------------------------------------------------------
 // Provider factories (Phase 1+ — return null for now)
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getEmailProvider(
-  _config: AreteConfig,
+  config: AreteConfig,
   _storage: StorageAdapter,
   _workspaceRoot: string,
 ): Promise<import('./types.js').EmailProvider | null> {
-  return null; // Phase 1
+  const gwsConfig = config.integrations?.['google-workspace'] as { status?: string } | undefined;
+  if (gwsConfig && gwsConfig.status === 'active') {
+    const { getGmailProvider } = await import('./gmail.js');
+    return getGmailProvider();
+  }
+  return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -7,7 +7,7 @@
 
 import type { SearchProvider } from './search/types.js';
 import type { AreteConfig } from './models/workspace.js';
-import type { GwsDetectionResult } from './integrations/gws/index.js';
+import type { GwsDetectionResult, EmailProvider } from './integrations/gws/index.js';
 import { FileStorageAdapter } from './storage/file.js';
 import { getSearchProvider } from './search/factory.js';
 import { loadConfig, getDefaultConfig } from './config.js';
@@ -24,7 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
-import { detectGws } from './integrations/gws/index.js';
+import { detectGws, getEmailProvider } from './integrations/gws/index.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -47,6 +47,7 @@ export type AreteServices = {
   tasks: TaskService;
   gws: {
     detection: GwsDetectionResult;
+    email: EmailProvider | null;
   };
 };
 
@@ -115,6 +116,9 @@ export async function createServices(
   // GWS detection (non-blocking — returns { installed: false } if binary missing)
   const gwsDetection = await detectGws();
 
+  // GWS email provider (null if google-workspace integration not active)
+  const gwsEmail = await getEmailProvider(config, storage, workspaceRoot);
+
   return {
     storage,
     search,
@@ -133,6 +137,7 @@ export async function createServices(
     tasks,
     gws: {
       detection: gwsDetection,
+      email: gwsEmail,
     },
   };
 }

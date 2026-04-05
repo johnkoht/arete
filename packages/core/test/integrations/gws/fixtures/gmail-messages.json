@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "id": "msg-1",
+      "threadId": "thread-1",
+      "labelIds": ["INBOX", "UNREAD", "IMPORTANT"],
+      "snippet": "Please review the Q2 roadmap by Friday",
+      "payload": {
+        "headers": [
+          { "name": "Subject", "value": "Q2 Roadmap Review" },
+          { "name": "From", "value": "Jane Smith <jane@example.com>" },
+          { "name": "Date", "value": "Fri, 03 Apr 2026 10:30:00 -0500" }
+        ]
+      }
+    },
+    {
+      "id": "msg-2",
+      "threadId": "thread-2",
+      "labelIds": ["INBOX", "IMPORTANT"],
+      "snippet": "The vendor contract has been signed",
+      "payload": {
+        "headers": [
+          { "name": "Subject", "value": "Re: Vendor Contract" },
+          { "name": "From", "value": "Bob Lee <bob@example.com>" },
+          { "name": "Date", "value": "Thu, 02 Apr 2026 14:00:00 -0500" }
+        ]
+      }
+    }
+  ]
+}

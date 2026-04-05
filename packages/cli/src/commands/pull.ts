@@ -2,8 +2,8 @@
  * arete pull [integration] — fetch data from integrations
  */
 
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath } from '@arete/core';
-import type { QmdRefreshResult, CalendarProvider, AreteConfig } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider } from '@arete/core';
+import type { QmdRefreshResult, CalendarProvider, AreteConfig, EmailProvider } from '@arete/core';
 import type { Command } from 'commander';
 import { isAbsolute, join, basename } from 'path';
 import { tmpdir } from 'os';
@@ -63,6 +63,13 @@ export function registerPullCommand(program: Command): void {
             dryRun: Boolean(opts.dryRun),
             skipQmd: Boolean(opts.skipQmd),
             json: Boolean(opts.json),
+          });
+        }
+
+        if (integration === 'gmail') {
+          return pullGmailHelper(services, root, {
+            days,
+            json: opts.json ?? false,
           });
         }
 
@@ -153,12 +160,12 @@ export function registerPullCommand(program: Command): void {
             JSON.stringify({
               success: false,
               error: `Unknown integration: ${integration}`,
-              available: ['calendar', 'fathom', 'krisp', 'notion'],
+              available: ['calendar', 'fathom', 'gmail', 'krisp', 'notion'],
             }),
           );
         } else {
           error(`Unknown integration: ${integration}`);
-          info('Available: calendar, fathom, krisp, notion');
+          info('Available: calendar, fathom, gmail, krisp, notion');
         }
         process.exit(1);
       },
@@ -544,5 +551,111 @@ export async function pullCalendarHelper(
     console.log('');
   }
   console.log(`Total: ${enrichedEvents.length} event(s)`);
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// Gmail helper
+// ---------------------------------------------------------------------------
+
+export async function pullGmailHelper(
+  services: Awaited<ReturnType<typeof import('@arete/core').createServices>>,
+  workspaceRoot: string,
+  opts: {
+    days: number;
+    json: boolean;
+  },
+): Promise<void> {
+  const config = await loadConfig(services.storage, workspaceRoot);
+  const provider = await getEmailProvider(config, services.storage, workspaceRoot);
+
+  if (!provider) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: 'Google Workspace integration not configured',
+          message: 'Add google-workspace integration with status: active to arete.yaml',
+        }),
+      );
+    } else {
+      error('Google Workspace integration not configured');
+      info('Add google-workspace integration with status: active to arete.yaml');
+    }
+    process.exit(1);
+  }
+
+  const available = await provider.isAvailable();
+  if (!available) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: 'Gmail provider not available',
+          message: 'Ensure gws CLI is installed and authenticated: gws auth login',
+        }),
+      );
+    } else {
+      error('Gmail provider not available');
+      info('Ensure gws CLI is installed and authenticated: gws auth login');
+    }
+    process.exit(1);
+  }
+
+  // Build date query if --days specified
+  let queryExtra = '';
+  if (opts.days > 0) {
+    const afterDate = new Date();
+    afterDate.setDate(afterDate.getDate() - opts.days);
+    const yyyy = afterDate.getFullYear();
+    const mm = String(afterDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(afterDate.getDate()).padStart(2, '0');
+    queryExtra = ` after:${yyyy}/${mm}/${dd}`;
+  }
+
+  // getImportantUnread will add the base query; if we have a date filter,
+  // use searchThreads directly with the combined query
+  let threads;
+  if (queryExtra) {
+    threads = await provider.searchThreads(
+      `is:important is:unread -category:promotions -category:social${queryExtra}`,
+      { maxResults: 20 },
+    );
+  } else {
+    threads = await provider.getImportantUnread({ maxResults: 20 });
+  }
+
+  if (opts.json) {
+    console.log(
+      JSON.stringify(
+        {
+          success: true,
+          integration: 'gmail',
+          threads,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  header('Gmail — Important Unread');
+  console.log('');
+
+  if (threads.length === 0) {
+    info('No important unread threads found.');
+    return;
+  }
+
+  for (const thread of threads) {
+    console.log(`  * [${thread.subject}] — from ${thread.from}, ${thread.date}`);
+    if (thread.snippet) {
+      console.log(`    ${thread.snippet}`);
+    }
+    console.log('');
+  }
+
+  console.log(`Total: ${threads.length} thread(s)`);
   console.log('');
 }

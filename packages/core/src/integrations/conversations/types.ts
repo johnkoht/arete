@@ -22,7 +22,7 @@ export type ConversationInsights = {
  * Provenance metadata for a conversation artifact.
  */
 export type ConversationProvenance = {
-  source: 'manual';
+  source: 'manual' | 'email' | 'slack';
   capturedAt: string;
   capturedBy?: string;
 };
