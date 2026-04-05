@@ -84,8 +84,12 @@ export async function createServices(
   const memory = new MemoryService(storage, search);
   const entity = new EntityService(storage, search);
 
+  // GWS email provider (null if google-workspace integration not active)
+  // Created early so IntelligenceService can use it for email enrichment
+  const gwsEmail = await getEmailProvider(config, storage, workspaceRoot);
+
   // Orchestration (depends on core services)
-  const intelligence = new IntelligenceService(context, memory, entity);
+  const intelligence = new IntelligenceService(context, memory, entity, gwsEmail);
 
   // Workspace management (depends on storage only)
   const workspace = new WorkspaceService(storage);
@@ -115,9 +119,6 @@ export async function createServices(
 
   // GWS detection (non-blocking — returns { installed: false } if binary missing)
   const gwsDetection = await detectGws();
-
-  // GWS email provider (null if google-workspace integration not active)
-  const gwsEmail = await getEmailProvider(config, storage, workspaceRoot);
 
   return {
     storage,

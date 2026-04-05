@@ -118,6 +118,44 @@ Search for past decisions and learnings related to this meeting.
 
 5. **Empty results**: If no relevant memory found, omit the "Related Memory" section entirely. Don't say "nothing found."
 
+### 4.7. Email Context (Optional — requires Google Workspace)
+
+If Google Workspace integration is active, enrich the prep brief with recent email context for each attendee.
+
+1. **Check integration status**:
+   ```bash
+   arete integration list --json
+   ```
+   Look for `google-workspace` with `status: 'active'`. If not active, skip this step entirely — meeting-prep works without it.
+
+2. **Search for attendee email threads**:
+   For each attendee with a known email address (from their person profile), search for recent threads:
+   ```bash
+   arete pull gmail --query "from:<email> OR to:<email>" --days 14 --json
+   ```
+   Cap at 3 attendees to avoid excessive API calls.
+
+3. **Filter for relevance**:
+   - Keep only threads that appear related to the meeting topic (match subject or snippet against meeting title/keywords)
+   - Discard automated notifications, newsletters, or unrelated threads
+   - Keep at most 3-5 threads per attendee
+
+4. **Include in prep brief**:
+   Add a `## Recent Email Context` section (see Step 6) with relevant threads grouped by attendee:
+   ```markdown
+   ### Recent Email Context
+   _Sourced from Gmail — last 14 days_
+
+   **Jane Smith** (jane@example.com):
+   - 2026-04-01 — **Re: Roadmap Q2** — "Here's the updated timeline..."
+   - 2026-03-28 — **Budget Approval** — "Approved the $50k allocation for..."
+
+   **Alex Rivera** (alex@example.com):
+   - 2026-03-30 — **Sprint Review Notes** — "Key decisions from Friday's review..."
+   ```
+
+5. **Empty results**: If no relevant email threads are found for any attendee, omit the section entirely. Do not mention that email was checked.
+
 ### 5. Relationship Intelligence Analysis
 
 Using the person profiles and context already gathered by **get_meeting_context** (do NOT re-run `arete people show`), apply the **relationship_intelligence** pattern from PATTERNS.md for each attendee who has a person profile:
@@ -171,6 +209,12 @@ _Include only when relevant items were found in Step 4.5. Omit section if empty.
 
 - **Decision** [YYYY-MM-DD]: [Relevant decision for this meeting]
 - **Learning** [YYYY-MM-DD]: [Relevant learning for this meeting]
+
+### Recent Email Context
+_Include only when GWS is active and relevant threads were found in Step 4.7. Omit section if empty._
+
+**[Attendee Name]** ([email]):
+- YYYY-MM-DD — **[Subject]** — "[snippet]"
 
 ### Stances
 For each attendee with person intelligence (via `arete people show <slug> --memory`):
