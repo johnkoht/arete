@@ -4,6 +4,36 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 4, 2026
+
+### Meeting Review: Faster Approvals
+
+**The meeting review flow is significantly faster.** Three new ways to approve items without clicking one-by-one:
+
+- **Approve High Confidence** — one click approves all items at or above your confidence threshold (default 80%). Adjust the threshold inline before clicking.
+- **Approve by Meeting** — items are now grouped by source meeting. Approve or skip everything from a single meeting at once.
+- **Auto-approve preview** — an amber banner appears when all items from a meeting exceed 0.8 confidence. Review what qualifies and confirm in one click — nothing is silently approved.
+
+After finishing, a **review summary** shows approved/skipped/undecided counts and lists anything that was auto-approved for audit.
+
+### Smarter Planning — No More Duplicates
+
+**Planning skills now check for existing work before writing.** When the daily-plan or week-plan skill runs, it sees your current open tasks from `week.md` and `tasks.md` — and won't re-propose items you've already captured. The same check happens during meeting extraction: action items already tracked as tasks are flagged as "do not duplicate."
+
+**Task deduplication at write time.** `TaskService.addTask()` now checks for near-duplicate tasks (≥80% text similarity or matching commitment link) before inserting. Idempotent writes — no more duplicates from repeated skill runs.
+
+### Structured Planning by Area
+
+**Week planning now starts with focus areas.** The week-plan skill opens by asking "Which areas are you focusing on this week?" — then shows your goals and projects scoped to those areas. One area auto-selects; no areas skips the filter gracefully.
+
+**Goals and projects get linked on creation.** The quarter-plan skill now prompts for an area when you create a goal (soft constraint — skip is always allowed). The general-project skill asks which goal the project advances.
+
+### Confidence Threshold Raised
+
+The reconciliation include threshold has been raised from 0.5 → 0.65. Lower-confidence items are filtered out earlier, reducing noise in the review queue.
+
+---
+
 ## Week of April 3, 2026
 
 ### Cross-Meeting Deduplication in Web UI

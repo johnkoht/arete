@@ -106,7 +106,7 @@ export declare class AreaParserService {
      * Matching algorithm (tries ALL methods, returns highest confidence):
      * 1. Exact title match (1.0): Meeting title matches a recurring_meetings[].title
      * 2. Area name match (0.8): Area name appears in meeting title OR summary
-     * 3. Keyword overlap (0.5-0.7): Jaccard similarity between meeting content and area's currentState
+     * 3. Keyword overlap (0.5-0.7): Jaccard similarity between meeting content and area's focus
      *
      * Returns null when:
      * - Input is empty/whitespace-only

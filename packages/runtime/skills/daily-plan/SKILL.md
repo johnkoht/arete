@@ -202,6 +202,8 @@ For **prep-worthy meetings** (QBR, customer, leadership, 1:1, planning, etc.):
 
 ### 7. Write Today Section
 
+**Dedup check before writing**: Before updating the Today section, review the existing Tasks sections (Must/Should/Could) in `now/week.md`. Do NOT create or suggest task items in the Focus section that already appear in the Tasks sections. If a task is already tracked (exact or near-identical text), reference it by name rather than re-creating it. This prevents the same item appearing both in "Focus" and as a tracked task.
+
 Replace `## Today — {old date}` with new content.
 
 > **Important**: The `## Today` section is a **generated read-only snapshot** — a quick-glance summary of today's plan. The canonical source of truth for today's tasks is the `@due(YYYY-MM-DD)` tags on tasks in the Must/Should/Could sections (set in step 3.6). The Task UI's Today view reads from those `@due` tags, not from this section.

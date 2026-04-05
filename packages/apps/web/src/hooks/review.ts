@@ -3,7 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchPendingReview, completeReview } from '@/api/review.js';
+import { fetchPendingReview, completeReview, fetchAutoApprovePreview } from '@/api/review.js';
 import type { CompleteReviewRequest } from '@/api/types.js';
 
 /** Fetch all pending review items */
@@ -12,6 +12,16 @@ export function usePendingReview() {
     queryKey: ['review', 'pending'],
     queryFn: fetchPendingReview,
     staleTime: 30 * 1000, // 30 seconds — review data changes frequently
+  });
+}
+
+/** Fetch auto-approve preview — meetings where all items meet confidence threshold */
+export function useAutoApprovePreview(threshold: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['review', 'auto-approve-preview', threshold],
+    queryFn: () => fetchAutoApprovePreview(threshold),
+    enabled,
+    staleTime: 60 * 1000, // 1 minute
   });
 }
 
