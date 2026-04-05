@@ -47,7 +47,7 @@ If subagent tool is unavailable, run each domain audit sequentially as the orche
 ls .pi/skills/audit/manifest.yaml
 ```
 
-If missing: use the inline domain table (Domain Assignments section below) as the configuration. No HALT — the domain defaults in SKILL.md are sufficient for a full audit.
+If missing: use the inline domain table (Domain Assignments section below) as the configuration. **Note**: Without manifest.yaml, any project-specific customizations (custom scope overrides, skip lists, extra experts) are unavailable. Default audit coverage is full but project-specific tuning won't apply. No HALT.
 
 ## Tool Reference
 

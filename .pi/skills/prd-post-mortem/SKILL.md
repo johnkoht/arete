@@ -96,6 +96,15 @@ Write `memory/entries/YYYY-MM-DD_{feature-name}-learnings.md`:
 | Pre-mortem | A/B risks materialized |
 | Commits | N |
 
+## Signal Patterns
+Aggregated from developer signals in `dev/executions/{slug}/progress.md`:
+| Signal | Count | Notable Examples |
+|--------|-------|-----------------|
+| MISSING_CONTEXT | N | [what was missing] |
+| NEW_PATTERN | N | [patterns created] |
+| REUSE | N | [what was reused] |
+*(Omit rows with count=0. NOTHING_NOVEL/BLOCKER_RESOLVED don't need examples.)*
+
 ## Pre-Mortem Effectiveness
 | Risk | Materialized? | Mitigation Applied? | Effective? |
 |------|--------------|---------------------|-----------|
