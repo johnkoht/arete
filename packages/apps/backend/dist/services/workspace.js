@@ -449,6 +449,7 @@ export async function getMeeting(workspaceRoot, slug) {
         stagedItemEdits,
         approvedItems,
         parsedSections,
+        area: typeof fm['area'] === 'string' ? fm['area'] : undefined,
     };
 }
 export async function deleteMeeting(workspaceRoot, slug) {
