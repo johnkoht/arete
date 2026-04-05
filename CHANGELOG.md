@@ -1,4 +1,21 @@
 # Changelog
+## [Unreleased]
+
+### Changed
+- **Ship skill** — 2363→375 lines; extracted Phase 0 to `build-log-protocol.md`, multi-phase loop to `multi-phase-protocol.md`
+- **Engineering-lead agent** — merged into orchestrator (Testing Requirements section, signal tag processing); 6 roles → 5
+- **Signal tags** — replace token estimates in developer reflections; cascade through execute-prd, prd-post-mortem, orchestrator
+- **Three-track routing** — Express/Standard/Full in APPEND_SYSTEM.md + review-plan recommended_track output
+- **Working-memory structure** — explicit 4-section format (Discovered Patterns, Active Gotchas, Shared Utilities, Context Corrections)
+- **plan-to-prd** — emits prd.md + prd.json in one pass (no separate prd-to-json step)
+- **Recon check** — formal CONFIRMED/PHANTOM/PARTIAL classification in execute-prd Phase 0
+- **prd-post-mortem** — 9→5 sections; Signal Patterns section; synthesize-collaboration-profile mandatory
+- **Reviewer mindset** — grumpy-by-default ("assume something is wrong until proven otherwise")
+- **synthesize-collaboration-profile** — triggers simplified: automatic after post-mortem + on-request only
+- **Multi-phase ship** — meta-orchestrator loop with phase gates, GATE_PASS/GATE_FAIL escalation, project-working-memory.md
+
+---
+
 ## [0.3.0] - 2026-03-28
 
 ### Added
