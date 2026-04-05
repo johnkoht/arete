@@ -77,7 +77,6 @@ The `.pi/` directory at the repo root configures pi for this project:
 │   ├── reviewer.md     # Sr. Engineer — code review + AC verification
 │   ├── developer.md    # Task execution agent
 │   ├── product-manager.md
-│   ├── engineering-lead.md
 │   └── gitboss.md      # Git gatekeeper agent
 ├── expertise/          # Domain profiles (core/, cli/, web/, backend/)
 ├── standards/          # Build standards (build-standards.md, patterns.md, maintenance.md)
