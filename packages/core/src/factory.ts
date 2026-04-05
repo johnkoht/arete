@@ -7,6 +7,7 @@
 
 import type { SearchProvider } from './search/types.js';
 import type { AreteConfig } from './models/workspace.js';
+import type { GwsDetectionResult } from './integrations/gws/index.js';
 import { FileStorageAdapter } from './storage/file.js';
 import { getSearchProvider } from './search/factory.js';
 import { loadConfig, getDefaultConfig } from './config.js';
@@ -23,6 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { detectGws } from './integrations/gws/index.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -43,6 +45,9 @@ export type AreteServices = {
   areaMemory: AreaMemoryService;
   ai: AIService;
   tasks: TaskService;
+  gws: {
+    detection: GwsDetectionResult;
+  };
 };
 
 /**
@@ -107,6 +112,9 @@ export async function createServices(
   // AI service (depends on config)
   const ai = new AIService(config);
 
+  // GWS detection (non-blocking — returns { installed: false } if binary missing)
+  const gwsDetection = await detectGws();
+
   return {
     storage,
     search,
@@ -123,5 +131,8 @@ export async function createServices(
     areaMemory,
     ai,
     tasks,
+    gws: {
+      detection: gwsDetection,
+    },
   };
 }
