@@ -356,6 +356,17 @@ export type CompleteReviewResponse = {
   success: boolean;
 };
 
+export type AutoApproveQualifyingMeeting = {
+  slug: string;
+  title: string;
+  itemCount: number;
+};
+
+export type AutoApprovePreviewResponse = {
+  meetings: AutoApproveQualifyingMeeting[];
+  totalItems: number;
+};
+
 // ── Activity types ────────────────────────────────────────────────────────────
 
 export type ActivityItem = {

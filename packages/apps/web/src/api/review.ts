@@ -7,6 +7,7 @@ import type {
   PendingReviewResponse,
   CompleteReviewRequest,
   CompleteReviewResponse,
+  AutoApprovePreviewResponse,
 } from './types.js';
 
 /** GET /api/review/pending — fetch all pending review items */
@@ -22,4 +23,13 @@ export async function completeReview(
     method: 'POST',
     body: JSON.stringify(request),
   });
+}
+
+/** GET /api/review/auto-approve-preview — find meetings where all items meet confidence threshold */
+export async function fetchAutoApprovePreview(
+  threshold = 0.8
+): Promise<AutoApprovePreviewResponse> {
+  return apiFetch<AutoApprovePreviewResponse>(
+    `/api/review/auto-approve-preview?threshold=${threshold}`
+  );
 }

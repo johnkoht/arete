@@ -225,6 +225,66 @@ function buildTestApp(mocks: MockServices = {}) {
     }
   });
 
+  // GET /api/review/auto-approve-preview
+  app.get('/api/review/auto-approve-preview', async (c) => {
+    try {
+      const thresholdParam = c.req.query('threshold');
+      const threshold = thresholdParam !== undefined ? parseFloat(thresholdParam) : 0.8;
+
+      const allMeetings = await workspaceService.listMeetings();
+      const processedMeetings = allMeetings.filter((m) => m.status === 'processed');
+
+      type QualifyingMeeting = { slug: string; title: string; itemCount: number };
+      const qualifyingMeetings: QualifyingMeeting[] = [];
+
+      for (const meeting of processedMeetings) {
+        const fullMeeting = await workspaceService.getMeeting(meeting.slug);
+        if (!fullMeeting) continue;
+
+        const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
+
+        // Collect all pending items (decisions + learnings)
+        const pendingItems: MockStagedItem[] = [];
+
+        for (const item of fullMeeting.stagedSections.decisions) {
+          const status = stagedItemStatus[item.id];
+          if (status === 'pending' || status === undefined) {
+            pendingItems.push(item);
+          }
+        }
+
+        for (const item of fullMeeting.stagedSections.learnings) {
+          const status = stagedItemStatus[item.id];
+          if (status === 'pending' || status === undefined) {
+            pendingItems.push(item);
+          }
+        }
+
+        // No pending items → skip (meeting is already fully reviewed)
+        if (pendingItems.length === 0) continue;
+
+        // All pending items must have confidence >= threshold
+        const allQualify = pendingItems.every(
+          (item) => item.confidence !== undefined && item.confidence >= threshold
+        );
+
+        if (allQualify) {
+          qualifyingMeetings.push({
+            slug: fullMeeting.slug,
+            title: fullMeeting.title,
+            itemCount: pendingItems.length,
+          });
+        }
+      }
+
+      const totalItems = qualifyingMeetings.reduce((sum, m) => sum + m.itemCount, 0);
+      return c.json({ meetings: qualifyingMeetings, totalItems });
+    } catch (err) {
+      console.error('[review] auto-approve-preview error:', err);
+      return c.json({ error: 'Failed to compute auto-approve preview' }, 500);
+    }
+  });
+
   // POST /api/review/complete
   app.post('/api/review/complete', async (c) => {
     try {
@@ -511,6 +571,220 @@ describe('GET /api/review/pending', () => {
     const body = json as { decisions: Array<{ id: string }> };
     assert.equal(body.decisions.length, 1);
     assert.equal(body.decisions[0].id, 'de_001');
+  });
+});
+
+describe('GET /api/review/auto-approve-preview', () => {
+  it('returns empty when no processed meetings', async () => {
+    const app = buildTestApp();
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: unknown[]; totalItems: number };
+    assert.deepEqual(body.meetings, []);
+    assert.equal(body.totalItems, 0);
+  });
+
+  it('returns qualifying meetings where all items have confidence >= 0.8', async () => {
+    const meeting = makeMeetingSummary({ slug: 'high-conf-meeting', status: 'processed' });
+    const fullMeeting = makeFullMeeting({
+      slug: 'high-conf-meeting',
+      title: 'High Confidence Meeting',
+      date: '2024-01-20',
+      stagedSections: {
+        actionItems: [],
+        decisions: [
+          { id: 'de_001', text: 'Decision A', type: 'de', source: 'ai', confidence: 0.9 },
+          { id: 'de_002', text: 'Decision B', type: 'de', source: 'ai', confidence: 0.85 },
+        ],
+        learnings: [
+          { id: 'le_001', text: 'Learning A', type: 'le', source: 'ai', confidence: 0.95 },
+        ],
+      },
+      stagedItemStatus: {},
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([meeting]),
+      getMeeting: () => Promise.resolve(fullMeeting),
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: Array<{ slug: string; title: string; itemCount: number }>; totalItems: number };
+    assert.equal(body.meetings.length, 1);
+    assert.equal(body.meetings[0].slug, 'high-conf-meeting');
+    assert.equal(body.meetings[0].title, 'High Confidence Meeting');
+    assert.equal(body.meetings[0].itemCount, 3);
+    assert.equal(body.totalItems, 3);
+  });
+
+  it('excludes meetings where any item has confidence below 0.8', async () => {
+    const meeting = makeMeetingSummary({ slug: 'mixed-conf-meeting', status: 'processed' });
+    const fullMeeting = makeFullMeeting({
+      slug: 'mixed-conf-meeting',
+      title: 'Mixed Confidence Meeting',
+      date: '2024-01-20',
+      stagedSections: {
+        actionItems: [],
+        decisions: [
+          { id: 'de_001', text: 'High confidence', type: 'de', source: 'ai', confidence: 0.9 },
+          { id: 'de_002', text: 'Low confidence', type: 'de', source: 'ai', confidence: 0.6 },
+        ],
+        learnings: [],
+      },
+      stagedItemStatus: {},
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([meeting]),
+      getMeeting: () => Promise.resolve(fullMeeting),
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: unknown[]; totalItems: number };
+    assert.equal(body.meetings.length, 0);
+    assert.equal(body.totalItems, 0);
+  });
+
+  it('excludes meetings where any item has no confidence score', async () => {
+    const meeting = makeMeetingSummary({ slug: 'no-conf-meeting', status: 'processed' });
+    const fullMeeting = makeFullMeeting({
+      slug: 'no-conf-meeting',
+      title: 'No Confidence Meeting',
+      date: '2024-01-20',
+      stagedSections: {
+        actionItems: [],
+        decisions: [
+          { id: 'de_001', text: 'Has confidence', type: 'de', source: 'ai', confidence: 0.9 },
+          { id: 'de_002', text: 'No confidence', type: 'de', source: 'ai' /* no confidence */ },
+        ],
+        learnings: [],
+      },
+      stagedItemStatus: {},
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([meeting]),
+      getMeeting: () => Promise.resolve(fullMeeting),
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: unknown[]; totalItems: number };
+    assert.equal(body.meetings.length, 0);
+    assert.equal(body.totalItems, 0);
+  });
+
+  it('excludes meetings with no pending items (already all decided)', async () => {
+    const meeting = makeMeetingSummary({ slug: 'all-decided', status: 'processed' });
+    const fullMeeting = makeFullMeeting({
+      slug: 'all-decided',
+      title: 'All Decided Meeting',
+      date: '2024-01-20',
+      stagedSections: {
+        actionItems: [],
+        decisions: [
+          { id: 'de_001', text: 'Already approved', type: 'de', source: 'ai', confidence: 0.95 },
+        ],
+        learnings: [],
+      },
+      stagedItemStatus: { de_001: 'approved' }, // Already decided
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([meeting]),
+      getMeeting: () => Promise.resolve(fullMeeting),
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: unknown[]; totalItems: number };
+    assert.equal(body.meetings.length, 0);
+    assert.equal(body.totalItems, 0);
+  });
+
+  it('returns multiple qualifying meetings', async () => {
+    const m1 = makeMeetingSummary({ slug: 'meeting-1', status: 'processed' });
+    const m2 = makeMeetingSummary({ slug: 'meeting-2', status: 'processed' });
+    const full1 = makeFullMeeting({
+      slug: 'meeting-1',
+      title: 'Meeting One',
+      date: '2024-01-18',
+      stagedSections: {
+        actionItems: [],
+        decisions: [{ id: 'de_a', text: 'D1', type: 'de', source: 'ai', confidence: 0.9 }],
+        learnings: [],
+      },
+      stagedItemStatus: {},
+    });
+    const full2 = makeFullMeeting({
+      slug: 'meeting-2',
+      title: 'Meeting Two',
+      date: '2024-01-19',
+      stagedSections: {
+        actionItems: [],
+        decisions: [],
+        learnings: [{ id: 'le_b', text: 'L1', type: 'le', source: 'ai', confidence: 0.85 }],
+      },
+      stagedItemStatus: {},
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([m1, m2]),
+      getMeeting: (slug) => {
+        if (slug === 'meeting-1') return Promise.resolve(full1);
+        if (slug === 'meeting-2') return Promise.resolve(full2);
+        return Promise.resolve(null);
+      },
+    });
+
+    const { status, json } = await req(app, 'GET', '/api/review/auto-approve-preview');
+
+    assert.equal(status, 200);
+    const body = json as { meetings: Array<{ slug: string }>; totalItems: number };
+    assert.equal(body.meetings.length, 2);
+    assert.equal(body.totalItems, 2);
+  });
+
+  it('uses custom threshold from query param', async () => {
+    const meeting = makeMeetingSummary({ slug: 'borderline-meeting', status: 'processed' });
+    const fullMeeting = makeFullMeeting({
+      slug: 'borderline-meeting',
+      title: 'Borderline Meeting',
+      date: '2024-01-20',
+      stagedSections: {
+        actionItems: [],
+        decisions: [
+          { id: 'de_001', text: 'Borderline', type: 'de', source: 'ai', confidence: 0.75 },
+        ],
+        learnings: [],
+      },
+      stagedItemStatus: {},
+    });
+
+    const app = buildTestApp({
+      listMeetings: () => Promise.resolve([meeting]),
+      getMeeting: () => Promise.resolve(fullMeeting),
+    });
+
+    // With default threshold (0.8), meeting should NOT qualify
+    const { status: s1, json: j1 } = await req(app, 'GET', '/api/review/auto-approve-preview');
+    assert.equal(s1, 200);
+    const body1 = j1 as { meetings: unknown[] };
+    assert.equal(body1.meetings.length, 0);
+
+    // With lower threshold (0.7), meeting should qualify
+    const { status: s2, json: j2 } = await req(app, 'GET', '/api/review/auto-approve-preview?threshold=0.7');
+    assert.equal(s2, 200);
+    const body2 = j2 as { meetings: Array<{ slug: string }> };
+    assert.equal(body2.meetings.length, 1);
+    assert.equal(body2.meetings[0].slug, 'borderline-meeting');
   });
 });
 

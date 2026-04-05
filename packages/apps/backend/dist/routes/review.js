@@ -88,6 +88,55 @@ export function createReviewRouter(workspaceRoot) {
             return c.json({ error: 'Failed to load pending review items' }, 500);
         }
     });
+    // GET /api/review/auto-approve-preview — find meetings eligible for auto-approval
+    // A meeting qualifies when ALL pending items (decisions + learnings) have confidence >= threshold.
+    app.get('/auto-approve-preview', async (c) => {
+        try {
+            const thresholdParam = c.req.query('threshold');
+            const threshold = thresholdParam !== undefined ? parseFloat(thresholdParam) : 0.8;
+            const allMeetings = await workspaceService.listMeetings(workspaceRoot);
+            const processedMeetings = allMeetings.filter((m) => m.status === 'processed');
+            const qualifyingMeetings = [];
+            for (const meeting of processedMeetings) {
+                const fullMeeting = await workspaceService.getMeeting(workspaceRoot, meeting.slug);
+                if (!fullMeeting)
+                    continue;
+                const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
+                // Collect all pending items (decisions + learnings)
+                const pendingItems = [];
+                for (const item of fullMeeting.stagedSections.decisions) {
+                    const status = stagedItemStatus[item.id];
+                    if (status === 'pending' || status === undefined) {
+                        pendingItems.push(item);
+                    }
+                }
+                for (const item of fullMeeting.stagedSections.learnings) {
+                    const status = stagedItemStatus[item.id];
+                    if (status === 'pending' || status === undefined) {
+                        pendingItems.push(item);
+                    }
+                }
+                // No pending items → skip (meeting is already fully reviewed)
+                if (pendingItems.length === 0)
+                    continue;
+                // All pending items must have confidence >= threshold
+                const allQualify = pendingItems.every((item) => item.confidence !== undefined && item.confidence >= threshold);
+                if (allQualify) {
+                    qualifyingMeetings.push({
+                        slug: fullMeeting.slug,
+                        title: fullMeeting.title,
+                        itemCount: pendingItems.length,
+                    });
+                }
+            }
+            const totalItems = qualifyingMeetings.reduce((sum, m) => sum + m.itemCount, 0);
+            return c.json({ meetings: qualifyingMeetings, totalItems });
+        }
+        catch (err) {
+            console.error('[review] auto-approve-preview error:', err);
+            return c.json({ error: 'Failed to compute auto-approve preview' }, 500);
+        }
+    });
     // POST /api/review/complete — write completion file for CLI polling
     app.post('/complete', async (c) => {
         try {
