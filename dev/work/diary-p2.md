@@ -36,9 +36,10 @@ Building remaining phases from `product-simplification-assessment/plan.md`:
 - [x] Phase 2 complete → spawn Phase 3
 - [ ] Phase 4 complete
 - [ ] Phase 3 complete
-- [ ] Integration: cherry-pick all into this branch, rebuild dist, full test suite
-- [ ] Engineering-lead review
-- [ ] Wrap: memory entry, index
+- [x] Integration: cherry-pick all into this branch, rebuild dist, full test suite ✓
+- [x] Engineering-lead review — 0 critical, 9 minor, FIX THEN MERGE
+- [x] Post-review fixes: 4 tests for existingTasks injection, remove aspirational migration note
+- [x] Wrap: memory entry, index
 
 ---
 
