@@ -41,8 +41,7 @@ Guide the PM to define the top 3-5 weekly priorities. Read current quarter goals
 
 **Gather silently** (no user interaction needed):
 
-- **Quarter goals**: Read `goals/*.md` (excluding `strategy.md`). Parse frontmatter for `id`, `title`, `status`, `area`. Filter to `status: active`.
-- **Fallback**: If no individual goal files, read `goals/quarter.md` (legacy format).
+- **Quarter goals**: Read `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
 - **Last week**: Read `now/week.md` for carry-over items and continuity.
 - **Projects**: Scan `projects/active/` README files for active work.
 - **Scratchpad**: Read `now/scratchpad.md` for ad-hoc items.
@@ -321,8 +320,7 @@ No high-priority meetings this week — light calendar!
 
 ## References
 
-- **Quarter goals**: `goals/*.md` (individual files with frontmatter)
-- **Legacy goals**: `goals/quarter.md` (fallback)
+- **Quarter goals**: `goals/quarter.md`
 - **Last week**: `now/week.md`
 - **Output**: `now/week.md`
 - **Template**: `packages/runtime/skills/week-plan/templates/week-priorities.md`
@@ -334,7 +332,7 @@ No high-priority meetings this week — light calendar!
 - **Today section**: Placeholder for daily-plan. When daily-plan runs, it updates Focus and Meetings, and archives previous day to Daily Progress.
 - **Notes section**: User's working scratchpad. Preserved across all updates — never moved or overwritten.
 - **Tasks vs Outcomes**: Outcomes are high-level goals ("CoverWhale through compliance"). Tasks are specific action items ("Get templates through compliance review").
-- **Area context**: Goals and commitments may have `area:` field linking to areas. Area context (Current State, Key Decisions) lives in area files, not duplicated here.
+- **Area context**: Goals and commitments may have `area:` field linking to areas. Area context (Focus, Goals, Horizon) lives in area files, not duplicated here.
 
 ## Error Handling
 

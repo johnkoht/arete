@@ -230,7 +230,7 @@ Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to iden
 3. **Store area association** — When area is determined:
    - Add `area: <slug>` to meeting frontmatter (or context bundle)
    - This will be used for:
-     - Routing decisions to area's Key Decisions section
+     - Providing area context (Focus, Goals) for better extraction
      - Tagging commitments with area
 
 **Example**: Meeting "CoverWhale Sync" → matches `areas/glance-communications.md` → area = "glance-communications"
@@ -325,7 +325,7 @@ This commits approved decisions and learnings to `.arete/memory/items/`.
 
 **Area-based decision routing**: When the meeting has an area association (from Step 2b):
 
-1. **Write to area file** — For each approved decision, append to the area's `## Key Decisions` section:
+1. **Write to area file** — For each approved decision, append to the area's `## Notes` section:
    ```markdown
    - YYYY-MM-DD: [Decision description]
    ```
@@ -334,7 +334,7 @@ This commits approved decisions and learnings to `.arete/memory/items/`.
 2. **Also write to memory** — Decisions are still written to `.arete/memory/items/decisions.md` for global search. The area file entry provides quick access when prepping for related meetings.
 
 3. **Example**: After approving a decision from "CoverWhale Sync":
-   - Append to `areas/glance-communications.md` under `## Key Decisions`:
+   - Append to `areas/glance-communications.md` under `## Notes`:
      ```markdown
      - 2026-03-25: Use REST API instead of GraphQL for partner integration
      ```
@@ -392,7 +392,7 @@ After approval, report memory updates:
 
 ```
 Approved: 1 decision, 2 learnings committed to memory
-Decision routed to: areas/glance-communications.md (Key Decisions)
+Decision routed to: areas/glance-communications.md (Notes)
 Refreshed person memory: sarah-smith, mike-jones
 Commitments tagged: 3 with area "glance-communications"
 ```
@@ -578,5 +578,5 @@ Use `--commit` only when:
   - `arete commitments list --area <slug>` — filter commitments by area
 - **People**: `people/{internal|customers|users}/`, `arete people list`, `arete people index`
 - **Meetings**: `resources/meetings/` (frontmatter: `attendee_ids`, `status`, `processed_at`, `company`, `pillar`, `area`)
-- **Areas**: `areas/*.md` (recurring meeting mappings, Key Decisions section for decision routing)
+- **Areas**: `areas/*.md` (recurring meeting mappings, area context for extraction and decision routing)
 - **Related**: meeting-prep, daily-plan (both use get_area_context for area enrichment)

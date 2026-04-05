@@ -30,28 +30,25 @@ Read org strategy and the current quarter plan, then output an alignment view: o
 Before reviewing alignment, offer a brief **team health check** using the Five Dysfunctions pyramid (Patrick Lencioni): (1) **Trust** — vulnerability-based, (2) **Conflict** — healthy disagreement, (3) **Commitment** — clarity and buy-in, (4) **Accountability** — peers hold each other, (5) **Results** — team outcomes over individual. If any level is weak, alignment will be fragile. Ask: "Want to run through the Five Dysfunctions check before we look at the alignment?"
 
 - **Read** `goals/strategy.md` — org pillars, OKRs, strategic framework.
-- **Read** individual goal files: `goals/*.md` (excluding `strategy.md`).
-  - Parse frontmatter from each file to extract: `id`, `title`, `status`, `orgAlignment`.
-  - Filter to `status: active` goals for the current quarter.
-- **Fallback**: If no individual goal files exist, read `goals/quarter.md` (legacy format).
+- **Read** `goals/quarter.md` — current quarter goals. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields.
 
 ### 2. Build Alignment View
 
 Produce an **alignment view** that includes:
 
 - **Org side**: Pillars and/or OKRs from `goals/strategy.md`.
-- **PM side**: Active quarter goals from individual files, using `orgAlignment` frontmatter field.
-- **Mapping**: Table showing each goal's `title` → its `orgAlignment` value.
+- **PM side**: Active quarter goals from `goals/quarter.md`.
+- **Mapping**: Infer org alignment by matching each goal's title and area against `goals/strategy.md` pillars/OKRs.
   
   Example table format:
   ```
-  | Goal | Org Alignment | Status |
-  |------|---------------|--------|
-  | Ship onboarding v2 | Pillar 2: Retention | active |
-  | Reduce churn 15% | OKR: Improve NRR | active |
+  | Goal | Inferred Org Alignment | Status |
+  |------|------------------------|--------|
+  | Ship onboarding v2 | Pillar 2: Retention | Active |
+  | Reduce churn 15% | OKR: Improve NRR | Active |
   ```
   
-- **Gaps (optional)**: Org pillars/OKRs with no goal linked; goals with empty `orgAlignment`.
+- **Gaps (optional)**: Org pillars/OKRs with no goal linked; goals that don't clearly map to any pillar.
 
 ### 3. Present and Optionally Save
 
@@ -66,30 +63,11 @@ Produce an **alignment view** that includes:
 ## References
 
 - **Org strategy**: `goals/strategy.md`
-- **Individual goals**: `goals/*.md` (excluding `strategy.md`) — one file per goal with frontmatter
-- **Legacy quarter plan**: `goals/quarter.md` (fallback for older workspaces)
+- **Quarter goals**: `goals/quarter.md`
 - **Optional snapshot**: `goals/archive/alignment-YYYY-Qn.md`
-
-### Goal File Frontmatter
-
-Individual goal files use this frontmatter structure:
-```yaml
----
-id: "Q1-1"
-title: "Goal title"
-status: active
-quarter: "2026-Q1"
-type: outcome
-orgAlignment: "Pillar 2: Retention"
-successCriteria: "Measurable target"
----
-```
-
-The `orgAlignment` field links goals to org pillars/OKRs from `strategy.md`.
 
 ## Error Handling
 
-- If no individual goal files exist in `goals/`, try `goals/quarter.md` as fallback.
-- If neither individual files nor `quarter.md` exist, suggest running **quarter-plan** first.
+- If `goals/quarter.md` does not exist, suggest running **quarter-plan** first.
 - If `goals/strategy.md` is missing, show only PM goals and note that org context is not set.
-- If goal files lack `orgAlignment` frontmatter, flag them as "unlinked" in the gaps section.
+- If a goal doesn't clearly map to any org pillar, flag it as "unlinked" in the gaps section.

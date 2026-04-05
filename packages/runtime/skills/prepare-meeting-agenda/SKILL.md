@@ -83,7 +83,7 @@ The command output defines the complete section structure. If the user wants a d
 - The meeting has a specific purpose (e.g. kickoff, strategic planning, two teams meeting, "get things in motion").
 - The user named attendees or teams - resolve them and pull their context.
 - Multiple attendees or cross-group meeting - context is especially valuable.
-- Planning/strategy files are relevant (e.g. `goals/*.md` for individual goals, `now/week.md` open or referenced) - read them and align suggested items. **Goals**: Read individual goal files from `goals/*.md` (excluding `strategy.md`), parse frontmatter for `id`, `title`, `status`, `quarter`. Filter to `status: active` goals. Fallback to `goals/quarter.md` if no individual files exist.
+- Planning/strategy files are relevant (e.g. `goals/quarter.md`, `now/week.md` open or referenced) - read them and align suggested items. **Goals**: Read `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
 - The user gave more than a generic "create an agenda" (e.g. "agenda for the Acme kickoff tomorrow").
 
 **Skip context only when**: No attendees are identified and the user explicitly wants a blank template, or the user says they only want the template structure with no suggested items.
@@ -146,8 +146,7 @@ Use template section names and optional time from template's `time_allocation` w
 ## References
 
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) - get_meeting_context (for suggested items)
-- **Individual goals**: `goals/*.md` (excluding `strategy.md`) - one file per goal with frontmatter
-- **Legacy quarter plan**: `goals/quarter.md` (fallback for older workspaces)
+- **Quarter goals**: `goals/quarter.md`
 - **Week plan**: `now/week.md`
 - **Meetings**: `resources/meetings/index.md` (high-level themes); latest 2-3 files in `resources/meetings/` (summaries, key points for agenda ideas)
 - **Calendar**: `arete pull calendar --today --json` or `--days N`
@@ -155,19 +154,3 @@ Use template section names and optional time from template's `time_allocation` w
 - **Save location**: `now/agendas/` (primary); project folder or clipboard as alternatives
 - **Related skills**: meeting-prep (prep brief), process-meetings (run after the meeting)
 
-### Goal File Frontmatter
-
-Individual goal files use this frontmatter structure:
-```yaml
----
-id: "Q1-1"
-title: "Goal title"
-status: active
-quarter: "2026-Q1"
-type: outcome
-orgAlignment: "Pillar 2: Retention"
-successCriteria: "Measurable target"
----
-```
-
-Use `status` and `quarter` to identify active goals for the current quarter.

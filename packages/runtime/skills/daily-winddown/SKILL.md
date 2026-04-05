@@ -117,8 +117,7 @@ Read current goals and weekly plan from local files:
 cat now/week.md
 
 # Quarter goals
-ls goals/*.md
-cat goals/*.md
+cat goals/quarter.md
 ```
 
 Capture:
@@ -904,7 +903,7 @@ The skip option is critical for maintaining flow:
 
 - **Review UI is opt-in**: The visual review UI (Phase 2.5) is disabled by default. Set `skills.daily-winddown.useReviewUI: true` in `arete.yaml` or pass `--review-ui` flag to enable. This preserves the traditional CLI triage workflow for users who prefer it (Harvester requirement: don't force new UX on users).
 - **Approval flow**: User reviews and approves items in `arete view` (web UI) if Review UI is enabled, or via CLI triage (Phase 3a) if disabled. The agent then helps triage approved items into the week plan vs commitments for later.
-- **Local-first**: All state is in local markdown files (`now/week.md`, `goals/*.md`, `people/`, `.arete/memory/`). No external integrations required for core workflow.
+- **Local-first**: All state is in local markdown files (`now/week.md`, `goals/quarter.md`, `people/`, `.arete/memory/`). No external integrations required for core workflow.
 - **Commitments as backlog**: Items marked "Not This Week" stay in `.arete/commitments.json` and surface in future daily plans. Nothing falls through the cracks.
 - **Commitment auto-resolution**: TaskService.completeTask() auto-resolves linked commitments via `@from(commitment:XXX)` metadata. No manual link handling needed.
 - **Process-meetings delegation**: Phase 2 follows the process-meetings skill (steps 1-4) for consistency. See that skill for details on context building, area mapping, and extraction.
@@ -933,7 +932,7 @@ The skip option is critical for maintaining flow:
   - `now/tasks.md` — anytime/someday task backlog
   - `now/scratchpad.md` — carryover items and waiting-on-others
   - `now/agendas/` — prepared agendas (merged into meetings, then deleted)
-  - `goals/*.md` — individual goal files
+  - `goals/quarter.md` — quarter goals
   - `resources/meetings/` — meeting files
   - `.arete/memory/items/` — decisions and learnings
   - `.arete/commitments.json` — tracked commitments

@@ -200,7 +200,7 @@ The mode selection appears in the reprocess dialog alongside the "Clear approved
 - Items already in your memory (approved yesterday) → skipped automatically
 
 **Area context flows into extraction.** When processing a meeting linked to an area, the extraction prompt now includes:
-- Area's Current State section
+- Area's Focus section
 - Recent decisions from that area
 - Key stakeholders and their stances
 

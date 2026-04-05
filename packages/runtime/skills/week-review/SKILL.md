@@ -23,10 +23,7 @@ Read the current week file and quarter file, then guide the PM to mark prioritie
 ### 1. Read Context
 
 - **Read** the current week file: `now/week.md`.
-- **Read** individual goal files: `goals/*.md` (excluding `strategy.md`).
-  - Parse frontmatter from each file to extract: `id`, `title`, `status`, `quarter`, `successCriteria`.
-  - Filter to `status: active` goals for the current quarter.
-- **Fallback**: If no individual goal files exist, read `goals/quarter.md` (legacy format).
+- **Read** `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
 - **Check for Today's Plan section**: Look for `## Today's Plan` in the week file.
   - If present with real content (not just placeholders like `- [placeholder]` or empty subsections), note that daily planning was active this week.
   - If absent or placeholder-only, proceed normally — this is backward compatible with older week files.
@@ -126,27 +123,9 @@ If both sections return empty results, note: `⚠️ Sparse context — signific
 ## References
 
 - **Week file**: `now/week.md`
-- **Individual goals**: `goals/*.md` (excluding `strategy.md`) — one file per goal with frontmatter
-- **Legacy quarter plan**: `goals/quarter.md` (fallback for older workspaces)
+- **Quarter goals**: `goals/quarter.md`
 - **Optional**: `.arete/memory/summaries/sessions.md`
 - **Patterns**: `context_bundle_assembly` (context bundle limited to goals + memory only), `significance_analyst` (weekly significance assessment)
-
-### Goal File Frontmatter
-
-Individual goal files use this frontmatter structure:
-```yaml
----
-id: "Q1-1"
-title: "Goal title"
-status: active
-quarter: "2026-Q1"
-type: outcome
-orgAlignment: "Pillar 2: Retention"
-successCriteria: "Measurable target"
----
-```
-
-Use `status` and `quarter` to identify active goals for the current quarter.
 
 ## Error Handling
 

@@ -30,7 +30,7 @@ Build a prep brief for a meeting: attendee details, recent meetings, related pro
 1. **Use this skill** — Execute this workflow. Do not substitute ad-hoc grep/read only; use the get_meeting_context and get_area_context patterns.
 2. **Use QMD when available** — Run `qmd query "..."` to find related decisions/learnings; incorporate into the brief (step 6 of the pattern).
 3. **If the user asks what you used** — Report: "I used the **meeting-prep** skill (get_meeting_context + get_area_context patterns), person/meeting/project reads, and QMD for related context."
-4. **Area context enrichment** — For recurring meetings like "CoverWhale Sync", automatically look up and include area context (Current State, Key Decisions, Open Commitments) from the matched area file.
+4. **Area context enrichment** — For recurring meetings like "CoverWhale Sync", automatically look up and include area context (Focus, Goals, Horizon) from the matched area file.
 
 ## When to Use
 
@@ -65,9 +65,9 @@ Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to iden
    - Returns `AreaMatch | null`: `{ areaSlug: string; matchType: 'recurring' | 'inferred'; confidence: number }`
 
 2. **When area found** — Call `AreaParserService.getAreaContext(areaSlug)` to retrieve:
-   - `currentState` — Current status and key points about the area
-   - `keyDecisions` — Date-prefixed decisions relevant to this area
-   - `openCommitments` — Commitments scoped to this area
+   - `focus` — Current priorities and active work streams
+   - `goal` — Linked goals for this area
+   - `horizon` — Upcoming work and future priorities
    - Store these for inclusion in the brief (Step 6)
 
 3. **When area not found** — For recurring meetings (detected by title pattern or user indication):
@@ -77,7 +77,7 @@ Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to iden
      - Create a new area: `arete create area <slug>`
    - For one-off meetings, proceed without area context (no prompt needed)
 
-**Example**: Meeting title "CoverWhale Sync" → matches `areas/glance-communications.md` → auto-pulls Glance Communications context (Current State, Key Decisions, Open Commitments).
+**Example**: Meeting title "CoverWhale Sync" → matches `areas/glance-communications.md` → auto-pulls Glance Communications context (Focus, Goals, Horizon).
 
 ### 3. Lazy Refresh Person Memory (stale-aware)
 
@@ -141,17 +141,16 @@ _Include this section only when an area was matched in Step 2._
 
 **Area**: [Area Name] (areas/[slug].md)
 
-**Current State**:
-[Summary from area's Current State section — 2-3 key points about where things stand]
+**Focus**:
+[Summary from area's Focus section — 2-3 key priorities and active work streams]
 
-**Key Decisions**:
-- YYYY-MM-DD: [Decision relevant to this meeting]
-- YYYY-MM-DD: [Another relevant decision]
-_(Show 3-5 most recent decisions from the area)_
+**Goals**:
+- [Goal name](link) — one-liner
+_(Show goals from the area)_
 
-**Open Commitments** (area-scoped):
-- [ ] [Commitment description] — _Due: YYYY-MM-DD_
-_(Show commitments tagged with this area)_
+**Horizon**:
+- [Upcoming work or next phase]
+_(Show upcoming work from the area)_
 
 ### Attendees
 - **Name** — Role, Company | Last met: YYYY-MM-DD (or "No prior meetings")

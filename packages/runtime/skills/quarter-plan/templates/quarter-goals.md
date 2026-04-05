@@ -1,24 +1,15 @@
 ---
-id: "Q1-1"
-title: "Ship onboarding v2"
-status: active
 quarter: "2026-Q1"
-type: outcome
-orgAlignment: "Pillar 2: Retention"
-successCriteria: "90% completion rate"
+status: active
 ---
+# Q1 2026 Goals
 
-# Ship onboarding v2
+## Ship onboarding v2
+- **Area**: [Product](../areas/product.md)
+- **Success**: 90% completion rate
+- **Status**: Active
 
-## Notes
-
-- Key context or background for this goal
-
-## Progress
-
-- [ ] Milestone or checkpoint
-- [ ] Another milestone
-
-## Dependencies
-
-- Related goals, blockers, or external dependencies
+## Another Goal Title
+- **Area**: [Area Name](../areas/area-slug.md)
+- **Success**: Measurable criteria
+- **Status**: Active

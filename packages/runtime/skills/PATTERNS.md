@@ -157,14 +157,14 @@ const match = await parser.getAreaForMeeting('CoverWhale Sync');
 if (match) {
   // match: { areaSlug: 'glance-communications', matchType: 'recurring', confidence: 1.0 }
   const context = await parser.getAreaContext(match.areaSlug);
-  // Inject context.sections.currentState, context.sections.keyDecisions, etc.
+  // Inject context.sections.focus, context.sections.goal, etc.
 }
 
 // Direct by slug (e.g., when area is already known)
 const context = await parser.getAreaContext('glance-communications');
 if (context) {
-  console.log(context.sections.currentState); // "Partnership progressing well..."
-  console.log(context.sections.keyDecisions); // "- 2026-03-01: Use REST API..."
+  console.log(context.sections.focus); // "Cover Whale production launch..."
+  console.log(context.sections.goal); // "- [Ship CoverWhale integration]..."
 }
 ```
 
@@ -184,16 +184,30 @@ recurring_meetings:
 
 # Glance Communications
 
-## Current State
-Partnership is progressing well. API integration complete.
+## Goal
+- [Ship CoverWhale integration](../goals/2026-Q1-2-coverwhale.md) (Q1 2026)
 
-## Key Decisions
-- 2026-03-01: Use REST API instead of GraphQL
-- 2026-02-15: Monthly partner reviews
+## Focus
+- **Cover Whale production launch** — Templates finalized, targeting go-live
+
+## Horizon
+- LEAP rollout (Phase 2)
+
+## Projects
+
+| Project | Status |
+| ------- | ------ |
+| [Comms Domain](../projects/active/glance-comms/README.md) | Active |
 
 ## Backlog
 - Add webhook support
 - Performance optimization
+
+## Stakeholders
+
+| Person | Role |
+| ------ | ---- |
+| Lindsay Gray | PM lead |
 ```
 
 **Integration with other patterns**:
@@ -569,7 +583,7 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
    - User's stated priorities (their exact wording, not paraphrased)
    - Confirmed meeting titles (QBRs, customer calls, key 1:1s)
    - Key attendee names (resolved to person slugs)
-   - Related goal keywords (from goals/*.md linkage)
+   - Related goal keywords (from goals/quarter.md)
 
 2. **Run targeted memory searches** — For each search term:
    ```bash
