@@ -31,9 +31,11 @@ export {
 export { detectGws } from './detection.js';
 export { gwsExec } from './client.js';
 export { GmailProvider, getGmailProvider } from './gmail.js';
+export { GwsDriveProvider, getGwsDriveProvider } from './drive.js';
+export { GwsDocsProvider, getGwsDocsProvider } from './docs.js';
 
 // ---------------------------------------------------------------------------
-// Provider factories (Phase 1+ — return null for now)
+// Provider factories
 // ---------------------------------------------------------------------------
 
 export async function getEmailProvider(
@@ -49,20 +51,28 @@ export async function getEmailProvider(
   return null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getDriveProvider(
-  _config: AreteConfig,
+  config: AreteConfig,
   _storage: StorageAdapter,
   _workspaceRoot: string,
 ): Promise<import('./types.js').DriveProvider | null> {
-  return null; // Phase 2
+  const gwsConfig = config.integrations?.['google-workspace'] as { status?: string } | undefined;
+  if (gwsConfig && gwsConfig.status === 'active') {
+    const { getGwsDriveProvider } = await import('./drive.js');
+    return getGwsDriveProvider();
+  }
+  return null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function getDocsProvider(
-  _config: AreteConfig,
+  config: AreteConfig,
   _storage: StorageAdapter,
   _workspaceRoot: string,
 ): Promise<import('./types.js').DocsProvider | null> {
-  return null; // Phase 2
+  const gwsConfig = config.integrations?.['google-workspace'] as { status?: string } | undefined;
+  if (gwsConfig && gwsConfig.status === 'active') {
+    const { getGwsDocsProvider } = await import('./docs.js');
+    return getGwsDocsProvider();
+  }
+  return null;
 }

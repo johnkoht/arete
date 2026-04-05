@@ -2,8 +2,8 @@
  * arete pull [integration] — fetch data from integrations
  */
 
-import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider } from '@arete/core';
-import type { QmdRefreshResult, CalendarProvider, AreteConfig, EmailProvider } from '@arete/core';
+import { createServices, loadConfig, getCalendarProvider, refreshQmdIndex, inferMeetingImportance, findMatchingAgendaPath, getEmailProvider, getDriveProvider } from '@arete/core';
+import type { QmdRefreshResult, CalendarProvider, AreteConfig, EmailProvider, DriveProvider } from '@arete/core';
 import type { Command } from 'commander';
 import { isAbsolute, join, basename } from 'path';
 import { tmpdir } from 'os';
@@ -25,6 +25,7 @@ export function registerPullCommand(program: Command): void {
     .option('--dry-run', 'Fetch + convert and print markdown without saving (notion only)')
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--json', 'Output as JSON')
+    .option('--query <q>', 'Search query (drive, gmail)')
     .action(
       async (
         integration: string | undefined,
@@ -36,6 +37,7 @@ export function registerPullCommand(program: Command): void {
           dryRun?: boolean;
           skipQmd?: boolean;
           json?: boolean;
+          query?: string;
         },
       ) => {
         const services = await createServices(process.cwd());
@@ -70,6 +72,14 @@ export function registerPullCommand(program: Command): void {
           return pullGmailHelper(services, root, {
             days,
             json: opts.json ?? false,
+          });
+        }
+
+        if (integration === 'drive') {
+          return pullDriveHelper(services, root, {
+            days,
+            json: opts.json ?? false,
+            query: opts.query,
           });
         }
 
@@ -160,12 +170,12 @@ export function registerPullCommand(program: Command): void {
             JSON.stringify({
               success: false,
               error: `Unknown integration: ${integration}`,
-              available: ['calendar', 'fathom', 'gmail', 'krisp', 'notion'],
+              available: ['calendar', 'drive', 'fathom', 'gmail', 'krisp', 'notion'],
             }),
           );
         } else {
           error(`Unknown integration: ${integration}`);
-          info('Available: calendar, fathom, gmail, krisp, notion');
+          info('Available: calendar, drive, fathom, gmail, krisp, notion');
         }
         process.exit(1);
       },
@@ -657,5 +667,99 @@ export async function pullGmailHelper(
   }
 
   console.log(`Total: ${threads.length} thread(s)`);
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// Drive helper
+// ---------------------------------------------------------------------------
+
+export async function pullDriveHelper(
+  services: Awaited<ReturnType<typeof import('@arete/core').createServices>>,
+  workspaceRoot: string,
+  opts: {
+    days: number;
+    json: boolean;
+    query?: string;
+  },
+): Promise<void> {
+  const config = await loadConfig(services.storage, workspaceRoot);
+  const provider = await getDriveProvider(config, services.storage, workspaceRoot);
+
+  if (!provider) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: 'Google Workspace integration not configured',
+          message: 'Add google-workspace integration with status: active to arete.yaml',
+        }),
+      );
+    } else {
+      error('Google Workspace integration not configured');
+      info('Add google-workspace integration with status: active to arete.yaml');
+    }
+    process.exit(1);
+  }
+
+  const available = await provider.isAvailable();
+  if (!available) {
+    if (opts.json) {
+      console.log(
+        JSON.stringify({
+          success: false,
+          error: 'Drive provider not available',
+          message: 'Ensure gws CLI is installed and authenticated: gws auth login',
+        }),
+      );
+    } else {
+      error('Drive provider not available');
+      info('Ensure gws CLI is installed and authenticated: gws auth login');
+    }
+    process.exit(1);
+  }
+
+  let files;
+  if (opts.query) {
+    files = await provider.search(opts.query, { maxResults: 25 });
+  } else {
+    // Default: recent files within --days range
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - opts.days);
+    const iso = cutoff.toISOString();
+    files = await provider.search(`modifiedTime > '${iso}'`, { maxResults: 25 });
+  }
+
+  if (opts.json) {
+    console.log(
+      JSON.stringify(
+        {
+          success: true,
+          integration: 'drive',
+          files,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  header('Google Drive Files');
+  console.log('');
+
+  if (files.length === 0) {
+    info('No files found matching the query.');
+    return;
+  }
+
+  for (const file of files) {
+    const modified = file.modifiedTime ? file.modifiedTime.split('T')[0] : 'unknown';
+    const link = file.webViewLink ? ` — ${file.webViewLink}` : '';
+    console.log(`  * [${file.name}] (${file.mimeType}) — modified ${modified}${link}`);
+  }
+
+  console.log('');
+  console.log(`Total: ${files.length} file(s)`);
   console.log('');
 }

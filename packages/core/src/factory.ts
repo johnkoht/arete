@@ -7,7 +7,7 @@
 
 import type { SearchProvider } from './search/types.js';
 import type { AreteConfig } from './models/workspace.js';
-import type { GwsDetectionResult, EmailProvider } from './integrations/gws/index.js';
+import type { GwsDetectionResult, EmailProvider, DriveProvider, DocsProvider } from './integrations/gws/index.js';
 import { FileStorageAdapter } from './storage/file.js';
 import { getSearchProvider } from './search/factory.js';
 import { loadConfig, getDefaultConfig } from './config.js';
@@ -24,7 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
-import { detectGws, getEmailProvider } from './integrations/gws/index.js';
+import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider } from './integrations/gws/index.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -48,6 +48,8 @@ export type AreteServices = {
   gws: {
     detection: GwsDetectionResult;
     email: EmailProvider | null;
+    drive: DriveProvider | null;
+    docs: DocsProvider | null;
   };
 };
 
@@ -84,9 +86,11 @@ export async function createServices(
   const memory = new MemoryService(storage, search);
   const entity = new EntityService(storage, search);
 
-  // GWS email provider (null if google-workspace integration not active)
-  // Created early so IntelligenceService can use it for email enrichment
+  // GWS providers (null if google-workspace integration not active)
+  // Created early so IntelligenceService can use email for enrichment
   const gwsEmail = await getEmailProvider(config, storage, workspaceRoot);
+  const gwsDrive = await getDriveProvider(config, storage, workspaceRoot);
+  const gwsDocs = await getDocsProvider(config, storage, workspaceRoot);
 
   // Orchestration (depends on core services)
   const intelligence = new IntelligenceService(context, memory, entity, gwsEmail);
@@ -139,6 +143,8 @@ export async function createServices(
     gws: {
       detection: gwsDetection,
       email: gwsEmail,
+      drive: gwsDrive,
+      docs: gwsDocs,
     },
   };
 }

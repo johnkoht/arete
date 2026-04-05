@@ -112,5 +112,6 @@ export interface DocsProvider {
   name: string;
   isAvailable(): Promise<boolean>;
   getDoc(docId: string): Promise<DocMetadata>;
+  getDocContent(docId: string): Promise<string>;
   getRecentDocs(options?: { maxResults?: number }): Promise<DocMetadata[]>;
 }
