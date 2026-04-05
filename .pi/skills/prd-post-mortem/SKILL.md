@@ -103,6 +103,7 @@ Aggregated from developer signals in `dev/executions/{slug}/progress.md`:
 | MISSING_CONTEXT | N | [what was missing] |
 | NEW_PATTERN | N | [patterns created] |
 | REUSE | N | [what was reused] |
+| OTHER | N | [summary of miscellaneous signals] |
 *(Omit rows with count=0. NOTHING_NOVEL/BLOCKER_RESOLVED don't need examples.)*
 
 ## Pre-Mortem Effectiveness

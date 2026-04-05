@@ -140,7 +140,7 @@ Plans can have associated artifacts in the same directory:
 | `review.md` | `/review` | Cross-model review output |
 | `pre-mortem.md` | `/pre-mortem` | Risk analysis |
 | `prd.md` | `/prd` | Full PRD for autonomous execution |
-| `prd.json` | `prd-to-json` skill | Task list for execute-prd |
+| `prd.json` | `plan-to-prd` skill | Task list for execute-prd (emitted alongside prd.md) |
 | `notes.md` | `save_plan_artifact` tool | General notes |
 
 ---

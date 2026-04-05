@@ -134,6 +134,7 @@ abc1234
 - NEW_PATTERN: [pattern you created that others should know about]
 - BLOCKER_RESOLVED: [decision that unblocked you]
 - NOTHING_NOVEL: [confirm context assembly worked, implementation followed existing patterns]
+- OTHER: [anything that doesn't fit the above tags]
 *(Include at least one signal. NOTHING_NOVEL is the expected default for straightforward tasks.)*
 ```
 

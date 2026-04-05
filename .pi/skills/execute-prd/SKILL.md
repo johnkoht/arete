@@ -217,8 +217,8 @@ For each pending task (in dependency order):
    **Context - Read These Files First**:
    1. `dev/executions/{plan-slug}/working-memory.md` — cross-task knowledge from prior tasks
    2. `.pi/expertise/{area}/PROFILE.md` — domain map for {area} (architecture, services, invariants)
-   2. [file] — [why it's relevant]
    3. [file] — [why it's relevant]
+   4. [file] — [why it's relevant]
    ...
    
    **Important Patterns**:

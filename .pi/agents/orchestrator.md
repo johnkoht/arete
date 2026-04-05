@@ -114,6 +114,7 @@ You are a learning system, not a mechanical dispatcher. After each task complete
   - `BLOCKER_RESOLVED` → explicitly include the resolution in the next task's prompt
   - `REUSE` → confirm context assembly worked; no action needed
   - `NOTHING_NOVEL` → skip documentation synthesis for this task
+  - `OTHER` → read the note; route to LEARNINGS.md, patterns.md, or escalate as appropriate
 - **Synthesize reviewer feedback** — Are patterns emerging? Is the same issue flagged repeatedly? Adjust your next subagent prompt.
 - **Check for new LEARNINGS.md** — Did the developer create or update a LEARNINGS.md? If so, does it affect upcoming tasks?
 - **Adapt prompts** — If Task 2's reviewer said "forgot to use existing helper X," explicitly add "Use helper X" to Task 3's prompt.
