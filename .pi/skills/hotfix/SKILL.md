@@ -146,22 +146,7 @@ Run quality gates: `npm run typecheck && npm test`
 
 1. **Update LEARNINGS.md** (if applicable)
    
-   If this bug was a regression or revealed a non-obvious gotcha:
-   
-   **Path resolution**:
-   - Check for LEARNINGS.md in the affected file's directory
-   - If not found, check the parent directory
-   - If still not found, create one in the directory of the primary changed file
-   
-   **Entry format**:
-   ```markdown
-   ## [Date] — [Short description]
-   
-   **What broke**: [description]
-   **Why**: [root cause]
-   **Fix**: [what you did]
-   **Prevention**: [how to avoid in future]
-   ```
+   If this bug was a regression, first-use pattern, or non-obvious design decision, update the nearest LEARNINGS.md. See `.pi/standards/learnings-protocol.md` for path resolution, entry format, and the 7-section template for new files.
 
 2. **Report to user**:
    ```

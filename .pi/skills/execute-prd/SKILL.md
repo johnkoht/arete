@@ -11,63 +11,13 @@ requires_briefing: false
 
 Autonomously execute a PRD by dispatching subagents for each task, with two distinct roles: **Orchestrator** (senior engineering manager) and **Reviewer** (senior engineer).
 
-## Tool Reference
+## Tool Reference & Pre-Flight
 
-This skill uses the `subagent` tool to dispatch work to developer and reviewer agents.
+**Read `.pi/standards/subagent-dispatch.md`** for the full subagent tool reference, pre-flight check, prompt template, and proven patterns. This is required reading before dispatching any subagent.
 
-```typescript
-// Dispatch a developer to implement a task
-subagent({ agent: "developer", task: "<prompt>", agentScope: "project" })
+**Pre-Flight Check (MANDATORY)**: Before doing ANY other work, run the pre-flight check from subagent-dispatch.md. If the subagent tool is unavailable, HALT and present options to the builder. There is no silent fallback.
 
-// Dispatch a reviewer for sanity check or code review
-subagent({ agent: "reviewer", task: "<prompt>", agentScope: "project" })
-```
-
-**Parameters**:
-- `agent`: Name of the agent definition in `.pi/agents/<name>.md`
-- `task`: The full prompt/instructions for the subagent
-- `agentScope`: Must be `"project"` to load project-level agent definitions from `.pi/agents/`
-
-**Returns**: The subagent's final assistant message (text). Parse the developer's completion report or reviewer's verdict from this text.
-
-**Important**: All subagent calls inherit the current working directory. The orchestrator must run from the **worktree root** so subagents work in the correct location.
-
-### Pre-Flight Check (MANDATORY)
-
-Before doing ANY other work, verify the `subagent` tool is available by making a real call:
-
-```typescript
-subagent({ action: "list" })
-```
-
-**If the call succeeds**: The tool is available. Proceed with Phase 0.
-
-**If the call fails** (tool not found, error, or no `subagent` in tool list): **HALT immediately.** Do NOT silently fall back to single-agent execution. Instead:
-
-1. **Stop all work** — do not read the PRD, do not begin planning
-2. **Notify the builder** with this exact message:
-
-   > ⚠️ **Subagent tool is not available in this session.**
-   >
-   > The execute-prd skill requires the `subagent` tool to dispatch work to developer and reviewer agents. Without it, the multi-agent orchestration loop (reviewer pre-checks, developer implementation, reviewer code review, iterate cycles) cannot run.
-   >
-   > **Without subagents you lose:**
-   > - Independent reviewer sanity checks before each task
-   > - Separate developer agents with fresh context per task
-   > - Reviewer code reviews with iterate/approve cycles
-   > - Developer reflections and cross-task learning
-   >
-   > **Options:**
-   > 1. **Fix and retry** — Ensure the `pi-subagents` package is installed and restart the session
-   > 2. **Continue without subagents** — I'll execute all tasks directly as a single agent (reduced quality assurance)
-   > 3. **Abort** — Stop execution entirely
-   >
-   > Which would you like?
-
-3. **Wait for the builder's explicit choice** — do not proceed until they respond
-4. **If the builder chooses option 2**: Proceed with Phase 0, but prepend all progress.md entries and the final report with `⚠️ Executed in single-agent fallback mode (no subagents)` so the degraded mode is always visible
-
-**There is no silent fallback.** The builder must explicitly opt in to degraded execution.
+**If the builder chooses single-agent mode**: Proceed with Phase 0, but prepend all progress.md entries and the final report with `⚠️ Executed in single-agent fallback mode (no subagents)` so the degraded mode is always visible.
 
 ## Roles
 
@@ -174,50 +124,15 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
 
 6. **Identify Risks**
    
-   Consider these common risk categories:
-   
-   | Risk Category | Question to Ask | Example |
-   |--------------|----------------|---------|
-   | **Context Gaps** | Will subagents have enough context? | "B1 needs to know about SearchProvider from A1-A3" |
-   | **Test Patterns** | Do we have test patterns to follow? | "Need to reference testDeps pattern from qmd.ts" |
-   | **Integration** | How will tasks integrate? | "B2 async change might break callers" |
-   | **Scope Creep** | How to prevent over-implementation? | "Strict acceptance criteria adherence" |
-   | **Code Quality** | What patterns must be followed? | ".js imports, no any, error handling" |
-   | **Reuse / Duplication** | Could subagent reimplement instead of reuse? | "Use getSearchProvider(); don't add new search logic" |
-   | **Dependencies** | Are dependencies clear? | "Can't do B1 until A3 is done" |
-   | **Platform Issues** | Any platform-specific risks? | "ical-buddy might not be installed" |
-   | **State Tracking** | How to track progress? | "Update prd.json after each task" |
-   | **Documentation** | What docs need updates? | "README install flow, ONBOARDING paths, plan items with doc tasks" |
-   | **Build Scripts** | Do referenced scripts exist? | "Verify `npm run build:agents:dev` exists before putting in prompts" |
+   Read `.pi/standards/pre-mortem-categories.md` for the canonical list of 11 risk categories. Work through each, identifying risks specific to THIS PRD.
 
 7. **Document Mitigations**
    
-   For each risk, create concrete mitigation:
-   
-   ```markdown
-   ### Risk: [Name]
-   **Problem**: [What could go wrong]
-   **Mitigation**: [Specific action to prevent it]
-   **Verification**: [How to check mitigation was applied]
-   ```
+   For each risk, use the entry format from `.pi/standards/pre-mortem-categories.md` (Problem / Mitigation / Verification).
 
-   **Documentation Impact Mitigation:**
+   **Documentation Impact Mitigation**: If the PRD changes user-facing behavior, add a doc-update task to prd.json (last task). Orchestrator spawns doc subagent after all implementation tasks complete.
 
-   If the PRD changes user-facing behavior, paths, or setup:
-   1. Run documentation checklist (see dev.mdc § Documentation planning checklist).
-   2. If docs are affected: Add a doc-update task to prd.json (last task, depends on all implementation tasks).
-   3. Provide the doc subagent with: feature changes summary, documentation checklist, and search results (which files reference affected concepts).
-   4. Doc subagent runs checklist, updates files, commits.
-
-   **Pattern:** Orchestrator spawns doc subagent after all implementation tasks complete. Subagent has full context of what changed and runs systematic audit.
-
-   **Shared Utility Mitigation:**
-
-   If pre-mortem identifies that two tasks will need the same helper/formatter/utility:
-   - **Option A**: Add a Task 0 to create the shared utility first (before both dependent tasks).
-   - **Option B**: In Task 2's prompt, explicitly state: "Import [utility] from Task 1's file; do not reimplement."
-
-   **Anti-pattern**: Flagging duplication in code review then filing a refactor item. Better to prevent during implementation.
+   **Shared Utility Mitigation**: If two tasks need the same helper, either add a Task 0 to create it first, or in Task 2's prompt state "Import [utility] from Task 1's file; do not reimplement." Anti-pattern: flagging duplication in review then filing a refactor item — prevent during implementation instead.
 
 8. **Share Pre-Mortem with User**
    
@@ -235,18 +150,13 @@ For each pending task (in dependency order):
    - **Read prior completed tasks**: Check what's been built (files, patterns, tests)
    - **Identify files to reference**: List specific files subagent should read first
    - **Check mitigations**: Review pre-mortem - which mitigations apply to this task?
-   - **Pre-task LEARNINGS.md check**: For each file the subagent will edit, check for LEARNINGS.md in the same directory and one level up. If found, add to "Context - Read These Files First":
-     - `packages/core/src/services/LEARNINGS.md` — component gotchas and invariants
+   - **Pre-task LEARNINGS.md check**: See `.pi/standards/learnings-protocol.md` for path resolution. For each file the subagent will edit, check for LEARNINGS.md in the same directory and one level up. If found, add to "Context - Read These Files First."
 
 10. **Craft Subagent Prompt** (Orchestrator)
    
-   **Expertise profile selection**: Before writing the prompt, determine which expertise profile(s) the task needs based on the files it touches:
-   - Task touches `packages/core/` → include `.pi/expertise/core/PROFILE.md`
-   - Task touches `packages/cli/` → include `.pi/expertise/cli/PROFILE.md`
-   - Task touches both → include both profiles
-   - Task touches only docs/config/`.pi/` → no profile needed
+   **Use the prompt template from `.pi/standards/subagent-dispatch.md`**. It includes expertise profile selection, proven patterns, and the signals format.
    
-   See `orchestrator.md` § Expertise Profiles for the full heuristic.
+   See `orchestrator.md` § Expertise Profiles for the full heuristic and `.pi/standards/subagent-dispatch.md` § Expertise Profile Selection for the mapping table.
    
    Use this template (scale reflection based on task complexity):
    
