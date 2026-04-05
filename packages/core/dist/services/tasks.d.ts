@@ -85,6 +85,11 @@ export declare class TaskService {
     listTasks(options?: ListTasksOptions): Promise<WorkspaceTask[]>;
     /**
      * Add a task to the specified destination.
+     *
+     * Dedup logic (runs before insert):
+     * 1. Fast-path: if metadata.from.id matches any existing task's @from(commitment:id), skip insert.
+     * 2. Jaccard similarity: if normalized text similarity >= 0.8 vs any existing task, skip insert.
+     * In both cases, returns the existing task instead of inserting.
      */
     addTask(text: string, destination: TaskDestination, metadata?: TaskMetadata): Promise<WorkspaceTask>;
     /**

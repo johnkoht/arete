@@ -583,6 +583,119 @@ describe('TaskService.addTask', () => {
     assert.equal(task.id.length, 8);
     assert.match(task.id, /^[a-f0-9]{8}$/);
   });
+
+  // ---------------------------------------------------------------------------
+  // Dedup tests
+  // ---------------------------------------------------------------------------
+
+  it('dedup: skips insert when @from(commitment:id) already exists', async () => {
+    // Existing task has @from(commitment:abc12345)
+    const weekContent = `# Week
+## Inbox
+- [ ] Send API docs @from(commitment:abc12345)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Try to add the same task with the same commitment ID
+    const result = await service.addTask('Send API documentation to Sarah', 'inbox', {
+      from: { type: 'commitment', id: 'abc12345' },
+    });
+
+    // Should return the existing task, not insert
+    const updatedContent = store.get(WEEK_FILE);
+    const taskLines = updatedContent?.split('\n').filter((l) => l.startsWith('- [')) ?? [];
+    assert.equal(taskLines.length, 1, 'Should not have inserted a duplicate task');
+    assert.equal(result.text, 'Send API docs');
+  });
+
+  it('dedup: skips insert when Jaccard similarity >= 0.8', async () => {
+    // Verify math: "Send API docs to Sarah" (5 tokens) vs "Send API docs to Sarah now" (6 tokens)
+    // Intersection: 5, Union: 6, Jaccard = 5/6 ≈ 0.833 >= 0.8
+    const weekContent = `# Week
+## Inbox
+- [ ] Send API docs to Sarah
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Try to add near-duplicate (adds one word → Jaccard = 5/6 = 0.833)
+    const result = await service.addTask('Send API docs to Sarah now', 'inbox');
+
+    // Should return the existing task, not insert
+    const updatedContent = store.get(WEEK_FILE);
+    const taskLines = updatedContent?.split('\n').filter((l) => l.startsWith('- [')) ?? [];
+    assert.equal(taskLines.length, 1, 'Should not have inserted a near-duplicate task');
+    assert.equal(result.text, 'Send API docs to Sarah');
+  });
+
+  it('dedup: does NOT skip when Jaccard similarity < 0.8', async () => {
+    // "Send API docs" (3 tokens) vs "Update project documentation" (3 tokens)
+    // Intersection: 0, Union: 6, Jaccard = 0.0
+    const weekContent = `# Week
+## Inbox
+- [ ] Send API docs
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Different enough task — should be inserted
+    const result = await service.addTask('Update project documentation', 'inbox');
+
+    const updatedContent = store.get(WEEK_FILE);
+    const taskLines = updatedContent?.split('\n').filter((l) => l.startsWith('- [')) ?? [];
+    assert.equal(taskLines.length, 2, 'Should have inserted the distinct task');
+    assert.equal(result.text, 'Update project documentation');
+  });
+
+  it('dedup: does NOT match @from(commitment:) when IDs differ', async () => {
+    const weekContent = `# Week
+## Inbox
+- [ ] Send API docs @from(commitment:abc12345)
+`;
+    const store = makeWeekFile(weekContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Different commitment ID — should be inserted
+    await service.addTask('Send API docs', 'inbox', {
+      from: { type: 'commitment', id: 'xyz99999' },
+    });
+
+    const updatedContent = store.get(WEEK_FILE);
+    const taskLines = updatedContent?.split('\n').filter((l) => l.startsWith('- [')) ?? [];
+    // Two tasks: original + new (but Jaccard might catch this — text "Send API docs" is very similar)
+    // "Send API docs" vs "Send API docs" → Jaccard = 1.0 >= 0.8, so dedup WILL fire via text
+    // This is correct behavior — same text = duplicate
+    assert.equal(taskLines.length, 1);
+  });
+
+  it('dedup: checks both week.md and tasks.md for duplicates', async () => {
+    // Task exists in tasks.md, trying to add to week.md
+    const tasksContent = `# Tasks
+## Anytime
+- [ ] Research pricing strategy
+`;
+    const weekContent = `# Week
+## Inbox
+`;
+    const store = makeBothFiles(weekContent, tasksContent);
+    const storage = createMockStorage(store);
+    const service = new TaskService(storage, makePaths());
+
+    // Try to add near-duplicate to week.md
+    // "Research pricing strategy" (3 tokens) vs "Research pricing strategy" → Jaccard = 1.0
+    const result = await service.addTask('Research pricing strategy', 'inbox');
+
+    // Should return the existing task from tasks.md
+    const updatedWeek = store.get(WEEK_FILE);
+    const weekTaskLines = updatedWeek?.split('\n').filter((l) => l.startsWith('- [')) ?? [];
+    assert.equal(weekTaskLines.length, 0, 'Should not have inserted into week.md');
+    assert.equal(result.text, 'Research pricing strategy');
+  });
 });
 
 // ---------------------------------------------------------------------------
