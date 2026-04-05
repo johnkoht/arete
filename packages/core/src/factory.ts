@@ -7,6 +7,7 @@
 
 import type { SearchProvider } from './search/types.js';
 import type { AreteConfig } from './models/workspace.js';
+import type { GwsDetectionResult, EmailProvider, DriveProvider, DocsProvider, SheetsProvider, DirectoryProvider } from './integrations/gws/index.js';
 import { FileStorageAdapter } from './storage/file.js';
 import { getSearchProvider } from './search/factory.js';
 import { loadConfig, getDefaultConfig } from './config.js';
@@ -23,6 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider } from './integrations/gws/index.js';
 
 /**
  * All services created by the factory, keyed by role.
@@ -43,6 +45,14 @@ export type AreteServices = {
   areaMemory: AreaMemoryService;
   ai: AIService;
   tasks: TaskService;
+  gws: {
+    detection: GwsDetectionResult;
+    email: EmailProvider | null;
+    drive: DriveProvider | null;
+    docs: DocsProvider | null;
+    sheets: SheetsProvider | null;
+    directory: DirectoryProvider | null;
+  };
 };
 
 /**
@@ -73,13 +83,22 @@ export async function createServices(
   // Load config for IntegrationService
   const config = options?.config ?? await loadConfig(storage, workspaceRoot);
 
+  // GWS providers (null if google-workspace integration not active)
+  // Created early so IntelligenceService can use email for enrichment
+  // and EntityService can use directory for fallback resolution
+  const gwsEmail = await getEmailProvider(config, storage, workspaceRoot);
+  const gwsDrive = await getDriveProvider(config, storage, workspaceRoot);
+  const gwsDocs = await getDocsProvider(config, storage, workspaceRoot);
+  const gwsSheets = await getSheetsProvider(config, storage, workspaceRoot);
+  const gwsDirectory = await getDirectoryProvider(config, storage, workspaceRoot);
+
   // Core services (depend on storage + search)
   const context = new ContextService(storage, search);
   const memory = new MemoryService(storage, search);
-  const entity = new EntityService(storage, search);
+  const entity = new EntityService(storage, search, gwsDirectory);
 
   // Orchestration (depends on core services)
-  const intelligence = new IntelligenceService(context, memory, entity);
+  const intelligence = new IntelligenceService(context, memory, entity, gwsEmail);
 
   // Workspace management (depends on storage only)
   const workspace = new WorkspaceService(storage);
@@ -107,6 +126,9 @@ export async function createServices(
   // AI service (depends on config)
   const ai = new AIService(config);
 
+  // GWS detection (non-blocking — returns { installed: false } if binary missing)
+  const gwsDetection = await detectGws();
+
   return {
     storage,
     search,
@@ -123,5 +145,13 @@ export async function createServices(
     areaMemory,
     ai,
     tasks,
+    gws: {
+      detection: gwsDetection,
+      email: gwsEmail,
+      drive: gwsDrive,
+      docs: gwsDocs,
+      sheets: gwsSheets,
+      directory: gwsDirectory,
+    },
   };
 }

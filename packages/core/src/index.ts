@@ -132,6 +132,46 @@ export {
 } from './integrations/krisp/config.js';
 export type { KrispCredentials } from './integrations/krisp/config.js';
 
+// Google Workspace (gws CLI) integration
+export {
+  detectGws,
+  gwsExec,
+  getEmailProvider,
+  getDriveProvider,
+  getDocsProvider,
+  getSheetsProvider,
+  getDirectoryProvider,
+  GmailProvider,
+  getGmailProvider,
+  GwsDriveProvider,
+  getGwsDriveProvider,
+  GwsDocsProvider,
+  getGwsDocsProvider,
+  GwsSheetsProvider,
+  getGwsSheetsProvider,
+  GwsDirectoryProvider,
+  getGwsDirectoryProvider,
+  GwsNotInstalledError,
+  GwsAuthError,
+  GwsTimeoutError,
+  GwsExecError,
+} from './integrations/gws/index.js';
+export type {
+  GwsDetectionResult,
+  GwsExecOptions,
+  GwsDeps,
+  EmailThread,
+  DriveFile,
+  DocMetadata,
+  SheetRange,
+  DirectoryPerson,
+  EmailProvider,
+  DriveProvider,
+  DocsProvider,
+  SheetsProvider,
+  DirectoryProvider,
+} from './integrations/gws/index.js';
+
 // Notion integration
 export { pullNotionPages } from './integrations/notion/index.js';
 export { loadNotionApiKey } from './integrations/notion/config.js';

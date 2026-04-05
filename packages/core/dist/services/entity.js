@@ -474,9 +474,11 @@ function buildRationale(affiliation, roleLens, evidenceCount, confidence) {
 export class EntityService {
     storage;
     searchProvider;
-    constructor(storage, searchProvider) {
+    directoryProvider;
+    constructor(storage, searchProvider, directoryProvider) {
         this.storage = storage;
         this.searchProvider = searchProvider;
+        this.directoryProvider = directoryProvider;
     }
     async resolve(reference, type, workspacePaths) {
         if (!reference?.trim())
@@ -490,6 +492,31 @@ export class EntityService {
         }
         if (type === 'project' || type === 'any') {
             candidates.push(...(await resolveProject(this.storage, reference, workspacePaths)));
+        }
+        // Directory fallback: try GWS directory when no local person found
+        if ((type === 'person' || type === 'any') && candidates.length === 0 && this.directoryProvider) {
+            try {
+                const dirResults = await this.directoryProvider.searchDirectory(reference, { maxResults: 3 });
+                for (const person of dirResults) {
+                    candidates.push({
+                        type: 'person',
+                        name: person.name,
+                        slug: person.email,
+                        path: '',
+                        score: 0.5,
+                        source: 'directory',
+                        metadata: {
+                            email: person.email,
+                            title: person.title,
+                            department: person.department,
+                            manager: person.manager,
+                        },
+                    });
+                }
+            }
+            catch {
+                // Directory lookup failed — degrade gracefully
+            }
         }
         if (candidates.length === 0)
             return null;
@@ -508,6 +535,32 @@ export class EntityService {
         }
         if (type === 'project' || type === 'any') {
             candidates.push(...(await resolveProject(this.storage, reference, workspacePaths)));
+        }
+        // Directory fallback: try GWS directory when no local person found
+        const personCandidates = candidates.filter((c) => c.type === 'person');
+        if ((type === 'person' || type === 'any') && personCandidates.length === 0 && this.directoryProvider) {
+            try {
+                const dirResults = await this.directoryProvider.searchDirectory(reference, { maxResults: 3 });
+                for (const person of dirResults) {
+                    candidates.push({
+                        type: 'person',
+                        name: person.name,
+                        slug: person.email,
+                        path: '',
+                        score: 0.5,
+                        source: 'directory',
+                        metadata: {
+                            email: person.email,
+                            title: person.title,
+                            department: person.department,
+                            manager: person.manager,
+                        },
+                    });
+                }
+            }
+            catch {
+                // Directory lookup failed — degrade gracefully
+            }
         }
         candidates.sort((a, b) => b.score - a.score);
         return candidates.slice(0, limit);

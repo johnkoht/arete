@@ -46,6 +46,7 @@ describe('createServices', () => {
       'commitments',
       'context',
       'entity',
+      'gws',
       'integrations',
       'intelligence',
       'memory',

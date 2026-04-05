@@ -647,7 +647,15 @@ function buildRationale(
 }
 
 export class EntityService {
-  constructor(private storage: StorageAdapter, private searchProvider?: SearchProvider) {}
+  private directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null;
+
+  constructor(
+    private storage: StorageAdapter,
+    private searchProvider?: SearchProvider,
+    directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null,
+  ) {
+    this.directoryProvider = directoryProvider;
+  }
 
   async resolve(
     reference: string,
@@ -666,6 +674,31 @@ export class EntityService {
     }
     if (type === 'project' || type === 'any') {
       candidates.push(...(await resolveProject(this.storage, reference, workspacePaths)));
+    }
+
+    // Directory fallback: try GWS directory when no local person found
+    if ((type === 'person' || type === 'any') && candidates.length === 0 && this.directoryProvider) {
+      try {
+        const dirResults = await this.directoryProvider.searchDirectory(reference, { maxResults: 3 });
+        for (const person of dirResults) {
+          candidates.push({
+            type: 'person',
+            name: person.name,
+            slug: person.email,
+            path: '',
+            score: 0.5,
+            source: 'directory',
+            metadata: {
+              email: person.email,
+              title: person.title,
+              department: person.department,
+              manager: person.manager,
+            },
+          });
+        }
+      } catch {
+        // Directory lookup failed — degrade gracefully
+      }
     }
 
     if (candidates.length === 0) return null;
@@ -692,6 +725,32 @@ export class EntityService {
     }
     if (type === 'project' || type === 'any') {
       candidates.push(...(await resolveProject(this.storage, reference, workspacePaths)));
+    }
+
+    // Directory fallback: try GWS directory when no local person found
+    const personCandidates = candidates.filter((c) => c.type === 'person');
+    if ((type === 'person' || type === 'any') && personCandidates.length === 0 && this.directoryProvider) {
+      try {
+        const dirResults = await this.directoryProvider.searchDirectory(reference, { maxResults: 3 });
+        for (const person of dirResults) {
+          candidates.push({
+            type: 'person',
+            name: person.name,
+            slug: person.email,
+            path: '',
+            score: 0.5,
+            source: 'directory',
+            metadata: {
+              email: person.email,
+              title: person.title,
+              department: person.department,
+              manager: person.manager,
+            },
+          });
+        }
+      } catch {
+        // Directory lookup failed — degrade gracefully
+      }
     }
 
     candidates.sort((a, b) => b.score - a.score);

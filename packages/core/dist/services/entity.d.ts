@@ -56,7 +56,8 @@ export interface PeopleIntelligenceOptions {
 export declare class EntityService {
     private storage;
     private searchProvider?;
-    constructor(storage: StorageAdapter, searchProvider?: SearchProvider | undefined);
+    private directoryProvider?;
+    constructor(storage: StorageAdapter, searchProvider?: SearchProvider | undefined, directoryProvider?: import('../integrations/gws/types.js').DirectoryProvider | null);
     resolve(reference: string, type: EntityType, workspacePaths: WorkspacePaths): Promise<ResolvedEntity | null>;
     resolveAll(reference: string, type: EntityType, workspacePaths: WorkspacePaths, limit?: number): Promise<ResolvedEntity[]>;
     findMentions(entity: ResolvedEntity, workspacePaths: WorkspacePaths): Promise<EntityMention[]>;

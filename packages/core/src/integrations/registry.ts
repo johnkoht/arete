@@ -55,4 +55,12 @@ export const INTEGRATIONS: Record<string, IntegrationDefinition> = {
     auth: { type: 'oauth' },
     status: 'available',
   },
+  'google-workspace': {
+    name: 'google-workspace',
+    displayName: 'Google Workspace',
+    description: 'Gmail, Drive, Docs, Sheets, People via gws CLI',
+    implements: ['email', 'drive', 'docs', 'sheets', 'contacts'],
+    auth: { type: 'none' },
+    status: 'available',
+  },
 };

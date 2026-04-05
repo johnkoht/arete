@@ -1,0 +1,8 @@
+{
+  "range": "Summary!A1:C3",
+  "values": [
+    ["Name", "Amount", "Status"],
+    ["Engineering", "150000", "Approved"],
+    ["Marketing", "80000", "Pending"]
+  ]
+}

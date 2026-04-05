@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "id": "file-1",
+      "name": "Q2 Roadmap Draft",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-04-02T14:30:00.000Z",
+      "owners": [
+        { "emailAddress": "jane@example.com", "displayName": "Jane Smith" }
+      ],
+      "webViewLink": "https://docs.google.com/document/d/file-1/edit"
+    },
+    {
+      "id": "file-2",
+      "name": "Budget Spreadsheet 2026",
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "modifiedTime": "2026-03-28T09:15:00.000Z",
+      "owners": [
+        { "emailAddress": "bob@example.com", "displayName": "Bob Lee" }
+      ],
+      "webViewLink": "https://docs.google.com/spreadsheets/d/file-2/edit"
+    },
+    {
+      "id": "file-3",
+      "name": "Meeting Notes - Product Review",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-04-01T16:00:00.000Z",
+      "owners": [
+        { "emailAddress": "alex@example.com", "displayName": "Alex Rivera" }
+      ]
+    }
+  ]
+}

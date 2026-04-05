@@ -174,12 +174,12 @@ export class AreaParserService {
             }
         }
         // Extract markdown sections
-        const goal = extractSection(body, 'Goal');
-        const focus = extractSection(body, 'Focus');
-        const horizon = extractSection(body, 'Horizon');
-        const projects = extractSection(body, 'Projects');
+        const currentState = extractSection(body, 'Current State');
+        const keyDecisions = extractSection(body, 'Key Decisions');
         const backlog = extractSection(body, 'Backlog');
-        const stakeholders = extractSection(body, 'Stakeholders');
+        const activeGoals = extractSection(body, 'Active Goals');
+        const activeWork = extractSection(body, 'Active Work');
+        const openCommitments = extractSection(body, 'Open Commitments');
         const notes = extractSection(body, 'Notes');
         // Parse memory.md for this area (areas/{slug}/memory.md)
         const memory = await this.parseMemoryFile(slug);
@@ -190,12 +190,12 @@ export class AreaParserService {
             recurringMeetings,
             filePath,
             sections: {
-                goal,
-                focus,
-                horizon,
-                projects,
+                currentState,
+                keyDecisions,
                 backlog,
-                stakeholders,
+                activeGoals,
+                activeWork,
+                openCommitments,
                 notes,
             },
             memory: memory ?? undefined,
@@ -319,7 +319,7 @@ export class AreaParserService {
      * Matching algorithm (tries ALL methods, returns highest confidence):
      * 1. Exact title match (1.0): Meeting title matches a recurring_meetings[].title
      * 2. Area name match (0.8): Area name appears in meeting title OR summary
-     * 3. Keyword overlap (0.5-0.7): Jaccard similarity between meeting content and area's focus
+     * 3. Keyword overlap (0.5-0.7): Jaccard similarity between meeting content and area's currentState
      *
      * Returns null when:
      * - Input is empty/whitespace-only
@@ -369,9 +369,9 @@ export class AreaParserService {
                     confidence: AREA_NAME_MATCH_CONFIDENCE,
                 });
             }
-            // 3. Keyword overlap with focus (confidence 0.5-0.7)
-            if (area.sections.focus) {
-                const areaTokens = tokenizeWithStopWords(area.sections.focus);
+            // 3. Keyword overlap with currentState (confidence 0.5-0.7)
+            if (area.sections.currentState) {
+                const areaTokens = tokenizeWithStopWords(area.sections.currentState);
                 if (areaTokens.length > 0 && meetingTokens.length > 0) {
                     // Calculate intersection size
                     const setA = new Set(meetingTokens);

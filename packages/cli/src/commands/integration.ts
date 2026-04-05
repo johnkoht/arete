@@ -265,6 +265,89 @@ export function registerIntegrationCommands(program: Command): void {
           return;
         }
 
+        if (name === 'google-workspace') {
+          const core = await import('@arete/core') as Record<string, unknown>;
+          const detectGws = core.detectGws as () => Promise<{ installed: boolean; version?: string; authenticated?: boolean }>;
+          const gwsExec = core.gwsExec as (service: string, command: string, args?: Record<string, string | number | boolean>) => Promise<unknown>;
+          const detection = await detectGws();
+
+          if (!detection.installed) {
+            if (opts.json) {
+              console.log(JSON.stringify({ success: false, error: 'gws CLI not installed' }));
+            } else {
+              console.log('');
+              error('Google Workspace CLI (gws) is not installed.');
+              console.log('');
+              console.log('  Install it:');
+              console.log(`    ${chalk.cyan('brew install googleworkspace/tap/gws')}`);
+              console.log('');
+              console.log(`  Then re-run: ${chalk.cyan('arete integration configure google-workspace')}`);
+              console.log('');
+            }
+            process.exit(1);
+          }
+
+          if (detection.authenticated === false) {
+            if (opts.json) {
+              console.log(JSON.stringify({ success: false, error: 'gws CLI not authenticated' }));
+            } else {
+              console.log('');
+              info(`gws CLI detected (v${detection.version ?? 'unknown'})`);
+              console.log('');
+              console.log('  You need to authenticate with Google. Run:');
+              console.log(`    ${chalk.cyan('gws auth login')}`);
+              console.log('');
+              console.log(`  Then re-run: ${chalk.cyan('arete integration configure google-workspace')}`);
+              console.log('');
+            }
+            process.exit(1);
+          }
+
+          // Installed and authenticated (or auth status unknown — optimistic)
+          console.log('');
+          warn('Data Notice');
+          console.log('');
+          console.log('  Google Workspace integration stores email and document content locally');
+          console.log('  in your workspace. You are responsible for data sensitivity in your');
+          console.log('  environment.');
+          console.log('');
+
+          // Smoke test: try fetching a single calendar event
+          let smokeTestPassed = false;
+          try {
+            await gwsExec('calendar', 'events', { maxResults: 1 });
+            smokeTestPassed = true;
+          } catch {
+            // Smoke test failed — non-fatal, configure anyway
+            smokeTestPassed = false;
+          }
+
+          await services.integrations.configure(root, 'google-workspace', { status: 'active' });
+
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: true,
+              integration: 'google-workspace',
+              version: detection.version,
+              smokeTest: smokeTestPassed,
+            }));
+          } else {
+            success('Google Workspace integration configured');
+            info(`gws CLI v${detection.version ?? 'unknown'}`);
+            if (smokeTestPassed) {
+              info('Smoke test passed — calendar API reachable');
+            } else {
+              warn('Smoke test failed — calendar API may not be reachable yet');
+            }
+            console.log('');
+            console.log('  Next steps:');
+            console.log(`    ${chalk.cyan('arete pull gmail --query "is:unread"')}  — pull recent email`);
+            console.log(`    ${chalk.cyan('arete pull drive --query "roadmap"')}     — search Drive files`);
+            console.log('');
+          }
+          return;
+        }
+
         if (name === 'krisp') {
           const client = new KrispMcpClient(services.storage, root);
           const creds = await client.configure(services.storage, root);

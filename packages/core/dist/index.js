@@ -36,6 +36,8 @@ export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCre
 // Krisp integration
 export { KrispMcpClient } from './integrations/krisp/client.js';
 export { loadKrispCredentials, saveKrispCredentials, } from './integrations/krisp/config.js';
+// Google Workspace (gws CLI) integration
+export { detectGws, gwsExec, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider, GmailProvider, getGmailProvider, GwsDriveProvider, getGwsDriveProvider, GwsDocsProvider, getGwsDocsProvider, GwsSheetsProvider, getGwsSheetsProvider, GwsDirectoryProvider, getGwsDirectoryProvider, GwsNotInstalledError, GwsAuthError, GwsTimeoutError, GwsExecError, } from './integrations/gws/index.js';
 // Notion integration
 export { pullNotionPages } from './integrations/notion/index.js';
 export { loadNotionApiKey } from './integrations/notion/config.js';

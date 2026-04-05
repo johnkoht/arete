@@ -1,0 +1,11 @@
+{
+  "spreadsheetId": "sheet-abc-123",
+  "properties": {
+    "title": "Q2 Budget Tracker"
+  },
+  "sheets": [
+    { "properties": { "title": "Summary" } },
+    { "properties": { "title": "Details" } },
+    { "properties": { "title": "Charts" } }
+  ]
+}
