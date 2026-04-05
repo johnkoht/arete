@@ -1437,6 +1437,92 @@ We are focused on customer retention.
     assert.equal(bundle.areaContext, null);
   });
 
+  describe('existingTasks injection', () => {
+    it('reads open tasks from week.md and tasks.md and includes them in bundle', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-sync.md', {
+        title: 'Sync',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Meeting content.');
+
+      const nowDir = join(tmpDir, 'now');
+      mkdirSync(nowDir, { recursive: true });
+      writeFileSync(join(nowDir, 'week.md'), [
+        '## Tasks',
+        '- [ ] Write the proposal',
+        '- [x] Send email',  // completed — should not be included
+        '- [ ] Review PR @area(engineering) @due(2026-03-19)',
+      ].join('\n'), 'utf8');
+      writeFileSync(join(nowDir, 'tasks.md'), [
+        '### Inbox',
+        '- [ ] Call vendor @from(commitment:abc123)',
+      ].join('\n'), 'utf8');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-sync.md');
+      const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+      assert.ok(bundle.existingTasks, 'existingTasks should be present');
+      assert.ok(bundle.existingTasks!.includes('Write the proposal'), 'week.md task should be included');
+      assert.ok(bundle.existingTasks!.includes('Review PR'), 'week.md task with stripped @tags should be included');
+      assert.ok(bundle.existingTasks!.includes('Call vendor'), 'tasks.md task should be included');
+      assert.ok(!bundle.existingTasks!.some(t => t.includes('Send email')), 'completed tasks should not be included');
+      assert.ok(!bundle.existingTasks!.some(t => t.includes('@area')), '@tags should be stripped from task text');
+      assert.ok(!bundle.existingTasks!.some(t => t.includes('@from')), '@from metadata should be stripped');
+    });
+
+    it('caps existingTasks at 20 entries', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-sync.md', {
+        title: 'Sync',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Meeting content.');
+
+      const nowDir = join(tmpDir, 'now');
+      mkdirSync(nowDir, { recursive: true });
+      const manyTasks = Array.from({ length: 30 }, (_, i) => `- [ ] Task number ${i + 1}`).join('\n');
+      writeFileSync(join(nowDir, 'week.md'), manyTasks, 'utf8');
+      writeFileSync(join(nowDir, 'tasks.md'), '', 'utf8');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-sync.md');
+      const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+      assert.ok(bundle.existingTasks, 'existingTasks should be present');
+      assert.equal(bundle.existingTasks!.length, 20, 'should be capped at 20');
+    });
+
+    it('returns undefined existingTasks when task files do not exist', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-sync.md', {
+        title: 'Sync',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Meeting content.');
+      // No now/ directory created
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-sync.md');
+      const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+      assert.equal(bundle.existingTasks, undefined, 'existingTasks should be absent when files missing');
+    });
+
+    it('omits existingTasks when task files are empty', async () => {
+      writeMeetingFile(tmpDir, '2026-03-19-sync.md', {
+        title: 'Sync',
+        date: '2026-03-19',
+        attendees: [],
+      }, 'Meeting content.');
+
+      const nowDir = join(tmpDir, 'now');
+      mkdirSync(nowDir, { recursive: true });
+      writeFileSync(join(nowDir, 'week.md'), '## Week\nNo tasks here.\n', 'utf8');
+      writeFileSync(join(nowDir, 'tasks.md'), '', 'utf8');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-03-19-sync.md');
+      const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+      assert.equal(bundle.existingTasks, undefined, 'existingTasks should be absent when no open tasks found');
+    });
+  });
+
   it('matches area via case-insensitive substring', async () => {
     // Create area file
     writeAreaFile(tmpDir, 'product-team', {
