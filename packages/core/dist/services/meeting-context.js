@@ -619,6 +619,37 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         warnings.push(`Brief service failed: ${msg}`);
         // Continue with empty relatedContext (pre-mortem mitigation)
     }
+    // 6. Read existing open tasks from now/week.md and now/tasks.md
+    // Included in context so the LLM can avoid re-proposing already-tracked tasks.
+    // Capped at 20 tasks total to avoid bloating the prompt.
+    const existingTasks = [];
+    const MAX_EXISTING_TASKS = 20;
+    const TASK_LINE_PATTERN = /^- \[ \] (.+)$/;
+    function extractTaskTexts(content) {
+        const texts = [];
+        for (const line of content.split('\n')) {
+            const m = line.match(TASK_LINE_PATTERN);
+            if (m) {
+                // Strip @tag(value) metadata to get clean task text
+                const clean = m[1].replace(/@[a-zA-Z]+\([^)]*\)/g, '').trim().replace(/\s+/g, ' ');
+                if (clean)
+                    texts.push(clean);
+            }
+        }
+        return texts;
+    }
+    try {
+        const weekContent = await storage.read(join(paths.now, 'week.md')) ?? '';
+        const tasksContent = await storage.read(join(paths.now, 'tasks.md')) ?? '';
+        const weekTasks = extractTaskTexts(weekContent);
+        const tasksTasks = extractTaskTexts(tasksContent);
+        existingTasks.push(...weekTasks, ...tasksTasks);
+        // Cap at limit
+        existingTasks.splice(MAX_EXISTING_TASKS);
+    }
+    catch {
+        // Non-fatal: if task files can't be read, continue without them
+    }
     return {
         meeting,
         agenda,
@@ -628,6 +659,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         relatedContext,
         areaContext,
         warnings,
+        ...(existingTasks.length > 0 && { existingTasks }),
     };
 }
 // ---------------------------------------------------------------------------
