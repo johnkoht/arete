@@ -9,6 +9,10 @@ requires_briefing: false
 
 # Execute PRD Skill
 
+Runs the build loop for an existing PRD + prd.json. Assumes branch/worktree already set up. Call this directly (`/build`) for focused execution without the full ship workflow.
+
+**Relationship to Ship**: `/ship` calls this internally after creating the worktree. Use `/build` directly when you have a PRD and worktree already set up and want just the execution phase.
+
 Autonomously execute a PRD by dispatching subagents for each task, with two distinct roles: **Orchestrator** (senior engineering manager) and **Reviewer** (senior engineer).
 
 ## Tool Reference & Pre-Flight

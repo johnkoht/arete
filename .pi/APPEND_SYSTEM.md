@@ -56,7 +56,8 @@ User reports a bug
 User approves plan
  ├─ Tiny (1-2 steps) → Direct execution → quality gates
  ├─ Small (2-3 steps) → Offer pre-mortem → quality gates → offer memory capture
- └─ Medium/Large (3+) → Recommend PRD path → execute-prd skill
+ ├─ Medium (3-5 steps) → /ship (full workflow) OR /build (just execute-prd, worktree already set up)
+ └─ Large (6+ steps) → /ship mandatory (pre-mortem + review + PRD + worktree + build + wrap)
 ```
 
 **Bug fixes require structure.** Do not make ad-hoc code changes. Load the hotfix skill and follow its process.
