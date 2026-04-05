@@ -341,7 +341,8 @@ export function registerIntegrationCommands(program: Command): void {
             }
             console.log('');
             console.log('  Next steps:');
-            console.log(`    ${chalk.cyan('arete pull google-workspace')}  — sync workspace data`);
+            console.log(`    ${chalk.cyan('arete pull gmail --query "is:unread"')}  — pull recent email`);
+            console.log(`    ${chalk.cyan('arete pull drive --query "roadmap"')}     — search Drive files`);
             console.log('');
           }
           return;

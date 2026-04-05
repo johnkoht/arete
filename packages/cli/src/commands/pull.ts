@@ -585,12 +585,12 @@ export async function pullGmailHelper(
         JSON.stringify({
           success: false,
           error: 'Google Workspace integration not configured',
-          message: 'Add google-workspace integration with status: active to arete.yaml',
+          message: 'Run: arete integration configure google-workspace',
         }),
       );
     } else {
       error('Google Workspace integration not configured');
-      info('Add google-workspace integration with status: active to arete.yaml');
+      info('Run: arete integration configure google-workspace');
     }
     process.exit(1);
   }
@@ -692,12 +692,12 @@ export async function pullDriveHelper(
         JSON.stringify({
           success: false,
           error: 'Google Workspace integration not configured',
-          message: 'Add google-workspace integration with status: active to arete.yaml',
+          message: 'Run: arete integration configure google-workspace',
         }),
       );
     } else {
       error('Google Workspace integration not configured');
-      info('Add google-workspace integration with status: active to arete.yaml');
+      info('Run: arete integration configure google-workspace');
     }
     process.exit(1);
   }

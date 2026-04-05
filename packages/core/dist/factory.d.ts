@@ -6,6 +6,7 @@
  */
 import type { SearchProvider } from './search/types.js';
 import type { AreteConfig } from './models/workspace.js';
+import type { GwsDetectionResult, EmailProvider, DriveProvider, DocsProvider, SheetsProvider, DirectoryProvider } from './integrations/gws/index.js';
 import { FileStorageAdapter } from './storage/file.js';
 import { ContextService } from './services/context.js';
 import { MemoryService } from './services/memory.js';
@@ -39,6 +40,14 @@ export type AreteServices = {
     areaMemory: AreaMemoryService;
     ai: AIService;
     tasks: TaskService;
+    gws: {
+        detection: GwsDetectionResult;
+        email: EmailProvider | null;
+        drive: DriveProvider | null;
+        docs: DocsProvider | null;
+        sheets: SheetsProvider | null;
+        directory: DirectoryProvider | null;
+    };
 };
 /**
  * Options for createServices. All optional — sensible defaults are used.

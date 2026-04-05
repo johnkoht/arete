@@ -17,10 +17,10 @@ const execFileAsync = promisify(execFile);
 
 const DEFAULT_TIMEOUT = 30_000;
 
-function defaultDeps(): GwsDeps {
+function defaultDeps(timeoutMs: number): GwsDeps {
   return {
     exec: (command: string, args: string[]) =>
-      execFileAsync(command, args, { timeout: DEFAULT_TIMEOUT }),
+      execFileAsync(command, args, { timeout: timeoutMs }),
   };
 }
 
@@ -61,8 +61,8 @@ export async function gwsExec(
   options?: GwsExecOptions,
   deps?: GwsDeps,
 ): Promise<unknown> {
-  const { exec } = deps ?? defaultDeps();
   const timeoutMs = options?.timeout ?? DEFAULT_TIMEOUT;
+  const { exec } = deps ?? defaultDeps(timeoutMs);
 
   const cliArgs = [service, command, '--format', 'json'];
   if (args) {

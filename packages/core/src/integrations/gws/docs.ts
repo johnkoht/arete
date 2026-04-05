@@ -94,14 +94,12 @@ export class GwsDocsProvider implements DocsProvider {
     options?: { maxResults?: number },
   ): Promise<DocMetadata[]> {
     // Use Drive search filtered to Google Docs mimeType
-    const { gwsExec: exec } = await import('./client.js');
-
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 7);
     const iso = cutoff.toISOString();
     const maxResults = options?.maxResults ?? 25;
 
-    const raw = await exec(
+    const raw = await gwsExec(
       'drive',
       'files',
       {

@@ -77,7 +77,7 @@ export class GmailProvider implements EmailProvider {
     const raw = await gwsExec(
       'gmail',
       'messages',
-      { q: query, maxResults, format: 'json' },
+      { q: query, maxResults },
       undefined,
       this.deps,
     );
@@ -105,7 +105,7 @@ export class GmailProvider implements EmailProvider {
     const raw = await gwsExec(
       'gmail',
       'messages',
-      { id: threadId, format: 'json' },
+      { id: threadId },
       undefined,
       this.deps,
     );
