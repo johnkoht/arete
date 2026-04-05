@@ -154,6 +154,8 @@ Read from three sources:
 1. **Task Backlog**: Read `now/tasks.md` `## Anytime` section
 2. **Open Commitments**: Run `arete commitments list --json`, filter to:
    - `direction: i_owe_them` only
+   - Check both `now/tasks.md` and `now/week.md` for existing tasks with `@from(commitment:HASH)` matching this commitment's ID
+   - If a linked task already exists: show it with label **(already a task: "task text")** and skip auto-create
    - WITHOUT existing linked tasks (no `@from(commitment:)` match in tasks.md or week.md)
 3. **Last Week Carryover**: Read `now/week.md` Tasks section, filter to incomplete (`- [ ]`) items
 
