@@ -235,7 +235,9 @@ export function registerIntegrationCommands(program) {
             return;
         }
         if (name === 'google-workspace') {
-            const { detectGws, gwsExec } = await import('@arete/core');
+            const core = await import('@arete/core');
+            const detectGws = core.detectGws;
+            const gwsExec = core.gwsExec;
             const detection = await detectGws();
             if (!detection.installed) {
                 if (opts.json) {
