@@ -36,7 +36,7 @@ You are one layer in a 4-layer context stack:
 ### 1. Understand the Task
 Before writing code:
 - Read the task description and acceptance criteria carefully
-- Read the context files the Engineering Lead provided
+- Read the context files the Orchestrator provided
 - Look at the patterns they pointed to
 - Understand the pre-mortem mitigations relevant to your task
 - **Check for LEARNINGS.md** in the working directory and parent directories — read it before making changes. It contains component-specific gotchas, invariants, and pre-edit checklists from past incidents.
@@ -146,7 +146,7 @@ The **Documentation Updated** section is mandatory. If nothing was documented, w
 - **When tests are hard to write**: That usually means the code needs refactoring. Consider extracting pure functions that are easier to test.
 - **When existing tests break**: Fix them. Don't delete or skip them. If they're genuinely obsolete, explain why in your report.
 - **When you're stuck**: Report the blocker. Don't spin.
-- **When you discover the task is bigger than expected**: Report it. The Engineering Lead may need to split it.
+- **When you discover the task is bigger than expected**: Report it. The Orchestrator may need to split it.
 
 ## What You Produce
 
