@@ -42,15 +42,61 @@ Guide the PM to define the top 3-5 weekly priorities. Read current quarter goals
 **Gather silently** (no user interaction needed):
 
 - **Quarter goals**: Read `goals/quarter.md`. Goals are markdown headings (`## Goal Title`) with `Area`, `Success`, and `Status` fields. Filter to `Status: Active`.
+- **Areas**: Read `areas/*.md` (excluding `_template.md`). Extract slug and display name from each. Build a list of available areas for Step 1.5.
 - **Last week**: Read `now/week.md` for carry-over items and continuity.
 - **Projects**: Scan `projects/active/` README files for active work.
 - **Scratchpad**: Read `now/scratchpad.md` for ad-hoc items.
 - **Commitments**: Run `arete commitments list --json` to get open commitments.
 - **Calendar** (if configured): Run `arete pull calendar --days 7 --json`. If successful, use events for meeting context. If not configured, skip.
 
+### 1.5. Scope by Area
+
+**Purpose**: Focus the week around specific work domains instead of showing all work undifferentiated.
+
+**When to run this step**: Only if 2 or more areas exist. Skip entirely if 0 or 1 area found.
+
+**Single area**: If exactly 1 area exists, auto-select it silently (no prompt). Note: "Scoping to [Area Name]."
+
+**Multiple areas** (2+): Present a numbered list and ask:
+
+> "Which areas are you focusing on this week?
+> 1. Glance Communications
+> 2. Product Platform
+> 3. Team Operations
+>
+> Enter numbers (e.g., '1 3') or 'all' to include everything:"
+
+**After user responds**:
+- Store the selected area slugs as `focusedAreas`
+- When presenting goals in Step 2: group by area — selected areas first, unscoped goals last
+- When presenting projects in Step 2: filter to selected areas' projects (show others in a collapsed "Other projects" note)
+- Commitments: shown unfiltered (area tagging is partial — don't hide commitments by area)
+- Tasks in Step 3: shown unfiltered (task area tags may be incomplete — show all)
+
+**Graceful degradation**:
+- If no areas exist: skip this step entirely. Proceed to Step 2 showing all goals together.
+- If user says 'all': treat same as no area filter (show everything).
+- If user says 'skip': treat same as 'all'.
+
 ### 2. Shape Priorities
 
 **Phase 1: Open-ended ask**
+
+Present goals grouped by focus area (from Step 1.5):
+
+```
+Goals — [Area Name]:
+  [Q1-1] Ship onboarding v2
+  [Q1-3] Complete discovery for X
+
+Goals — [Other Area]:
+  [Q1-2] Compliance milestone
+
+Unscoped goals (no area):
+  [Q1-4] Internal tooling
+```
+
+Then ask:
 
 > "Based on your calendar and goals, what are your top 3-5 priorities this week? Just tell me in your own words."
 
@@ -61,6 +107,7 @@ Wait for user response. **Capture their exact wording**.
 For each priority:
 - Preserve user's wording
 - Link to quarter goal ID if relevant (e.g., `[Q1-2]`)
+- Note area if linked (e.g., `[glance-communications]`)
 - Clarify "what done looks like" if ambiguous
 
 Present the numbered list back for confirmation.
@@ -323,6 +370,7 @@ No high-priority meetings this week — light calendar!
 ## References
 
 - **Quarter goals**: `goals/quarter.md`
+- **Areas**: `areas/*.md` (used for Step 1.5 area scoping)
 - **Last week**: `now/week.md`
 - **Output**: `now/week.md`
 - **Template**: `packages/runtime/skills/week-plan/templates/week-priorities.md`
@@ -334,7 +382,8 @@ No high-priority meetings this week — light calendar!
 - **Today section**: Placeholder for daily-plan. When daily-plan runs, it updates Focus and Meetings, and archives previous day to Daily Progress.
 - **Notes section**: User's working scratchpad. Preserved across all updates — never moved or overwritten.
 - **Tasks vs Outcomes**: Outcomes are high-level goals ("CoverWhale through compliance"). Tasks are specific action items ("Get templates through compliance review").
-- **Area context**: Goals and commitments may have `area:` field linking to areas. Area context (Focus, Goals, Horizon) lives in area files, not duplicated here.
+- **Area context**: Goals and commitments may have `area:` field linking to areas. Step 1.5 scopes the planning session to selected areas — goals are grouped by area, projects filtered. Tasks and commitments shown unfiltered (area tagging may be incomplete).
+- **Area scoping graceful degradation**: If no areas exist, Step 1.5 is skipped entirely — all goals shown together without grouping.
 
 ## Error Handling
 
