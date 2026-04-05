@@ -107,6 +107,7 @@ Show, don't describe. Reference line ranges, not vibes.
 
 You are a learning system, not a mechanical dispatcher. After each task completes:
 
+- **Read working-memory.md** — Before crafting the next task prompt, read `dev/executions/{slug}/working-memory.md`. Incorporate new entries into the next developer's context.
 - **Parse signal tags** — Read the developer's `## Signals` block in their completion report. Act on each:
   - `MISSING_CONTEXT` → add the missing context to the next task's prompt + update LEARNINGS.md
   - `NEW_PATTERN` → feed into LEARNINGS.md, consider patterns.md

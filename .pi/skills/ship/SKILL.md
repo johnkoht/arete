@@ -60,6 +60,22 @@ If plan has no frontmatter → **HALT**: "Use `/plan save` to recreate with prop
 
 ---
 
+## Mode Detection
+
+After the Pre-Flight Check, detect whether the plan is single-phase or multi-phase:
+
+```
+Read plan.md → look for explicit phase markers (## Phase 1, ## Phase 2, or numbered phase sections)
+├── Flat step list (no phase sections) → Single-phase mode (standard flow below)
+└── Explicit phases → Multi-phase mode (meta-orchestrator loop)
+
+Override: /ship --single | /ship --multi
+```
+
+**Single-phase** (default): Standard flow through Phases 0-6 below.
+
+**Multi-phase**: See [Multi-Phase Mode](#multi-phase-mode) section.
+
 ## Workflow Overview
 
 ```
@@ -302,6 +318,21 @@ Triggered automatically after successful merge in Phase 5.6, or manually via `/s
 │  Memory: entries/YYYY-MM-DD_...  │
 └──────────────────────────────────┘
 ```
+
+---
+
+## Multi-Phase Mode
+
+For plans with explicit phase sections (## Phase 1, ## Phase 2, etc.).
+
+See `ship/multi-phase-protocol.md` for the complete protocol (phase briefing format, sub-orchestrator dispatch, post-phase gate, branch strategy, project-working-memory.md structure).
+
+**Summary**:
+1. Run Phases 0-3 normally (build log, pre-build, memory, PRD, worktree on `feature/{slug}`)
+2. For each plan phase: `git checkout -b feature/{slug}-phase-N feature/{slug}` → dispatch sub-orchestrator with phase briefing → reviewer post-phase gate → merge back on GATE_PASS
+3. After all phases: run Phases 5-6 (wrap, report, merge) against `feature/{slug}`
+
+**Autonomous authority**: Sub-orchestrators have full authority within phases. Meta-orchestrator proceeds between phases if gate passes; pauses only for: GATE_FAIL after 2 attempts, cross-phase integration issue, or builder interrupt.
 
 ---
 

@@ -80,12 +80,21 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
    - Understand how this PRD fits into the broader Areté system (see AGENTS.md).
    - Understand the **benefits and value** this will provide to end users (problem statement, success criteria).
    - Understand dependencies between tasks (A1→A2→A3→B1...).
-   - **Phantom Task Detection** (verify PRD is current):
-     - Check if proposed files already exist (`ls -la` the paths in prd.json)
-     - Check if proposed functionality already works (not just file existence — does the feature run?)
-     - Verify PRD reflects current codebase state (it may have been written before recent changes)
-     - **If phantom tasks detected** (features already implemented): Surface to builder with options — (a) skip them, (b) verify AC and mark complete, (c) proceed anyway
-     - *Source*: reimagine-v2 PRD (2026-03-07) — 5/6 tasks were phantom, saving ~80% of planned work
+   - **Recon Check** (MANDATORY — before pre-mortem): For each task in prd.json:
+     1. `ls` the proposed output files — do they already exist?
+     2. `grep` for proposed function/class names — already implemented?
+     3. Check if ACs are already met by existing code
+     
+     Output a recon report:
+     ```markdown
+     ## Recon Report
+     | Task | Status | Evidence |
+     |------|--------|----------|
+     | task-1 | PHANTOM | feature already implemented at routes/meetings.ts:47 |
+     | task-2 | CONFIRMED | No existing implementation found |
+     | task-3 | PARTIAL | exists but missing --filter flag |
+     ```
+     PHANTOM/PARTIAL tasks → **surface to builder** with options: (a) skip, (b) verify AC and mark complete, (c) proceed. Do NOT proceed with PHANTOM tasks without builder decision. *Source*: reimagine-v2 (2026-03-07) saved 80% of work; product-simplification (2026-04-03) found gap 1 already implemented.
 
 3. **Clarity and Alignment**
    - If anything is unclear (scope, problem statement, success criteria, or how it fits Areté), **ask the builder** before proceeding. Do not assume.
@@ -116,6 +125,25 @@ The orchestrator runs **from the worktree root** (or repository root if not usin
      
      Started: <ISO timestamp>
      ```
+   - Create (or append to) `dev/executions/{plan-slug}/working-memory.md`:
+     ```markdown
+     # Working Memory — {plan-slug}
+     
+     Cross-task knowledge. Every developer reads this before starting and updates it after completing.
+     
+     ## Discovered Patterns
+     *(Add: [Task N] pattern-name: description and file:line)*
+     
+     ## Active Gotchas
+     *(Add: [Task N] issue that the next task must know about)*
+     
+     ## Shared Utilities Created
+     *(Add: [Task N] functionName() in path/to/file.ts)*
+     
+     ## Context Corrections
+     *(Add: [Task N] MISSING_CONTEXT: what was missing and where to find it)*
+     ```
+     If resuming (file exists), append a `---` separator and new session marker rather than overwriting.
 
 5. **Identify Completed Work**
    - Check prd.json for tasks with `status: "complete"`
@@ -179,8 +207,11 @@ For each pending task (in dependency order):
    
    **Execution State Path**: dev/executions/{plan-slug}/
    
+   **Working Memory**: Before starting, read `dev/executions/{plan-slug}/working-memory.md` — it contains patterns, gotchas, and shared utilities from prior tasks. After completing, update it with anything the next developer should know (new patterns, resolved gotchas, shared utilities created).
+   
    **Context - Read These Files First**:
-   1. `.pi/expertise/{area}/PROFILE.md` — domain map for {area} (architecture, services, invariants)
+   1. `dev/executions/{plan-slug}/working-memory.md` — cross-task knowledge from prior tasks
+   2. `.pi/expertise/{area}/PROFILE.md` — domain map for {area} (architecture, services, invariants)
    2. [file] — [why it's relevant]
    3. [file] — [why it's relevant]
    ...
