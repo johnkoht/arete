@@ -29,6 +29,14 @@ Guide the PM through defining 3–5 quarter outcomes, success criteria, and alig
 - **Read** `goals/strategy.md` — org pillars, OKRs, and strategic direction.
 - **Read** existing `goals/quarter.md` if it exists, to carry forward themes or unfinished outcomes.
 
+### 1.5. Discover Available Areas
+
+**Before defining outcomes**, read `areas/*.md` (excluding `_template.md`) to identify available work domains. Extract the `area:` or display name from each file's frontmatter.
+
+If areas exist, keep the list handy for Step 2. If no areas exist, note this — goals will be created without area association and can be linked later.
+
+**Example area list**: `glance-communications`, `product-platform`, `team-operations`
+
 ### 2. Guide to 3–5 Outcomes
 
 If your org has a vision, treat it as a *picture of a better place*. Check that each quarter outcome moves the company toward that picture.
@@ -38,6 +46,17 @@ Ask the PM to define **3–5 outcomes** for the quarter. For each outcome captur
 - **Title** — Short, outcome-oriented (e.g. "Ship onboarding v2", "Complete discovery for X").
 - **Success criteria** — 1–2 sentences: how we know it's done.
 - **Org alignment** — Which pillar or OKR from `goals/strategy.md` this supports (e.g. "Pillar 2: Retention", "O1-KR2").
+- **Area** — Which persistent work domain does this goal belong to? (from the list discovered in Step 1.5)
+
+**Area prompt** (after capturing title and success criteria):
+
+> "Which area does this goal belong to?
+> [list available areas]
+> — or press Enter to leave unassigned for now"
+
+- If areas exist and user selects one: store the slug as `area:` in the goal file.
+- If user skips or no areas exist: leave `area: ""` — goal can be linked to an area later.
+- This is a soft prompt — never block goal creation if the user doesn't assign an area.
 
 ### 3. Write Quarter Goals File
 
@@ -74,6 +93,7 @@ Each goal is a `## Heading` with simple markdown fields — no YAML frontmatter 
 
 - Summarize the quarter outcomes and alignment.
 - Confirm `goals/quarter.md` was written.
+- If any goals are missing an area (the `**Area**` field is blank or absent), mention them briefly: "Note: [Goal Title] has no area assigned — you can link it to an area later by editing the file."
 - Suggest next steps: **goals-alignment** to view the alignment view, **week-plan** when ready to plan the first week.
 
 ## Frameworks

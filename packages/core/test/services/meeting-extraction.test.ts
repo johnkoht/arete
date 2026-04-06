@@ -2021,6 +2021,79 @@ describe('buildMeetingExtractionPrompt - context enhancement', () => {
 });
 
 // ---------------------------------------------------------------------------
+// buildMeetingExtractionPrompt - existingTasks context (Phase 2 Task 2)
+// ---------------------------------------------------------------------------
+
+describe('buildMeetingExtractionPrompt - existingTasks context', () => {
+  function makeMinimalContext(existingTasks?: string[]): Parameters<typeof buildMeetingExtractionPrompt>[3] {
+    return {
+      meeting: {
+        path: '/path/to/meeting.md',
+        title: 'Test Meeting',
+        date: '2026-03-19',
+        attendees: [],
+        transcript: 'transcript',
+      },
+      agenda: null,
+      attendees: [],
+      unknownAttendees: [],
+      relatedContext: {
+        goals: [],
+        projects: [],
+        recentDecisions: [],
+        recentLearnings: [],
+      },
+      warnings: [],
+      ...(existingTasks !== undefined && { existingTasks }),
+    };
+  }
+
+  it('includes existing tasks section when existingTasks present', () => {
+    const context = makeMinimalContext([
+      'Send API documentation to Sarah',
+      'Review quarterly goals',
+      'Update project timeline',
+    ]);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(prompt.includes('## Meeting Context'));
+    assert.ok(prompt.includes('### Existing Tasks'));
+    assert.ok(prompt.includes('Send API documentation to Sarah'));
+    assert.ok(prompt.includes('Review quarterly goals'));
+    assert.ok(prompt.includes('Update project timeline'));
+    assert.ok(prompt.includes('do not duplicate'));
+  });
+
+  it('omits existing tasks section when existingTasks is empty array', () => {
+    const context = makeMinimalContext([]);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('### Existing Tasks'));
+  });
+
+  it('omits existing tasks section when existingTasks is undefined', () => {
+    const context = makeMinimalContext(undefined);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    assert.ok(!prompt.includes('### Existing Tasks'));
+  });
+
+  it('includes all existing tasks in the prompt', () => {
+    const tasks = ['Task one', 'Task two', 'Task three'];
+    const context = makeMinimalContext(tasks);
+
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, context);
+
+    for (const task of tasks) {
+      assert.ok(prompt.includes(task), `Expected prompt to include: ${task}`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractMeetingIntelligence - context option (T2)
 // ---------------------------------------------------------------------------
 

@@ -17,6 +17,7 @@ import type {
   ListTasksOptions,
 } from '../models/tasks.js';
 import type { CommitmentsService } from './commitments.js';
+import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
 
 // ---------------------------------------------------------------------------
 // Error classes
@@ -58,6 +59,9 @@ const DESTINATION_MAP: Record<TaskDestination, { file: 'week.md' | 'tasks.md'; s
 
 /** Pattern for task checkbox lines */
 const TASK_LINE_PATTERN = /^- \[([ xX])\] (.+)$/;
+
+/** Jaccard similarity threshold for near-duplicate dedup in addTask (default 0.8). */
+const TASK_DEDUP_JACCARD_THRESHOLD = 0.8;
 
 /** Pattern for @tag(value) extraction */
 const TAG_PATTERN = /@([a-zA-Z]+)\(([^)]*)\)/g;
@@ -371,12 +375,39 @@ export class TaskService {
 
   /**
    * Add a task to the specified destination.
+   *
+   * Dedup logic (runs before insert):
+   * 1. Fast-path: if metadata.from.id matches any existing task's @from(commitment:id), skip insert.
+   * 2. Jaccard similarity: if normalized text similarity >= 0.8 vs any existing task, skip insert.
+   * In both cases, returns the existing task instead of inserting.
    */
   async addTask(
     text: string,
     destination: TaskDestination,
     metadata: TaskMetadata = {},
   ): Promise<WorkspaceTask> {
+    // Dedup check: read all existing open tasks before inserting
+    const existingTasks = await this.listTasks({ completed: false });
+
+    // Fast-path dedup: @from(commitment:id) exact match
+    if (metadata.from?.type === 'commitment' && metadata.from.id) {
+      const commitmentId = metadata.from.id;
+      const existing = existingTasks.find(
+        (t) => t.metadata.from?.type === 'commitment' && t.metadata.from.id === commitmentId,
+      );
+      if (existing) return existing;
+    }
+
+    // Jaccard dedup: near-duplicate text detection (≥ 0.8 similarity)
+    const normalizedNewText = normalizeForJaccard(text);
+    for (const existing of existingTasks) {
+      const normalizedExisting = normalizeForJaccard(existing.text);
+      const similarity = jaccardSimilarity(normalizedNewText, normalizedExisting);
+      if (similarity >= TASK_DEDUP_JACCARD_THRESHOLD) {
+        return existing;
+      }
+    }
+
     const filePath = this.getFilePath(destination);
     const mapping = DESTINATION_MAP[destination];
     let lines = await this.readFile(filePath);

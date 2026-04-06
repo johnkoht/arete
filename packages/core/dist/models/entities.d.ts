@@ -249,12 +249,12 @@ export type AreaMatch = {
  * Parsed sections from area markdown body.
  */
 export type AreaSections = {
-    currentState: string | null;
-    keyDecisions: string | null;
+    goal: string | null;
+    focus: string | null;
+    horizon: string | null;
+    projects: string | null;
     backlog: string | null;
-    activeGoals: string | null;
-    activeWork: string | null;
-    openCommitments: string | null;
+    stakeholders: string | null;
     notes: string | null;
 };
 /**

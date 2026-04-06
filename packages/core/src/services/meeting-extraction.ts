@@ -367,6 +367,16 @@ function buildContextSection(context: MeetingContextBundle): string {
     sections.push(areaLines.join('\n'));
   }
 
+  // Existing tasks (from now/week.md and now/tasks.md)
+  // Shown so the LLM does not re-extract action items already tracked as tasks.
+  if (context.existingTasks && context.existingTasks.length > 0) {
+    const taskLines = ['### Existing Tasks (already tracked — do not duplicate as action items)'];
+    for (const task of context.existingTasks) {
+      taskLines.push(`- ${task}`);
+    }
+    sections.push(taskLines.join('\n'));
+  }
+
   if (sections.length === 0) return '';
 
   return `\n\n## Meeting Context (use this for better extraction)

@@ -44,7 +44,7 @@ export interface FilteredItem {
 
 /** Processing options (thresholds can be overridden for testing) */
 export interface ProcessingOptions {
-  /** Minimum confidence to include item (default: 0.5) */
+  /** Minimum confidence to include item (default: 0.65) */
   confidenceInclude?: number;
   /** Confidence above which items are auto-approved (default: 0.8) */
   confidenceApproved?: number;
@@ -90,7 +90,7 @@ export interface ProcessedMeetingResult {
 // Default Thresholds
 // ---------------------------------------------------------------------------
 
-const DEFAULT_CONFIDENCE_INCLUDE = 0.5;
+const DEFAULT_CONFIDENCE_INCLUDE = 0.65;
 const DEFAULT_CONFIDENCE_APPROVED = 0.8;
 const DEFAULT_DEDUP_JACCARD = 0.7;
 const DEFAULT_RECONCILE_JACCARD = 0.6;
@@ -258,7 +258,7 @@ function findMatchingCompletedItem(
  * Process meeting extraction results with filtering, dedup, and metadata.
  *
  * This function:
- * 1. Filters items by confidence threshold (< 0.5 excluded by default)
+ * 1. Filters items by confidence threshold (< 0.65 excluded by default)
  * 2. Checks for user notes matches (Jaccard > 0.7 → source: 'dedup')
  * 3. Determines status: dedup → approved, confidence > 0.8 → approved, else pending
  * 4. Builds metadata maps for staged items

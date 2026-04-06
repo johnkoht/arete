@@ -75,6 +75,7 @@ const emptyPendingReview = {
 vi.mock("@/api/review.js", () => ({
   fetchPendingReview: vi.fn(),
   completeReview: vi.fn(),
+  fetchAutoApprovePreview: vi.fn(),
 }));
 
 import * as reviewApi from "@/api/review.js";
@@ -112,6 +113,11 @@ function renderReviewPage() {
 describe("ReviewPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no auto-approve qualifying meetings
+    vi.mocked(reviewApi.fetchAutoApprovePreview).mockResolvedValue({
+      meetings: [],
+      totalItems: 0,
+    });
   });
 
   describe("loading state", () => {
@@ -187,7 +193,8 @@ describe("ReviewPage", () => {
         ).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Vendor Sync")).toBeInTheDocument();
+      // Meeting title appears in group header + item link (so getAllByText)
+      expect(screen.getAllByText("Vendor Sync").length).toBeGreaterThanOrEqual(1);
     });
 
     it("renders learnings", async () => {
@@ -199,7 +206,8 @@ describe("ReviewPage", () => {
         ).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Tech Review")).toBeInTheDocument();
+      // Meeting title appears in group header + item link (so getAllByText)
+      expect(screen.getAllByText("Tech Review").length).toBeGreaterThanOrEqual(1);
     });
 
     it("renders commitments as read-only", async () => {
@@ -489,6 +497,286 @@ describe("ReviewPage", () => {
       });
 
       expect(screen.getByText("Network error")).toBeInTheDocument();
+    });
+  });
+
+  describe("Task 1: Global confidence-based approve", () => {
+    beforeEach(() => {
+      vi.mocked(reviewApi.fetchPendingReview).mockResolvedValue(mockPendingReview);
+      vi.mocked(reviewApi.completeReview).mockResolvedValue({ success: true });
+    });
+
+    it("shows Approve High Confidence button when there are memory items", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Decisions")).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Approve High Confidence")).toBeInTheDocument();
+    });
+
+    it("shows count of qualifying items on the button", async () => {
+      // mockPendingReview has 1 decision with confidence 0.92 (qualifies for 0.8 threshold)
+      // and 1 learning with no confidence (does NOT qualify)
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Approve High Confidence")).toBeInTheDocument();
+      });
+
+      // Should show badge with count — find the amber-styled badge on the button
+      const highConfBtn = screen.getByText("Approve High Confidence").closest("button");
+      expect(highConfBtn).not.toBeNull();
+      expect(highConfBtn!.textContent).toContain("1");
+    });
+
+    it("approves only items meeting the confidence threshold", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Approve High Confidence")).toBeInTheDocument();
+      });
+
+      const button = screen.getByText("Approve High Confidence").closest("button");
+      expect(button).not.toBeNull();
+      fireEvent.click(button!);
+
+      // Click Done Reviewing
+      const doneButton = screen.getByText(/Done Reviewing/);
+      fireEvent.click(doneButton);
+
+      await waitFor(() => {
+        expect(reviewApi.completeReview).toHaveBeenCalled();
+      });
+
+      const callArgs = vi.mocked(reviewApi.completeReview).mock.calls[0][0];
+      const approvedMemory = callArgs.approved.filter((id: string) =>
+        id.startsWith("memory:")
+      );
+
+      // Only "dec-1" (confidence: 0.92) should be approved — "learn-1" has no confidence
+      expect(approvedMemory.some((id: string) => id.startsWith("memory:dec-1"))).toBe(true);
+      expect(approvedMemory.some((id: string) => id.startsWith("memory:learn-1"))).toBe(false);
+    });
+  });
+
+  describe("Task 2: Meeting-level batch approval", () => {
+    beforeEach(() => {
+      vi.mocked(reviewApi.fetchPendingReview).mockResolvedValue(mockPendingReview);
+    });
+
+    it("shows meeting group headers for decisions and learnings", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Decisions")).toBeInTheDocument();
+      });
+
+      // Meeting group headers appear in both sections (decisions + learnings)
+      // Vendor Sync group header
+      const vendorSyncLinks = screen.getAllByText("Vendor Sync");
+      expect(vendorSyncLinks.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("shows Approve Meeting and Skip Meeting buttons per meeting group", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Decisions")).toBeInTheDocument();
+      });
+
+      // Should have per-meeting batch buttons
+      const approveMeetingButtons = screen.getAllByText("Approve Meeting");
+      const skipMeetingButtons = screen.getAllByText("Skip Meeting");
+
+      // At least 1 meeting group per section with pending items
+      expect(approveMeetingButtons.length).toBeGreaterThanOrEqual(1);
+      expect(skipMeetingButtons.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("clicking Approve Meeting approves all pending items in that meeting", async () => {
+      vi.mocked(reviewApi.completeReview).mockResolvedValue({ success: true });
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Approve Meeting").length).toBeGreaterThanOrEqual(1);
+      });
+
+      // Click the first Approve Meeting button (use aria-label for specificity)
+      const approveMeetingButton = screen.getAllByLabelText(/Approve all items from/)[0];
+      expect(approveMeetingButton).toBeDefined();
+      fireEvent.click(approveMeetingButton);
+
+      // Click Done Reviewing
+      const doneButton = screen.getByText(/Done Reviewing/);
+      fireEvent.click(doneButton);
+
+      await waitFor(() => {
+        expect(reviewApi.completeReview).toHaveBeenCalled();
+      });
+
+      const callArgs = vi.mocked(reviewApi.completeReview).mock.calls[0][0];
+      // At least one memory item should now be approved
+      const approvedMemory = callArgs.approved.filter((id: string) =>
+        id.startsWith("memory:")
+      );
+      expect(approvedMemory.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Task 3: Auto-approve banner", () => {
+    beforeEach(() => {
+      vi.mocked(reviewApi.fetchPendingReview).mockResolvedValue(mockPendingReview);
+    });
+
+    it("shows auto-approve banner when qualifying meetings exist", async () => {
+      vi.mocked(reviewApi.fetchAutoApprovePreview).mockResolvedValue({
+        meetings: [{ slug: "2026-03-27-vendor-sync", title: "Vendor Sync", itemCount: 1 }],
+        totalItems: 1,
+      });
+
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/can be auto-approved/)
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Auto-approve these")).toBeInTheDocument();
+    });
+
+    it("hides banner when no qualifying meetings", async () => {
+      vi.mocked(reviewApi.fetchAutoApprovePreview).mockResolvedValue({
+        meetings: [],
+        totalItems: 0,
+      });
+
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Decisions")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Auto-approve these")).not.toBeInTheDocument();
+    });
+
+    it("clicking Auto-approve approves qualifying items and hides banner", async () => {
+      vi.mocked(reviewApi.fetchAutoApprovePreview).mockResolvedValue({
+        meetings: [{ slug: "2026-03-27-vendor-sync", title: "Vendor Sync", itemCount: 1 }],
+        totalItems: 1,
+      });
+      vi.mocked(reviewApi.completeReview).mockResolvedValue({ success: true });
+
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText("Auto-approve these")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("Auto-approve these"));
+
+      // Banner should be gone after auto-approving
+      await waitFor(() => {
+        expect(screen.queryByText("Auto-approve these")).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("Task 4: Review summary", () => {
+    beforeEach(() => {
+      vi.mocked(reviewApi.fetchPendingReview).mockResolvedValue(mockPendingReview);
+      vi.mocked(reviewApi.completeReview).mockResolvedValue({ success: true });
+    });
+
+    it("shows review summary after completing review", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Done Reviewing/)).toBeInTheDocument();
+      });
+
+      const doneButton = screen.getByText(/Done Reviewing/);
+      fireEvent.click(doneButton);
+
+      await waitFor(() => {
+        // "Review Complete" appears in PageHeader (h1) and CardTitle (h3)
+        expect(screen.getAllByText("Review Complete").length).toBeGreaterThanOrEqual(1);
+      });
+
+      // Should show approval counts
+      expect(screen.getByText("Approved")).toBeInTheDocument();
+      expect(screen.getByText("Skipped")).toBeInTheDocument();
+    });
+
+    it("shows links to dashboard and start another review in summary", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Done Reviewing/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Done Reviewing/));
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Review Complete").length).toBeGreaterThanOrEqual(1);
+      });
+
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+      expect(screen.getByText("Start Another Review")).toBeInTheDocument();
+    });
+
+    it("shows auto-approved meetings in summary when they were auto-approved", async () => {
+      vi.mocked(reviewApi.fetchAutoApprovePreview).mockResolvedValue({
+        meetings: [{ slug: "2026-03-27-vendor-sync", title: "Vendor Sync", itemCount: 1 }],
+        totalItems: 1,
+      });
+
+      renderReviewPage();
+
+      // Wait for banner and auto-approve
+      await waitFor(() => {
+        expect(screen.getByText("Auto-approve these")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("Auto-approve these"));
+
+      // Complete the review
+      await waitFor(() => {
+        expect(screen.queryByText("Auto-approve these")).not.toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Done Reviewing/));
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Review Complete").length).toBeGreaterThanOrEqual(1);
+      });
+
+      // Should show auto-approved meetings
+      expect(screen.getByText("Auto-approved meetings")).toBeInTheDocument();
+    });
+
+    it("clicking Start Another Review resets the state", async () => {
+      renderReviewPage();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Done Reviewing/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Done Reviewing/));
+
+      await waitFor(() => {
+        expect(screen.getAllByText("Review Complete").length).toBeGreaterThanOrEqual(1);
+      });
+
+      // Reset by clicking Start Another Review
+      fireEvent.click(screen.getByText("Start Another Review"));
+
+      // Should go back to normal review state (tasks visible again)
+      await waitFor(() => {
+        expect(screen.getByText(/Done Reviewing/)).toBeInTheDocument();
+      });
     });
   });
 });

@@ -58,6 +58,23 @@ projects/active/[topic]-project/
 └── outputs/
 ```
 
+### 1.5. Link to a Quarter Goal
+
+**After creating the folder but before customizing the README**, check if any active quarter goals exist.
+
+**Read** `goals/*.md` (excluding `strategy.md`) or run `arete goals list --json` if available. Filter to `status: active`.
+
+**If active goals exist**, ask the user:
+
+> "Which quarter goal does this project advance?
+> [numbered list of active goals: ID + title]
+> — or press Enter to skip"
+
+- If the user selects a goal: record the goal ID (e.g., `Q1-2`) in the README `**Linked Goal**` field.
+- If the user skips or no goals exist: leave `**Linked Goal**: —` (unlinked). Never block project creation.
+
+**Graceful degradation**: If no goals directory exists or no active goals are found, skip this step entirely without prompting.
+
 ### 2. Optional: Categorize Work Type
 
 Ask the user what type of work this is — but accept minimal answers or "just start":

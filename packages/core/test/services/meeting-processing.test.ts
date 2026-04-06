@@ -161,7 +161,7 @@ Content to keep.`;
 // ---------------------------------------------------------------------------
 
 describe('processMeetingExtraction - confidence filtering', () => {
-  it('excludes action items with confidence below 0.5', () => {
+  it('excludes action items with confidence below 0.65', () => {
     const result = createMockResult({
       actionItems: [
         createActionItem('Low confidence task', 0.4),
@@ -175,9 +175,18 @@ describe('processMeetingExtraction - confidence filtering', () => {
     assert.equal(processed.filteredItems[0].id, 'ai_001');
   });
 
-  it('includes action items with confidence exactly 0.5', () => {
+  it('excludes action items with confidence exactly 0.5 (below 0.65 threshold)', () => {
     const result = createMockResult({
       actionItems: [createActionItem('Borderline task', 0.5)],
+    });
+
+    const processed = processMeetingExtraction(result, '');
+    assert.equal(processed.filteredItems.length, 0);
+  });
+
+  it('includes action items with confidence exactly 0.65', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Borderline task', 0.65)],
     });
 
     const processed = processMeetingExtraction(result, '');
@@ -660,21 +669,35 @@ describe('processMeetingExtraction - auto-approval thresholds', () => {
     assert.equal(processed.stagedItemSource['ai_001'], 'ai');
   });
 
-  it('marks items with confidence 0.5-0.8 as pending', () => {
+  it('marks items with confidence 0.65-0.8 as pending', () => {
     const result = createMockResult({
       actionItems: [
-        createActionItem('Task at 0.5', 0.5),
-        createActionItem('Task at 0.6', 0.6),
+        createActionItem('Task at 0.65', 0.65),
         createActionItem('Task at 0.7', 0.7),
         createActionItem('Task at 0.8', 0.8),
       ],
     });
 
     const processed = processMeetingExtraction(result, '');
-    assert.equal(processed.stagedItemStatus['ai_001'], 'pending'); // 0.5
-    assert.equal(processed.stagedItemStatus['ai_002'], 'pending'); // 0.6
-    assert.equal(processed.stagedItemStatus['ai_003'], 'pending'); // 0.7
-    assert.equal(processed.stagedItemStatus['ai_004'], 'pending'); // 0.8 (not > 0.8)
+    assert.equal(processed.stagedItemStatus['ai_001'], 'pending'); // 0.65
+    assert.equal(processed.stagedItemStatus['ai_002'], 'pending'); // 0.7
+    assert.equal(processed.stagedItemStatus['ai_003'], 'pending'); // 0.8 (not > 0.8)
+  });
+
+  it('excludes items with confidence 0.5 and 0.6 (below 0.65 threshold)', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Task at 0.5', 0.5),
+        createActionItem('Task at 0.6', 0.6),
+        createActionItem('Task at 0.7', 0.7),
+      ],
+    });
+
+    const processed = processMeetingExtraction(result, '');
+    // 0.5 and 0.6 are excluded; 0.7 passes
+    assert.equal(processed.filteredItems.length, 1);
+    assert.equal(processed.filteredItems[0].text, 'Task at 0.7');
+    assert.equal(processed.stagedItemStatus['ai_001'], 'pending'); // 0.7
   });
 
   it('approves items with confidence exactly at boundary (0.81)', () => {
@@ -686,14 +709,14 @@ describe('processMeetingExtraction - auto-approval thresholds', () => {
     assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
   });
 
-  it('always approves dedup items regardless of confidence', () => {
+  it('always approves dedup items when confidence meets include threshold', () => {
     const userNotes = 'complete the task by friday';
     const result = createMockResult({
-      actionItems: [createActionItem('complete the task by friday', 0.6)],
+      actionItems: [createActionItem('complete the task by friday', 0.7)],
     });
 
-    // Item has low confidence (0.6) but matches user notes exactly
-    // Jaccard of identical strings = 1.0 > 0.7
+    // Item matches user notes exactly (Jaccard = 1.0 > 0.7 dedup threshold)
+    // → source: dedup, status: approved
     const processed = processMeetingExtraction(result, userNotes);
     assert.equal(processed.stagedItemSource['ai_001'], 'dedup');
     assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
@@ -1655,7 +1678,7 @@ describe('processMeetingExtraction - importance: light', () => {
   it('auto-approves all action items for importance: light', () => {
     const result = createMockResult({
       actionItems: [
-        createActionItem('Low confidence task', 0.55), // Would be 'pending' normally
+        createActionItem('Medium-low confidence task', 0.70), // Would be 'pending' normally
         createActionItem('Medium confidence task', 0.75), // Would be 'pending' normally
         createActionItem('High confidence task', 0.95), // Would be 'approved' anyway
       ],
@@ -1699,11 +1722,12 @@ describe('processMeetingExtraction - importance: light', () => {
   });
 
   it('still respects confidence filtering for importance: light', () => {
-    // Items below 0.5 should still be excluded
+    // Items below 0.65 should still be excluded
     const result = createMockResult({
       actionItems: [
         createActionItem('Very low confidence', 0.3), // Should be excluded
-        createActionItem('Valid item', 0.6), // Should be included and approved
+        createActionItem('Below threshold', 0.6), // Should be excluded (< 0.65)
+        createActionItem('Valid item', 0.7), // Should be included and approved
       ],
     });
 
@@ -1755,7 +1779,7 @@ describe('processMeetingExtraction - importance: normal/important', () => {
   it('processes normally for importance: normal', () => {
     const result = createMockResult({
       actionItems: [
-        createActionItem('Low confidence task', 0.6), // Should be 'pending'
+        createActionItem('Medium confidence task', 0.7), // Should be 'pending'
         createActionItem('High confidence task', 0.9), // Should be 'approved'
       ],
     });
@@ -1770,7 +1794,7 @@ describe('processMeetingExtraction - importance: normal/important', () => {
   it('processes normally for importance: important', () => {
     const result = createMockResult({
       actionItems: [
-        createActionItem('Low confidence task', 0.6), // Should be 'pending'
+        createActionItem('Medium confidence task', 0.7), // Should be 'pending'
         createActionItem('High confidence task', 0.9), // Should be 'approved'
       ],
     });
@@ -1785,7 +1809,7 @@ describe('processMeetingExtraction - importance: normal/important', () => {
   it('processes normally when importance is undefined', () => {
     const result = createMockResult({
       actionItems: [
-        createActionItem('Low confidence task', 0.6),
+        createActionItem('Medium confidence task', 0.7),
         createActionItem('High confidence task', 0.9),
       ],
     });

@@ -2,14 +2,14 @@
 
 **Work type**: [User fills in: domain ownership, migration, research, etc.]
 **Status**: Active
-**Goal**: [What are we trying to achieve?]
 **Started**: YYYY-MM-DD
+**Linked Goal**: — *(e.g., Q1-2 — link to a quarter goal that this project advances)*
 
 > **Minimal project?** For lightweight projects, keep: Overview, Tasks, Status Updates. Remove optional sections.
 
 ## Overview
 
-[Brief context about this project]
+[Brief context about this project — what problem does it solve and why now?]
 
 ## Phases *(optional)*
 

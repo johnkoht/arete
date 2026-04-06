@@ -89,6 +89,12 @@ export interface MeetingContextBundle {
     relatedContext: RelatedContext;
     areaContext?: AreaContext | null;
     warnings: string[];
+    /**
+     * Existing open tasks from now/week.md and now/tasks.md.
+     * Included so the extraction LLM can avoid re-proposing already-tracked tasks.
+     * Cap at 20 items to avoid bloating the prompt.
+     */
+    existingTasks?: string[];
 }
 /**
  * Options for building meeting context.
