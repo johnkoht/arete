@@ -3572,3 +3572,92 @@ describe('golden file tests — extraction filtering pipeline', () => {
     assert.ok(theyOweMe.length > 0, 'Expected at least one they_owe_me item');
   });
 });
+
+// ---------------------------------------------------------------------------
+// parseMeetingExtractionResponse - topics
+// ---------------------------------------------------------------------------
+
+describe('parseMeetingExtractionResponse - topics', () => {
+  it('parses valid topic slugs', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: ['email-templates', 'q2-planning', 'onboarding-v2'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, ['email-templates', 'q2-planning', 'onboarding-v2']);
+  });
+
+  it('drops topics with uppercase letters', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: ['Email-Templates', 'q2-planning'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, ['q2-planning']);
+  });
+
+  it('drops topics with spaces', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: ['email templates', 'q2-planning'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, ['q2-planning']);
+  });
+
+  it('drops banned generic topics', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: ['meeting', 'discussion', 'q2-planning', 'sync', 'review'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, ['q2-planning']);
+  });
+
+  it('caps topics at 6', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: ['topic-a', 'topic-b', 'topic-c', 'topic-d', 'topic-e', 'topic-f', 'topic-g'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.topics?.length, 6);
+  });
+
+  it('returns empty array when topics absent', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, []);
+  });
+
+  it('returns empty array when topics is not an array', () => {
+    const response = JSON.stringify({
+      summary: 'A meeting.',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+      topics: 'not-an-array',
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.topics, []);
+  });
+});
