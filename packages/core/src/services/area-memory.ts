@@ -13,6 +13,7 @@ import type { AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
 import type { WorkspacePaths, Commitment, AreaContext } from '../models/index.js';
+import { parseMeetingFile } from './meeting-context.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,6 +72,14 @@ interface DecisionEntry {
   raw: string;
 }
 
+interface TopicEntry {
+  slug: string;
+  name: string;
+  meetingCount: number;
+  openItems: number;
+  lastReferenced: string;
+}
+
 interface AreaMemoryData {
   slug: string;
   name: string;
@@ -79,6 +88,7 @@ interface AreaMemoryData {
   openCommitments: Commitment[];
   recentlyCompleted: Commitment[];
   recentDecisions: DecisionEntry[];
+  topics: TopicEntry[];
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +140,17 @@ function parseMemorySections(content: string): DecisionEntry[] {
   }
 
   return sections;
+}
+
+/**
+ * Convert a slug to a title-cased display name.
+ * 'email-templates' → 'Email Templates'
+ */
+function slugToName(slug: string): string {
+  return slug
+    .split('-')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 function daysAgo(dateStr: string, referenceDate: Date = new Date()): number {
@@ -199,6 +220,16 @@ function renderAreaMemory(data: AreaMemoryData): string {
   if (data.keywords.length > 0) {
     lines.push(`keywords: [${data.keywords.map(k => `"${k}"`).join(', ')}]`);
   }
+  if (data.topics.length > 0) {
+    lines.push('topics:');
+    for (const t of data.topics) {
+      lines.push(`  - slug: ${t.slug}`);
+      lines.push(`    name: ${t.name}`);
+      lines.push(`    meeting_count: ${t.meetingCount}`);
+      lines.push(`    open_items: ${t.openItems}`);
+      lines.push(`    last_referenced: "${t.lastReferenced}"`);
+    }
+  }
   lines.push('---');
   lines.push('');
 
@@ -213,6 +244,17 @@ function renderAreaMemory(data: AreaMemoryData): string {
     lines.push('## Keywords');
     lines.push('');
     lines.push(data.keywords.join(', '));
+    lines.push('');
+  }
+
+  // Topics
+  if (data.topics.length > 0) {
+    lines.push('## Topics');
+    lines.push('');
+    for (const t of data.topics) {
+      const openStr = t.openItems > 0 ? ` — ${t.openItems} open` : '';
+      lines.push(`- **${t.name}** (${t.meetingCount} meetings${openStr}, last: ${t.lastReferenced})`);
+    }
     lines.push('');
   }
 
@@ -495,6 +537,9 @@ export class AreaMemoryService {
 
     const keywords = extractKeywords(keywordSources);
 
+    // 5. Topics from area-matched meeting files
+    const topics = await this.getAreaTopics(areaContext, workspacePaths);
+
     return {
       slug: areaContext.slug,
       name: areaContext.name,
@@ -503,6 +548,7 @@ export class AreaMemoryService {
       openCommitments,
       recentlyCompleted,
       recentDecisions,
+      topics,
     };
   }
 
@@ -558,6 +604,97 @@ export class AreaMemoryService {
     }
 
     return [...people];
+  }
+
+  /**
+   * Aggregate topic slugs from area-matched meeting files.
+   *
+   * Matches meetings via BOTH frontmatter `area:` field AND recurring meeting
+   * title match. Excludes topics older than 60 days with zero open items.
+   */
+  private async getAreaTopics(
+    areaContext: AreaContext,
+    workspacePaths: WorkspacePaths,
+  ): Promise<TopicEntry[]> {
+    const TOPIC_STALE_DAYS = 60;
+    const meetingsDir = join(workspacePaths.resources, 'meetings');
+    if (!(await this.storage.exists(meetingsDir))) return [];
+
+    const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
+
+    // Aggregate: slug → { count, openItems, lastReferenced }
+    const topicMap = new Map<string, { count: number; openItems: number; lastReferenced: string }>();
+
+    for (const meetingPath of meetingFiles) {
+      const fileName = basename(meetingPath);
+      if (fileName === 'index.md' || fileName === 'MANIFEST.md') continue;
+
+      const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) continue;
+      const date = dateMatch[1];
+
+      const content = await this.storage.read(meetingPath);
+      if (!content) continue;
+
+      const parsed = parseMeetingFile(content);
+      if (!parsed) continue;
+
+      const fm = parsed.frontmatter;
+
+      // Match via area: frontmatter field
+      let matchesArea = fm.area === areaContext.slug;
+
+      // Match via recurring meeting title (fallback)
+      if (!matchesArea && areaContext.recurringMeetings.length > 0) {
+        const title = fm.title.toLowerCase();
+        for (const recurring of areaContext.recurringMeetings) {
+          if (title.includes(recurring.title.toLowerCase())) {
+            matchesArea = true;
+            break;
+          }
+        }
+      }
+
+      if (!matchesArea) continue;
+
+      // No topics — meeting still counts toward area but contributes no topic entries
+      if (!fm.topics || fm.topics.length === 0) continue;
+
+      const openItems = fm.open_action_items ?? 0;
+
+      for (const slug of fm.topics) {
+        const existing = topicMap.get(slug);
+        if (!existing) {
+          topicMap.set(slug, { count: 1, openItems, lastReferenced: date });
+        } else {
+          existing.count += 1;
+          existing.openItems += openItems;
+          if (date > existing.lastReferenced) {
+            existing.lastReferenced = date;
+          }
+        }
+      }
+    }
+
+    // Build topic entries, applying 60-day stale exclusion rule
+    const entries: TopicEntry[] = [];
+    for (const [slug, data] of topicMap.entries()) {
+      const age = daysAgo(data.lastReferenced);
+      if (age > TOPIC_STALE_DAYS && data.openItems === 0) continue;
+
+      entries.push({
+        slug,
+        name: slugToName(slug),
+        meetingCount: data.count,
+        openItems: data.openItems,
+        lastReferenced: data.lastReferenced,
+      });
+    }
+
+    // Sort by openItems desc, then meetingCount desc
+    entries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
+
+    return entries;
   }
 
   /**

@@ -292,6 +292,107 @@ describe('AreaMemoryService', () => {
     });
   });
 
+  describe('topics aggregation', () => {
+    it('aggregates topics from meetings matched by area: frontmatter field', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      // Meeting tagged with area: glance-comms and topics
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-email-work.md`),
+        `---\ntitle: "Email Work"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - email-templates\n  - sms\nopen_action_items: 2\nmy_commitments: 1\ntheir_commitments: 1\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const outputPath = join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md');
+      const content = storage.store.get(outputPath)!;
+
+      // Topics should appear in frontmatter
+      assert.ok(content.includes('slug: email-templates'), 'Should have email-templates slug');
+      assert.ok(content.includes('name: Email Templates'), 'Should have title-cased name');
+      assert.ok(content.includes('meeting_count: 1'), 'Should have meeting_count: 1');
+      assert.ok(content.includes('open_items: 2'), 'Should have open_items: 2');
+      assert.ok(content.includes(`last_referenced: "${today}"`), 'Should have last_referenced');
+      // Topics section in body
+      assert.ok(content.includes('## Topics'), 'Should have Topics section');
+      assert.ok(content.includes('**Email Templates**'), 'Should have bold topic name');
+    });
+
+    it('aggregates topics from meetings matched by recurring title', async () => {
+      const area = makeAreaContext({
+        slug: 'glance-comms',
+        recurringMeetings: [{ title: 'CoverWhale Sync', attendees: [], frequency: 'weekly' }],
+      });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-coverwhale-sync.md`),
+        `---\ntitle: "CoverWhale Sync"\ndate: "${today}"\ntopics:\n  - roadmap\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.ok(content.includes('slug: roadmap'), 'Should include roadmap from title-matched meeting');
+    });
+
+    it('counts meetings with two tags for the same topic across multiple meetings', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const d1 = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const d2 = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${d1}-meeting-a.md`),
+        `---\ntitle: "Meeting A"\ndate: "${d1}"\narea: glance-comms\ntopics:\n  - email-templates\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+      );
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${d2}-meeting-b.md`),
+        `---\ntitle: "Meeting B"\ndate: "${d2}"\narea: glance-comms\ntopics:\n  - email-templates\n  - sms\nopen_action_items: 2\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.ok(content.includes('meeting_count: 2'), 'email-templates should have meeting_count: 2');
+      assert.ok(content.includes('open_items: 3'), 'Should sum open_action_items (1+2=3)');
+      assert.ok(content.includes('slug: sms'), 'Should also have sms topic');
+    });
+
+    it('does not crash when meeting has no topics frontmatter field', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-no-topics.md`),
+        `---\ntitle: "No Topics"\ndate: "${today}"\narea: glance-comms\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      // Should not throw
+      const result = await service.refreshAreaMemory('glance-comms', paths);
+      assert.equal(result, true);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.ok(!content.includes('## Topics'), 'Should not have Topics section when no topics');
+    });
+  });
+
   describe('refreshAllAreaMemory', () => {
     it('refreshes all areas', async () => {
       const areas = [
