@@ -17,16 +17,20 @@ import * as workspaceService from '../services/workspace.js';
 // Types
 // ---------------------------------------------------------------------------
 
-/** A staged decision/learning from a processed meeting */
+/** A staged decision/learning/action item from a processed meeting */
 type StagedMemoryItem = {
   id: string;
   text: string;
-  type: 'decision' | 'learning';
+  type: 'decision' | 'learning' | 'action_item';
   meetingSlug: string;
   meetingTitle: string;
   meetingDate: string;
+  meetingArea?: string;
   source?: 'ai' | 'dedup' | 'reconciled';
   confidence?: number;
+  ownerSlug?: string;
+  direction?: 'i_owe_them' | 'they_owe_me';
+  counterpartySlug?: string;
 };
 
 /** Response type for GET /api/review/pending */
@@ -34,6 +38,7 @@ type PendingReviewResponse = {
   tasks: WorkspaceTask[];
   decisions: StagedMemoryItem[];
   learnings: StagedMemoryItem[];
+  actionItems: StagedMemoryItem[];
   commitments: Commitment[];
 };
 
@@ -78,16 +83,39 @@ export function createReviewRouter(workspaceRoot: string): Hono {
         return false;
       });
       
-      // 4. Get staged decisions/learnings from processed meetings
+      // 4. Get staged decisions/learnings/action items from processed meetings
       const decisions: StagedMemoryItem[] = [];
       const learnings: StagedMemoryItem[] = [];
-      
+      const actionItems: StagedMemoryItem[] = [];
+
       for (const meeting of processedMeetings) {
         const fullMeeting = await workspaceService.getMeeting(workspaceRoot, meeting.slug);
         if (!fullMeeting) continue;
-        
+
         const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
-        
+        const meetingArea = fullMeeting.area;
+
+        // Extract action items with 'pending' status
+        for (const item of fullMeeting.stagedSections.actionItems) {
+          const status = stagedItemStatus[item.id];
+          if (status === 'pending' || status === undefined) {
+            actionItems.push({
+              id: item.id,
+              text: item.text,
+              type: 'action_item',
+              meetingSlug: meeting.slug,
+              meetingTitle: meeting.title,
+              meetingDate: meeting.date,
+              meetingArea,
+              source: item.source,
+              confidence: item.confidence,
+              ownerSlug: item.ownerSlug,
+              direction: item.direction,
+              counterpartySlug: item.counterpartySlug,
+            });
+          }
+        }
+
         // Extract decisions with 'pending' status
         for (const item of fullMeeting.stagedSections.decisions) {
           const status = stagedItemStatus[item.id];
@@ -99,12 +127,13 @@ export function createReviewRouter(workspaceRoot: string): Hono {
               meetingSlug: meeting.slug,
               meetingTitle: meeting.title,
               meetingDate: meeting.date,
+              meetingArea,
               source: item.source,
               confidence: item.confidence,
             });
           }
         }
-        
+
         // Extract learnings with 'pending' status
         for (const item of fullMeeting.stagedSections.learnings) {
           const status = stagedItemStatus[item.id];
@@ -116,17 +145,19 @@ export function createReviewRouter(workspaceRoot: string): Hono {
               meetingSlug: meeting.slug,
               meetingTitle: meeting.title,
               meetingDate: meeting.date,
+              meetingArea,
               source: item.source,
               confidence: item.confidence,
             });
           }
         }
       }
-      
+
       const response: PendingReviewResponse = {
         tasks,
         decisions,
         learnings,
+        actionItems,
         commitments,
       };
       
@@ -156,8 +187,15 @@ export function createReviewRouter(workspaceRoot: string): Hono {
 
         const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
 
-        // Collect all pending items (decisions + learnings)
+        // Collect all pending items (action items + decisions + learnings)
         const pendingItems: StagedItem[] = [];
+
+        for (const item of fullMeeting.stagedSections.actionItems) {
+          const status = stagedItemStatus[item.id];
+          if (status === 'pending' || status === undefined) {
+            pendingItems.push(item);
+          }
+        }
 
         for (const item of fullMeeting.stagedSections.decisions) {
           const status = stagedItemStatus[item.id];
@@ -219,10 +257,13 @@ export function createReviewRouter(workspaceRoot: string): Hono {
       const sessionFile = join(areteDir, `.review-session-${sessionId}`);
       const completeFile = join(areteDir, `.review-complete-${sessionId}`);
       
-      // Validate session file exists
-      const sessionExists = await storage.read(sessionFile);
-      if (sessionExists === null) {
-        return c.json({ error: `Session not found: ${sessionId}` }, 400);
+      // Validate session file exists (skip for web-initiated sessions)
+      const isWebSession = sessionId.startsWith('web-');
+      if (!isWebSession) {
+        const sessionExists = await storage.read(sessionFile);
+        if (sessionExists === null) {
+          return c.json({ error: `Session not found: ${sessionId}` }, 400);
+        }
       }
       
       // Write completion file with approved/skipped arrays

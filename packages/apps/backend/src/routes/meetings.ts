@@ -162,7 +162,7 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
   // PUT /api/meetings/:slug — update title/summary
   app.put('/:slug', async (c) => {
     const slug = c.req.param('slug');
-    const body = await c.req.json<{ title?: string; summary?: string }>();
+    const body = await c.req.json<{ title?: string; summary?: string; area?: string }>();
     try {
       await withSlugLock(slug, () =>
         workspaceService.updateMeeting(workspaceRoot, slug, body)

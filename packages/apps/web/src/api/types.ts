@@ -316,12 +316,16 @@ export type WorkspaceTask = {
 export type StagedMemoryItem = {
   id: string;
   text: string;
-  type: 'decision' | 'learning';
+  type: 'decision' | 'learning' | 'action_item';
   meetingSlug: string;
   meetingTitle: string;
   meetingDate: string;
+  meetingArea?: string;
   source?: 'ai' | 'dedup' | 'reconciled';
   confidence?: number;
+  ownerSlug?: string;
+  direction?: 'i_owe_them' | 'they_owe_me';
+  counterpartySlug?: string;
 };
 
 export type ReviewCommitment = {
@@ -343,6 +347,7 @@ export type PendingReviewResponse = {
   tasks: WorkspaceTask[];
   decisions: StagedMemoryItem[];
   learnings: StagedMemoryItem[];
+  actionItems: StagedMemoryItem[];
   commitments: ReviewCommitment[];
 };
 

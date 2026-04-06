@@ -17,9 +17,11 @@ import {
   Pencil,
   Zap,
   ChevronRight,
+  User,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +37,8 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { usePendingReview, useCompleteReview, useAutoApprovePreview } from "@/hooks/review.js";
+import { useAreas } from "@/hooks/areas.js";
+import { updateMeeting } from "@/api/meetings.js";
 import type {
   TaskDestination,
   WorkspaceTask,
@@ -61,6 +65,20 @@ type ReviewSummary = {
   skipped: number;
   pending: number;
   autoApprovedMeetings: AutoApproveQualifyingMeeting[];
+};
+
+/** Composite key to avoid ID collisions across meetings */
+function itemKey(item: StagedMemoryItem): string {
+  return `${item.meetingSlug}::${item.id}`;
+}
+
+type MeetingGroupData = {
+  title: string;
+  slug: string;
+  area?: string;
+  actionItems: StagedMemoryItem[];
+  decisions: StagedMemoryItem[];
+  learnings: StagedMemoryItem[];
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -114,7 +132,7 @@ function TaskItem({
     <div
       className={`group rounded-lg border bg-card p-4 transition-all ${
         isApproved
-          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+          ? "border-emerald-200 dark:border-emerald-900/50"
           : isSkipped
             ? "border-muted bg-muted/30 opacity-60"
             : "hover:border-primary/30"
@@ -236,7 +254,7 @@ function MemoryItem({
     <div
       className={`group rounded-lg border bg-card p-4 transition-all ${
         isApproved
-          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+          ? "border-emerald-200 dark:border-emerald-900/50"
           : isSkipped
             ? "border-muted bg-muted/30 opacity-60"
             : "hover:border-primary/30"
@@ -251,7 +269,7 @@ function MemoryItem({
                 onChange={(e) => onEditChange(e.target.value)}
                 className="h-8 text-sm"
                 aria-label="Edit item text"
-                autoFocus
+                ref={(el) => el?.focus({ preventScroll: true })}
               />
               <Button
                 variant="outline"
@@ -340,12 +358,102 @@ function MemoryItem({
   );
 }
 
-// ── Meeting-grouped memory items (Task 2) ─────────────────────────────────────
+// ── Meeting area selector ────────────────────────────────────────────────────
 
-function MeetingGroup({
+function MeetingAreaSelector({
   meetingSlug,
-  meetingTitle,
-  items,
+  currentArea,
+}: {
+  meetingSlug: string;
+  currentArea?: string;
+}) {
+  const { data: areas } = useAreas();
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (area: string) => updateMeeting(meetingSlug, { area }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["review"] });
+      toast.success("Area updated");
+    },
+    onError: (err) => {
+      toast.error(`Failed to update area: ${err instanceof Error ? err.message : "Unknown error"}`);
+    },
+  });
+
+  if (!areas || areas.length === 0) return null;
+
+  return (
+    <Select
+      value={currentArea ?? ""}
+      onValueChange={(value) => mutation.mutate(value)}
+    >
+      <SelectTrigger className="h-6 w-auto min-w-[8rem] max-w-[16rem] text-[10px]">
+        <SelectValue placeholder="Area..." />
+      </SelectTrigger>
+      <SelectContent>
+        {areas.map((area) => (
+          <SelectItem key={area.slug} value={area.slug}>
+            {area.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ── Meeting section (grouped by meeting with sub-sections) ───────────────────
+
+function MemoryItemWithOwner({
+  item,
+  decision,
+  onDecisionChange,
+  editedText,
+  isEditing,
+  onEditStart,
+  onEditSave,
+  onEditChange,
+}: {
+  item: StagedMemoryItem;
+  decision: MemoryDecision;
+  onDecisionChange: (decision: MemoryDecision) => void;
+  editedText: string | undefined;
+  isEditing: boolean;
+  onEditStart: () => void;
+  onEditSave: () => void;
+  onEditChange: (text: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <MemoryItem
+        item={item}
+        decision={decision}
+        onDecisionChange={onDecisionChange}
+        editedText={editedText}
+        isEditing={isEditing}
+        onEditStart={onEditStart}
+        onEditSave={onEditSave}
+        onEditChange={onEditChange}
+      />
+      {item.ownerSlug && (
+        <div className="pl-4">
+          <Badge variant="secondary" className="text-xs font-normal">
+            <User className="mr-1 h-3 w-3" />
+            @{item.ownerSlug}
+            {item.direction === "i_owe_them" ? (
+              <ArrowRight className="mx-0.5 h-3 w-3" />
+            ) : item.direction === "they_owe_me" ? (
+              <ArrowLeft className="mx-0.5 h-3 w-3" />
+            ) : null}
+            {item.counterpartySlug && <span>@{item.counterpartySlug}</span>}
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MeetingSection({
+  meeting,
   memoryDecisions,
   editedItems,
   editingId,
@@ -356,9 +464,7 @@ function MeetingGroup({
   onApproveAll,
   onSkipAll,
 }: {
-  meetingSlug: string;
-  meetingTitle: string;
-  items: StagedMemoryItem[];
+  meeting: MeetingGroupData;
   memoryDecisions: Record<string, MemoryDecision>;
   editedItems: Map<string, string>;
   editingId: string | null;
@@ -369,25 +475,40 @@ function MeetingGroup({
   onApproveAll: () => void;
   onSkipAll: () => void;
 }) {
-  const pendingCount = items.filter(
-    (item) => (memoryDecisions[item.id]?.status ?? "pending") === "pending"
+  const [isExpanded, setIsExpanded] = useState(true);
+  const allItems = [...meeting.actionItems, ...meeting.decisions, ...meeting.learnings];
+  const pendingCount = allItems.filter(
+    (item) => (memoryDecisions[itemKey(item)]?.status ?? "pending") === "pending"
   ).length;
 
+  const subSections: { key: string; label: string; icon: typeof ListTodo; items: StagedMemoryItem[] }[] = [
+    { key: "action_items", label: "Action Items", icon: ListTodo, items: meeting.actionItems },
+    { key: "decisions", label: "Decisions", icon: Lightbulb, items: meeting.decisions },
+    { key: "learnings", label: "Learnings", icon: Brain, items: meeting.learnings },
+  ].filter((s) => s.items.length > 0);
+
   return (
-    <div className="space-y-2">
-      {/* Meeting group header */}
-      <div className="flex items-center justify-between py-1 border-b border-dashed border-muted-foreground/20">
+    <section className="space-y-3">
+      {/* Meeting header */}
+      <div className="flex items-center justify-between py-2 border-b border-muted-foreground/20">
         <div className="flex items-center gap-2">
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-          <Link
-            to={`/meetings/${meetingSlug}`}
-            className="text-xs font-medium text-muted-foreground hover:text-primary hover:underline"
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1.5 hover:text-primary"
+            aria-label={isExpanded ? "Collapse section" : "Expand section"}
           >
-            {meetingTitle}
+            <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+          </button>
+          <Link
+            to={`/meetings/${meeting.slug}`}
+            className="text-sm font-medium hover:text-primary hover:underline"
+          >
+            {meeting.title}
           </Link>
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-            {items.length}
+            {allItems.length}
           </Badge>
+          <MeetingAreaSelector meetingSlug={meeting.slug} currentArea={meeting.area} />
         </div>
         {pendingCount > 0 && (
           <div className="flex items-center gap-1">
@@ -396,7 +517,7 @@ function MeetingGroup({
               size="sm"
               className="h-6 text-[10px] px-2 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
               onClick={onApproveAll}
-              aria-label={`Approve all items from ${meetingTitle}`}
+              aria-label={`Approve all items from ${meeting.title}`}
             >
               <CheckCircle2 className="h-3 w-3 mr-1" />
               Approve Meeting
@@ -406,7 +527,7 @@ function MeetingGroup({
               size="sm"
               className="h-6 text-[10px] px-2 text-muted-foreground hover:bg-muted/50"
               onClick={onSkipAll}
-              aria-label={`Skip all items from ${meetingTitle}`}
+              aria-label={`Skip all items from ${meeting.title}`}
             >
               <XCircle className="h-3 w-3 mr-1" />
               Skip Meeting
@@ -414,23 +535,52 @@ function MeetingGroup({
           </div>
         )}
       </div>
-      {/* Items */}
-      <div className="space-y-2 pl-4">
-        {items.map((item) => (
-          <MemoryItem
-            key={item.id}
-            item={item}
-            decision={memoryDecisions[item.id] ?? { status: "pending" }}
-            onDecisionChange={(d) => onDecisionChange(item.id, d)}
-            editedText={editedItems.get(item.id)}
-            isEditing={editingId === item.id}
-            onEditStart={() => onEditStart(item.id)}
-            onEditSave={onEditSave}
-            onEditChange={(text) => onEditChange(item.id, text)}
-          />
-        ))}
-      </div>
-    </div>
+      {/* Sub-sections by type */}
+      {isExpanded && (
+        <div className="space-y-4 pl-4">
+          {subSections.map(({ key, label, icon: Icon, items }) => (
+            <div key={key} className="space-y-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Icon className="h-3.5 w-3.5" />
+                <span className="font-medium">{label}</span>
+                <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                  {items.length}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                {items.map((item) =>
+                  item.type === "action_item" ? (
+                    <MemoryItemWithOwner
+                      key={itemKey(item)}
+                      item={item}
+                      decision={memoryDecisions[itemKey(item)] ?? { status: "pending" }}
+                      onDecisionChange={(d) => onDecisionChange(itemKey(item), d)}
+                      editedText={editedItems.get(itemKey(item))}
+                      isEditing={editingId === itemKey(item)}
+                      onEditStart={() => onEditStart(itemKey(item))}
+                      onEditSave={onEditSave}
+                      onEditChange={(text) => onEditChange(itemKey(item), text)}
+                    />
+                  ) : (
+                    <MemoryItem
+                      key={itemKey(item)}
+                      item={item}
+                      decision={memoryDecisions[itemKey(item)] ?? { status: "pending" }}
+                      onDecisionChange={(d) => onDecisionChange(itemKey(item), d)}
+                      editedText={editedItems.get(itemKey(item))}
+                      isEditing={editingId === itemKey(item)}
+                      onEditStart={() => onEditStart(itemKey(item))}
+                      onEditSave={onEditSave}
+                      onEditChange={(text) => onEditChange(itemKey(item), text)}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -602,16 +752,16 @@ function AutoApproveBanner({
   if (meetings.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+    <div className="rounded-lg border border-orange-300 bg-orange-500/10 p-4 dark:border-orange-500/50 dark:bg-orange-500/10">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Zap className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            <Zap className="h-4 w-4 text-orange-600" />
+            <span className="text-sm font-medium text-orange-700 dark:text-orange-200">
               {totalItems} items from {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} can be auto-approved
             </span>
           </div>
-          <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mb-2">
+          <p className="text-xs text-orange-600 dark:text-orange-400 mb-2">
             All items in these meetings have ≥80% confidence:
           </p>
           <div className="flex flex-wrap gap-1">
@@ -619,7 +769,7 @@ function AutoApproveBanner({
               <Badge
                 key={m.slug}
                 variant="secondary"
-                className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                className="text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
               >
                 {m.title} ({m.itemCount})
               </Badge>
@@ -628,7 +778,7 @@ function AutoApproveBanner({
         </div>
         <Button
           size="sm"
-          className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white flex-shrink-0"
+          className="h-8 text-xs bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
           onClick={onAutoApprove}
           aria-label="Auto-approve high confidence meetings"
         >
@@ -747,7 +897,7 @@ export default function ReviewPage() {
   // Auto-approve preview (Task 3) — enabled only when we have items
   const { data: autoApproveData } = useAutoApprovePreview(
     confidenceThreshold,
-    !isLoading && !error && ((data?.decisions.length ?? 0) + (data?.learnings.length ?? 0)) > 0
+    !isLoading && !error && ((data?.actionItems.length ?? 0) + (data?.decisions.length ?? 0) + (data?.learnings.length ?? 0)) > 0
   );
 
   // Auto-approve state: which meetings the user chose to auto-approve
@@ -798,9 +948,9 @@ export default function ReviewPage() {
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
       let changed = false;
-      for (const item of [...data.decisions, ...data.learnings]) {
-        if (!updated[item.id]) {
-          updated[item.id] = { status: "pending" };
+      for (const item of [...data.actionItems, ...data.decisions, ...data.learnings]) {
+        if (!updated[itemKey(item)]) {
+          updated[itemKey(item)] = { status: "pending" };
           changed = true;
         }
       }
@@ -857,54 +1007,27 @@ export default function ReviewPage() {
     });
   }, [data]);
 
-  // Bulk actions for decisions
-  const handleApproveAllDecisions = useCallback(() => {
+  // Bulk actions for all memory items (action items + decisions + learnings)
+  const handleApproveAllMemory = useCallback(() => {
     if (!data) return;
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
-      for (const item of data.decisions) {
-        if (updated[item.id]?.status === "pending") {
-          updated[item.id] = { status: "approved" };
+      for (const item of [...data.actionItems, ...data.decisions, ...data.learnings]) {
+        if (updated[itemKey(item)]?.status === "pending") {
+          updated[itemKey(item)] = { status: "approved" };
         }
       }
       return updated;
     });
   }, [data]);
 
-  const handleSkipAllDecisions = useCallback(() => {
+  const handleSkipAllMemory = useCallback(() => {
     if (!data) return;
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
-      for (const item of data.decisions) {
-        if (updated[item.id]?.status === "pending") {
-          updated[item.id] = { status: "skipped" };
-        }
-      }
-      return updated;
-    });
-  }, [data]);
-
-  // Bulk actions for learnings
-  const handleApproveAllLearnings = useCallback(() => {
-    if (!data) return;
-    setMemoryDecisions((prev) => {
-      const updated = { ...prev };
-      for (const item of data.learnings) {
-        if (updated[item.id]?.status === "pending") {
-          updated[item.id] = { status: "approved" };
-        }
-      }
-      return updated;
-    });
-  }, [data]);
-
-  const handleSkipAllLearnings = useCallback(() => {
-    if (!data) return;
-    setMemoryDecisions((prev) => {
-      const updated = { ...prev };
-      for (const item of data.learnings) {
-        if (updated[item.id]?.status === "pending") {
-          updated[item.id] = { status: "skipped" };
+      for (const item of [...data.actionItems, ...data.decisions, ...data.learnings]) {
+        if (updated[itemKey(item)]?.status === "pending") {
+          updated[itemKey(item)] = { status: "skipped" };
         }
       }
       return updated;
@@ -916,8 +1039,8 @@ export default function ReviewPage() {
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
       for (const item of items) {
-        if (item.meetingSlug === meetingSlug && (updated[item.id]?.status ?? "pending") === "pending") {
-          updated[item.id] = { status: "approved" };
+        if (item.meetingSlug === meetingSlug && (updated[itemKey(item)]?.status ?? "pending") === "pending") {
+          updated[itemKey(item)] = { status: "approved" };
         }
       }
       return updated;
@@ -928,27 +1051,27 @@ export default function ReviewPage() {
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
       for (const item of items) {
-        if (item.meetingSlug === meetingSlug && (updated[item.id]?.status ?? "pending") === "pending") {
-          updated[item.id] = { status: "skipped" };
+        if (item.meetingSlug === meetingSlug && (updated[itemKey(item)]?.status ?? "pending") === "pending") {
+          updated[itemKey(item)] = { status: "skipped" };
         }
       }
       return updated;
     });
   }, []);
 
-  // Global confidence-based approve (Task 1)
+  // Global confidence-based approve
   const handleApproveHighConfidence = useCallback(() => {
     if (!data) return;
-    const allMemoryItems = [...data.decisions, ...data.learnings];
+    const allMemoryItems = [...data.actionItems, ...data.decisions, ...data.learnings];
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
       for (const item of allMemoryItems) {
         if (
-          (updated[item.id]?.status ?? "pending") === "pending" &&
+          (updated[itemKey(item)]?.status ?? "pending") === "pending" &&
           item.confidence !== undefined &&
           item.confidence >= confidenceThreshold
         ) {
-          updated[item.id] = { status: "approved" };
+          updated[itemKey(item)] = { status: "approved" };
         }
       }
       return updated;
@@ -958,23 +1081,23 @@ export default function ReviewPage() {
   // Count items qualifying for high-confidence approve
   const highConfidenceCount = useMemo(() => {
     if (!data) return 0;
-    return [...data.decisions, ...data.learnings].filter(
+    return [...data.actionItems, ...data.decisions, ...data.learnings].filter(
       (item) =>
-        (memoryDecisions[item.id]?.status ?? "pending") === "pending" &&
+        (memoryDecisions[itemKey(item)]?.status ?? "pending") === "pending" &&
         item.confidence !== undefined &&
         item.confidence >= confidenceThreshold
     ).length;
   }, [data, memoryDecisions, confidenceThreshold]);
 
-  // Auto-approve handler (Task 3) — marks all items from qualifying meetings as approved
+  // Auto-approve handler — marks all items from qualifying meetings as approved
   const handleAutoApprove = useCallback(() => {
     if (!autoApproveData || !data) return;
     const qualifyingSlugs = new Set(autoApproveData.meetings.map((m) => m.slug));
     setMemoryDecisions((prev) => {
       const updated = { ...prev };
-      for (const item of [...data.decisions, ...data.learnings]) {
-        if (qualifyingSlugs.has(item.meetingSlug) && (updated[item.id]?.status ?? "pending") === "pending") {
-          updated[item.id] = { status: "approved" };
+      for (const item of [...data.actionItems, ...data.decisions, ...data.learnings]) {
+        if (qualifyingSlugs.has(item.meetingSlug) && (updated[itemKey(item)]?.status ?? "pending") === "pending") {
+          updated[itemKey(item)] = { status: "approved" };
         }
       }
       return updated;
@@ -988,44 +1111,40 @@ export default function ReviewPage() {
     return data.tasks.filter((t) => taskDecisions[t.id]?.status === "pending").length;
   }, [data, taskDecisions]);
 
-  const pendingDecisionCount = useMemo(() => {
+  const pendingMemoryCount = useMemo(() => {
     if (!data) return 0;
-    return data.decisions.filter((d) => memoryDecisions[d.id]?.status === "pending").length;
+    return [...data.actionItems, ...data.decisions, ...data.learnings].filter(
+      (item) => memoryDecisions[itemKey(item)]?.status === "pending"
+    ).length;
   }, [data, memoryDecisions]);
 
-  const pendingLearningCount = useMemo(() => {
-    if (!data) return 0;
-    return data.learnings.filter((l) => memoryDecisions[l.id]?.status === "pending").length;
-  }, [data, memoryDecisions]);
+  const totalPending = pendingTaskCount + pendingMemoryCount;
 
-  const totalPending = pendingTaskCount + pendingDecisionCount + pendingLearningCount;
+  // Group all memory items by meeting
+  const itemsByMeeting = useMemo(() => {
+    if (!data) return new Map<string, MeetingGroupData>();
+    const map = new Map<string, MeetingGroupData>();
 
-  // Group memory items by meeting (Task 2)
-  const decisionsByMeeting = useMemo(() => {
-    if (!data) return new Map<string, { title: string; items: StagedMemoryItem[] }>();
-    const map = new Map<string, { title: string; items: StagedMemoryItem[] }>();
-    for (const item of data.decisions) {
-      const existing = map.get(item.meetingSlug);
-      if (existing) {
-        existing.items.push(item);
-      } else {
-        map.set(item.meetingSlug, { title: item.meetingTitle, items: [item] });
+    const ensureMeeting = (item: StagedMemoryItem) => {
+      let group = map.get(item.meetingSlug);
+      if (!group) {
+        group = {
+          title: item.meetingTitle,
+          slug: item.meetingSlug,
+          area: item.meetingArea,
+          actionItems: [],
+          decisions: [],
+          learnings: [],
+        };
+        map.set(item.meetingSlug, group);
       }
-    }
-    return map;
-  }, [data]);
+      return group;
+    };
 
-  const learningsByMeeting = useMemo(() => {
-    if (!data) return new Map<string, { title: string; items: StagedMemoryItem[] }>();
-    const map = new Map<string, { title: string; items: StagedMemoryItem[] }>();
-    for (const item of data.learnings) {
-      const existing = map.get(item.meetingSlug);
-      if (existing) {
-        existing.items.push(item);
-      } else {
-        map.set(item.meetingSlug, { title: item.meetingTitle, items: [item] });
-      }
-    }
+    for (const item of data.actionItems) ensureMeeting(item).actionItems.push(item);
+    for (const item of data.decisions) ensureMeeting(item).decisions.push(item);
+    for (const item of data.learnings) ensureMeeting(item).learnings.push(item);
+
     return map;
   }, [data]);
 
@@ -1042,9 +1161,10 @@ export default function ReviewPage() {
       }
     }
 
-    for (const [id, decision] of Object.entries(memoryDecisionsRef.current)) {
+    for (const [compositeKey, decision] of Object.entries(memoryDecisionsRef.current)) {
+      const id = compositeKey.includes('::') ? compositeKey.split('::')[1] : compositeKey;
       if (decision.status === "approved") {
-        const editedText = editedItemsRef.current.get(id);
+        const editedText = editedItemsRef.current.get(compositeKey);
         if (editedText !== undefined) {
           approved.push(`memory:${id}:${encodeURIComponent(editedText)}`);
         } else {
@@ -1063,7 +1183,7 @@ export default function ReviewPage() {
     const { approved, skipped } = collectResults();
 
     // Calculate summary counts before mutation
-    const totalItems = (data?.tasks.length ?? 0) + (data?.decisions.length ?? 0) + (data?.learnings.length ?? 0);
+    const totalItems = (data?.tasks.length ?? 0) + (data?.actionItems.length ?? 0) + (data?.decisions.length ?? 0) + (data?.learnings.length ?? 0);
     const approvedCount = approved.length;
     const skippedCount = skipped.length;
     const pendingCount = totalItems - approvedCount - skippedCount;
@@ -1100,7 +1220,7 @@ export default function ReviewPage() {
 
   // Calculate total items
   const totalItems = data
-    ? data.tasks.length + data.decisions.length + data.learnings.length
+    ? data.tasks.length + data.actionItems.length + data.decisions.length + data.learnings.length
     : 0;
   const hasItems = totalItems > 0;
   const hasCommitments = (data?.commitments.length ?? 0) > 0;
@@ -1199,8 +1319,8 @@ export default function ReviewPage() {
 
       <div className="flex-1 overflow-auto">
         <div className="p-6 space-y-8 max-w-4xl mx-auto">
-          {/* Global confidence controls (Task 1) */}
-          {data && (data.decisions.length > 0 || data.learnings.length > 0) && (
+          {/* Global confidence controls */}
+          {data && (data.actionItems.length > 0 || data.decisions.length > 0 || data.learnings.length > 0) && (
             <div className="flex items-center justify-between flex-wrap gap-3">
               <GlobalApproveControl
                 threshold={confidenceThreshold}
@@ -1246,57 +1366,23 @@ export default function ReviewPage() {
             </section>
           )}
 
-          {/* Decisions Section (grouped by meeting — Task 2) */}
-          {data && data.decisions.length > 0 && (
-            <section>
-              <SectionHeader
-                icon={Lightbulb}
-                title="Decisions"
-                count={data.decisions.length}
-                pendingCount={pendingDecisionCount}
-                onApproveAll={handleApproveAllDecisions}
-                onSkipAll={handleSkipAllDecisions}
-              />
-              <div className="space-y-4">
-                {Array.from(decisionsByMeeting.entries()).map(([slug, { title, items }]) => (
-                  <MeetingGroup
-                    key={slug}
-                    meetingSlug={slug}
-                    meetingTitle={title}
-                    items={items}
-                    memoryDecisions={memoryDecisions}
-                    editedItems={editedItems}
-                    editingId={editingId}
-                    onDecisionChange={handleMemoryDecisionChange}
-                    onEditStart={handleEditStart}
-                    onEditSave={handleEditSave}
-                    onEditChange={handleEditChange}
-                    onApproveAll={() => handleApproveMeeting(slug, data.decisions)}
-                    onSkipAll={() => handleSkipMeeting(slug, data.decisions)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Learnings Section (grouped by meeting — Task 2) */}
-          {data && data.learnings.length > 0 && (
-            <section>
+          {/* Meeting Sections — grouped by meeting, sub-grouped by type */}
+          {data && itemsByMeeting.size > 0 && (
+            <div className="space-y-6">
               <SectionHeader
                 icon={Brain}
-                title="Learnings"
-                count={data.learnings.length}
-                pendingCount={pendingLearningCount}
-                onApproveAll={handleApproveAllLearnings}
-                onSkipAll={handleSkipAllLearnings}
+                title="Meeting Items"
+                count={data.actionItems.length + data.decisions.length + data.learnings.length}
+                pendingCount={pendingMemoryCount}
+                onApproveAll={handleApproveAllMemory}
+                onSkipAll={handleSkipAllMemory}
               />
-              <div className="space-y-4">
-                {Array.from(learningsByMeeting.entries()).map(([slug, { title, items }]) => (
-                  <MeetingGroup
-                    key={slug}
-                    meetingSlug={slug}
-                    meetingTitle={title}
-                    items={items}
+              {Array.from(itemsByMeeting.values()).map((meeting) => {
+                const allItems = [...meeting.actionItems, ...meeting.decisions, ...meeting.learnings];
+                return (
+                  <MeetingSection
+                    key={meeting.slug}
+                    meeting={meeting}
                     memoryDecisions={memoryDecisions}
                     editedItems={editedItems}
                     editingId={editingId}
@@ -1304,12 +1390,12 @@ export default function ReviewPage() {
                     onEditStart={handleEditStart}
                     onEditSave={handleEditSave}
                     onEditChange={handleEditChange}
-                    onApproveAll={() => handleApproveMeeting(slug, data.learnings)}
-                    onSkipAll={() => handleSkipMeeting(slug, data.learnings)}
+                    onApproveAll={() => handleApproveMeeting(meeting.slug, allItems)}
+                    onSkipAll={() => handleSkipMeeting(meeting.slug, allItems)}
                   />
-                ))}
-              </div>
-            </section>
+                );
+              })}
+            </div>
           )}
 
           {/* Commitments Section (read-only) */}
