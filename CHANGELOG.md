@@ -1,11 +1,22 @@
 # Changelog
-## [Unreleased]
+## [0.5.0] - 2026-04-05
+
+### Added
+- **Google Workspace integration** (`gws` CLI) — Gmail, Drive, Docs, Sheets, and People access via `arete gws <resource>`
+- **GWS detection** — auto-detects Google Workspace availability at startup; registers in integration registry
+- **Jaccard deduplication** — `TaskService.addTask()` checks for near-duplicate tasks (≥80% similarity or matching commitment link) before inserting; idempotent writes across repeated skill runs
+- **Meeting context injection** — daily-plan and week-plan skills read open tasks from `week.md`/`tasks.md` before proposing new work; prevents re-proposing already-captured items
+- **Approve High Confidence** — one-click approval for all Review items at or above a configurable confidence threshold (default 80%)
+- **Approve by Meeting** — Review items grouped by source meeting; approve or skip an entire meeting's items at once
+- **Auto-approve preview banner** — amber banner surfaces when all items in a meeting exceed 0.8 confidence; nothing auto-approved silently
+- **Review summary** — post-approval summary shows approved/skipped/undecided counts and lists auto-approved items for audit
+- **Area-focused week planning** — week-plan skill opens by asking which areas to focus on, then scopes goals and projects to those areas
 
 ### Changed
 - **Ship skill** — 2363→375 lines; extracted Phase 0 to `build-log-protocol.md`, multi-phase loop to `multi-phase-protocol.md`
 - **Engineering-lead agent** — merged into orchestrator (Testing Requirements section, signal tag processing); 6 roles → 5
 - **Signal tags** — replace token estimates in developer reflections; cascade through execute-prd, prd-post-mortem, orchestrator
-- **Three-track routing** — Express/Standard/Full in APPEND_SYSTEM.md + review-plan recommended_track output
+- **Three-track routing** — Express/Standard/Full in APPEND_SYSTEM.md + review-plan `recommended_track` output
 - **Working-memory structure** — explicit 4-section format (Discovered Patterns, Active Gotchas, Shared Utilities, Context Corrections)
 - **plan-to-prd** — emits prd.md + prd.json in one pass (no separate prd-to-json step)
 - **Recon check** — formal CONFIRMED/PHANTOM/PARTIAL classification in execute-prd Phase 0
@@ -13,6 +24,8 @@
 - **Reviewer mindset** — grumpy-by-default ("assume something is wrong until proven otherwise")
 - **synthesize-collaboration-profile** — triggers simplified: automatic after post-mortem + on-request only
 - **Multi-phase ship** — meta-orchestrator loop with phase gates, GATE_PASS/GATE_FAIL escalation, project-working-memory.md
+- **Reconciliation threshold** — raised from 0.5 → 0.65; lower-confidence items filtered earlier, reducing review queue noise
+- **Goal/project hierarchy** — quarter-plan prompts for area on goal creation; general-project prompts for linked goal
 
 ---
 
