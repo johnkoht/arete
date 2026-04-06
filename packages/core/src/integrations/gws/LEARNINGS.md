@@ -34,6 +34,13 @@ This means `searchThreads` requires N+1 calls. See `gmail.ts` for the two-call i
 ### Drive uses `pageSize` not `maxResults`
 Drive API uses `pageSize` for pagination; Gmail uses `maxResults`. Don't mix them.
 
+### Drive `q` requires query syntax, not free text
+The `q` param for `files list` must be a Drive query expression, not a plain search term.
+Free text like `"email template"` causes `error[api]: Invalid Value`.
+Valid forms: `fullText contains 'email template'`, `name contains 'roadmap'`, `mimeType = '...'`.
+The CLI (`pullDriveHelper`) auto-wraps plain text as `fullText contains '...'`. Internal callers
+(e.g. `getRecentDocs`, `getRecentFiles`) always pass Drive operator syntax directly — that's correct.
+
 ### Arrays in --params work
 The gws CLI accepts arrays in the JSON blob: `{"metadataHeaders":["From","Subject","Date"]}` and
 `{"sources":["DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE"]}` both work correctly.
