@@ -1,6 +1,6 @@
 {
   "name": "@arete/cli-next",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "bin": {
     "arete": "./bin/arete.js"
