@@ -39,6 +39,7 @@ Before a developer starts a task, you confirm:
 - **AC**: Acceptance criteria are complete and testable; nothing critical is missing
 - **Context**: Files to read, patterns to follow, and pre-mortem mitigations are sufficient
 - **Dependencies**: Prior task outputs that this task depends on are available
+- **CLI wrappers**: If the task wraps an external CLI binary, confirm the task prompt requires the developer to run `<binary> --help` first and document actual command structure before writing adapter code. If not, add it. Fixture files must be snapshotted from real CLI output — flag any task that plans to hand-craft fixtures. Evidence: GWS adapter (2026-04-05) invented command paths without checking `--help`; all 69 mocked tests passed but every real call failed.
 - If anything is vague or missing, return **NEEDS REFINEMENT** with specific issues
 
 ### Role 2: Post-Work Code Review

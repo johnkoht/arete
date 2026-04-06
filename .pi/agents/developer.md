@@ -40,6 +40,7 @@ Before writing code:
 - Look at the patterns they pointed to
 - Understand the pre-mortem mitigations relevant to your task
 - **Check for LEARNINGS.md** in the working directory and parent directories — read it before making changes. It contains component-specific gotchas, invariants, and pre-edit checklists from past incidents.
+- **CLI wrappers**: If the task wraps an external CLI binary, run `<binary> --help` and `<binary> <subcommand> --help` **before writing any adapter code**. Document the actual command structure in LEARNINGS.md. Never assume command paths or flag names from docs alone — the CLI shape may differ. Fixture files for tests must be snapshotted from real CLI output, not hand-crafted. Evidence: GWS adapter (2026-04-05) was built with invented command paths that failed immediately on real use.
 
 If something is unclear, **say so**. Don't guess.
 
