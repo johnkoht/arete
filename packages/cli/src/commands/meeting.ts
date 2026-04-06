@@ -1675,8 +1675,8 @@ export function registerMeetingCommands(program: Command): void {
 
       // Fire-and-forget manifest refresh (non-blocking — do not await)
       const paths = services.workspace.getPaths(root);
-      generateMeetingManifest(paths, services.storage).catch(() => {
-        // Silently ignore manifest errors — apply already succeeded
+      generateMeetingManifest(paths, services.storage).catch((err: unknown) => {
+        warn(`Meeting manifest update failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     });
 }

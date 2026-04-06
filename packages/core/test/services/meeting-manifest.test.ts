@@ -206,4 +206,20 @@ describe('generateMeetingManifest', () => {
     assert.ok(content.includes('window_days: 30'), 'Should have window_days: 30');
     assert.ok(content.includes('generated_at:'), 'Should have generated_at');
   });
+
+  it('handles meetings with empty topics array without emitting topics line', async () => {
+    writeMeeting(meetingsDir, '2026-04-04-empty-topics.md', {
+      title: 'Empty Topics Meeting',
+      status: 'processed',
+      open_action_items: 1,
+      // topics field omitted (equivalent to absent or [])
+    });
+
+    const result = await generateMeetingManifest(paths, storage);
+    assert.equal(result.meetingCount, 1);
+
+    const content = readFileSync(join(meetingsDir, 'MANIFEST.md'), 'utf8');
+    assert.ok(!content.includes('- topics:'), 'Should not include topics line when absent');
+    assert.ok(content.includes('open_items: 1'), 'Should still include open_items line');
+  });
 });

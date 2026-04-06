@@ -510,8 +510,8 @@ export class AreaMemoryService {
         activePeopleSet.add(attendee);
       }
     }
-    // Also scan recent meetings for attendees
-    const recentMeetingPeople = await this.getRecentMeetingPeople(areaContext, workspacePaths);
+    // Also scan recent meetings for attendees and topics (single pass)
+    const { people: recentMeetingPeople, topics } = await this.scanAreaMeetings(areaContext, workspacePaths);
     for (const person of recentMeetingPeople) {
       activePeopleSet.add(person);
     }
@@ -537,9 +537,6 @@ export class AreaMemoryService {
 
     const keywords = extractKeywords(keywordSources);
 
-    // 5. Topics from area-matched meeting files
-    const topics = await this.getAreaTopics(areaContext, workspacePaths);
-
     return {
       slug: areaContext.slug,
       name: areaContext.name,
@@ -553,76 +550,27 @@ export class AreaMemoryService {
   }
 
   /**
-   * Get people who attended area-mapped meetings in the last 30 days.
-   */
-  private async getRecentMeetingPeople(
-    areaContext: AreaContext,
-    workspacePaths: WorkspacePaths,
-  ): Promise<string[]> {
-    const meetingsDir = join(workspacePaths.resources, 'meetings');
-    const meetingsExist = await this.storage.exists(meetingsDir);
-    if (!meetingsExist) return [];
-
-    const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
-    const people = new Set<string>();
-
-    for (const meetingPath of meetingFiles) {
-      const fileName = basename(meetingPath);
-      if (fileName === 'index.md') continue;
-
-      const content = await this.storage.read(meetingPath);
-      if (!content) continue;
-
-      // Check if this meeting matches the area
-      const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
-      const title = titleMatch?.[1] ?? fileName.replace(/\.md$/, '');
-
-      let matchesArea = false;
-      for (const recurring of areaContext.recurringMeetings) {
-        if (title.toLowerCase().includes(recurring.title.toLowerCase())) {
-          matchesArea = true;
-          break;
-        }
-      }
-      if (!matchesArea) continue;
-
-      // Check recency
-      const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
-      if (dateMatch && daysAgo(dateMatch[1]) > RECENT_DAYS) continue;
-
-      // Extract attendees
-      const attendeeIdsMatch = content.match(/^attendee_ids:\s*\n((?:\s*-\s*.+\n)*)/m);
-      if (attendeeIdsMatch) {
-        const ids = attendeeIdsMatch[1].match(/-\s*(.+)/g);
-        if (ids) {
-          for (const id of ids) {
-            const slug = id.replace(/^\s*-\s*/, '').trim();
-            if (slug) people.add(slug);
-          }
-        }
-      }
-    }
-
-    return [...people];
-  }
-
-  /**
-   * Aggregate topic slugs from area-matched meeting files.
+   * Single-pass scan of area-matched meeting files.
+   *
+   * Collects both recent attendee IDs (for active people) and topic aggregates
+   * in one loop, avoiding the O(2N) double-scan that separate methods would cause.
    *
    * Matches meetings via BOTH frontmatter `area:` field AND recurring meeting
-   * title match. Excludes topics older than 60 days with zero open items.
+   * title match. People collection is limited to RECENT_DAYS; topics use all
+   * matched meetings (stale exclusion applied at the end).
    */
-  private async getAreaTopics(
+  private async scanAreaMeetings(
     areaContext: AreaContext,
     workspacePaths: WorkspacePaths,
-  ): Promise<TopicEntry[]> {
+  ): Promise<{ people: string[]; topics: TopicEntry[] }> {
     const TOPIC_STALE_DAYS = 60;
     const meetingsDir = join(workspacePaths.resources, 'meetings');
-    if (!(await this.storage.exists(meetingsDir))) return [];
+    if (!(await this.storage.exists(meetingsDir))) return { people: [], topics: [] };
 
     const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
 
-    // Aggregate: slug → { count, openItems, lastReferenced }
+    const people = new Set<string>();
+    // Aggregate topics: slug → { count, openItems, lastReferenced }
     const topicMap = new Map<string, { count: number; openItems: number; lastReferenced: string }>();
 
     for (const meetingPath of meetingFiles) {
@@ -641,10 +589,8 @@ export class AreaMemoryService {
 
       const fm = parsed.frontmatter;
 
-      // Match via area: frontmatter field
+      // Match via area: frontmatter field OR recurring meeting title
       let matchesArea = fm.area === areaContext.slug;
-
-      // Match via recurring meeting title (fallback)
       if (!matchesArea && areaContext.recurringMeetings.length > 0) {
         const title = fm.title.toLowerCase();
         for (const recurring of areaContext.recurringMeetings) {
@@ -654,35 +600,36 @@ export class AreaMemoryService {
           }
         }
       }
-
       if (!matchesArea) continue;
 
-      // No topics — meeting still counts toward area but contributes no topic entries
-      if (!fm.topics || fm.topics.length === 0) continue;
+      // Collect attendee IDs (only for recent meetings)
+      if (daysAgo(date) <= RECENT_DAYS && fm.attendee_ids) {
+        for (const id of fm.attendee_ids) {
+          if (id) people.add(id);
+        }
+      }
 
-      const openItems = fm.open_action_items ?? 0;
-
-      for (const slug of fm.topics) {
-        const existing = topicMap.get(slug);
-        if (!existing) {
-          topicMap.set(slug, { count: 1, openItems, lastReferenced: date });
-        } else {
-          existing.count += 1;
-          existing.openItems += openItems;
-          if (date > existing.lastReferenced) {
-            existing.lastReferenced = date;
+      // Collect topics from all matched meetings (no date restriction here)
+      if (fm.topics && fm.topics.length > 0) {
+        const openItems = fm.open_action_items ?? 0;
+        for (const slug of fm.topics) {
+          const existing = topicMap.get(slug);
+          if (!existing) {
+            topicMap.set(slug, { count: 1, openItems, lastReferenced: date });
+          } else {
+            existing.count += 1;
+            existing.openItems += openItems;
+            if (date > existing.lastReferenced) existing.lastReferenced = date;
           }
         }
       }
     }
 
-    // Build topic entries, applying 60-day stale exclusion rule
-    const entries: TopicEntry[] = [];
+    // Build topic entries — exclude topics not mentioned in 60+ days with no open work
+    const topicEntries: TopicEntry[] = [];
     for (const [slug, data] of topicMap.entries()) {
-      const age = daysAgo(data.lastReferenced);
-      if (age > TOPIC_STALE_DAYS && data.openItems === 0) continue;
-
-      entries.push({
+      if (daysAgo(data.lastReferenced) > TOPIC_STALE_DAYS && data.openItems === 0) continue;
+      topicEntries.push({
         slug,
         name: slugToName(slug),
         meetingCount: data.count,
@@ -692,9 +639,9 @@ export class AreaMemoryService {
     }
 
     // Sort by openItems desc, then meetingCount desc
-    entries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
+    topicEntries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
 
-    return entries;
+    return { people: [...people], topics: topicEntries };
   }
 
   /**
