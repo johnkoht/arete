@@ -6,6 +6,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { ClaudeAdapter } from '../../src/adapters/claude-adapter.js';
 import type { AreteConfig } from '../../src/models/workspace.js';
+import type { SkillDefinition } from '../../src/models/skills.js';
 
 describe('ClaudeAdapter', () => {
   let adapter: ClaudeAdapter;
@@ -14,97 +15,135 @@ describe('ClaudeAdapter', () => {
     adapter = new ClaudeAdapter();
   });
 
-  describe('generateRootFiles', () => {
-    const mockConfig: AreteConfig = {
-      version: '1.0.0',
-      source: 'npm',
-      agent_mode: 'guide',
-      created: '2026-02-23',
-      ide_target: 'claude',
-    };
+  const mockConfig: AreteConfig = {
+    version: '1.0.0',
+    source: 'npm',
+    agent_mode: 'guide',
+    created: '2026-02-23',
+    ide_target: 'claude',
+  };
 
-    it('generates CLAUDE.md file (not AGENTS.md)', () => {
+  const mockSkills: SkillDefinition[] = [
+    {
+      id: 'meeting-prep',
+      name: 'Meeting Prep',
+      description: 'Prepare for an upcoming meeting',
+      requiresBriefing: true,
+    },
+    {
+      id: 'week-plan',
+      name: 'Week Plan',
+      description: 'Plan your week',
+      requiresBriefing: false,
+    },
+  ];
+
+  describe('getIDEDirs', () => {
+    it('includes .claude/commands', () => {
+      const dirs = adapter.getIDEDirs();
+      assert.ok(dirs.includes('.claude/commands'), 'Should include .claude/commands');
+    });
+  });
+
+  describe('commandsDir', () => {
+    it('returns .claude/commands', () => {
+      assert.equal(adapter.commandsDir(), '.claude/commands');
+    });
+  });
+
+  describe('generateRootFiles', () => {
+    it('returns valid CLAUDE.md without skills argument (backward compat)', () => {
+      // Called with only config + root — no skills arg — must not throw
+      const files = adapter.generateRootFiles(mockConfig, '/workspace');
+      assert.ok('CLAUDE.md' in files, 'Should generate CLAUDE.md');
+      assert.ok(typeof files['CLAUDE.md'] === 'string', 'CLAUDE.md content should be a string');
+      assert.ok(files['CLAUDE.md'].length > 0, 'CLAUDE.md content should not be empty');
+    });
+
+    it('returns CLAUDE.md key', () => {
       const files = adapter.generateRootFiles(mockConfig, '/workspace');
       assert.ok('CLAUDE.md' in files, 'Should generate CLAUDE.md');
       assert.ok(!('AGENTS.md' in files), 'Should NOT generate AGENTS.md');
     });
 
-    it('CLAUDE.md contains CLI section', () => {
+    it('CLAUDE.md contains Arete identity section', () => {
       const files = adapter.generateRootFiles(mockConfig, '/workspace');
       const claudeMd = files['CLAUDE.md'];
-      
-      // The comprehensive dist/AGENTS.md (transformed) has [CLI] section
+      assert.ok(claudeMd.includes('Arete PM Workspace'), 'Should contain Arete identity');
       assert.ok(
-        claudeMd.includes('[CLI]') || claudeMd.includes('## CLI'),
-        'Should contain CLI section'
+        claudeMd.includes('senior product partner'),
+        'Should describe the agent role'
       );
     });
 
-    it('CLAUDE.md contains Skills section', () => {
-      const files = adapter.generateRootFiles(mockConfig, '/workspace');
+    it('CLAUDE.md contains slash commands table when skills are provided', () => {
+      const files = adapter.generateRootFiles(mockConfig, '/workspace', undefined, mockSkills);
       const claudeMd = files['CLAUDE.md'];
-      
-      // The comprehensive dist/AGENTS.md (transformed) has [Skills] section
-      assert.ok(
-        claudeMd.includes('[Skills]') || claudeMd.includes('## Skills'),
-        'Should contain Skills section'
-      );
+      assert.ok(claudeMd.includes('## Slash Commands'), 'Should contain slash commands heading');
+      assert.ok(claudeMd.includes('/meeting-prep'), 'Should list meeting-prep command');
+      assert.ok(claudeMd.includes('/week-plan'), 'Should list week-plan command');
     });
 
-    it('CLAUDE.md contains Intelligence section for guide mode', () => {
+    it('CLAUDE.md contains intelligence services references', () => {
       const files = adapter.generateRootFiles(mockConfig, '/workspace');
       const claudeMd = files['CLAUDE.md'];
-      
-      // The comprehensive dist/AGENTS.md (transformed) has [Intelligence] section
       assert.ok(
-        claudeMd.includes('[Intelligence]') || claudeMd.includes('## Intelligence'),
-        'Should contain Intelligence section'
+        claudeMd.includes('## Intelligence Services'),
+        'Should contain Intelligence Services section'
       );
+      assert.ok(claudeMd.includes('arete search'), 'Should reference arete search');
+      assert.ok(claudeMd.includes('arete brief'), 'Should reference arete brief');
     });
 
     it('CLAUDE.md contains version footer', () => {
       const files = adapter.generateRootFiles(mockConfig, '/workspace');
       const claudeMd = files['CLAUDE.md'];
-      
-      assert.ok(claudeMd.includes('## Version'), 'Should contain Version section');
       assert.ok(claudeMd.includes('v1.0.0'), 'Should contain version number');
-      assert.ok(claudeMd.includes('Generated by Areté'), 'Should contain generation note');
+      assert.ok(claudeMd.includes('Generated by Arete'), 'Should contain generation note');
     });
 
-    it('CLAUDE.md transforms .cursor paths to .claude paths', () => {
-      const files = adapter.generateRootFiles(mockConfig, '/workspace');
+    it('CLAUDE.md does NOT contain STOP or routing-mandatory language', () => {
+      const files = adapter.generateRootFiles(mockConfig, '/workspace', undefined, mockSkills);
       const claudeMd = files['CLAUDE.md'];
-      
-      // Should NOT contain .cursor/ paths (except possibly in comments about BUILD vs USER)
-      // The main content should use .claude/ paths
-      const lines = claudeMd.split('\n').filter(line => 
-        !line.includes('BUILD') && 
-        !line.includes('build:') &&
-        !line.includes('<!-- ') &&
-        line.includes('.cursor/')
-      );
-      assert.equal(lines.length, 0, 'Should not have .cursor/ paths in main content');
-    });
-
-    it('CLAUDE.md contains arete route command', () => {
-      const files = adapter.generateRootFiles(mockConfig, '/workspace');
-      const claudeMd = files['CLAUDE.md'];
-      
-      assert.ok(claudeMd.includes('arete route'), 'Should contain arete route command');
-    });
-
-    it('has basic structure in output', () => {
-      // Verifies the output has basic structure (from dist/AGENTS.md or fallback)
-      const files = adapter.generateRootFiles(mockConfig, '/workspace');
-      const claudeMd = files['CLAUDE.md'];
-      
-      // Should have basic structure regardless of source
-      assert.ok(claudeMd.includes('Areté'), 'Should contain Areté title');
-      // The comprehensive version uses [Workspace] compressed format
+      assert.ok(!claudeMd.includes('STOP'), 'Should not contain STOP');
       assert.ok(
-        claudeMd.includes('[Workspace]') || claudeMd.includes('Workspace'),
-        'Should contain workspace info'
+        !claudeMd.includes('routing-mandatory'),
+        'Should not contain routing-mandatory'
       );
+    });
+  });
+
+  describe('generateCommands', () => {
+    it('returns command files for given skills', () => {
+      const commands = adapter.generateCommands(mockSkills);
+      assert.ok('meeting-prep.md' in commands, 'Should have meeting-prep.md');
+      assert.ok('week-plan.md' in commands, 'Should have week-plan.md');
+    });
+
+    it('command content references SKILL.md', () => {
+      const commands = adapter.generateCommands(mockSkills);
+      const content = commands['meeting-prep.md'];
+      assert.ok(
+        content.includes('.agents/skills/meeting-prep/SKILL.md'),
+        'Should reference the skill workflow file'
+      );
+    });
+
+    it('briefing skill includes arete brief command', () => {
+      const commands = adapter.generateCommands(mockSkills);
+      const content = commands['meeting-prep.md'];
+      assert.ok(content.includes('arete brief'), 'Should include briefing command');
+    });
+
+    it('non-briefing skill omits arete brief command', () => {
+      const commands = adapter.generateCommands(mockSkills);
+      const content = commands['week-plan.md'];
+      assert.ok(!content.includes('arete brief'), 'Should not include briefing command');
+    });
+
+    it('returns empty record for empty skills', () => {
+      const commands = adapter.generateCommands([]);
+      assert.deepEqual(commands, {});
     });
   });
 
@@ -122,6 +161,45 @@ describe('ClaudeAdapter', () => {
     });
   });
 
+  describe('formatRule', () => {
+    it('formats rule with frontmatter', () => {
+      const rule = {
+        name: 'test-rule',
+        description: 'A test rule',
+        content: 'Rule content here.',
+      };
+      const formatted = adapter.formatRule(rule, mockConfig);
+      assert.ok(formatted.includes('---'), 'Should contain frontmatter delimiters');
+      assert.ok(formatted.includes('description: A test rule'), 'Should contain description');
+      assert.ok(formatted.includes('Rule content here.'), 'Should contain rule content');
+    });
+
+    it('includes globs when not alwaysApply', () => {
+      const rule = {
+        name: 'scoped-rule',
+        description: 'Scoped rule',
+        content: 'Content.',
+        globs: ['*.ts', '*.js'],
+        alwaysApply: false,
+      };
+      const formatted = adapter.formatRule(rule, mockConfig);
+      assert.ok(formatted.includes('globs:'), 'Should contain globs');
+      assert.ok(formatted.includes('"*.ts"'), 'Should include ts glob');
+    });
+
+    it('omits globs when alwaysApply is true', () => {
+      const rule = {
+        name: 'global-rule',
+        description: 'Global rule',
+        content: 'Content.',
+        globs: ['*.ts'],
+        alwaysApply: true,
+      };
+      const formatted = adapter.formatRule(rule, mockConfig);
+      assert.ok(!formatted.includes('globs:'), 'Should not contain globs when alwaysApply');
+    });
+  });
+
   describe('transformRuleContent', () => {
     it('transforms .cursor/ to .claude/', () => {
       const input = 'Read .cursor/rules/file.mdc for guidance.';
@@ -133,6 +211,12 @@ describe('ClaudeAdapter', () => {
       const input = 'Load .cursor/skills/meeting-prep/SKILL.md';
       const output = adapter.transformRuleContent(input);
       assert.equal(output, 'Load .agents/skills/meeting-prep/SKILL.md');
+    });
+  });
+
+  describe('detectInWorkspace', () => {
+    it('returns false for non-existent directory', () => {
+      assert.equal(adapter.detectInWorkspace('/nonexistent/path'), false);
     });
   });
 });
