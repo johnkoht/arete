@@ -2,8 +2,9 @@
  * Directory / People provider — thin wrapper over the `gws` CLI for
  * Google Workspace directory lookups.
  *
- * Implements `DirectoryProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * People API command paths:
+ *   gws people people searchContacts        --params '{"query":"...","readMask":"emailAddresses,names,organizations,photos","pageSize":N}'
+ *   gws people people searchDirectoryPeople --params '{"query":"...","readMask":"emailAddresses,names,organizations,photos","sources":[...],"pageSize":N}'
  */
 
 import { gwsExec } from './client.js';
@@ -38,7 +39,6 @@ type PeopleListResponse = {
 };
 
 function mapPerson(raw: PersonRaw): DirectoryPerson {
-  // Handle both nested Google People API shape and flat shape
   const email =
     raw.email ??
     raw.emailAddresses?.[0]?.value ??
@@ -72,6 +72,8 @@ function mapPerson(raw: PersonRaw): DirectoryPerson {
 // GwsDirectoryProvider class
 // ---------------------------------------------------------------------------
 
+const PERSON_READ_MASK = 'emailAddresses,names,organizations,photos';
+
 export class GwsDirectoryProvider implements DirectoryProvider {
   readonly name = 'directory';
   private deps?: GwsDeps;
@@ -92,44 +94,42 @@ export class GwsDirectoryProvider implements DirectoryProvider {
   async lookupPerson(email: string): Promise<DirectoryPerson | null> {
     const raw = await gwsExec(
       'people',
-      'get',
-      { email },
+      'people searchContacts',
+      { query: email, readMask: PERSON_READ_MASK, pageSize: 1 },
       undefined,
       this.deps,
     );
 
-    // Defensive: handle various response shapes
     if (!raw || typeof raw !== 'object') return null;
 
-    const response = raw as PersonRaw;
+    // searchContacts returns { results: [...] } or { people: [...] }
+    const response = raw as PeopleListResponse;
+    const people = response.results ?? response.people ?? [];
+    if (people.length === 0) return null;
 
-    // Check if the response has any person data
-    const hasData =
-      response.email ||
-      response.emailAddresses?.length ||
-      response.name ||
-      response.names?.length;
-
-    if (!hasData) return null;
-
-    return mapPerson(response);
+    const person = mapPerson(people[0]);
+    return person.email || person.name ? person : null;
   }
 
   async searchDirectory(
     query: string,
     options?: { maxResults?: number },
   ): Promise<DirectoryPerson[]> {
-    const maxResults = options?.maxResults ?? 10;
+    const pageSize = options?.maxResults ?? 10;
 
     const raw = await gwsExec(
       'people',
-      'search',
-      { query, maxResults },
+      'people searchDirectoryPeople',
+      {
+        query,
+        readMask: PERSON_READ_MASK,
+        sources: ['DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE'],
+        pageSize,
+      },
       undefined,
       this.deps,
     );
 
-    // Defensive: handle various response shapes
     const response = raw as PeopleListResponse | PersonRaw[] | PersonRaw;
 
     if (Array.isArray(response)) {
@@ -144,7 +144,6 @@ export class GwsDirectoryProvider implements DirectoryProvider {
       return (response.results ?? []).map(mapPerson);
     }
 
-    // Single person or unrecognized shape
     if (
       response &&
       typeof response === 'object' &&

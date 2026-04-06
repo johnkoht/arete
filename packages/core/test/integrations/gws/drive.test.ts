@@ -1,5 +1,9 @@
 /**
  * Tests for GwsDriveProvider.
+ *
+ * Drive API command paths:
+ *   gws drive files list --params '{"q":"...","pageSize":N}'
+ *   gws drive files get  --params '{"fileId":"..."}'
  */
 
 import { describe, it } from 'node:test';
@@ -13,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(
   readFileSync(join(__dirname, 'fixtures', 'drive-files.json'), 'utf-8'),
-);
+) as { files: Array<Record<string, unknown>> };
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -22,16 +26,16 @@ const fixture = JSON.parse(
 function makeDeps(responses: Record<string, string>): GwsDeps {
   return {
     exec: async (_command: string, args: string[]) => {
-      // Detection calls
       if (args.includes('--version')) {
-        return { stdout: 'gws version 0.5.2', stderr: '' };
+        return { stdout: 'gws version 0.22.1', stderr: '' };
       }
       if (args.includes('status')) {
         return { stdout: JSON.stringify({ authenticated: true }), stderr: '' };
       }
 
-      // Drive CLI calls — match on the key built from service+command
-      const key = `${args[0]}_${args[1]}`;
+      // Drive CLI calls — match on service + resource + method
+      // args: ['drive', 'files', 'list'|'get', '--format', 'json', '--params', '...']
+      const key = `${args[0]}_${args[1]}_${args[2]}`;
       const stdout = responses[key] ?? '{}';
       return { stdout, stderr: '' };
     },
@@ -52,7 +56,7 @@ function makeUnauthenticatedDeps(): GwsDeps {
   return {
     exec: async (_command: string, args: string[]) => {
       if (args.includes('--version')) {
-        return { stdout: 'gws version 0.5.2', stderr: '' };
+        return { stdout: 'gws version 0.22.1', stderr: '' };
       }
       if (args.includes('status')) {
         return { stdout: JSON.stringify({ authenticated: false }), stderr: '' };
@@ -68,7 +72,7 @@ function makeUnauthenticatedDeps(): GwsDeps {
 
 describe('GwsDriveProvider', () => {
   describe('search', () => {
-    it('calls gwsExec with correct args', async () => {
+    it('calls gws drive files list with --params JSON', async () => {
       const capturedArgs: string[][] = [];
       const deps: GwsDeps = {
         exec: async (_command: string, args: string[]) => {
@@ -83,15 +87,18 @@ describe('GwsDriveProvider', () => {
       const driveCall = capturedArgs.find((a) => a[0] === 'drive');
       assert.ok(driveCall, 'Expected a drive CLI call');
       assert.equal(driveCall[1], 'files');
-      assert.ok(driveCall.includes('-q'), 'Should include -q flag');
-      assert.ok(driveCall.includes('name contains "roadmap"'), 'Should include the query value');
-      assert.ok(driveCall.includes('--maxResults'), 'Should include --maxResults flag');
-      assert.ok(driveCall.includes('10'), 'Should include maxResults value');
+      assert.equal(driveCall[2], 'list');
+
+      const paramsIdx = driveCall.indexOf('--params');
+      assert.ok(paramsIdx >= 0, 'Should include --params');
+      const params = JSON.parse(driveCall[paramsIdx + 1]) as Record<string, unknown>;
+      assert.equal(params.q, 'name contains "roadmap"');
+      assert.equal(params.pageSize, 10);
     });
 
     it('maps response to DriveFile array', async () => {
       const deps = makeDeps({
-        drive_files: JSON.stringify(fixture),
+        drive_files_list: JSON.stringify(fixture),
       });
 
       const provider = new GwsDriveProvider(deps);
@@ -115,7 +122,7 @@ describe('GwsDriveProvider', () => {
 
     it('handles empty results', async () => {
       const deps = makeDeps({
-        drive_files: JSON.stringify({ files: [] }),
+        drive_files_list: JSON.stringify({ files: [] }),
       });
 
       const provider = new GwsDriveProvider(deps);
@@ -126,10 +133,29 @@ describe('GwsDriveProvider', () => {
   });
 
   describe('getFile', () => {
+    it('calls gws drive files get with fileId in --params', async () => {
+      const capturedArgs: string[][] = [];
+      const deps: GwsDeps = {
+        exec: async (_command: string, args: string[]) => {
+          capturedArgs.push(args);
+          return { stdout: JSON.stringify(fixture.files[0]), stderr: '' };
+        },
+      };
+
+      const provider = new GwsDriveProvider(deps);
+      await provider.getFile('file-1');
+
+      const getCall = capturedArgs.find((a) => a[0] === 'drive' && a.includes('get'));
+      assert.ok(getCall, 'Expected a drive files get call');
+      const paramsIdx = getCall.indexOf('--params');
+      const params = JSON.parse(getCall[paramsIdx + 1]) as Record<string, unknown>;
+      assert.equal(params.fileId, 'file-1');
+    });
+
     it('returns single file', async () => {
       const singleFile = fixture.files[0];
       const deps = makeDeps({
-        drive_files: JSON.stringify(singleFile),
+        drive_files_get: JSON.stringify(singleFile),
       });
 
       const provider = new GwsDriveProvider(deps);

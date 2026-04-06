@@ -27,39 +27,70 @@ describe('gwsExec', () => {
       stderr: '',
     }));
 
-    const result = await gwsExec('calendar', 'events', undefined, undefined, deps);
+    const result = await gwsExec('calendar', 'events list', undefined, undefined, deps);
 
     assert.deepEqual(result, expected);
   });
 
-  it('builds correct command args', async () => {
+  it('builds correct command args with --params JSON', async () => {
     let capturedArgs: string[] = [];
     const deps = makeDeps(async (_command, args) => {
       capturedArgs = args;
       return { stdout: '{}', stderr: '' };
     });
 
-    await gwsExec('calendar', 'events', { maxResults: 5 }, undefined, deps);
+    await gwsExec('calendar', 'events list', { maxResults: 5 }, undefined, deps);
 
     assert.deepEqual(capturedArgs, [
-      'calendar', 'events', '--format', 'json', '--maxResults', '5',
+      'calendar', 'events', 'list', '--format', 'json', '--params', '{"maxResults":5}',
     ]);
   });
 
-  it('passes args as --key flags without camelCase conversion', async () => {
+  it('splits multi-segment command into path parts', async () => {
     let capturedArgs: string[] = [];
     const deps = makeDeps(async (_command, args) => {
       capturedArgs = args;
       return { stdout: '{}', stderr: '' };
     });
 
-    await gwsExec('gmail', 'list', { maxResults: 10, query: 'is:unread' }, undefined, deps);
+    await gwsExec('gmail', 'users messages list', { userId: 'me', q: 'is:unread' }, undefined, deps);
 
-    // Keys are passed as-is (no camelCase→kebab-case conversion)
-    assert.ok(capturedArgs.includes('--maxResults'));
-    assert.ok(capturedArgs.includes('10'));
-    assert.ok(capturedArgs.includes('--query'));
-    assert.ok(capturedArgs.includes('is:unread'));
+    assert.deepEqual(capturedArgs, [
+      'gmail', 'users', 'messages', 'list', '--format', 'json',
+      '--params', '{"userId":"me","q":"is:unread"}',
+    ]);
+  });
+
+  it('omits --params when no args provided', async () => {
+    let capturedArgs: string[] = [];
+    const deps = makeDeps(async (_command, args) => {
+      capturedArgs = args;
+      return { stdout: '{}', stderr: '' };
+    });
+
+    await gwsExec('calendar', 'events list', undefined, undefined, deps);
+
+    assert.deepEqual(capturedArgs, ['calendar', 'events', 'list', '--format', 'json']);
+    assert.ok(!capturedArgs.includes('--params'));
+  });
+
+  it('serializes array values in --params JSON', async () => {
+    let capturedArgs: string[] = [];
+    const deps = makeDeps(async (_command, args) => {
+      capturedArgs = args;
+      return { stdout: '{}', stderr: '' };
+    });
+
+    await gwsExec('gmail', 'users messages get', {
+      userId: 'me',
+      id: 'msg-1',
+      metadataHeaders: ['From', 'Subject', 'Date'],
+    }, undefined, deps);
+
+    const paramsIdx = capturedArgs.indexOf('--params');
+    assert.ok(paramsIdx >= 0, 'Should include --params');
+    const params = JSON.parse(capturedArgs[paramsIdx + 1]);
+    assert.deepEqual(params.metadataHeaders, ['From', 'Subject', 'Date']);
   });
 
   it('throws GwsNotInstalledError when binary not found (ENOENT)', async () => {
@@ -70,7 +101,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('calendar', 'events', undefined, undefined, deps),
+      () => gwsExec('calendar', 'events list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsNotInstalledError);
         return true;
@@ -86,7 +117,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('gmail', 'list', undefined, undefined, deps),
+      () => gwsExec('gmail', 'users messages list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsAuthError);
         return true;
@@ -102,7 +133,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('drive', 'list', undefined, undefined, deps),
+      () => gwsExec('drive', 'files list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsAuthError);
         return true;
@@ -118,7 +149,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('gmail', 'list', undefined, undefined, deps),
+      () => gwsExec('gmail', 'users messages list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsAuthError);
         return true;
@@ -134,7 +165,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('calendar', 'events', undefined, undefined, deps),
+      () => gwsExec('calendar', 'events list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsTimeoutError);
         return true;
@@ -150,7 +181,7 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('calendar', 'events', undefined, undefined, deps),
+      () => gwsExec('calendar', 'events list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsTimeoutError);
         return true;
@@ -165,7 +196,7 @@ describe('gwsExec', () => {
     }));
 
     await assert.rejects(
-      () => gwsExec('calendar', 'events', undefined, undefined, deps),
+      () => gwsExec('calendar', 'events list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsExecError);
         return true;
@@ -181,7 +212,7 @@ describe('gwsExec', () => {
     }));
 
     await assert.rejects(
-      () => gwsExec('calendar', 'events', undefined, undefined, deps),
+      () => gwsExec('calendar', 'events list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsExecError);
         assert.ok((err as Error).message.includes(badOutput));
@@ -198,40 +229,12 @@ describe('gwsExec', () => {
     });
 
     await assert.rejects(
-      () => gwsExec('drive', 'list', undefined, undefined, deps),
+      () => gwsExec('drive', 'files list', undefined, undefined, deps),
       (err: unknown) => {
         assert.ok(err instanceof GwsExecError);
         assert.ok((err as Error).message.includes('internal server error'));
         return true;
       },
     );
-  });
-
-  it('handles boolean args correctly', async () => {
-    let capturedArgs: string[] = [];
-    const deps = makeDeps(async (_command, args) => {
-      capturedArgs = args;
-      return { stdout: '{}', stderr: '' };
-    });
-
-    await gwsExec('gmail', 'list', { verbose: true, silent: false }, undefined, deps);
-
-    // verbose: true → --verbose is present
-    assert.ok(capturedArgs.includes('--verbose'));
-    // silent: false → --silent is NOT present
-    assert.ok(!capturedArgs.includes('--silent'));
-  });
-
-  it('handles single-character args as short flags', async () => {
-    let capturedArgs: string[] = [];
-    const deps = makeDeps(async (_command, args) => {
-      capturedArgs = args;
-      return { stdout: '{}', stderr: '' };
-    });
-
-    await gwsExec('gmail', 'list', { n: 5 }, undefined, deps);
-
-    assert.ok(capturedArgs.includes('-n'));
-    assert.ok(capturedArgs.includes('5'));
   });
 });

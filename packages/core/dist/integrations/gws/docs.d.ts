@@ -1,8 +1,10 @@
 /**
  * Docs provider — thin wrapper over the `gws` CLI for Google Docs operations.
  *
- * Implements `DocsProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * API command paths:
+ *   gws drive files get  --params '{"fileId":"..."}'            (metadata via Drive)
+ *   gws docs documents get --params '{"documentId":"..."}'      (content via Docs API)
+ *   gws drive files list --params '{"q":"...","pageSize":N}'    (recent docs via Drive)
  */
 import type { DocMetadata, DocsProvider, GwsDeps } from './types.js';
 export declare class GwsDocsProvider implements DocsProvider {

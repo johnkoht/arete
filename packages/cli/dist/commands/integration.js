@@ -282,7 +282,7 @@ export function registerIntegrationCommands(program) {
             // Smoke test: try fetching a single calendar event
             let smokeTestPassed = false;
             try {
-                await gwsExec('calendar', 'events', { maxResults: 1 });
+                await gwsExec('calendar', 'events list', { maxResults: 1 });
                 smokeTestPassed = true;
             }
             catch {

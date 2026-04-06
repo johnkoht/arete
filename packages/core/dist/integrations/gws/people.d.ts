@@ -2,8 +2,9 @@
  * Directory / People provider — thin wrapper over the `gws` CLI for
  * Google Workspace directory lookups.
  *
- * Implements `DirectoryProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * People API command paths:
+ *   gws people people searchContacts        --params '{"query":"...","readMask":"emailAddresses,names,organizations,photos","pageSize":N}'
+ *   gws people people searchDirectoryPeople --params '{"query":"...","readMask":"emailAddresses,names,organizations,photos","sources":[...],"pageSize":N}'
  */
 import type { DirectoryPerson, DirectoryProvider, GwsDeps } from './types.js';
 export declare class GwsDirectoryProvider implements DirectoryProvider {

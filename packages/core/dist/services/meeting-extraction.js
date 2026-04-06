@@ -215,22 +215,22 @@ function buildContextSection(context) {
     if (context.areaContext) {
         const area = context.areaContext;
         const areaLines = [`### Area Context (${area.name})`];
-        // Current state (truncate to 500 chars)
-        if (area.sections?.currentState) {
-            const truncated = area.sections.currentState.length > 500
-                ? area.sections.currentState.slice(0, 500) + '...'
-                : area.sections.currentState;
-            areaLines.push(`**Current State**: ${truncated}`);
+        // Focus (truncate to 500 chars)
+        if (area.sections?.focus) {
+            const truncated = area.sections.focus.length > 500
+                ? area.sections.focus.slice(0, 500) + '...'
+                : area.sections.focus;
+            areaLines.push(`**Focus**: ${truncated}`);
         }
-        // Key decisions (parse bullet points, last 5)
-        if (area.sections?.keyDecisions) {
-            const decisions = area.sections.keyDecisions
+        // Goal (show linked goals)
+        if (area.sections?.goal) {
+            const goals = area.sections.goal
                 .split('\n')
                 .filter(line => /^[-*]\s/.test(line.trim()))
-                .slice(-5);
-            if (decisions.length > 0) {
-                areaLines.push('', '**Recent Area Decisions**:');
-                areaLines.push(...decisions);
+                .slice(0, 5);
+            if (goals.length > 0) {
+                areaLines.push('', '**Area Goals**:');
+                areaLines.push(...goals);
             }
         }
         sections.push(areaLines.join('\n'));

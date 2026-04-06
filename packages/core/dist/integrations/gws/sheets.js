@@ -1,8 +1,9 @@
 /**
  * Sheets provider — thin wrapper over the `gws` CLI for Google Sheets operations.
  *
- * Implements `SheetsProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Sheets API command paths:
+ *   gws sheets spreadsheets get        --params '{"spreadsheetId":"..."}'
+ *   gws sheets spreadsheets values get --params '{"spreadsheetId":"...","range":"Sheet1!A1:B2"}'
  */
 import { gwsExec } from './client.js';
 import { detectGws } from './detection.js';
@@ -46,11 +47,11 @@ export class GwsSheetsProvider {
         }
     }
     async getSpreadsheet(spreadsheetId) {
-        const raw = await gwsExec('sheets', 'get', { spreadsheetId }, undefined, this.deps);
+        const raw = await gwsExec('sheets', 'spreadsheets get', { spreadsheetId }, undefined, this.deps);
         return mapSpreadsheet(raw);
     }
     async getRange(spreadsheetId, range) {
-        const raw = await gwsExec('sheets', 'values', { spreadsheetId, range }, undefined, this.deps);
+        const raw = await gwsExec('sheets', 'spreadsheets values get', { spreadsheetId, range }, undefined, this.deps);
         return mapRange(raw);
     }
 }

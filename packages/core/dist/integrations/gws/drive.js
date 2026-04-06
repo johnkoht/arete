@@ -1,8 +1,9 @@
 /**
  * Drive provider — thin wrapper over the `gws` CLI for Google Drive operations.
  *
- * Implements `DriveProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Drive API command paths:
+ *   gws drive files list --params '{"q":"...","pageSize":N}'
+ *   gws drive files get  --params '{"fileId":"..."}'
  */
 import { gwsExec } from './client.js';
 import { detectGws } from './detection.js';
@@ -46,9 +47,8 @@ export class GwsDriveProvider {
         }
     }
     async search(query, options) {
-        const maxResults = options?.maxResults ?? 25;
-        const raw = await gwsExec('drive', 'files', { q: query, maxResults }, undefined, this.deps);
-        // Defensive: handle various response shapes
+        const pageSize = options?.maxResults ?? 25;
+        const raw = await gwsExec('drive', 'files list', { q: query, pageSize }, undefined, this.deps);
         const response = raw;
         if (Array.isArray(response)) {
             return response.map(mapDriveFile);
@@ -56,14 +56,13 @@ export class GwsDriveProvider {
         if (response && typeof response === 'object' && 'files' in response) {
             return (response.files ?? []).map(mapDriveFile);
         }
-        // Single file or unrecognized shape
         if (response && typeof response === 'object' && 'id' in response) {
             return [mapDriveFile(response)];
         }
         return [];
     }
     async getFile(fileId) {
-        const raw = await gwsExec('drive', 'files', { fileId }, undefined, this.deps);
+        const raw = await gwsExec('drive', 'files get', { fileId }, undefined, this.deps);
         return mapDriveFile(raw);
     }
     async getRecentFiles(options) {

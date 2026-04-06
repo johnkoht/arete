@@ -1,8 +1,12 @@
 /**
  * Gmail provider — thin wrapper over the `gws` CLI for email operations.
  *
- * Implements `EmailProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Gmail API command paths:
+ *   gws gmail users messages list --params '{"userId":"me","q":"...","maxResults":N}'
+ *   gws gmail users messages get  --params '{"userId":"me","id":"...","format":"metadata","metadataHeaders":["From","Subject","Date"]}'
+ *
+ * Note: messages.list returns only {id, threadId}. Full metadata requires a
+ * separate messages.get call per message (capped at 10 to limit API calls).
  */
 import type { EmailThread, EmailProvider, GwsDeps } from './types.js';
 export declare class GmailProvider implements EmailProvider {

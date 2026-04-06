@@ -1,8 +1,12 @@
 /**
  * Gmail provider — thin wrapper over the `gws` CLI for email operations.
  *
- * Implements `EmailProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Gmail API command paths:
+ *   gws gmail users messages list --params '{"userId":"me","q":"...","maxResults":N}'
+ *   gws gmail users messages get  --params '{"userId":"me","id":"...","format":"metadata","metadataHeaders":["From","Subject","Date"]}'
+ *
+ * Note: messages.list returns only {id, threadId}. Full metadata requires a
+ * separate messages.get call per message (capped at 10 to limit API calls).
  */
 
 import { gwsExec } from './client.js';
@@ -23,7 +27,7 @@ type GmailMessage = {
   payload?: GmailPayload;
 };
 type GmailListResponse = {
-  messages?: GmailMessage[];
+  messages?: Array<{ id: string; threadId: string }>;
 };
 
 function getHeader(payload: GmailPayload | undefined, name: string): string {
@@ -74,38 +78,46 @@ export class GmailProvider implements EmailProvider {
   ): Promise<EmailThread[]> {
     const maxResults = options?.maxResults ?? 20;
 
-    const raw = await gwsExec(
+    // Step 1: List message IDs
+    const listRaw = await gwsExec(
       'gmail',
-      'messages',
-      { q: query, maxResults },
+      'users messages list',
+      { userId: 'me', q: query, maxResults },
       undefined,
       this.deps,
     );
 
-    // Defensive: handle various response shapes
-    const response = raw as GmailListResponse | GmailMessage[] | GmailMessage;
+    const listResponse = listRaw as GmailListResponse;
+    const messageIds = (listResponse.messages ?? [])
+      .map((m) => m.id)
+      .filter(Boolean)
+      .slice(0, 10); // cap detail fetches to limit API calls
 
-    if (Array.isArray(response)) {
-      return response.map(mapMessage);
-    }
+    if (messageIds.length === 0) return [];
 
-    if (response && typeof response === 'object' && 'messages' in response) {
-      return (response.messages ?? []).map(mapMessage);
-    }
+    // Step 2: Fetch metadata for each message in parallel
+    const messageResults = await Promise.all(
+      messageIds.map((id) =>
+        gwsExec(
+          'gmail',
+          'users messages get',
+          { userId: 'me', id, format: 'metadata', metadataHeaders: ['From', 'Subject', 'Date'] },
+          undefined,
+          this.deps,
+        ).catch(() => null),
+      ),
+    );
 
-    // Single message or unrecognized shape
-    if (response && typeof response === 'object' && ('id' in response || 'threadId' in response)) {
-      return [mapMessage(response as GmailMessage)];
-    }
-
-    return [];
+    return messageResults
+      .filter((m): m is GmailMessage => m !== null && typeof m === 'object')
+      .map(mapMessage);
   }
 
   async getThread(threadId: string): Promise<EmailThread> {
     const raw = await gwsExec(
       'gmail',
-      'messages',
-      { id: threadId },
+      'users messages get',
+      { userId: 'me', id: threadId, format: 'full' },
       undefined,
       this.deps,
     );

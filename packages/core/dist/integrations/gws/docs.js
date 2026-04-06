@@ -1,20 +1,30 @@
 /**
  * Docs provider — thin wrapper over the `gws` CLI for Google Docs operations.
  *
- * Implements `DocsProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * API command paths:
+ *   gws drive files get  --params '{"fileId":"..."}'            (metadata via Drive)
+ *   gws docs documents get --params '{"documentId":"..."}'      (content via Docs API)
+ *   gws drive files list --params '{"q":"...","pageSize":N}'    (recent docs via Drive)
  */
 import { gwsExec } from './client.js';
 import { detectGws } from './detection.js';
-function mapDocMetadata(raw) {
+function mapDocMetadata(raw, docId) {
     return {
-        id: raw.documentId ?? '',
-        title: raw.title ?? '',
-        lastModified: raw.lastModifiedTime ?? '',
+        id: raw.id ?? docId,
+        title: raw.name ?? '',
+        lastModified: raw.modifiedTime ?? '',
         lastModifiedBy: raw.lastModifyingUser?.displayName ??
             raw.lastModifyingUser?.emailAddress,
         webViewLink: raw.webViewLink,
     };
+}
+/** Extract plain text from a Google Docs document body. */
+function extractDocText(doc) {
+    const content = doc.body?.content ?? [];
+    return content
+        .flatMap((el) => el.paragraph?.elements ?? [])
+        .map((el) => el.textRun?.content ?? '')
+        .join('');
 }
 // ---------------------------------------------------------------------------
 // GwsDocsProvider class
@@ -36,42 +46,31 @@ export class GwsDocsProvider {
         }
     }
     async getDoc(docId) {
-        const raw = await gwsExec('docs', 'get', { documentId: docId }, undefined, this.deps);
-        return mapDocMetadata(raw);
+        // Use Drive API for file metadata (modifiedTime, webViewLink, etc.)
+        const raw = await gwsExec('drive', 'files get', { fileId: docId }, undefined, this.deps);
+        return mapDocMetadata(raw, docId);
     }
     async getDocContent(docId) {
-        const raw = await gwsExec('docs', 'export', { documentId: docId, mimeType: 'text/plain' }, undefined, this.deps);
-        // The export command may return a string directly, or an object with content
-        if (typeof raw === 'string') {
+        // Use Docs API to get document content
+        const raw = await gwsExec('docs', 'documents get', { documentId: docId }, undefined, this.deps);
+        if (typeof raw === 'string')
             return raw;
-        }
-        if (raw && typeof raw === 'object') {
-            const obj = raw;
-            return obj.content ?? obj.body ?? obj.text ?? '';
-        }
-        return '';
+        return extractDocText(raw);
     }
     async getRecentDocs(options) {
-        // Use Drive search filtered to Google Docs mimeType
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 7);
         const iso = cutoff.toISOString();
-        const maxResults = options?.maxResults ?? 25;
-        const raw = await gwsExec('drive', 'files', {
+        const pageSize = options?.maxResults ?? 25;
+        const raw = await gwsExec('drive', 'files list', {
             q: `mimeType = '${GOOGLE_DOCS_MIME}' and modifiedTime > '${iso}'`,
-            maxResults,
+            pageSize,
         }, undefined, this.deps);
         const response = raw;
         const files = Array.isArray(response)
             ? response
             : response?.files ?? [];
-        return files.map((f) => ({
-            id: f.id ?? '',
-            title: f.name ?? '',
-            lastModified: f.modifiedTime ?? '',
-            lastModifiedBy: f.owners?.[0]?.emailAddress ?? f.owners?.[0]?.displayName,
-            webViewLink: f.webViewLink,
-        }));
+        return files.map((f) => mapDocMetadata(f, f.id ?? ''));
     }
 }
 // ---------------------------------------------------------------------------

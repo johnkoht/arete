@@ -1,8 +1,9 @@
 /**
  * Drive provider — thin wrapper over the `gws` CLI for Google Drive operations.
  *
- * Implements `DriveProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Drive API command paths:
+ *   gws drive files list --params '{"q":"...","pageSize":N}'
+ *   gws drive files get  --params '{"fileId":"..."}'
  */
 import type { DriveFile, DriveProvider, GwsDeps } from './types.js';
 export declare class GwsDriveProvider implements DriveProvider {

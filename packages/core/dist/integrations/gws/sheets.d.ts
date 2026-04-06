@@ -1,8 +1,9 @@
 /**
  * Sheets provider — thin wrapper over the `gws` CLI for Google Sheets operations.
  *
- * Implements `SheetsProvider` interface using `gwsExec()` for CLI calls
- * and `detectGws()` for availability checks.
+ * Sheets API command paths:
+ *   gws sheets spreadsheets get        --params '{"spreadsheetId":"..."}'
+ *   gws sheets spreadsheets values get --params '{"spreadsheetId":"...","range":"Sheet1!A1:B2"}'
  */
 import type { SheetRange, SheetsProvider, GwsDeps } from './types.js';
 export declare class GwsSheetsProvider implements SheetsProvider {
