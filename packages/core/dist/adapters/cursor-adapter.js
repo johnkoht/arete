@@ -28,6 +28,12 @@ export class CursorAdapter {
     integrationsDir() {
         return '.cursor/integrations';
     }
+    commandsDir() {
+        return '';
+    }
+    generateCommands(_skills) {
+        return {};
+    }
     formatRule(rule, _config) {
         const frontmatter = {
             description: rule.description,
@@ -56,7 +62,7 @@ export class CursorAdapter {
     transformRuleContent(content) {
         return content;
     }
-    generateRootFiles(config, _workspaceRoot, _sourceRulesDir) {
+    generateRootFiles(config, _workspaceRoot, _sourceRulesDir, _skills) {
         const timestamp = new Date().toISOString();
         const version = config.version || '1.0.0';
         // Try to read pre-built comprehensive AGENTS.md from dist/

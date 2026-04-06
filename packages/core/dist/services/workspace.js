@@ -6,7 +6,8 @@
 import { join, dirname, resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
-import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, PRODUCT_RULES_ALLOW_LIST, } from '../workspace-structure.js';
+import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, getProductRulesAllowList, } from '../workspace-structure.js';
+import { ClaudeAdapter } from '../adapters/claude-adapter.js';
 /**
  * Root-level .md files in skills/ that are documentation, not skills.
  * These should NOT be copied to user workspaces (they cause pi skill parsing errors).
@@ -178,6 +179,31 @@ export class WorkspaceService {
                     }
                 }
             }
+            // Copy profiles to .agents/profiles/
+            if (sourcePaths?.profiles) {
+                const profilesSrc = sourcePaths.profiles;
+                if (await this.storage.exists(profilesSrc)) {
+                    const profileFiles = await this.storage.list(profilesSrc, { extensions: ['.md'] });
+                    for (const src of profileFiles) {
+                        const filename = src.split(/[/\\]/).pop() ?? '';
+                        if (!filename)
+                            continue;
+                        const dest = join(targetDir, '.agents', 'profiles', filename);
+                        if (!(await this.storage.exists(dest))) {
+                            try {
+                                const content = await this.storage.read(src);
+                                if (content !== null) {
+                                    await this.storage.write(dest, content);
+                                    result.files.push(join('.agents', 'profiles', filename));
+                                }
+                            }
+                            catch (err) {
+                                result.errors.push({ type: 'file', path: join('.agents', 'profiles', filename), error: err.message });
+                            }
+                        }
+                    }
+                }
+            }
             // Copy tools to IDE-specific tools directory (e.g. .cursor/tools/ or .claude/tools/)
             // Regression fix: tools were copied in the old CLI install command but were never
             // ported into WorkspaceService.create() during the CLI refactor (e3bc217, 2026-02-15).
@@ -210,7 +236,7 @@ export class WorkspaceService {
                     extensions: ['.mdc'],
                 });
                 for (const src of ruleFiles) {
-                    if (!PRODUCT_RULES_ALLOW_LIST.some((r) => src.endsWith(r)))
+                    if (!getProductRulesAllowList(ideTarget).some((r) => src.endsWith(r)))
                         continue;
                     const baseName = src.split(/[/\\]/).pop() ?? '';
                     const destName = baseName.replace(/\.mdc$/, adapter.ruleExtension);
@@ -329,7 +355,10 @@ export class WorkspaceService {
         if (!result.files.includes('arete.yaml')) {
             result.files.push('arete.yaml');
         }
-        const rootFiles = adapter.generateRootFiles(manifest, targetDir, sourcePaths?.rules);
+        // Build skill list for CLAUDE.md and commands
+        const skillService = new SkillService(this.storage);
+        const skills = await skillService.list(targetDir);
+        const rootFiles = adapter.generateRootFiles(manifest, targetDir, sourcePaths?.rules, skills);
         for (const [filename, content] of Object.entries(rootFiles)) {
             const filePath = join(targetDir, filename);
             await this.storage.write(filePath, content);
@@ -337,12 +366,43 @@ export class WorkspaceService {
                 result.files.push(filename);
             }
         }
+        // Generate slash commands for Claude Code
+        if (adapter instanceof ClaudeAdapter) {
+            const commands = adapter.generateCommands(skills);
+            for (const [filename, content] of Object.entries(commands)) {
+                const cmdPath = join(targetDir, '.claude', 'commands', filename);
+                await this.storage.write(cmdPath, content);
+                result.files.push(join('.claude', 'commands', filename));
+            }
+        }
         return result;
     }
     async update(workspaceRoot, options = {}) {
         const config = await loadConfig(this.storage, workspaceRoot);
-        const adapter = getAdapterFromConfig(config, workspaceRoot);
-        const paths = this.getPaths(workspaceRoot);
+        const adapter = options.ideTarget
+            ? getAdapter(options.ideTarget)
+            : getAdapterFromConfig(config, workspaceRoot);
+        // When IDE is overridden, compute paths from the override adapter (not detected adapter)
+        const paths = options.ideTarget
+            ? {
+                root: workspaceRoot,
+                manifest: join(workspaceRoot, 'arete.yaml'),
+                ideConfig: join(workspaceRoot, adapter.configDirName),
+                rules: join(workspaceRoot, adapter.rulesDir()),
+                agentSkills: join(workspaceRoot, '.agents', 'skills'),
+                tools: join(workspaceRoot, adapter.toolsDir()),
+                integrations: join(workspaceRoot, adapter.integrationsDir()),
+                context: join(workspaceRoot, 'context'),
+                memory: join(workspaceRoot, '.arete', 'memory'),
+                now: join(workspaceRoot, 'now'),
+                goals: join(workspaceRoot, 'goals'),
+                projects: join(workspaceRoot, 'projects'),
+                resources: join(workspaceRoot, 'resources'),
+                people: join(workspaceRoot, 'people'),
+                credentials: join(workspaceRoot, '.credentials'),
+                templates: join(workspaceRoot, 'templates'),
+            }
+            : this.getPaths(workspaceRoot);
         const structureResult = await this.ensureWorkspaceStructure(workspaceRoot, { getIDEDirs: () => adapter.getIDEDirs() });
         const result = {
             added: [...structureResult.directoriesAdded, ...structureResult.filesAdded],
@@ -356,13 +416,85 @@ export class WorkspaceService {
             result.updated.push(...syncResult.updated);
             result.preserved.push(...syncResult.preserved);
         }
+        // Build skill list for commands and root files
+        const skillService = new SkillService(this.storage);
+        const skills = await skillService.list(workspaceRoot);
+        // Regenerate Claude Code slash commands (wipe + regenerate)
+        if (adapter instanceof ClaudeAdapter) {
+            const commandsDir = join(workspaceRoot, '.claude', 'commands');
+            if (await this.storage.exists(commandsDir)) {
+                const existingCmds = await this.storage.list(commandsDir, { extensions: ['.md'] });
+                for (const cmd of existingCmds) {
+                    try {
+                        await this.storage.delete(cmd);
+                    }
+                    catch { /* non-fatal */ }
+                }
+            }
+            const commands = adapter.generateCommands(skills);
+            for (const [filename, content] of Object.entries(commands)) {
+                await this.storage.mkdir(join(workspaceRoot, '.claude', 'commands'));
+                await this.storage.write(join(workspaceRoot, '.claude', 'commands', filename), content);
+                result.updated.push(join('.claude', 'commands', filename));
+            }
+        }
+        // Provision rules for the target IDE (backfill missing rules from source)
+        if (options.sourcePaths?.rules) {
+            const allowList = getProductRulesAllowList(adapter.target);
+            const ruleFiles = await this.storage.list(options.sourcePaths.rules, { extensions: ['.mdc'] });
+            for (const src of ruleFiles) {
+                if (!allowList.some((r) => src.endsWith(r)))
+                    continue;
+                const baseName = src.split(/[/\\]/).pop() ?? '';
+                const destName = baseName.replace(/\.mdc$/, adapter.ruleExtension);
+                const dest = join(paths.rules, destName);
+                if (!(await this.storage.exists(dest))) {
+                    try {
+                        await this.storage.mkdir(paths.rules);
+                        const content = await this.storage.read(src);
+                        if (content) {
+                            const transformed = adapter.transformRuleContent(content);
+                            await this.storage.write(dest, transformed);
+                            result.added.push(join(adapter.rulesDir(), destName));
+                        }
+                    }
+                    catch { /* non-fatal */ }
+                }
+            }
+        }
+        // Claude rule migration: remove rules not in reduced allow list
+        if (adapter instanceof ClaudeAdapter) {
+            const allowedRules = new Set(getProductRulesAllowList('claude').map(r => r.replace(/\.mdc$/, '.md')));
+            const existingRules = await this.storage.list(paths.rules, { extensions: ['.md'] });
+            for (const ruleFile of existingRules) {
+                const filename = ruleFile.split(/[/\\]/).pop() ?? '';
+                if (filename && !allowedRules.has(filename)) {
+                    try {
+                        await this.storage.delete(ruleFile);
+                        result.removed.push(join('.claude', 'rules', filename));
+                    }
+                    catch { /* non-fatal */ }
+                }
+            }
+            // Refresh agent-memory.md from source
+            if (options.sourcePaths?.rules) {
+                const srcMemory = join(options.sourcePaths.rules, 'agent-memory.mdc');
+                if (await this.storage.exists(srcMemory)) {
+                    const content = await this.storage.read(srcMemory);
+                    if (content) {
+                        const transformed = adapter.transformRuleContent(content);
+                        await this.storage.write(join(paths.rules, 'agent-memory.md'), transformed);
+                        result.updated.push('.claude/rules/agent-memory.md');
+                    }
+                }
+            }
+        }
         // Regenerate integration sections in all installed skills (unconditional).
         // Runs independently of options.sourcePaths so community/external skills benefit too.
         {
             const agentSkillsExists = await this.storage.exists(paths.agentSkills);
             if (agentSkillsExists) {
                 const skillDirs = await this.storage.listSubdirectories(paths.agentSkills);
-                const skillService = new SkillService(this.storage);
                 for (const skillDir of skillDirs) {
                     try {
                         const info = await skillService.getInfo(skillDir);
@@ -418,6 +550,35 @@ export class WorkspaceService {
                             }
                         }
                     }
+                }
+            }
+        }
+        // Always refresh profiles from source (reference docs, not user content)
+        if (options.sourcePaths?.profiles) {
+            const profilesSrc = options.sourcePaths.profiles;
+            if (await this.storage.exists(profilesSrc)) {
+                const profileFiles = await this.storage.list(profilesSrc, { extensions: ['.md'] });
+                const profilesDest = join(workspaceRoot, '.agents', 'profiles');
+                for (const srcFile of profileFiles) {
+                    const filename = srcFile.split(/[/\\]/).pop() ?? '';
+                    if (!filename)
+                        continue;
+                    const destFile = join(profilesDest, filename);
+                    try {
+                        await this.storage.mkdir(profilesDest);
+                        const content = await this.storage.read(srcFile);
+                        if (content !== null) {
+                            const existed = await this.storage.exists(destFile);
+                            await this.storage.write(destFile, content);
+                            if (existed) {
+                                result.updated.push(join('.agents', 'profiles', filename));
+                            }
+                            else {
+                                result.added.push(join('.agents', 'profiles', filename));
+                            }
+                        }
+                    }
+                    catch { /* non-fatal */ }
                 }
             }
         }
@@ -498,7 +659,7 @@ export class WorkspaceService {
         }
         // TODO: Copy memory.md template to areas/ on workspace update (P1-3)
         // Regenerate AGENTS.md / CLAUDE.md on update (always refreshes to latest version)
-        const rootFiles = adapter.generateRootFiles(config, workspaceRoot);
+        const rootFiles = adapter.generateRootFiles(config, workspaceRoot, undefined, skills);
         for (const [filename, content] of Object.entries(rootFiles)) {
             const filePath = join(workspaceRoot, filename);
             await this.storage.write(filePath, content);

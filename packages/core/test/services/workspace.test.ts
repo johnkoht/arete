@@ -770,6 +770,139 @@ describe('WorkspaceService', () => {
     });
   });
 
+  describe('create — Claude Code specifics', () => {
+    function makeClaudeSourceRuntime(dir: string) {
+      const sourceRoot = join(dir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      const sourceRules = join(sourceRoot, 'rules');
+      const sourceProfiles = join(sourceRoot, 'profiles');
+      mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
+      writeFileSync(
+        join(sourceSkills, 'meeting-prep', 'SKILL.md'),
+        [
+          '---',
+          'name: Meeting Prep',
+          'description: Prepare for meetings',
+          'triggers:',
+          '  - meeting prep',
+          'category: core',
+          '---',
+          '',
+          '# Meeting Prep',
+          '',
+          'Prepare for upcoming meetings.',
+        ].join('\n'),
+        'utf8',
+      );
+      mkdirSync(sourceRules, { recursive: true });
+      // Create all 7 Cursor rules
+      for (const rule of [
+        'agent-memory.mdc', 'context-management.mdc', 'project-management.mdc',
+        'routing-mandatory.mdc', 'pm-workspace.mdc', 'arete-vision.mdc', 'qmd-search.mdc',
+      ]) {
+        writeFileSync(join(sourceRules, rule), `# ${rule}\nRule content`, 'utf8');
+      }
+      mkdirSync(sourceProfiles, { recursive: true });
+      writeFileSync(join(sourceProfiles, 'guide.md'), '# Guide Profile\n', 'utf8');
+      return { sourceRoot, sourceSkills, sourceRules, sourceProfiles };
+    }
+
+    it('Claude install copies only 3 rules (reduced set)', async () => {
+      const { sourceRoot, sourceSkills, sourceRules, sourceProfiles } = makeClaudeSourceRuntime(tmpDir);
+      const result = await service.create(tmpDir, {
+        ideTarget: 'claude',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: sourceRules,
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          profiles: sourceProfiles,
+        },
+      });
+      // Claude should get only 3 rules (agent-memory, context-management, project-management)
+      assert.equal(result.rules.length, 3, `Expected 3 rules for Claude, got: ${JSON.stringify(result.rules)}`);
+      assert.ok(result.rules.includes('agent-memory.md'));
+      assert.ok(result.rules.includes('context-management.md'));
+      assert.ok(result.rules.includes('project-management.md'));
+      // Cursor-only rules should NOT be present
+      assert.ok(!result.rules.includes('routing-mandatory.md'));
+      assert.ok(!result.rules.includes('pm-workspace.md'));
+    });
+
+    it('Cursor install still gets all 7 rules', async () => {
+      const { sourceRoot, sourceSkills, sourceRules } = makeClaudeSourceRuntime(tmpDir);
+      const result = await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: sourceRules,
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+        },
+      });
+      assert.equal(result.rules.length, 7, `Expected 7 rules for Cursor, got: ${JSON.stringify(result.rules)}`);
+    });
+
+    it('Claude install creates .claude/commands/ with command files', async () => {
+      const { sourceRoot, sourceSkills, sourceRules, sourceProfiles } = makeClaudeSourceRuntime(tmpDir);
+      const result = await service.create(tmpDir, {
+        ideTarget: 'claude',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: sourceRules,
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          profiles: sourceProfiles,
+        },
+      });
+      // Should have command files in result
+      const commandFiles = result.files.filter((f) => f.startsWith('.claude/commands/'));
+      assert.ok(commandFiles.length > 0, `Expected command files, got: ${JSON.stringify(commandFiles)}`);
+      // Verify files exist on disk
+      for (const cmdFile of commandFiles) {
+        assert.equal(existsSync(join(tmpDir, cmdFile)), true, `${cmdFile} should exist on disk`);
+      }
+    });
+
+    it('Claude install copies profiles to .agents/profiles/', async () => {
+      const { sourceRoot, sourceSkills, sourceRules, sourceProfiles } = makeClaudeSourceRuntime(tmpDir);
+      const result = await service.create(tmpDir, {
+        ideTarget: 'claude',
+        source: 'npm',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: sourceRules,
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          profiles: sourceProfiles,
+        },
+      });
+      const profilePath = join(tmpDir, '.agents', 'profiles', 'guide.md');
+      assert.equal(existsSync(profilePath), true, '.agents/profiles/guide.md should exist');
+      const content = readFileSync(profilePath, 'utf8');
+      assert.ok(content.includes('Guide Profile'));
+      assert.ok(
+        result.files.some((f) => f.includes('.agents/profiles/guide.md')),
+        'Profile should appear in result.files',
+      );
+    });
+  });
+
   describe('create and syncCoreSkills — root-level .md file deployment', () => {
     function makeSourceRuntime(dir: string): { sourceRoot: string; sourceSkills: string } {
       const sourceRoot = join(dir, 'source-runtime');

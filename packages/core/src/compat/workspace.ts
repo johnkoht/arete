@@ -97,5 +97,6 @@ export function getSourcePaths(packageRoot: string): SourcePaths {
     templates: join(base, 'templates'),
     guide: join(base, 'GUIDE.md'),
     updates: join(base, 'UPDATES.md'),
+    profiles: join(base, 'profiles'),
   };
 }

@@ -80,6 +80,7 @@ export function getSourcePaths(packageRoot) {
         templates: join(base, 'templates'),
         guide: join(base, 'GUIDE.md'),
         updates: join(base, 'UPDATES.md'),
+        profiles: join(base, 'profiles'),
     };
 }
 //# sourceMappingURL=workspace.js.map
