@@ -495,4 +495,65 @@ Hello world.
     assert.ok(updatedContent.includes('@john-smith'), 'Should have owner slug');
     assert.ok(updatedContent.includes('→'), 'Should have arrow notation');
   });
+
+  it('writes topics and item counts to frontmatter', async () => {
+    writeMeetingFile(tmpDir, 'test.md', {
+      title: 'Test Meeting',
+      date: '2026-04-05',
+      status: 'synced',
+    }, '# Test Meeting\n');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', 'test.md');
+
+    const intelligenceWithTopics: MeetingIntelligence = {
+      ...sampleIntelligence,
+      topics: ['email-templates', 'q2-planning'],
+    };
+
+    await applyMeetingIntelligence(
+      meetingPath,
+      intelligenceWithTopics,
+      { storage, workspaceRoot: tmpDir },
+    );
+
+    const updatedContent = readFileSync(meetingPath, 'utf8');
+    // topics
+    assert.ok(updatedContent.includes('email-templates'), 'Should have topic slug');
+    assert.ok(updatedContent.includes('q2-planning'), 'Should have second topic slug');
+    // counts: sampleIntelligence has 2 action items (1 mine, 1 theirs), 2 decisions, 1 learning
+    assert.ok(updatedContent.includes('open_action_items: 2'), 'Should have open_action_items: 2');
+    assert.ok(updatedContent.includes('my_commitments: 1'), 'Should have my_commitments: 1');
+    assert.ok(updatedContent.includes('their_commitments: 1'), 'Should have their_commitments: 1');
+    assert.ok(updatedContent.includes('decisions_count: 2'), 'Should have decisions_count: 2');
+    assert.ok(updatedContent.includes('learnings_count: 1'), 'Should have learnings_count: 1');
+  });
+
+  it('writes empty topics array and zero counts when intelligence has none', async () => {
+    writeMeetingFile(tmpDir, 'test.md', {
+      title: 'Test Meeting',
+    }, '# Test Meeting\n');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', 'test.md');
+
+    const emptyIntelligence: MeetingIntelligence = {
+      summary: '',
+      actionItems: [],
+      nextSteps: [],
+      decisions: [],
+      learnings: [],
+    };
+
+    await applyMeetingIntelligence(
+      meetingPath,
+      emptyIntelligence,
+      { storage, workspaceRoot: tmpDir },
+    );
+
+    const updatedContent = readFileSync(meetingPath, 'utf8');
+    assert.ok(updatedContent.includes('open_action_items: 0'), 'Should have open_action_items: 0');
+    assert.ok(updatedContent.includes('my_commitments: 0'), 'Should have my_commitments: 0');
+    assert.ok(updatedContent.includes('their_commitments: 0'), 'Should have their_commitments: 0');
+    assert.ok(updatedContent.includes('decisions_count: 0'), 'Should have decisions_count: 0');
+    assert.ok(updatedContent.includes('learnings_count: 0'), 'Should have learnings_count: 0');
+  });
 });
