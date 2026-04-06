@@ -45,6 +45,7 @@
 |review-plan:{triggers:"Review this plan, Give me a second opinion, Critique this PRD",does:"Structured second-opinion review with checklist and devil's advocate perspective."}
 |run-pre-mortem:{triggers:"Before executing approved plans (3+ steps), before large refactors, before new systems",does:"Pre-mortem risk analysis across 8 categories with actionable mitigations."}
 |ship:{triggers:"/ship after plan approval, ship this plan, build autonomously",does:"Mega-build skill automating plan-to-merge workflow. Pre-mortem, review, PRD, worktree, build, wrap, merge — with intelligent gates."}
+|sandbox:{triggers:"let's test in the sandbox, /sandbox, spin up sandbox, test the build, test in the sandbox",does:"Build a release branch worktree, sync test workspace with real data, generate targeted test plan from changed files, run regression baseline."}
 |synthesize-collaboration-profile:{triggers:"Synthesize collaboration profile, Update collaboration, after 5+ entries or PRD completion",does:"Merge entry learnings into memory/collaboration.md."}
 
 [Memory]|entry:memory/MEMORY.md

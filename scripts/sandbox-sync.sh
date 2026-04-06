@@ -13,6 +13,14 @@ if [[ ! -d "${HOME}/code/arete-reserv" ]]; then
   exit 1
 fi
 
+# Guard: SRC and DST must be different directories
+src_real=$(realpath "${SRC%/}" 2>/dev/null || echo "${SRC%/}")
+dst_real=$(realpath "${DST%/}" 2>/dev/null || echo "${DST%/}")
+if [[ "$src_real" == "$dst_real" ]]; then
+  echo "❌ SRC and DST resolve to the same directory — refusing to sync."
+  exit 1
+fi
+
 echo "Syncing: ${SRC} → ${DST}"
 echo ""
 

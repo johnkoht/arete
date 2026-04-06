@@ -68,9 +68,14 @@ If on `main` with no diff: note that targeted tests will be limited; regression 
 3. Worktree guard — verify isolation:
    ```bash
    git_dir=$(git -C ~/code/arete.worktrees/sandbox rev-parse --git-dir 2>/dev/null)
-   # Expected: .git/worktrees/sandbox/gitdir (NOT ".git")
+   if [[ "$git_dir" == ".git" ]]; then
+     echo "❌ Worktree guard failed — still in main repo. Halt."
+     exit 1
+   fi
+   branch=$(git -C ~/code/arete.worktrees/sandbox branch --show-current)
+   echo "✅ Worktree confirmed | Branch: $branch"
    ```
-   If result is `.git` → halt: something went wrong with worktree creation.
+   Expected output: `✅ Worktree confirmed | Branch: sandbox/{branch}`
 
 4. Set for remaining phases:
    ```
@@ -86,8 +91,9 @@ Run all commands inside `$WORKTREE`.
 
 1. Delete stale TypeScript build cache (critical — stale .tsbuildinfo causes wrong builds):
    ```bash
-   rm -f packages/core/*.tsbuildinfo packages/cli/*.tsbuildinfo
+   rm -f packages/core/*.tsbuildinfo packages/cli/*.tsbuildinfo packages/apps/backend/*.tsbuildinfo
    ```
+   All three are cleared unconditionally — `rm -f` is safe if files don't exist.
 
 2. Determine build target:
    - If `{changed-files}` includes any path under `packages/apps/` → `npm run build` (full, warn: takes longer)
@@ -169,8 +175,11 @@ After presenting the test plan, ask:
 > "Want me to run extraction on 1-2 meetings and review the output for quality issues?"
 
 If yes:
-1. List meetings in `~/code/arete-reserv-test/resources/meetings/` (or wherever meetings live in that workspace)
-2. Pick 2 that represent different types: prefer one 1:1 + one team meeting (check frontmatter for attendee count)
+1. Locate meetings directory:
+   - Check `~/code/arete-reserv-test/resources/meetings/` first (standard path)
+   - If not found, read `~/code/arete-reserv-test/arete.yaml` for the configured paths
+   - List the 10 most recent `.md` files by modification time: `ls -t {meetings-dir}/*.md | head -10`
+2. Pick 2 that represent different types: prefer one 1:1 + one team meeting (check frontmatter `attendees:` count — 2 attendees = 1:1, 3+ = team)
 3. Run extraction on each:
    ```bash
    cd ~/code/arete-reserv-test && node {ARETE_BIN} meeting extract --file {meeting-path}
