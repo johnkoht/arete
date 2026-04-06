@@ -7,7 +7,6 @@ import { join, dirname, resolve } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getAdapter, detectAdapter, getAdapterFromConfig } from '../adapters/index.js';
 import { BASE_WORKSPACE_DIRS, DEFAULT_FILES, getProductRulesAllowList, } from '../workspace-structure.js';
-import { ClaudeAdapter } from '../adapters/claude-adapter.js';
 /**
  * Root-level .md files in skills/ that are documentation, not skills.
  * These should NOT be copied to user workspaces (they cause pi skill parsing errors).
@@ -367,7 +366,7 @@ export class WorkspaceService {
             }
         }
         // Generate slash commands for Claude Code
-        if (adapter instanceof ClaudeAdapter) {
+        if (typeof adapter.generateCommands === 'function') {
             const commands = adapter.generateCommands(skills);
             for (const [filename, content] of Object.entries(commands)) {
                 const cmdPath = join(targetDir, '.claude', 'commands', filename);
@@ -420,7 +419,7 @@ export class WorkspaceService {
         const skillService = new SkillService(this.storage);
         const skills = await skillService.list(workspaceRoot);
         // Regenerate Claude Code slash commands (wipe + regenerate)
-        if (adapter instanceof ClaudeAdapter) {
+        if (typeof adapter.generateCommands === 'function') {
             const commandsDir = join(workspaceRoot, '.claude', 'commands');
             if (await this.storage.exists(commandsDir)) {
                 const existingCmds = await this.storage.list(commandsDir, { extensions: ['.md'] });
@@ -463,7 +462,7 @@ export class WorkspaceService {
             }
         }
         // Claude rule migration: remove rules not in reduced allow list
-        if (adapter instanceof ClaudeAdapter) {
+        if (adapter.target === 'claude') {
             const allowedRules = new Set(getProductRulesAllowList('claude').map(r => r.replace(/\.mdc$/, '.md')));
             const existingRules = await this.storage.list(paths.rules, { extensions: ['.md'] });
             for (const ruleFile of existingRules) {

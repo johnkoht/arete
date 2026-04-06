@@ -29,7 +29,12 @@ export function registerUpdateCommand(program) {
         const config = await loadConfig(services.storage, root);
         const ideOverride = opts.ide;
         if (ideOverride && ideOverride !== 'cursor' && ideOverride !== 'claude') {
-            error(`Invalid IDE target: ${ideOverride}. Must be "cursor" or "claude".`);
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Invalid IDE target: ${ideOverride}. Must be "cursor" or "claude".` }));
+            }
+            else {
+                error(`Invalid IDE target: ${ideOverride}. Must be "cursor" or "claude".`);
+            }
             process.exit(1);
         }
         const ideTarget = ideOverride ?? config.ide_target ?? 'cursor';

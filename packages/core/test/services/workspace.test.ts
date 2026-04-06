@@ -546,6 +546,59 @@ describe('WorkspaceService', () => {
       assert.ok(content.includes('Community variant'));
       assert.ok(result.preserved.includes('meeting-prep'));
     });
+
+    it('regenerates Claude Code slash commands when updating with --ide claude', async () => {
+      // Create a cursor workspace first
+      await service.create(tmpDir, {
+        ideTarget: 'cursor',
+        source: 'npm',
+      });
+
+      // Set up source paths with a skill so commands can be generated
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      mkdirSync(join(sourceSkills, 'daily-plan'), { recursive: true });
+      writeFileSync(
+        join(sourceSkills, 'daily-plan', 'SKILL.md'),
+        '---\nid: daily-plan\nname: Daily Plan\ntriggers:\n  - daily plan\n---\n# Daily Plan\n',
+        'utf8',
+      );
+
+      // Create a rules source dir for Claude Code
+      const sourceRules = join(sourceRoot, 'rules');
+      mkdirSync(sourceRules, { recursive: true });
+
+      const result = await service.update(tmpDir, {
+        ideTarget: 'claude',
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: sourceRules,
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
+        },
+      });
+
+      // Claude commands directory should exist with generated commands
+      const commandsDir = join(tmpDir, '.claude', 'commands');
+      assert.equal(existsSync(commandsDir), true, '.claude/commands/ should exist after --ide claude update');
+
+      // Should have at least one command file in the updated results
+      const commandEntries = result.updated.filter((p) => p.startsWith('.claude/commands/'));
+      assert.ok(
+        commandEntries.length > 0,
+        `Expected .claude/commands/ entries in result.updated, got: ${JSON.stringify(result.updated)}`,
+      );
+
+      // CLAUDE.md should be generated (not AGENTS.md)
+      assert.ok(
+        result.updated.includes('CLAUDE.md'),
+        `Expected CLAUDE.md in result.updated, got: ${JSON.stringify(result.updated)}`,
+      );
+    });
   });
 
   describe('updateManifestField', () => {
