@@ -5,6 +5,7 @@
  * Adapters may use fs directly (infrastructure, not services).
  */
 import type { AreteConfig } from '../models/workspace.js';
+import type { SkillDefinition } from '../models/skills.js';
 /** Supported IDE targets */
 export type IDETarget = 'cursor' | 'claude';
 /** Canonical representation of a rule before IDE-specific formatting */
@@ -24,9 +25,13 @@ export interface IDEAdapter {
     rulesDir(): string;
     toolsDir(): string;
     integrationsDir(): string;
+    /** Returns the IDE-specific commands directory path, or empty string if not supported. */
+    commandsDir?(): string;
     formatRule(rule: CanonicalRule, config: AreteConfig): string;
     transformRuleContent(content: string): string;
-    generateRootFiles(config: AreteConfig, workspaceRoot: string, sourceRulesDir?: string): Record<string, string>;
+    generateRootFiles(config: AreteConfig, workspaceRoot: string, sourceRulesDir?: string, skills?: SkillDefinition[]): Record<string, string>;
+    /** Generates IDE-specific command files for skills, or empty object if not supported. */
+    generateCommands?(skills: SkillDefinition[]): Record<string, string>;
     detectInWorkspace(workspaceRoot: string): boolean;
 }
 //# sourceMappingURL=ide-adapter.d.ts.map

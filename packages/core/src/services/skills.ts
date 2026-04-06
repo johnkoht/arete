@@ -144,6 +144,8 @@ export class SkillService {
       typeof fm.creates_project === 'boolean' ? fm.creates_project : undefined;
     const projectTemplate =
       typeof fm.project_template === 'string' ? fm.project_template : undefined;
+    const profile =
+      typeof fm.profile === 'string' ? fm.profile : undefined;
 
     const merged = { ...fm, ...sidecar } as Record<string, unknown>;
 
@@ -165,6 +167,7 @@ export class SkillService {
       createsProject: (merged.creates_project as boolean) ?? createsProject,
       projectTemplate: (merged.project_template as string) ?? projectTemplate,
       integration,
+      profile: (merged.profile as string) ?? profile,
     };
   }
 

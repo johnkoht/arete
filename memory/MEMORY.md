@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-04-05: [claude-code-friendly-learnings](entries/2026-04-05_claude-code-friendly-learnings.md) — Claude Code workspace support: slash command generation, profiles system, IDE adapter interface dispatch, rules consolidation, --ide flag on `arete update`.
 - 2026-04-04: [product-simplification-phases2-4-learnings](entries/2026-04-04_product-simplification-phases2-4-learnings.md) — Phases 2-4: Jaccard dedup in addTask(), existingTasks in extraction context, confidence threshold 0.65, hierarchy skill tightening, review UX (bulk approve, batch, opt-in auto-approve, summary). 3/3 plans, 2441 tests pass.
 - 2026-04-04: [phase3-hierarchy-learnings](entries/2026-04-04_phase3-hierarchy-learnings.md) — Phase 3 hierarchy tightening: 2/5 tasks already done (task 3 & 5 verified in code), 3/5 implemented as skill updates. quarter-plan asks for area, general-project asks for goal, week-plan scopes by area. Skills-only for UX gaps — data model already supported the fields.
 - 2026-04-05: [build-skills-tighten-learnings](entries/2026-04-05_build-skills-tighten-learnings.md) — 16-step skills refactor: ship 2363→375 lines, signal tags cascade, eng-lead merged into orchestrator, multi-phase protocol, 3-track routing, working-memory structure.

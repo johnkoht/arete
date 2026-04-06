@@ -29,6 +29,8 @@ The adapters layer provides IDE-specific implementations for workspace generatio
 - Both adapters append a version footer with `config.version` and current ISO timestamp.
 - Path transformation in `ClaudeAdapter` preserves `.agents/skills/` (not `.claude/skills/`) for skill paths.
 - The fallback minimal AGENTS.md/CLAUDE.md includes basic routing instructions and a subset of CLI commands so agents can still function if `dist/AGENTS.md` is missing.
+- `generateCommands?()` is optional on `IDEAdapter`. Only `ClaudeAdapter` implements it. Callers must use `typeof adapter.generateCommands === 'function'` — never `instanceof ClaudeAdapter`. This keeps `workspace.ts` decoupled from concrete adapter types.
+- `workspace.ts` does NOT import any concrete adapter class. All adapter-specific dispatch uses interface methods or `adapter.target`.
 
 ## Pre-Edit Checklist
 

@@ -75,6 +75,7 @@ export function registerInstallCommand(program) {
             rules: join(basePaths.rules, rulesSubdir),
             integrations: basePaths.integrations,
             templates: basePaths.templates,
+            profiles: basePaths.profiles,
             guide: basePaths.guide,
             updates: basePaths.updates,
         };
@@ -151,8 +152,13 @@ export function registerInstallCommand(program) {
         console.log('');
         console.log(chalk.dim('Next steps:'));
         console.log(`  1. ${chalk.cyan('cd ' + formatPath(targetDir))}`);
-        console.log(`  2. ${chalk.cyan('arete onboard')} to set up your profile and integrations`);
-        console.log(`  3. Say ${chalk.cyan('"Let\'s get started"')} in chat to continue onboarding`);
+        if (ide === 'claude') {
+            console.log(`  2. Type ${chalk.cyan('/getting-started')} in Claude Code to begin`);
+        }
+        else {
+            console.log(`  2. ${chalk.cyan('arete onboard')} to set up your profile and integrations`);
+            console.log(`  3. Say ${chalk.cyan('"Let\'s get started"')} in chat to continue onboarding`);
+        }
         console.log('');
     });
 }
