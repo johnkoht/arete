@@ -721,7 +721,12 @@ export async function pullDriveHelper(
 
   let files;
   if (opts.query) {
-    files = await provider.search(opts.query, { maxResults: 25 });
+    // Drive API requires query syntax (e.g. `fullText contains 'term'`).
+    // If the user passed plain text, wrap it as a fullText search.
+    const driveQuery = /\b(contains|mimeType|modifiedTime|and\b|or\b|not\b|in\b)/.test(opts.query)
+      ? opts.query
+      : `fullText contains '${opts.query.replace(/'/g, "\\'")}'`;
+    files = await provider.search(driveQuery, { maxResults: 25 });
   } else {
     // Default: recent files within --days range
     const cutoff = new Date();
