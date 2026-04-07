@@ -1,0 +1,63 @@
+{
+  "name": "cross-area-synthesis",
+  "branchName": "feature/cross-area-synthesis",
+  "goal": "Add LLM-powered cross-area synthesis to area memory, identifying connections, dependencies, and convergence signals across areas.",
+  "userStories": [
+    {
+      "id": "task-1-synthesize-method",
+      "title": "Collect cross-area data and build LLM prompt",
+      "description": "Add synthesizeCrossArea() method to AreaMemoryService that reads all area memory files, builds a structured prompt, and calls an LLM. Export LLMCallFn type and buildSynthesisPrompt() helper. Return opaque markdown response.",
+      "acceptanceCriteria": [
+        "synthesizeCrossArea() method exists accepting { callLLM?: LLMCallFn } in options",
+        "LLMCallFn type and buildSynthesisPrompt() exported from area-memory.ts",
+        "Prompt contains all area names and content, excluding _-prefixed files",
+        "Returns null when callLLM not provided or no area files exist",
+        "Unit tests cover: prompt content, response passthrough, absent callLLM, _-prefix exclusion",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-refresh-integration",
+      "title": "Write synthesis output and integrate into refresh flow",
+      "description": "Wire synthesizeCrossArea() into refreshAllAreaMemory(), write output to _synthesis.md with YAML frontmatter, extend result type, handle errors gracefully.",
+      "acceptanceCriteria": [
+        "refreshAllAreaMemory() calls synthesizeCrossArea() when callLLM provided and refreshing all areas",
+        "Synthesis file written to .arete/memory/areas/_synthesis.md with type/last_refreshed/areas_analyzed frontmatter",
+        "RefreshAreaMemoryResult extended with synthesis field",
+        "listAreaMemoryStatus() excludes _synthesis.md (verified)",
+        "callLLM errors caught as warning, refresh still succeeds",
+        "Tests verify integration, file output, error handling",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-cli-output",
+      "title": "CLI output and staleness",
+      "description": "Update intelligence.ts and status.ts CLI commands to pass callLLM, display synthesis status, and show staleness.",
+      "acceptanceCriteria": [
+        "CLI checks services.ai.isConfigured() before creating callLLM wrapper",
+        "callLLM wrapper uses services.ai.call('synthesis', prompt) pattern",
+        "CLI output includes synthesis status line",
+        "--json output includes synthesis field",
+        "arete status shows synthesis freshness when _synthesis.md exists",
+        "Error handling shows failed message",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-06T12:00:00.000Z",
+    "totalTasks": 3,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
