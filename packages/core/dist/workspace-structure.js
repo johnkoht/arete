@@ -35,6 +35,7 @@ export const BASE_WORKSPACE_DIRS = [
     'templates/plans',
     '.agents',
     '.agents/skills',
+    '.agents/profiles',
     '.credentials',
     'templates',
     'templates/inputs',
@@ -42,7 +43,18 @@ export const BASE_WORKSPACE_DIRS = [
     'templates/projects',
 ];
 /**
+ * IDE-aware rules allow list. Claude gets a reduced set; Cursor gets all.
+ */
+export function getProductRulesAllowList(ideTarget) {
+    const base = ['agent-memory.mdc', 'context-management.mdc', 'project-management.mdc'];
+    if (ideTarget === 'cursor') {
+        return [...base, 'routing-mandatory.mdc', 'pm-workspace.mdc', 'arete-vision.mdc', 'qmd-search.mdc'];
+    }
+    return base; // Claude: reduced set
+}
+/**
  * Rule files to copy on install (product rules only).
+ * @deprecated Use getProductRulesAllowList(ideTarget) instead.
  */
 export const PRODUCT_RULES_ALLOW_LIST = [
     'routing-mandatory.mdc',

@@ -13,6 +13,9 @@ export * from './search/index.js';
 // Services
 export * from './services/index.js';
 
+// Generators
+export * from './generators/index.js';
+
 // Utilities
 export * from './utils/index.js';
 

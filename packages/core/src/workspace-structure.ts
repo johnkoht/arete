@@ -3,6 +3,8 @@
  * Used by install (new workspaces) and update (backfill missing structure).
  */
 
+import type { IDETarget } from './adapters/ide-adapter.js';
+
 /**
  * Base directories that should exist in an Areté workspace (IDE-agnostic).
  */
@@ -36,6 +38,7 @@ export const BASE_WORKSPACE_DIRS = [
   'templates/plans',
   '.agents',
   '.agents/skills',
+  '.agents/profiles',
   '.credentials',
   'templates',
   'templates/inputs',
@@ -44,7 +47,19 @@ export const BASE_WORKSPACE_DIRS = [
 ];
 
 /**
+ * IDE-aware rules allow list. Claude gets a reduced set; Cursor gets all.
+ */
+export function getProductRulesAllowList(ideTarget: IDETarget): string[] {
+  const base = ['agent-memory.mdc', 'context-management.mdc', 'project-management.mdc'];
+  if (ideTarget === 'cursor') {
+    return [...base, 'routing-mandatory.mdc', 'pm-workspace.mdc', 'arete-vision.mdc', 'qmd-search.mdc'];
+  }
+  return base; // Claude: reduced set
+}
+
+/**
  * Rule files to copy on install (product rules only).
+ * @deprecated Use getProductRulesAllowList(ideTarget) instead.
  */
 export const PRODUCT_RULES_ALLOW_LIST = [
   'routing-mandatory.mdc',

@@ -3,6 +3,7 @@ export * from './models/index.js';
 export * from './storage/index.js';
 export * from './search/index.js';
 export * from './services/index.js';
+export * from './generators/index.js';
 export * from './utils/index.js';
 export { isAreteWorkspace, findWorkspaceRoot, getWorkspacePaths, parseSourceType, getSourcePaths, getRelevantContext, searchMemory, assembleBriefing, routeToSkill, resolveEntity, resolveEntities, listPeople, getPersonBySlug, getPersonByEmail, updatePeopleIndex, slugifyPersonName, PEOPLE_CATEGORIES, } from './compat/index.js';
 export type { ListPeopleOptions, BriefingOptions } from './compat/index.js';

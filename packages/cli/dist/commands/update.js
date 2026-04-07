@@ -9,6 +9,7 @@ export function registerUpdateCommand(program) {
         .command('update')
         .description('Pull latest skills/tools/integrations from upstream')
         .option('--check', 'Check for updates without applying')
+        .option('--ide <target>', 'Override IDE target (cursor or claude) — useful for adding a second IDE')
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
@@ -26,7 +27,17 @@ export function registerUpdateCommand(program) {
         }
         // Load config once for ideTarget and qmd_collection
         const config = await loadConfig(services.storage, root);
-        const ideTarget = config.ide_target ?? 'cursor';
+        const ideOverride = opts.ide;
+        if (ideOverride && ideOverride !== 'cursor' && ideOverride !== 'claude') {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Invalid IDE target: ${ideOverride}. Must be "cursor" or "claude".` }));
+            }
+            else {
+                error(`Invalid IDE target: ${ideOverride}. Must be "cursor" or "claude".`);
+            }
+            process.exit(1);
+        }
+        const ideTarget = ideOverride ?? config.ide_target ?? 'cursor';
         const packageRoot = getPackageRoot();
         const basePaths = getSourcePaths(packageRoot);
         const sourcePaths = {
@@ -36,10 +47,11 @@ export function registerUpdateCommand(program) {
             rules: join(basePaths.rules, ideTarget === 'claude' ? 'claude-code' : 'cursor'),
             integrations: basePaths.integrations,
             templates: basePaths.templates,
+            profiles: basePaths.profiles,
             guide: basePaths.guide,
             updates: basePaths.updates,
         };
-        const result = await services.workspace.update(root, { sourcePaths });
+        const result = await services.workspace.update(root, { sourcePaths, ideTarget: ideOverride });
         // Run goal migration (converts quarter.md to individual goal files)
         let migrationResult;
         if (!opts.check) {

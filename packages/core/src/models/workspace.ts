@@ -166,6 +166,8 @@ export type UpdateResult = {
 export type UpdateWorkspaceOptions = {
   /** Pre-resolved source paths used to sync canonical runtime assets (skills/rules/tools). */
   sourcePaths?: SourcePaths;
+  /** Override IDE target (useful for adding a second IDE without changing arete.yaml). */
+  ideTarget?: 'cursor' | 'claude';
 };
 
 /** Return type of parseSourceType() */
@@ -186,4 +188,6 @@ export type SourcePaths = {
   guide: string;
   /** Path to UPDATES.md file in the runtime/dist package (release notes) */
   updates: string;
+  /** Path to agent profiles directory in the runtime package */
+  profiles?: string;
 };
