@@ -1,12 +1,12 @@
 ---
 title: Google Workspace CLI Integration
 slug: gws-integration
-status: approved
+status: completed
 size: large
 tags: [integration, google-workspace, gws, gmail, drive, docs, sheets, people]
 created: 2026-03-25T22:52:37.393Z
-updated: 2026-04-04T00:00:00.000Z
-completed: null
+updated: 2026-04-05T00:00:00.000Z
+completed: 2026-04-05T00:00:00.000Z
 execution: null
 has_review: true
 has_pre_mortem: true

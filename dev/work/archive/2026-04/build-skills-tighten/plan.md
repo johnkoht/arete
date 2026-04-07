@@ -1,9 +1,10 @@
 ---
 title: "BUILD Skills Tighten-Up"
 slug: build-skills-tighten
-status: approved
+status: completed
 size: large
 created: 2026-04-04
+completed: 2026-04-05
 has_prd: false
 has_pre_mortem: true
 has_review: true
