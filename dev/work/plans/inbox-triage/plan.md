@@ -1,12 +1,12 @@
 ---
 title: "Inbox: Universal Content Ingest & Triage"
 slug: inbox-triage
-status: approved
+status: complete
 size: medium
 tags: [inbox, ingest, triage, skill, workspace]
 created: "2026-04-06T00:00:00.000Z"
 updated: "2026-04-06T00:00:00.000Z"
-completed: null
+completed: "2026-04-06"
 execution: null
 has_review: true
 has_pre_mortem: true
