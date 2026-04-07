@@ -67,8 +67,19 @@ function parseMeetingFile(content) {
         const agenda = typeof fm.agenda === 'string' ? fm.agenda : undefined;
         // Parse area slug if present
         const area = typeof fm.area === 'string' && fm.area.trim() !== '' ? fm.area.trim() : undefined;
+        // Parse agent-facing fields (written by meeting-apply after extraction)
+        const topics = Array.isArray(fm.topics) ? fm.topics.map(String) : undefined;
+        const open_action_items = typeof fm.open_action_items === 'number' ? fm.open_action_items : undefined;
+        const my_commitments = typeof fm.my_commitments === 'number' ? fm.my_commitments : undefined;
+        const their_commitments = typeof fm.their_commitments === 'number' ? fm.their_commitments : undefined;
+        const decisions_count = typeof fm.decisions_count === 'number' ? fm.decisions_count : undefined;
+        const learnings_count = typeof fm.learnings_count === 'number' ? fm.learnings_count : undefined;
         return {
-            frontmatter: { title, date, attendees, attendee_ids, agenda, area },
+            frontmatter: {
+                title, date, attendees, attendee_ids, agenda, area,
+                topics, open_action_items, my_commitments, their_commitments,
+                decisions_count, learnings_count,
+            },
             body,
         };
     }
@@ -665,5 +676,5 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
 // ---------------------------------------------------------------------------
 // Exports for testing (internal functions exposed for unit tests)
 // ---------------------------------------------------------------------------
-export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, };
+export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, parseMeetingFile, };
 //# sourceMappingURL=meeting-context.js.map

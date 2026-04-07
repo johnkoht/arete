@@ -52,6 +52,8 @@ export type MeetingIntelligence = {
     nextSteps: string[];
     decisions: string[];
     learnings: string[];
+    /** Slugified topic keywords (e.g. 'email-templates', 'q2-planning'). 3–6 items. */
+    topics?: string[];
 };
 /** Validation warning for rejected items. */
 export type ValidationWarning = {
