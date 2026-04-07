@@ -22,8 +22,9 @@ import type { MemoryService } from '../../src/services/memory.js';
 
 type MockStore = Map<string, string>;
 
-function createMockStorage(initial: MockStore = new Map()): StorageAdapter & { store: MockStore } {
-  const store: MockStore = new Map(initial);
+function createMockStorage(initial?: MockStore): StorageAdapter & { store: MockStore } {
+  // Use the passed Map reference directly — never copy it (see LEARNINGS.md)
+  const store: MockStore = initial ?? new Map();
   return {
     store,
     async read(path: string): Promise<string | null> {
