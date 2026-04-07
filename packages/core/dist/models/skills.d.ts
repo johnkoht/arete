@@ -33,6 +33,7 @@ export type SkillDefinition = {
     createsProject?: boolean;
     projectTemplate?: string;
     integration?: SkillIntegration;
+    profile?: string;
 };
 /** Skill metadata extracted from frontmatter */
 export type SkillMetadata = {

@@ -120,3 +120,24 @@ staged_item_confidence:
 ```
 
 **Fallback requirement**: Any skill using Review UI MUST have a CLI fallback path. The web UI is an enhancement, not a requirement.
+
+---
+
+## 2026-04-05: Profile reference pattern for skills
+
+**Context**: Skills can reference agent profiles stored in `.agents/profiles/{name}.md`. These profiles define behavioral personas (e.g., `pm-orchestrator`, `pm-advisor`, `plan-reviewer`) that shape how the agent executes the skill.
+
+**How it works**: A skill's frontmatter includes a `profile` field (e.g., `profile: pm-orchestrator`). During Claude Code command generation (`packages/core/src/generators/skill-commands.ts`), the generated slash command includes an instruction to adopt the profile before executing the skill workflow.
+
+**Correct pattern**:
+```yaml
+# In SKILL.md frontmatter:
+profile: pm-orchestrator
+```
+The generated command then includes: `Adopt the voice and approach described in .agents/profiles/pm-orchestrator.md while executing this skill.`
+
+**Key constraints**:
+- Profile files are always refreshed from source on `arete update` (they're reference docs, not user content)
+- Profile names must match filenames in `packages/runtime/profiles/` (without `.md` extension)
+- Not all skills need profiles — only skills that benefit from a distinct behavioral persona
+- For Cursor IDE, profiles are informational; for Claude Code, they're injected into slash commands

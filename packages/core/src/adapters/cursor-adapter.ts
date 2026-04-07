@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import type { IDEAdapter, CanonicalRule, IDETarget } from './ide-adapter.js';
 import type { AreteConfig } from '../models/workspace.js';
+import type { SkillDefinition } from '../models/skills.js';
 import { readPrebuiltAgentsMd, generateMinimalAgentsMd } from './read-agents-md.js';
 
 export class CursorAdapter implements IDEAdapter {
@@ -35,6 +36,14 @@ export class CursorAdapter implements IDEAdapter {
 
   integrationsDir(): string {
     return '.cursor/integrations';
+  }
+
+  commandsDir(): string {
+    return '';
+  }
+
+  generateCommands(_skills: SkillDefinition[]): Record<string, string> {
+    return {};
   }
 
   formatRule(rule: CanonicalRule, _config: AreteConfig): string {
@@ -68,7 +77,8 @@ export class CursorAdapter implements IDEAdapter {
   generateRootFiles(
     config: AreteConfig,
     _workspaceRoot: string,
-    _sourceRulesDir?: string
+    _sourceRulesDir?: string,
+    _skills?: SkillDefinition[]
   ): Record<string, string> {
     const timestamp = new Date().toISOString();
     const version = config.version || '1.0.0';

@@ -120,6 +120,7 @@ export class SkillService {
         const requiresBriefing = typeof fm.requires_briefing === 'boolean' ? fm.requires_briefing : undefined;
         const createsProject = typeof fm.creates_project === 'boolean' ? fm.creates_project : undefined;
         const projectTemplate = typeof fm.project_template === 'string' ? fm.project_template : undefined;
+        const profile = typeof fm.profile === 'string' ? fm.profile : undefined;
         const merged = { ...fm, ...sidecar };
         // Integration: sidecar replaces frontmatter entirely (same merge pattern)
         const integration = parseIntegration(merged.integration);
@@ -137,6 +138,7 @@ export class SkillService {
             createsProject: merged.creates_project ?? createsProject,
             projectTemplate: merged.project_template ?? projectTemplate,
             integration,
+            profile: merged.profile ?? profile,
         };
     }
     async install(source, options) {

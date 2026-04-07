@@ -4,6 +4,20 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 5, 2026
+
+### Claude Code Support
+
+**Areté now works natively with Claude Code.** Run `arete install --ide claude` to set up a Claude Code workspace, or `arete update --ide claude` to add Claude Code support to an existing workspace.
+
+- **Slash commands** — Every skill is available as a `/skill-name` command in Claude Code. Commands are auto-generated from skill definitions and regenerated on `arete update`.
+- **Profiles** — Three new agent profiles: `pm-orchestrator` (plan execution), `pm-advisor` (strategic guidance), `plan-reviewer` (structured plan critique). Skills reference these via `.agents/profiles/`.
+- **New skills** — `wrap` (end-of-session protocol), `pre-mortem` (risk analysis before execution), `review-plan` (second-opinion plan review).
+- **`--ide` flag** — `arete update --ide claude` provisions Claude Code config alongside your existing Cursor setup. Supports running both IDEs on the same workspace.
+- **Consolidated rules** — Claude Code uses 3 focused rules (vs Cursor's 7). The remaining guidance is consolidated into `CLAUDE.md` for better context window efficiency.
+
+---
+
 ## Week of April 4, 2026
 
 ### Meeting Review: Faster Approvals

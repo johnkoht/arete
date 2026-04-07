@@ -1,0 +1,1 @@
+{"version":3,"file":"skill-commands.d.ts","sourceRoot":"","sources":["../../src/generators/skill-commands.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,qBAAqB,CAAC;AAE3D;;GAEG;AACH,wBAAgB,oBAAoB,CAAC,KAAK,EAAE,eAAe,GAAG,MAAM,CA2BnE;AAED;;;GAGG;AACH,wBAAgB,wBAAwB,CACtC,MAAM,EAAE,eAAe,EAAE,GACxB,MAAM,CAAC,MAAM,EAAE,MAAM,CAAC,CAMxB"}

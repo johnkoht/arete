@@ -8,6 +8,8 @@ export * from './storage/index.js';
 export * from './search/index.js';
 // Services
 export * from './services/index.js';
+// Generators
+export * from './generators/index.js';
 // Utilities
 export * from './utils/index.js';
 // Compatibility shims (legacy function APIs)
