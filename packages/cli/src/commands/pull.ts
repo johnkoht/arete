@@ -11,8 +11,42 @@ import { header, listItem, success, error, info } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
+import { existsSync, readdirSync, readFileSync } from 'fs';
+import { parse as parseYaml } from 'yaml';
+
 const DEFAULT_DAYS = 7;
 const DEFAULT_NOTION_DESTINATION = 'resources/notes';
+
+/** Show a tip about unprocessed inbox items (non-JSON only). */
+function showInboxTip(root: string): void {
+  const inboxDir = join(root, 'inbox');
+  if (!existsSync(inboxDir)) return;
+  try {
+    const files = readdirSync(inboxDir).filter(
+      (f) => f.endsWith('.md') && f !== 'README.md',
+    );
+    // Count unprocessed (no status, no frontmatter, or status: unprocessed)
+    let unprocessed = 0;
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(inboxDir, file), 'utf8');
+        const match = content.match(/^---\n([\s\S]*?)\n---/);
+        if (!match) {
+          unprocessed++;
+          continue;
+        }
+        const data = parseYaml(match[1]) as Record<string, unknown>;
+        if (!data['status'] || data['status'] === 'unprocessed') unprocessed++;
+      } catch {
+        unprocessed++;
+      }
+    }
+    if (unprocessed > 0) {
+      console.log('');
+      info(`You have ${unprocessed} unprocessed item${unprocessed === 1 ? '' : 's'} in inbox/. Run inbox-triage to process them.`);
+    }
+  } catch { /* non-critical */ }
+}
 
 export function registerPullCommand(program: Command): void {
   program
@@ -122,6 +156,7 @@ export function registerPullCommand(program: Command): void {
             error(`Fathom pull failed: ${result.errors.join(', ')}`);
           }
           displayQmdResult(qmdResult);
+          showInboxTip(root);
           return;
         }
 
@@ -162,6 +197,7 @@ export function registerPullCommand(program: Command): void {
             error(`Krisp pull failed: ${result.errors.join(', ')}`);
           }
           displayQmdResult(qmdResult);
+          showInboxTip(root);
           return;
         }
 

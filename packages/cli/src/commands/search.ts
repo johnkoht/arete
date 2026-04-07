@@ -60,6 +60,7 @@ const VALID_SCOPES: readonly QmdScope[] = [
   'context',
   'projects',
   'people',
+  'inbox',
 ] as const;
 
 /** Search result item */
@@ -932,7 +933,7 @@ export function registerSearchCommand(program: Command): void {
     .description('Search across workspace with semantic matching')
     .option(
       '--scope <scope>',
-      'Limit to scope (all|memory|meetings|context|projects|people)',
+      'Limit to scope (all|memory|meetings|context|projects|people|inbox)',
       'all',
     )
     .option('--limit <n>', 'Maximum results', '15')

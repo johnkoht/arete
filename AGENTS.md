@@ -85,6 +85,9 @@
 |arete pull calendar [--today|--days N]:Pull calendar events
 |arete pull fathom [--days N]:Pull Fathom recordings
 |arete calendar create --title <title> --start <datetime>:Create a calendar event
+|arete inbox add --title <t> --body <b> [--source <s>]:Add text item to inbox for triage
+|arete inbox add --url <url>:Fetch URL and add to inbox as article
+|arete inbox add --file <path>:Copy file to inbox (binary gets companion .md)
 |arete template resolve --skill <id> --variant <name>:Resolve and print the active template for a skill
 |arete template list [--skill <id>]:List all skill templates; shows which have workspace overrides
 |arete template view --skill <id> --variant <name>:View resolved template content with source annotation

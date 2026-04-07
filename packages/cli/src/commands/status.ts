@@ -129,6 +129,35 @@ function countMemoryItems(filePath: string): number {
 }
 
 /**
+ * Count inbox items by status.
+ */
+function countInboxItems(inboxDir: string): { unprocessed: number; needsReview: number } {
+  if (!existsSync(inboxDir)) return { unprocessed: 0, needsReview: 0 };
+  try {
+    const files = readdirSync(inboxDir).filter(
+      (f) => f.endsWith('.md') && f !== 'README.md',
+    );
+    let needsReview = 0;
+    let triaged = 0;
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(inboxDir, file), 'utf8');
+        const match = content.match(/^---\n([\s\S]*?)\n---/);
+        if (match) {
+          const data = parseYaml(match[1]) as Record<string, unknown>;
+          if (data['status'] === 'needs-review') needsReview++;
+          else if (data['status'] === 'triaged') triaged++;
+        }
+      } catch { /* count as unprocessed */ }
+    }
+    const unprocessed = files.length - needsReview - triaged;
+    return { unprocessed, needsReview };
+  } catch {
+    return { unprocessed: 0, needsReview: 0 };
+  }
+}
+
+/**
  * Count active projects (subdirs of projects/active/).
  */
 function countActiveProjects(projectsDir: string): number {
@@ -200,6 +229,7 @@ export function registerStatusCommand(program: Command): void {
       }).length;
 
       const activeProjectsCount = countActiveProjects(join(root, 'projects', 'active'));
+      const inbox = countInboxItems(join(root, 'inbox'));
 
       const memoryItemsDir = join(root, '.arete', 'memory', 'items');
       const decisionsCount = countMemoryItems(join(memoryItemsDir, 'decisions.md'));
@@ -252,6 +282,10 @@ export function registerStatusCommand(program: Command): void {
           open: openCommitments.length,
           overdue: overdueCount,
         },
+        inbox: {
+          unprocessed: inbox.unprocessed,
+          needsReview: inbox.needsReview,
+        },
         projects: { active: activeProjectsCount },
         memory: {
           decisions: decisionsCount,
@@ -300,6 +334,14 @@ export function registerStatusCommand(program: Command): void {
       console.log(
         `  ${chalk.dim('📋 Active Projects:')} ${chalk.bold(String(activeProjectsCount))}`,
       );
+      if (inbox.unprocessed > 0 || inbox.needsReview > 0) {
+        const parts: string[] = [];
+        if (inbox.unprocessed > 0) parts.push(`${inbox.unprocessed} unprocessed`);
+        if (inbox.needsReview > 0) parts.push(`${inbox.needsReview} needs review`);
+        console.log(
+          `  ${chalk.dim('📥 Inbox:')} ${chalk.yellow(parts.join(', '))}`,
+        );
+      }
       console.log(
         `  ${chalk.dim('🧠 Memory:')} ${chalk.bold(String(decisionsCount))} decisions, ${chalk.bold(String(learningsCount))} learnings`,
       );

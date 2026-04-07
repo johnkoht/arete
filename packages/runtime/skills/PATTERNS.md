@@ -476,6 +476,43 @@ Wait for user confirmation before proceeding.
 - Synthesis: Max 10 paragraphs; focus on actionable themes, not exhaustive coverage
 - Overall: The synthesis is the primary deliverable. User's time > completeness.
 
+**See also**: `inbox_triage` — workspace-scoped triage that may route items TO a project's `inputs/`, where `research_intake` then processes them.
+
+---
+
+## inbox_triage
+
+**Purpose**: Classify, route, and extract insights from items in the workspace `inbox/` directory. Generalizes `research_intake` from project-scoped to workspace-scoped: triage decides WHERE content goes, then project-scoped patterns like `research_intake` process it further.
+
+**Used by**: inbox-triage
+
+**Relationship to research_intake**: These patterns are sequential, not competing:
+- `inbox_triage`: Workspace-scoped. Processes top-level `inbox/`. Routes items to any workspace destination (projects, areas, resources, memory).
+- `research_intake`: Project-scoped. Processes `inputs/` within a specific project. Output stays in project `working/`.
+- Triage may route TO a project's `inputs/`, where `research_intake` later processes.
+
+**Steps**:
+
+1. **Scan inbox/** — List all files in `inbox/` (excluding README.md). Separate into unprocessed and needs-review items.
+
+2. **Assemble context bundle** — Follow `context_bundle_assembly`. Include strategy, goals, active areas, active projects, existing memory, and people slugs. Assembled once, reused for all items.
+
+3. **Analyze each item** — For each unprocessed item:
+   - Read content (handle `.md`/`.txt` directly; `.pdf` best-effort; images via vision; other binary flagged as needs-review)
+   - Classify content type (article, research, conversation, person-intel, note, decision, reference, image, unsupported)
+   - Extract entities by matching against workspace people, projects, areas, goals
+   - Apply `significance_analyst` judgment: cite specific bundle content that grounds the routing decision
+
+4. **Decide routing** — Assign destination and confidence. High confidence (>= 0.8): project inputs, area reference, or specific resource folder. Medium (0.6-0.8): general resources. Low (< 0.6): stays in inbox with `status: needs-review`.
+
+5. **Present triage plan** — Table with item, type, destination, confidence, and grounded "Why" column. Memory updates listed separately. User must approve before any files move.
+
+6. **Execute routing** — Move files, update frontmatter (`status: triaged`, `triaged_to`, `triaged_date`), apply approved memory updates, run `arete index`.
+
+**Outputs**: Routed files in their new locations with triage metadata. Updated memory items if approved.
+
+**See also**: `research_intake` — project-scoped input processing. `significance_analyst` — the reasoning pattern used for routing decisions. `context_bundle_assembly` — how the context bundle is built.
+
 ---
 
 ## skill_integration

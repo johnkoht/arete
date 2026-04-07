@@ -847,6 +847,71 @@
         "Scoring dimensions: due date (0-40), commitment (0-25), meeting relevance (0-20), week priority (0-15)"
       ],
       "lastVerified": "2026-03-28"
+    },
+    {
+      "id": "inbox-cli",
+      "name": "Inbox CLI Command",
+      "type": "cli-command",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "CLI command for adding items to the workspace inbox. Supports text (--title/--body), URL fetch (--url), and file copy (--file) with companion .md for binary files.",
+      "implementationPaths": [
+        "packages/cli/src/commands/inbox.ts"
+      ],
+      "entrypoints": [
+        "arete inbox add --title <t> --body <b>",
+        "arete inbox add --url <url>",
+        "arete inbox add --file <path>"
+      ],
+      "readBeforeChange": [
+        "packages/cli/src/commands/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "notes": [
+        "Supports --json and --skip-qmd flags per CLI conventions",
+        "Calls refreshQmdIndex() after writing files",
+        "Uses slugify() from @arete/core for filename generation"
+      ],
+      "lastVerified": "2026-04-06"
+    },
+    {
+      "id": "inbox-triage-skill",
+      "name": "Inbox Triage Skill",
+      "type": "skill",
+      "provenance": "built",
+      "status": "active",
+      "usageStatus": "active",
+      "owner": "build",
+      "platform": "cross",
+      "summary": "Workspace-scoped content triage: classify inbox items by type, match against workspace entities, route to destinations with user approval.",
+      "implementationPaths": [
+        "packages/runtime/skills/inbox-triage/SKILL.md"
+      ],
+      "entrypoints": [
+        "inbox-triage",
+        "triage my inbox",
+        "process inbox"
+      ],
+      "readBeforeChange": [
+        "packages/runtime/skills/PATTERNS.md",
+        "packages/runtime/skills/LEARNINGS.md"
+      ],
+      "testCommands": [
+        "npm run typecheck"
+      ],
+      "notes": [
+        "Composes context_bundle_assembly + significance_analyst patterns",
+        "Routes TO project inputs/ where research_intake later processes",
+        "Approval gate: never auto-moves files",
+        "Graceful degradation tiers for non-markdown files"
+      ],
+      "lastVerified": "2026-04-06"
     }
   ]
 }

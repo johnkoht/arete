@@ -565,7 +565,7 @@ describe('generateScopedCollectionName', () => {
 
 describe('SCOPE_PATHS', () => {
   it('has 10 scopes', () => {
-    assert.equal(Object.keys(SCOPE_PATHS).length, 10);
+    assert.equal(Object.keys(SCOPE_PATHS).length, 11);
   });
 
   it('has all expected scopes', () => {
@@ -584,7 +584,7 @@ describe('SCOPE_PATHS', () => {
 
 describe('ALL_SCOPES', () => {
   it('has 10 scopes', () => {
-    assert.equal(ALL_SCOPES.length, 10);
+    assert.equal(ALL_SCOPES.length, 11);
   });
 
   it('includes all expected scopes', () => {
@@ -737,7 +737,7 @@ describe('ensureQmdCollections', () => {
     }
   });
 
-  it('creates all 10 collections when all paths exist', async () => {
+  it('creates all 11 collections when all paths exist', async () => {
     const calls: Array<{ file: string; args: string[]; cwd: string }> = [];
     const existingPaths = new Set([
       '/workspace',  // all
@@ -750,6 +750,7 @@ describe('ensureQmdCollections', () => {
       '/workspace/goals',
       '/workspace/now',
       '/workspace/resources',
+      '/workspace/inbox',
     ]);
     const deps = makeCollectionsDeps({ calls, existingPaths });
     const prev = process.env.ARETE_SEARCH_FALLBACK;
@@ -757,7 +758,7 @@ describe('ensureQmdCollections', () => {
       delete process.env.ARETE_SEARCH_FALLBACK;
       const result = await ensureQmdCollections('/workspace', undefined, deps);
 
-      assert.equal(Object.keys(result.collections).length, 10);
+      assert.equal(Object.keys(result.collections).length, 11);
       assert.ok(result.collections.all);
       assert.ok(result.collections.memory);
       assert.ok(result.collections.meetings);
@@ -768,6 +769,7 @@ describe('ensureQmdCollections', () => {
       assert.ok(result.collections.goals);
       assert.ok(result.collections.now);
       assert.ok(result.collections.resources);
+      assert.ok(result.collections.inbox);
 
       // All scopes should not be skipped
       for (const scope of result.scopes) {

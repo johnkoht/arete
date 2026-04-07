@@ -14,6 +14,7 @@ export const BASE_WORKSPACE_DIRS = [
   'context',
   'context/_history',
   'areas',
+  'inbox',
   '.arete',
   '.arete/memory',
   '.arete/memory/items',
@@ -245,6 +246,14 @@ recurring_meetings:
 
 ## Notes
 <!-- Working observations and context -->
+`,
+  'inbox/README.md': `# Inbox
+
+Drop anything here for triage: articles, notes, PDFs, screenshots, research.
+
+Run \`inbox-triage\` to classify, route, and extract insights from inbox contents.
+
+Files can arrive from any source: web clippers, agent chat, manual drop, CLI.
 `,
   '.arete/memory/items/agent-observations.md': `# Agent Observations
 

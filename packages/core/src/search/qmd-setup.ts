@@ -416,6 +416,7 @@ export const SCOPE_PATHS: Record<QmdScope, string> = {
   goals: 'goals',
   now: 'now',
   resources: 'resources',
+  inbox: 'inbox',
 };
 
 /** All scopes in order of creation */
@@ -430,6 +431,7 @@ export const ALL_SCOPES: readonly QmdScope[] = [
   'goals',
   'now',
   'resources',
+  'inbox',
 ] as const;
 
 /** Result for a single scope's collection setup */

@@ -68,7 +68,7 @@ function buildChecklist(hasWebsite: boolean, hasFolder: boolean, hasPaste: boole
   ];
 
   if (!hasWebsite) checks.push('- [ ] Optional: add company website input for better domain signals');
-  if (!hasFolder) checks.push('- [ ] Optional: add docs in inputs/onboarding-dump/ for richer evidence');
+  if (!hasFolder) checks.push('- [ ] Optional: add docs in inbox/ for richer evidence');
   if (!hasPaste) checks.push('- [ ] Optional: paste team notes for missing context');
 
   return checks.join('\n');
