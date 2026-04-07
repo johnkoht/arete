@@ -94,7 +94,7 @@ Collect context from one or more input types. Use fallback matrix when inputs ar
 | Priority | Input | How to Collect |
 |---|---|---|
 | 1 | **Pasted text** | Ask user to paste content directly into chat |
-| 2 | **Folder** | Read files from `inputs/onboarding-dump/` |
+| 2 | **Folder** | Read files from `inbox/` |
 | 3 | **Website URL** | Fetch and parse company website |
 | 4 | **Chat upload** | If supported by environment (optional) |
 
@@ -114,7 +114,7 @@ I'll extract the key information and create draft context files.
 
 **For folder:**
 ```
-I'll check inputs/onboarding-dump/ for files to process.
+I'll check inbox/ for files to process.
 
 Supported formats: .md, .txt, .pdf (text only), .docx (text only)
 
@@ -259,7 +259,7 @@ Also generate a one-page summary:
 [What's missing that should be added manually]
 ```
 
-Save to: `inputs/onboarding-dump/draft-strategy-summary.md`
+Save to: `inbox/draft-strategy-summary.md`
 
 ---
 
@@ -277,7 +277,7 @@ I've generated the following draft files:
 - [ ] goals/strategy.md — Review priorities
 
 **Summary:**
-- [ ] inputs/onboarding-dump/draft-strategy-summary.md
+- [ ] inbox/draft-strategy-summary.md
 
 **Review Checklist:**
 1. Open each file and verify accuracy

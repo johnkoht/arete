@@ -8,6 +8,7 @@ import { join } from 'path';
 import { readdirSync, readFileSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 import { header, listItem, section, error, info, formatPath } from '../formatters.js';
+import { countInboxItems } from '../lib/inbox-count.js';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -178,6 +179,7 @@ export function registerStatusCommand(program) {
             return !Number.isNaN(d.getTime()) && c.date.slice(0, 10) <= todayStr;
         }).length;
         const activeProjectsCount = countActiveProjects(join(root, 'projects', 'active'));
+        const inbox = countInboxItems(join(root, 'inbox'));
         const memoryItemsDir = join(root, '.arete', 'memory', 'items');
         const decisionsCount = countMemoryItems(join(memoryItemsDir, 'decisions.md'));
         const learningsCount = countMemoryItems(join(memoryItemsDir, 'learnings.md'));
@@ -227,6 +229,10 @@ export function registerStatusCommand(program) {
                 open: openCommitments.length,
                 overdue: overdueCount,
             },
+            inbox: {
+                unprocessed: inbox.unprocessed,
+                needsReview: inbox.needsReview,
+            },
             projects: { active: activeProjectsCount },
             memory: {
                 decisions: decisionsCount,
@@ -262,6 +268,14 @@ export function registerStatusCommand(program) {
             : '';
         console.log(`  ${chalk.dim('✅ Commitments:')} ${chalk.bold(String(openCommitments.length))} open${commitmentBadge}`);
         console.log(`  ${chalk.dim('📋 Active Projects:')} ${chalk.bold(String(activeProjectsCount))}`);
+        if (inbox.unprocessed > 0 || inbox.needsReview > 0) {
+            const parts = [];
+            if (inbox.unprocessed > 0)
+                parts.push(`${inbox.unprocessed} unprocessed`);
+            if (inbox.needsReview > 0)
+                parts.push(`${inbox.needsReview} needs review`);
+            console.log(`  ${chalk.dim('📥 Inbox:')} ${chalk.yellow(parts.join(', '))}`);
+        }
         console.log(`  ${chalk.dim('🧠 Memory:')} ${chalk.bold(String(decisionsCount))} decisions, ${chalk.bold(String(learningsCount))} learnings`);
         if (areaMemoryTotal > 0) {
             const staleBadge = areaMemoryStale > 0

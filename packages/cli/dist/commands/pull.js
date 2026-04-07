@@ -7,8 +7,22 @@ import { tmpdir } from 'os';
 import { header, listItem, success, error, info } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
 import { displayQmdResult } from '../lib/qmd-output.js';
+import { countInboxItems } from '../lib/inbox-count.js';
 const DEFAULT_DAYS = 7;
 const DEFAULT_NOTION_DESTINATION = 'resources/notes';
+/** Show a tip about unprocessed inbox items (non-JSON only). */
+function showInboxTip(root) {
+    const inbox = countInboxItems(join(root, 'inbox'));
+    if (inbox.unprocessed > 0) {
+        console.log('');
+        info(`You have ${inbox.unprocessed} unprocessed item${inbox.unprocessed === 1 ? '' : 's'} in inbox/. Run inbox-triage to process them.`);
+    }
+}
+/** Get inbox counts for JSON output. Returns undefined if inbox is empty. */
+function getInboxForJson(root) {
+    const inbox = countInboxItems(join(root, 'inbox'));
+    return inbox.unprocessed > 0 ? { unprocessed: inbox.unprocessed } : undefined;
+}
 export function registerPullCommand(program) {
     program
         .command('pull [integration]')
@@ -36,29 +50,41 @@ export function registerPullCommand(program) {
         }
         const days = parseInt(opts.days ?? String(DEFAULT_DAYS), 10);
         if (integration === 'calendar') {
-            return pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
+            await pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
+            if (!opts.json)
+                showInboxTip(root);
+            return;
         }
         if (integration === 'notion') {
-            return pullNotion(services, root, {
+            await pullNotion(services, root, {
                 pages: opts.page ?? [],
                 destination: opts.destination ?? DEFAULT_NOTION_DESTINATION,
                 dryRun: Boolean(opts.dryRun),
                 skipQmd: Boolean(opts.skipQmd),
                 json: Boolean(opts.json),
             });
+            if (!opts.json)
+                showInboxTip(root);
+            return;
         }
         if (integration === 'gmail') {
-            return pullGmailHelper(services, root, {
+            await pullGmailHelper(services, root, {
                 days,
                 json: opts.json ?? false,
             });
+            if (!opts.json)
+                showInboxTip(root);
+            return;
         }
         if (integration === 'drive') {
-            return pullDriveHelper(services, root, {
+            await pullDriveHelper(services, root, {
                 days,
                 json: opts.json ?? false,
                 query: opts.query,
             });
+            if (!opts.json)
+                showInboxTip(root);
+            return;
         }
         if (integration === 'fathom' || !integration) {
             const config = await loadConfig(services.storage, root);
@@ -69,14 +95,18 @@ export function registerPullCommand(program) {
                 qmdResult = await refreshQmdIndex(root, config.qmd_collection);
             }
             if (opts.json) {
-                console.log(JSON.stringify({
+                const jsonOutput = {
                     success: result.errors.length === 0,
                     integration: 'fathom',
                     itemsProcessed: result.itemsProcessed,
                     itemsCreated: result.itemsCreated,
                     errors: result.errors,
                     qmd: qmdResult ?? { indexed: false, skipped: true },
-                }, null, 2));
+                };
+                const inboxData = getInboxForJson(root);
+                if (inboxData)
+                    jsonOutput.inbox = inboxData;
+                console.log(JSON.stringify(jsonOutput, null, 2));
                 return;
             }
             if (!opts.json) {
@@ -92,6 +122,7 @@ export function registerPullCommand(program) {
                 error(`Fathom pull failed: ${result.errors.join(', ')}`);
             }
             displayQmdResult(qmdResult);
+            showInboxTip(root);
             return;
         }
         if (integration === 'krisp') {
@@ -103,14 +134,18 @@ export function registerPullCommand(program) {
                 qmdResult = await refreshQmdIndex(root, config.qmd_collection);
             }
             if (opts.json) {
-                console.log(JSON.stringify({
+                const jsonOutput = {
                     success: result.errors.length === 0,
                     integration: 'krisp',
                     itemsProcessed: result.itemsProcessed,
                     itemsCreated: result.itemsCreated,
                     errors: result.errors,
                     qmd: qmdResult ?? { indexed: false, skipped: true },
-                }, null, 2));
+                };
+                const inboxData = getInboxForJson(root);
+                if (inboxData)
+                    jsonOutput.inbox = inboxData;
+                console.log(JSON.stringify(jsonOutput, null, 2));
                 return;
             }
             header('Pull Latest Data');
@@ -124,6 +159,7 @@ export function registerPullCommand(program) {
                 error(`Krisp pull failed: ${result.errors.join(', ')}`);
             }
             displayQmdResult(qmdResult);
+            showInboxTip(root);
             return;
         }
         if (opts.json) {

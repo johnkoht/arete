@@ -150,7 +150,7 @@ Perfect! Let's get your context into the workspace.
 You can:
   1. Paste content directly in chat
   2. Share your company website URL
-  3. Drop files into inputs/onboarding-dump/ folder
+  3. Drop files into inbox/ folder
 
 Which would you like to start with?
 ```
@@ -300,6 +300,7 @@ Celebrate completion and provide next steps:
 - Try `daily-plan` before tomorrow's meetings
 - Run `process-meetings` after your next meeting
 - Explore more: Ask "What can Areté do?" or "Show me all skills"
+- Drop files into `inbox/` anytime — articles, notes, PDFs, screenshots. Run `inbox-triage` to classify and route them.
 - Customize: Edit context files as your work evolves
 
 **Need help?** Say "Help with [skill name]" or "What should I do?"

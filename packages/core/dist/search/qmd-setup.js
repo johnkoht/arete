@@ -301,6 +301,7 @@ export const SCOPE_PATHS = {
     goals: 'goals',
     now: 'now',
     resources: 'resources',
+    inbox: 'inbox',
 };
 /** All scopes in order of creation */
 export const ALL_SCOPES = [
@@ -314,6 +315,7 @@ export const ALL_SCOPES = [
     'goals',
     'now',
     'resources',
+    'inbox',
 ];
 /**
  * Generate a unique scoped collection name from workspace path and scope.

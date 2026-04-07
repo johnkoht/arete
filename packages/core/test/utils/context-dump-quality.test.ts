@@ -20,7 +20,7 @@ describe('context dump quality utilities', () => {
       },
       {
         type: 'folder',
-        source: 'inputs/onboarding-dump',
+        source: 'inbox',
         content: 'User interviews mention setup confusion and unclear success criteria.',
       },
     ]);
@@ -64,7 +64,7 @@ describe('context dump quality utilities', () => {
       },
       {
         type: 'folder',
-        source: 'inputs/onboarding-dump',
+        source: 'inbox',
         content: 'Research notes: Users report confusion during setup and ask for clearer guidance. Strategy docs prioritize activation and second-skill usage.',
       },
       {

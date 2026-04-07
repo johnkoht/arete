@@ -33,6 +33,7 @@ import { registerCredentialsCommand } from './commands/credentials.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerSearchCommand } from './commands/search.js';
 import { registerCreateCommands } from './commands/create.js';
+import { registerInboxCommand } from './commands/inbox.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -77,6 +78,11 @@ ${chalk.bold('People')}
   people index                     Regenerate index
   people intelligence digest       Batch people classification suggestions
   people memory refresh            Refresh person memory highlights
+
+${chalk.bold('Inbox')}
+  inbox add --title <t> --body <b>   Add text to inbox
+  inbox add --url <url>              Fetch URL and add to inbox
+  inbox add --file <path>            Copy file to inbox
 
 ${chalk.bold('Integrations')}
   integration list                 List integrations
@@ -135,5 +141,6 @@ registerCredentialsCommand(program);
 registerConfigCommand(program);
 registerSearchCommand(program);
 registerCreateCommands(program);
+registerInboxCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

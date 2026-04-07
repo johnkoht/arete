@@ -4,6 +4,31 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 6, 2026
+
+### Inbox: Universal Content Ingest
+
+**New `inbox/` workspace directory and `arete inbox add` command.** Drop anything into your workspace — URLs, files, PDFs, or raw notes — and Areté files it in the inbox for triage.
+
+Three input modes:
+- **`arete inbox add --title "Note" --body "Content"`** — quick text capture from agent chat or terminal
+- **`arete inbox add --url https://example.com`** — fetches a URL, extracts the title and body, converts to markdown
+- **`arete inbox add --file ./report.pdf`** — copies the file into inbox with a companion `.md` for metadata
+
+All items land as markdown with frontmatter (`status: unprocessed`, `source`, `type`, `clipped` timestamp). The QMD index updates automatically so items are immediately searchable.
+
+### Inbox Triage Skill
+
+**New `inbox-triage` skill routes inbox items to the right place.** Run it (or say "triage my inbox") and it scans unprocessed items, classifies by type, matches against workspace context (people, projects, areas), and proposes routing — tasks to `week.md`, decisions to memory, articles to resources, people references to person files. Every routing action requires user approval before execution.
+
+### Status & Pull: Inbox Awareness
+
+**`arete status` now shows inbox counts** — unprocessed and needs-review items appear in the Intelligence Overview section and JSON output.
+
+**`arete pull` shows an inbox tip** after every integration sync when unprocessed items exist, reminding you to triage.
+
+---
+
 ## Week of April 5, 2026
 
 ### Claude Code Support

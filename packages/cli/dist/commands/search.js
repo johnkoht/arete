@@ -45,6 +45,7 @@ const VALID_SCOPES = [
     'context',
     'projects',
     'people',
+    'inbox',
 ];
 /**
  * Strip QMD URL prefix to get workspace-relative path.
@@ -675,7 +676,7 @@ export function registerSearchCommand(program) {
     program
         .command('search <query>')
         .description('Search across workspace with semantic matching')
-        .option('--scope <scope>', 'Limit to scope (all|memory|meetings|context|projects|people)', 'all')
+        .option('--scope <scope>', 'Limit to scope (all|memory|meetings|context|projects|people|inbox)', 'all')
         .option('--limit <n>', 'Maximum results', '15')
         .option('--person <name>', 'Filter by person (name or slug) (Note: filtering happens after limit, so fewer results may be returned)')
         .option('--timeline', 'Show results chronologically with themes')
