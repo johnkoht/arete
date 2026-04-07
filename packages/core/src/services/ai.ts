@@ -85,6 +85,7 @@ const DEFAULT_TASK_TIERS: Record<AITask, AITier> = {
   learning_extraction: 'standard',
   significance_analysis: 'standard',
   reconciliation: 'standard',
+  synthesis: 'standard',
 };
 
 /**

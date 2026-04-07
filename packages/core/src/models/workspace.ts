@@ -16,7 +16,8 @@ export type AITask =
   | 'decision_extraction'
   | 'learning_extraction'
   | 'significance_analysis'
-  | 'reconciliation';
+  | 'reconciliation'
+  | 'synthesis';
 
 /** AI tier levels */
 export type AITier = 'fast' | 'standard' | 'frontier';

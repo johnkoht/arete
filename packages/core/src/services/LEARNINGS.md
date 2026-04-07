@@ -186,6 +186,10 @@ Only `commitment` type triggers auto-resolution; `meeting` type references are i
 
 ---
 
+- **New AI tasks need both type union AND default tier mapping** (2026-04-06): Adding a new `AITask` (e.g., `'synthesis'`) requires updating two locations: (1) the `AITask` type union in `models/workspace.ts` and (2) the `DEFAULT_TASK_TIERS` record in `services/ai.ts`. Missing either causes a type error. The type union controls what callers can pass to `services.ai.call()`; the default tiers record provides the fallback model mapping when `arete.yaml` doesn't specify a custom tier.
+
+- **`listAreaMemoryStatus()` is filesystem-safe from `_synthesis.md`** (2026-04-06): The method iterates `areaParser.listAreas()` (which reads area definition files), NOT the `.arete/memory/areas/` directory. So `_synthesis.md` in that directory won't pollute area listings. However, `synthesizeCrossArea()` reads the areas directory directly via `storage.list()` — it must exclude `_`-prefixed files to avoid feeding old synthesis output back into the prompt.
+
 ## Pre-Edit Checklist
 
 - **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.

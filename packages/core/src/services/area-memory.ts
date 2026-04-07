@@ -27,11 +27,23 @@ const RECENT_DAYS = 30;
 // Types
 // ---------------------------------------------------------------------------
 
+/** Function that calls the LLM with a prompt and returns the response text. */
+export type LLMCallFn = (prompt: string) => Promise<string>;
+
 export type RefreshAreaMemoryOptions = {
   /** Refresh only this area slug. */
   areaSlug?: string;
   /** Preview without writing files. */
   dryRun?: boolean;
+  /** Optional LLM function for cross-area synthesis. */
+  callLLM?: LLMCallFn;
+};
+
+export type SynthesisResult = {
+  updated: boolean;
+  areasAnalyzed?: string[];
+  skipped?: boolean;
+  reason?: string;
 };
 
 export type RefreshAreaMemoryResult = {
@@ -41,6 +53,8 @@ export type RefreshAreaMemoryResult = {
   scannedAreas: number;
   /** Areas skipped (e.g., no data). */
   skipped: number;
+  /** Cross-area synthesis result. */
+  synthesis?: SynthesisResult;
 };
 
 export type CompactDecisionsOptions = {
@@ -307,6 +321,39 @@ function renderAreaMemory(data: AreaMemoryData): string {
   return lines.join('\n');
 }
 
+/**
+ * Build the LLM prompt for cross-area synthesis.
+ * Exported for testing.
+ */
+export function buildSynthesisPrompt(
+  areaContents: Array<{ slug: string; content: string }>,
+): string {
+  const areaNames = areaContents.map(a => a.slug).join(', ');
+  const areaSections = areaContents
+    .map(a => `--- Area: ${a.slug} ---\n${a.content}\n--- End: ${a.slug} ---`)
+    .join('\n\n');
+
+  return `You are analyzing area memory summaries for a product builder's workspace. Each area represents a domain of responsibility (e.g., engineering, product, sales).
+
+Review all area summaries below and identify meaningful cross-area connections. Be specific and evidence-based — cite actual commitments, decisions, and people. If there are no meaningful connections, say so honestly.
+
+Areas: ${areaNames}
+
+${areaSections}
+
+Identify:
+
+1. **Cross-area connections** — Decisions, commitments, or people that bridge areas. For each: what the connection is, why it matters, and which areas it touches.
+
+2. **Dependencies & blockers** — Open work in one area that depends on or is blocked by work in another area.
+
+3. **Convergence signals** — Areas trending toward the same topic or problem from different angles.
+
+4. **Attention items** — Things that look like they need coordination across areas but may not be getting it.
+
+Format your response as markdown with ## section headers (Connections, Dependencies, Convergence, Attention). Use bullet points with **bold area names** for each item. Be concise and actionable.`;
+}
+
 // ---------------------------------------------------------------------------
 // AreaMemoryService
 // ---------------------------------------------------------------------------
@@ -370,11 +417,34 @@ export class AreaMemoryService {
       }
     }
 
-    return {
+    const result: RefreshAreaMemoryResult = {
       updated,
       scannedAreas: targetAreas.length,
       skipped,
     };
+
+    // Run cross-area synthesis only when refreshing all areas and callLLM provided
+    if (!options.areaSlug && options.callLLM) {
+      try {
+        const synthesisResult = await this.synthesizeCrossArea(workspacePaths, { callLLM: options.callLLM });
+        if (synthesisResult && !options.dryRun) {
+          await this.writeSynthesisFile(workspacePaths, synthesisResult);
+          result.synthesis = { updated: true, areasAnalyzed: synthesisResult.areasAnalyzed };
+        } else if (synthesisResult) {
+          result.synthesis = { updated: false, areasAnalyzed: synthesisResult.areasAnalyzed, reason: 'dry-run' };
+        } else {
+          result.synthesis = { updated: false, skipped: true, reason: 'no area files' };
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[area-memory] Cross-area synthesis failed: ${message}`);
+        result.synthesis = { updated: false, skipped: true, reason: `error: ${message}` };
+      }
+    } else if (!options.areaSlug && !options.callLLM) {
+      result.synthesis = { updated: false, skipped: true, reason: 'no AI configured' };
+    }
+
+    return result;
   }
 
   /**
@@ -489,9 +559,80 @@ export class AreaMemoryService {
     return results;
   }
 
+  /**
+   * Synthesize cross-area connections using an LLM.
+   *
+   * Reads all area memory files, builds a prompt asking the LLM to identify
+   * connections, dependencies, and attention items, and returns the response.
+   *
+   * Returns null if callLLM is not provided or no area files exist.
+   */
+  async synthesizeCrossArea(
+    workspacePaths: WorkspacePaths,
+    options: { callLLM?: LLMCallFn } = {},
+  ): Promise<{ response: string; areasAnalyzed: string[] } | null> {
+    if (!options.callLLM) return null;
+
+    const areaDir = join(workspacePaths.root, AREA_MEMORY_DIR);
+    const dirExists = await this.storage.exists(areaDir);
+    if (!dirExists) return null;
+
+    const areaFiles = await this.storage.list(areaDir, { extensions: ['.md'] });
+
+    // Read all area files, excluding _-prefixed files (like _synthesis.md)
+    const areaContents: Array<{ slug: string; content: string }> = [];
+    for (const filePath of areaFiles) {
+      const fileName = basename(filePath);
+      if (fileName.startsWith('_')) continue;
+
+      const content = await this.storage.read(filePath);
+      if (!content) continue;
+
+      const slug = fileName.replace(/\.md$/, '');
+      areaContents.push({ slug, content });
+    }
+
+    if (areaContents.length === 0) return null;
+
+    const prompt = buildSynthesisPrompt(areaContents);
+    const response = await options.callLLM(prompt);
+
+    return {
+      response,
+      areasAnalyzed: areaContents.map(a => a.slug),
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Private methods
   // ---------------------------------------------------------------------------
+
+  /**
+   * Write the cross-area synthesis file with YAML frontmatter.
+   */
+  private async writeSynthesisFile(
+    workspacePaths: WorkspacePaths,
+    synthesisResult: { response: string; areasAnalyzed: string[] },
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const areasYaml = synthesisResult.areasAnalyzed.map(a => `"${a}"`).join(', ');
+    const content = `---
+type: cross-area-synthesis
+last_refreshed: "${now}"
+areas_analyzed: [${areasYaml}]
+---
+
+# Cross-Area Synthesis
+
+> Auto-generated connections across area memories. Refreshed by \`arete memory refresh\`.
+
+${synthesisResult.response}
+`;
+
+    const outputDir = join(workspacePaths.root, AREA_MEMORY_DIR);
+    await this.storage.mkdir(outputDir);
+    await this.storage.write(join(outputDir, '_synthesis.md'), content);
+  }
 
   private async computeAreaData(
     areaContext: AreaContext,

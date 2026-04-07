@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { StorageAdapter } from '../../src/storage/adapter.js';
 import type { WorkspacePaths, Commitment, AreaContext } from '../../src/models/index.js';
-import { AreaMemoryService, isAreaMemoryStale } from '../../src/services/area-memory.js';
+import { AreaMemoryService, isAreaMemoryStale, buildSynthesisPrompt } from '../../src/services/area-memory.js';
+import type { LLMCallFn } from '../../src/services/area-memory.js';
 import type { AreaParserService } from '../../src/services/area-parser.js';
 import type { CommitmentsService } from '../../src/services/commitments.js';
 import type { MemoryService } from '../../src/services/memory.js';
@@ -426,6 +427,91 @@ describe('AreaMemoryService', () => {
       assert.equal(result.updated, 1);
       assert.equal(result.scannedAreas, 1);
     });
+
+    it('calls synthesizeCrossArea when callLLM provided and refreshing all areas', async () => {
+      const areas = [
+        makeAreaContext({ slug: 'area-1', name: 'Area One' }),
+        makeAreaContext({ slug: 'area-2', name: 'Area Two' }),
+      ];
+      const areaParser = createStubAreaParser(areas);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const callLLM: LLMCallFn = async () => '## Connections\n- Area One connects to Area Two';
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.refreshAllAreaMemory(paths, { callLLM });
+
+      assert.ok(result.synthesis, 'Should have synthesis result');
+      assert.equal(result.synthesis!.updated, true);
+      assert.ok(result.synthesis!.areasAnalyzed!.length > 0);
+
+      // Verify _synthesis.md was written
+      const synthPath = join(WORKSPACE_ROOT, '.arete/memory/areas/_synthesis.md');
+      const content = storage.store.get(synthPath);
+      assert.ok(content, '_synthesis.md should be written');
+      assert.ok(content!.includes('type: cross-area-synthesis'), 'Should have type in frontmatter');
+      assert.ok(content!.includes('last_refreshed:'), 'Should have last_refreshed');
+      assert.ok(content!.includes('areas_analyzed:'), 'Should have areas_analyzed');
+      assert.ok(content!.includes('Area One connects to Area Two'), 'Should contain LLM response');
+    });
+
+    it('skips synthesis when callLLM not provided', async () => {
+      const areas = [makeAreaContext({ slug: 'area-1', name: 'Area One' })];
+      const areaParser = createStubAreaParser(areas);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.refreshAllAreaMemory(paths);
+
+      assert.ok(result.synthesis, 'Should have synthesis result');
+      assert.equal(result.synthesis!.updated, false);
+      assert.equal(result.synthesis!.skipped, true);
+      assert.equal(result.synthesis!.reason, 'no AI configured');
+    });
+
+    it('skips synthesis on single-area refresh', async () => {
+      const areas = [
+        makeAreaContext({ slug: 'area-1', name: 'Area One' }),
+        makeAreaContext({ slug: 'area-2', name: 'Area Two' }),
+      ];
+      const areaParser = createStubAreaParser(areas);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      let llmCalled = false;
+      const callLLM: LLMCallFn = async () => { llmCalled = true; return 'response'; };
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.refreshAllAreaMemory(paths, { areaSlug: 'area-1', callLLM });
+
+      assert.equal(llmCalled, false, 'Should not call LLM for single-area refresh');
+      assert.equal(result.synthesis, undefined, 'No synthesis for single-area');
+    });
+
+    it('handles callLLM errors gracefully', async () => {
+      const areas = [makeAreaContext({ slug: 'area-1', name: 'Area One' })];
+      const areaParser = createStubAreaParser(areas);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const callLLM: LLMCallFn = async () => { throw new Error('LLM service unavailable'); };
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.refreshAllAreaMemory(paths, { callLLM });
+
+      // Should still succeed for individual areas
+      assert.equal(result.updated, 1);
+      assert.ok(result.synthesis, 'Should have synthesis result');
+      assert.equal(result.synthesis!.updated, false);
+      assert.equal(result.synthesis!.skipped, true);
+      assert.ok(result.synthesis!.reason!.includes('LLM service unavailable'));
+
+      // No _synthesis.md should be written
+      const synthPath = join(WORKSPACE_ROOT, '.arete/memory/areas/_synthesis.md');
+      assert.equal(storage.store.has(synthPath), false);
+    });
   });
 
   describe('compactDecisions', () => {
@@ -595,6 +681,107 @@ describe('AreaMemoryService', () => {
       assert.equal(noMemoryStatus.stale, true);
       assert.equal(noMemoryStatus.lastRefreshed, null);
     });
+  });
+});
+
+describe('synthesizeCrossArea', () => {
+  let storage: StorageAdapter & { store: MockStore };
+  let paths: WorkspacePaths;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    paths = makeWorkspacePaths();
+  });
+
+  it('returns null when callLLM is not provided', async () => {
+    const areaParser = createStubAreaParser([]);
+    const commitments = createStubCommitments();
+    const memoryService = createStubMemory();
+
+    const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+    const result = await service.synthesizeCrossArea(paths);
+
+    assert.equal(result, null);
+  });
+
+  it('returns null when no area files exist', async () => {
+    const areaParser = createStubAreaParser([]);
+    const commitments = createStubCommitments();
+    const memoryService = createStubMemory();
+
+    const callLLM: LLMCallFn = async () => 'should not be called';
+    const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+    const result = await service.synthesizeCrossArea(paths, { callLLM });
+
+    assert.equal(result, null);
+  });
+
+  it('passes all area content to callLLM and returns response', async () => {
+    const areaParser = createStubAreaParser([]);
+    const commitments = createStubCommitments();
+    const memoryService = createStubMemory();
+
+    // Seed area memory files
+    const areaDir = join(WORKSPACE_ROOT, '.arete/memory/areas');
+    storage.store.set(join(areaDir, 'engineering.md'), '---\narea_slug: engineering\n---\n# Engineering\nOpen work: build API');
+    storage.store.set(join(areaDir, 'product.md'), '---\narea_slug: product\n---\n# Product\nOpen work: define roadmap');
+
+    let capturedPrompt = '';
+    const callLLM: LLMCallFn = async (prompt: string) => {
+      capturedPrompt = prompt;
+      return '## Connections\n- **Engineering <> Product**: API work relates to roadmap';
+    };
+
+    const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+    const result = await service.synthesizeCrossArea(paths, { callLLM });
+
+    assert.ok(result, 'Should return a result');
+    assert.ok(capturedPrompt.includes('engineering'), 'Prompt should contain engineering area name');
+    assert.ok(capturedPrompt.includes('product'), 'Prompt should contain product area name');
+    assert.ok(capturedPrompt.includes('build API'), 'Prompt should contain engineering content');
+    assert.ok(capturedPrompt.includes('define roadmap'), 'Prompt should contain product content');
+    assert.ok(result.response.includes('Engineering <> Product'), 'Should return LLM response');
+    assert.deepEqual(result.areasAnalyzed.sort(), ['engineering', 'product']);
+  });
+
+  it('excludes _-prefixed files from synthesis', async () => {
+    const areaParser = createStubAreaParser([]);
+    const commitments = createStubCommitments();
+    const memoryService = createStubMemory();
+
+    const areaDir = join(WORKSPACE_ROOT, '.arete/memory/areas');
+    storage.store.set(join(areaDir, 'engineering.md'), '# Engineering\nContent');
+    storage.store.set(join(areaDir, '_synthesis.md'), '# Old synthesis\nShould be excluded');
+
+    let capturedPrompt = '';
+    const callLLM: LLMCallFn = async (prompt: string) => {
+      capturedPrompt = prompt;
+      return 'synthesis result';
+    };
+
+    const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+    const result = await service.synthesizeCrossArea(paths, { callLLM });
+
+    assert.ok(result);
+    assert.ok(!capturedPrompt.includes('Should be excluded'), 'Should not include _synthesis.md content');
+    assert.deepEqual(result.areasAnalyzed, ['engineering']);
+  });
+});
+
+describe('buildSynthesisPrompt', () => {
+  it('includes all area names and content', () => {
+    const prompt = buildSynthesisPrompt([
+      { slug: 'eng', content: '# Engineering area content' },
+      { slug: 'sales', content: '# Sales area content' },
+    ]);
+
+    assert.ok(prompt.includes('eng, sales'), 'Should list area names');
+    assert.ok(prompt.includes('--- Area: eng ---'), 'Should have eng section delimiter');
+    assert.ok(prompt.includes('# Engineering area content'), 'Should include eng content');
+    assert.ok(prompt.includes('--- Area: sales ---'), 'Should have sales section delimiter');
+    assert.ok(prompt.includes('# Sales area content'), 'Should include sales content');
+    assert.ok(prompt.includes('Cross-area connections'), 'Should ask for connections');
+    assert.ok(prompt.includes('Dependencies'), 'Should ask for dependencies');
   });
 });
 
