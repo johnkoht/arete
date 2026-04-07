@@ -15,6 +15,7 @@ import { join } from 'path';
 import { readdirSync, readFileSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 import { header, listItem, section, error, info, formatPath } from '../formatters.js';
+import { countInboxItems } from '../lib/inbox-count.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,35 +126,6 @@ function countMemoryItems(filePath: string): number {
     return content.split('\n').filter((l) => l.trim().startsWith('-')).length;
   } catch {
     return 0;
-  }
-}
-
-/**
- * Count inbox items by status.
- */
-function countInboxItems(inboxDir: string): { unprocessed: number; needsReview: number } {
-  if (!existsSync(inboxDir)) return { unprocessed: 0, needsReview: 0 };
-  try {
-    const files = readdirSync(inboxDir).filter(
-      (f) => f.endsWith('.md') && f !== 'README.md',
-    );
-    let needsReview = 0;
-    let triaged = 0;
-    for (const file of files) {
-      try {
-        const content = readFileSync(join(inboxDir, file), 'utf8');
-        const match = content.match(/^---\n([\s\S]*?)\n---/);
-        if (match) {
-          const data = parseYaml(match[1]) as Record<string, unknown>;
-          if (data['status'] === 'needs-review') needsReview++;
-          else if (data['status'] === 'triaged') triaged++;
-        }
-      } catch { /* count as unprocessed */ }
-    }
-    const unprocessed = files.length - needsReview - triaged;
-    return { unprocessed, needsReview };
-  } catch {
-    return { unprocessed: 0, needsReview: 0 };
   }
 }
 

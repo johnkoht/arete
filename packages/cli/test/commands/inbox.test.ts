@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 import { join } from 'path';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 
-import { runCli, runCliRaw, createTmpDir, cleanupTmpDir } from '../helpers.js';
+import { runCli, runCliRaw, createTmpDir, cleanupTmpDir, captureConsole } from '../helpers.js';
+import { runInboxAdd } from '../../src/commands/inbox.js';
+import { createServices, loadConfig, refreshQmdIndex } from '@arete/core';
 
 describe('inbox add command', () => {
   let tmpDir: string;
@@ -189,6 +191,118 @@ describe('inbox add command', () => {
       assert.equal(parsed.source, 'agent-chat');
       assert.ok('qmd' in parsed, 'Should include qmd field');
       assert.equal(parsed.qmd.skipped, true, 'Should be skipped with --skip-qmd');
+    });
+  });
+
+  describe('--url mode', () => {
+    it('fetches URL and creates markdown file with extracted title', async () => {
+      const fakeHtml = '<html><head><title>Great Article</title></head><body><h1>Great Article</h1><p>Some content here.</p></body></html>';
+      const mockFetch = async (_url: string) => ({
+        ok: true,
+        status: 200,
+        text: async () => fakeHtml,
+      }) as unknown as Response;
+
+      // Use runInboxAdd directly with mock deps
+      const origCwd = process.cwd();
+      process.chdir(tmpDir);
+      try {
+        const { stdout } = await captureConsole(() =>
+          runInboxAdd(
+            { url: 'https://example.com/article', skipQmd: true, json: true },
+            {
+              createServices,
+              loadConfig,
+              refreshQmdIndex,
+              fetchFn: mockFetch as typeof fetch,
+            },
+          ),
+        );
+
+        const parsed = JSON.parse(stdout) as { success: boolean; title: string; source: string; path: string };
+        assert.equal(parsed.success, true);
+        assert.equal(parsed.title, 'Great Article');
+        assert.equal(parsed.source, 'https://example.com/article');
+        assert.ok(parsed.path.startsWith('inbox/'));
+
+        // Verify file exists and has correct content
+        const filePath = join(tmpDir, parsed.path);
+        assert.ok(existsSync(filePath), 'File should exist');
+
+        const content = readFileSync(filePath, 'utf8');
+        assert.ok(content.includes('type: article'), 'Should have article type');
+        assert.ok(content.includes('source: "https://example.com/article"'), 'Should have URL as source');
+        assert.ok(content.includes('Some content here'), 'Should have extracted body content');
+      } finally {
+        process.chdir(origCwd);
+      }
+    });
+
+    it('allows --url with --title override', async () => {
+      const fakeHtml = '<html><head><title>Original</title></head><body><p>Content</p></body></html>';
+      const mockFetch = async () => ({
+        ok: true,
+        status: 200,
+        text: async () => fakeHtml,
+      }) as unknown as Response;
+
+      const origCwd = process.cwd();
+      process.chdir(tmpDir);
+      try {
+        const { stdout } = await captureConsole(() =>
+          runInboxAdd(
+            { url: 'https://example.com', title: 'Custom Title', skipQmd: true, json: true },
+            {
+              createServices,
+              loadConfig,
+              refreshQmdIndex,
+              fetchFn: mockFetch as typeof fetch,
+            },
+          ),
+        );
+
+        const parsed = JSON.parse(stdout) as { title: string };
+        assert.equal(parsed.title, 'Custom Title');
+      } finally {
+        process.chdir(origCwd);
+      }
+    });
+  });
+
+  describe('mode validation', () => {
+    it('rejects --url combined with --file', () => {
+      const srcFile = join(tmpDir, 'test.txt');
+      writeFileSync(srcFile, 'content');
+
+      const { stdout, code } = runCliRaw([
+        'inbox', 'add',
+        '--url', 'https://example.com',
+        '--file', srcFile,
+        '--skip-qmd', '--json',
+      ], { cwd: tmpDir });
+
+      const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+      assert.equal(parsed.success, false);
+      assert.ok(parsed.error.includes('Use only one of'));
+      assert.equal(code, 1);
+    });
+
+    it('rejects --url --file --title combined', () => {
+      const srcFile = join(tmpDir, 'test.txt');
+      writeFileSync(srcFile, 'content');
+
+      const { stdout, code } = runCliRaw([
+        'inbox', 'add',
+        '--url', 'https://example.com',
+        '--file', srcFile,
+        '--title', 'Something',
+        '--skip-qmd', '--json',
+      ], { cwd: tmpDir });
+
+      const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+      assert.equal(parsed.success, false);
+      assert.ok(parsed.error.includes('Use only one of'));
+      assert.equal(code, 1);
     });
   });
 

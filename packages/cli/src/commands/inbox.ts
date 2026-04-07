@@ -15,7 +15,7 @@ import {
 } from '@arete/core';
 import type { Command } from 'commander';
 import { join, basename, extname } from 'node:path';
-import { readFileSync, copyFileSync, existsSync } from 'node:fs';
+import { readFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import {
   success,
   error,
@@ -55,7 +55,12 @@ function extractHtmlTitle(html: string): string | null {
   return match ? match[1].trim() : null;
 }
 
-/** Convert HTML to basic markdown (very simple: strip tags, keep text). */
+/**
+ * Convert HTML to basic markdown. Handles headings, paragraphs, line breaks,
+ * list items, and common entities. Strips scripts/styles.
+ * Limitations: tables, nested lists, code blocks, and images are lost.
+ * A library like turndown would be a natural v2 upgrade.
+ */
 function htmlToBasicMarkdown(html: string): string {
   // Remove script and style blocks
   let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -157,9 +162,9 @@ export async function runInboxAdd(
     process.exit(1);
   }
 
-  if (modes.length > 1 && modes.includes('url') && modes.includes('text')) {
-    // Allow --url with --title (title override) — this is fine
-  } else if (modes.length > 1) {
+  // Allow --url with --title (title override), but reject all other multi-mode combos
+  const isUrlWithTitleOverride = modes.length === 2 && modes.includes('url') && modes.includes('text') && !opts.file;
+  if (modes.length > 1 && !isUrlWithTitleOverride) {
     const errorMsg = 'Use only one of: --title/--body, --url, or --file';
     if (opts.json) {
       console.log(JSON.stringify({ success: false, error: errorMsg }));
@@ -241,8 +246,9 @@ export async function runInboxAdd(
   const fileSlug = slugify(title);
   const inboxDir = join(root, 'inbox');
 
-  // For binary files, copy the original
+  // For binary files, copy the original (ensure inbox/ exists first)
   if (binaryFileName && opts.file) {
+    mkdirSync(inboxDir, { recursive: true });
     const destBinary = join(inboxDir, binaryFileName);
     const copyFn = deps.copyFileSync ?? copyFileSync;
     try {

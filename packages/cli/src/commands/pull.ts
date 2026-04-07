@@ -11,41 +11,24 @@ import { header, listItem, success, error, info } from '../formatters.js';
 import { resolveEntities } from '@arete/core';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { parse as parseYaml } from 'yaml';
+import { countInboxItems } from '../lib/inbox-count.js';
 
 const DEFAULT_DAYS = 7;
 const DEFAULT_NOTION_DESTINATION = 'resources/notes';
 
 /** Show a tip about unprocessed inbox items (non-JSON only). */
 function showInboxTip(root: string): void {
-  const inboxDir = join(root, 'inbox');
-  if (!existsSync(inboxDir)) return;
-  try {
-    const files = readdirSync(inboxDir).filter(
-      (f) => f.endsWith('.md') && f !== 'README.md',
-    );
-    // Count unprocessed (no status, no frontmatter, or status: unprocessed)
-    let unprocessed = 0;
-    for (const file of files) {
-      try {
-        const content = readFileSync(join(inboxDir, file), 'utf8');
-        const match = content.match(/^---\n([\s\S]*?)\n---/);
-        if (!match) {
-          unprocessed++;
-          continue;
-        }
-        const data = parseYaml(match[1]) as Record<string, unknown>;
-        if (!data['status'] || data['status'] === 'unprocessed') unprocessed++;
-      } catch {
-        unprocessed++;
-      }
-    }
-    if (unprocessed > 0) {
-      console.log('');
-      info(`You have ${unprocessed} unprocessed item${unprocessed === 1 ? '' : 's'} in inbox/. Run inbox-triage to process them.`);
-    }
-  } catch { /* non-critical */ }
+  const inbox = countInboxItems(join(root, 'inbox'));
+  if (inbox.unprocessed > 0) {
+    console.log('');
+    info(`You have ${inbox.unprocessed} unprocessed item${inbox.unprocessed === 1 ? '' : 's'} in inbox/. Run inbox-triage to process them.`);
+  }
+}
+
+/** Get inbox counts for JSON output. Returns undefined if inbox is empty. */
+function getInboxForJson(root: string): { unprocessed: number } | undefined {
+  const inbox = countInboxItems(join(root, 'inbox'));
+  return inbox.unprocessed > 0 ? { unprocessed: inbox.unprocessed } : undefined;
 }
 
 export function registerPullCommand(program: Command): void {
@@ -89,32 +72,40 @@ export function registerPullCommand(program: Command): void {
         const days = parseInt(opts.days ?? String(DEFAULT_DAYS), 10);
 
         if (integration === 'calendar') {
-          return pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
+          await pullCalendarHelper(services, root, { today: opts.today ?? false, json: opts.json ?? false });
+          if (!opts.json) showInboxTip(root);
+          return;
         }
 
         if (integration === 'notion') {
-          return pullNotion(services, root, {
+          await pullNotion(services, root, {
             pages: opts.page ?? [],
             destination: opts.destination ?? DEFAULT_NOTION_DESTINATION,
             dryRun: Boolean(opts.dryRun),
             skipQmd: Boolean(opts.skipQmd),
             json: Boolean(opts.json),
           });
+          if (!opts.json) showInboxTip(root);
+          return;
         }
 
         if (integration === 'gmail') {
-          return pullGmailHelper(services, root, {
+          await pullGmailHelper(services, root, {
             days,
             json: opts.json ?? false,
           });
+          if (!opts.json) showInboxTip(root);
+          return;
         }
 
         if (integration === 'drive') {
-          return pullDriveHelper(services, root, {
+          await pullDriveHelper(services, root, {
             days,
             json: opts.json ?? false,
             query: opts.query,
           });
+          if (!opts.json) showInboxTip(root);
+          return;
         }
 
         if (integration === 'fathom' || !integration) {
@@ -128,20 +119,17 @@ export function registerPullCommand(program: Command): void {
           }
 
           if (opts.json) {
-            console.log(
-              JSON.stringify(
-                {
-                  success: result.errors.length === 0,
-                  integration: 'fathom',
-                  itemsProcessed: result.itemsProcessed,
-                  itemsCreated: result.itemsCreated,
-                  errors: result.errors,
-                  qmd: qmdResult ?? { indexed: false, skipped: true },
-                },
-                null,
-                2,
-              ),
-            );
+            const jsonOutput: Record<string, unknown> = {
+              success: result.errors.length === 0,
+              integration: 'fathom',
+              itemsProcessed: result.itemsProcessed,
+              itemsCreated: result.itemsCreated,
+              errors: result.errors,
+              qmd: qmdResult ?? { indexed: false, skipped: true },
+            };
+            const inboxData = getInboxForJson(root);
+            if (inboxData) jsonOutput.inbox = inboxData;
+            console.log(JSON.stringify(jsonOutput, null, 2));
             return;
           }
           if (!opts.json) {
@@ -171,20 +159,17 @@ export function registerPullCommand(program: Command): void {
           }
 
           if (opts.json) {
-            console.log(
-              JSON.stringify(
-                {
-                  success: result.errors.length === 0,
-                  integration: 'krisp',
-                  itemsProcessed: result.itemsProcessed,
-                  itemsCreated: result.itemsCreated,
-                  errors: result.errors,
-                  qmd: qmdResult ?? { indexed: false, skipped: true },
-                },
-                null,
-                2,
-              ),
-            );
+            const jsonOutput: Record<string, unknown> = {
+              success: result.errors.length === 0,
+              integration: 'krisp',
+              itemsProcessed: result.itemsProcessed,
+              itemsCreated: result.itemsCreated,
+              errors: result.errors,
+              qmd: qmdResult ?? { indexed: false, skipped: true },
+            };
+            const inboxData = getInboxForJson(root);
+            if (inboxData) jsonOutput.inbox = inboxData;
+            console.log(JSON.stringify(jsonOutput, null, 2));
             return;
           }
           header('Pull Latest Data');
