@@ -380,10 +380,17 @@ export function registerMemoryCommand(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
-        // 1. Refresh area memory
+        // 1. Refresh area memory (with synthesis if AI configured)
+        const callLLM = services.ai.isConfigured()
+            ? async (prompt) => {
+                const result = await services.ai.call('synthesis', prompt);
+                return result.text;
+            }
+            : undefined;
         const areaResult = await services.areaMemory.refreshAllAreaMemory(paths, {
             areaSlug: opts.area,
             dryRun: opts.dryRun,
+            callLLM,
         });
         // 2. Refresh person memory (unless targeting a specific area)
         let personResult;
@@ -405,6 +412,7 @@ export function registerMemoryCommand(program) {
                 success: true,
                 dryRun: Boolean(opts.dryRun),
                 areas: areaResult,
+                synthesis: areaResult.synthesis ?? null,
                 people: personResult ?? null,
                 qmd: qmdResult ?? { indexed: false, skipped: true },
             }, null, 2));
@@ -425,6 +433,22 @@ export function registerMemoryCommand(program) {
         }
         listItem('Areas scanned', String(areaResult.scannedAreas));
         listItem('Areas skipped', String(areaResult.skipped));
+        // Synthesis status
+        if (areaResult.synthesis) {
+            const s = areaResult.synthesis;
+            if (s.updated) {
+                success('Cross-area synthesis: updated');
+            }
+            else if (s.reason?.startsWith('error:')) {
+                warn(`Cross-area synthesis: failed (${s.reason})`);
+            }
+            else if (s.reason === 'no AI configured') {
+                info('Cross-area synthesis: skipped (no AI configured)');
+            }
+            else if (s.reason) {
+                info(`Cross-area synthesis: skipped (${s.reason})`);
+            }
+        }
         // Person results
         if (personResult) {
             console.log('');

@@ -186,10 +186,20 @@ export function registerStatusCommand(program) {
         // Area memory staleness (best-effort)
         let areaMemoryStale = 0;
         let areaMemoryTotal = 0;
+        let synthesisLastRefreshed = null;
         try {
             const areaStatuses = await services.areaMemory.listAreaMemoryStatus(basePaths);
             areaMemoryTotal = areaStatuses.length;
             areaMemoryStale = areaStatuses.filter(s => s.stale).length;
+        }
+        catch { /* non-critical */ }
+        try {
+            const synthPath = join(root, '.arete', 'memory', 'areas', '_synthesis.md');
+            const synthContent = await services.storage.read(synthPath);
+            if (synthContent) {
+                const match = synthContent.match(/^last_refreshed:\s*"?([^"\n]+)"?\s*$/m);
+                synthesisLastRefreshed = match?.[1] ?? null;
+            }
         }
         catch { /* non-critical */ }
         // Pattern detection (best-effort, don't fail status if it errors)
@@ -238,6 +248,7 @@ export function registerStatusCommand(program) {
                 decisions: decisionsCount,
                 learnings: learningsCount,
                 areaMemory: { total: areaMemoryTotal, stale: areaMemoryStale },
+                synthesis: { lastRefreshed: synthesisLastRefreshed },
             },
             intelligence: {
                 patterns: patternCount,
@@ -285,6 +296,13 @@ export function registerStatusCommand(program) {
         }
         else {
             console.log(`  ${chalk.dim('📦 Area Memory:')} ${chalk.dim('none — run `arete memory refresh`')}`);
+        }
+        if (synthesisLastRefreshed) {
+            const synthAge = Math.floor((Date.now() - new Date(synthesisLastRefreshed).getTime()) / (1000 * 60 * 60 * 24));
+            const synthBadge = synthAge > 7
+                ? chalk.yellow(` (${synthAge}d ago — stale)`)
+                : chalk.green(` (${synthAge}d ago)`);
+            console.log(`  ${chalk.dim('🔗 Cross-Area Synthesis:')}${synthBadge}`);
         }
         console.log(`  ${chalk.dim('⚡ Intelligence:')} Patterns detected in last 30 days: ${chalk.bold(String(patternCount))}`);
         console.log('');

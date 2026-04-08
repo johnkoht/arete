@@ -7,7 +7,7 @@ import type { AgentMode } from './common.js';
 /** Supported IDE targets */
 export type IDETarget = 'cursor' | 'claude';
 /** AI task types for tier routing */
-export type AITask = 'summary' | 'extraction' | 'decision_extraction' | 'learning_extraction' | 'significance_analysis' | 'reconciliation';
+export type AITask = 'summary' | 'extraction' | 'decision_extraction' | 'learning_extraction' | 'significance_analysis' | 'reconciliation' | 'synthesis';
 /** AI tier levels */
 export type AITier = 'fast' | 'standard' | 'frontier';
 /** AI configuration section */
