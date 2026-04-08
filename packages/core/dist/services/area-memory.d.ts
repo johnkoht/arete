@@ -11,11 +11,21 @@ import type { AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
 import type { WorkspacePaths } from '../models/index.js';
+/** Function that calls the LLM with a prompt and returns the response text. */
+export type LLMCallFn = (prompt: string) => Promise<string>;
 export type RefreshAreaMemoryOptions = {
     /** Refresh only this area slug. */
     areaSlug?: string;
     /** Preview without writing files. */
     dryRun?: boolean;
+    /** Optional LLM function for cross-area synthesis. */
+    callLLM?: LLMCallFn;
+};
+export type SynthesisResult = {
+    updated: boolean;
+    areasAnalyzed?: string[];
+    skipped?: boolean;
+    reason?: string;
 };
 export type RefreshAreaMemoryResult = {
     /** Number of area memory files written/updated. */
@@ -24,6 +34,8 @@ export type RefreshAreaMemoryResult = {
     scannedAreas: number;
     /** Areas skipped (e.g., no data). */
     skipped: number;
+    /** Cross-area synthesis result. */
+    synthesis?: SynthesisResult;
 };
 export type CompactDecisionsOptions = {
     /** Compact decisions older than this many days. Default: 90. */
@@ -45,6 +57,14 @@ export type CompactDecisionsResult = {
  * Check if an area memory file is stale.
  */
 export declare function isAreaMemoryStale(lastRefreshed: string | null, staleDays?: number): boolean;
+/**
+ * Build the LLM prompt for cross-area synthesis.
+ * Exported for testing.
+ */
+export declare function buildSynthesisPrompt(areaContents: Array<{
+    slug: string;
+    content: string;
+}>): string;
 export declare class AreaMemoryService {
     private readonly storage;
     private readonly areaParser;
@@ -83,6 +103,24 @@ export declare class AreaMemoryService {
         lastRefreshed: string | null;
         stale: boolean;
     }>>;
+    /**
+     * Synthesize cross-area connections using an LLM.
+     *
+     * Reads all area memory files, builds a prompt asking the LLM to identify
+     * connections, dependencies, and attention items, and returns the response.
+     *
+     * Returns null if callLLM is not provided or no area files exist.
+     */
+    synthesizeCrossArea(workspacePaths: WorkspacePaths, options?: {
+        callLLM?: LLMCallFn;
+    }): Promise<{
+        response: string;
+        areasAnalyzed: string[];
+    } | null>;
+    /**
+     * Write the cross-area synthesis file with YAML frontmatter.
+     */
+    private writeSynthesisFile;
     private computeAreaData;
     /**
      * Single-pass scan of area-matched meeting files.

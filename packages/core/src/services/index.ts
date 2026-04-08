@@ -139,12 +139,14 @@ export { generateMeetingManifest } from './meeting-manifest.js';
 export { AreaParserService } from './area-parser.js';
 
 // Area memory (L3 computed summaries)
-export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
+export { AreaMemoryService, isAreaMemoryStale, buildSynthesisPrompt } from './area-memory.js';
 export type {
   RefreshAreaMemoryOptions,
   RefreshAreaMemoryResult,
+  SynthesisResult,
   CompactDecisionsOptions,
   CompactDecisionsResult,
+  LLMCallFn as AreaLLMCallFn,
 } from './area-memory.js';
 export type { AreaContext } from '../models/index.js';
 
