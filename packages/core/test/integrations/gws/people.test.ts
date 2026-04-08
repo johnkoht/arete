@@ -33,8 +33,10 @@ function makeDeps(responses: Record<string, string>): GwsDeps {
         return { stdout: JSON.stringify({ authenticated: true }), stderr: '' };
       }
 
-      // CLI calls — match on the key built from service+command
-      const key = `${args[0]}_${args[1]}`;
+      // CLI calls — take args up to the first flag (--format, --params, etc.)
+      const flagIdx = args.findIndex(a => a.startsWith('--'));
+      const pathParts = flagIdx === -1 ? args : args.slice(0, flagIdx);
+      const key = pathParts.join('_');
       const stdout = responses[key] ?? '{}';
       return { stdout, stderr: '' };
     },
@@ -73,7 +75,7 @@ describe('GwsDirectoryProvider', () => {
   describe('lookupPerson', () => {
     it('returns DirectoryPerson with full data', async () => {
       const deps = makeDeps({
-        people_get: JSON.stringify(lookupFixture),
+        people_people_searchContacts: JSON.stringify(lookupFixture),
       });
 
       const provider = new GwsDirectoryProvider(deps);
@@ -90,7 +92,7 @@ describe('GwsDirectoryProvider', () => {
 
     it('returns null when not found', async () => {
       const deps = makeDeps({
-        people_get: JSON.stringify({}),
+        people_people_searchContacts: JSON.stringify({}),
       });
 
       const provider = new GwsDirectoryProvider(deps);
@@ -103,7 +105,7 @@ describe('GwsDirectoryProvider', () => {
   describe('searchDirectory', () => {
     it('returns array of results', async () => {
       const deps = makeDeps({
-        people_search: JSON.stringify(searchFixture),
+        people_people_searchDirectoryPeople: JSON.stringify(searchFixture),
       });
 
       const provider = new GwsDirectoryProvider(deps);
@@ -120,7 +122,7 @@ describe('GwsDirectoryProvider', () => {
 
     it('handles empty results', async () => {
       const deps = makeDeps({
-        people_search: JSON.stringify({ people: [] }),
+        people_people_searchDirectoryPeople: JSON.stringify({ people: [] }),
       });
 
       const provider = new GwsDirectoryProvider(deps);

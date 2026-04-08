@@ -33,8 +33,10 @@ function makeDeps(responses: Record<string, string>): GwsDeps {
         return { stdout: JSON.stringify({ authenticated: true }), stderr: '' };
       }
 
-      // CLI calls — match on the key built from service+command
-      const key = `${args[0]}_${args[1]}`;
+      // CLI calls — take args up to the first flag (--format, --params, etc.)
+      const flagIdx = args.findIndex(a => a.startsWith('--'));
+      const pathParts = flagIdx === -1 ? args : args.slice(0, flagIdx);
+      const key = pathParts.join('_');
       const stdout = responses[key] ?? '{}';
       return { stdout, stderr: '' };
     },
@@ -73,7 +75,7 @@ describe('GwsSheetsProvider', () => {
   describe('getSpreadsheet', () => {
     it('returns metadata with sheet names', async () => {
       const deps = makeDeps({
-        sheets_get: JSON.stringify(sheetsGetFixture),
+        sheets_spreadsheets_get: JSON.stringify(sheetsGetFixture),
       });
 
       const provider = new GwsSheetsProvider(deps);
@@ -86,7 +88,7 @@ describe('GwsSheetsProvider', () => {
 
     it('handles empty spreadsheet', async () => {
       const deps = makeDeps({
-        sheets_get: JSON.stringify({
+        sheets_spreadsheets_get: JSON.stringify({
           spreadsheetId: 'empty-sheet',
           properties: { title: 'Empty' },
           sheets: [],
@@ -105,7 +107,7 @@ describe('GwsSheetsProvider', () => {
   describe('getRange', () => {
     it('returns 2D values array', async () => {
       const deps = makeDeps({
-        sheets_values: JSON.stringify(sheetsValuesFixture),
+        sheets_spreadsheets_values_get: JSON.stringify(sheetsValuesFixture),
       });
 
       const provider = new GwsSheetsProvider(deps);
@@ -119,7 +121,7 @@ describe('GwsSheetsProvider', () => {
 
     it('handles empty range', async () => {
       const deps = makeDeps({
-        sheets_values: JSON.stringify({ range: 'Sheet1!A1:A1' }),
+        sheets_spreadsheets_values_get: JSON.stringify({ range: 'Sheet1!A1:A1' }),
       });
 
       const provider = new GwsSheetsProvider(deps);

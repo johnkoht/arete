@@ -1,7 +1,7 @@
 {
-  "documentId": "doc-abc-123",
-  "title": "Q2 Roadmap Draft",
-  "lastModifiedTime": "2026-04-02T14:30:00.000Z",
+  "id": "doc-abc-123",
+  "name": "Q2 Roadmap Draft",
+  "modifiedTime": "2026-04-02T14:30:00.000Z",
   "lastModifyingUser": {
     "displayName": "Jane Smith",
     "emailAddress": "jane@example.com"

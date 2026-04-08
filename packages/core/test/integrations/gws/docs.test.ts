@@ -30,8 +30,10 @@ function makeDeps(responses: Record<string, string>): GwsDeps {
         return { stdout: JSON.stringify({ authenticated: true }), stderr: '' };
       }
 
-      // CLI calls — match on the key built from service+command
-      const key = `${args[0]}_${args[1]}`;
+      // CLI calls — take args up to the first flag (--format, --params, etc.)
+      const flagIdx = args.findIndex(a => a.startsWith('--'));
+      const pathParts = flagIdx === -1 ? args : args.slice(0, flagIdx);
+      const key = pathParts.join('_');
       const stdout = responses[key] ?? '{}';
       return { stdout, stderr: '' };
     },
@@ -70,7 +72,7 @@ describe('GwsDocsProvider', () => {
   describe('getDoc', () => {
     it('maps response to DocMetadata', async () => {
       const deps = makeDeps({
-        docs_get: JSON.stringify(fixture),
+        drive_files_get: JSON.stringify(fixture),
       });
 
       const provider = new GwsDocsProvider(deps);
@@ -87,7 +89,15 @@ describe('GwsDocsProvider', () => {
   describe('getDocContent', () => {
     it('returns text content', async () => {
       const deps = makeDeps({
-        docs_export: JSON.stringify({ content: 'This is the document body text.\n\nWith multiple paragraphs.' }),
+        docs_documents_get: JSON.stringify({
+          body: {
+            content: [
+              { paragraph: { elements: [{ textRun: { content: 'This is the document body text.\n' } }] } },
+              { paragraph: { elements: [{ textRun: { content: '\n' } }] } },
+              { paragraph: { elements: [{ textRun: { content: 'With multiple paragraphs.' } }] } },
+            ],
+          },
+        }),
       });
 
       const provider = new GwsDocsProvider(deps);
@@ -98,7 +108,7 @@ describe('GwsDocsProvider', () => {
 
     it('handles empty content gracefully', async () => {
       const deps = makeDeps({
-        docs_export: JSON.stringify({}),
+        docs_documents_get: JSON.stringify({}),
       });
 
       const provider = new GwsDocsProvider(deps);
