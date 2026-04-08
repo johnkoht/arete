@@ -34,14 +34,36 @@ export function createReviewRouter(workspaceRoot) {
                 }
                 return false;
             });
-            // 4. Get staged decisions/learnings from processed meetings
+            // 4. Get staged decisions/learnings/action items from processed meetings
             const decisions = [];
             const learnings = [];
+            const actionItems = [];
             for (const meeting of processedMeetings) {
                 const fullMeeting = await workspaceService.getMeeting(workspaceRoot, meeting.slug);
                 if (!fullMeeting)
                     continue;
                 const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
+                const meetingArea = fullMeeting.area;
+                // Extract action items with 'pending' status
+                for (const item of fullMeeting.stagedSections.actionItems) {
+                    const status = stagedItemStatus[item.id];
+                    if (status === 'pending' || status === undefined) {
+                        actionItems.push({
+                            id: item.id,
+                            text: item.text,
+                            type: 'action_item',
+                            meetingSlug: meeting.slug,
+                            meetingTitle: meeting.title,
+                            meetingDate: meeting.date,
+                            meetingArea,
+                            source: item.source,
+                            confidence: item.confidence,
+                            ownerSlug: item.ownerSlug,
+                            direction: item.direction,
+                            counterpartySlug: item.counterpartySlug,
+                        });
+                    }
+                }
                 // Extract decisions with 'pending' status
                 for (const item of fullMeeting.stagedSections.decisions) {
                     const status = stagedItemStatus[item.id];
@@ -53,6 +75,7 @@ export function createReviewRouter(workspaceRoot) {
                             meetingSlug: meeting.slug,
                             meetingTitle: meeting.title,
                             meetingDate: meeting.date,
+                            meetingArea,
                             source: item.source,
                             confidence: item.confidence,
                         });
@@ -69,6 +92,7 @@ export function createReviewRouter(workspaceRoot) {
                             meetingSlug: meeting.slug,
                             meetingTitle: meeting.title,
                             meetingDate: meeting.date,
+                            meetingArea,
                             source: item.source,
                             confidence: item.confidence,
                         });
@@ -79,6 +103,7 @@ export function createReviewRouter(workspaceRoot) {
                 tasks,
                 decisions,
                 learnings,
+                actionItems,
                 commitments,
             };
             return c.json(response);
@@ -102,8 +127,14 @@ export function createReviewRouter(workspaceRoot) {
                 if (!fullMeeting)
                     continue;
                 const stagedItemStatus = fullMeeting.stagedItemStatus ?? {};
-                // Collect all pending items (decisions + learnings)
+                // Collect all pending items (action items + decisions + learnings)
                 const pendingItems = [];
+                for (const item of fullMeeting.stagedSections.actionItems) {
+                    const status = stagedItemStatus[item.id];
+                    if (status === 'pending' || status === undefined) {
+                        pendingItems.push(item);
+                    }
+                }
                 for (const item of fullMeeting.stagedSections.decisions) {
                     const status = stagedItemStatus[item.id];
                     if (status === 'pending' || status === undefined) {
@@ -155,10 +186,13 @@ export function createReviewRouter(workspaceRoot) {
             const areteDir = join(workspaceRoot, '.arete');
             const sessionFile = join(areteDir, `.review-session-${sessionId}`);
             const completeFile = join(areteDir, `.review-complete-${sessionId}`);
-            // Validate session file exists
-            const sessionExists = await storage.read(sessionFile);
-            if (sessionExists === null) {
-                return c.json({ error: `Session not found: ${sessionId}` }, 400);
+            // Validate session file exists (skip for web-initiated sessions)
+            const isWebSession = sessionId.startsWith('web-');
+            if (!isWebSession) {
+                const sessionExists = await storage.read(sessionFile);
+                if (sessionExists === null) {
+                    return c.json({ error: `Session not found: ${sessionId}` }, 400);
+                }
             }
             // Write completion file with approved/skipped arrays
             const completionData = {

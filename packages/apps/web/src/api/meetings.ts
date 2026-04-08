@@ -270,6 +270,18 @@ export async function fetchAreaSuggestion(slug: string): Promise<AreaSuggestionR
   return { suggestion: raw.suggestion, areas: raw.areas };
 }
 
+/** PUT /api/meetings/:slug — update meeting fields (title, summary, area) */
+export async function updateMeeting(
+  slug: string,
+  updates: { title?: string; summary?: string; area?: string }
+): Promise<Meeting> {
+  const raw = await apiFetch<RawFullMeeting>(`/api/meetings/${slug}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  return mapFullMeeting(raw);
+}
+
 /** DELETE /api/meetings/:slug — delete meeting file */
 export async function deleteMeeting(slug: string): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>(`/api/meetings/${slug}`, {
