@@ -153,7 +153,10 @@ describe('generateMeetingManifest', () => {
   });
 
   it('excludes meetings outside the window', async () => {
-    writeMeeting(meetingsDir, '2026-04-04-recent.md', { title: 'Recent' });
+    // Use today's date so the test never drifts out of window
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const recentFile = `${today}-recent.md`;
+    writeMeeting(meetingsDir, recentFile, { title: 'Recent' });
     // Far past the 3-day window
     writeMeeting(meetingsDir, '2020-01-01-old.md', { title: 'Old' });
 
@@ -161,7 +164,7 @@ describe('generateMeetingManifest', () => {
     assert.equal(result.meetingCount, 1);
 
     const content = readFileSync(join(meetingsDir, 'MANIFEST.md'), 'utf8');
-    assert.ok(content.includes('2026-04-04-recent.md'), 'Should include recent meeting');
+    assert.ok(content.includes(recentFile), 'Should include recent meeting');
     assert.ok(!content.includes('2020-01-01-old.md'), 'Should not include old meeting');
   });
 
