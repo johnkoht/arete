@@ -131,16 +131,28 @@ export interface MeetingContextDeps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-interface ParsedMeetingFrontmatter {
+export interface ParsedMeetingFrontmatter {
   title: string;
   date: string;
   attendees: Array<{ name: string; email: string }>;
   attendee_ids?: string[];
   agenda?: string;
   area?: string;
+  /** Slugified topic keywords extracted from meeting intelligence. */
+  topics?: string[];
+  /** Count of open action items (pending + approved, not skipped). */
+  open_action_items?: number;
+  /** Count of action items where the user owes a counterparty. */
+  my_commitments?: number;
+  /** Count of action items where a counterparty owes the user. */
+  their_commitments?: number;
+  /** Count of staged decisions. */
+  decisions_count?: number;
+  /** Count of staged learnings. */
+  learnings_count?: number;
 }
 
-interface ParsedMeetingFile {
+export interface ParsedMeetingFile {
   frontmatter: ParsedMeetingFrontmatter;
   body: string;
 }
@@ -201,8 +213,20 @@ function parseMeetingFile(content: string): ParsedMeetingFile | null {
     // Parse area slug if present
     const area = typeof fm.area === 'string' && fm.area.trim() !== '' ? fm.area.trim() : undefined;
 
+    // Parse agent-facing fields (written by meeting-apply after extraction)
+    const topics = Array.isArray(fm.topics) ? fm.topics.map(String) : undefined;
+    const open_action_items = typeof fm.open_action_items === 'number' ? fm.open_action_items : undefined;
+    const my_commitments = typeof fm.my_commitments === 'number' ? fm.my_commitments : undefined;
+    const their_commitments = typeof fm.their_commitments === 'number' ? fm.their_commitments : undefined;
+    const decisions_count = typeof fm.decisions_count === 'number' ? fm.decisions_count : undefined;
+    const learnings_count = typeof fm.learnings_count === 'number' ? fm.learnings_count : undefined;
+
     return {
-      frontmatter: { title, date, attendees, attendee_ids, agenda, area },
+      frontmatter: {
+        title, date, attendees, attendee_ids, agenda, area,
+        topics, open_action_items, my_commitments, their_commitments,
+        decisions_count, learnings_count,
+      },
       body,
     };
   } catch {
@@ -931,4 +955,5 @@ export {
   findRecentMeetingsForAttendees,
   calculateCutoffDateString,
   extractDateFromFilename,
+  parseMeetingFile,
 };

@@ -115,6 +115,37 @@ export interface MeetingContextDeps {
     paths: WorkspacePaths;
     areaParser?: AreaParserService;
 }
+export interface ParsedMeetingFrontmatter {
+    title: string;
+    date: string;
+    attendees: Array<{
+        name: string;
+        email: string;
+    }>;
+    attendee_ids?: string[];
+    agenda?: string;
+    area?: string;
+    /** Slugified topic keywords extracted from meeting intelligence. */
+    topics?: string[];
+    /** Count of open action items (pending + approved, not skipped). */
+    open_action_items?: number;
+    /** Count of action items where the user owes a counterparty. */
+    my_commitments?: number;
+    /** Count of action items where a counterparty owes the user. */
+    their_commitments?: number;
+    /** Count of staged decisions. */
+    decisions_count?: number;
+    /** Count of staged learnings. */
+    learnings_count?: number;
+}
+export interface ParsedMeetingFile {
+    frontmatter: ParsedMeetingFrontmatter;
+    body: string;
+}
+/**
+ * Parse meeting file frontmatter and body.
+ */
+declare function parseMeetingFile(content: string): ParsedMeetingFile | null;
 /**
  * Calculate YYYY-MM-DD cutoff date string for 60 days before reference date.
  */
@@ -156,5 +187,5 @@ declare function findRecentMeetingsForAttendees(storage: StorageAdapter, paths: 
  * @returns MeetingContextBundle with all assembled context
  */
 export declare function buildMeetingContext(meetingPath: string, deps: MeetingContextDeps, options?: BuildMeetingContextOptions): Promise<MeetingContextBundle>;
-export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, };
+export { findRecentMeetings, findRecentMeetingsForAttendees, calculateCutoffDateString, extractDateFromFilename, parseMeetingFile, };
 //# sourceMappingURL=meeting-context.d.ts.map

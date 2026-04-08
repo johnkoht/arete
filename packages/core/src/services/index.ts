@@ -132,6 +132,9 @@ export type {
   ApplyMeetingDeps,
 } from './meeting-apply.js';
 
+// Meeting manifest generator
+export { generateMeetingManifest } from './meeting-manifest.js';
+
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 

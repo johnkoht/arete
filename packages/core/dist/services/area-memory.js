@@ -7,6 +7,7 @@
  * All I/O via StorageAdapter — no direct fs imports.
  */
 import { join, basename } from 'node:path';
+import { parseMeetingFile } from './meeting-context.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -59,6 +60,16 @@ function parseMemorySections(content) {
         });
     }
     return sections;
+}
+/**
+ * Convert a slug to a title-cased display name.
+ * 'email-templates' → 'Email Templates'
+ */
+function slugToName(slug) {
+    return slug
+        .split('-')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
 }
 function daysAgo(dateStr, referenceDate = new Date()) {
     const d = new Date(dateStr);
@@ -124,6 +135,16 @@ function renderAreaMemory(data) {
     if (data.keywords.length > 0) {
         lines.push(`keywords: [${data.keywords.map(k => `"${k}"`).join(', ')}]`);
     }
+    if (data.topics.length > 0) {
+        lines.push('topics:');
+        for (const t of data.topics) {
+            lines.push(`  - slug: ${t.slug}`);
+            lines.push(`    name: ${t.name}`);
+            lines.push(`    meeting_count: ${t.meetingCount}`);
+            lines.push(`    open_items: ${t.openItems}`);
+            lines.push(`    last_referenced: "${t.lastReferenced}"`);
+        }
+    }
     lines.push('---');
     lines.push('');
     // Header
@@ -136,6 +157,16 @@ function renderAreaMemory(data) {
         lines.push('## Keywords');
         lines.push('');
         lines.push(data.keywords.join(', '));
+        lines.push('');
+    }
+    // Topics
+    if (data.topics.length > 0) {
+        lines.push('## Topics');
+        lines.push('');
+        for (const t of data.topics) {
+            const openStr = t.openItems > 0 ? ` — ${t.openItems} open` : '';
+            lines.push(`- **${t.name}** (${t.meetingCount} meetings${openStr}, last: ${t.lastReferenced})`);
+        }
         lines.push('');
     }
     // Active People
@@ -353,8 +384,8 @@ export class AreaMemoryService {
                 activePeopleSet.add(attendee);
             }
         }
-        // Also scan recent meetings for attendees
-        const recentMeetingPeople = await this.getRecentMeetingPeople(areaContext, workspacePaths);
+        // Also scan recent meetings for attendees and topics (single pass)
+        const { people: recentMeetingPeople, topics } = await this.scanAreaMeetings(areaContext, workspacePaths);
         for (const person of recentMeetingPeople) {
             activePeopleSet.add(person);
         }
@@ -382,55 +413,96 @@ export class AreaMemoryService {
             openCommitments,
             recentlyCompleted,
             recentDecisions,
+            topics,
         };
     }
     /**
-     * Get people who attended area-mapped meetings in the last 30 days.
+     * Single-pass scan of area-matched meeting files.
+     *
+     * Collects both recent attendee IDs (for active people) and topic aggregates
+     * in one loop, avoiding the O(2N) double-scan that separate methods would cause.
+     *
+     * Matches meetings via BOTH frontmatter `area:` field AND recurring meeting
+     * title match. People collection is limited to RECENT_DAYS; topics use all
+     * matched meetings (stale exclusion applied at the end).
      */
-    async getRecentMeetingPeople(areaContext, workspacePaths) {
+    async scanAreaMeetings(areaContext, workspacePaths) {
+        const TOPIC_STALE_DAYS = 60;
         const meetingsDir = join(workspacePaths.resources, 'meetings');
-        const meetingsExist = await this.storage.exists(meetingsDir);
-        if (!meetingsExist)
-            return [];
+        if (!(await this.storage.exists(meetingsDir)))
+            return { people: [], topics: [] };
         const meetingFiles = await this.storage.list(meetingsDir, { extensions: ['.md'] });
         const people = new Set();
+        // Aggregate topics: slug → { count, openItems, lastReferenced }
+        const topicMap = new Map();
         for (const meetingPath of meetingFiles) {
             const fileName = basename(meetingPath);
-            if (fileName === 'index.md')
+            if (fileName === 'index.md' || fileName === 'MANIFEST.md')
                 continue;
+            const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (!dateMatch)
+                continue;
+            const date = dateMatch[1];
             const content = await this.storage.read(meetingPath);
             if (!content)
                 continue;
-            // Check if this meeting matches the area
-            const titleMatch = content.match(/^title:\s*"?([^"\n]+)"?\s*$/m);
-            const title = titleMatch?.[1] ?? fileName.replace(/\.md$/, '');
-            let matchesArea = false;
-            for (const recurring of areaContext.recurringMeetings) {
-                if (title.toLowerCase().includes(recurring.title.toLowerCase())) {
-                    matchesArea = true;
-                    break;
+            const parsed = parseMeetingFile(content);
+            if (!parsed)
+                continue;
+            const fm = parsed.frontmatter;
+            // Match via area: frontmatter field OR recurring meeting title
+            let matchesArea = fm.area === areaContext.slug;
+            if (!matchesArea && areaContext.recurringMeetings.length > 0) {
+                const title = fm.title.toLowerCase();
+                for (const recurring of areaContext.recurringMeetings) {
+                    if (title.includes(recurring.title.toLowerCase())) {
+                        matchesArea = true;
+                        break;
+                    }
                 }
             }
             if (!matchesArea)
                 continue;
-            // Check recency
-            const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
-            if (dateMatch && daysAgo(dateMatch[1]) > RECENT_DAYS)
-                continue;
-            // Extract attendees
-            const attendeeIdsMatch = content.match(/^attendee_ids:\s*\n((?:\s*-\s*.+\n)*)/m);
-            if (attendeeIdsMatch) {
-                const ids = attendeeIdsMatch[1].match(/-\s*(.+)/g);
-                if (ids) {
-                    for (const id of ids) {
-                        const slug = id.replace(/^\s*-\s*/, '').trim();
-                        if (slug)
-                            people.add(slug);
+            // Collect attendee IDs (only for recent meetings)
+            if (daysAgo(date) <= RECENT_DAYS && fm.attendee_ids) {
+                for (const id of fm.attendee_ids) {
+                    if (id)
+                        people.add(id);
+                }
+            }
+            // Collect topics from all matched meetings (no date restriction here)
+            if (fm.topics && fm.topics.length > 0) {
+                const openItems = fm.open_action_items ?? 0;
+                for (const slug of fm.topics) {
+                    const existing = topicMap.get(slug);
+                    if (!existing) {
+                        topicMap.set(slug, { count: 1, openItems, lastReferenced: date });
+                    }
+                    else {
+                        existing.count += 1;
+                        existing.openItems += openItems;
+                        if (date > existing.lastReferenced)
+                            existing.lastReferenced = date;
                     }
                 }
             }
         }
-        return [...people];
+        // Build topic entries — exclude topics not mentioned in 60+ days with no open work
+        const topicEntries = [];
+        for (const [slug, data] of topicMap.entries()) {
+            if (daysAgo(data.lastReferenced) > TOPIC_STALE_DAYS && data.openItems === 0)
+                continue;
+            topicEntries.push({
+                slug,
+                name: slugToName(slug),
+                meetingCount: data.count,
+                openItems: data.openItems,
+                lastReferenced: data.lastReferenced,
+            });
+        }
+        // Sort by openItems desc, then meetingCount desc
+        topicEntries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
+        return { people: [...people], topics: topicEntries };
     }
     /**
      * Get recently completed commitments for an area.

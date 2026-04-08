@@ -3,7 +3,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createServices, loadConfig, refreshQmdIndex } from '@arete/core';
+import { createServices, loadConfig, refreshQmdIndex, generateMeetingManifest } from '@arete/core';
 import { listItem, success, info, warn, error } from '../formatters.js';
 const execFileAsync = promisify(execFile);
 const QMD_STATUS_TIMEOUT_MS = 5_000;
@@ -81,6 +81,17 @@ export function registerIndexSearchCommand(program) {
         }
         if (result.embedWarning) {
             warn(result.embedWarning);
+        }
+        // Rebuild meeting manifest
+        try {
+            const paths = services.workspace.getPaths(root);
+            const manifestResult = await generateMeetingManifest(paths, services.storage);
+            if (manifestResult.meetingCount > 0) {
+                info(`Meeting manifest updated (${manifestResult.meetingCount} meetings)`);
+            }
+        }
+        catch (e) {
+            warn(`Meeting manifest update failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     });
 }

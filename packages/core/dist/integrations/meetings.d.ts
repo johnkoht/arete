@@ -37,6 +37,8 @@ export interface MeetingForSave {
     recurring_series_id?: string;
     /** Explicit area slug for meeting-to-area association. */
     area?: string;
+    /** Slugified topic keywords extracted from meeting content (e.g. 'email-templates', 'q2-planning'). */
+    topics?: string[];
 }
 /**
  * Result of agenda matching with metadata for user prompting.

@@ -123,6 +123,13 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
     // 6. Update frontmatter
     data['status'] = 'processed';
     data['processed_at'] = new Date().toISOString();
+    // Write topics + item counts for agent-facing frontmatter
+    data['topics'] = intelligence.topics ?? [];
+    data['open_action_items'] = intelligence.actionItems.length;
+    data['my_commitments'] = intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
+    data['their_commitments'] = intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;
+    data['decisions_count'] = intelligence.decisions.length;
+    data['learnings_count'] = intelligence.learnings.length;
     // 7. Write meeting file
     const updatedContent = serializeFrontmatter(data, updatedBody);
     await storage.write(absPath, updatedContent);

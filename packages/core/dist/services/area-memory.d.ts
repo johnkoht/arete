@@ -85,9 +85,16 @@ export declare class AreaMemoryService {
     }>>;
     private computeAreaData;
     /**
-     * Get people who attended area-mapped meetings in the last 30 days.
+     * Single-pass scan of area-matched meeting files.
+     *
+     * Collects both recent attendee IDs (for active people) and topic aggregates
+     * in one loop, avoiding the O(2N) double-scan that separate methods would cause.
+     *
+     * Matches meetings via BOTH frontmatter `area:` field AND recurring meeting
+     * title match. People collection is limited to RECENT_DAYS; topics use all
+     * matched meetings (stale exclusion applied at the end).
      */
-    private getRecentMeetingPeople;
+    private scanAreaMeetings;
     /**
      * Get recently completed commitments for an area.
      */

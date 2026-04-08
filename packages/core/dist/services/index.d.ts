@@ -35,6 +35,7 @@ export { buildMeetingContext } from './meeting-context.js';
 export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, AgendaCandidate, } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
 export type { ApplyMeetingOptions, ApplyMeetingResult, ApplyMeetingDeps, } from './meeting-apply.js';
+export { generateMeetingManifest } from './meeting-manifest.js';
 export { AreaParserService } from './area-parser.js';
 export { AreaMemoryService, isAreaMemoryStale } from './area-memory.js';
 export type { RefreshAreaMemoryOptions, RefreshAreaMemoryResult, CompactDecisionsOptions, CompactDecisionsResult, } from './area-memory.js';

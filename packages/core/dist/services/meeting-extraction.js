@@ -36,6 +36,12 @@ const GARBAGE_PREFIXES = [
     'uh',
 ];
 const VALID_DIRECTIONS = new Set(['i_owe_them', 'they_owe_me']);
+const TOPIC_SLUG_REGEX = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+const TOPIC_BANNED = new Set([
+    'meeting', 'discussion', 'update', 'call', 'sync', 'review',
+    'followup', 'follow-up', 'next-steps',
+]);
+const TOPIC_MAX_COUNT = 6;
 // ---------------------------------------------------------------------------
 // Post-processing filters
 // ---------------------------------------------------------------------------
@@ -420,7 +426,8 @@ JSON schema:
   ],
   "next_steps": ["string — each agreed-upon next step"],
   "decisions": ["string — each decision made"],
-  "learnings": ["string — each key insight or learning shared"]
+  "learnings": ["string — each key insight or learning shared"],
+  "topics": ["string — 3-6 slugified keywords for what this meeting was substantively about"]
 }
 
 ## What IS an action item (INCLUDE these — high confidence ≥0.8):
@@ -456,6 +463,7 @@ Rules:
 - Omit sections that have no content (return empty arrays, not null)
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
+- Topics: format as lowercase-hyphenated slugs (e.g. 'email-templates', 'q2-planning', 'onboarding-v2'). 3–6 topics max. Exclude generic words: meeting, discussion, update, call, sync, review, followup, follow-up, next-steps.
 ${enhancedContext}${exclusionList}
 
 Transcript:
@@ -523,6 +531,7 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
             nextSteps: [],
             decisions: [],
             learnings: [],
+            topics: [],
         },
         validationWarnings: [],
         rawItems: [],
@@ -653,6 +662,22 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
             }
         }
     }
+    // Parse topics — validate slug format, drop banned words, cap at max
+    const topics = [];
+    if (Array.isArray(raw.topics)) {
+        for (const t of raw.topics) {
+            if (typeof t !== 'string')
+                continue;
+            const slug = t.trim(); // validate as-is — drop, never transform
+            if (!TOPIC_SLUG_REGEX.test(slug))
+                continue;
+            if (TOPIC_BANNED.has(slug))
+                continue;
+            if (topics.length >= TOPIC_MAX_COUNT)
+                break;
+            topics.push(slug);
+        }
+    }
     // ---------------------------------------------------------------------------
     // Post-processing filters (order: dedup → category limits)
     // ---------------------------------------------------------------------------
@@ -719,6 +744,7 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
             nextSteps,
             decisions: limitedDecisions,
             learnings: limitedLearnings,
+            topics,
         },
         validationWarnings,
         rawItems,

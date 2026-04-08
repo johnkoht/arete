@@ -27,6 +27,7 @@ import {
   extractAttendeeSlugs,
   buildMeetingContext,
   applyMeetingIntelligence,
+  generateMeetingManifest,
   getCompletedItems,
   calculateSpeakingRatio,
   inferUrgency,
@@ -1671,6 +1672,12 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       displayQmdResult(qmdResult);
+
+      // Fire-and-forget manifest refresh (non-blocking — do not await)
+      const paths = services.workspace.getPaths(root);
+      generateMeetingManifest(paths, services.storage).catch((err: unknown) => {
+        warn(`Meeting manifest update failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
     });
 }
 

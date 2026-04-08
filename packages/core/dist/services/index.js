@@ -35,6 +35,8 @@ export { buildMeetingContext } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here
 // Meeting apply service
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
+// Meeting manifest generator
+export { generateMeetingManifest } from './meeting-manifest.js';
 // Area parsing
 export { AreaParserService } from './area-parser.js';
 // Area memory (L3 computed summaries)
