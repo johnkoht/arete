@@ -64,6 +64,10 @@ export type MeetingIntelligence = {
   nextSteps: string[];
   decisions: string[];
   learnings: string[];
+  /** Confidence scores for decisions, parallel array indexed same as decisions. */
+  decisionConfidences?: number[];
+  /** Confidence scores for learnings, parallel array indexed same as learnings. */
+  learningConfidences?: number[];
   /** Slugified topic keywords (e.g. 'email-templates', 'q2-planning'). 3–6 items. */
   topics?: string[];
 };
@@ -211,6 +215,47 @@ function isTrivialItem(text: string): string | null {
   for (const pattern of TRIVIAL_PATTERNS) {
     if (pattern.test(text)) {
       return `matches trivial pattern: ${pattern.source}`;
+    }
+  }
+  return null;
+}
+
+/** Decision verbs that indicate a real decision was made (used as safety check). */
+const DECISION_VERBS = /\b(decided|agreed|chose|approved|confirmed|committed|selected|adopted)\b/i;
+
+/** Trivial decision patterns — match only if no decision verb present. */
+const TRIVIAL_DECISION_PATTERNS = [
+  /^we (discussed|reviewed|talked about|went over|covered)\b/i,
+  /^(meeting|call) (moved|rescheduled|cancelled)/i,
+  /^team (met|gathered|synced)\b/i,
+];
+
+/**
+ * Check if a decision matches trivial patterns.
+ * Safety: patterns do NOT match items containing decision verbs.
+ */
+export function isTrivialDecision(text: string): string | null {
+  if (DECISION_VERBS.test(text)) return null; // Contains a real decision verb — keep it
+  for (const pattern of TRIVIAL_DECISION_PATTERNS) {
+    if (pattern.test(text)) {
+      return `matches trivial decision pattern: ${pattern.source}`;
+    }
+  }
+  return null;
+}
+
+/** Trivial learning patterns. */
+const TRIVIAL_LEARNING_PATTERNS = [
+  /^(company|team|org)\s+(picnic|outing|happy hour|party|offsite)\b/i,
+];
+
+/**
+ * Check if a learning matches trivial patterns.
+ */
+export function isTrivialLearning(text: string): string | null {
+  for (const pattern of TRIVIAL_LEARNING_PATTERNS) {
+    if (pattern.test(text)) {
+      return `matches trivial learning pattern: ${pattern.source}`;
     }
   }
   return null;
@@ -601,8 +646,8 @@ JSON schema:
     }
   ],
   "next_steps": ["string — each agreed-upon next step"],
-  "decisions": ["string — each decision made"],
-  "learnings": ["string — each key insight or learning shared"],
+  "decisions": [{ "text": "string — the decision made", "confidence": "number (0-1) — your confidence this is a real decision" }],
+  "learnings": [{ "text": "string — key insight or learning", "confidence": "number (0-1) — your confidence this is a genuine insight" }],
   "topics": ["string — 3-6 slugified keywords for what this meeting was substantively about"]
 }
 
@@ -623,12 +668,43 @@ JSON schema:
 ✗ "We will touch base next week" — trivial check-in
 ✗ Long descriptions spanning multiple sentences
 
-## Confidence Guide:
+## What is NOT a decision (EXCLUDE these):
+✗ "We discussed the product roadmap" — discussion summary, not a choice made
+✗ "Team reviewed the Q2 metrics" — activity description, not a decision
+✗ "Meeting moved to Tuesday" — logistics, not a strategic decision
+✗ "A new ops hire is expected to join April 20" — status update, no choice was made
+✗ "The goal is to refine the process" — goal statement, not a decision
+✗ "High-confidence call links are ready for use" — readiness status, not a decision
+✗ "We use Notion for tracking" — existing tool/process, not a new decision
+✗ Raw metrics or statistics without a decision attached
+
+## What is NOT a learning (EXCLUDE these):
+✗ "Anthony is a runner and fitness enthusiast" — personal trivia
+✗ "Reserv named to Forbes Fintech 50" — organizational announcement
+✗ "A new ops hire expected April 20" — status update
+✗ "We deploy on Tuesdays" — known process, not a novel insight
+✗ "TalkDesk contract is ~$1M/year" — raw financial fact without insight
+✗ "ISO is used on nearly every claim" — raw statistic without learning
+✗ "The team met to discuss priorities" — meeting description, not an insight
+
+## Action Item Confidence Guide:
 - 0.9-1.0: Explicit commitment with owner + deadline (e.g., "John will send docs by Friday")
 - 0.7-0.8: Clear owner + task but no deadline (e.g., "Sarah to review the PR")
 - 0.5-0.6: Implied commitment, owner inferable (e.g., "I'll look into the bug")
 - 0.3-0.4: Vague intention (exclude these)
 - 0.0-0.2: Not an action item (exclude these)
+
+## Decision Confidence Guide:
+- 0.9-1.0: Explicit choice made with alternatives rejected (e.g., "We decided to use PostgreSQL over MongoDB")
+- 0.7-0.8: Clear direction chosen, implied alternatives (e.g., "Going with the phased rollout approach")
+- 0.5-0.6: Soft agreement, may not be final (e.g., "Leaning toward option A")
+- Below 0.5: Not a decision — exclude
+
+## Learning Confidence Guide:
+- 0.9-1.0: Novel insight that changes how work is done (e.g., "Batch processing reduces errors by 40%")
+- 0.7-0.8: Useful domain knowledge, non-obvious (e.g., "Enterprise users prefer email over Slack notifications")
+- 0.5-0.6: Interesting but may be common knowledge
+- Below 0.5: Not a learning — exclude
 
 Rules:
 - Return ONLY the JSON object, no other text
@@ -640,6 +716,8 @@ Rules:
 - Be HIGHLY selective: extract only items you're confident about (≥0.5)
 - When in doubt, exclude rather than include garbage
 - Topics: format as lowercase-hyphenated slugs (e.g. 'email-templates', 'q2-planning', 'onboarding-v2'). 3–6 topics max. Exclude generic words: meeting, discussion, update, call, sync, review, followup, follow-up, next-steps.
+- Include confidence (0-1) for EVERY decision and learning
+- Before finalizing, review your list: remove any decisions that are status updates or meeting logistics, remove any learnings that are personal facts or common knowledge, remove duplicates with different wording
 ${enhancedContext}${exclusionList}
 
 Transcript:
@@ -660,7 +738,7 @@ export function buildLightExtractionPrompt(transcript: string): string {
 Return ONLY valid JSON with no markdown formatting:
 {
   "summary": "string — 2-3 sentence summary of the meeting",
-  "learnings": ["string — max 2 domain insights"]
+  "learnings": [{ "text": "string — domain insight", "confidence": "number (0-1)" }]
 }
 
 ## What TO extract (learnings only):
@@ -834,29 +912,89 @@ export function parseMeetingExtractionResponse(
     }
   }
 
-  // Parse decisions
+  // Parse decisions (supports both string and { text, confidence } objects)
   const decisions: string[] = [];
+  const decisionConfidences: number[] = [];
   if (Array.isArray(raw.decisions)) {
     for (const decision of raw.decisions) {
-      if (typeof decision === 'string' && decision.trim()) {
-        const text = decision.trim();
-        // Store raw item for debugging/analysis
-        rawItems.push({ type: 'decision', text });
-        decisions.push(text);
+      let text: string | undefined;
+      let confidence: number | undefined;
+      if (typeof decision === 'string') {
+        text = decision.trim();
+      } else if (decision && typeof decision === 'object') {
+        text = typeof decision.text === 'string' ? decision.text.trim() : undefined;
+        if (typeof decision.confidence === 'number') {
+          confidence = Math.max(0, Math.min(1, decision.confidence));
+        }
       }
+      if (!text) continue;
+
+      // Apply garbage filter
+      const garbageReason = isGarbageItem(text);
+      if (garbageReason) {
+        validationWarnings.push({
+          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+          reason: `decision: ${garbageReason}`,
+        });
+        continue;
+      }
+
+      // Apply trivial decision filter
+      const trivialReason = isTrivialDecision(text);
+      if (trivialReason) {
+        validationWarnings.push({
+          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+          reason: trivialReason,
+        });
+        continue;
+      }
+
+      rawItems.push({ type: 'decision', text, confidence });
+      decisions.push(text);
+      decisionConfidences.push(confidence as number);
     }
   }
 
-  // Parse learnings
+  // Parse learnings (supports both string and { text, confidence } objects)
   const learnings: string[] = [];
+  const learningConfidences: number[] = [];
   if (Array.isArray(raw.learnings)) {
     for (const learning of raw.learnings) {
-      if (typeof learning === 'string' && learning.trim()) {
-        const text = learning.trim();
-        // Store raw item for debugging/analysis
-        rawItems.push({ type: 'learning', text });
-        learnings.push(text);
+      let text: string | undefined;
+      let confidence: number | undefined;
+      if (typeof learning === 'string') {
+        text = learning.trim();
+      } else if (learning && typeof learning === 'object') {
+        text = typeof learning.text === 'string' ? learning.text.trim() : undefined;
+        if (typeof learning.confidence === 'number') {
+          confidence = Math.max(0, Math.min(1, learning.confidence));
+        }
       }
+      if (!text) continue;
+
+      // Apply garbage filter
+      const garbageReason = isGarbageItem(text);
+      if (garbageReason) {
+        validationWarnings.push({
+          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+          reason: `learning: ${garbageReason}`,
+        });
+        continue;
+      }
+
+      // Apply trivial learning filter
+      const trivialReason = isTrivialLearning(text);
+      if (trivialReason) {
+        validationWarnings.push({
+          item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
+          reason: trivialReason,
+        });
+        continue;
+      }
+
+      rawItems.push({ type: 'learning', text, confidence });
+      learnings.push(text);
+      learningConfidences.push(confidence as number);
     }
   }
 
@@ -886,9 +1024,9 @@ export function parseMeetingExtractionResponse(
     });
   }
 
-  // 2. Near-duplicate deduplication for decisions
+  // 2. Near-duplicate deduplication for decisions (carry confidence through)
   const { kept: dedupedDecisions, filtered: dedupedDecisionsFiltered } = deduplicateItems(
-    decisions.map(d => ({ text: d }))
+    decisions.map((d, i) => ({ text: d, conf: decisionConfidences[i] }))
   );
   for (const { item, reason } of dedupedDecisionsFiltered) {
     validationWarnings.push({
@@ -897,10 +1035,11 @@ export function parseMeetingExtractionResponse(
     });
   }
   const finalDecisions = dedupedDecisions.map(d => d.text);
+  const finalDecisionConfidences = dedupedDecisions.map(d => d.conf);
 
-  // 3. Near-duplicate deduplication for learnings
+  // 3. Near-duplicate deduplication for learnings (carry confidence through)
   const { kept: dedupedLearnings, filtered: dedupedLearningsFiltered } = deduplicateItems(
-    learnings.map(l => ({ text: l }))
+    learnings.map((l, i) => ({ text: l, conf: learningConfidences[i] }))
   );
   for (const { item, reason } of dedupedLearningsFiltered) {
     validationWarnings.push({
@@ -909,11 +1048,14 @@ export function parseMeetingExtractionResponse(
     });
   }
   const finalLearnings = dedupedLearnings.map(l => l.text);
+  const finalLearningConfidences = dedupedLearnings.map(l => l.conf);
 
   // 4. Apply category limits (keep first N in LLM response order)
   const limitedActionItems = dedupedActionItems.slice(0, limits.actionItems);
   const limitedDecisions = finalDecisions.slice(0, limits.decisions);
+  const limitedDecisionConfidences = finalDecisionConfidences.slice(0, limits.decisions);
   const limitedLearnings = finalLearnings.slice(0, limits.learnings);
+  const limitedLearningConfidences = finalLearningConfidences.slice(0, limits.learnings);
 
   // Add warnings for items exceeding limits
   if (dedupedActionItems.length > limits.actionItems) {
@@ -942,6 +1084,10 @@ export function parseMeetingExtractionResponse(
     }
   }
 
+  // Build confidence arrays — only include if at least one value is defined
+  const hasDecisionConf = limitedDecisionConfidences.some(c => c !== undefined);
+  const hasLearningConf = limitedLearningConfidences.some(c => c !== undefined);
+
   return {
     intelligence: {
       summary,
@@ -949,6 +1095,8 @@ export function parseMeetingExtractionResponse(
       nextSteps,
       decisions: limitedDecisions,
       learnings: limitedLearnings,
+      ...(hasDecisionConf && { decisionConfidences: limitedDecisionConfidences }),
+      ...(hasLearningConf && { learningConfidences: limitedLearningConfidences }),
       topics,
     },
     validationWarnings,

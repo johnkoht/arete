@@ -9,6 +9,8 @@ import {
   matchCompletedTasks,
   matchRecentMemory,
   matchPriorWorkspace,
+  parseMemoryItems,
+  batchLLMReview,
   WORKSPACE_MATCH_THRESHOLD,
   COMPLETED_MATCH_THRESHOLD,
   MEMORY_MATCH_THRESHOLD,
@@ -1321,5 +1323,236 @@ describe('generateWhy', () => {
     // area and keyword tie at sort — area comes first in the factors array
     // With stable sort, area stays before keyword when scores equal
     assert.ok(result.includes('Area match') || result.includes('Keyword match'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseMemoryItems
+// ---------------------------------------------------------------------------
+
+describe('parseMemoryItems', () => {
+  // Use a fixed "today" relative date for tests — items dated within 30 days of now
+  const recentDate = new Date();
+  recentDate.setDate(recentDate.getDate() - 5);
+  const recentDateStr = recentDate.toISOString().split('T')[0];
+
+  const oldDate = new Date();
+  oldDate.setDate(oldDate.getDate() - 60);
+  const oldDateStr = oldDate.toISOString().split('T')[0];
+
+  it('parses standard memory file format', () => {
+    const content = [
+      `## Decided to use PostgreSQL`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Weekly Standup (Alice, Bob)`,
+      `- We will migrate to PostgreSQL for the production database`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 1);
+    assert.equal(items[0].text, 'We will migrate to PostgreSQL for the production database');
+    assert.equal(items[0].date, recentDateStr);
+    assert.equal(items[0].source, 'Weekly Standup (Alice, Bob)');
+  });
+
+  it('parses multiple sections', () => {
+    const content = [
+      `## Decision A`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Meeting 1`,
+      `- First decision text`,
+      '',
+      `## Decision B`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Meeting 2`,
+      `- Second decision text`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 2);
+    assert.equal(items[0].text, 'First decision text');
+    assert.equal(items[1].text, 'Second decision text');
+  });
+
+  it('returns empty array for empty content', () => {
+    assert.deepStrictEqual(parseMemoryItems('', 'decisions.md'), []);
+    assert.deepStrictEqual(parseMemoryItems('   \n\n  ', 'decisions.md'), []);
+  });
+
+  it('filters out items older than maxAgeDays', () => {
+    const content = [
+      `## Old Decision`,
+      `- **Date**: ${oldDateStr}`,
+      `- **Source**: Old Meeting`,
+      `- This is from 60 days ago`,
+      '',
+      `## Recent Decision`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Recent Meeting`,
+      `- This is from 5 days ago`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 1);
+    assert.equal(items[0].text, 'This is from 5 days ago');
+  });
+
+  it('respects custom maxAgeDays', () => {
+    const content = [
+      `## Old Decision`,
+      `- **Date**: ${oldDateStr}`,
+      `- **Source**: Meeting`,
+      `- From 60 days ago`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md', { maxAgeDays: 90 });
+    assert.equal(items.length, 1);
+  });
+
+  it('caps at maxItems', () => {
+    const sections = Array.from({ length: 5 }, (_, i) => [
+      `## Decision ${i}`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Meeting`,
+      `- Decision text ${i}`,
+    ].join('\n')).join('\n\n');
+
+    const items = parseMemoryItems(sections, 'decisions.md', { maxItems: 3 });
+    assert.equal(items.length, 3);
+  });
+
+  it('skips sections without date', () => {
+    const content = [
+      `## No Date Section`,
+      `- **Source**: Meeting`,
+      `- Some text without a date`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 0);
+  });
+
+  it('skips sections with invalid date', () => {
+    const content = [
+      `## Bad Date`,
+      `- **Date**: not-a-date`,
+      `- **Source**: Meeting`,
+      `- Some text`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 0);
+  });
+
+  it('uses sourcePath as fallback when Source is missing', () => {
+    const content = [
+      `## No Source`,
+      `- **Date**: ${recentDateStr}`,
+      `- Just the text`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, '.arete/memory/items/decisions.md');
+    assert.equal(items.length, 1);
+    assert.equal(items[0].source, '.arete/memory/items/decisions.md');
+  });
+
+  it('handles content before first section header', () => {
+    const content = [
+      `# Decisions`,
+      `Some preamble text`,
+      '',
+      `## Actual Decision`,
+      `- **Date**: ${recentDateStr}`,
+      `- **Source**: Meeting`,
+      `- The real content`,
+    ].join('\n');
+
+    const items = parseMemoryItems(content, 'decisions.md');
+    assert.equal(items.length, 1);
+    assert.equal(items[0].text, 'The real content');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// batchLLMReview
+// ---------------------------------------------------------------------------
+
+describe('batchLLMReview', () => {
+  const currentItems = [
+    { text: 'Migrate to PostgreSQL', type: 'decision', id: 'de-1' },
+    { text: 'Alice likes hiking', type: 'learning', id: 'le-1' },
+    { text: 'Use React for frontend', type: 'decision', id: 'de-2' },
+  ];
+
+  const committedItems = [
+    { text: 'We decided to use PostgreSQL for prod', date: '2026-04-01', source: 'decisions.md' },
+  ];
+
+  it('returns drops when LLM flags items', async () => {
+    const mockLLM = async () => JSON.stringify({
+      drops: [
+        { id: 'de-1', reason: 'Duplicate of committed item about PostgreSQL' },
+        { id: 'le-1', reason: 'Personal trivia, not a learning' },
+      ],
+    });
+
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 2);
+    assert.equal(drops[0].id, 'de-1');
+    assert.equal(drops[0].action, 'drop');
+    assert.ok(drops[0].reason.includes('PostgreSQL'));
+    assert.equal(drops[1].id, 'le-1');
+  });
+
+  it('returns empty when LLM says keep all', async () => {
+    const mockLLM = async () => JSON.stringify({ drops: [] });
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 0);
+  });
+
+  it('returns empty for empty current items', async () => {
+    const mockLLM = async () => { throw new Error('should not be called'); };
+    const drops = await batchLLMReview([], committedItems, mockLLM);
+    assert.equal(drops.length, 0);
+  });
+
+  it('handles malformed JSON gracefully', async () => {
+    const mockLLM = async () => 'This is not JSON at all';
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 0);
+  });
+
+  it('handles LLM error gracefully', async () => {
+    const mockLLM = async () => { throw new Error('LLM unavailable'); };
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 0);
+  });
+
+  it('filters out drops with invalid IDs', async () => {
+    const mockLLM = async () => JSON.stringify({
+      drops: [
+        { id: 'de-1', reason: 'Valid drop' },
+        { id: 'nonexistent-id', reason: 'Should be filtered' },
+      ],
+    });
+
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 1);
+    assert.equal(drops[0].id, 'de-1');
+  });
+
+  it('handles JSON wrapped in markdown code fences', async () => {
+    const mockLLM = async () => '```json\n{"drops": [{"id": "le-1", "reason": "trivia"}]}\n```';
+    const drops = await batchLLMReview(currentItems, committedItems, mockLLM);
+    assert.equal(drops.length, 1);
+    assert.equal(drops[0].id, 'le-1');
+  });
+
+  it('works with empty committed items', async () => {
+    const mockLLM = async () => JSON.stringify({
+      drops: [{ id: 'le-1', reason: 'Personal trivia' }],
+    });
+    const drops = await batchLLMReview(currentItems, [], mockLLM);
+    assert.equal(drops.length, 1);
   });
 });

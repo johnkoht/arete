@@ -399,9 +399,10 @@ export function processMeetingExtraction(
   }
 
   // Process decisions
-  for (const decision of intelligence.decisions) {
-    // Decisions don't have confidence from core extraction, default to 0.9
-    const confidence = 0.9;
+  for (let i = 0; i < intelligence.decisions.length; i++) {
+    const decision = intelligence.decisions[i];
+    // Use real confidence from extraction if available, fallback to 0.9
+    const confidence = intelligence.decisionConfidences?.[i] ?? 0.9;
     if (confidence < confidenceInclude) continue;
 
     const id = generateItemId('de_', deIndex);
@@ -437,9 +438,10 @@ export function processMeetingExtraction(
   }
 
   // Process learnings
-  for (const learning of intelligence.learnings) {
-    // Learnings don't have confidence from core extraction, default to 0.9
-    const confidence = 0.9;
+  for (let i = 0; i < intelligence.learnings.length; i++) {
+    const learning = intelligence.learnings[i];
+    // Use real confidence from extraction if available, fallback to 0.9
+    const confidence = intelligence.learningConfidences?.[i] ?? 0.9;
     if (confidence < confidenceInclude) continue;
 
     const id = generateItemId('le_', leIndex);

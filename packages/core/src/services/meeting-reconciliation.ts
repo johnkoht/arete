@@ -10,6 +10,7 @@
  * No storage/search access — all data passed in via ReconciliationContext.
  */
 
+import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type {
   ReconciliationContext,
@@ -576,16 +577,165 @@ export function reconcileMeetingBatch(
 }
 
 // ---------------------------------------------------------------------------
+// Memory item parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse committed items from a memory file (decisions.md or learnings.md).
+ *
+ * Handles the section format written by `appendToMemoryFile()`:
+ * ```
+ * ## Title
+ * - **Date**: YYYY-MM-DD
+ * - **Source**: Meeting Title (Attendees)
+ * - Item content
+ * ```
+ *
+ * Filters to items within the last `maxAgeDays` and caps at `maxItems`.
+ */
+export function parseMemoryItems(
+  content: string,
+  sourcePath: string,
+  options?: { maxAgeDays?: number; maxItems?: number },
+): Array<{ text: string; date: string; source: string }> {
+  const maxAgeDays = options?.maxAgeDays ?? 30;
+  const maxItems = options?.maxItems ?? 100;
+
+  if (!content.trim()) return [];
+
+  const items: Array<{ text: string; date: string; source: string }> = [];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - maxAgeDays);
+
+  // Split into sections by ## headers
+  const sections = content.split(/^## /m).slice(1); // skip preamble before first ##
+
+  for (const section of sections) {
+    const lines = section.split('\n');
+    let date: string | undefined;
+    let source: string | undefined;
+    const textLines: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const dateMatch = line.match(/^- \*\*Date\*\*:\s*(.+)$/);
+      if (dateMatch) {
+        date = dateMatch[1].trim();
+        continue;
+      }
+
+      const sourceMatch = line.match(/^- \*\*Source\*\*:\s*(.+)$/);
+      if (sourceMatch) {
+        source = sourceMatch[1].trim();
+        continue;
+      }
+
+      // Content lines (strip leading "- " prefix)
+      const textContent = line.startsWith('- ') ? line.slice(2) : line;
+      if (textContent) textLines.push(textContent);
+    }
+
+    const text = textLines.join(' ').trim();
+    if (!text || !date) continue;
+
+    // Filter by date
+    const itemDate = new Date(date);
+    if (isNaN(itemDate.getTime())) continue;
+    if (itemDate < cutoff) continue;
+
+    items.push({ text, date, source: source ?? sourcePath });
+  }
+
+  return items.slice(0, maxItems);
+}
+
+// ---------------------------------------------------------------------------
+// Batch LLM quality review
+// ---------------------------------------------------------------------------
+
+/**
+ * One LLM call per processing run that semantically deduplicates against
+ * committed memory and catches low-signal items that slipped through
+ * rule-based filters.
+ *
+ * Returns a list of items to drop (with reasons). Graceful degradation:
+ * returns empty on parse failure.
+ */
+export async function batchLLMReview(
+  currentItems: Array<{ text: string; type: string; id: string }>,
+  committedItems: Array<{ text: string; date: string; source: string }>,
+  callLLM: (prompt: string) => Promise<string>,
+): Promise<Array<{ id: string; action: 'drop'; reason: string }>> {
+  if (currentItems.length === 0) return [];
+
+  const committedSection = committedItems.length > 0
+    ? committedItems.map(c => `- [${c.date}] ${c.text}`).join('\n')
+    : '(none)';
+
+  const currentSection = currentItems
+    .map(c => `- [${c.id}] (${c.type}) ${c.text}`)
+    .join('\n');
+
+  const prompt = `You are reviewing extracted meeting items for quality and duplication.
+
+## Recently Committed Items (already saved — flag duplicates)
+${committedSection}
+
+## Current Extraction Items (review each)
+${currentSection}
+
+## Task
+Return a JSON object with items to DROP. Keep everything else — when in doubt, keep.
+
+DROP criteria:
+- Semantic duplicate of a committed item (same meaning, different wording)
+- Status update misclassified as a decision (e.g. "We discussed X", "We reviewed Y")
+- Personal trivia misclassified as a learning (e.g. "Alice lives in Seattle")
+- Vague or unactionable items that add no signal
+
+Return ONLY valid JSON in this format:
+{"drops": [{"id": "item-id", "reason": "brief reason"}]}
+
+If nothing should be dropped, return: {"drops": []}`;
+
+  try {
+    const response = await callLLM(prompt);
+
+    // Extract JSON from response (handle markdown code fences)
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.drops || !Array.isArray(parsed.drops)) return [];
+
+    // Validate IDs exist in input
+    const validIds = new Set(currentItems.map(i => i.id));
+    return parsed.drops
+      .filter((d: { id?: string; reason?: string }) =>
+        d.id && d.reason && validIds.has(d.id),
+      )
+      .map((d: { id: string; reason: string }) => ({
+        id: d.id,
+        action: 'drop' as const,
+        reason: d.reason,
+      }));
+  } catch {
+    // Graceful degradation — parse failure or LLM error
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Reconciliation context loader
 // ---------------------------------------------------------------------------
 
 /**
  * Load reconciliation context from workspace.
  *
- * Reads area memory files to build the context needed for reconciliation
- * scoring and matching. For now, completedTasks and recentCommittedItems
- * return empty arrays — these will be populated when area task list and
- * .arete/memory/ integrations are implemented.
+ * Reads area memory files and committed decision/learning memory to build
+ * the context needed for reconciliation scoring and matching.
  *
  * @param storage - StorageAdapter for file access
  * @param workspaceRoot - Workspace root path
@@ -605,11 +755,24 @@ export async function loadReconciliationContext(
     }
   }
 
-  // For now, return empty arrays for completed tasks and recent memory.
-  // These would be loaded from area task lists and .arete/memory/ in future.
+  // Load recently committed decisions and learnings from memory files
+  const memoryDir = join(workspaceRoot, '.arete', 'memory', 'items');
+  const decisionPath = join(memoryDir, 'decisions.md');
+  const learningPath = join(memoryDir, 'learnings.md');
+
+  const [decisionContent, learningContent] = await Promise.all([
+    storage.read(decisionPath).catch(() => null),
+    storage.read(learningPath).catch(() => null),
+  ]);
+
+  const recentCommittedItems = [
+    ...parseMemoryItems(decisionContent ?? '', decisionPath),
+    ...parseMemoryItems(learningContent ?? '', learningPath),
+  ];
+
   return {
     areaMemories,
-    recentCommittedItems: [],
+    recentCommittedItems,
     completedTasks: [],
   };
 }

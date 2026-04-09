@@ -34,6 +34,7 @@ import {
   loadReconciliationContext,
   reconcileMeetingBatch,
   loadRecentMeetingBatch,
+  batchLLMReview,
 } from '@arete/core';
 import type {
   MeetingForSave,
@@ -877,6 +878,39 @@ export function registerMeetingCommands(program: Command): void {
             if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
               processed.stagedItemStatus[matchingItem.id] = 'skipped';
               processed.stagedItemSource[matchingItem.id] = 'reconciled';
+            }
+          }
+        }
+
+        // Run batch LLM quality review when reconciliation is active
+        if (opts.reconcile && processed) {
+          try {
+            const proc = processed;
+            const reviewItems = proc.filteredItems
+              .filter(fi => proc.stagedItemStatus[fi.id] !== 'skipped')
+              .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
+
+            if (reviewItems.length > 0) {
+              const reconciliationContext = await loadReconciliationContext(
+                services.storage,
+                root,
+              );
+              const drops = await batchLLMReview(
+                reviewItems,
+                reconciliationContext.recentCommittedItems,
+                callLLM,
+              );
+              for (const drop of drops) {
+                processed.stagedItemStatus[drop.id] = 'skipped';
+                processed.stagedItemSource[drop.id] = 'reconciled';
+              }
+              if (drops.length > 0 && !opts.json) {
+                warn(`Batch review dropped ${drops.length} item(s)`);
+              }
+            }
+          } catch {
+            if (!opts.json) {
+              warn('Batch LLM review skipped due to error');
             }
           }
         }
