@@ -522,7 +522,7 @@ export async function deleteMeeting(
 export async function updateMeeting(
   workspaceRoot: string,
   slug: string,
-  updates: { title?: string; summary?: string; area?: string }
+  updates: { title?: string; summary?: string; area?: string; status?: string }
 ): Promise<void> {
   const filePath = slugToPath(workspaceRoot, slug);
   const raw = await fs.readFile(filePath, 'utf8');
@@ -532,9 +532,25 @@ export async function updateMeeting(
   if (updates.title !== undefined) fm['title'] = updates.title;
   if (updates.summary !== undefined) fm['summary'] = updates.summary;
   if (updates.area !== undefined) fm['area'] = updates.area;
+  if (updates.status !== undefined) fm['status'] = updates.status;
 
   const updated = matter.stringify(parsed.content, fm);
   await fs.writeFile(filePath, updated, 'utf8');
+}
+
+/**
+ * Get the current status of a meeting from its frontmatter.
+ * Returns the explicit status if set, or detects from content.
+ */
+export async function getMeetingStatus(
+  workspaceRoot: string,
+  slug: string
+): Promise<string> {
+  const filePath = slugToPath(workspaceRoot, slug);
+  const raw = await fs.readFile(filePath, 'utf8');
+  const parsed = matter(raw);
+  const fm = parsed.data as Record<string, unknown>;
+  return detectMeetingStatus(fm, parsed.content);
 }
 
 export async function updateItemStatus(

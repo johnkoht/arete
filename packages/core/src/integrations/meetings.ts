@@ -32,7 +32,7 @@ export interface MeetingForSave {
   share_url?: string;
   agenda?: string; // Relative path to linked agenda file
   /** Lifecycle status written to frontmatter at save time. Default: 'synced'. */
-  status?: 'synced' | 'processed' | 'approved';
+  status?: 'synced' | 'processed' | 'approved' | 'skipped';
   /** Meeting importance for triage workflow. 'skip' is user-assigned only. */
   importance?: Importance;
   /** ID of the recurring event series (for recurring meeting detection). */

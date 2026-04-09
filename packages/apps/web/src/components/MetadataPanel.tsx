@@ -1,6 +1,6 @@
 import type { Meeting } from "@/api/types.js";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ExternalLink, Trash2, Sparkles, RefreshCw } from "lucide-react";
+import { ExternalLink, Trash2, Sparkles, RefreshCw, XCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -16,9 +16,11 @@ interface MetadataPanelProps {
   onProcessClick?: () => void;
   onReprocessClick?: () => void;
   onDeleteClick?: () => void;
+  onDismissClick?: () => void;
+  onRestoreClick?: () => void;
 }
 
-export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onReprocessClick, onDeleteClick }: MetadataPanelProps) {
+export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onReprocessClick, onDeleteClick, onDismissClick, onRestoreClick }: MetadataPanelProps) {
   return (
     <div className="rounded-md border bg-card p-5 shadow-sm space-y-5">
       <div>
@@ -105,6 +107,18 @@ export function MetadataPanel({ meeting, isSynced, approved, onProcessClick, onR
           <Button variant="outline" size="sm" className="w-full justify-start" onClick={onReprocessClick}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Reprocess Meeting
+          </Button>
+        )}
+        {meeting.status === "skipped" && onRestoreClick && (
+          <Button variant="outline" size="sm" className="w-full justify-start" onClick={onRestoreClick}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Restore to Review
+          </Button>
+        )}
+        {meeting.status !== "approved" && meeting.status !== "skipped" && onDismissClick && (
+          <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={onDismissClick}>
+            <XCircle className="mr-2 h-4 w-4" />
+            Dismiss Meeting
           </Button>
         )}
         <Button

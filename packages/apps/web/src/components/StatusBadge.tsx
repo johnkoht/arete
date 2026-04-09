@@ -9,6 +9,7 @@ const config: Record<string, { dot: string; text: string; border: string; bg: st
   synced: { dot: "bg-muted-foreground", text: "text-muted-foreground", border: "border-muted-foreground/20", bg: "bg-muted-foreground/10" },
   processed: { dot: "bg-status-processed", text: "text-status-processed", border: "border-status-processed/20", bg: "bg-status-processed/10" },
   approved: { dot: "bg-status-approved", text: "text-status-approved", border: "border-status-approved/20", bg: "bg-status-approved/10" },
+  skipped: { dot: "bg-muted-foreground", text: "text-muted-foreground", border: "border-muted-foreground/20", bg: "bg-muted-foreground/10" },
 };
 
 const defaultConfig = { dot: "bg-muted-foreground", text: "text-muted-foreground", border: "border-muted-foreground/20", bg: "bg-muted-foreground/10" };

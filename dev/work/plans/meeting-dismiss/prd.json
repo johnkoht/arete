@@ -1,0 +1,126 @@
+{
+  "name": "meeting-dismiss",
+  "branchName": "feature/meeting-dismiss",
+  "description": "Fix the non-functional Skip Meeting button by adding backend skip/unskip endpoints and wiring the ReviewPage to call them immediately. Rename to 'Dismiss Meeting'.",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Add 'skipped' to MeetingStatus types",
+      "description": "Add 'skipped' to the status union in packages/core/src/integrations/meetings.ts:35 and packages/apps/web/src/api/types.ts:391. This is the foundation that all other tasks depend on.",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "'skipped' is a valid value in MeetingForSave.status union in core",
+        "'skipped' is a valid value in MeetingStatus type in web/api/types.ts",
+        "npm run typecheck passes (or surfaces expected downstream issues)"
+      ],
+      "files": [
+        "packages/core/src/integrations/meetings.ts",
+        "packages/apps/web/src/api/types.ts"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "task-2",
+      "title": "Extend backend updateMeeting + add skip/unskip routes",
+      "description": "Extend updateMeeting() in workspace.ts to accept a status field. Add POST /:slug/skip and POST /:slug/unskip routes in meetings.ts. Skip sets status to 'skipped' (rejects on approved meetings with 409). Unskip resets to 'processed' (rejects on non-skipped with 409). Both use withSlugLock and return full meeting via getMeeting().",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "updateMeeting accepts { status?: string } in updates param",
+        "POST /:slug/skip sets frontmatter status to 'skipped'",
+        "POST /:slug/skip returns 409 for already-approved meetings",
+        "POST /:slug/skip returns 404 for unknown slug",
+        "POST /:slug/unskip resets frontmatter status to 'processed'",
+        "POST /:slug/unskip returns 409 for non-skipped meetings",
+        "POST /:slug/unskip returns 404 for unknown slug",
+        "Both routes use withSlugLock"
+      ],
+      "files": [
+        "packages/apps/backend/src/services/workspace.ts",
+        "packages/apps/backend/src/routes/meetings.ts"
+      ],
+      "dependsOn": ["task-1"]
+    },
+    {
+      "id": "task-3",
+      "title": "Add frontend API functions + hooks",
+      "description": "CRITICAL: Update normalizeStatus() in meetings.ts to return 'skipped' (without this the entire feature is invisible). Add skipMeeting(slug) and unskipMeeting(slug) API functions. Add useSkipMeeting and useUnskipMeeting hooks that invalidate ['meeting', slug], ['meetings'], and ['review', 'pending'] query keys.",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "normalizeStatus('skipped') returns 'skipped' (not 'synced')",
+        "skipMeeting(slug) calls POST /api/meetings/:slug/skip",
+        "unskipMeeting(slug) calls POST /api/meetings/:slug/unskip",
+        "useSkipMeeting hook invalidates meeting, meetings, and review pending query keys",
+        "useUnskipMeeting hook invalidates meeting, meetings, and review pending query keys"
+      ],
+      "files": [
+        "packages/apps/web/src/api/meetings.ts",
+        "packages/apps/web/src/hooks/meetings.ts"
+      ],
+      "dependsOn": ["task-1"]
+    },
+    {
+      "id": "task-4",
+      "title": "Wire ReviewPage dismiss button to backend",
+      "description": "Change handleSkipMeeting in ReviewPage.tsx to call skipMeeting() API immediately instead of only updating local state. Optimistic: remove meeting items from memoryDecisions state on click, rollback on error. Rename button label from 'Skip Meeting' to 'Dismiss Meeting'. Disable 'Done Reviewing' while dismiss mutation is in-flight. Ensure dismissed meeting items are excluded from collectResults() payload.",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Clicking 'Dismiss Meeting' calls skipMeeting API immediately",
+        "Meeting items removed from review page optimistically",
+        "On API error: items restored + error toast",
+        "On API success: invalidate review query + success toast",
+        "Button label says 'Dismiss Meeting' (not 'Skip Meeting')",
+        "'Done Reviewing' button disabled while dismiss in-flight",
+        "Dismissed meeting items excluded from collectResults() payload"
+      ],
+      "files": [
+        "packages/apps/web/src/pages/ReviewPage.tsx"
+      ],
+      "dependsOn": ["task-2", "task-3"]
+    },
+    {
+      "id": "task-5",
+      "title": "Update StatusBadge, MeetingDetail, MeetingsIndex, MetadataPanel",
+      "description": "Add 'skipped' config to StatusBadge with muted-foreground colors. In MeetingDetail: add isSkipped boolean, fix header badge fallback (currently shows 'Approved' for unknown), show read-only summary+transcript for skipped state, add Dismiss button for synced/processed, add 'Restore to Review' for skipped. In MeetingsIndex: opacity-60 for skipped rows, 'View Meeting' button for skipped status. In MetadataPanel: add onDismissClick and onUnskipClick props.",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "StatusBadge renders 'Skipped' with muted-foreground styling",
+        "MeetingDetail header badge shows 'Skipped' StatusBadge (not 'Approved' fallback)",
+        "Skipped MeetingDetail shows read-only summary + transcript + info banner",
+        "MeetingDetail has Dismiss button for synced/processed states",
+        "MeetingDetail has 'Restore to Review' button for skipped state",
+        "MeetingsIndex skipped rows have opacity-60",
+        "MeetingsIndex actionButton returns 'View Meeting' for skipped",
+        "MetadataPanel shows 'Dismiss Meeting' and 'Restore to Review' buttons appropriately"
+      ],
+      "files": [
+        "packages/apps/web/src/components/StatusBadge.tsx",
+        "packages/apps/web/src/pages/MeetingDetail.tsx",
+        "packages/apps/web/src/pages/MeetingsIndex.tsx",
+        "packages/apps/web/src/components/MetadataPanel.tsx"
+      ],
+      "dependsOn": ["task-3"]
+    },
+    {
+      "id": "task-6",
+      "title": "Tests for skip/unskip feature",
+      "description": "Add backend route tests for skip/unskip endpoints (success, 404, 409 guard cases). Add frontend test for normalizeStatus('skipped'). Add component tests for StatusBadge skipped rendering. Verify npm run typecheck && npm test pass clean.",
+      "status": "pending",
+      "acceptanceCriteria": [
+        "Backend test: POST /:slug/skip returns meeting with status 'skipped'",
+        "Backend test: POST /:slug/skip returns 404 for unknown slug",
+        "Backend test: POST /:slug/skip returns 409 for approved meeting",
+        "Backend test: POST /:slug/unskip returns meeting with status 'processed'",
+        "Backend test: POST /:slug/unskip returns 404 for unknown slug",
+        "Backend test: POST /:slug/unskip returns 409 for non-skipped meeting",
+        "Frontend test: normalizeStatus('skipped') returns 'skipped'",
+        "npm run typecheck passes",
+        "npm test passes with no regressions"
+      ],
+      "files": [
+        "packages/apps/backend/test/routes/meetings.test.ts",
+        "packages/apps/web/src/api/meetings.test.ts"
+      ],
+      "dependsOn": ["task-2", "task-3", "task-4", "task-5"]
+    }
+  ]
+}

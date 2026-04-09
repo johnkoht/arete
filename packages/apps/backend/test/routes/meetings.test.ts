@@ -63,6 +63,7 @@ function buildTestApp(
   meetingsMock: {
     listMeetings?: () => Promise<unknown[]>;
     getMeeting?: (slug: string) => Promise<MockMeeting | null>;
+    getMeetingStatus?: (slug: string) => Promise<string>;
     deleteMeeting?: (slug: string) => Promise<void>;
     updateMeeting?: (slug: string, updates: unknown) => Promise<void>;
     updateItemStatus?: (slug: string, id: string, opts: unknown) => Promise<void>;
@@ -76,6 +77,7 @@ function buildTestApp(
   const ws = {
     listMeetings: meetingsMock.listMeetings ?? (() => Promise.resolve([])),
     getMeeting: meetingsMock.getMeeting ?? (() => Promise.resolve(null)),
+    getMeetingStatus: meetingsMock.getMeetingStatus ?? (() => Promise.resolve('synced')),
     deleteMeeting: meetingsMock.deleteMeeting ?? (() => Promise.resolve()),
     updateMeeting: meetingsMock.updateMeeting ?? (() => Promise.resolve()),
     updateItemStatus: meetingsMock.updateItemStatus ?? (() => Promise.resolve()),
@@ -185,6 +187,48 @@ function buildTestApp(
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('not found')) return c.json({ error: 'Meeting not found' }, 404);
       return c.json({ error: 'Failed to approve meeting' }, 500);
+    }
+  });
+
+  app.post('/api/meetings/:slug/skip', async (c) => {
+    const slug = c.req.param('slug');
+    try {
+      // Atomic: status check + update together (mirrors withSlugLock in production)
+      const currentStatus = await ws.getMeetingStatus(slug);
+      if (currentStatus === 'approved') {
+        return c.json({ error: 'Cannot skip an approved meeting' }, 409);
+      }
+      await ws.updateMeeting(slug, { status: 'skipped' });
+      const meeting = await ws.getMeeting(slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+      return c.json(meeting);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('ENOENT') || msg.includes('no such file')) {
+        return c.json({ error: 'Meeting not found' }, 404);
+      }
+      return c.json({ error: 'Failed to skip meeting' }, 500);
+    }
+  });
+
+  app.post('/api/meetings/:slug/unskip', async (c) => {
+    const slug = c.req.param('slug');
+    try {
+      // Atomic: status check + update together (mirrors withSlugLock in production)
+      const currentStatus = await ws.getMeetingStatus(slug);
+      if (currentStatus !== 'skipped') {
+        return c.json({ error: 'Can only unskip a skipped meeting' }, 409);
+      }
+      await ws.updateMeeting(slug, { status: 'processed' });
+      const meeting = await ws.getMeeting(slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+      return c.json(meeting);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('ENOENT') || msg.includes('no such file')) {
+        return c.json({ error: 'Meeting not found' }, 404);
+      }
+      return c.json({ error: 'Failed to unskip meeting' }, 500);
     }
   });
 
@@ -665,5 +709,79 @@ describe('GET /api/meetings/:slug (suggestedArea)', () => {
     assert.equal(status, 200);
     const body = json as MockMeeting & { suggestedArea: null };
     assert.equal(body.suggestedArea, null);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Skip / Unskip (dismiss meeting) tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/meetings/:slug/skip', () => {
+  it('returns meeting with status skipped', async () => {
+    const meeting = makeMeeting({ status: 'skipped' });
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.resolve('processed'),
+      updateMeeting: () => Promise.resolve(),
+      getMeeting: () => Promise.resolve(meeting),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/skip');
+    assert.equal(status, 200);
+    const m = json as MockMeeting;
+    assert.equal(m.status, 'skipped');
+  });
+
+  it('returns 409 for already-approved meeting', async () => {
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.resolve('approved'),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/skip');
+    assert.equal(status, 409);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Cannot skip an approved meeting');
+  });
+
+  it('returns 404 for unknown slug', async () => {
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.reject(new Error('ENOENT: no such file')),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/ghost/skip');
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Meeting not found');
+  });
+});
+
+describe('POST /api/meetings/:slug/unskip', () => {
+  it('returns meeting with status processed', async () => {
+    const meeting = makeMeeting({ status: 'processed' });
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.resolve('skipped'),
+      updateMeeting: () => Promise.resolve(),
+      getMeeting: () => Promise.resolve(meeting),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/unskip');
+    assert.equal(status, 200);
+    const m = json as MockMeeting;
+    assert.equal(m.status, 'processed');
+  });
+
+  it('returns 409 for non-skipped meeting', async () => {
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.resolve('processed'),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/2024-01-15-team-standup/unskip');
+    assert.equal(status, 409);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Can only unskip a skipped meeting');
+  });
+
+  it('returns 404 for unknown slug', async () => {
+    const app = buildTestApp({
+      getMeetingStatus: () => Promise.reject(new Error('ENOENT: no such file')),
+    });
+    const { status, json } = await req(app, 'POST', '/api/meetings/ghost/unskip');
+    assert.equal(status, 404);
+    const body = json as { error: string };
+    assert.equal(body.error, 'Meeting not found');
   });
 });

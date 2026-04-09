@@ -6,6 +6,15 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ## Week of April 6, 2026
 
+### Meeting Dismiss
+
+**Dismiss meetings from triage without deleting them.** The "Skip Meeting" button in the Review page and Meeting Detail now actually works — it sets the meeting status to "skipped" in frontmatter, removes it from the triage queue, and shows a "Skipped" badge. Dismissed meetings appear dimmed in the meetings list and can be restored to review at any time via "Restore to Review."
+
+- **Review page**: "Dismiss Meeting" button per meeting group (optimistic removal)
+- **Meeting detail**: "Dismiss Meeting" / "Restore to Review" buttons in header and sidebar
+- **Meetings list**: Skipped meetings show "Skipped" badge with reduced opacity
+- **Backend**: `POST /api/meetings/:slug/skip` and `POST /api/meetings/:slug/unskip`
+
 ### Inbox: Universal Content Ingest
 
 **New `inbox/` workspace directory and `arete inbox add` command.** Drop anything into your workspace — URLs, files, PDFs, or raw notes — and Areté files it in the inbox for triage.

@@ -233,6 +233,62 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
     }
   });
 
+  // POST /api/meetings/:slug/skip — dismiss meeting (set status to 'skipped')
+  app.post('/:slug/skip', async (c) => {
+    const slug = c.req.param('slug');
+    try {
+      const result = await withSlugLock(slug, async () => {
+        const currentStatus = await workspaceService.getMeetingStatus(workspaceRoot, slug);
+        if (currentStatus === 'approved') {
+          return { conflict: true as const, error: 'Cannot skip an approved meeting' };
+        }
+        await workspaceService.updateMeeting(workspaceRoot, slug, { status: 'skipped' });
+        return { conflict: false as const };
+      });
+      if (result.conflict) {
+        return c.json({ error: result.error }, 409);
+      }
+      const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+      return c.json(meeting);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('ENOENT') || message.includes('no such file')) {
+        return c.json({ error: 'Meeting not found' }, 404);
+      }
+      console.error('[meetings] skipMeeting error:', err);
+      return c.json({ error: 'Failed to skip meeting' }, 500);
+    }
+  });
+
+  // POST /api/meetings/:slug/unskip — restore skipped meeting (set status to 'processed')
+  app.post('/:slug/unskip', async (c) => {
+    const slug = c.req.param('slug');
+    try {
+      const result = await withSlugLock(slug, async () => {
+        const currentStatus = await workspaceService.getMeetingStatus(workspaceRoot, slug);
+        if (currentStatus !== 'skipped') {
+          return { conflict: true as const, error: 'Can only unskip a skipped meeting' };
+        }
+        await workspaceService.updateMeeting(workspaceRoot, slug, { status: 'processed' });
+        return { conflict: false as const };
+      });
+      if (result.conflict) {
+        return c.json({ error: result.error }, 409);
+      }
+      const meeting = await workspaceService.getMeeting(workspaceRoot, slug);
+      if (!meeting) return c.json({ error: 'Meeting not found' }, 404);
+      return c.json(meeting);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('ENOENT') || message.includes('no such file')) {
+        return c.json({ error: 'Meeting not found' }, 404);
+      }
+      console.error('[meetings] unskipMeeting error:', err);
+      return c.json({ error: 'Failed to unskip meeting' }, 500);
+    }
+  });
+
   // POST /api/meetings/:slug/process-people — run arete meeting process --file <path> --json
   app.post('/:slug/process-people', async (c) => {
     const slug = c.req.param('slug');

@@ -14,6 +14,8 @@ import {
   fetchJobStatus,
   patchItem,
   approveMeeting,
+  skipMeeting,
+  unskipMeeting,
   processPeople,
   processMeeting,
   deleteMeeting,
@@ -94,6 +96,38 @@ export function useSaveApprove(slug: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['meeting', slug] });
       void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+    },
+  });
+}
+
+/**
+ * Dismiss a meeting — sets status to 'skipped' (POST /skip).
+ * Invalidates individual meeting, meetings list, and review pending caches.
+ */
+export function useSkipMeeting(slug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => skipMeeting(slug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['meeting', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+      void queryClient.invalidateQueries({ queryKey: ['review', 'pending'] });
+    },
+  });
+}
+
+/**
+ * Restore a skipped meeting — sets status back to 'processed' (POST /unskip).
+ * Invalidates individual meeting, meetings list, and review pending caches.
+ */
+export function useUnskipMeeting(slug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unskipMeeting(slug),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['meeting', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+      void queryClient.invalidateQueries({ queryKey: ['review', 'pending'] });
     },
   });
 }

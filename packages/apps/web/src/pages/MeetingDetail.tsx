@@ -43,6 +43,8 @@ import {
   useProcessMeeting,
   useDeleteMeeting,
   useAreaSuggestion,
+  useSkipMeeting,
+  useUnskipMeeting,
 } from "@/hooks/meetings.js";
 import type { ReviewItem, ApprovedItems } from "@/api/types.js";
 import { BASE_URL } from "@/api/client.js";
@@ -62,6 +64,8 @@ export default function MeetingDetail() {
   const saveApproveMutation = useSaveApprove(safeSlug);
   const processMutation = useProcessMeeting(safeSlug);
   const deleteMutation = useDeleteMeeting();
+  const skipMutation = useSkipMeeting(safeSlug);
+  const unskipMutation = useUnskipMeeting(safeSlug);
 
   // Local review items state — kept in sync with query data, plus optimistic updates
   // Backend now drives status via confidence-based pre-selection (high confidence → approved, low → pending)
@@ -182,6 +186,7 @@ export default function MeetingDetail() {
   const isProcessed = meeting.status === "processed";
   const isSynced = meeting.status === "synced";
   const isApproved = meeting.status === "approved";
+  const isSkipped = meeting.status === "skipped";
 
   // Next triage meeting (from the meetings list, excluding current)
   const triageMeetings = allMeetings.filter(
@@ -360,6 +365,20 @@ export default function MeetingDetail() {
     });
   };
 
+  const handleDismiss = () => {
+    skipMutation.mutate(undefined, {
+      onSuccess: () => toast.success("Meeting dismissed"),
+      onError: (err) => toast.error(`Failed to dismiss: ${err instanceof Error ? err.message : "Unknown error"}`),
+    });
+  };
+
+  const handleRestore = () => {
+    unskipMutation.mutate(undefined, {
+      onSuccess: () => toast.success("Meeting restored to review"),
+      onError: (err) => toast.error(`Failed to restore: ${err instanceof Error ? err.message : "Unknown error"}`),
+    });
+  };
+
   // Header badge
   const headerBadge = isApproved ? (
     <StatusBadge status="approved" size="sm" />
@@ -371,8 +390,10 @@ export default function MeetingDetail() {
     <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
       Needs Processing
     </span>
+  ) : isSkipped ? (
+    <StatusBadge status="skipped" size="sm" />
   ) : (
-    <StatusBadge status="approved" size="sm" />
+    <StatusBadge status={meeting.status} size="sm" />
   );
 
   return (
@@ -392,24 +413,52 @@ export default function MeetingDetail() {
             <h1 className="text-lg font-semibold">{meeting.title}</h1>
             {headerBadge}
           </div>
-          {isProcessed && !isApproved && (
-            <Button
-              size="sm"
-              onClick={handleSaveApprove}
-              disabled={reviewed === 0 || saveApproveMutation.isPending}
-            >
-              {saveApproveMutation.isPending ? (
-                <>
+          <div className="flex items-center gap-2">
+            {(isSynced || isProcessed) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDismiss}
+                disabled={skipMutation.isPending}
+              >
+                {skipMutation.isPending ? (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  Save & Approve <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                </>
-              )}
-            </Button>
-          )}
+                ) : null}
+                Dismiss Meeting
+              </Button>
+            )}
+            {isSkipped && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRestore}
+                disabled={unskipMutation.isPending}
+              >
+                {unskipMutation.isPending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : null}
+                Restore to Review
+              </Button>
+            )}
+            {isProcessed && !isApproved && (
+              <Button
+                size="sm"
+                onClick={handleSaveApprove}
+                disabled={reviewed === 0 || saveApproveMutation.isPending}
+              >
+                {saveApproveMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Save & Approve <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -471,6 +520,32 @@ export default function MeetingDetail() {
               </>
             )}
 
+            {/* Skipped: read-only summary + info banner */}
+            {isSkipped && (
+              <>
+                <div className="flex items-start gap-3 rounded-md border border-muted-foreground/20 bg-muted/30 p-4">
+                  <Info className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium">Meeting dismissed</p>
+                    <p className="mt-1 text-muted-foreground">
+                      This meeting was dismissed from review. You can restore it to continue reviewing.
+                    </p>
+                  </div>
+                </div>
+                {summary && (
+                  <SummarySection
+                    summary={summary}
+                    setSummary={setSummary}
+                    editingSummary={editingSummary}
+                    setEditingSummary={setEditingSummary}
+                    summaryOpen={summaryOpen}
+                    setSummaryOpen={setSummaryOpen}
+                    readOnly={true}
+                  />
+                )}
+              </>
+            )}
+
             {/* Synced: raw content */}
             {isSynced && summary && (
               <SummarySection
@@ -529,6 +604,8 @@ export default function MeetingDetail() {
               onProcessClick={() => setProcessDialogOpen(true)}
               onReprocessClick={() => setReprocessDialogOpen(true)}
               onDeleteClick={handleDeleteClick}
+              onDismissClick={handleDismiss}
+              onRestoreClick={handleRestore}
             />
           </div>
         </div>

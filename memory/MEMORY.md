@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-04-08: [meeting-dismiss-learnings](entries/2026-04-08_meeting-dismiss-learnings.md) — Meeting dismiss feature: `'skipped'` status, skip/unskip routes, optimistic UI in ReviewPage, TOCTOU fix in withSlugLock. 12 files, 6 new tests.
 - 2026-04-06: [inbox-triage-learnings](entries/2026-04-06_inbox-triage-learnings.md) — Inbox universal ingest: `arete inbox add` (3 modes), inbox-triage skill, shared inbox-count helper, QMD inbox scope. 2 blockers caught in review (binary ENOENT, mode validation gap).
 - 2026-04-06: [cross-area-synthesis-learnings](entries/2026-04-06_cross-area-synthesis-learnings.md) — LLM-powered cross-area synthesis for area memory: synthesizeCrossArea(), _synthesis.md output, CLI integration. 3/3 tasks, 10 new tests.
 - 2026-04-05: [claude-code-friendly-learnings](entries/2026-04-05_claude-code-friendly-learnings.md) — Claude Code workspace support: slash command generation, profiles system, IDE adapter interface dispatch, rules consolidation, --ide flag on `arete update`.

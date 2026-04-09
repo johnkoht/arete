@@ -402,6 +402,8 @@ export default function MeetingsIndex() {
                     className={`border-b transition-colors hover:bg-accent/50 cursor-pointer ${
                       m.status === "processed"
                         ? "border-l-2 border-l-status-processed bg-status-processed/5"
+                        : m.status === "skipped"
+                        ? "opacity-60"
                         : ""
                     }`}
                   >

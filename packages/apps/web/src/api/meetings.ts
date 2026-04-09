@@ -106,6 +106,7 @@ function normalizeStatus(s: string): MeetingStatus {
   const lower = s.toLowerCase();
   if (lower === 'processed') return 'processed';
   if (lower === 'approved') return 'approved';
+  if (lower === 'skipped') return 'skipped';
   return 'synced';
 }
 
@@ -221,6 +222,22 @@ export async function patchItem(slug: string, params: PatchItemParams): Promise<
 /** POST /api/meetings/:slug/approve — commit approved items to memory */
 export async function approveMeeting(slug: string): Promise<Meeting> {
   const raw = await apiFetch<RawFullMeeting>(`/api/meetings/${slug}/approve`, {
+    method: 'POST',
+  });
+  return mapFullMeeting(raw);
+}
+
+/** POST /api/meetings/:slug/skip — dismiss meeting */
+export async function skipMeeting(slug: string): Promise<Meeting> {
+  const raw = await apiFetch<RawFullMeeting>(`/api/meetings/${slug}/skip`, {
+    method: 'POST',
+  });
+  return mapFullMeeting(raw);
+}
+
+/** POST /api/meetings/:slug/unskip — restore skipped meeting */
+export async function unskipMeeting(slug: string): Promise<Meeting> {
+  const raw = await apiFetch<RawFullMeeting>(`/api/meetings/${slug}/unskip`, {
     method: 'POST',
   });
   return mapFullMeeting(raw);

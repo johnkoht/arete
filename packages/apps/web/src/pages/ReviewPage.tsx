@@ -38,7 +38,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { usePendingReview, useCompleteReview, useAutoApprovePreview } from "@/hooks/review.js";
 import { useAreas } from "@/hooks/areas.js";
-import { updateMeeting } from "@/api/meetings.js";
+import { updateMeeting, skipMeeting } from "@/api/meetings.js";
 import type {
   TaskDestination,
   WorkspaceTask,
@@ -527,10 +527,10 @@ function MeetingSection({
               size="sm"
               className="h-6 text-[10px] px-2 text-muted-foreground hover:bg-muted/50"
               onClick={onSkipAll}
-              aria-label={`Skip all items from ${meeting.title}`}
+              aria-label={`Dismiss ${meeting.title}`}
             >
               <XCircle className="h-3 w-3 mr-1" />
-              Skip Meeting
+              Dismiss Meeting
             </Button>
           </div>
         )}
@@ -915,6 +915,10 @@ export default function ReviewPage() {
   // Track which item is currently being edited
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Track dismissed (skipped) meetings — optimistic removal from review
+  const [dismissedSlugs, setDismissedSlugs] = useState<Set<string>>(new Set());
+  const [dismissingSlug, setDismissingSlug] = useState<string | null>(null);
+
   // Ref to avoid stale closures in callbacks
   const taskDecisionsRef = useRef(taskDecisions);
   const memoryDecisionsRef = useRef(memoryDecisions);
@@ -1047,17 +1051,29 @@ export default function ReviewPage() {
     });
   }, []);
 
-  const handleSkipMeeting = useCallback((meetingSlug: string, items: StagedMemoryItem[]) => {
-    setMemoryDecisions((prev) => {
-      const updated = { ...prev };
-      for (const item of items) {
-        if (item.meetingSlug === meetingSlug && (updated[itemKey(item)]?.status ?? "pending") === "pending") {
-          updated[itemKey(item)] = { status: "skipped" };
-        }
-      }
-      return updated;
-    });
-  }, []);
+  const queryClient = useQueryClient();
+  const handleSkipMeeting = useCallback(async (meetingSlug: string) => {
+    setDismissingSlug(meetingSlug);
+    // Optimistic: hide the meeting immediately
+    setDismissedSlugs((prev) => new Set(prev).add(meetingSlug));
+    try {
+      await skipMeeting(meetingSlug);
+      void queryClient.invalidateQueries({ queryKey: ['review', 'pending'] });
+      void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+      void queryClient.invalidateQueries({ queryKey: ['meeting', meetingSlug] });
+      toast.success('Meeting dismissed');
+    } catch {
+      // Rollback on error
+      setDismissedSlugs((prev) => {
+        const next = new Set(prev);
+        next.delete(meetingSlug);
+        return next;
+      });
+      toast.error('Failed to dismiss meeting');
+    } finally {
+      setDismissingSlug(null);
+    }
+  }, [queryClient]);
 
   // Global confidence-based approve
   const handleApproveHighConfidence = useCallback(() => {
@@ -1114,18 +1130,19 @@ export default function ReviewPage() {
   const pendingMemoryCount = useMemo(() => {
     if (!data) return 0;
     return [...data.actionItems, ...data.decisions, ...data.learnings].filter(
-      (item) => memoryDecisions[itemKey(item)]?.status === "pending"
+      (item) => !dismissedSlugs.has(item.meetingSlug) && memoryDecisions[itemKey(item)]?.status === "pending"
     ).length;
-  }, [data, memoryDecisions]);
+  }, [data, memoryDecisions, dismissedSlugs]);
 
   const totalPending = pendingTaskCount + pendingMemoryCount;
 
-  // Group all memory items by meeting
+  // Group all memory items by meeting (excluding dismissed meetings)
   const itemsByMeeting = useMemo(() => {
     if (!data) return new Map<string, MeetingGroupData>();
     const map = new Map<string, MeetingGroupData>();
 
     const ensureMeeting = (item: StagedMemoryItem) => {
+      if (dismissedSlugs.has(item.meetingSlug)) return null;
       let group = map.get(item.meetingSlug);
       if (!group) {
         group = {
@@ -1141,12 +1158,12 @@ export default function ReviewPage() {
       return group;
     };
 
-    for (const item of data.actionItems) ensureMeeting(item).actionItems.push(item);
-    for (const item of data.decisions) ensureMeeting(item).decisions.push(item);
-    for (const item of data.learnings) ensureMeeting(item).learnings.push(item);
+    for (const item of data.actionItems) ensureMeeting(item)?.actionItems.push(item);
+    for (const item of data.decisions) ensureMeeting(item)?.decisions.push(item);
+    for (const item of data.learnings) ensureMeeting(item)?.learnings.push(item);
 
     return map;
-  }, [data]);
+  }, [data, dismissedSlugs]);
 
   // Collect approved/skipped IDs
   const collectResults = useCallback(() => {
@@ -1162,6 +1179,10 @@ export default function ReviewPage() {
     }
 
     for (const [compositeKey, decision] of Object.entries(memoryDecisionsRef.current)) {
+      // Skip items from dismissed meetings
+      const meetingSlug = compositeKey.includes('::') ? compositeKey.split('::')[0] : '';
+      if (dismissedSlugs.has(meetingSlug)) continue;
+
       const id = compositeKey.includes('::') ? compositeKey.split('::')[1] : compositeKey;
       if (decision.status === "approved") {
         const editedText = editedItemsRef.current.get(compositeKey);
@@ -1176,7 +1197,7 @@ export default function ReviewPage() {
     }
 
     return { approved, skipped };
-  }, []);
+  }, [dismissedSlugs]);
 
   // Handle done reviewing (Task 4: capture summary)
   const handleDoneReviewing = useCallback(() => {
@@ -1294,7 +1315,7 @@ export default function ReviewPage() {
         action={
           <Button
             onClick={handleDoneReviewing}
-            disabled={completeMutation.isPending}
+            disabled={completeMutation.isPending || dismissingSlug !== null}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {completeMutation.isPending ? (
@@ -1391,7 +1412,7 @@ export default function ReviewPage() {
                     onEditSave={handleEditSave}
                     onEditChange={handleEditChange}
                     onApproveAll={() => handleApproveMeeting(meeting.slug, allItems)}
-                    onSkipAll={() => handleSkipMeeting(meeting.slug, allItems)}
+                    onSkipAll={() => handleSkipMeeting(meeting.slug)}
                   />
                 );
               })}
