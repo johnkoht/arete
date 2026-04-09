@@ -169,10 +169,18 @@ function itemMatchesUserNotes(
 }
 
 /**
- * Negation markers that indicate an item may contradict a prior item.
+ * Negation patterns that indicate an item may contradict a prior item.
  * Items with these markers skip prior-item dedup to avoid suppressing contradictions.
+ * Uses word-boundary matching to avoid false positives on words like
+ * "notification", "another", "note".
  */
-const NEGATION_MARKERS = ['not', "won't", 'no longer', 'instead of', 'changed from'];
+const NEGATION_PATTERNS = [
+  /\bnot\b/i,
+  /\bwon't\b/i,
+  /\bno longer\b/i,
+  /\binstead of\b/i,
+  /\bchanged from\b/i,
+];
 
 /**
  * Check if text contains negation markers that indicate a possible contradiction.
@@ -183,8 +191,7 @@ const NEGATION_MARKERS = ['not', "won't", 'no longer', 'instead of', 'changed fr
  * @returns True if text contains any negation marker
  */
 export function hasNegationMarkers(text: string): boolean {
-  const lower = text.toLowerCase();
-  return NEGATION_MARKERS.some((marker) => lower.includes(marker));
+  return NEGATION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 /** Pre-tokenized prior item for efficient Jaccard comparison */

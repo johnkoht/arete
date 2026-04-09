@@ -11,6 +11,7 @@ import {
   matchPriorWorkspace,
   parseMemoryItems,
   batchLLMReview,
+  loadReconciliationContext,
   WORKSPACE_MATCH_THRESHOLD,
   COMPLETED_MATCH_THRESHOLD,
   MEMORY_MATCH_THRESHOLD,
@@ -1554,5 +1555,69 @@ describe('batchLLMReview', () => {
     });
     const drops = await batchLLMReview(currentItems, [], mockLLM);
     assert.equal(drops.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadReconciliationContext
+// ---------------------------------------------------------------------------
+
+describe('loadReconciliationContext', () => {
+  it('loads committed items from memory files', async () => {
+    const recentDate = new Date();
+    recentDate.setDate(recentDate.getDate() - 3);
+    const dateStr = recentDate.toISOString().split('T')[0];
+
+    const decisionsContent = [
+      `## Use PostgreSQL`,
+      `- **Date**: ${dateStr}`,
+      `- **Source**: Weekly Standup`,
+      `- Migrate to PostgreSQL for production`,
+    ].join('\n');
+
+    const learningsContent = [
+      `## Batch processing insight`,
+      `- **Date**: ${dateStr}`,
+      `- **Source**: Tech Review`,
+      `- Batch processing is 3x faster than streaming`,
+    ].join('\n');
+
+    const mockStorage = {
+      read: async (path: string) => {
+        if (path.endsWith('decisions.md')) return decisionsContent;
+        if (path.endsWith('learnings.md')) return learningsContent;
+        // Area parser will try to read area files — return null
+        return null;
+      },
+      write: async () => {},
+      exists: async () => false,
+      delete: async () => {},
+      list: async () => [] as string[],
+      listSubdirectories: async () => [] as string[],
+      mkdir: async () => {},
+      getModified: async () => null,
+    };
+
+    const context = await loadReconciliationContext(mockStorage, '/test/workspace');
+    assert.equal(context.recentCommittedItems.length, 2);
+    assert.ok(context.recentCommittedItems.some(i => i.text.includes('PostgreSQL')));
+    assert.ok(context.recentCommittedItems.some(i => i.text.includes('Batch processing')));
+  });
+
+  it('returns empty committed items when memory files do not exist', async () => {
+    const mockStorage = {
+      read: async () => null,
+      write: async () => {},
+      exists: async () => false,
+      delete: async () => {},
+      list: async () => [] as string[],
+      listSubdirectories: async () => [] as string[],
+      mkdir: async () => {},
+      getModified: async () => null,
+    };
+
+    const context = await loadReconciliationContext(mockStorage, '/test/workspace');
+    assert.equal(context.recentCommittedItems.length, 0);
+    assert.deepStrictEqual(context.completedTasks, []);
   });
 });

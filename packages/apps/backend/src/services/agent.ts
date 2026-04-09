@@ -287,10 +287,11 @@ export async function runProcessingSessionTestable(
 
     // 9b. Run cross-meeting reconciliation
     let reconciliationStats = { duplicates: 0, completed: 0, lowRelevance: 0 };
+    let cachedReconciliationContext: ReconciliationContext | undefined;
     if (deps.loadReconciliationContext && deps.loadRecentBatch) {
       try {
         jobs.appendEvent(jobId, 'Running cross-meeting reconciliation...');
-        const context = await deps.loadReconciliationContext();
+        cachedReconciliationContext = await deps.loadReconciliationContext();
         const recentBatch = await deps.loadRecentBatch();
 
         // Build current meeting batch entry
@@ -301,7 +302,7 @@ export async function runProcessingSessionTestable(
 
         const reconciliation = reconcileMeetingBatch(
           [...recentBatch, currentBatch],
-          context,
+          cachedReconciliationContext,
         );
 
         // Merge reconciliation decisions into processed maps
@@ -350,8 +351,8 @@ export async function runProcessingSessionTestable(
           .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
 
         if (reviewItems.length > 0) {
-          // Load committed items from reconciliation context
-          const ctx = await deps.loadReconciliationContext();
+          // Reuse cached context to avoid redundant I/O
+          const ctx = cachedReconciliationContext ?? await deps.loadReconciliationContext();
           const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLM);
 
           if (drops.length > 0) {

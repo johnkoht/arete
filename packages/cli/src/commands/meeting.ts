@@ -53,6 +53,7 @@ import type {
   TaskDestination,
   MeetingExtractionBatch,
   ReconciliationResult,
+  ReconciliationContext,
 } from '@arete/core';
 import { execSync } from 'child_process';
 import type { Command } from 'commander';
@@ -791,10 +792,11 @@ export function registerMeetingCommands(program: Command): void {
 
       // Run cross-meeting reconciliation if requested
       let reconciliationResult: ReconciliationResult | undefined;
+      let cachedReconciliationContext: ReconciliationContext | undefined;
       if (opts.reconcile) {
         try {
-          // Load reconciliation context (area memories)
-          const reconciliationContext = await loadReconciliationContext(
+          // Load reconciliation context (area memories + committed items)
+          cachedReconciliationContext = await loadReconciliationContext(
             services.storage,
             root,
           );
@@ -817,7 +819,7 @@ export function registerMeetingCommands(program: Command): void {
           // Run reconciliation
           reconciliationResult = reconcileMeetingBatch(
             [...recentBatch, currentBatch],
-            reconciliationContext,
+            cachedReconciliationContext!,
           );
         } catch (err) {
           // Graceful degradation: log warning but continue without reconciliation
@@ -891,13 +893,14 @@ export function registerMeetingCommands(program: Command): void {
               .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
 
             if (reviewItems.length > 0) {
-              const reconciliationContext = await loadReconciliationContext(
+              // Reuse cached context to avoid redundant I/O
+              const ctx = cachedReconciliationContext ?? await loadReconciliationContext(
                 services.storage,
                 root,
               );
               const drops = await batchLLMReview(
                 reviewItems,
-                reconciliationContext.recentCommittedItems,
+                ctx.recentCommittedItems,
                 callLLM,
               );
               for (const drop of drops) {

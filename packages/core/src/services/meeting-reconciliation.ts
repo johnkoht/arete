@@ -604,8 +604,11 @@ export function parseMemoryItems(
   if (!content.trim()) return [];
 
   const items: Array<{ text: string; date: string; source: string }> = [];
+  // Use local-time date strings for comparison to avoid UTC/local timezone mismatch.
+  // Both cutoff and item dates are compared as YYYY-MM-DD strings.
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - maxAgeDays);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
 
   // Split into sections by ## headers
   const sections = content.split(/^## /m).slice(1); // skip preamble before first ##
@@ -640,10 +643,9 @@ export function parseMemoryItems(
     const text = textLines.join(' ').trim();
     if (!text || !date) continue;
 
-    // Filter by date
-    const itemDate = new Date(date);
-    if (isNaN(itemDate.getTime())) continue;
-    if (itemDate < cutoff) continue;
+    // Filter by date — compare as YYYY-MM-DD strings to avoid timezone issues
+    if (!/^\d{4}-\d{2}-\d{2}/.test(date)) continue;
+    if (date < cutoffStr) continue;
 
     items.push({ text, date, source: source ?? sourcePath });
   }
@@ -670,12 +672,15 @@ export async function batchLLMReview(
 ): Promise<Array<{ id: string; action: 'drop'; reason: string }>> {
   if (currentItems.length === 0) return [];
 
+  // Sanitize text to mitigate prompt injection: truncate and strip control chars
+  const sanitize = (text: string) => text.slice(0, 200).replace(/[{}[\]]/g, '');
+
   const committedSection = committedItems.length > 0
-    ? committedItems.map(c => `- [${c.date}] ${c.text}`).join('\n')
+    ? committedItems.map(c => `- [${c.date}] ${sanitize(c.text)}`).join('\n')
     : '(none)';
 
   const currentSection = currentItems
-    .map(c => `- [${c.id}] (${c.type}) ${c.text}`)
+    .map(c => `- [${c.id}] (${c.type}) ${sanitize(c.text)}`)
     .join('\n');
 
   const prompt = `You are reviewing extracted meeting items for quality and duplication.
@@ -703,16 +708,26 @@ If nothing should be dropped, return: {"drops": []}`;
   try {
     const response = await callLLM(prompt);
 
-    // Extract JSON from response (handle markdown code fences)
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return [];
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!parsed.drops || !Array.isArray(parsed.drops)) return [];
+    // Try direct parse first, then strip code fences, then greedy regex extraction
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(response.trim());
+    } catch {
+      const stripped = response.replace(/```(?:json)?\s*/g, '').replace(/```\s*/g, '').trim();
+      try {
+        parsed = JSON.parse(stripped);
+      } catch {
+        const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return [];
+        parsed = JSON.parse(jsonMatch[0]);
+      }
+    }
+    const result = parsed as Record<string, unknown>;
+    if (!result.drops || !Array.isArray(result.drops)) return [];
 
     // Validate IDs exist in input
     const validIds = new Set(currentItems.map(i => i.id));
-    return parsed.drops
+    return result.drops
       .filter((d: { id?: string; reason?: string }) =>
         d.id && d.reason && validIds.has(d.id),
       )

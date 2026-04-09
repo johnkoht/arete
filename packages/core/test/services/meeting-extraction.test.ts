@@ -3864,6 +3864,21 @@ describe('isTrivialLearning', () => {
     assert.ok(isTrivialLearning('Company picnic scheduled for next Friday'));
   });
 
+  it('filters personal location trivia', () => {
+    assert.ok(isTrivialLearning('Alice lives in Seattle'));
+    assert.ok(isTrivialLearning('Bob is from Chicago'));
+    assert.ok(isTrivialLearning('Sarah moved to Austin last year'));
+  });
+
+  it('filters birthday/anniversary trivia', () => {
+    assert.ok(isTrivialLearning("John's birthday is on March 15th"));
+    assert.ok(isTrivialLearning('Team anniversary is in June'));
+  });
+
+  it('filters favorite thing trivia', () => {
+    assert.ok(isTrivialLearning("Alice's favorite food is sushi"));
+  });
+
   it('does NOT filter genuine insights', () => {
     assert.equal(isTrivialLearning('Enterprise users prefer batch processing over real-time'), null);
   });
@@ -3908,5 +3923,33 @@ describe('garbage/trivial filters applied to decisions in parsing', () => {
     const result = parseMeetingExtractionResponse(response);
     assert.equal(result.intelligence.decisions.length, 1);
     assert.equal(result.intelligence.decisions[0], 'Migrate the database to PostgreSQL by end of Q2');
+  });
+
+  it('does NOT filter long decisions (150-char limit only applies to action items)', () => {
+    const longDecision = 'We decided to migrate the entire monolithic backend service to a microservices architecture using Kubernetes orchestration, starting with the authentication module as a pilot and expanding to payment processing within the next quarter';
+    assert.ok(longDecision.length > 150, 'test decision should exceed 150 chars');
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: longDecision, confidence: 0.9 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.equal(result.intelligence.decisions[0], longDecision);
+  });
+
+  it('does NOT filter long learnings (150-char limit only applies to action items)', () => {
+    const longLearning = 'Enterprise customers in the healthcare vertical require HIPAA-compliant data processing pipelines with end-to-end encryption, which significantly increases infrastructure costs but reduces compliance audit burden by approximately 60%';
+    assert.ok(longLearning.length > 150, 'test learning should exceed 150 chars');
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [],
+      learnings: [{ text: longLearning, confidence: 0.85 }],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.learnings.length, 1);
+    assert.equal(result.intelligence.learnings[0], longLearning);
   });
 });

@@ -64,10 +64,10 @@ export type MeetingIntelligence = {
   nextSteps: string[];
   decisions: string[];
   learnings: string[];
-  /** Confidence scores for decisions, parallel array indexed same as decisions. */
-  decisionConfidences?: number[];
-  /** Confidence scores for learnings, parallel array indexed same as learnings. */
-  learningConfidences?: number[];
+  /** Confidence scores for decisions, parallel array indexed same as decisions. undefined = not provided by LLM. */
+  decisionConfidences?: (number | undefined)[];
+  /** Confidence scores for learnings, parallel array indexed same as learnings. undefined = not provided by LLM. */
+  learningConfidences?: (number | undefined)[];
   /** Slugified topic keywords (e.g. 'email-templates', 'q2-planning'). 3–6 items. */
   topics?: string[];
 };
@@ -244,9 +244,12 @@ export function isTrivialDecision(text: string): string | null {
   return null;
 }
 
-/** Trivial learning patterns. */
+/** Trivial learning patterns — personal trivia, social events, common knowledge. */
 const TRIVIAL_LEARNING_PATTERNS = [
   /^(company|team|org)\s+(picnic|outing|happy hour|party|offsite)\b/i,
+  /\b(lives in|is from|born in|moved to|grew up in)\b/i,
+  /\b(birthday|anniversary|wedding|engagement)\b.*\b(is|on|in)\b/i,
+  /\b(favorite|favourite)\s+(food|color|colour|movie|show|book|sport)\b/i,
 ];
 
 /**
@@ -332,7 +335,7 @@ function isGarbageItem(text: string): string | null {
     }
   }
 
-  // Check length
+  // Check length (action items have a tighter limit)
   if (text.length > MAX_ACTION_ITEM_LENGTH) {
     return `exceeds ${MAX_ACTION_ITEM_LENGTH} characters (${text.length})`;
   }
@@ -340,6 +343,23 @@ function isGarbageItem(text: string): string | null {
   // Check for multiple sentences
   if (countPeriods(text) > 1) {
     return 'contains multiple sentences';
+  }
+
+  return null;
+}
+
+/**
+ * Lighter garbage check for decisions/learnings — skips the 150-char length
+ * limit (which is action-item-specific) and multi-sentence check (decisions
+ * and learnings can legitimately be longer and more complex).
+ */
+function isGarbageDecisionOrLearning(text: string): string | null {
+  const lower = text.toLowerCase().trim();
+
+  for (const prefix of GARBAGE_PREFIXES) {
+    if (lower.startsWith(prefix)) {
+      return `starts with "${prefix}"`;
+    }
   }
 
   return null;
@@ -914,7 +934,7 @@ export function parseMeetingExtractionResponse(
 
   // Parse decisions (supports both string and { text, confidence } objects)
   const decisions: string[] = [];
-  const decisionConfidences: number[] = [];
+  const decisionConfidences: (number | undefined)[] = [];
   if (Array.isArray(raw.decisions)) {
     for (const decision of raw.decisions) {
       let text: string | undefined;
@@ -929,8 +949,8 @@ export function parseMeetingExtractionResponse(
       }
       if (!text) continue;
 
-      // Apply garbage filter
-      const garbageReason = isGarbageItem(text);
+      // Apply garbage filter (lighter check — no action-item length limit)
+      const garbageReason = isGarbageDecisionOrLearning(text);
       if (garbageReason) {
         validationWarnings.push({
           item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
@@ -951,13 +971,13 @@ export function parseMeetingExtractionResponse(
 
       rawItems.push({ type: 'decision', text, confidence });
       decisions.push(text);
-      decisionConfidences.push(confidence as number);
+      decisionConfidences.push(confidence);
     }
   }
 
   // Parse learnings (supports both string and { text, confidence } objects)
   const learnings: string[] = [];
-  const learningConfidences: number[] = [];
+  const learningConfidences: (number | undefined)[] = [];
   if (Array.isArray(raw.learnings)) {
     for (const learning of raw.learnings) {
       let text: string | undefined;
@@ -972,8 +992,8 @@ export function parseMeetingExtractionResponse(
       }
       if (!text) continue;
 
-      // Apply garbage filter
-      const garbageReason = isGarbageItem(text);
+      // Apply garbage filter (lighter check — no action-item length limit)
+      const garbageReason = isGarbageDecisionOrLearning(text);
       if (garbageReason) {
         validationWarnings.push({
           item: text.slice(0, 50) + (text.length > 50 ? '...' : ''),
@@ -994,7 +1014,7 @@ export function parseMeetingExtractionResponse(
 
       rawItems.push({ type: 'learning', text, confidence });
       learnings.push(text);
-      learningConfidences.push(confidence as number);
+      learningConfidences.push(confidence);
     }
   }
 

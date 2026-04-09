@@ -652,6 +652,26 @@ describe('hasNegationMarkers', () => {
   it('returns false for empty string', () => {
     assert.equal(hasNegationMarkers(''), false);
   });
+
+  it('does not false-positive on "notification"', () => {
+    assert.equal(hasNegationMarkers('Send notification to the team about the deploy'), false);
+  });
+
+  it('does not false-positive on "another"', () => {
+    assert.equal(hasNegationMarkers('Schedule another meeting for next week'), false);
+  });
+
+  it('does not false-positive on "note"', () => {
+    assert.equal(hasNegationMarkers('Take note of the deployment schedule'), false);
+  });
+
+  it('does not false-positive on "annotate"', () => {
+    assert.equal(hasNegationMarkers('Annotate the PR with review comments'), false);
+  });
+
+  it('still matches "not" as a standalone word', () => {
+    assert.equal(hasNegationMarkers('Do not deploy until Friday'), true);
+  });
 });
 
 // ---------------------------------------------------------------------------
