@@ -1,0 +1,127 @@
+{
+  "name": "workspace-hygiene",
+  "branchName": "feature/workspace-hygiene",
+  "goal": "Add workspace-hygiene feature with core HygieneService and CLI commands for scanning and cleaning up workspace entropy (stale meetings, uncompacted memory, resolved commitments, activity log bloat).",
+  "userStories": [
+    {
+      "id": "extract-jaccard-utils",
+      "title": "Extract Jaccard similarity utilities to shared module",
+      "description": "Move core Jaccard set-intersection computation to packages/core/src/utils/similarity.ts. Leave each caller's normalization in place. Preserve public API re-exports in services/index.ts.",
+      "acceptanceCriteria": [
+        "jaccardSimilarity(a: string[], b: string[]): number exported from utils/similarity.ts",
+        "normalizeForJaccard(text: string): string exported from utils/similarity.ts",
+        "services/index.ts re-exports both from ../utils/similarity.js",
+        "meeting-extraction.ts imports from utils instead of defining locally",
+        "commitments.ts imports jaccardSimilarity from utils but keeps own normalize()",
+        "area-parser.ts imports jaccardSimilarity from utils but keeps own tokenizeWithStopWords()",
+        "Unit tests for edge cases: empty, identical, disjoint, partial overlap",
+        "All existing tests pass: npm run typecheck && npm test"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "add-purge-resolved",
+      "title": "Add purgeResolved() to CommitmentsService",
+      "description": "Add public method to explicitly purge resolved commitments older than configurable threshold. Wraps existing shouldPrune() logic.",
+      "acceptanceCriteria": [
+        "purgeResolved(olderThanDays?: number): Promise<{ purged: number }> method added",
+        "Default threshold is PRUNE_DAYS (30)",
+        "Does not touch open/active commitments",
+        "Handles missing/empty commitments.json gracefully",
+        "Tests: no resolved → 0, mix → only resolved removed, custom threshold, empty file",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "add-compact-learnings",
+      "title": "Add compactLearnings() to AreaMemoryService",
+      "description": "Add method to compact old learnings entries. IMPORTANT: learnings.md uses bullet-list format (- YYYY-MM-DD: text), NOT heading sections. Requires dedicated parser — cannot reuse parseMemorySections().",
+      "acceptanceCriteria": [
+        "compactLearnings(workspacePaths, options?) method added with olderThanDays option (default 90)",
+        "Parses bullet-list format: - YYYY-MM-DD: text (from: source)",
+        "Old entries archived to .arete/memory/archive/learnings-YYYY-MM-DD.md",
+        "Recent entries remain in learnings.md",
+        "CompactResult type returned with archived/kept/archivePath",
+        "Does NOT use parseMemorySections() (heading-based parser)",
+        "Entries without parseable dates are preserved (conservative)",
+        "compactDecisions() still works unchanged",
+        "Tests: all recent → 0 archived, mix → correct split, empty file, no-date entries",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "define-hygiene-types",
+      "title": "Define hygiene types in core models",
+      "description": "Add TypeScript type definitions for HygieneItem, HygieneReport, HygieneScanOptions, etc. to packages/core/src/models/hygiene.ts and barrel-export.",
+      "acceptanceCriteria": [
+        "All types defined: HygieneTier, HygieneCategory, HygieneActionType, HygieneItem, HygieneReport, ApprovedAction, HygieneResult, HygieneScanOptions",
+        "Exported from models/hygiene.ts and re-exported from models/index.ts",
+        "Available from @arete/core package exports",
+        "No any types",
+        "npm run typecheck passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "implement-hygiene-service",
+      "title": "Implement HygieneService with scan and apply",
+      "description": "Create core HygieneService that scans for workspace entropy and applies approved cleanup actions by delegating to owning services. Wire into createServices() factory.",
+      "acceptanceCriteria": [
+        "HygieneService class with scan() and apply() methods",
+        "scan() is pure read — no filesystem mutations",
+        "scan() detects: stale meetings (tier 1), resolved commitments (tier 1), old memory entries (tier 2), activity log bloat (tier 2), duplicate memory (tier 3)",
+        "apply() validates scannedAt freshness (<1hr)",
+        "apply() delegates: meetings via StorageAdapter, commitments via CommitmentsService.purgeResolved(), memory via AreaMemoryService compact methods",
+        "apply() tracks per-action success/failure without stopping on individual failure",
+        "Meeting archival moves to resources/meetings/archive/YYYY-MM/ with archived_at frontmatter",
+        "Wired into createServices() as hygiene: HygieneService",
+        "AreteServices type updated, factory test updated with 'hygiene' key",
+        "Exported from @arete/core",
+        "Unit tests: empty scan, stale meetings, old memory, duplicates, apply delegation, stale rejection, partial failure",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "cli-hygiene-commands",
+      "title": "CLI arete hygiene scan and apply commands",
+      "description": "Add arete hygiene scan and arete hygiene apply commands as thin shell over HygieneService. Follow commitments.ts as template.",
+      "acceptanceCriteria": [
+        "registerHygieneCommand exported and registered in index.ts",
+        "scan: --tier, --category, --area, --json options",
+        "scan: human output uses header/section/listItem/info formatters",
+        "scan --json returns HygieneReport",
+        "apply: --tier, --yes, --dry-run, --skip-qmd, --json options",
+        "apply without --yes: interactive checkbox with tier 1 pre-checked",
+        "apply --yes: auto-approves all",
+        "apply --json: auto-approves, never blocks stdin",
+        "apply --dry-run: shows actions without executing",
+        "apply calls refreshQmdIndex after success (unless --skip-qmd)",
+        "Workspace detection with error handling for both JSON and human output",
+        "Tests: clean scan, fixtures scan, apply --yes, dry-run, outside workspace error",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-09T12:00:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
