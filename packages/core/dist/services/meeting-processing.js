@@ -79,10 +79,18 @@ function itemMatchesUserNotes(itemText, userNotesTokens, threshold) {
     return similarity >= threshold;
 }
 /**
- * Negation markers that indicate an item may contradict a prior item.
+ * Negation patterns that indicate an item may contradict a prior item.
  * Items with these markers skip prior-item dedup to avoid suppressing contradictions.
+ * Uses word-boundary matching to avoid false positives on words like
+ * "notification", "another", "note".
  */
-const NEGATION_MARKERS = ['not', "won't", 'no longer', 'instead of', 'changed from'];
+const NEGATION_PATTERNS = [
+    /\bnot\b/i,
+    /\bwon't\b/i,
+    /\bno longer\b/i,
+    /\binstead of\b/i,
+    /\bchanged from\b/i,
+];
 /**
  * Check if text contains negation markers that indicate a possible contradiction.
  * Items with negation markers should skip prior-item dedup to avoid suppressing
@@ -92,8 +100,7 @@ const NEGATION_MARKERS = ['not', "won't", 'no longer', 'instead of', 'changed fr
  * @returns True if text contains any negation marker
  */
 export function hasNegationMarkers(text) {
-    const lower = text.toLowerCase();
-    return NEGATION_MARKERS.some((marker) => lower.includes(marker));
+    return NEGATION_PATTERNS.some((pattern) => pattern.test(text));
 }
 /**
  * Check if an item's text matches any prior item.
@@ -262,9 +269,10 @@ export function processMeetingExtraction(result, userNotes, options) {
         }
     }
     // Process decisions
-    for (const decision of intelligence.decisions) {
-        // Decisions don't have confidence from core extraction, default to 0.9
-        const confidence = 0.9;
+    for (let i = 0; i < intelligence.decisions.length; i++) {
+        const decision = intelligence.decisions[i];
+        // Use real confidence from extraction if available, fallback to 0.9
+        const confidence = intelligence.decisionConfidences?.[i] ?? 0.9;
         if (confidence < confidenceInclude)
             continue;
         const id = generateItemId('de_', deIndex);
@@ -295,9 +303,10 @@ export function processMeetingExtraction(result, userNotes, options) {
         stagedItemSource[id] = source;
     }
     // Process learnings
-    for (const learning of intelligence.learnings) {
-        // Learnings don't have confidence from core extraction, default to 0.9
-        const confidence = 0.9;
+    for (let i = 0; i < intelligence.learnings.length; i++) {
+        const learning = intelligence.learnings[i];
+        // Use real confidence from extraction if available, fallback to 0.9
+        const confidence = intelligence.learningConfidences?.[i] ?? 0.9;
         if (confidence < confidenceInclude)
             continue;
         const id = generateItemId('le_', leIndex);
