@@ -1,0 +1,193 @@
+{
+  "name": "extraction-intelligence",
+  "branchName": "feature/extraction-intelligence",
+  "goal": "Fix systemic duplication and low-signal issues in the meeting extraction pipeline with two-layer LLM dedup, real confidence filtering, and broken plumbing fixes",
+  "userStories": [
+    {
+      "id": "task-1-prompt-hardening",
+      "title": "Prompt hardening — self-review guidance and exclusion sections",
+      "description": "Add decision/learning exclusion guidance and self-review instructions to the normal-mode extraction prompt. File: packages/core/src/services/meeting-extraction.ts, function: buildMeetingExtractionPrompt() (line 552). Add sections after line 624 (action item EXCLUDE list). Read the existing prompt structure first — mirror the action item INCLUDE/EXCLUDE pattern.",
+      "acceptanceCriteria": [
+        "buildMeetingExtractionPrompt() output contains '## What is NOT a decision' section with 4+ EXCLUDE examples",
+        "buildMeetingExtractionPrompt() output contains '## What is NOT a learning' section with 4+ EXCLUDE examples",
+        "Rules section contains self-review instruction: 'Before finalizing, review your list'",
+        "Unit test: prompt string contains all three new sections",
+        "Existing prompt tests pass unchanged"
+      ],
+      "warnings": [],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-confidence-schema",
+      "title": "Add confidence schema to decision/learning extraction",
+      "description": "Change the prompt JSON schema to request { text, confidence } objects for decisions and learnings. Add confidence guides. File: packages/core/src/services/meeting-extraction.ts. Update schema at lines 603-606 and add guides after line 631. Also update light-mode prompt (buildLightExtractionPrompt, line 657) for learnings only.",
+      "acceptanceCriteria": [
+        "Normal-mode prompt schema shows decisions as [{ 'text': '...', 'confidence': 'number (0-1)' }]",
+        "Normal-mode prompt schema shows learnings as [{ 'text': '...', 'confidence': 'number (0-1)' }]",
+        "Prompt contains '## Decision Confidence Guide' with 4 tiers",
+        "Prompt contains '## Learning Confidence Guide' with 4 tiers",
+        "Light-mode prompt learnings schema also uses { text, confidence } format",
+        "Unit test: prompt contains confidence guides"
+      ],
+      "warnings": [],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3-parse-confidence",
+      "title": "Parse confidence from LLM response for decisions/learnings",
+      "description": "Update parseMeetingExtractionResponse() to handle both string and { text, confidence } objects. Add decisionConfidences and learningConfidences parallel arrays to MeetingIntelligence type. File: packages/core/src/services/meeting-extraction.ts, lines 838-861 (parse loops) and line 61 (MeetingIntelligence type). The RawExtractionResult type at line 109 already supports Array<string | { text?, confidence? }>.",
+      "acceptanceCriteria": [
+        "MeetingIntelligence type has decisionConfidences?: number[] and learningConfidences?: number[]",
+        "Parser handles string-only responses: decisions extracted, confidences default to undefined",
+        "Parser handles object-only responses: text and confidence both parsed",
+        "Parser handles mixed string/object arrays",
+        "Parser handles objects with missing confidence: text extracted, confidence undefined",
+        "Parser handles confidence out of range: clamped to [0,1] or rejected",
+        "Parser handles empty arrays gracefully",
+        "rawItems entries include parsed confidence for debugging",
+        "Existing parse tests pass unchanged (backwards compat)"
+      ],
+      "warnings": [
+        "Pre-mortem R2: LLM may return old string format, new object format, or a mix. Parser must handle all variants. Test all 6 parse variant cases."
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-use-real-confidence",
+      "title": "Use real confidence in processing for decisions/learnings",
+      "description": "Replace hardcoded 0.9 confidence in processMeetingExtraction() with real values from parallel arrays. File: packages/core/src/services/meeting-processing.ts, lines 402-443. Change for-of loops to indexed loops to access parallel confidence arrays.",
+      "acceptanceCriteria": [
+        "Decisions loop uses intelligence.decisionConfidences?.[i] ?? 0.9",
+        "Learnings loop uses intelligence.learningConfidences?.[i] ?? 0.9",
+        "Decision with confidence 0.4 filtered out (below 0.65 threshold)",
+        "Decision with confidence 0.7 gets status 'pending' (above 0.65, below 0.8)",
+        "Decision with confidence 0.9 gets status 'approved' (above 0.8)",
+        "Same three threshold tests for learnings",
+        "Backwards compat: undefined decisionConfidences defaults to 0.9",
+        "Existing processing tests pass unchanged"
+      ],
+      "warnings": [
+        "Pre-mortem R1: MeetingIntelligence type change from task-3 must be complete first."
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-garbage-trivial-filters",
+      "title": "Extend garbage/trivial filters to decisions and learnings",
+      "description": "Apply isGarbageItem() to decisions and learnings during parsing. Add isTrivialDecision() and isTrivialLearning() functions. File: packages/core/src/services/meeting-extraction.ts. Add filter functions after line 217. Apply in parse loops at lines 838-861.",
+      "acceptanceCriteria": [
+        "isGarbageItem() called for each decision and learning in parse loop",
+        "Garbage items produce validationWarnings entries",
+        "isTrivialDecision() matches: 'We discussed the roadmap', 'Meeting moved to Tuesday'",
+        "isTrivialDecision() does NOT match items with decision verbs: 'We discussed and decided to ship Friday'",
+        "isTrivialLearning() matches personal trivia patterns",
+        "Normal decisions/learnings pass through unfiltered",
+        "Both positive (should filter) and negative (should keep) test cases"
+      ],
+      "warnings": [
+        "Pre-mortem R3: Trivial filters could false-positive on legitimate items. Keep patterns conservative (anchored to start, check for decision verbs before rejecting)."
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6-load-committed-items",
+      "title": "Load committed items from memory files",
+      "description": "Add parseMemoryItems() to parse .arete/memory/items/decisions.md and learnings.md. Wire into loadReconciliationContext() to replace hardcoded empty recentCommittedItems. File: packages/core/src/services/meeting-reconciliation.ts, lines 594-615. Read packages/core/src/integrations/staged-items.ts appendToMemoryFile() first to understand the write format.",
+      "acceptanceCriteria": [
+        "parseMemoryItems(content, defaultSource) function exported",
+        "Handles section format: ## Title + date + source + text",
+        "Handles ISO 8601 dates with time component",
+        "Returns Array<{ text, date, source }>",
+        "Filters to last 30 days, caps at 100 items",
+        "Returns empty array for null content (missing file)",
+        "Returns empty array for empty content",
+        "Skips malformed sections gracefully",
+        "loadReconciliationContext() loads from memory files via StorageAdapter",
+        "recentCommittedItems populated (no longer hardcoded [])",
+        "Unit tests for all edge cases"
+      ],
+      "warnings": [
+        "Pre-mortem R5: Read appendToMemoryFile() in staged-items.ts first to verify exact write format. Use StorageAdapter.read(), never fs."
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7-batch-llm-review",
+      "title": "Batch LLM quality review function and integration",
+      "description": "Add batchLLMReview() for semantic dedup and quality filtering. Integrate into backend (agent.ts after reconciliation) and CLI (--reconcile path). Files: packages/core/src/services/meeting-reconciliation.ts (new function), packages/apps/backend/src/services/agent.ts (integration after ~line 335), packages/cli/src/commands/meeting.ts (CLI integration), packages/core/src/services/index.ts (barrel export). Read parseMeetingExtractionResponse() lines 729-746 for JSON extraction pattern to reuse.",
+      "acceptanceCriteria": [
+        "batchLLMReview(currentItems, committedItems, callLLM) exported from meeting-reconciliation.ts",
+        "Prompt includes committed items, current items with IDs, DROP/KEEP criteria",
+        "Returns Array<{ id, action: 'drop', reason }>",
+        "Handles valid JSON: correct items flagged",
+        "Handles JSON with markdown fences: strips and parses",
+        "Handles malformed JSON: returns empty drops, logs warning",
+        "Handles invalid IDs: silently skips",
+        "Handles empty drops: all items kept",
+        "Backend: called after reconciliation, drops applied as status='skipped' source='reconciled'",
+        "Backend: guards with AIService configured check, skips if not",
+        "Backend: job status unchanged on failure (graceful degradation)",
+        "Backend: job event logged 'Batch review dropped N items'",
+        "CLI: runs when --reconcile flag used",
+        "Barrel export updated in services/index.ts",
+        "5+ unit tests covering all parse scenarios",
+        "Integration test in agent.test.ts"
+      ],
+      "warnings": [
+        "Pre-mortem R4: Reuse JSON extraction pattern from parseMeetingExtractionResponse (strip fences, find braces).",
+        "Pre-mortem R7: Keep test concerns separate — mock LLM only for batchLLMReview tests, mock storage only for memory tests."
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8-wire-prior-items",
+      "title": "Wire prior items from recent meetings in backend",
+      "description": "Load recent meeting items via loadRecentMeetingBatch() and pass as priorItems to extraction. File: packages/apps/backend/src/services/agent.ts, in runProcessingSession() (~line 430), before calling runProcessingSessionTestable(). Import loadRecentMeetingBatch from meeting-reconciliation.ts.",
+      "acceptanceCriteria": [
+        "Loads recent meetings via loadRecentMeetingBatch() before processing",
+        "Converts to PriorItem[] format (type + text + source per item)",
+        "Passes as options.priorItems to processing session",
+        "try/catch: failure logs warning, extraction runs without exclusion list",
+        "Unit test: priorItems length matches sum of items from recent batch",
+        "Existing agent tests pass unchanged"
+      ],
+      "warnings": [],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-9-deferred-commitment-note",
+      "title": "Deferred commitment mirroring note",
+      "description": "Add TODO comment about commitment mirroring near computeCommitmentHash() in commitments.ts. No functional changes. File: packages/core/src/services/commitments.ts, ~line 189.",
+      "acceptanceCriteria": [
+        "TODO comment added near computeCommitmentHash() referencing mirroring issue and merge-commitments-into-tasks branch",
+        "No functional code changes"
+      ],
+      "warnings": [],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-09T04:20:00Z",
+    "totalTasks": 9,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
