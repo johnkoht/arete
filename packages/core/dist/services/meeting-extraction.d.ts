@@ -52,6 +52,10 @@ export type MeetingIntelligence = {
     nextSteps: string[];
     decisions: string[];
     learnings: string[];
+    /** Confidence scores for decisions, parallel array indexed same as decisions. undefined = not provided by LLM. */
+    decisionConfidences?: (number | undefined)[];
+    /** Confidence scores for learnings, parallel array indexed same as learnings. undefined = not provided by LLM. */
+    learningConfidences?: (number | undefined)[];
     /** Slugified topic keywords (e.g. 'email-templates', 'q2-planning'). 3–6 items. */
     topics?: string[];
 };
@@ -105,6 +109,15 @@ export declare function normalizeForJaccard(text: string): string[];
  * Returns 0-1 where 1 is identical.
  */
 export declare function jaccardSimilarity(a: string[], b: string[]): number;
+/**
+ * Check if a decision matches trivial patterns.
+ * Safety: patterns do NOT match items containing decision verbs.
+ */
+export declare function isTrivialDecision(text: string): string | null;
+/**
+ * Check if a learning matches trivial patterns.
+ */
+export declare function isTrivialLearning(text: string): string | null;
 /**
  * Build exclusion list section for deduplication.
  * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.

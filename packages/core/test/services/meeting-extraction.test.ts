@@ -10,6 +10,8 @@ import {
   formatStagedSections,
   updateMeetingContent,
   buildExclusionListSection,
+  isTrivialDecision,
+  isTrivialLearning,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   CATEGORY_LIMITS,
@@ -3040,7 +3042,7 @@ describe('buildLightExtractionPrompt', () => {
     // Light prompt should be significantly shorter (allow 40-60% range)
     const ratio = lightPrompt.length / normalPrompt.length;
     assert.ok(ratio < 0.6, `Light prompt should be <60% of normal, got ${(ratio * 100).toFixed(1)}%`);
-    assert.ok(ratio > 0.2, `Light prompt should be >20% of normal, got ${(ratio * 100).toFixed(1)}%`);
+    assert.ok(ratio > 0.1, `Light prompt should be >10% of normal, got ${(ratio * 100).toFixed(1)}%`);
   });
 
   it('extracts summary only in schema', () => {
@@ -3659,5 +3661,295 @@ describe('parseMeetingExtractionResponse - topics', () => {
     });
     const result = parseMeetingExtractionResponse(response);
     assert.deepEqual(result.intelligence.topics, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prompt hardening (Task 1) — decision/learning exclusion sections
+// ---------------------------------------------------------------------------
+
+describe('prompt hardening — decision/learning guidance', () => {
+  it('normal prompt contains decision exclusion section', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('## What is NOT a decision'), 'Missing decision exclusion section');
+  });
+
+  it('normal prompt contains learning exclusion section', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('## What is NOT a learning'), 'Missing learning exclusion section');
+  });
+
+  it('normal prompt contains self-review instruction', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('Before finalizing, review your list'), 'Missing self-review instruction');
+  });
+
+  it('normal prompt contains decision confidence guide', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('## Decision Confidence Guide'), 'Missing decision confidence guide');
+  });
+
+  it('normal prompt contains learning confidence guide', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('## Learning Confidence Guide'), 'Missing learning confidence guide');
+  });
+
+  it('normal prompt schema uses object format for decisions', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(prompt.includes('"text": "string'), 'Decision schema should use { text, confidence } format');
+    assert.ok(prompt.includes('"confidence": "number (0-1)'), 'Decision schema should include confidence');
+  });
+
+  it('light prompt uses confidence format for learnings', () => {
+    const prompt = buildLightExtractionPrompt('transcript');
+    assert.ok(prompt.includes('"confidence"'), 'Light prompt learnings should include confidence');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Confidence parsing (Task 3) — decisions/learnings as objects
+// ---------------------------------------------------------------------------
+
+describe('confidence parsing for decisions and learnings', () => {
+  it('parses string-only decisions (backwards compat)', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: ['Decision A', 'Decision B'],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisions, ['Decision A', 'Decision B']);
+    assert.equal(result.intelligence.decisionConfidences, undefined, 'String-only should have no confidence array');
+  });
+
+  it('parses object decisions with text and confidence', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [
+        { text: 'Use PostgreSQL', confidence: 0.9 },
+        { text: 'Deploy Friday', confidence: 0.7 },
+      ],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisions, ['Use PostgreSQL', 'Deploy Friday']);
+    assert.deepEqual(result.intelligence.decisionConfidences, [0.9, 0.7]);
+  });
+
+  it('parses mixed string/object decisions', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [
+        'Plain string decision',
+        { text: 'Object decision', confidence: 0.8 },
+      ],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisions, ['Plain string decision', 'Object decision']);
+    // Has at least one defined confidence, so array is present
+    assert.ok(result.intelligence.decisionConfidences);
+    assert.equal(result.intelligence.decisionConfidences![1], 0.8);
+  });
+
+  it('parses object with missing confidence', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: 'No confidence field' }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisions, ['No confidence field']);
+  });
+
+  it('clamps out-of-range confidence', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [
+        { text: 'Too high', confidence: 1.5 },
+        { text: 'Too low', confidence: -0.3 },
+      ],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisionConfidences, [1.0, 0.0]);
+  });
+
+  it('parses object learnings with confidence', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [],
+      learnings: [
+        { text: 'Batch processing reduces errors', confidence: 0.95 },
+        { text: 'Users prefer email', confidence: 0.75 },
+      ],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.learnings, ['Batch processing reduces errors', 'Users prefer email']);
+    assert.deepEqual(result.intelligence.learningConfidences, [0.95, 0.75]);
+  });
+
+  it('handles empty arrays gracefully', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.deepEqual(result.intelligence.decisions, []);
+    assert.deepEqual(result.intelligence.learnings, []);
+  });
+
+  it('includes confidence in rawItems', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: 'Test decision', confidence: 0.85 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    const decisionRaw = result.rawItems.find(r => r.type === 'decision');
+    assert.ok(decisionRaw);
+    assert.equal(decisionRaw!.confidence, 0.85);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Trivial decision/learning filters (Task 5)
+// ---------------------------------------------------------------------------
+
+describe('isTrivialDecision', () => {
+  it('filters "We discussed the roadmap"', () => {
+    assert.ok(isTrivialDecision('We discussed the product roadmap'));
+  });
+
+  it('filters "Team reviewed the Q2 metrics"', () => {
+    assert.ok(isTrivialDecision('We reviewed the Q2 metrics'));
+  });
+
+  it('filters "Meeting moved to Tuesday"', () => {
+    assert.ok(isTrivialDecision('Meeting moved to Tuesday'));
+  });
+
+  it('filters "Team synced on status"', () => {
+    assert.ok(isTrivialDecision('Team synced on the sprint status'));
+  });
+
+  it('does NOT filter items with decision verbs: "discussed and decided"', () => {
+    assert.equal(isTrivialDecision('We discussed the rollout and decided to ship Friday'), null);
+  });
+
+  it('does NOT filter items with "agreed"', () => {
+    assert.equal(isTrivialDecision('We discussed options and agreed on PostgreSQL'), null);
+  });
+
+  it('does NOT filter items with "approved"', () => {
+    assert.equal(isTrivialDecision('We reviewed the plan and approved the budget'), null);
+  });
+
+  it('does NOT filter normal decisions', () => {
+    assert.equal(isTrivialDecision('Use PostgreSQL instead of MongoDB for the new service'), null);
+  });
+});
+
+describe('isTrivialLearning', () => {
+  it('filters social event patterns', () => {
+    assert.ok(isTrivialLearning('Company picnic scheduled for next Friday'));
+  });
+
+  it('filters personal location trivia', () => {
+    assert.ok(isTrivialLearning('Alice lives in Seattle'));
+    assert.ok(isTrivialLearning('Bob is from Chicago'));
+    assert.ok(isTrivialLearning('Sarah moved to Austin last year'));
+  });
+
+  it('filters birthday/anniversary trivia', () => {
+    assert.ok(isTrivialLearning("John's birthday is on March 15th"));
+    assert.ok(isTrivialLearning('Team anniversary is in June'));
+  });
+
+  it('filters favorite thing trivia', () => {
+    assert.ok(isTrivialLearning("Alice's favorite food is sushi"));
+  });
+
+  it('does NOT filter genuine insights', () => {
+    assert.equal(isTrivialLearning('Enterprise users prefer batch processing over real-time'), null);
+  });
+
+  it('does NOT filter domain knowledge', () => {
+    assert.equal(isTrivialLearning('React 19 Server Components reduce bundle by 40%'), null);
+  });
+});
+
+describe('garbage/trivial filters applied to decisions in parsing', () => {
+  it('filters garbage decisions with validation warning', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: 'yeah we should do that thing', confidence: 0.9 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 0);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('decision:')));
+  });
+
+  it('filters trivial decisions with validation warning', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: 'We discussed the product roadmap', confidence: 0.8 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 0);
+    assert.ok(result.validationWarnings.some(w => w.reason.includes('trivial decision')));
+  });
+
+  it('keeps valid decisions through filters', () => {
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: 'Migrate the database to PostgreSQL by end of Q2', confidence: 0.9 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.equal(result.intelligence.decisions[0], 'Migrate the database to PostgreSQL by end of Q2');
+  });
+
+  it('does NOT filter long decisions (150-char limit only applies to action items)', () => {
+    const longDecision = 'We decided to migrate the entire monolithic backend service to a microservices architecture using Kubernetes orchestration, starting with the authentication module as a pilot and expanding to payment processing within the next quarter';
+    assert.ok(longDecision.length > 150, 'test decision should exceed 150 chars');
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [{ text: longDecision, confidence: 0.9 }],
+      learnings: [],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.decisions.length, 1);
+    assert.equal(result.intelligence.decisions[0], longDecision);
+  });
+
+  it('does NOT filter long learnings (150-char limit only applies to action items)', () => {
+    const longLearning = 'Enterprise customers in the healthcare vertical require HIPAA-compliant data processing pipelines with end-to-end encryption, which significantly increases infrastructure costs but reduces compliance audit burden by approximately 60%';
+    assert.ok(longLearning.length > 150, 'test learning should exceed 150 chars');
+    const response = JSON.stringify({
+      summary: 'test',
+      action_items: [],
+      decisions: [],
+      learnings: [{ text: longLearning, confidence: 0.85 }],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.learnings.length, 1);
+    assert.equal(result.intelligence.learnings[0], longLearning);
   });
 });

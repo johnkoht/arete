@@ -180,6 +180,11 @@ export function computeCommitmentPriority(input: CommitmentPriorityInput): Commi
  * Must produce the same hash as computeActionItemHash() in person-signals.ts —
  * same algorithm, separate implementation to avoid circular deps.
  */
+// TODO: Commitment mirroring — the `personSlug` in the hash means the same
+// commitment text creates different hashes for "ours" vs "theirs" direction.
+// This causes duplicate entries when both directions are extracted from the
+// same meeting. Revisit after `merge-commitments-into-tasks` branch lands,
+// which may restructure how commitments are tracked. See extraction-intelligence plan.
 function computeCommitmentHash(
   text: string,
   personSlug: string,

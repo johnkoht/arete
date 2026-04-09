@@ -34,6 +34,7 @@ import {
   reconcileMeetingBatch,
   loadReconciliationContext,
   loadRecentMeetingBatch,
+  batchLLMReview,
   FileStorageAdapter,
   type ExtractionMode,
   type MeetingExtractionBatch,
@@ -171,16 +172,22 @@ export async function runProcessingSessionTestable(
 
     // 3. Call AI for extraction using core extraction service
     jobs.appendEvent(jobId, 'Extracting content with AI...');
+    // Create LLM adapter to bridge AIService to core LLMCallFn signature
+    // Hoisted outside try block so it's accessible for batch LLM review later
+    const callLLM = async (prompt: string): Promise<string> => {
+      const result = await deps.aiService.call('extraction', prompt);
+      return result.text;
+    };
+
     let coreResult: MeetingExtractionResult;
     try {
       // Track LLM errors separately since extractMeetingIntelligence catches them
       let llmError: Error | null = null;
 
-      // Create LLM adapter to bridge AIService to core LLMCallFn signature
-      const callLLM = async (prompt: string): Promise<string> => {
+      // Wrap callLLM to capture errors for later re-throw
+      const callLLMWithErrorCapture = async (prompt: string): Promise<string> => {
         try {
-          const result = await deps.aiService.call('extraction', prompt);
-          return result.text;
+          return await callLLM(prompt);
         } catch (err) {
           // Capture error for later re-throw after core extraction returns empty
           llmError = err instanceof Error ? err : new Error(String(err));
@@ -194,7 +201,7 @@ export async function runProcessingSessionTestable(
       ).map((a) => a.name);
 
       // Call core extraction service with optional context, prior items, and mode
-      coreResult = await extractMeetingIntelligence(content, callLLM, {
+      coreResult = await extractMeetingIntelligence(content, callLLMWithErrorCapture, {
         attendees: attendeeNames,
         context: options.context,
         priorItems: options.priorItems,
@@ -280,10 +287,11 @@ export async function runProcessingSessionTestable(
 
     // 9b. Run cross-meeting reconciliation
     let reconciliationStats = { duplicates: 0, completed: 0, lowRelevance: 0 };
+    let cachedReconciliationContext: ReconciliationContext | undefined;
     if (deps.loadReconciliationContext && deps.loadRecentBatch) {
       try {
         jobs.appendEvent(jobId, 'Running cross-meeting reconciliation...');
-        const context = await deps.loadReconciliationContext();
+        cachedReconciliationContext = await deps.loadReconciliationContext();
         const recentBatch = await deps.loadRecentBatch();
 
         // Build current meeting batch entry
@@ -294,7 +302,7 @@ export async function runProcessingSessionTestable(
 
         const reconciliation = reconcileMeetingBatch(
           [...recentBatch, currentBatch],
-          context,
+          cachedReconciliationContext,
         );
 
         // Merge reconciliation decisions into processed maps
@@ -331,6 +339,33 @@ export async function runProcessingSessionTestable(
         // Graceful degradation — log warning and continue
         console.warn('[agent] reconciliation failed:', err);
         jobs.appendEvent(jobId, 'Warning: Cross-meeting reconciliation skipped due to error');
+      }
+    }
+
+    // 9c. Batch LLM quality review — semantic dedup against committed memory
+    if (deps.loadReconciliationContext) {
+      try {
+        // Collect non-skipped items for review
+        const reviewItems = processed.filteredItems
+          .filter(fi => processed.stagedItemStatus[fi.id] !== 'skipped')
+          .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
+
+        if (reviewItems.length > 0) {
+          // Reuse cached context to avoid redundant I/O
+          const ctx = cachedReconciliationContext ?? await deps.loadReconciliationContext();
+          const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLM);
+
+          if (drops.length > 0) {
+            for (const drop of drops) {
+              processed.stagedItemStatus[drop.id] = 'skipped';
+              processed.stagedItemSource[drop.id] = 'reconciled';
+            }
+            jobs.appendEvent(jobId, `Batch review dropped ${drops.length} item(s)`);
+          }
+        }
+      } catch (err) {
+        console.warn('[agent] batch LLM review failed:', err);
+        jobs.appendEvent(jobId, 'Warning: Batch LLM review skipped due to error');
       }
     }
 
@@ -484,7 +519,28 @@ export async function runProcessingSession(
     context = options.context;
   }
 
+  // Load prior items from recent meetings for prompt-level dedup (if not already provided)
+  let priorItems = options.priorItems;
+  if (!priorItems) {
+    try {
+      const storage = new FileStorageAdapter();
+      const meetingsDir = join(workspaceRoot, 'resources', 'meetings');
+      const recentBatch = await loadRecentMeetingBatch(storage, meetingsDir, 7);
+      priorItems = recentBatch.flatMap(batch => [
+        ...batch.extraction.decisions.map(text => ({ type: 'decision' as const, text })),
+        ...batch.extraction.learnings.map(text => ({ type: 'learning' as const, text })),
+        ...batch.extraction.actionItems.map(ai => ({ type: 'action' as const, text: ai.description })),
+      ]);
+      if (priorItems.length > 0) {
+        jobs.appendEvent(jobId, `Loaded ${priorItems.length} prior items from recent meetings`);
+      }
+    } catch {
+      // Graceful degradation — extraction works without prior items
+      jobs.appendEvent(jobId, 'Warning: Could not load prior items from recent meetings');
+    }
+  }
+
   const deps = createDefaultDeps(moduleAiService, workspaceRoot);
-  const optionsWithContext: ProcessingOptions = { ...options, context };
+  const optionsWithContext: ProcessingOptions = { ...options, context, priorItems };
   return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, optionsWithContext);
 }

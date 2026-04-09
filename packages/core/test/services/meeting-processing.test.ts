@@ -652,6 +652,26 @@ describe('hasNegationMarkers', () => {
   it('returns false for empty string', () => {
     assert.equal(hasNegationMarkers(''), false);
   });
+
+  it('does not false-positive on "notification"', () => {
+    assert.equal(hasNegationMarkers('Send notification to the team about the deploy'), false);
+  });
+
+  it('does not false-positive on "another"', () => {
+    assert.equal(hasNegationMarkers('Schedule another meeting for next week'), false);
+  });
+
+  it('does not false-positive on "note"', () => {
+    assert.equal(hasNegationMarkers('Take note of the deployment schedule'), false);
+  });
+
+  it('does not false-positive on "annotate"', () => {
+    assert.equal(hasNegationMarkers('Annotate the PR with review comments'), false);
+  });
+
+  it('still matches "not" as a standalone word', () => {
+    assert.equal(hasNegationMarkers('Do not deploy until Friday'), true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1930,5 +1950,89 @@ describe('inferUrgency', () => {
       // Both "today" (must) and "anytime" (anytime) present
       assert.equal(inferUrgency('Reply today or anytime'), 'must');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Real confidence for decisions/learnings (Task 4)
+// ---------------------------------------------------------------------------
+
+describe('decision/learning confidence from extraction', () => {
+  it('decision with confidence 0.4 is filtered out (below 0.65 threshold)', () => {
+    const result = createMockResult({
+      decisions: ['Low confidence decision'],
+      decisionConfidences: [0.4],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    assert.equal(decisions.length, 0, 'Decision below threshold should be filtered');
+  });
+
+  it('decision with confidence 0.7 gets status pending', () => {
+    const result = createMockResult({
+      decisions: ['Medium confidence decision'],
+      decisionConfidences: [0.7],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    assert.equal(decisions.length, 1);
+    assert.equal(processed.stagedItemStatus[decisions[0].id], 'pending');
+  });
+
+  it('decision with confidence 0.9 gets status approved', () => {
+    const result = createMockResult({
+      decisions: ['High confidence decision'],
+      decisionConfidences: [0.9],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    assert.equal(decisions.length, 1);
+    assert.equal(processed.stagedItemStatus[decisions[0].id], 'approved');
+  });
+
+  it('learning with confidence 0.4 is filtered out', () => {
+    const result = createMockResult({
+      learnings: ['Low confidence learning'],
+      learningConfidences: [0.4],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const learnings = processed.filteredItems.filter(i => i.type === 'learning');
+    assert.equal(learnings.length, 0);
+  });
+
+  it('learning with confidence 0.7 gets status pending', () => {
+    const result = createMockResult({
+      learnings: ['Medium confidence learning'],
+      learningConfidences: [0.7],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const learnings = processed.filteredItems.filter(i => i.type === 'learning');
+    assert.equal(learnings.length, 1);
+    assert.equal(processed.stagedItemStatus[learnings[0].id], 'pending');
+  });
+
+  it('learning with confidence 0.9 gets status approved', () => {
+    const result = createMockResult({
+      learnings: ['High confidence learning'],
+      learningConfidences: [0.9],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const learnings = processed.filteredItems.filter(i => i.type === 'learning');
+    assert.equal(learnings.length, 1);
+    assert.equal(processed.stagedItemStatus[learnings[0].id], 'approved');
+  });
+
+  it('backwards compat: undefined confidences default to 0.9 (auto-approved)', () => {
+    const result = createMockResult({
+      decisions: ['Decision without confidence'],
+      learnings: ['Learning without confidence'],
+    });
+    const processed = processMeetingExtraction(result, '');
+    const decisions = processed.filteredItems.filter(i => i.type === 'decision');
+    const learnings = processed.filteredItems.filter(i => i.type === 'learning');
+    assert.equal(decisions.length, 1);
+    assert.equal(learnings.length, 1);
+    assert.equal(processed.stagedItemStatus[decisions[0].id], 'approved');
+    assert.equal(processed.stagedItemStatus[learnings[0].id], 'approved');
   });
 });

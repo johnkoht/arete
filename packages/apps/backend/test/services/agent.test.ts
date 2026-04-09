@@ -1168,5 +1168,104 @@ Discussion about tasks.
       assert.ok(content.includes('de_001: skipped'), 'Duplicate decision should be skipped');
       assert.ok(content.includes('de_001: reconciled'), 'Duplicate decision should have reconciled source');
     });
+
+    it('batch LLM review drops items flagged by LLM', async () => {
+      const jobs = makeMockJobs();
+      const decisionText = 'Use PostgreSQL for production database';
+      const learningText = 'The API supports batch processing mode';
+
+      // Track call count to return different responses for extraction vs batch review
+      let callCount = 0;
+      const baseDeps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          decisions: [decisionText],
+          learnings: [learningText],
+        }),
+        reconciliationContext: {
+          areaMemories: new Map(),
+          recentCommittedItems: [
+            { text: 'We chose PostgreSQL as our DB', date: '2026-04-01', source: 'decisions.md' },
+          ],
+          completedTasks: [],
+        },
+      });
+
+      // Override aiService to return batch review drops on second call
+      const deps = {
+        ...baseDeps,
+        aiService: {
+          call: async () => {
+            callCount++;
+            if (callCount === 1) {
+              // First call: extraction
+              const response = mockCoreExtractionResponse({
+                summary: 'Summary.',
+                decisions: [decisionText],
+                learnings: [learningText],
+              });
+              return { text: JSON.stringify(toRawLLMJson(response)) };
+            }
+            // Second call: batch review — drop the learning as low-signal
+            return { text: JSON.stringify({ drops: [{ id: 'le_001', reason: 'Duplicate of committed item' }] }) };
+          },
+        },
+      };
+
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      // The learning should be skipped by batch review
+      const learning = result.filteredItems.find(fi => fi.text === learningText);
+      assert.ok(learning, 'Learning should exist in filtered items');
+      assert.equal(result.stagedItemStatus[learning!.id], 'skipped');
+      assert.equal(result.stagedItemSource[learning!.id], 'reconciled');
+
+      // Batch review event should be logged
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(events.some((e) => e.includes('Batch review dropped 1')));
+    });
+
+    it('batch LLM review degrades gracefully when LLM fails', async () => {
+      const jobs = makeMockJobs();
+      let callCount = 0;
+      const baseDeps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          decisions: ['Valid decision'],
+        }),
+        reconciliationContext: {
+          areaMemories: new Map(),
+          recentCommittedItems: [],
+          completedTasks: [],
+        },
+      });
+
+      const deps = {
+        ...baseDeps,
+        aiService: {
+          call: async () => {
+            callCount++;
+            if (callCount === 1) {
+              const response = mockCoreExtractionResponse({
+                summary: 'Summary.',
+                decisions: ['Valid decision'],
+              });
+              return { text: JSON.stringify(toRawLLMJson(response)) };
+            }
+            // Second call: batch review fails — batchLLMReview catches internally
+            throw new Error('LLM unavailable');
+          },
+        },
+      };
+
+      const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      // Should still complete successfully — batchLLMReview catches errors internally
+      assert.ok(result.filteredItems.length > 0);
+      const events = jobs.appended.map((e) => e.line);
+      // No batch review warning since batchLLMReview handles errors gracefully (returns [])
+      // Processing should complete normally
+      assert.ok(events.some((e) => e.includes('processed successfully')));
+    });
   });
 });
