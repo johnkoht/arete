@@ -19,6 +19,7 @@ import type {
 } from '../models/index.js';
 import type { PersonActionItem } from './person-signals.js';
 import type { HealthIndicator } from './person-health.js';
+import { jaccardSimilarity } from '../utils/similarity.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -203,7 +204,11 @@ function computeCommitmentHash(
  * - Open items (resolvedAt: null) are NEVER pruned.
  * - A commitment from months ago resolved yesterday must NOT be pruned.
  */
-function shouldPrune(commitment: Commitment, referenceDate: Date = new Date()): boolean {
+function shouldPrune(
+  commitment: Commitment,
+  referenceDate: Date = new Date(),
+  thresholdDays: number = PRUNE_DAYS,
+): boolean {
   if (commitment.resolvedAt === null) return false;
   if (commitment.status !== 'resolved' && commitment.status !== 'dropped') return false;
 
@@ -212,7 +217,7 @@ function shouldPrune(commitment: Commitment, referenceDate: Date = new Date()): 
 
   const diffMs = referenceDate.getTime() - resolvedAt.getTime();
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  return diffDays > PRUNE_DAYS;
+  return diffDays > thresholdDays;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,13 +232,7 @@ function normalize(text: string): string[] {
     .filter(Boolean);
 }
 
-function jaccard(a: string[], b: string[]): number {
-  const setA = new Set(a);
-  const setB = new Set(b);
-  const intersection = [...setA].filter((w) => setB.has(w)).length;
-  const union = new Set([...setA, ...setB]).size;
-  return union === 0 ? 0 : intersection / union;
-}
+// jaccardSimilarity imported from ../utils/similarity.js
 
 const JACCARD_THRESHOLD = 0.6;
 
@@ -501,7 +500,7 @@ export class CommitmentsService {
 
       for (const commitment of open) {
         const commitmentWords = normalize(commitment.text);
-        const confidence = jaccard(completedWords, commitmentWords);
+        const confidence = jaccardSimilarity(completedWords, commitmentWords);
 
         if (confidence >= JACCARD_THRESHOLD) {
           results.push({ commitment, completedItem, confidence });
@@ -596,6 +595,29 @@ export class CommitmentsService {
       await this.save(updated);
       throw error;
     }
+  }
+
+  /**
+   * Explicitly purge resolved/dropped commitments older than a configurable threshold.
+   *
+   * Uses the same `shouldPrune()` logic as `save()`'s auto-prune, but with a
+   * caller-supplied threshold (defaults to PRUNE_DAYS = 30).
+   *
+   * Open/active commitments are never touched regardless of age.
+   * Handles missing or empty commitments.json gracefully (returns { purged: 0 }).
+   */
+  async purgeResolved(olderThanDays: number = PRUNE_DAYS): Promise<{ purged: number }> {
+    const all = await this.load();
+    if (all.length === 0) return { purged: 0 };
+
+    const now = new Date();
+    const kept = all.filter((c) => !shouldPrune(c, now, olderThanDays));
+    const purged = all.length - kept.length;
+
+    // save() applies its own auto-prune (PRUNE_DAYS), which is fine —
+    // anything we already filtered out won't be there to prune again.
+    await this.save(kept);
+    return { purged };
   }
 
   /**

@@ -172,6 +172,18 @@ export declare class CommitmentsService {
      */
     create(text: string, personSlug: string, personName: string, direction: CommitmentDirection, options?: CreateCommitmentOptions): Promise<CreateCommitmentResult>;
     /**
+     * Explicitly purge resolved/dropped commitments older than a configurable threshold.
+     *
+     * Uses the same `shouldPrune()` logic as `save()`'s auto-prune, but with a
+     * caller-supplied threshold (defaults to PRUNE_DAYS = 30).
+     *
+     * Open/active commitments are never touched regardless of age.
+     * Handles missing or empty commitments.json gracefully (returns { purged: 0 }).
+     */
+    purgeResolved(olderThanDays?: number): Promise<{
+        purged: number;
+    }>;
+    /**
      * Check if a commitment exists by hash prefix.
      */
     exists(hashPrefix: string): Promise<boolean>;

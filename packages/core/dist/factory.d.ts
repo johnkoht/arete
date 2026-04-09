@@ -21,6 +21,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { HygieneService } from './services/hygiene.js';
 /**
  * All services created by the factory, keyed by role.
  */
@@ -38,6 +39,7 @@ export type AreteServices = {
     commitments: CommitmentsService;
     areaParser: AreaParserService;
     areaMemory: AreaMemoryService;
+    hygiene: HygieneService;
     ai: AIService;
     tasks: TaskService;
     gws: {

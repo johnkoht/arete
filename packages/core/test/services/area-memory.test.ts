@@ -616,6 +616,161 @@ describe('AreaMemoryService', () => {
     });
   });
 
+  describe('compactLearnings', () => {
+    it('archives old bullet-format learnings and keeps recent ones', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().split('T')[0];
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        `# Learnings\n\n- 2025-01-01: Old learning about process (from: standup)\n- ${today}: Recent learning about tools (from: retro)\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 1);
+      assert.equal(result.kept, 1);
+      assert.ok(result.archivePath, 'Should have archive path');
+
+      // Verify archive content
+      const archiveContent = storage.store.get(result.archivePath!);
+      assert.ok(archiveContent, 'Archive file should exist');
+      assert.ok(archiveContent!.includes('Old learning about process'), 'Archive should contain old learning');
+      assert.ok(!archiveContent!.includes('Recent learning'), 'Archive should not contain recent learning');
+
+      // Verify learnings.md still has recent entry
+      const remaining = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'))!;
+      assert.ok(remaining.includes('Recent learning about tools'), 'Recent learning should be preserved');
+      assert.ok(!remaining.includes('Old learning about process'), 'Old learning should be removed');
+    });
+
+    it('returns zeros when all learnings are recent', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().split('T')[0];
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        `# Learnings\n\n- ${today}: Fresh insight (from: sync)\n- ${today}: Another fresh insight (from: retro)\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 0);
+      assert.equal(result.kept, 2);
+      assert.equal(result.archivePath, null);
+    });
+
+    it('returns zeros for empty learnings file', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        ''
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 0);
+      assert.equal(result.kept, 0);
+      assert.equal(result.archivePath, null);
+    });
+
+    it('returns zeros when learnings file does not exist', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 0);
+      assert.equal(result.kept, 0);
+      assert.equal(result.archivePath, null);
+    });
+
+    it('preserves bullet entries without parseable dates', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        `# Learnings\n\n- 2025-01-01: Old entry (from: sync)\n- No date on this learning\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 1, 'Old dated entry should be archived');
+      assert.equal(result.kept, 1, 'Undated entry should be preserved');
+
+      // Verify undated entry is in the remaining file
+      const remaining = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'))!;
+      assert.ok(remaining.includes('No date on this learning'), 'Undated entry should remain');
+    });
+
+    it('handles heading-based learnings format (### YYYY-MM-DD: Title)', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().split('T')[0];
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        `# Learnings Log\n\n### 2025-01-01: Old heading learning\n**Source**: Standup\n**Insight**: Something old\n\n### ${today}: Recent heading learning\n**Source**: Retro\n**Insight**: Something new\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const result = await service.compactLearnings(paths);
+
+      assert.equal(result.archived, 1, 'Old heading entry should be archived');
+      assert.equal(result.kept, 1, 'Recent heading entry should be kept');
+
+      // Verify archive
+      const archiveContent = storage.store.get(result.archivePath!)!;
+      assert.ok(archiveContent.includes('Old heading learning'), 'Archive should contain old entry');
+
+      // Verify remaining
+      const remaining = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'))!;
+      assert.ok(remaining.includes('Recent heading learning'), 'Recent entry should remain');
+      assert.ok(!remaining.includes('Old heading learning'), 'Old entry should be removed');
+    });
+
+    it('respects custom olderThanDays option', async () => {
+      const areaParser = createStubAreaParser([]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      // Entry from 10 days ago
+      const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/items/learnings.md'),
+        `# Learnings\n\n- ${tenDaysAgo}: Moderately old learning (from: sync)\n`
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+
+      // With default 90 days — should keep it
+      const result1 = await service.compactLearnings(paths);
+      assert.equal(result1.archived, 0, 'Should not archive with 90-day threshold');
+      assert.equal(result1.kept, 1);
+
+      // With 5 days — should archive it
+      const result2 = await service.compactLearnings(paths, { olderThanDays: 5 });
+      assert.equal(result2.archived, 1, 'Should archive with 5-day threshold');
+      assert.equal(result2.kept, 0);
+    });
+  });
+
   describe('getLastRefreshed', () => {
     it('returns date from frontmatter', async () => {
       const areaParser = createStubAreaParser([]);

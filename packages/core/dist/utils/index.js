@@ -10,4 +10,5 @@ export { findAvailableSlots } from './availability.js';
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
 export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems } from './agenda.js';
 export { extractAttendeeSlugs } from './attendees.js';
+export { jaccardSimilarity, normalizeForJaccard } from './similarity.js';
 //# sourceMappingURL=index.js.map

@@ -12,8 +12,10 @@ export { ToolService } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';
+// Similarity utilities (shared Jaccard computation)
+export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 // Meeting extraction
-export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, normalizeForJaccard, jaccardSimilarity, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
+export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
@@ -41,6 +43,8 @@ export { generateMeetingManifest } from './meeting-manifest.js';
 export { AreaParserService } from './area-parser.js';
 // Area memory (L3 computed summaries)
 export { AreaMemoryService, isAreaMemoryStale, buildSynthesisPrompt } from './area-memory.js';
+// Hygiene (workspace entropy scanning and cleanup)
+export { HygieneService } from './hygiene.js';
 // Task management
 export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';
 // Task scoring
