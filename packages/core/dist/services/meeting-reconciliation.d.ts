@@ -174,12 +174,52 @@ declare function generateWhy(tier: 'high' | 'normal' | 'low', breakdown: Relevan
  */
 export declare function reconcileMeetingBatch(extractions: MeetingExtractionBatch[], context: ReconciliationContext): ReconciliationResult;
 /**
+ * Parse committed items from a memory file (decisions.md or learnings.md).
+ *
+ * Handles the section format written by `appendToMemoryFile()`:
+ * ```
+ * ## Title
+ * - **Date**: YYYY-MM-DD
+ * - **Source**: Meeting Title (Attendees)
+ * - Item content
+ * ```
+ *
+ * Filters to items within the last `maxAgeDays` and caps at `maxItems`.
+ */
+export declare function parseMemoryItems(content: string, sourcePath: string, options?: {
+    maxAgeDays?: number;
+    maxItems?: number;
+}): Array<{
+    text: string;
+    date: string;
+    source: string;
+}>;
+/**
+ * One LLM call per processing run that semantically deduplicates against
+ * committed memory and catches low-signal items that slipped through
+ * rule-based filters.
+ *
+ * Returns a list of items to drop (with reasons). Graceful degradation:
+ * returns empty on parse failure.
+ */
+export declare function batchLLMReview(currentItems: Array<{
+    text: string;
+    type: string;
+    id: string;
+}>, committedItems: Array<{
+    text: string;
+    date: string;
+    source: string;
+}>, callLLM: (prompt: string) => Promise<string>): Promise<Array<{
+    id: string;
+    action: 'drop';
+    reason: string;
+}>>;
+/**
  * Load reconciliation context from workspace.
  *
- * Reads area memory files to build the context needed for reconciliation
- * scoring and matching. For now, completedTasks and recentCommittedItems
- * return empty arrays — these will be populated when area task list and
- * .arete/memory/ integrations are implemented.
+ * Reads area memory files and committed decision/learning memory to build
+ * the context needed for reconciliation scoring and matching.
  *
  * @param storage - StorageAdapter for file access
  * @param workspaceRoot - Workspace root path

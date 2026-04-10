@@ -75,6 +75,20 @@ export type CompactDecisionsResult = {
   archivePath?: string;
 };
 
+export type CompactLearningsOptions = {
+  /** Compact learnings older than this many days. Default: 90. */
+  olderThanDays?: number;
+};
+
+export type CompactResult = {
+  /** Number of entries archived. */
+  archived: number;
+  /** Number of entries kept in the active file. */
+  kept: number;
+  /** Path to the archive file, or null if nothing was archived. */
+  archivePath: string | null;
+};
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
@@ -83,6 +97,11 @@ interface DecisionEntry {
   title: string;
   date?: string;
   body: string;
+  raw: string;
+}
+
+interface LearningEntry {
+  date?: string;
   raw: string;
 }
 
@@ -154,6 +173,51 @@ function parseMemorySections(content: string): DecisionEntry[] {
   }
 
   return sections;
+}
+
+/**
+ * Parse learnings from a bullet-list formatted file.
+ *
+ * Handles the bullet format: `- YYYY-MM-DD: Some learning text (from: source)`
+ * Also handles the heading-based format (## Title / - **Date**: YYYY-MM-DD) that
+ * `appendToMemoryFile()` writes, since both formats exist in real workspaces.
+ *
+ * Lines/blocks without a parseable date are preserved (conservative — never drop data).
+ */
+function parseLearningsBullets(content: string): LearningEntry[] {
+  const entries: LearningEntry[] = [];
+  const lines = content.split('\n');
+
+  // --- Pass 1: Detect heading-based entries (### YYYY-MM-DD: ... or ## Title + **Date** line) ---
+  // These are multi-line blocks; we parse them first, then handle remaining bullet lines.
+  const headingEntries = parseMemorySections(content);
+  if (headingEntries.length > 0) {
+    for (const entry of headingEntries) {
+      entries.push({ date: entry.date, raw: entry.raw });
+    }
+    return entries;
+  }
+
+  // --- Pass 2: Pure bullet-list format ---
+  // Skip header lines (# title, description text, ---)
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip blank, horizontal rules, and top-level headings
+    if (trimmed === '' || trimmed === '---' || /^#\s/.test(trimmed)) continue;
+    // Skip non-bullet description lines (e.g., "Insights and learnings from work.")
+    if (!trimmed.startsWith('- ')) continue;
+
+    const bulletMatch = trimmed.match(/^- (\d{4}-\d{2}-\d{2}): (.+)$/);
+    if (bulletMatch) {
+      entries.push({ date: bulletMatch[1], raw: trimmed });
+    } else {
+      // Bullet line without a parseable date — preserve it (no date → kept)
+      entries.push({ date: undefined, raw: trimmed });
+    }
+  }
+
+  return entries;
 }
 
 /**
@@ -524,6 +588,74 @@ export class AreaMemoryService {
       preserved: toPreserve.length,
       areasUpdated: areaDecisions.size,
       archivePath: options.dryRun ? undefined : join(workspacePaths.memory, 'archive', `decisions-${new Date().toISOString().split('T')[0]}.md`),
+    };
+  }
+
+  /**
+   * Compact old learnings into an archive file.
+   *
+   * Reads `.arete/memory/items/learnings.md`, partitions entries by age,
+   * archives old entries to `.arete/memory/archive/learnings-YYYY-MM-DD.md`,
+   * and rewrites learnings.md with only recent entries.
+   *
+   * Supports both bullet-list format (`- YYYY-MM-DD: text`) and
+   * heading-based format (`### YYYY-MM-DD: Title`).
+   *
+   * Entries without a parseable date are always PRESERVED (never dropped).
+   */
+  async compactLearnings(
+    workspacePaths: WorkspacePaths,
+    options: CompactLearningsOptions = {},
+  ): Promise<CompactResult> {
+    const olderThanDays = options.olderThanDays ?? 90;
+    const learningsPath = join(workspacePaths.memory, 'items', 'learnings.md');
+    const content = await this.storage.read(learningsPath);
+    if (!content || content.trim() === '') {
+      return { archived: 0, kept: 0, archivePath: null };
+    }
+
+    const entries = parseLearningsBullets(content);
+    if (entries.length === 0) {
+      return { archived: 0, kept: 0, archivePath: null };
+    }
+
+    // Partition into old vs recent/undated
+    const toArchive: LearningEntry[] = [];
+    const toKeep: LearningEntry[] = [];
+
+    for (const entry of entries) {
+      if (entry.date && daysAgo(entry.date) > olderThanDays) {
+        toArchive.push(entry);
+      } else {
+        // No date → preserve (conservative); recent → keep
+        toKeep.push(entry);
+      }
+    }
+
+    if (toArchive.length === 0) {
+      return { archived: 0, kept: entries.length, archivePath: null };
+    }
+
+    // Archive old entries
+    const archiveDir = join(workspacePaths.memory, 'archive');
+    await this.storage.mkdir(archiveDir);
+    const archiveDateStr = new Date().toISOString().split('T')[0];
+    const archivePath = join(archiveDir, `learnings-${archiveDateStr}.md`);
+    const archiveContent = '# Archived Learnings\n\n' +
+      toArchive.map(e => e.raw).join('\n\n') + '\n';
+    await this.storage.write(archivePath, archiveContent);
+
+    // Rewrite learnings.md with only recent/undated entries
+    const header = content.match(/^(#[^#].*\n)/)?.[1] ?? '# Learnings\n';
+    const keptContent = toKeep.length > 0
+      ? header + '\n' + toKeep.map(e => e.raw).join('\n\n') + '\n'
+      : header;
+    await this.storage.write(learningsPath, keptContent);
+
+    return {
+      archived: toArchive.length,
+      kept: toKeep.length,
+      archivePath,
     };
   }
 

@@ -24,6 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { HygieneService } from './services/hygiene.js';
 import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider } from './integrations/gws/index.js';
 
 /**
@@ -43,6 +44,7 @@ export type AreteServices = {
   commitments: CommitmentsService;
   areaParser: AreaParserService;
   areaMemory: AreaMemoryService;
+  hygiene: HygieneService;
   ai: AIService;
   tasks: TaskService;
   gws: {
@@ -111,8 +113,13 @@ export async function createServices(
   // Area memory (depends on storage + areaParser + commitments + memory)
   const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
 
-  // Task management (depends on storage + workspace paths + commitments for auto-resolution)
+  // Workspace paths (used by hygiene + tasks)
   const workspacePaths = workspace.getPaths(workspaceRoot);
+
+  // Hygiene (depends on storage + commitments + areaMemory + areaParser + memory + paths)
+  const hygiene = new HygieneService(storage, workspaceRoot, commitments, areaMemory, areaParser, memory, workspacePaths);
+
+  // Task management (depends on storage + workspace paths + commitments for auto-resolution)
   const tasks = new TaskService(storage, workspacePaths, commitments);
 
   // Wire up cross-service dependencies
@@ -143,6 +150,7 @@ export async function createServices(
     commitments,
     areaParser,
     areaMemory,
+    hygiene,
     ai,
     tasks,
     gws: {

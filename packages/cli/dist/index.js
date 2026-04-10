@@ -34,6 +34,7 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerSearchCommand } from './commands/search.js';
 import { registerCreateCommands } from './commands/create.js';
 import { registerInboxCommand } from './commands/inbox.js';
+import { registerHygieneCommand } from './commands/hygiene.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -105,6 +106,10 @@ ${chalk.bold('Meetings & Templates')}
   template list meeting-agendas    List templates
   template view meeting-agenda --type <name>  View template
 
+${chalk.bold('Workspace Hygiene')}
+  hygiene scan [--tier] [--category]  Scan for workspace entropy
+  hygiene apply [--yes] [--dry-run]   Apply hygiene fixes
+
 ${chalk.bold('AI Configuration')}
   credentials set <provider>       Set API key for a provider
   credentials show                 Show configured providers (keys masked)
@@ -142,5 +147,6 @@ registerConfigCommand(program);
 registerSearchCommand(program);
 registerCreateCommands(program);
 registerInboxCommand(program);
+registerHygieneCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map

@@ -53,6 +53,18 @@ export type CompactDecisionsResult = {
     /** Archive file path (if created). */
     archivePath?: string;
 };
+export type CompactLearningsOptions = {
+    /** Compact learnings older than this many days. Default: 90. */
+    olderThanDays?: number;
+};
+export type CompactResult = {
+    /** Number of entries archived. */
+    archived: number;
+    /** Number of entries kept in the active file. */
+    kept: number;
+    /** Path to the archive file, or null if nothing was archived. */
+    archivePath: string | null;
+};
 /**
  * Check if an area memory file is stale.
  */
@@ -90,6 +102,19 @@ export declare class AreaMemoryService {
      * originals are archived.
      */
     compactDecisions(workspacePaths: WorkspacePaths, options?: CompactDecisionsOptions): Promise<CompactDecisionsResult>;
+    /**
+     * Compact old learnings into an archive file.
+     *
+     * Reads `.arete/memory/items/learnings.md`, partitions entries by age,
+     * archives old entries to `.arete/memory/archive/learnings-YYYY-MM-DD.md`,
+     * and rewrites learnings.md with only recent entries.
+     *
+     * Supports both bullet-list format (`- YYYY-MM-DD: text`) and
+     * heading-based format (`### YYYY-MM-DD: Title`).
+     *
+     * Entries without a parseable date are always PRESERVED (never dropped).
+     */
+    compactLearnings(workspacePaths: WorkspacePaths, options?: CompactLearningsOptions): Promise<CompactResult>;
     /**
      * Read the last_refreshed date from an area memory file.
      * Returns null if file doesn't exist or has no frontmatter.

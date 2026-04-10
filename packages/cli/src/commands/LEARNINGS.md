@@ -76,6 +76,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
   - The `arete meeting extract <file>` command now exists and uses AIService. It requires AI configuration (via `arete credentials configure` or `arete.yaml`), but the early `isConfigured()` check provides a clear error path rather than crashing on missing API keys.
   - Pattern: check `services.ai.isConfigured()` before any AI call; if false, emit `"No AI provider configured. Run \`arete credentials configure\` or set up via arete.yaml."` and exit with code 1.
 
+- **`hygiene apply` internal scan + approval pattern** (2026-04-08): `arete hygiene apply` runs `scan()` internally rather than accepting a pre-computed report. This avoids stale-report risks and simplifies the CLI flow. The command: scan → present checkbox (tier 1 pre-checked) → apply with approved IDs → optional `refreshQmdIndex()`. For `--yes` flag: auto-approve all items matching `--tier` filter. For `--json`: never block on stdin, auto-approve all. Follow this "internal scan then approve" pattern for any future two-phase commands.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

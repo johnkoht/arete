@@ -29,6 +29,9 @@ export type {
   ModelSpec,
 } from './ai.js';
 
+// Similarity utilities (shared Jaccard computation)
+export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
+
 // Meeting extraction
 export {
   buildMeetingExtractionPrompt,
@@ -37,8 +40,6 @@ export {
   extractMeetingIntelligence,
   formatStagedSections,
   updateMeetingContent,
-  normalizeForJaccard,
-  jaccardSimilarity,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
 } from './meeting-extraction.js';
@@ -149,6 +150,9 @@ export type {
   LLMCallFn as AreaLLMCallFn,
 } from './area-memory.js';
 export type { AreaContext } from '../models/index.js';
+
+// Hygiene (workspace entropy scanning and cleanup)
+export { HygieneService } from './hygiene.js';
 
 // Task management
 export { TaskService, TaskNotFoundError, AmbiguousIdError, parseMetadata, parseTaskLine, formatTask, computeTaskId } from './tasks.js';

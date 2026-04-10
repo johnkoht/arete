@@ -1592,3 +1592,149 @@ describe('computeCommitmentPriority()', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// purgeResolved()
+// ---------------------------------------------------------------------------
+
+describe('CommitmentsService.purgeResolved()', () => {
+  it('returns { purged: 0 } when no commitments file exists', async () => {
+    const svc = new CommitmentsService(createMockStorage(), WORKSPACE_ROOT);
+    const result = await svc.purgeResolved();
+    assert.deepEqual(result, { purged: 0 });
+  });
+
+  it('returns { purged: 0 } when commitments file is empty', async () => {
+    const store = new Map<string, string>([
+      [COMMITMENTS_PATH, makeFile([])],
+    ]);
+    const svc = new CommitmentsService(createMockStorage(store), WORKSPACE_ROOT);
+    const result = await svc.purgeResolved();
+    assert.deepEqual(result, { purged: 0 });
+  });
+
+  it('returns { purged: 0 } when no resolved commitments exist', async () => {
+    const open1 = makeCommitment({ id: 'a'.repeat(64), text: 'Send slides' });
+    const open2 = makeCommitment({ id: 'b'.repeat(64), text: 'Follow up on report' });
+
+    const svc = new CommitmentsService(makeStorage([open1, open2]), WORKSPACE_ROOT);
+    const result = await svc.purgeResolved();
+    assert.deepEqual(result, { purged: 0 });
+
+    // Verify open commitments are still there
+    const remaining = await svc.listOpen();
+    assert.equal(remaining.length, 2);
+  });
+
+  it('purges resolved commitments older than default 30 days', async () => {
+    const open = makeCommitment({ id: 'a'.repeat(64), text: 'Open item' });
+    const recentResolved = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Recently resolved',
+      status: 'resolved',
+      resolvedAt: daysAgo(10),
+    });
+    const oldResolved = makeCommitment({
+      id: 'c'.repeat(64),
+      text: 'Old resolved',
+      status: 'resolved',
+      resolvedAt: daysAgo(35),
+    });
+
+    const store = new Map<string, string>([
+      [COMMITMENTS_PATH, makeFile([open, recentResolved, oldResolved])],
+    ]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.purgeResolved();
+    assert.equal(result.purged, 1);
+
+    // Verify file contents: open + recentResolved remain, oldResolved is gone
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 2);
+    assert.ok(parsed.commitments.some((c) => c.id === 'a'.repeat(64)));
+    assert.ok(parsed.commitments.some((c) => c.id === 'b'.repeat(64)));
+    assert.ok(!parsed.commitments.some((c) => c.id === 'c'.repeat(64)));
+  });
+
+  it('purges with custom threshold (7 days)', async () => {
+    const open = makeCommitment({ id: 'a'.repeat(64), text: 'Open item' });
+    const resolved8days = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Resolved 8 days ago',
+      status: 'resolved',
+      resolvedAt: daysAgo(8),
+    });
+    const resolved3days = makeCommitment({
+      id: 'c'.repeat(64),
+      text: 'Resolved 3 days ago',
+      status: 'resolved',
+      resolvedAt: daysAgo(3),
+    });
+
+    const store = new Map<string, string>([
+      [COMMITMENTS_PATH, makeFile([open, resolved8days, resolved3days])],
+    ]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.purgeResolved(7);
+    assert.equal(result.purged, 1);
+
+    // Only the 8-day-old resolved commitment should be purged
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 2);
+    assert.ok(parsed.commitments.some((c) => c.id === 'a'.repeat(64)));
+    assert.ok(parsed.commitments.some((c) => c.id === 'c'.repeat(64)));
+    assert.ok(!parsed.commitments.some((c) => c.id === 'b'.repeat(64)));
+  });
+
+  it('does not touch open commitments regardless of age', async () => {
+    const ancientOpen = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Very old open item',
+      date: '2020-01-01',
+    });
+    const oldResolved = makeCommitment({
+      id: 'b'.repeat(64),
+      text: 'Old resolved',
+      status: 'resolved',
+      resolvedAt: daysAgo(60),
+    });
+
+    const store = new Map<string, string>([
+      [COMMITMENTS_PATH, makeFile([ancientOpen, oldResolved])],
+    ]);
+    const storage = createMockStorage(store);
+    const svc = new CommitmentsService(storage, WORKSPACE_ROOT);
+
+    const result = await svc.purgeResolved();
+    assert.equal(result.purged, 1);
+
+    // Ancient open item must survive
+    const written = store.get(COMMITMENTS_PATH);
+    assert.ok(written !== undefined);
+    const parsed = JSON.parse(written) as CommitmentsFile;
+    assert.equal(parsed.commitments.length, 1);
+    assert.equal(parsed.commitments[0].id, 'a'.repeat(64));
+    assert.equal(parsed.commitments[0].status, 'open');
+  });
+
+  it('also purges dropped commitments older than threshold', async () => {
+    const dropped = makeCommitment({
+      id: 'a'.repeat(64),
+      text: 'Dropped item',
+      status: 'dropped',
+      resolvedAt: daysAgo(35),
+    });
+
+    const svc = new CommitmentsService(makeStorage([dropped]), WORKSPACE_ROOT);
+    const result = await svc.purgeResolved();
+    assert.equal(result.purged, 1);
+  });
+});
