@@ -1,0 +1,87 @@
+{
+  "name": "meeting-intelligence",
+  "branchName": "feature/meeting-intelligence",
+  "goal": "Give agents fast, structured access to meeting intelligence — topics, item counts, and cross-meeting context — without reading full meeting files. Achieved through enriched meeting frontmatter, a rolling meeting manifest, and topic aggregation in area memory.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Extend types and update frontmatter parser",
+      "description": "Add six new fields to meeting-related type definitions (MeetingForSave, MeetingIntelligence, ParsedMeetingFrontmatter) and update parseMeetingFile() to actually read and return the new fields from frontmatter YAML. This is the foundation all subsequent tasks depend on.\n\nFiles to read first:\n- packages/core/src/integrations/meetings.ts (MeetingForSave)\n- packages/core/src/services/meeting-extraction.ts (MeetingIntelligence)\n- packages/core/src/services/meeting-context.ts (ParsedMeetingFrontmatter + parseMeetingFile lines 151-211)\n\nPre-mortem mitigations:\n- Adding types alone is NOT enough — parseMeetingFile() must be updated or downstream tasks silently get undefined\n- Use .js extensions in all imports (NodeNext module resolution)",
+      "acceptanceCriteria": [
+        "npm run typecheck passes with no new errors",
+        "parseMeetingFile() returns correct values for topics, open_action_items, my_commitments, their_commitments, decisions_count, learnings_count when present in frontmatter",
+        "parseMeetingFile() returns undefined for all six new fields when absent — existing test-data files unaffected",
+        "All existing tests pass (npm test)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Add topic extraction to LLM prompt",
+      "description": "Extend buildMeetingExtractionPrompt() to request topics in the JSON schema, and update parseMeetingExtractionResponse() to validate and sanitize the returned topics.\n\nFiles to read first:\n- packages/core/src/services/meeting-extraction.ts — buildMeetingExtractionPrompt() lines 542-635, parseMeetingExtractionResponse(), MeetingIntelligence type, existing validation patterns\n\nChanges:\n1. Add 'topics' to JSON schema in buildMeetingExtractionPrompt() with guidance: lowercase-hyphenated slugs, 3-6 max, banned: ['meeting','discussion','update','call','sync','review','followup','follow-up','next-steps']\n2. parseMeetingExtractionResponse(): validate each topic against /^[a-z0-9][a-z0-9-]*[a-z0-9]$/, drop invalid and banned items silently, cap at 6, return [] when absent — never fail extraction\n\nPre-mortem mitigations:\n- Bad topics must degrade gracefully — never throw, never fail extraction\n- Topics with spaces or uppercase must be dropped, not transformed",
+      "acceptanceCriteria": [
+        "buildMeetingExtractionPrompt() output contains 'topics' key in JSON schema block with slug-format guidance",
+        "Unit test: mixed valid/invalid topics in mock response → only valid slugs returned (caps dropped, spaces dropped, banned words dropped)",
+        "Unit test: topics absent from LLM response → returns [], no throw",
+        "Unit test: topics non-array (e.g. string) → returns [], no throw",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Populate frontmatter counts and topics in meeting-apply",
+      "description": "After applying meeting intelligence, write six new frontmatter fields to the meeting file: topics (from intelligence), and five derived counts from staged items.\n\nFiles to read first:\n- packages/core/src/services/meeting-apply.ts — applyMeetingIntelligence() full function (lines 156-234)\n- packages/core/src/services/meeting-processing.ts — ProcessedMeetingResult and FilteredItem types (lines 74-87), exact shape of staged items and where direction lives on action items\n\nCount logic:\n- open_action_items: action items with status !== 'skipped' (includes pending + approved)\n- my_commitments: action items where direction === 'i_owe_them'\n- their_commitments: action items where direction === 'they_owe_me'\n- decisions_count: staged decisions\n- learnings_count: staged learnings\n\nPre-mortem mitigations:\n- Read ProcessedMeetingResult and FilteredItem BEFORE writing count logic — verify direction field path\n- Write counts ONLY in applyMeetingIntelligence(), not in saveMeetingFile() or CLI\n- StorageAdapter for all file I/O, no raw fs calls",
+      "acceptanceCriteria": [
+        "After arete meeting apply on a test file, frontmatter contains all six new fields",
+        "Fixture test: 2 pending i_owe_them + 1 approved they_owe_me + 1 skipped → open_action_items: 3, my_commitments: 2, their_commitments: 1",
+        "topics: [] written when intelligence has no topics",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Build meeting manifest generator and wire into CLI",
+      "description": "Create packages/core/src/services/meeting-manifest.ts with generateMeetingManifest() that reads meeting frontmatters (90-day rolling window) and writes resources/meetings/MANIFEST.md. Wire into arete index (blocking) and meeting apply (async fire-and-forget).\n\nFiles to read first:\n- packages/core/src/services/meeting-context.ts — parseMeetingFile() lines 151-211 (reuse YAML parsing approach, do NOT reimplement)\n- packages/cli/src/commands/index-search.ts — full file\n- packages/core/src/services/entity.ts — writePersonIndex() as precedent for auto-generated aggregation files\n- packages/core/src/integrations/LEARNINGS.md\n\nFunction signature:\nexport async function generateMeetingManifest(workspacePaths: WorkspacePaths, storage: StorageAdapter, options?: { windowDays?: number }): Promise<void>\n\nLogic: glob resources/meetings/*.md → filter 90-day window by filename date → read frontmatter only (stop at ---) → sort desc → group by ISO week → write MANIFEST.md with YAML header + weekly sections.\n\nManifest YAML header fields: generated_at, window_days, total_meetings, open_action_items (sum), my_commitments (sum), their_commitments (sum)\n\nWiring:\n- arete index: await generateMeetingManifest() after refreshQmdIndex(), log count\n- meeting apply: fire-and-forget after primary result returned, log warning on failure, never fail apply\n\nPre-mortem mitigations:\n- Do NOT reimplement YAML parsing — use same approach as parseMeetingFile()\n- Read frontmatter only (stop at closing ---) for performance\n- StorageAdapter for all file I/O, no raw fs calls\n- Fire-and-forget in apply — manifest failure must never fail the apply",
+      "acceptanceCriteria": [
+        "arete index generates resources/meetings/MANIFEST.md with correct weekly groupings and aggregate stats from test-data meetings",
+        "Manifest entries with missing frontmatter fields (no topics, no importance) render without those lines — no undefined in output, no crash",
+        "arete meeting apply completes at normal speed; manifest regenerates asynchronously",
+        "Unit test: generateMeetingManifest() with mock StorageAdapter + 3 meetings across 2 weeks → correct MANIFEST.md structure verified",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Add topics aggregation to area memory",
+      "description": "Update area-memory.ts to scan meeting frontmatter for topics during refresh and write a structured topics block to area memory files.\n\nFiles to read first:\n- packages/core/src/services/area-memory.ts — computeAreaData() lines 454-507, meeting scanning section (~line 536), generateAreaMemoryContent(), AreaMemoryData interface, extractKeywords(), RECENT_DAYS constant\n- packages/core/test/services/area-memory.test.ts — fixture patterns\n\nAdd to AreaMemoryData:\ntopics: Array<{ slug: string; name: string; meetingCount: number; openItems: number; lastReferenced: string }>\n\nIn computeAreaData(): read topics frontmatter field from matched meetings; use BOTH matching paths (area: frontmatter field AND title match); aggregate per slug (count, sum openItems, track latest date); exclude topics where lastReferenced > 60 days AND openItems === 0.\n\nIn generateAreaMemoryContent(): write topics block to frontmatter YAML with fields: slug, name (title-cased), meeting_count, open_items, last_referenced.\n\nHistorical meetings (no topics frontmatter): contribute to meetingCount via other fields but add no topic entries — expected behavior.\n\nPre-mortem mitigations:\n- Confirm BOTH area matching paths are used before writing\n- openItems: 0 for historical meetings is correct, not a bug\n- StorageAdapter for all file I/O",
+      "acceptanceCriteria": [
+        "After arete memory refresh, area memory frontmatter contains topics block with correct aggregated data for areas with topic-tagged meetings",
+        "Meeting matched via area: frontmatter field (not title match) contributes its topics",
+        "Meeting without topics frontmatter causes no errors and contributes no topic entries",
+        "Topics with lastReferenced > 60 days AND openItems === 0 are excluded from output",
+        "Unit test: 2 meetings tagged email-templates (1 with open_action_items: 2) + 1 meeting tagged sms → area memory has 2 topics, email-templates has open_items: 2",
+        "npm run typecheck && npm test pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-05T00:00:00.000Z",
+    "totalTasks": 5,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
