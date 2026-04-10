@@ -602,6 +602,257 @@ Bob Smith asked about deployment timing.
 });
 
 // ---------------------------------------------------------------------------
+// refreshPersonMemory — bilateral dedup (owner self-reminder suppression)
+// ---------------------------------------------------------------------------
+
+describe('EntityService.refreshPersonMemory — bilateral dedup', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let service: EntityService;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'person-memory-dedup-'));
+    paths = makePaths(tmpDir);
+    service = new EntityService(new FileStorageAdapter());
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('suppresses owner self-reminder when bilateral entry exists under counterparty', async () => {
+    // Set up workspace owner profile
+    const contextDir = join(tmpDir, 'context');
+    mkdirSync(contextDir, { recursive: true });
+    writeFileSync(
+      join(contextDir, 'profile.md'),
+      '---\nname: "John Koht"\n---\n',
+      'utf8',
+    );
+
+    // Create both the owner and a counterparty as people
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'john-koht.md'),
+      '---\nname: "John Koht"\ncategory: "internal"\n---\n\n# John Koht\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(personDir, 'alice.md'),
+      '---\nname: "Alice"\ncategory: "internal"\n---\n\n# Alice\n',
+      'utf8',
+    );
+
+    // Meeting with bilateral action item
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-04-08-sync.md'),
+      `---
+title: "Sync"
+date: "2026-04-08"
+attendee_ids:
+  - john-koht
+  - alice
+---
+
+## Action Items
+
+- [ ] Send the proposal to Alice (@john-koht → @alice)
+`,
+      'utf8',
+    );
+
+    // Run without CommitmentsService — action items render directly
+    await service.refreshPersonMemory(paths);
+
+    const aliceContent = readFileSync(join(personDir, 'alice.md'), 'utf8');
+    const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
+
+    // Alice should have the bilateral entry (they_owe_me: John owes Alice)
+    assert.ok(
+      aliceContent.includes('Send the proposal to Alice'),
+      'Alice should have the bilateral action item',
+    );
+
+    // John should NOT have the self-reminder (it duplicates the bilateral entry)
+    assert.ok(
+      !johnContent.includes('Send the proposal to Alice'),
+      'Owner should not have self-reminder when bilateral entry exists under counterparty',
+    );
+  });
+
+  it('preserves owner-only items without bilateral counterpart', async () => {
+    // Set up workspace owner profile
+    const contextDir = join(tmpDir, 'context');
+    mkdirSync(contextDir, { recursive: true });
+    writeFileSync(
+      join(contextDir, 'profile.md'),
+      '---\nname: "John Koht"\n---\n',
+      'utf8',
+    );
+
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'john-koht.md'),
+      '---\nname: "John Koht"\ncategory: "internal"\n---\n\n# John Koht\n',
+      'utf8',
+    );
+
+    // Meeting with owner-only action item (no counterparty)
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-04-08-solo.md'),
+      `---
+title: "Solo Tasks"
+date: "2026-04-08"
+attendee_ids:
+  - john-koht
+---
+
+## Action Items
+
+- [ ] Review the quarterly report (@john-koht)
+`,
+      'utf8',
+    );
+
+    await service.refreshPersonMemory(paths);
+
+    const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
+
+    // Owner-only item should be preserved (no bilateral counterpart to suppress it)
+    assert.ok(
+      johnContent.includes('Review the quarterly report'),
+      'Owner-only items without bilateral counterpart should be preserved',
+    );
+  });
+
+  it('suppresses heuristic-based self-reminders when bilateral match exists', async () => {
+    // Set up workspace owner profile
+    const contextDir = join(tmpDir, 'context');
+    mkdirSync(contextDir, { recursive: true });
+    writeFileSync(
+      join(contextDir, 'profile.md'),
+      '---\nname: "John Koht"\n---\n',
+      'utf8',
+    );
+
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'john-koht.md'),
+      '---\nname: "John Koht"\ncategory: "internal"\n---\n\n# John Koht\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(personDir, 'alice.md'),
+      '---\nname: "Alice"\ncategory: "internal"\n---\n\n# Alice\n',
+      'utf8',
+    );
+
+    // Meeting without arrow notation — relies on heuristic detection
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-04-08-heuristic.md'),
+      `---
+title: "Heuristic"
+date: "2026-04-08"
+attendee_ids:
+  - john-koht
+  - alice
+---
+
+## Action Items
+
+- [ ] I'll send Alice the design specs by Friday
+`,
+      'utf8',
+    );
+
+    await service.refreshPersonMemory(paths);
+
+    const aliceContent = readFileSync(join(personDir, 'alice.md'), 'utf8');
+    const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
+
+    // Alice should have the bilateral entry
+    assert.ok(
+      aliceContent.includes('send Alice the design specs'),
+      'Alice should have the bilateral action item from heuristic detection',
+    );
+
+    // John should NOT have the self-reminder duplicate
+    assert.ok(
+      !johnContent.includes('send Alice the design specs'),
+      'Owner should not have heuristic self-reminder when bilateral entry exists',
+    );
+  });
+
+  it('selectively suppresses: bilateral item removed, unrelated owner-only item preserved in same meeting', async () => {
+    const contextDir = join(tmpDir, 'context');
+    mkdirSync(contextDir, { recursive: true });
+    writeFileSync(
+      join(contextDir, 'profile.md'),
+      '---\nname: "John Koht"\n---\n',
+      'utf8',
+    );
+
+    const personDir = join(tmpDir, 'people', 'internal');
+    mkdirSync(personDir, { recursive: true });
+    writeFileSync(
+      join(personDir, 'john-koht.md'),
+      '---\nname: "John Koht"\ncategory: "internal"\n---\n\n# John Koht\n',
+      'utf8',
+    );
+    writeFileSync(
+      join(personDir, 'alice.md'),
+      '---\nname: "Alice"\ncategory: "internal"\n---\n\n# Alice\n',
+      'utf8',
+    );
+
+    // Single meeting with BOTH a bilateral item and an owner-only item
+    const meetingDir = join(tmpDir, 'resources', 'meetings');
+    mkdirSync(meetingDir, { recursive: true });
+    writeFileSync(
+      join(meetingDir, '2026-04-08-mixed.md'),
+      `---
+title: "Mixed"
+date: "2026-04-08"
+attendee_ids:
+  - john-koht
+  - alice
+---
+
+## Action Items
+
+- [ ] Send the proposal to Alice (@john-koht → @alice)
+- [ ] Review the quarterly report (@john-koht)
+`,
+      'utf8',
+    );
+
+    await service.refreshPersonMemory(paths);
+
+    const johnContent = readFileSync(join(personDir, 'john-koht.md'), 'utf8');
+
+    // Bilateral item should be suppressed from owner
+    assert.ok(
+      !johnContent.includes('Send the proposal to Alice'),
+      'Bilateral item should be suppressed from owner',
+    );
+    // Owner-only item should survive
+    assert.ok(
+      johnContent.includes('Review the quarterly report'),
+      'Owner-only item without bilateral counterpart should be preserved',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // refreshPersonMemory — CommitmentsService bidirectional sync
 // ---------------------------------------------------------------------------
 

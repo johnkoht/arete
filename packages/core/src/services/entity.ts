@@ -1269,6 +1269,31 @@ export class EntityService {
       totalActionItems += cappedItems.length;
     }
 
+    // Cross-person dedup: suppress owner self-reminder duplicates.
+    // When the same action item text from the same meeting appears under both the
+    // workspace owner's slug (self-reminder) and another person's slug (bilateral),
+    // drop the owner's copy. Scoped to same-source to avoid cross-meeting false positives.
+    if (ownerSlug && personActionItems.has(ownerSlug)) {
+      const ownerItems = personActionItems.get(ownerSlug)!;
+      if (ownerItems.length > 0) {
+        const normalizeText = (t: string) => t.toLowerCase().trim().replace(/\s+/g, ' ');
+        const bilateralKeys = new Set<string>();
+        for (const [slug, items] of personActionItems) {
+          if (slug === ownerSlug) continue;
+          for (const item of items) {
+            bilateralKeys.add(normalizeText(item.text) + '\0' + item.source);
+          }
+        }
+        const filtered = ownerItems.filter(
+          (item) => !bilateralKeys.has(normalizeText(item.text) + '\0' + item.source),
+        );
+        if (filtered.length < ownerItems.length) {
+          totalActionItems -= ownerItems.length - filtered.length;
+          personActionItems.set(ownerSlug, filtered);
+        }
+      }
+    }
+
     let updated = 0;
     for (const person of refreshablePeople) {
       const category = person.category;
