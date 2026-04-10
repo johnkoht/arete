@@ -13,4 +13,5 @@ export { generateIntegrationSection, injectIntegrationSection, deriveIntegration
 export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems } from './agenda.js';
 export type { AgendaItem } from './agenda.js';
 export { extractAttendeeSlugs } from './attendees.js';
+export { jaccardSimilarity, normalizeForJaccard } from './similarity.js';
 //# sourceMappingURL=index.d.ts.map

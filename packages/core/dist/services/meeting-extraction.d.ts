@@ -99,16 +99,7 @@ export declare const THOROUGH_LIMITS: {
 };
 /** Type for category limits. */
 export type CategoryLimits = typeof CATEGORY_LIMITS;
-/**
- * Normalize text for Jaccard comparison.
- * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
- */
-export declare function normalizeForJaccard(text: string): string[];
-/**
- * Compute Jaccard similarity between two word arrays.
- * Returns 0-1 where 1 is identical.
- */
-export declare function jaccardSimilarity(a: string[], b: string[]): number;
+export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 /**
  * Check if a decision matches trivial patterns.
  * Safety: patterns do NOT match items containing decision verbs.

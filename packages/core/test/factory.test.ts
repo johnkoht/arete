@@ -20,6 +20,7 @@ import { ToolService } from '../src/services/tools.js';
 import { CommitmentsService } from '../src/services/commitments.js';
 import { AreaParserService } from '../src/services/area-parser.js';
 import { AreaMemoryService } from '../src/services/area-memory.js';
+import { HygieneService } from '../src/services/hygiene.js';
 import { AIService } from '../src/services/ai.js';
 import { TaskService } from '../src/services/tasks.js';
 import { FileStorageAdapter } from '../src/storage/file.js';
@@ -47,6 +48,7 @@ describe('createServices', () => {
       'context',
       'entity',
       'gws',
+      'hygiene',
       'integrations',
       'intelligence',
       'memory',
@@ -73,6 +75,7 @@ describe('createServices', () => {
     assert.ok(services.commitments instanceof CommitmentsService, 'commitments is CommitmentsService');
     assert.ok(services.areaParser instanceof AreaParserService, 'areaParser is AreaParserService');
     assert.ok(services.areaMemory instanceof AreaMemoryService, 'areaMemory is AreaMemoryService');
+    assert.ok(services.hygiene instanceof HygieneService, 'hygiene is HygieneService');
     assert.ok(services.ai instanceof AIService, 'ai is AIService');
     assert.ok(services.tasks instanceof TaskService, 'tasks is TaskService');
   });

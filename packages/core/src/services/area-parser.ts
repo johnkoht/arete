@@ -11,6 +11,7 @@ import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { AreaMatch, AreaContext, AreaMemory, RecurringMeeting, AreaFrontmatter } from '../models/entities.js';
+import { jaccardSimilarity } from '../utils/similarity.js';
 
 // ---------------------------------------------------------------------------
 // Confidence constants (exported for testing and documentation)
@@ -66,17 +67,7 @@ export function tokenizeWithStopWords(text: string): string[] {
     .filter(word => word.length > 0 && !STOP_WORDS.has(word));
 }
 
-/**
- * Compute Jaccard similarity between two word sets.
- * Returns 0-1 where 1 is identical.
- */
-function jaccardSimilarity(a: string[], b: string[]): number {
-  const setA = new Set(a);
-  const setB = new Set(b);
-  const intersection = [...setA].filter(w => setB.has(w)).length;
-  const union = new Set([...setA, ...setB]).size;
-  return union === 0 ? 0 : intersection / union;
-}
+// jaccardSimilarity imported from ../utils/similarity.js
 
 /**
  * Input for area suggestion based on meeting content.

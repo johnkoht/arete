@@ -155,6 +155,18 @@ export type {
 } from './prd.js';
 export { validateTask, validatePRD } from './prd.js';
 
+// Hygiene domain
+export type {
+  HygieneTier,
+  HygieneCategory,
+  HygieneActionType,
+  HygieneItem,
+  HygieneReport,
+  ApprovedAction,
+  HygieneResult,
+  HygieneScanOptions,
+} from './hygiene.js';
+
 // Task management domain
 export type {
   TaskMetadata,

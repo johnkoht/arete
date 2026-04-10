@@ -9,6 +9,7 @@
  */
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { jaccardSimilarity } from '../utils/similarity.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -132,6 +133,11 @@ export function computeCommitmentPriority(input) {
  * Must produce the same hash as computeActionItemHash() in person-signals.ts —
  * same algorithm, separate implementation to avoid circular deps.
  */
+// TODO: Commitment mirroring — the `personSlug` in the hash means the same
+// commitment text creates different hashes for "ours" vs "theirs" direction.
+// This causes duplicate entries when both directions are extracted from the
+// same meeting. Revisit after `merge-commitments-into-tasks` branch lands,
+// which may restructure how commitments are tracked. See extraction-intelligence plan.
 function computeCommitmentHash(text, personSlug, direction) {
     const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
     return createHash('sha256')
@@ -145,7 +151,7 @@ function computeCommitmentHash(text, personSlug, direction) {
  * - Open items (resolvedAt: null) are NEVER pruned.
  * - A commitment from months ago resolved yesterday must NOT be pruned.
  */
-function shouldPrune(commitment, referenceDate = new Date()) {
+function shouldPrune(commitment, referenceDate = new Date(), thresholdDays = PRUNE_DAYS) {
     if (commitment.resolvedAt === null)
         return false;
     if (commitment.status !== 'resolved' && commitment.status !== 'dropped')
@@ -155,7 +161,7 @@ function shouldPrune(commitment, referenceDate = new Date()) {
         return false;
     const diffMs = referenceDate.getTime() - resolvedAt.getTime();
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    return diffDays > PRUNE_DAYS;
+    return diffDays > thresholdDays;
 }
 // ---------------------------------------------------------------------------
 // Jaccard similarity for reconcile()
@@ -167,13 +173,7 @@ function normalize(text) {
         .split(/\s+/)
         .filter(Boolean);
 }
-function jaccard(a, b) {
-    const setA = new Set(a);
-    const setB = new Set(b);
-    const intersection = [...setA].filter((w) => setB.has(w)).length;
-    const union = new Set([...setA, ...setB]).size;
-    return union === 0 ? 0 : intersection / union;
-}
+// jaccardSimilarity imported from ../utils/similarity.js
 const JACCARD_THRESHOLD = 0.6;
 // ---------------------------------------------------------------------------
 // CommitmentsService
@@ -350,7 +350,7 @@ export class CommitmentsService {
             const completedWords = normalize(completedItem.text);
             for (const commitment of open) {
                 const commitmentWords = normalize(commitment.text);
-                const confidence = jaccard(completedWords, commitmentWords);
+                const confidence = jaccardSimilarity(completedWords, commitmentWords);
                 if (confidence >= JACCARD_THRESHOLD) {
                     results.push({ commitment, completedItem, confidence });
                 }
@@ -430,6 +430,27 @@ export class CommitmentsService {
             await this.save(updated);
             throw error;
         }
+    }
+    /**
+     * Explicitly purge resolved/dropped commitments older than a configurable threshold.
+     *
+     * Uses the same `shouldPrune()` logic as `save()`'s auto-prune, but with a
+     * caller-supplied threshold (defaults to PRUNE_DAYS = 30).
+     *
+     * Open/active commitments are never touched regardless of age.
+     * Handles missing or empty commitments.json gracefully (returns { purged: 0 }).
+     */
+    async purgeResolved(olderThanDays = PRUNE_DAYS) {
+        const all = await this.load();
+        if (all.length === 0)
+            return { purged: 0 };
+        const now = new Date();
+        const kept = all.filter((c) => !shouldPrune(c, now, olderThanDays));
+        const purged = all.length - kept.length;
+        // save() applies its own auto-prune (PRUNE_DAYS), which is fine —
+        // anything we already filtered out won't be there to prune again.
+        await this.save(kept);
+        return { purged };
     }
     /**
      * Check if a commitment exists by hash prefix.

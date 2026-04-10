@@ -14,5 +14,6 @@ export type { BriefingRequest, Briefing, PrimitiveBriefing, SkillContext, Sugges
 export type { StagedItemDirection, StagedItemStatus, StagedItemEdits, StagedItemOwnerMeta, StagedItemOwner, StagedItem, StagedSections, FathomTranscript, IntegrationConfig, IntegrationAuth, IntegrationDefinition, IntegrationListEntry, ScriptableIntegration, ScriptResult, PullOptions, PullResult, IntegrationStatus, } from './integrations.js';
 export type { TaskStatus, Task, PRD, } from './prd.js';
 export { validateTask, validatePRD } from './prd.js';
+export type { HygieneTier, HygieneCategory, HygieneActionType, HygieneItem, HygieneReport, ApprovedAction, HygieneResult, HygieneScanOptions, } from './hygiene.js';
 export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from './tasks.js';
 //# sourceMappingURL=index.d.ts.map

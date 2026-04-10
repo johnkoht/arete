@@ -204,6 +204,14 @@ Only `commitment` type triggers auto-resolution; `meeting` type references are i
 
 - **`loadRecentMeetingBatch` must destructure `body` from `parseFrontmatter`** (2026-04-09). The function reads meeting files via `parseFrontmatter(content)` which returns `{ frontmatter, body }`. Previously only `frontmatter` was destructured, so `body` was discarded. Since `extractIntelligenceFromFrontmatter` now needs `body` for Format A parsing, always destructure both fields. Pattern: `const { frontmatter, body } = parseFrontmatter(content);`.
 
+- **HygieneService delegates to owning services — never mutates files directly** (2026-04-08): `HygieneService.apply()` calls `CommitmentsService.purgeResolved()` for commitments, `AreaMemoryService.compactDecisions()`/`compactLearnings()` for memory, and only does direct `StorageAdapter` ops for meeting archival and activity trim (which have no owning service). This prevents bypassing service invariants (e.g., CommitmentsService's prune thresholds). When adding new hygiene categories, always check if an owning service method exists before writing direct file operations.
+
+- **`purgeResolved()` wraps private `shouldPrune()` with optional threshold** (2026-04-08): Rather than exposing `shouldPrune()` publicly or duplicating its logic, `purgeResolved(olderThanDays?)` passes the threshold to the extended `shouldPrune(c, thresholdDays?)`. This maintains CommitmentsService's encapsulation while enabling external cleanup. Follow this pattern when adding "batch operation" methods that build on existing private logic.
+
+- **`compactLearnings()` handles two entry formats** (2026-04-08): learnings.md uses bullet-list format (`- YYYY-MM-DD: text`) while decisions.md uses heading sections (`## Decision Title`). `parseLearningsBullets()` supports both formats via regex detection. When adding new memory file operations, always verify the file's actual format — don't assume it matches other memory files.
+
+- **Jaccard similarity is shared but normalization is not** (2026-04-08): `jaccardSimilarity(a[], b[])` and `normalizeForJaccard()` are in `utils/similarity.ts`, but 4 callers (commitments, area-parser, meeting-extraction, meeting-processing) keep their own normalization. Each has different regex/stop-word needs. Only extract computation, not preprocessing, when domain-specific transforms differ.
+
 ## Pre-Edit Checklist
 
 - **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.

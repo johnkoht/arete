@@ -19,6 +19,7 @@
  *   - Unchecked agenda items that become action item candidates
  */
 import { calculateSpeakingRatio } from './meeting-processing.js';
+import { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -72,29 +73,9 @@ const TRIVIAL_PATTERNS = [
     /^touch base/i,
     /^we (should|will|can)\s*(just|probably)?\s*(meet|discuss|talk)/i,
 ];
-/**
- * Normalize text for Jaccard comparison.
- * Lowercase, replace newlines with spaces, strip non-alphanumeric, split on whitespace.
- */
-export function normalizeForJaccard(text) {
-    return text
-        .toLowerCase()
-        .replace(/[\r\n]+/g, ' ') // Convert newlines to spaces first
-        .replace(/[^a-z0-9 ]/g, '')
-        .split(/\s+/)
-        .filter(Boolean);
-}
-/**
- * Compute Jaccard similarity between two word arrays.
- * Returns 0-1 where 1 is identical.
- */
-export function jaccardSimilarity(a, b) {
-    const setA = new Set(a);
-    const setB = new Set(b);
-    const intersection = [...setA].filter((w) => setB.has(w)).length;
-    const union = new Set([...setA, ...setB]).size;
-    return union === 0 ? 0 : intersection / union;
-}
+// normalizeForJaccard and jaccardSimilarity are imported from ../utils/similarity.js
+// and re-exported below for public API compatibility.
+export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 /**
  * Check if an item matches trivial patterns.
  * Returns the matched pattern description or null.

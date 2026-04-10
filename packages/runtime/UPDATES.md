@@ -6,6 +6,17 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ## Week of April 6, 2026
 
+### Workspace Hygiene (CLI)
+
+**New `arete hygiene` commands for spring cleaning your workspace.** Scan for accumulated entropy — stale meetings, resolved commitments, old memory entries, bloated activity logs — and apply cleanup with a single command.
+
+- **`arete hygiene scan`** — detect issues across 4 categories, grouped by 3-tier risk system (safe auto-apply, review recommended, human judgment)
+- **`arete hygiene apply`** — interactive checkbox approval with tier 1 pre-checked, or `--yes` for scripted use
+- **`--dry-run`** — preview what would change without touching files
+- **`--json`** — structured output for programmatic consumption
+
+Meetings get archived to `resources/meetings/archive/YYYY-MM/`, resolved commitments are purged, old decisions/learnings are compacted into area summaries, and bloated activity logs are trimmed with old entries archived.
+
 ### Meeting Dismiss
 
 **Dismiss meetings from triage without deleting them.** The "Skip Meeting" button in the Review page and Meeting Detail now actually works — it sets the meeting status to "skipped" in frontmatter, removes it from the triage queue, and shows a "Skipped" badge. Dismissed meetings appear dimmed in the meetings list and can be restored to review at any time via "Restore to Review."
