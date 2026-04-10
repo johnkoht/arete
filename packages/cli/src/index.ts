@@ -107,6 +107,7 @@ ${chalk.bold('Integrations')}
 
 ${chalk.bold('Commitments')}
   commitments list [--direction]   List open commitments
+  commitments create <text>        Create a commitment
   commitments resolve <id>         Resolve or drop a commitment
 
 ${chalk.bold('Availability & Calendar')}

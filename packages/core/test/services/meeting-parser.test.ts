@@ -207,6 +207,27 @@ date: "2026-03-04"
       assert.equal(items.length, 1);
       assert.equal(items[0].direction, 'i_owe_them');
     });
+
+    it('handles ← (left arrow) — they_owe_me from counterparty perspective', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Approved Action Items
+
+- [ ] Store exposure type in config (@anthony-avina ← @john-smith)`;
+
+      // anthony-avina is the owner (actor, left side), john-smith is counterparty
+      // Position-based: owner is debtor, counterparty is creditor
+      const anthonyItems = parseActionItemsFromMeeting(content, 'anthony-avina', 'john-smith', 'meeting.md');
+      assert.equal(anthonyItems.length, 1);
+      assert.equal(anthonyItems[0].direction, 'i_owe_them'); // Anthony owes John
+      assert.equal(anthonyItems[0].text, 'Store exposure type in config');
+
+      const johnItems = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(johnItems.length, 1);
+      assert.equal(johnItems[0].direction, 'they_owe_me'); // Anthony owes John
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -319,6 +340,36 @@ date: "2026-03-04"
       // sarah-chen is not the owner, and there's no counterparty
       const items = parseActionItemsFromMeeting(content, 'sarah-chen', 'john-smith', 'meeting.md');
       assert.equal(items.length, 0);
+    });
+
+    it('handles owner-only with trailing ← arrow', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Approved Action Items
+
+- [ ] Review the metrics (@anthony-avina ←)`;
+
+      const items = parseActionItemsFromMeeting(content, 'anthony-avina', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].text, 'Review the metrics');
+      assert.equal(items[0].direction, 'i_owe_them');
+    });
+
+    it('handles owner-only with trailing → arrow', () => {
+      const content = `---
+date: "2026-03-04"
+---
+
+## Approved Action Items
+
+- [ ] Send the report (@john-smith →)`;
+
+      const items = parseActionItemsFromMeeting(content, 'john-smith', 'john-smith', 'meeting.md');
+      assert.equal(items.length, 1);
+      assert.equal(items[0].text, 'Send the report');
+      assert.equal(items[0].direction, 'i_owe_them');
     });
 
     it('handles owner-only without @ prefix', () => {

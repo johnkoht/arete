@@ -454,6 +454,7 @@ export function registerMeetingCommands(program: Command): void {
     .option('--dry-run', 'Show what would be written without writing')
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
+    .option('--clear', 'Alias for --clear-approved (requires --stage)')
     .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
     .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
     .option('--importance <level>', 'Override importance level (skip, light, normal, important)')
@@ -465,12 +466,16 @@ export function registerMeetingCommands(program: Command): void {
       dryRun?: boolean;
       skipQmd?: boolean;
       clearApproved?: boolean;
+      clear?: boolean;
       context?: string;
       priorItems?: string;
       importance?: string;
       reconcile?: boolean;
       reconcileDays?: string;
     }) => {
+      // Merge --clear into --clear-approved
+      if (opts.clear) opts.clearApproved = true;
+
       const services = await createServices(process.cwd());
 
       // Early check: --clear-approved requires --stage

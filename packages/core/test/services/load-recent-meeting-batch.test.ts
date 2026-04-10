@@ -292,6 +292,64 @@ describe('extractIntelligenceFromFrontmatter', () => {
     assert.strictEqual(result.actionItems[0].direction, 'i_owe_them');
   });
 
+  it('Format B: parses they_owe_me direction from ← arrow', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: [
+          'Store exposure type in config (@anthony-avina ← @john-koht)',
+        ],
+        decisions: [],
+        learnings: [],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems.length, 1);
+    assert.strictEqual(result.actionItems[0].description, 'Store exposure type in config');
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'anthony-avina');
+    assert.strictEqual(result.actionItems[0].counterpartySlug, 'john-koht');
+    assert.strictEqual(result.actionItems[0].direction, 'they_owe_me');
+  });
+
+  it('Format B: parses owner-only with trailing arrow', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: [
+          'Review proposal (@jamie-burk ←)',
+          'Send docs (@john-koht →)',
+        ],
+        decisions: [],
+        learnings: [],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems.length, 2);
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'jamie-burk');
+    assert.strictEqual(result.actionItems[0].direction, 'they_owe_me');
+    assert.strictEqual(result.actionItems[0].counterpartySlug, undefined);
+    assert.strictEqual(result.actionItems[1].ownerSlug, 'john-koht');
+    assert.strictEqual(result.actionItems[1].direction, 'i_owe_them');
+    assert.strictEqual(result.actionItems[1].counterpartySlug, undefined);
+  });
+
+  it('Format B: owner-only without arrow defaults to i_owe_them', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: [
+          'Send API docs (@john-koht)',
+        ],
+        decisions: [],
+        learnings: [],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'john-koht');
+    assert.strictEqual(result.actionItems[0].direction, 'i_owe_them');
+    assert.strictEqual(result.actionItems[0].counterpartySlug, undefined);
+  });
+
   it('Format B: action items without owner notation get empty ownerSlug', () => {
     const frontmatter = {
       approved_items: {
