@@ -813,9 +813,17 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 
 /**
  * Parse owner notation from approved_items action item strings.
- * Format: "description (@ownerSlug)" or "description (@ownerSlug → @counterpartySlug)"
+ *
+ * Supported formats:
+ * - "description (@ownerSlug → @counterpartySlug)" — i_owe_them with counterparty
+ * - "description (@ownerSlug ← @counterpartySlug)" — they_owe_me with counterparty
+ * - "description (@ownerSlug →)" — i_owe_them, no counterparty
+ * - "description (@ownerSlug ←)" — they_owe_me, no counterparty
+ * - "description (@ownerSlug)" — no arrow, defaults to i_owe_them
+ *
+ * Capture groups: [1] description, [2] ownerSlug, [3] arrow (→ or ←), [4] counterpartySlug
  */
-const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*→\s*@([a-z0-9-]+))?\)\s*$/i;
+const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←])\s*(?:@([a-z0-9-]+))?)?\)\s*$/i;
 
 /**
  * Extract MeetingIntelligence from meeting file content.
@@ -872,12 +880,14 @@ function extractIntelligenceFromFrontmatter(
   for (const text of approved.actionItems ?? []) {
     const match = text.match(APPROVED_OWNER_PATTERN);
     if (match) {
+      const arrow = match[3]; // '→', '←', or undefined
+      const direction = arrow === '←' ? 'they_owe_me' : 'i_owe_them';
       actionItems.push({
         owner: '',
         ownerSlug: match[2],
         description: match[1].trim(),
-        direction: 'i_owe_them',
-        counterpartySlug: match[3] || undefined,
+        direction,
+        counterpartySlug: match[4] || undefined,
       });
     } else {
       actionItems.push({

@@ -44,7 +44,7 @@ export type ParsedActionItem = {
  * All arrow notation variations we accept.
  * Order matters for regex construction (longer patterns first).
  */
-const ARROW_VARIANTS = ['-->', '=>', '->', '→'] as const;
+const ARROW_VARIANTS = ['-->', '=>', '->', '→', '←'] as const;
 
 /**
  * Regex to match ## Approved Action Items section header specifically.
@@ -137,11 +137,11 @@ function buildArrowPattern(): RegExp {
 const ARROW_PATTERN = buildArrowPattern();
 
 /**
- * Owner-only notation pattern: (@slug) without arrow or counterparty.
+ * Owner-only notation pattern: (@slug) with optional trailing arrow.
  * Used when an action item has an owner but no explicit counterparty.
- * Example: "Review the proposal (@john-koht)"
+ * Examples: "Review the proposal (@john-koht)", "Store config (@anthony-avina ←)"
  */
-const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*\)$/i;
+const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*(?:[→←])?\s*\)$/i;
 
 /**
  * Parse a single action item line.

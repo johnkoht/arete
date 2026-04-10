@@ -297,22 +297,28 @@ export async function writeItemStatusToFile(
 
 /**
  * Format an action item with owner arrow notation for the approved section.
- * 
+ *
+ * Arrow encodes direction relative to workspace owner:
+ * - `→` = i_owe_them (workspace owner owes counterparty)
+ * - `←` = they_owe_me (counterparty owes workspace owner)
+ *
  * Output formats:
  * - With owner and counterparty: "Text here (@owner-slug → @counterparty-slug)"
- * - With owner only: "Text here (@owner-slug)"
+ * - With owner only: "Text here (@owner-slug →)"
  * - Without owner info: "Text here"
  */
 function formatActionItemWithOwner(item: StagedItem): string {
   if (!item.ownerSlug) {
     return item.text;
   }
-  
+
+  const arrow = item.direction === 'they_owe_me' ? '←' : '→';
+
   if (item.counterpartySlug) {
-    return `${item.text} (@${item.ownerSlug} → @${item.counterpartySlug})`;
+    return `${item.text} (@${item.ownerSlug} ${arrow} @${item.counterpartySlug})`;
   }
-  
-  return `${item.text} (@${item.ownerSlug})`;
+
+  return `${item.text} (@${item.ownerSlug} ${arrow})`;
 }
 
 // ---------------------------------------------------------------------------

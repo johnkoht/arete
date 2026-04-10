@@ -689,7 +689,7 @@ Content here.
     assert.ok(!updated.includes('## Approved Learnings'), 'should NOT have Approved Learnings section (no items)');
   });
 
-  it('(25) includes owner arrow notation from staged_item_owner in approved action items', async () => {
+  it('(25) includes direction-aware arrow notation from staged_item_owner in approved action items', async () => {
     const meetingWithOwner = `---
 title: "Meeting with Owner"
 date: "2026-03-01"
@@ -698,6 +698,7 @@ staged_item_status:
   ai_001: approved
   ai_002: approved
   ai_003: approved
+  ai_004: approved
 staged_item_owner:
   ai_001:
     ownerSlug: john-koht
@@ -706,12 +707,17 @@ staged_item_owner:
   ai_002:
     ownerSlug: jamie-burk
     direction: they_owe_me
+    counterpartySlug: john-koht
+  ai_003:
+    ownerSlug: jamie-burk
+    direction: they_owe_me
 ---
 
 ## Staged Action Items
 - ai_001: Send the Q1 report
 - ai_002: Review proposal draft
-- ai_003: Action without owner
+- ai_003: Check the metrics
+- ai_004: Action without owner
 
 ## Transcript
 Content here.
@@ -721,16 +727,23 @@ Content here.
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const updated = storage.files.get(MEETING_FILE)!;
-    
-    // Should include arrow notation for items with owner metadata
+
+    // i_owe_them with counterparty → uses →
     assert.ok(
       updated.includes('- [ ] Send the Q1 report (@john-koht → @lindsay-gray)'),
-      'should include owner and counterparty notation'
+      'i_owe_them should use → arrow with counterparty'
     );
+    // they_owe_me with counterparty → uses ←
     assert.ok(
-      updated.includes('- [ ] Review proposal draft (@jamie-burk)'),
-      'should include owner-only notation when no counterparty'
+      updated.includes('- [ ] Review proposal draft (@jamie-burk ← @john-koht)'),
+      'they_owe_me should use ← arrow with counterparty'
     );
+    // they_owe_me without counterparty → uses ← (owner-only with trailing arrow)
+    assert.ok(
+      updated.includes('- [ ] Check the metrics (@jamie-burk ←)'),
+      'they_owe_me without counterparty should use trailing ← arrow'
+    );
+    // No owner metadata → plain text
     assert.ok(
       updated.includes('- [ ] Action without owner'),
       'should include plain text for items without owner'
@@ -741,22 +754,28 @@ Content here.
     );
   });
 
-  it('(26) stores owner notation in approved_items frontmatter', async () => {
+  it('(26) stores direction-aware owner notation in approved_items frontmatter', async () => {
     const meetingWithOwner = `---
 title: "Meeting with Owner"
 date: "2026-03-01"
 status: processed
 staged_item_status:
   ai_001: approved
+  ai_002: approved
 staged_item_owner:
   ai_001:
     ownerSlug: john-koht
     direction: i_owe_them
     counterpartySlug: lindsay-gray
+  ai_002:
+    ownerSlug: anthony-avina
+    direction: they_owe_me
+    counterpartySlug: john-koht
 ---
 
 ## Staged Action Items
 - ai_001: Send the Q1 report
+- ai_002: Store exposure type in config
 
 ## Transcript
 Content here.
@@ -769,10 +788,14 @@ Content here.
     const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
     const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
     const approvedItems = frontmatter['approved_items'] as { actionItems: string[] };
-    
+
     assert.ok(
       approvedItems.actionItems[0].includes('(@john-koht → @lindsay-gray)'),
-      'approved_items should include owner notation'
+      'i_owe_them should use → in approved_items'
+    );
+    assert.ok(
+      approvedItems.actionItems[1].includes('(@anthony-avina ← @john-koht)'),
+      'they_owe_me should use ← in approved_items'
     );
   });
 
