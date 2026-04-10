@@ -20,6 +20,11 @@ type ProcessedEventData = {
   slug?: string;
 };
 
+type SyncedEventData = {
+  slug?: string;
+  detectedAt?: string;
+};
+
 type TaskChangedEventData = {
   file?: string;
 };
@@ -54,6 +59,24 @@ export function useProcessingEvents(): void {
         void queryClient.invalidateQueries({ queryKey: ['memory', 'recent'] });
 
         toast.success(slug ? `Meeting processed: ${slug}` : 'Meeting processed');
+
+        // Reset backoff on successful event
+        retryRef.current = 0;
+      });
+
+      es.addEventListener('meeting:synced', (event: MessageEvent<string>) => {
+        let slug = '';
+        try {
+          const data = JSON.parse(event.data) as SyncedEventData;
+          slug = data.slug ?? '';
+        } catch {
+          // ignore parse errors
+        }
+
+        // Invalidate meetings cache so newly synced meetings appear in the list
+        void queryClient.invalidateQueries({ queryKey: ['meetings'] });
+
+        toast.info(slug ? `New meeting synced: ${slug}` : 'New meeting synced');
 
         // Reset backoff on successful event
         retryRef.current = 0;

@@ -5,15 +5,14 @@
 import { serve } from '@hono/node-server';
 import { createApp, broadcastSseEvent } from './server.js';
 import { startMeetingWatcher, startTaskFileWatcher } from './services/watcher.js';
-import * as jobsService from './services/jobs.js';
-import { runProcessingSession, initializeAIService } from './services/agent.js';
-import { writeActivityEvent } from './services/activity.js';
+import { initializeAIService } from './services/agent.js';
 import {
   loadConfig,
   loadCredentialsIntoEnv,
   AIService,
   FileStorageAdapter,
 } from '@arete/core';
+import { writeActivityEvent } from './services/activity.js';
 
 const workspaceRoot = process.env['ARETE_WORKSPACE'];
 if (!workspaceRoot) {
@@ -44,33 +43,16 @@ const server = serve({ fetch: app.fetch, port }, () => {
   console.log(`Backend ready on http://localhost:${port}`);
 
   // Start the meeting file watcher after server is ready
-  const stopWatcher = startMeetingWatcher(workspaceRoot, async (slug) => {
+  const stopWatcher = startMeetingWatcher(workspaceRoot, (slug) => {
     console.log(`[watcher] New synced meeting detected: ${slug}`);
-
-    // Create a background job for auto-processing
-    const jobId = jobsService.createJob('auto-process');
-    console.log(`[watcher] Created job ${jobId} for meeting ${slug}`);
-
-    try {
-      await runProcessingSession(workspaceRoot, slug, jobId);
-      console.log(`[watcher] Auto-processed meeting ${slug}`);
-
-      const processedAt = new Date().toISOString();
-
-      // Emit SSE event to connected clients
-      broadcastSseEvent('meeting:processed', { slug, jobId, processedAt });
-
-      // Persist activity event for the feed
-      await writeActivityEvent(workspaceRoot, {
-        id: crypto.randomUUID(),
-        type: 'meeting:processed',
-        title: `Meeting processed: ${slug}`,
-        detail: slug,
-        timestamp: processedAt,
-      });
-    } catch (err) {
-      console.error(`[watcher] Failed to process meeting ${slug}:`, err);
-    }
+    const detectedAt = new Date().toISOString();
+    broadcastSseEvent('meeting:synced', { slug, detectedAt });
+    writeActivityEvent(workspaceRoot, {
+      id: `sync-${slug}-${Date.now()}`,
+      type: 'meeting:synced',
+      title: `Meeting synced: ${slug}`,
+      timestamp: detectedAt,
+    }).catch((err) => console.error('[watcher] Failed to write activity event:', err));
   });
 
   // Start the task file watcher — emits SSE events when week.md or tasks.md change

@@ -61,33 +61,99 @@ function meetingPath(filename: string): string {
   return `${MEETINGS_DIR}/${filename}`;
 }
 
-function makeMeetingContent(opts: {
-  status: string;
-  stagedItems?: Array<Record<string, unknown>>;
+/** Build a Format A (staged/processed) meeting file with body sections. */
+function makeFormatAContent(opts: {
+  status?: string;
+  stagedItemOwner?: Record<string, { ownerSlug?: string; direction?: string; counterpartySlug?: string }>;
+  actionItems?: Array<{ id: string; text: string }>;
+  decisions?: Array<{ id: string; text: string }>;
+  learnings?: Array<{ id: string; text: string }>;
+  summary?: string;
 }): string {
-  const fm: Record<string, unknown> = { status: opts.status };
-  if (opts.stagedItems) {
-    fm.staged_items = opts.stagedItems;
-  }
-  // Simple YAML serialization for test fixtures
-  let yaml = '';
-  for (const [key, value] of Object.entries(fm)) {
-    if (key === 'staged_items' && Array.isArray(value)) {
-      yaml += `staged_items:\n`;
-      for (const item of value) {
-        const entries = Object.entries(item);
-        if (entries.length > 0) {
-          yaml += `  - ${entries[0][0]}: ${entries[0][1]}\n`;
-          for (let i = 1; i < entries.length; i++) {
-            yaml += `    ${entries[i][0]}: ${entries[i][1]}\n`;
-          }
-        }
-      }
-    } else {
-      yaml += `${key}: ${value}\n`;
+  const status = opts.status ?? 'processed';
+  let yaml = `status: ${status}\n`;
+
+  if (opts.stagedItemOwner) {
+    yaml += `staged_item_owner:\n`;
+    for (const [id, meta] of Object.entries(opts.stagedItemOwner)) {
+      yaml += `  ${id}:\n`;
+      if (meta.ownerSlug) yaml += `    ownerSlug: ${meta.ownerSlug}\n`;
+      if (meta.direction) yaml += `    direction: ${meta.direction}\n`;
+      if (meta.counterpartySlug) yaml += `    counterpartySlug: ${meta.counterpartySlug}\n`;
     }
   }
+
+  let body = '';
+  if (opts.summary) {
+    body += `## Summary\n${opts.summary}\n\n`;
+  }
+  if (opts.actionItems && opts.actionItems.length > 0) {
+    body += `## Staged Action Items\n`;
+    for (const item of opts.actionItems) {
+      body += `- ${item.id}: ${item.text}\n`;
+    }
+    body += '\n';
+  }
+  if (opts.decisions && opts.decisions.length > 0) {
+    body += `## Staged Decisions\n`;
+    for (const item of opts.decisions) {
+      body += `- ${item.id}: ${item.text}\n`;
+    }
+    body += '\n';
+  }
+  if (opts.learnings && opts.learnings.length > 0) {
+    body += `## Staged Learnings\n`;
+    for (const item of opts.learnings) {
+      body += `- ${item.id}: ${item.text}\n`;
+    }
+    body += '\n';
+  }
+
+  return `---\n${yaml}---\n\n${body}`;
+}
+
+/** Build a Format B (approved) meeting file with frontmatter approved_items. */
+function makeFormatBContent(opts: {
+  status?: string;
+  actionItems?: string[];
+  decisions?: string[];
+  learnings?: string[];
+}): string {
+  const status = opts.status ?? 'approved';
+  let yaml = `status: ${status}\n`;
+
+  const hasItems = (opts.actionItems?.length || 0) > 0
+    || (opts.decisions?.length || 0) > 0
+    || (opts.learnings?.length || 0) > 0;
+
+  if (hasItems) {
+    yaml += `approved_items:\n`;
+    if (opts.actionItems && opts.actionItems.length > 0) {
+      yaml += `  actionItems:\n`;
+      for (const item of opts.actionItems) {
+        yaml += `    - "${item}"\n`;
+      }
+    }
+    if (opts.decisions && opts.decisions.length > 0) {
+      yaml += `  decisions:\n`;
+      for (const item of opts.decisions) {
+        yaml += `    - "${item}"\n`;
+      }
+    }
+    if (opts.learnings && opts.learnings.length > 0) {
+      yaml += `  learnings:\n`;
+      for (const item of opts.learnings) {
+        yaml += `    - "${item}"\n`;
+      }
+    }
+  }
+
   return `---\n${yaml}---\n\n# Meeting\n`;
+}
+
+/** Build a bare meeting file with only a status (no intelligence). */
+function makeBareContent(status: string): string {
+  return `---\nstatus: ${status}\n---\n\n# Meeting\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,67 +161,173 @@ function makeMeetingContent(opts: {
 // ---------------------------------------------------------------------------
 
 describe('extractIntelligenceFromFrontmatter', () => {
-  it('returns null when no staged_items', () => {
-    assert.strictEqual(extractIntelligenceFromFrontmatter({}), null);
-    assert.strictEqual(extractIntelligenceFromFrontmatter({ staged_items: undefined }), null);
+  it('returns null when body has no staged sections and no approved_items', () => {
+    assert.strictEqual(extractIntelligenceFromFrontmatter({}, ''), null);
+    assert.strictEqual(extractIntelligenceFromFrontmatter({}, '# Meeting\nSome text'), null);
   });
 
-  it('returns null when staged_items is not an array', () => {
-    assert.strictEqual(extractIntelligenceFromFrontmatter({ staged_items: 'not-array' }), null);
-  });
-
-  it('returns null when all items lack text', () => {
-    const result = extractIntelligenceFromFrontmatter({
-      staged_items: [{ type: 'action' }, { type: 'decision' }],
-    });
+  it('returns null when approved_items is empty', () => {
+    const result = extractIntelligenceFromFrontmatter(
+      { approved_items: { actionItems: [], decisions: [], learnings: [] } },
+      '',
+    );
     assert.strictEqual(result, null);
   });
 
-  it('extracts action items', () => {
-    const result = extractIntelligenceFromFrontmatter({
-      staged_items: [
-        {
-          type: 'action',
-          description: 'Send API docs',
-          owner: 'john-smith',
-          owner_name: 'John Smith',
-          counterparty: 'jane-doe',
-          direction: 'i_owe_them',
-        },
-      ],
-    });
+  // -- Format A: Staged sections in body -----------------------------------
+
+  it('Format A: extracts action items from body staged sections', () => {
+    const body = `## Summary\nTest summary\n\n## Staged Action Items\n- ai_001: Send API docs\n`;
+    const result = extractIntelligenceFromFrontmatter({}, body);
     assert.ok(result);
     assert.strictEqual(result.actionItems.length, 1);
     assert.strictEqual(result.actionItems[0].description, 'Send API docs');
-    assert.strictEqual(result.actionItems[0].ownerSlug, 'john-smith');
-    assert.strictEqual(result.actionItems[0].owner, 'John Smith');
-    assert.strictEqual(result.actionItems[0].counterpartySlug, 'jane-doe');
-    assert.strictEqual(result.actionItems[0].direction, 'i_owe_them');
   });
 
-  it('extracts decisions and learnings', () => {
-    const result = extractIntelligenceFromFrontmatter({
-      staged_items: [
-        { type: 'decision', text: 'Use React for frontend' },
-        { type: 'learning', description: 'Users prefer batch processing' },
-      ],
-    });
+  it('Format A: enriches action items with staged_item_owner metadata', () => {
+    const body = `## Staged Action Items\n- ai_001: Map out signature logic for Anthony\n`;
+    const frontmatter = {
+      staged_item_owner: {
+        ai_001: {
+          ownerSlug: 'john-koht',
+          direction: 'i_owe_them',
+          counterpartySlug: 'lindsay-gray',
+        },
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, body);
     assert.ok(result);
-    assert.deepStrictEqual(result.decisions, ['Use React for frontend']);
-    assert.deepStrictEqual(result.learnings, ['Users prefer batch processing']);
+    assert.strictEqual(result.actionItems.length, 1);
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'john-koht');
+    assert.strictEqual(result.actionItems[0].direction, 'i_owe_them');
+    assert.strictEqual(result.actionItems[0].counterpartySlug, 'lindsay-gray');
+    assert.strictEqual(result.actionItems[0].description, 'Map out signature logic for Anthony');
+  });
+
+  it('Format A: extracts decisions and learnings from body', () => {
+    const body = [
+      '## Staged Decisions',
+      '- de_001: Note templates should be standardized to 5-10 static templates',
+      '',
+      '## Staged Learnings',
+      '- le_001: Adjuster managers are often unaware of the full template inventory',
+    ].join('\n');
+    const result = extractIntelligenceFromFrontmatter({}, body);
+    assert.ok(result);
+    assert.deepStrictEqual(result.decisions, [
+      'Note templates should be standardized to 5-10 static templates',
+    ]);
+    assert.deepStrictEqual(result.learnings, [
+      'Adjuster managers are often unaware of the full template inventory',
+    ]);
     assert.strictEqual(result.actionItems.length, 0);
   });
 
-  it('uses description or text field', () => {
-    const result = extractIntelligenceFromFrontmatter({
-      staged_items: [
-        { type: 'decision', description: 'From description' },
-        { type: 'learning', text: 'From text' },
-      ],
-    });
+  it('Format A: handles all three section types together', () => {
+    const body = [
+      '## Summary',
+      'Test summary',
+      '',
+      '## Staged Action Items',
+      '- ai_001: Review PR',
+      '- ai_002: Deploy staging',
+      '',
+      '## Staged Decisions',
+      '- de_001: Use React for frontend',
+      '',
+      '## Staged Learnings',
+      '- le_001: Users prefer batch processing',
+    ].join('\n');
+    const result = extractIntelligenceFromFrontmatter({}, body);
     assert.ok(result);
-    assert.deepStrictEqual(result.decisions, ['From description']);
-    assert.deepStrictEqual(result.learnings, ['From text']);
+    assert.strictEqual(result.actionItems.length, 2);
+    assert.strictEqual(result.decisions.length, 1);
+    assert.strictEqual(result.learnings.length, 1);
+    assert.strictEqual(result.actionItems[0].description, 'Review PR');
+    assert.strictEqual(result.actionItems[1].description, 'Deploy staging');
+    assert.deepStrictEqual(result.decisions, ['Use React for frontend']);
+    assert.deepStrictEqual(result.learnings, ['Users prefer batch processing']);
+  });
+
+  // -- Format B: approved_items in frontmatter ----------------------------
+
+  it('Format B: extracts from approved_items frontmatter', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: [
+          'Send API docs (@john-koht)',
+          'Review templates (@john-koht)',
+        ],
+        decisions: ['Use REST API for partner integration'],
+        learnings: ['Template sprawl mirrors email sprawl'],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems.length, 2);
+    assert.strictEqual(result.actionItems[0].description, 'Send API docs');
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'john-koht');
+    assert.strictEqual(result.actionItems[1].description, 'Review templates');
+    assert.strictEqual(result.actionItems[1].ownerSlug, 'john-koht');
+    assert.deepStrictEqual(result.decisions, ['Use REST API for partner integration']);
+    assert.deepStrictEqual(result.learnings, ['Template sprawl mirrors email sprawl']);
+  });
+
+  it('Format B: parses owner with counterparty notation', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: [
+          'Send API docs (@john-koht \u2192 @anthony-avina)',
+        ],
+        decisions: [],
+        learnings: [],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems.length, 1);
+    assert.strictEqual(result.actionItems[0].description, 'Send API docs');
+    assert.strictEqual(result.actionItems[0].ownerSlug, 'john-koht');
+    assert.strictEqual(result.actionItems[0].counterpartySlug, 'anthony-avina');
+    assert.strictEqual(result.actionItems[0].direction, 'i_owe_them');
+  });
+
+  it('Format B: action items without owner notation get empty ownerSlug', () => {
+    const frontmatter = {
+      approved_items: {
+        actionItems: ['Just a plain action item'],
+        decisions: [],
+        learnings: [],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, '');
+    assert.ok(result);
+    assert.strictEqual(result.actionItems.length, 1);
+    assert.strictEqual(result.actionItems[0].description, 'Just a plain action item');
+    assert.strictEqual(result.actionItems[0].ownerSlug, '');
+  });
+
+  // -- Priority: Format A wins over Format B ------------------------------
+
+  it('Format A takes priority when body has staged sections', () => {
+    const body = `## Staged Decisions\n- de_001: From body\n`;
+    const frontmatter = {
+      approved_items: {
+        decisions: ['From frontmatter'],
+      },
+    };
+    const result = extractIntelligenceFromFrontmatter(frontmatter, body);
+    assert.ok(result);
+    // Format A found items, so Format B is skipped
+    assert.deepStrictEqual(result.decisions, ['From body']);
+  });
+
+  // -- Empty sections -----------------------------------------------------
+
+  it('returns null when body has section headers but no items', () => {
+    const body = `## Staged Action Items\n\n## Staged Decisions\n\n`;
+    const result = extractIntelligenceFromFrontmatter({}, body);
+    assert.strictEqual(result, null);
   });
 });
 
@@ -174,27 +346,30 @@ describe('loadRecentMeetingBatch', () => {
     const storage = createMockStorage();
     storage.files.set(
       meetingPath('notes.md'),
-      makeMeetingContent({ status: 'processed', stagedItems: [{ type: 'decision', text: 'test' }] }),
+      makeFormatAContent({
+        status: 'processed',
+        decisions: [{ id: 'de_001', text: 'test' }],
+      }),
     );
     const result = await loadRecentMeetingBatch(storage, MEETINGS_DIR);
     assert.deepStrictEqual(result, []);
   });
 
-  it('loads processed meetings within date range', async () => {
+  it('loads Format A processed meetings within date range', async () => {
     const storage = createMockStorage();
-    // Use today's date to ensure it's within range
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10);
     const filename = `${dateStr}-standup.md`;
 
     storage.files.set(
       meetingPath(filename),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [
-          { type: 'action', description: 'Review PR', owner: 'john', owner_name: 'John', direction: 'i_owe_them' },
-          { type: 'decision', text: 'Ship v2 next week' },
-        ],
+        actionItems: [{ id: 'ai_001', text: 'Review PR' }],
+        decisions: [{ id: 'de_001', text: 'Ship v2 next week' }],
+        stagedItemOwner: {
+          ai_001: { ownerSlug: 'john', direction: 'i_owe_them' },
+        },
       }),
     );
 
@@ -202,19 +377,20 @@ describe('loadRecentMeetingBatch', () => {
     assert.strictEqual(result.length, 1);
     assert.strictEqual(result[0].meetingPath, meetingPath(filename));
     assert.strictEqual(result[0].extraction.actionItems.length, 1);
+    assert.strictEqual(result[0].extraction.actionItems[0].ownerSlug, 'john');
     assert.strictEqual(result[0].extraction.decisions.length, 1);
   });
 
-  it('includes approved meetings', async () => {
+  it('loads Format B approved meetings', async () => {
     const storage = createMockStorage();
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10);
 
     storage.files.set(
       meetingPath(`${dateStr}-approved.md`),
-      makeMeetingContent({
+      makeFormatBContent({
         status: 'approved',
-        stagedItems: [{ type: 'learning', text: 'Users love dark mode' }],
+        learnings: ['Users love dark mode'],
       }),
     );
 
@@ -225,16 +401,16 @@ describe('loadRecentMeetingBatch', () => {
 
   it('filters out meetings older than lookback window', async () => {
     const storage = createMockStorage();
-    // 30 days ago — outside default 7-day window
+    // 30 days ago -- outside default 7-day window
     const oldDate = new Date();
     oldDate.setDate(oldDate.getDate() - 30);
     const oldDateStr = oldDate.toISOString().slice(0, 10);
 
     storage.files.set(
       meetingPath(`${oldDateStr}-old-meeting.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [{ type: 'decision', text: 'Old decision' }],
+        decisions: [{ id: 'de_001', text: 'Old decision' }],
       }),
     );
 
@@ -250,9 +426,9 @@ describe('loadRecentMeetingBatch', () => {
 
     storage.files.set(
       meetingPath(`${dateStr}-recent.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [{ type: 'decision', text: 'Recent decision' }],
+        decisions: [{ id: 'de_001', text: 'Recent decision' }],
       }),
     );
 
@@ -269,21 +445,21 @@ describe('loadRecentMeetingBatch', () => {
     const storage = createMockStorage();
     const today = new Date().toISOString().slice(0, 10);
 
-    // draft status — should be excluded
+    // draft status -- should be excluded
     storage.files.set(
       meetingPath(`${today}-draft.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'draft',
-        stagedItems: [{ type: 'decision', text: 'Draft decision' }],
+        decisions: [{ id: 'de_001', text: 'Draft decision' }],
       }),
     );
 
-    // raw status — should be excluded
+    // raw status -- should be excluded
     storage.files.set(
       meetingPath(`${today}-raw.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'raw',
-        stagedItems: [{ type: 'learning', text: 'Raw learning' }],
+        learnings: [{ id: 'le_001', text: 'Raw learning' }],
       }),
     );
 
@@ -291,13 +467,13 @@ describe('loadRecentMeetingBatch', () => {
     assert.deepStrictEqual(result, []);
   });
 
-  it('skips meetings without staged items', async () => {
+  it('skips meetings without intelligence items', async () => {
     const storage = createMockStorage();
     const today = new Date().toISOString().slice(0, 10);
 
     storage.files.set(
       meetingPath(`${today}-empty.md`),
-      makeMeetingContent({ status: 'processed' }),
+      makeBareContent('processed'),
     );
 
     const result = await loadRecentMeetingBatch(storage, MEETINGS_DIR);
@@ -328,44 +504,86 @@ describe('loadRecentMeetingBatch', () => {
     oldDate.setDate(oldDate.getDate() - 30);
     const oldDateStr = oldDate.toISOString().slice(0, 10);
 
-    // Valid processed meeting
+    // Valid processed meeting (Format A)
     storage.files.set(
       meetingPath(`${today}-valid.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [{ type: 'decision', text: 'Valid decision' }],
+        decisions: [{ id: 'de_001', text: 'Valid decision' }],
       }),
     );
 
     // Too old
     storage.files.set(
       meetingPath(`${oldDateStr}-old.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [{ type: 'decision', text: 'Old' }],
+        decisions: [{ id: 'de_001', text: 'Old' }],
       }),
     );
 
     // Wrong status
     storage.files.set(
       meetingPath(`${today}-draft.md`),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'draft',
-        stagedItems: [{ type: 'decision', text: 'Draft' }],
+        decisions: [{ id: 'de_001', text: 'Draft' }],
       }),
     );
 
     // No date prefix
     storage.files.set(
       meetingPath('random-notes.md'),
-      makeMeetingContent({
+      makeFormatAContent({
         status: 'processed',
-        stagedItems: [{ type: 'decision', text: 'No date' }],
+        decisions: [{ id: 'de_001', text: 'No date' }],
       }),
     );
 
     const result = await loadRecentMeetingBatch(storage, MEETINGS_DIR);
     assert.strictEqual(result.length, 1);
     assert.strictEqual(result[0].extraction.decisions[0], 'Valid decision');
+  });
+
+  it('loads mixed batch of Format A and Format B meetings', async () => {
+    const storage = createMockStorage();
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Format A: processed with staged sections
+    storage.files.set(
+      meetingPath(`${today}-standup.md`),
+      makeFormatAContent({
+        status: 'processed',
+        actionItems: [{ id: 'ai_001', text: 'Review PR' }],
+        stagedItemOwner: {
+          ai_001: { ownerSlug: 'john-koht', direction: 'i_owe_them' },
+        },
+      }),
+    );
+
+    // Format B: approved with approved_items
+    storage.files.set(
+      meetingPath(`${today}-retro.md`),
+      makeFormatBContent({
+        status: 'approved',
+        decisions: ['Use REST API for partner integration'],
+        learnings: ['Template sprawl mirrors email sprawl'],
+      }),
+    );
+
+    const result = await loadRecentMeetingBatch(storage, MEETINGS_DIR);
+    assert.strictEqual(result.length, 2);
+
+    // Find the Format A and Format B results (order not guaranteed)
+    const formatA = result.find(r => r.meetingPath.includes('standup'));
+    const formatB = result.find(r => r.meetingPath.includes('retro'));
+
+    assert.ok(formatA);
+    assert.strictEqual(formatA.extraction.actionItems.length, 1);
+    assert.strictEqual(formatA.extraction.actionItems[0].ownerSlug, 'john-koht');
+
+    assert.ok(formatB);
+    assert.deepStrictEqual(formatB.extraction.decisions, ['Use REST API for partner integration']);
+    assert.deepStrictEqual(formatB.extraction.learnings, ['Template sprawl mirrors email sprawl']);
   });
 });

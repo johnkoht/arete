@@ -21,6 +21,8 @@ import type {
 } from '../models/entities.js';
 import type { MeetingIntelligence, ActionItem } from './meeting-extraction.js';
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
+import { parseStagedSections } from '../integrations/staged-items.js';
+import type { StagedItemOwnerMeta } from '../models/index.js';
 import type { SearchProvider, SearchResult } from '../search/types.js';
 import type { StorageAdapter } from '../storage/adapter.js';
 import { AreaParserService } from './area-parser.js';
@@ -810,49 +812,94 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 }
 
 /**
- * Extract MeetingIntelligence from meeting frontmatter staged items.
+ * Parse owner notation from approved_items action item strings.
+ * Format: "description (@ownerSlug)" or "description (@ownerSlug → @counterpartySlug)"
+ */
+const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*→\s*@([a-z0-9-]+))?\)\s*$/i;
+
+/**
+ * Extract MeetingIntelligence from meeting file content.
+ *
+ * Handles two formats:
+ * - Format A (staged/processed): Items in body sections (## Staged Action Items, etc.)
+ *   with owner metadata in frontmatter staged_item_owner map.
+ * - Format B (approved): Items in frontmatter approved_items object
+ *   ({ actionItems: string[], decisions: string[], learnings: string[] }).
  */
 function extractIntelligenceFromFrontmatter(
   frontmatter: Record<string, unknown>,
+  body: string,
 ): MeetingIntelligence | null {
-  const stagedItems = frontmatter.staged_items as Record<string, unknown>[] | undefined;
-  if (!stagedItems || !Array.isArray(stagedItems)) return null;
+  // Format A: Parse staged sections from body + owner metadata from frontmatter
+  const staged = parseStagedSections(body);
+  const ownerMap = (frontmatter.staged_item_owner ?? {}) as Record<string, StagedItemOwnerMeta>;
 
   const actionItems: ActionItem[] = [];
   const decisions: string[] = [];
   const learnings: string[] = [];
 
-  for (const item of stagedItems) {
-    const type = item.type as string;
-    const text = (item.description || item.text) as string;
-    if (!text) continue;
+  for (const item of staged.actionItems) {
+    const ownerMeta = ownerMap[item.id];
+    actionItems.push({
+      owner: '',
+      ownerSlug: ownerMeta?.ownerSlug ?? item.ownerSlug ?? '',
+      description: item.text,
+      direction: (ownerMeta?.direction ?? item.direction ?? 'i_owe_them') as ActionItem['direction'],
+      counterpartySlug: ownerMeta?.counterpartySlug ?? item.counterpartySlug,
+    });
+  }
+  for (const item of staged.decisions) {
+    decisions.push(item.text);
+  }
+  for (const item of staged.learnings) {
+    learnings.push(item.text);
+  }
 
-    if (type === 'action') {
+  // If Format A yielded items, return them
+  if (actionItems.length > 0 || decisions.length > 0 || learnings.length > 0) {
+    return { summary: '', actionItems, nextSteps: [], decisions, learnings };
+  }
+
+  // Format B: approved_items in frontmatter
+  const approved = frontmatter.approved_items as {
+    actionItems?: string[];
+    decisions?: string[];
+    learnings?: string[];
+  } | undefined;
+
+  if (!approved) return null;
+
+  for (const text of approved.actionItems ?? []) {
+    const match = text.match(APPROVED_OWNER_PATTERN);
+    if (match) {
       actionItems.push({
-        owner: (item.owner_name as string) || '',
-        ownerSlug: (item.owner as string) || '',
-        description: text,
-        direction: (item.direction as ActionItem['direction']) || 'i_owe_them',
-        counterpartySlug: item.counterparty as string | undefined,
+        owner: '',
+        ownerSlug: match[2],
+        description: match[1].trim(),
+        direction: 'i_owe_them',
+        counterpartySlug: match[3] || undefined,
       });
-    } else if (type === 'decision') {
-      decisions.push(text);
-    } else if (type === 'learning') {
-      learnings.push(text);
+    } else {
+      actionItems.push({
+        owner: '',
+        ownerSlug: '',
+        description: text,
+        direction: 'i_owe_them',
+      });
     }
+  }
+  for (const text of approved.decisions ?? []) {
+    decisions.push(text);
+  }
+  for (const text of approved.learnings ?? []) {
+    learnings.push(text);
   }
 
   if (actionItems.length === 0 && decisions.length === 0 && learnings.length === 0) {
     return null;
   }
 
-  return {
-    summary: '',
-    actionItems,
-    nextSteps: [],
-    decisions,
-    learnings,
-  };
+  return { summary: '', actionItems, nextSteps: [], decisions, learnings };
 }
 
 /**
@@ -896,13 +943,13 @@ export async function loadRecentMeetingBatch(
     const content = await storage.read(filePath);
     if (!content) continue;
 
-    const { frontmatter } = parseFrontmatter(content);
+    const { frontmatter, body } = parseFrontmatter(content);
 
     // Only include processed/approved meetings
     if (!['processed', 'approved'].includes(frontmatter.status as string)) continue;
 
-    // Extract staged items from frontmatter
-    const intelligence = extractIntelligenceFromFrontmatter(frontmatter);
+    // Extract staged items from body sections + frontmatter metadata
+    const intelligence = extractIntelligenceFromFrontmatter(frontmatter, body);
     if (!intelligence) continue;
 
     batches.push({

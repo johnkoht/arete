@@ -421,14 +421,12 @@ PROMPT: |
   ### Step 2: Map to Area (if applicable)
   The context command handles area mapping. Check the output for area association.
 
-  ### Step 3: Extract Intelligence
-  Run: arete meeting extract {meeting_file_path} --context /tmp/context.json --json > /tmp/intelligence.json
-
-  ### Step 4: Apply to Meeting File
-  Run: arete meeting apply {meeting_file_path} --intelligence /tmp/intelligence.json
+  ### Step 3: Extract & Stage Intelligence
+  Run: arete meeting extract {meeting_file_path} --context /tmp/context.json --stage --reconcile --skip-qmd --json
 
   This writes staged sections (## Staged Action Items, ## Staged Decisions, ## Staged Learnings)
-  to the meeting file.
+  with full metadata (confidence scores, dedup source, owner attribution, reconciliation annotations)
+  directly to the meeting file. The --reconcile flag enables cross-meeting dedup and batch LLM review.
 
   **STOP HERE** — Do not run approval or person refresh. The user will review in arete view.
 
@@ -916,8 +914,7 @@ The skip option is critical for maintaining flow:
 - **Process-meetings skill**: [process-meetings](../process-meetings/SKILL.md) — Phase 2 delegates to steps 1-4
 - **CLI commands**:
   - `arete meeting context <file> --json` — build context bundle
-  - `arete meeting extract <file> --context - --json` — extract intelligence
-  - `arete meeting apply <file> --intelligence -` — write staged sections
+  - `arete meeting extract <file> --context - --stage --reconcile --json` — extract and stage intelligence with dedup
   - `arete commitments list --json` — list open commitments
   - `arete people memory refresh --person <slug>` — refresh person highlights
   - `arete search "<query>" --timeline` — thread progress

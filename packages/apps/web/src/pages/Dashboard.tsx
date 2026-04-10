@@ -11,6 +11,7 @@ import {
   Calendar,
   Zap,
   Activity,
+  CloudUpload,
 } from "lucide-react";
 import { formatDistanceToNow, format, parseISO } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -422,6 +423,13 @@ function ActivityIcon({ type }: { type: string }) {
     return (
       <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/30 flex-shrink-0">
         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+      </div>
+    );
+  }
+  if (type === 'meeting:synced') {
+    return (
+      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 dark:bg-blue-950/30 flex-shrink-0">
+        <CloudUpload className="h-4 w-4 text-blue-600" />
       </div>
     );
   }

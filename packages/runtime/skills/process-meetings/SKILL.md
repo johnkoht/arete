@@ -235,20 +235,16 @@ Use the **get_area_context** pattern (see [PATTERNS.md](../PATTERNS.md)) to iden
 
 **Example**: Meeting "CoverWhale Sync" → matches `areas/glance-communications.md` → area = "glance-communications"
 
-### 3. For Each Meeting — Extract Intelligence
+### 3. For Each Meeting — Extract & Stage Intelligence
 
-Pipe the context bundle into extraction:
-
-```bash
-arete meeting context <file> --json | arete meeting extract <file> --context - --json
-```
-
-Or as separate steps:
+Build context and extract in one step using `--stage --reconcile`:
 
 ```bash
 arete meeting context <file> --json > /tmp/context.json
-arete meeting extract <file> --context /tmp/context.json --json
+arete meeting extract <file> --context /tmp/context.json --stage --reconcile --json
 ```
+
+The `--stage` flag writes staged sections directly to the meeting file. The `--reconcile` flag enables cross-meeting deduplication (Layers 2+3).
 
 **What gets extracted**:
 - **Summary** — 2-4 sentence overview of the meeting
@@ -267,17 +263,9 @@ The extract command uses the context bundle for smarter extraction:
 **Flags**:
 - `--context <file>` — context bundle JSON (use `-` for stdin)
 - `--json` — output as JSON
-- `--stage` — write staged sections directly to meeting file
-
-### 4. For Each Meeting — Apply Intelligence
-
-Write the extracted intelligence to the meeting file:
-
-```bash
-arete meeting context <file> --json \
-  | arete meeting extract <file> --context - --json \
-  | arete meeting apply <file> --intelligence -
-```
+- `--stage` — write staged sections + metadata directly to meeting file
+- `--reconcile` — enable cross-meeting dedup (Layers 2+3)
+- `--skip-qmd` — skip QMD indexing (useful in batch processing; index once at the end)
 
 **What gets written**:
 - Staged sections in meeting body (`## Staged Action Items`, `## Staged Decisions`, `## Staged Learnings`)
@@ -361,7 +349,7 @@ This updates:
 
 ### 8. Archive Linked Agendas
 
-The `arete meeting apply` command automatically archives linked agendas:
+The `arete meeting extract --stage` command automatically archives linked agendas:
 
 1. Checks meeting frontmatter for `agenda: <path>` field
 2. If agenda exists, updates its frontmatter: `status: processed`, `processed_at: YYYY-MM-DD`
@@ -440,31 +428,19 @@ For processing a single meeting with full pipeline:
 # 1. Build context
 arete meeting context resources/meetings/2026-03-19-product-sync.md --json > /tmp/context.json
 
-# 2. Extract intelligence with context
+# 2. Extract & stage intelligence (writes staged sections + archives agenda)
 arete meeting extract resources/meetings/2026-03-19-product-sync.md \
-  --context /tmp/context.json --json > /tmp/intelligence.json
+  --context /tmp/context.json --stage --reconcile --json
 
-# 3. Apply to meeting file (writes staged sections + archives agenda)
-arete meeting apply resources/meetings/2026-03-19-product-sync.md \
-  --intelligence /tmp/intelligence.json
-
-# 4. User reviews in web app
+# 3. User reviews in web app
 arete view
 
-# 5. After approval — commit to memory
+# 4. After approval — commit to memory
 arete meeting approve 2026-03-19-product-sync
 
-# 6. Refresh person memory for attendees
+# 5. Refresh person memory for attendees
 arete people memory refresh --person sarah-smith
 arete people memory refresh --person mike-jones
-```
-
-Or as a single piped command (steps 1-3):
-
-```bash
-arete meeting context <file> --json \
-  | arete meeting extract <file> --context - --json \
-  | arete meeting apply <file> --intelligence -
 ```
 
 ---
@@ -571,8 +547,7 @@ Use `--commit` only when:
 - **Pattern**: [PATTERNS.md](../PATTERNS.md) — get_area_context, extract_decisions_learnings, refresh_person_memory, context_bundle_assembly, significance_analyst
 - **CLI Primitives**:
   - `arete meeting context <file> --json` — assemble context bundle
-  - `arete meeting extract <file> --context - --json` — extract intelligence
-  - `arete meeting apply <file> --intelligence -` — write staged sections
+  - `arete meeting extract <file> --context - --stage --reconcile --json` — extract, stage, and reconcile intelligence
   - `arete meeting approve <slug>` — commit to memory
   - `arete people memory refresh --person <slug>` — refresh person highlights
   - `arete commitments list --area <slug>` — filter commitments by area
