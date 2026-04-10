@@ -556,3 +556,151 @@ describe('commitments resolve command', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// commitments create
+// ---------------------------------------------------------------------------
+
+describe('commitments create command', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-commitments-create');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('creates a commitment with --json output', () => {
+    const raw = runCli(
+      [
+        'commitments', 'create', 'Send API docs to Sarah',
+        '--person', 'sarah-chen',
+        '--direction', 'i_owe_them',
+        '--person-name', 'Sarah Chen',
+        '--skip-qmd',
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as {
+      success: boolean;
+      commitment: {
+        id: string;
+        idShort: string;
+        text: string;
+        direction: string;
+        personSlug: string;
+        personName: string;
+        status: string;
+      };
+    };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.commitment.text, 'Send API docs to Sarah');
+    assert.equal(parsed.commitment.direction, 'i_owe_them');
+    assert.equal(parsed.commitment.personSlug, 'sarah-chen');
+    assert.equal(parsed.commitment.personName, 'Sarah Chen');
+    assert.equal(parsed.commitment.status, 'open');
+    assert.equal(parsed.commitment.idShort.length, 8);
+  });
+
+  it('creates a they_owe_me commitment', () => {
+    const raw = runCli(
+      [
+        'commitments', 'create', 'Share the design mockups',
+        '--person', 'anthony-avina',
+        '--direction', 'they_owe_me',
+        '--skip-qmd',
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    const parsed = JSON.parse(raw) as {
+      success: boolean;
+      commitment: { direction: string; personSlug: string; personName: string };
+    };
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.commitment.direction, 'they_owe_me');
+    assert.equal(parsed.commitment.personSlug, 'anthony-avina');
+    // Derives name from slug when --person-name is omitted
+    assert.equal(parsed.commitment.personName, 'Anthony Avina');
+  });
+
+  it('errors for invalid direction', () => {
+    const { stdout, code } = runCliRaw(
+      [
+        'commitments', 'create', 'Some action',
+        '--person', 'alice',
+        '--direction', 'invalid_direction',
+        '--skip-qmd',
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.ok(
+      parsed.error.includes('invalid_direction'),
+      `Expected error to mention invalid_direction: ${parsed.error}`,
+    );
+  });
+
+  it('errors for invalid date', () => {
+    const { stdout, code } = runCliRaw(
+      [
+        'commitments', 'create', 'Some action',
+        '--person', 'alice',
+        '--direction', 'i_owe_them',
+        '--date', 'not-a-date',
+        '--skip-qmd',
+        '--json',
+      ],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.ok(
+      parsed.error.includes('not-a-date'),
+      `Expected error to mention invalid date: ${parsed.error}`,
+    );
+  });
+
+  it('errors when not in workspace', () => {
+    const { stdout, code } = runCliRaw(
+      [
+        'commitments', 'create', 'Some action',
+        '--person', 'alice',
+        '--direction', 'i_owe_them',
+        '--skip-qmd',
+        '--json',
+      ],
+      { cwd: '/tmp' },
+    );
+    assert.equal(code, 1);
+    const parsed = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(parsed.success, false);
+    assert.ok(
+      parsed.error.includes('workspace'),
+      `Expected workspace error: ${parsed.error}`,
+    );
+  });
+
+  it('is idempotent — creating same commitment twice returns same ID', () => {
+    const args = [
+      'commitments', 'create', 'Review the proposal',
+      '--person', 'bob-smith',
+      '--direction', 'i_owe_them',
+      '--skip-qmd',
+      '--json',
+    ];
+    const raw1 = runCli(args, { cwd: tmpDir });
+    const raw2 = runCli(args, { cwd: tmpDir });
+    const parsed1 = JSON.parse(raw1) as { commitment: { id: string } };
+    const parsed2 = JSON.parse(raw2) as { commitment: { id: string } };
+    assert.equal(parsed1.commitment.id, parsed2.commitment.id);
+  });
+});

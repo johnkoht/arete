@@ -453,6 +453,29 @@ No approved content here.
       assert.ok(!result.error?.includes('no approved'), 'Should not error about no approved content');
     }
   });
+
+  it('--clear is an alias for --clear-approved (requires --stage)', () => {
+    // --clear without --stage should produce the same error as --clear-approved without --stage
+    const areteYaml = join(tmpDir, 'arete.yaml');
+    const config = `ai:\n  tiers:\n    fast: anthropic/claude-3-haiku\n`;
+    writeFileSync(areteYaml, config, 'utf8');
+
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--clear', '--json'],
+      {
+        cwd: tmpDir,
+        env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+      },
+    );
+
+    assert.equal(code, 1);
+    const result = JSON.parse(stdout) as { success: boolean; error: string };
+    assert.equal(result.success, false);
+    assert.ok(
+      result.error.includes('--clear-approved requires --stage'),
+      `Expected --clear to trigger same error as --clear-approved: ${result.error}`,
+    );
+  });
 });
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
