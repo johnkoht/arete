@@ -123,6 +123,21 @@ staged_item_confidence:
 
 ---
 
+## 2026-04-09: Extraction skills must use `--stage --reconcile`, never `extract` + `apply`
+
+**What broke**: The daily-winddown skill used a two-step pipeline: `arete meeting extract ... --json` piped to `arete meeting apply ... --intelligence -`. This bypassed all three dedup layers: Layer 1 (Jaccard dedup, requires `--stage`), Layer 2 (cross-meeting reconciliation, requires `--reconcile`), and Layer 3 (batch LLM review, requires `--reconcile`). Every item came through as `source: ai` with zero dedup.
+
+**Correct pattern**: A single command with both flags:
+```bash
+arete meeting extract <file> --context /tmp/context.json --stage --reconcile --skip-qmd --json
+```
+
+**Why `--skip-qmd`**: In batch processing (multiple meetings), skip per-meeting QMD indexing. Run `arete index` once at the end instead.
+
+**Prevention**: When updating any skill that does meeting extraction, verify it uses `--stage --reconcile`. The `arete meeting apply` command is legacy — it writes staged sections but skips all dedup/reconciliation. Grep for `meeting apply` in skill files to find any remaining uses.
+
+---
+
 ## 2026-04-05: Profile reference pattern for skills
 
 **Context**: Skills can reference agent profiles stored in `.agents/profiles/{name}.md`. These profiles define behavioral personas (e.g., `pm-orchestrator`, `pm-advisor`, `plan-reviewer`) that shape how the agent executes the skill.

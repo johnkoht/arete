@@ -377,6 +377,20 @@ If `attendee_ids` is missing/empty, Step 2 is skipped entirely, and action items
 
 When modifying the approval workflow, ensure this resolution step runs before person memory refresh. Test with the new `approval-integration.test.ts` suite.
 
+### Meeting File Watcher Must Notify, Not Auto-Process (2026-04-09)
+
+The `startMeetingWatcher` `onNew` callback in `index.ts` previously ran `runProcessingSession` + job creation + activity write on every synced meeting. This preempted the winddown skill's batch extraction pipeline — meetings were already `status: processed` before the skill ran, so Phase 2 was always skipped.
+
+**Fix**: The watcher now only emits an SSE event + writes a lightweight activity event:
+```typescript
+broadcastSseEvent('meeting:synced', { slug, detectedAt });
+writeActivityEvent(workspaceRoot, { type: 'meeting:synced', ... });
+```
+
+Processing only happens via explicit paths: UI button (`POST /api/meetings/:slug/process`) or winddown skill (`arete meeting extract --stage --reconcile`).
+
+**Pattern**: File watchers should notify, not act. Side effects belong to the user-initiated command or skill that decides when/how to process. This follows the existing `broadcastSseEvent is Caller-Owned` pattern but extends it: the watcher itself should only broadcast, never invoke processing services.
+
 ### Pre-Existing Test Failures in goals.test.ts (2026-03-06, updated 2026-03-07)
 
 The GET /quarter tests in `test/routes/goals.test.ts` were failing **before** iteration 3:
