@@ -12,7 +12,6 @@ import {
   type HygieneCategory,
 } from '@arete/core';
 import type { Command } from 'commander';
-import chalk from 'chalk';
 import { header, section, listItem, info, success, warn, error } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 
@@ -21,6 +20,32 @@ const TIER_LABELS: Record<HygieneTier, string> = {
   2: 'Review recommended',
   3: 'Human judgment required',
 };
+
+const VALID_TIERS = new Set([1, 2, 3]);
+const VALID_CATEGORIES = new Set<string>(['meetings', 'memory', 'commitments', 'activity']);
+
+function parseTiers(raw?: string[]): HygieneTier[] | undefined {
+  if (!raw) return undefined;
+  return raw.map((t) => {
+    const n = Number(t);
+    if (!VALID_TIERS.has(n)) {
+      error(`Invalid tier: "${t}". Valid tiers are 1, 2, 3`);
+      process.exit(1);
+    }
+    return n as HygieneTier;
+  });
+}
+
+function parseCategories(raw?: string[]): HygieneCategory[] | undefined {
+  if (!raw) return undefined;
+  return raw.map((c) => {
+    if (!VALID_CATEGORIES.has(c)) {
+      error(`Invalid category: "${c}". Valid: meetings, memory, commitments, activity`);
+      process.exit(1);
+    }
+    return c as HygieneCategory;
+  });
+}
 
 export function registerHygieneCommand(program: Command): void {
   const hygieneCmd = program
@@ -36,13 +61,11 @@ export function registerHygieneCommand(program: Command): void {
     .description('Scan workspace for hygiene issues')
     .option('--tier <tiers...>', 'Filter by tier(s): 1, 2, 3')
     .option('--category <categories...>', 'Filter by category: meetings, memory, commitments, activity')
-    .option('--area <slug>', 'Filter by area slug')
     .option('--json', 'Output as JSON')
     .action(
       async (opts: {
         tier?: string[];
         category?: string[];
-        area?: string;
         json?: boolean;
       }) => {
         const services = await createServices(process.cwd());
@@ -59,18 +82,14 @@ export function registerHygieneCommand(program: Command): void {
           process.exit(1);
         }
 
-        // Parse tier values
-        const tiers = opts.tier
-          ? opts.tier.map((t) => Number(t) as HygieneTier)
-          : undefined;
-        const categories = opts.category as HygieneCategory[] | undefined;
+        const tiers = parseTiers(opts.tier);
+        const categories = parseCategories(opts.category);
 
         let report: HygieneReport;
         try {
           report = await services.hygiene.scan({
             tiers,
             categories,
-            areaSlug: opts.area,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Failed to scan workspace';
@@ -155,10 +174,7 @@ export function registerHygieneCommand(program: Command): void {
 
         const config = await loadConfig(services.storage, root);
 
-        // Parse tier values
-        const tiers = opts.tier
-          ? opts.tier.map((t) => Number(t) as HygieneTier)
-          : undefined;
+        const tiers = parseTiers(opts.tier);
 
         // Run scan internally
         let report: HygieneReport;
@@ -199,25 +215,19 @@ export function registerHygieneCommand(program: Command): void {
           approvedIds = report.items.map((item) => item.id);
         } else {
           // Interactive checkbox
-          const { checkbox } = await import('@inquirer/prompts');
+          const { checkbox, Separator } = await import('@inquirer/prompts');
 
-          // Build choices grouped by tier
-          const choices: Array<{
-            name: string;
-            value: string;
-            checked: boolean;
-          }> = [];
+          // Build choices grouped by tier with proper separators
+          const choices: Array<
+            | { name: string; value: string; checked: boolean }
+            | InstanceType<typeof Separator>
+          > = [];
 
           for (const tier of [1, 2, 3] as HygieneTier[]) {
             const tierItems = report.items.filter((item) => item.tier === tier);
             if (tierItems.length === 0) continue;
 
-            // Add separator-like header
-            choices.push({
-              name: chalk.bold(`--- Tier ${tier}: ${TIER_LABELS[tier]} ---`),
-              value: `__separator_${tier}`,
-              checked: false,
-            });
+            choices.push(new Separator(`--- Tier ${tier}: ${TIER_LABELS[tier]} ---`));
 
             for (const item of tierItems) {
               choices.push({
@@ -235,10 +245,7 @@ export function registerHygieneCommand(program: Command): void {
             pageSize: 12,
           });
 
-          // Filter out separator values
-          approvedIds = selected.filter(
-            (id: string) => !id.startsWith('__separator_'),
-          );
+          approvedIds = selected as string[];
 
           if (approvedIds.length === 0) {
             info('No items selected. Aborted.');

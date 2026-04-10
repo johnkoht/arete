@@ -61,8 +61,6 @@ export interface HygieneScanOptions {
   tiers?: HygieneTier[];
   /** Filter to specific categories */
   categories?: HygieneCategory[];
-  /** Scope to a single area */
-  areaSlug?: string;
   /** Threshold for stale meetings (default: 90) */
   meetingOlderThanDays?: number;
   /** Threshold for old memory entries (default: 90) */

@@ -138,6 +138,7 @@ export class HygieneService {
     private readonly areaMemory: AreaMemoryService,
     private readonly areaParser: AreaParserService,
     private readonly memory: MemoryService,
+    private readonly workspacePaths?: WorkspacePaths,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -215,19 +216,19 @@ export class HygieneService {
             (c.status === 'resolved' || c.status === 'dropped') && c.resolvedAt
           );
 
-          for (const c of resolved) {
-            const age = daysAgo(c.resolvedAt!, now);
-            if (age < commitmentOlderThanDays) continue;
+          const staleResolved = resolved.filter(c => daysAgo(c.resolvedAt!, now) >= commitmentOlderThanDays);
 
+          if (staleResolved.length > 0) {
+            // Emit one aggregate item — purgeResolved is a bulk operation
             items.push({
-              id: makeId(`commitments:${c.id}`),
+              id: makeId('commitments:purge'),
               tier: 1,
               category: 'commitments',
               actionType: 'purge',
-              description: `Resolved commitment "${c.text.slice(0, 60)}${c.text.length > 60 ? '...' : ''}" resolved ${age} days ago`,
+              description: `${staleResolved.length} resolved commitment${staleResolved.length === 1 ? '' : 's'} older than ${commitmentOlderThanDays} days`,
               affectedPath: '.arete/commitments.json',
-              suggestedAction: `Purge resolved commitments older than ${commitmentOlderThanDays} days`,
-              metadata: { ageDays: age, status: c.status, resolvedAt: c.resolvedAt },
+              suggestedAction: `Purge ${staleResolved.length} resolved commitments`,
+              metadata: { count: staleResolved.length, thresholdDays: commitmentOlderThanDays },
             });
           }
         } catch {
@@ -238,47 +239,42 @@ export class HygieneService {
 
     // ----- Tier 2: Memory compaction -----
     if (shouldScan(2, 'memory')) {
-      // Decisions
+      // Decisions — aggregate into one item (compactDecisions is a bulk operation)
       const decisionsPath = join(this.workspaceRoot, '.arete', 'memory', 'items', 'decisions.md');
       const decisionsContent = await this.storage.read(decisionsPath);
       if (decisionsContent) {
         const entries = parseDecisionEntries(decisionsContent);
-        for (const entry of entries) {
-          if (!entry.date) continue;
-          const age = daysAgo(entry.date, now);
-          if (age < memoryOlderThanDays) continue;
-
+        const oldEntries = entries.filter(e => e.date && daysAgo(e.date, now) >= memoryOlderThanDays);
+        if (oldEntries.length > 0) {
           items.push({
-            id: makeId(`memory:decisions:${entry.title}`),
+            id: makeId('memory:compact:decisions'),
             tier: 2,
             category: 'memory',
             actionType: 'compact',
-            description: `Decision "${entry.title}" is ${age} days old`,
+            description: `${oldEntries.length} decision${oldEntries.length === 1 ? '' : 's'} older than ${memoryOlderThanDays} days`,
             affectedPath: '.arete/memory/items/decisions.md',
             suggestedAction: 'Compact old decisions into area summaries',
-            metadata: { ageDays: age, date: entry.date, type: 'decision' },
+            metadata: { count: oldEntries.length, thresholdDays: memoryOlderThanDays, type: 'decision' },
           });
         }
       }
 
-      // Learnings
+      // Learnings — aggregate into one item (compactLearnings is a bulk operation)
       const learningsPath = join(this.workspaceRoot, '.arete', 'memory', 'items', 'learnings.md');
       const learningsContent = await this.storage.read(learningsPath);
       if (learningsContent) {
         const entries = parseLearningEntries(learningsContent);
-        for (const entry of entries) {
-          const age = daysAgo(entry.date, now);
-          if (age < memoryOlderThanDays) continue;
-
+        const oldEntries = entries.filter(e => daysAgo(e.date, now) >= memoryOlderThanDays);
+        if (oldEntries.length > 0) {
           items.push({
-            id: makeId(`memory:learnings:${entry.text}`),
+            id: makeId('memory:compact:learnings'),
             tier: 2,
             category: 'memory',
             actionType: 'compact',
-            description: `Learning from ${entry.date} is ${age} days old`,
+            description: `${oldEntries.length} learning${oldEntries.length === 1 ? '' : 's'} older than ${memoryOlderThanDays} days`,
             affectedPath: '.arete/memory/items/learnings.md',
             suggestedAction: 'Compact old learnings into area summaries',
-            metadata: { ageDays: age, date: entry.date, type: 'learning' },
+            metadata: { count: oldEntries.length, thresholdDays: memoryOlderThanDays, type: 'learning' },
           });
         }
       }
@@ -492,39 +488,20 @@ export class HygieneService {
   }
 
   private async purgeCommitments(item: HygieneItem): Promise<void> {
-    const olderThanDays = (item.metadata.ageDays as number) ?? DEFAULT_COMMITMENT_OLDER_THAN_DAYS;
-    // Use the threshold that would catch this item. We pass the configured
-    // threshold which is the minimum age that triggered the scan item.
-    await this.commitments.purgeResolved(DEFAULT_COMMITMENT_OLDER_THAN_DAYS);
+    const thresholdDays = (item.metadata.thresholdDays as number) ?? DEFAULT_COMMITMENT_OLDER_THAN_DAYS;
+    await this.commitments.purgeResolved(thresholdDays);
   }
 
   private async compactMemory(item: HygieneItem): Promise<void> {
+    if (!this.workspacePaths) {
+      throw new Error('WorkspacePaths required for memory compaction — inject via constructor');
+    }
+
     const memoryType = item.metadata.type as string;
-
-    // Build workspace paths for the service call
-    const workspacePaths: WorkspacePaths = {
-      root: this.workspaceRoot,
-      manifest: join(this.workspaceRoot, 'arete.yaml'),
-      ideConfig: join(this.workspaceRoot, '.cursor'),
-      rules: join(this.workspaceRoot, '.cursor', 'rules'),
-      agentSkills: join(this.workspaceRoot, '.agents', 'skills'),
-      tools: join(this.workspaceRoot, '.cursor', 'tools'),
-      integrations: join(this.workspaceRoot, '.cursor', 'integrations'),
-      context: join(this.workspaceRoot, 'context'),
-      memory: join(this.workspaceRoot, '.arete', 'memory'),
-      now: join(this.workspaceRoot, 'now'),
-      goals: join(this.workspaceRoot, 'goals'),
-      projects: join(this.workspaceRoot, 'projects'),
-      resources: join(this.workspaceRoot, 'resources'),
-      people: join(this.workspaceRoot, 'people'),
-      credentials: join(this.workspaceRoot, '.credentials'),
-      templates: join(this.workspaceRoot, 'templates'),
-    };
-
     if (memoryType === 'decision') {
-      await this.areaMemory.compactDecisions(workspacePaths);
+      await this.areaMemory.compactDecisions(this.workspacePaths);
     } else if (memoryType === 'learning') {
-      await this.areaMemory.compactLearnings(workspacePaths);
+      await this.areaMemory.compactLearnings(this.workspacePaths);
     }
   }
 

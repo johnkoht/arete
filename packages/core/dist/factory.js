@@ -60,10 +60,11 @@ export async function createServices(workspaceRoot, options) {
     const areaParser = new AreaParserService(storage, workspaceRoot);
     // Area memory (depends on storage + areaParser + commitments + memory)
     const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
-    // Hygiene (depends on storage + commitments + areaMemory + areaParser + memory)
-    const hygiene = new HygieneService(storage, workspaceRoot, commitments, areaMemory, areaParser, memory);
-    // Task management (depends on storage + workspace paths + commitments for auto-resolution)
+    // Workspace paths (used by hygiene + tasks)
     const workspacePaths = workspace.getPaths(workspaceRoot);
+    // Hygiene (depends on storage + commitments + areaMemory + areaParser + memory + paths)
+    const hygiene = new HygieneService(storage, workspaceRoot, commitments, areaMemory, areaParser, memory, workspacePaths);
+    // Task management (depends on storage + workspace paths + commitments for auto-resolution)
     const tasks = new TaskService(storage, workspacePaths, commitments);
     // Wire up cross-service dependencies
     // CommitmentsService needs to create tasks, but TaskService needs CommitmentsService.

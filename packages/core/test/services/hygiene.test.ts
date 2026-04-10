@@ -128,6 +128,26 @@ function createService(store?: MockStore) {
   const areaParser = createStubAreaParser();
   const memory = createStubMemory();
 
+  // Minimal WorkspacePaths for compactMemory delegation
+  const workspacePaths = {
+    root: WORKSPACE,
+    manifest: join(WORKSPACE, 'arete.yaml'),
+    ideConfig: join(WORKSPACE, '.cursor'),
+    rules: join(WORKSPACE, '.cursor', 'rules'),
+    agentSkills: join(WORKSPACE, '.agents', 'skills'),
+    tools: join(WORKSPACE, '.cursor', 'tools'),
+    integrations: join(WORKSPACE, '.cursor', 'integrations'),
+    context: join(WORKSPACE, 'context'),
+    memory: join(WORKSPACE, '.arete', 'memory'),
+    now: join(WORKSPACE, 'now'),
+    goals: join(WORKSPACE, 'goals'),
+    projects: join(WORKSPACE, 'projects'),
+    resources: join(WORKSPACE, 'resources'),
+    people: join(WORKSPACE, 'people'),
+    credentials: join(WORKSPACE, '.credentials'),
+    templates: join(WORKSPACE, 'templates'),
+  };
+
   const service = new HygieneService(
     storage,
     WORKSPACE,
@@ -135,6 +155,7 @@ function createService(store?: MockStore) {
     areaMemory,
     areaParser,
     memory,
+    workspacePaths,
   );
 
   return { service, storage, commitments, areaMemory };
@@ -211,7 +232,7 @@ describe('HygieneService', () => {
       assert.equal(report.items.length, 0);
     });
 
-    it('scan flags resolved commitments as tier 1', async () => {
+    it('scan flags resolved commitments as single aggregate tier 1 item', async () => {
       const store = new Map<string, string>();
       const resolvedAt = oldISODate(45);
       store.set(
@@ -225,6 +246,13 @@ describe('HygieneService', () => {
               resolvedAt,
               date: oldDate(60),
             },
+            {
+              id: 'def456',
+              text: 'Review budget doc',
+              status: 'resolved',
+              resolvedAt: oldISODate(50),
+              date: oldDate(70),
+            },
           ],
         }),
       );
@@ -232,31 +260,37 @@ describe('HygieneService', () => {
       const { service } = createService(store);
       const report = await service.scan();
 
+      // Should be ONE aggregate item, not one per commitment
       assert.equal(report.items.length, 1);
       assert.equal(report.items[0].tier, 1);
       assert.equal(report.items[0].category, 'commitments');
       assert.equal(report.items[0].actionType, 'purge');
+      assert.equal(report.items[0].metadata.count, 2);
+      assert.equal(report.items[0].metadata.thresholdDays, 30);
     });
 
-    it('scan flags old memory decisions as tier 2', async () => {
+    it('scan flags old memory decisions as single aggregate tier 2 item', async () => {
       const store = new Map<string, string>();
-      const decisionDate = oldDate(100);
+      const oldDecisionDate = oldDate(100);
+      const olderDecisionDate = oldDate(150);
       store.set(
         join(WORKSPACE, '.arete', 'memory', 'items', 'decisions.md'),
-        `# Decisions\n\n### ${decisionDate}: Use TypeScript for all services\n\nWe decided to use TypeScript.\n`,
+        `# Decisions\n\n### ${oldDecisionDate}: Use TypeScript for all services\n\nWe decided to use TypeScript.\n\n### ${olderDecisionDate}: Use Node.js for runtime\n\nWe decided on Node.\n`,
       );
 
       const { service } = createService(store);
       const report = await service.scan();
 
+      // Should be ONE aggregate item, not one per decision
       assert.equal(report.items.length, 1);
       assert.equal(report.items[0].tier, 2);
       assert.equal(report.items[0].category, 'memory');
       assert.equal(report.items[0].actionType, 'compact');
       assert.equal(report.items[0].metadata.type, 'decision');
+      assert.equal(report.items[0].metadata.count, 2);
     });
 
-    it('scan flags old memory learnings as tier 2', async () => {
+    it('scan flags old memory learnings as single aggregate tier 2 item', async () => {
       const store = new Map<string, string>();
       const learningDate = oldDate(120);
       store.set(
@@ -272,6 +306,7 @@ describe('HygieneService', () => {
       assert.equal(report.items[0].category, 'memory');
       assert.equal(report.items[0].actionType, 'compact');
       assert.equal(report.items[0].metadata.type, 'learning');
+      assert.equal(report.items[0].metadata.count, 1);
     });
 
     it('scan flags bloated activity log as tier 2', async () => {
@@ -472,7 +507,7 @@ describe('HygieneService', () => {
       assert.ok(archiveContent.includes('archived_at'), 'should have archived_at in frontmatter');
     });
 
-    it('apply purge commitments delegates to CommitmentsService', async () => {
+    it('apply purge commitments delegates to CommitmentsService with correct threshold', async () => {
       const store = new Map<string, string>();
       store.set(
         join(WORKSPACE, '.arete', 'commitments.json'),
@@ -496,7 +531,37 @@ describe('HygieneService', () => {
       const result = await service.apply(report, [{ id: commitmentItem!.id }]);
 
       assert.equal(result.applied.length, 1);
-      assert.ok(commitments.calls.purgeResolved.length >= 1, 'purgeResolved should be called');
+      assert.ok(commitments.calls.purgeResolved.length === 1, 'purgeResolved should be called once');
+      // Verify threshold is passed through from scan metadata
+      assert.equal(commitments.calls.purgeResolved[0][0], 30, 'should pass default threshold');
+    });
+
+    it('apply purge commitments passes custom threshold from scan', async () => {
+      const store = new Map<string, string>();
+      store.set(
+        join(WORKSPACE, '.arete', 'commitments.json'),
+        JSON.stringify({
+          commitments: [{
+            id: 'abc123',
+            text: 'Something resolved',
+            status: 'resolved',
+            resolvedAt: oldISODate(70),
+            date: oldDate(90),
+          }],
+        }),
+      );
+
+      const { service, commitments } = createService(store);
+      const report = await service.scan({ commitmentOlderThanDays: 60 });
+
+      const commitmentItem = report.items.find(i => i.category === 'commitments');
+      assert.ok(commitmentItem);
+
+      const result = await service.apply(report, [{ id: commitmentItem!.id }]);
+
+      assert.equal(result.applied.length, 1);
+      // Verify custom threshold (60) is passed through, not default (30)
+      assert.equal(commitments.calls.purgeResolved[0][0], 60, 'should pass custom threshold');
     });
 
     it('apply compact decisions delegates to AreaMemoryService', async () => {

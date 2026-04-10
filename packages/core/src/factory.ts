@@ -113,11 +113,13 @@ export async function createServices(
   // Area memory (depends on storage + areaParser + commitments + memory)
   const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
 
-  // Hygiene (depends on storage + commitments + areaMemory + areaParser + memory)
-  const hygiene = new HygieneService(storage, workspaceRoot, commitments, areaMemory, areaParser, memory);
+  // Workspace paths (used by hygiene + tasks)
+  const workspacePaths = workspace.getPaths(workspaceRoot);
+
+  // Hygiene (depends on storage + commitments + areaMemory + areaParser + memory + paths)
+  const hygiene = new HygieneService(storage, workspaceRoot, commitments, areaMemory, areaParser, memory, workspacePaths);
 
   // Task management (depends on storage + workspace paths + commitments for auto-resolution)
-  const workspacePaths = workspace.getPaths(workspaceRoot);
   const tasks = new TaskService(storage, workspacePaths, commitments);
 
   // Wire up cross-service dependencies

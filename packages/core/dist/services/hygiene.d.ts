@@ -13,6 +13,7 @@ import type { AreaMemoryService } from './area-memory.js';
 import type { AreaParserService } from './area-parser.js';
 import type { MemoryService } from './memory.js';
 import type { HygieneReport, HygieneResult, HygieneScanOptions, ApprovedAction } from '../models/hygiene.js';
+import type { WorkspacePaths } from '../models/workspace.js';
 export declare class HygieneService {
     private readonly storage;
     private readonly workspaceRoot;
@@ -20,7 +21,8 @@ export declare class HygieneService {
     private readonly areaMemory;
     private readonly areaParser;
     private readonly memory;
-    constructor(storage: StorageAdapter, workspaceRoot: string, commitments: CommitmentsService, areaMemory: AreaMemoryService, areaParser: AreaParserService, memory: MemoryService);
+    private readonly workspacePaths?;
+    constructor(storage: StorageAdapter, workspaceRoot: string, commitments: CommitmentsService, areaMemory: AreaMemoryService, areaParser: AreaParserService, memory: MemoryService, workspacePaths?: WorkspacePaths | undefined);
     scan(options?: HygieneScanOptions): Promise<HygieneReport>;
     apply(report: HygieneReport, actions: ApprovedAction[]): Promise<HygieneResult>;
     private archiveMeeting;
