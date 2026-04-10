@@ -1,7 +1,7 @@
 ---
 title: Workspace Hygiene
 slug: workspace-hygiene
-status: approved
+status: building
 created: 2026-04-09
 has_pre_mortem: true
 has_review: true
