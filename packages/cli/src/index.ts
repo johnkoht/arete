@@ -42,6 +42,7 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerSearchCommand } from './commands/search.js';
 import { registerCreateCommands } from './commands/create.js';
 import { registerInboxCommand } from './commands/inbox.js';
+import { registerHygieneCommand } from './commands/hygiene.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,6 +108,7 @@ ${chalk.bold('Integrations')}
 
 ${chalk.bold('Commitments')}
   commitments list [--direction]   List open commitments
+  commitments create <text>        Create a commitment
   commitments resolve <id>         Resolve or drop a commitment
 
 ${chalk.bold('Availability & Calendar')}
@@ -118,6 +120,10 @@ ${chalk.bold('Meetings & Templates')}
   meeting add --file <path>        Add meeting from JSON
   template list meeting-agendas    List templates
   template view meeting-agenda --type <name>  View template
+
+${chalk.bold('Workspace Hygiene')}
+  hygiene scan [--tier] [--category]  Scan for workspace entropy
+  hygiene apply [--yes] [--dry-run]   Apply hygiene fixes
 
 ${chalk.bold('AI Configuration')}
   credentials set <provider>       Set API key for a provider
@@ -158,5 +164,6 @@ registerConfigCommand(program);
 registerSearchCommand(program);
 registerCreateCommands(program);
 registerInboxCommand(program);
+registerHygieneCommand(program);
 
 program.parse();
