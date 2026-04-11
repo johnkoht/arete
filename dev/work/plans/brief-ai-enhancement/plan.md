@@ -1,7 +1,7 @@
 ---
 title: "Enhance `brief` with AI Synthesis"
 slug: brief-ai-enhancement
-status: draft
+status: prioritized
 size: small
 tags: [cli, intelligence, ai, brief]
 created: "2026-03-10"

@@ -1,7 +1,7 @@
 ---
 title: Self Guided Onboarding
 slug: self-guided-onboarding
-status: idea
+status: prioritized
 size: unknown
 tags: [feature]
 created: 2026-02-20T03:47:16Z
