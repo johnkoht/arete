@@ -66,7 +66,8 @@ ORCHESTRATOR (you)
 │   ├─ Triage approved action items
 │   ├─ Refresh stakeholder memory
 │   ├─ Review agenda carryover
-│   └─ Track thread progress
+│   ├─ Track thread progress
+│   └─ 3g. Slack digest (optional, opt-in)
 │
 └─ Phase 4: Update & Close ──────── orchestrator
     ├─ Update weekly plan (now/week.md)
@@ -697,6 +698,30 @@ Build:
 | <name> | <event>      | <status>   |
 ```
 
+#### 3g. Slack Digest (Optional — opt-in)
+
+> **OPT-IN FEATURE**: Slack digest is disabled by default. Users need Slack MCP integration connected (via Claude Desktop or Claude Code) and must explicitly enable this phase.
+
+**Configuration**: Check if `slackDigest` is enabled in skill config.
+- Default: **false** (Slack digest phase is skipped)
+- Enable: Pass `--slack` flag when invoking skill, or set `skills.daily-winddown.slackDigest: true` in `arete.yaml`
+- Requires: Slack MCP integration connected
+
+**If slackDigest is false OR config not set**:
+> (Skip silently — proceed to Phase 4.)
+
+**If slackDigest is true**:
+
+Run the [slack-digest](../slack-digest/SKILL.md) workflow with `today`:
+
+1. Execute slack-digest Phases 1-4 (full interactive review in chat)
+2. All meeting decisions, learnings, and commitments are already committed at this point — slack-digest's reconciliation reads the current state and only surfaces what's genuinely new from Slack
+3. Approved items are written to memory, commitments, and week.md immediately
+
+**Why this position**: Meetings are the primary intelligence source. Slack catches what meetings missed — follow-ups, async decisions, side conversations. Running slack-digest after meeting processing means its reconciliation sees all meeting output and avoids duplicates.
+
+**Error handling**: If slack-digest fails or Slack MCP is unavailable, log the error and continue to Phase 4. Do not block the winddown flow.
+
 ---
 
 ### Phase 4: Update & Close
@@ -847,6 +872,13 @@ Compile the final report:
 - Key meetings: {titles and times}
 - Suggested focus: {based on week priorities and open threads}
 
+### Slack Digest
+- Status: {processed | skipped | disabled}
+- Conversations: {count}
+- Items extracted: {count}
+- Commitments resolved: {count}
+- Commitments added: {count}
+
 ### Notes
 - {any errors, skipped steps, or issues}
 ```
@@ -889,6 +921,7 @@ The skip option is critical for maintaining flow:
 - **Meeting subagent fails**: Note the failed meeting, process the rest. Report which meetings were not processed.
 - **arete view not used**: If user skips UI review, triage can still work with staged items directly from meeting files.
 - **Review UI fails or times out**: Auto-fallback to CLI triage (Phase 2.5.3/2.5.4). Never block the winddown flow.
+- **Slack MCP unavailable**: Log "Slack digest skipped — MCP not connected" and continue to Phase 4. Never block the winddown flow.
 - **`arete index` fails**: Note the failure but do not block the final report.
 - **Subagent returns malformed output**: Skip that subagent's data and note the issue. Process what's available from other subagents.
 - **Agenda merge fails for single file**: Log the error and continue. Agenda file remains in `now/agendas/`.
@@ -900,6 +933,7 @@ The skip option is critical for maintaining flow:
 ## Notes
 
 - **Review UI is opt-in**: The visual review UI (Phase 2.5) is disabled by default. Set `skills.daily-winddown.useReviewUI: true` in `arete.yaml` or pass `--review-ui` flag to enable. This preserves the traditional CLI triage workflow for users who prefer it (Harvester requirement: don't force new UX on users).
+- **Slack digest is opt-in**: The Slack digest phase (3g) is disabled by default. Set `skills.daily-winddown.slackDigest: true` in `arete.yaml` or pass `--slack` flag to enable. Requires Slack MCP integration connected via Claude Desktop or Claude Code. Runs after all meeting processing is complete so its reconciliation naturally deduplicates against meeting output.
 - **Approval flow**: User reviews and approves items in `arete view` (web UI) if Review UI is enabled, or via CLI triage (Phase 3a) if disabled. The agent then helps triage approved items into the week plan vs commitments for later.
 - **Local-first**: All state is in local markdown files (`now/week.md`, `goals/quarter.md`, `people/`, `.arete/memory/`). No external integrations required for core workflow.
 - **Commitments as backlog**: Items marked "Not This Week" stay in `.arete/commitments.json` and surface in future daily plans. Nothing falls through the cracks.
@@ -935,4 +969,4 @@ The skip option is critical for maintaining flow:
   - `.arete/commitments.json` — tracked commitments
 - **Web UI**: `arete view` — review and approve staged items
 - **Review UI with wait**: `arete view --path /review --wait --timeout 300 --json` — blocks until user completes review (Phase 2.5)
-- **Related skills**: process-meetings, daily-plan, week-plan, week-review, weekly-winddown, prepare-meeting-agenda
+- **Related skills**: process-meetings, daily-plan, week-plan, week-review, weekly-winddown, prepare-meeting-agenda, [slack-digest](../slack-digest/SKILL.md)
