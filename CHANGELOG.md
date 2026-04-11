@@ -1,4 +1,53 @@
 # Changelog
+
+## [0.7.0] - 2026-04-10
+
+### Added
+- **Extraction intelligence** — two-layer dedup architecture reducing ~40% decision/learning duplication in meeting extraction: prompt-level hardening (self-review instructions, exclusion lists, confidence guides, trivial/garbage filters) + post-reconciliation `batchLLMReview()` for semantic dedup against committed memory items
+- Real confidence scores from extraction (no longer hardcoded 0.9)
+- Prior meeting items fed into extraction prompts for cross-meeting context
+- Prompt injection mitigations in `batchLLMReview` (input sanitization, ID validation)
+- **Slack digest skill** — daily/weekly winddown integration for Slack channel summaries
+- **Commitments create CLI** — `arete commitments create` for manual commitment entry
+- **Workspace hygiene** — `arete hygiene scan` and `arete hygiene apply` for detecting and cleaning workspace entropy (Phase 1)
+
+### Fixed
+- **Krisp OAuth redirect URI** — corrected redirect URI for OAuth flow
+- **Weekly-winddown alignment** — aligned with daily meeting processing pipeline
+- **Direction-inversion bugs** — fixed ours/theirs direction swap in extraction pipeline
+- **Cross-person bilateral dedup** — commitment extraction no longer creates duplicates when both directions extracted from same meeting
+
+---
+
+## [0.6.1] - 2026-04-09
+
+### Added
+- **Meeting dismiss** — skip/unskip meetings from triage (`arete meeting dismiss`)
+
+### Fixed
+- **Extraction intelligence dedup pipeline** — parse real extraction formats, notify-not-process mode, correct CLI flags
+- **Meeting-manifest window test** — use relative date for stability
+
+---
+
+## [0.6.0] - 2026-04-07
+
+### Added
+- **Meeting intelligence** — enriched meeting frontmatter with topics, item counts; rolling `MANIFEST.md` with weekly grouping and aggregate stats
+- **Area-memory topics** — aggregate topics from tagged meetings into area memory
+- **Cross-area synthesis** — LLM-powered connections between area memories
+- **Inbox triage** — `arete inbox add` (text, URL, file) with universal content ingest; inbox-triage skill for processing
+- **Review page UX** — meeting-first layout, action items panel, area assignment in web UI
+- **Claude Code integration** — slash commands, expertise profiles, new skills, `--ide` flag (#7)
+- **GitHub Actions** — Claude Code Review and PR Assistant workflows
+
+### Fixed
+- GWS CLI command paths and `--params` JSON serialization
+- Drive plain-text query wrapping (`fullText contains` syntax)
+- GWS test mocks aligned with actual CLI command paths
+
+---
+
 ## [0.5.0] - 2026-04-05
 
 ### Added
@@ -26,31 +75,6 @@
 - **Multi-phase ship** — meta-orchestrator loop with phase gates, GATE_PASS/GATE_FAIL escalation, project-working-memory.md
 - **Reconciliation threshold** — raised from 0.5 → 0.65; lower-confidence items filtered earlier, reducing review queue noise
 - **Goal/project hierarchy** — quarter-plan prompts for area on goal creation; general-project prompts for linked goal
-
----
-
-## [0.3.0] - 2026-03-28
-
-### Added
-- add [DONE:N] markers and expertise profile injection
-- split changelog into BUILD (CHANGELOG.md) and GUIDE (UPDATES.md)
-- audit skill - documentation audit orchestration
-
-### Changed
-- lean orchestrator - subagents read own profiles
-
-### Fixed
-- distinguish BUILD vs GUIDE docs in manifest
-- audit findings - memory index + skill frontmatter
-- use persistent report paths, add template rendering note
-
-
-Build tooling and developer experience changes for Areté contributors.
-
-For user-facing features, see [`packages/runtime/UPDATES.md`](packages/runtime/UPDATES.md).
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
@@ -87,6 +111,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-03-28
+
+### Added
+- add [DONE:N] markers and expertise profile injection
+- split changelog into BUILD (CHANGELOG.md) and GUIDE (UPDATES.md)
+- audit skill - documentation audit orchestration
+
+### Changed
+- lean orchestrator - subagents read own profiles
+
+### Fixed
+- distinguish BUILD vs GUIDE docs in manifest
+- audit findings - memory index + skill frontmatter
+- use persistent report paths, add template rendering note
+
+---
+
 ## Historical
 
 For changes before 0.2.0, see git history:
@@ -99,3 +140,12 @@ Key milestones:
 - **Plan mode** (`/plan`, `/ship`, `/wrap`, `/release`) — Feb-Mar 2026
 - **Gitboss agent** — Mar 2026
 - **PRD execution system** — Feb 2026
+
+---
+
+Build tooling and developer experience changes for Areté contributors.
+
+For user-facing features, see [`packages/runtime/UPDATES.md`](packages/runtime/UPDATES.md).
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
