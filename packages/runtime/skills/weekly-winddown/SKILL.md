@@ -40,9 +40,13 @@ ORCHESTRATOR (you)
 │   ├─ Subagent: Pull recordings + list unprocessed meetings
 │   └─ Subagent: Gather planning context (week.md, quarter.md, projects, scratchpad, commitments)
 │
+├─ Phase 1.5: Pre-Processing ────── orchestrator
+│   ├─ Area association checkpoint (batch confirm areas for unprocessed meetings)
+│   └─ Agenda merge (merge now/agendas/ into meeting files)
+│
 ├─ Phase 2: Process meetings ────── parallel subagents (1 per meeting, max 4, batched)
 │   ├─ Subagent: Meeting A ──┐
-│   ├─ Subagent: Meeting B   ├──── safe writes + diffs (same as daily-winddown)
+│   ├─ Subagent: Meeting B   ├──── process-meetings steps 1-4 (context → extract → stage)
 │   ├─ Subagent: Meeting C   │
 │   └─ Subagent: Meeting D ──┘
 │   (repeat batches if >4 unprocessed meetings)
@@ -51,12 +55,15 @@ ORCHESTRATOR (you)
 │   ├─ Merge person file diffs
 │   ├─ Verify all writes
 │   ├─ Decisions/learnings from ALL week's meetings (user approval gate 1)
-│   └─ Refresh stakeholder memory
+│   ├─ Refresh stakeholder memory
+│   ├─ Handle unknown attendees
+│   └─ Agenda carryover review
 │
 ├─ Phase 4: Review & Reconcile ──── parallel subagents + orchestrator
 │   ├─ Subagent: Build thread arcs (memory timeline per thread)
 │   ├─ Subagent: Context health check
-│   └─ Orchestrator: Commitments reconciliation (user approval gate 2)
+│   ├─ Orchestrator: Commitments reconciliation (user approval gate 2)
+│   └─ 4d. Slack digest (optional, opt-in)
 │
 ├─ Phase 5: Weekly Review ───────── orchestrator (sequential)
 │   ├─ Significance analysis (what actually mattered this week)
@@ -86,9 +93,17 @@ Spawn two subagents in parallel.
 PROMPT: |
   Pull this week's meeting recordings and identify unprocessed meetings.
 
-  Run: arete pull fathom --days 7
+  Check `arete.yaml` for active recording integrations (under `integrations:`).
+  Pull from whichever are configured:
 
-  If the pull fails or fathom is not configured, that's okay — continue with existing files.
+    # If krisp is configured:
+    arete pull krisp --days 7
+
+    # If fathom is configured:
+    arete pull fathom --days 7
+
+  Pull from ALL configured recording integrations (krisp, fathom, or both).
+  If a pull fails or an integration is not configured, note the error and continue.
 
   Then list all meeting files from this week:
     ls resources/meetings/YYYY-MM-DD-*.md
@@ -137,22 +152,146 @@ PROMPT: |
 - List of all week's meeting file paths (from 1A)
 - Planning context + commitments (from 1B)
 
-If no unprocessed meetings exist, skip Phase 2.
+If no unprocessed meetings exist, skip Phases 1.5 and 2.
+
+---
+
+### Phase 1.5: Pre-Processing (orchestrator)
+
+Before dispatching meeting processing subagents, run two preparation steps that ensure area context and agenda content are available during extraction.
+
+#### Area Association (Checkpoint)
+
+Associate each unprocessed meeting with a workspace area so that area context (current state, recent decisions) can be injected into extraction. Same pattern as daily-winddown Phase 1e / process-meetings Step 1b.
+
+**Get suggestions**: Use `suggestAreaForMeeting()` from AreaParserService for all unprocessed meetings in a single batch:
+
+```typescript
+// Conceptual — agent uses available tools
+const areas = await areaParser.listAreas(); // all area slugs
+for (const meetingPath of unprocessedMeetings) {
+  const meeting = parseMeetingFile(meetingPath);
+  const suggestion = await areaParser.suggestAreaForMeeting({
+    title: meeting.title,
+    summary: meeting.summary,
+    transcript: meeting.transcript,
+  });
+}
+```
+
+**Present as a single batch table** (not N prompts for N meetings):
+
+```
+I'll be processing {N} unprocessed meetings. Here are my area suggestions:
+
+| Meeting Title | Date | Suggested Area | Confidence |
+|--------------|------|----------------|------------|
+| Weekly Sync  | 2026-04-07 | team-meetings | 1.0 |
+| Acme Intro   | 2026-04-08 | — | — |
+| Product Review | 2026-04-09 | product-dev | 0.8 |
+
+Areas available: {comma-separated list of all area slugs}
+
+Options:
+1. **Confirm** — proceed with these associations
+2. **Adjust** — specify different areas (format: "Meeting Title → area-slug")
+3. **Skip** — process without area associations
+
+Your choice?
+```
+
+**After confirmation**: Save confirmed areas to meeting frontmatter (`area: <slug>`) before Phase 2 dispatch. Include the area in each subagent's prompt context.
+
+**Edge cases**:
+- **All suggestions null**: "No area suggestions available for these meetings. Would you like to assign areas manually, or skip area association? Available areas: {list}"
+- **User provides invalid area**: "'{area}' not found. Available areas: {list}. Please try again."
+- **User provides custom area not in suggestions**: Valid — any area slug from the available list can be used, not just the suggested ones.
+
+#### Agenda Merge
+
+For each unprocessed meeting, check for matching agendas in `now/agendas/`:
+
+1. List agendas: `ls now/agendas/YYYY-MM-DD-*.md` (for each day of the week)
+2. For each unprocessed meeting file, fuzzy-match to an agenda by normalizing filenames
+3. For matched pairs:
+   - Read agenda content
+   - Insert as `## Agenda / Notes` section in meeting file (after frontmatter, before other sections)
+   - Mark: `<!-- Merged from now/agendas/{filename} -->`
+   - Delete the agenda file after merging
+4. Unmatched agendas: leave in place (user may need them)
+
+This preserves agenda content (prep notes, questions, unchecked items) as action item candidates during extraction. Without this step, agenda context is lost.
 
 ---
 
 ### Phase 2: Process Unprocessed Meetings (parallel subagents)
 
-Same pattern as the **daily-winddown** skill — spawn one subagent per unprocessed meeting, max 4 concurrent. If more than 4 unprocessed meetings, batch into groups of 4.
+Spawn one subagent per unprocessed meeting, max 4 concurrent. If more than 4 unprocessed meetings, batch into groups of 4.
 
 **Before spawning**: Read `people/index.md` (or list `people/**/*.md`) to build a list of existing person slugs. Pass this list into each subagent prompt.
 
-Use the **exact same per-meeting subagent prompt template** from the daily-winddown skill. Each subagent:
-- **Runs**: `arete meeting process --file <path> --json` for AI extraction with confidence scores, people intelligence, entity resolution, and staged items
-- **Writes**: meeting frontmatter (attendee_ids) + new person files (safe, no conflicts)
-- **Returns**: diffs for existing person files, staged items (decisions/learnings with confidence), action items
+**Per-Meeting Subagent Prompt** (follows [process-meetings](../process-meetings/SKILL.md) steps 1-4):
 
-See [daily-winddown](../daily-winddown/SKILL.md) Phase 2 for the full prompt template.
+```
+PROMPT: |
+  Process a single meeting file following the process-meetings skill (steps 1-4 only).
+
+  MEETING FILE: {meeting_file_path}
+  EXISTING PERSON SLUGS: {comma-separated list}
+
+  ## Instructions
+
+  Follow the process-meetings skill workflow, steps 1-4:
+
+  ### Step 1: Build Context
+  Run: arete meeting context {meeting_file_path} --json > /tmp/context.json
+
+  ### Step 2: Map to Area (if applicable)
+  The context command handles area mapping. Check the output for area association.
+
+  ### Step 3: Extract & Stage Intelligence
+  Run: arete meeting extract {meeting_file_path} --context /tmp/context.json --stage --reconcile --skip-qmd --json
+
+  This writes staged sections (## Staged Action Items, ## Staged Decisions, ## Staged Learnings)
+  with full metadata (confidence scores, dedup source, owner attribution, reconciliation annotations)
+  directly to the meeting file. The --reconcile flag enables cross-meeting dedup and batch LLM review.
+
+  **STOP HERE** — Do not run approval or person refresh. The user will review in arete view.
+
+  ## Output
+
+  Read the processed meeting file and return:
+
+  ### MEETING SUMMARY
+  - file: {meeting_file_path}
+  - title: <from frontmatter or first heading>
+  - date: <YYYY-MM-DD>
+  - attendees: <comma-separated names>
+  - area: <area slug if mapped, or "none">
+  - status: processed | failed
+
+  ### STAGED ITEMS
+  Count of staged items:
+  - Action items: <count>
+  - Decisions: <count>
+  - Learnings: <count>
+
+  ### UNKNOWN ATTENDEES
+  List any attendees from the context output that aren't in EXISTING PERSON SLUGS:
+  - name: <name>
+  - email: <email if available>
+
+  ### AGENDA CARRYOVER
+  If the meeting has a ## Agenda / Notes section, identify unaddressed items:
+  - item: <text>
+  - type: question | ask | next_step | topic
+  - recommendation: carryover | skip
+
+  (Or "No agenda section" if none exists.)
+
+  ### ERRORS
+  Any errors encountered during processing.
+```
 
 **Additionally**: For meetings that were ALREADY processed (have `attendee_ids`), the orchestrator still needs decisions/learnings and action items scanned. Spawn read-only subagents for these:
 
@@ -245,6 +384,41 @@ arete people memory refresh --person <slug>
 
 Runs AFTER all person file writes are verified (3a).
 
+#### 3d. Handle Unknown Attendees
+
+Collect all `UNKNOWN ATTENDEES` from Phase 2 subagent reports. De-duplicate by email/name across meetings.
+
+For each unknown attendee, offer to add:
+
+```
+Unknown attendees found across this week's meetings:
+- <name> (<email>) — appeared in: <meeting1>, <meeting2>
+- <name> (<email>) — appeared in: <meeting3>
+
+For each: Add as [I]nternal / [C]ustomer / [U]ser / [S]kip?
+```
+
+Create person files for accepted attendees using the appropriate category template.
+
+#### 3e. Agenda Carryover Review
+
+Collect all `AGENDA CARRYOVER` items from Phase 2 subagent reports. Group by meeting.
+
+Present unaddressed agenda items:
+
+```markdown
+### Unaddressed Agenda Items
+
+**From "Weekly Sync" (2026-04-07):**
+- [ ] Question: Status update on API integration? → Add to scratchpad / Skip
+- [ ] Ask: Timeline for design review → Add to scratchpad / Skip
+
+**From "Product Review" (2026-04-09):**
+- [ ] Next step: Schedule follow-up with vendor → Add to scratchpad / Skip
+```
+
+For items the user wants to keep: append to `now/scratchpad.md` under `## Carryover from week of {date range}`.
+
 ---
 
 ### Phase 4: Review & Reconcile (parallel + orchestrator)
@@ -306,17 +480,13 @@ From Phase 1B, get the list of open commitments.
 
 **Step 1 — Resolve linked commitments (high confidence)**:
 
-Scan completed tasks for explicit commitment links: `- [x] Task text <!-- c:XXXXXXXX -->`
+Scan completed tasks for explicit commitment links via `@from(commitment:XXX)` metadata tags.
 
-For each linked task:
-1. Extract the commitment ID (8-char prefix after `c:`)
-2. Run: `arete commitments resolve XXXXXXXX`
-3. Remove the `<!-- c:XXXXXXXX -->` comment from the line in `week.md`
-4. Log: "✓ Auto-resolved: {task text}"
+For each linked task, `TaskService.completeTask()` automatically resolves the linked commitment — same mechanism as daily-winddown Phase 4a. Log: "Auto-resolved: {task text}"
 
 **Step 2 — Fuzzy-match unlinked tasks (needs confirmation)**:
 
-For completed tasks WITHOUT `<!-- c:ID -->` links:
+For completed tasks WITHOUT `@from(commitment:XXX)` links:
 - Fuzzy-match against remaining open commitments (by description/owner)
 - If match found with high confidence → flag for user confirmation (don't auto-resolve)
 - If match uncertain → skip
@@ -356,6 +526,30 @@ Present for approval:
 ```
 
 For approved items, create commitments. Update `now/scratchpad.md` with "waiting on others" items organized by person.
+
+#### 4d. Slack Digest (Optional — opt-in)
+
+> **OPT-IN FEATURE**: Slack digest is disabled by default. Users need Slack MCP integration connected (via Claude Desktop or Claude Code) and must explicitly enable this phase.
+
+**Configuration**: Check if `slackDigest` is enabled in skill config.
+- Default: **false** (Slack digest phase is skipped)
+- Enable: Pass `--slack` flag when invoking skill, or set `skills.weekly-winddown.slackDigest: true` in `arete.yaml`
+- Requires: Slack MCP integration connected
+
+**If slackDigest is false OR config not set**:
+> (Skip silently — proceed to Phase 5.)
+
+**If slackDigest is true**:
+
+Run the [slack-digest](../slack-digest/SKILL.md) workflow with `--days-back=7`:
+
+1. Execute slack-digest Phases 1-4 (full interactive review in chat)
+2. All meeting decisions, learnings, and commitments from the week are already committed at this point — slack-digest's reconciliation reads the current state and only surfaces what's genuinely new from Slack
+3. Approved items are written to memory, commitments, and week.md immediately
+
+**Why this position**: All meetings are processed (Phase 2-3), commitments reconciled (Phase 4c). Slack-digest catches week-long async threads that didn't surface in meetings. Phase 5 (Weekly Review) then has the complete picture for significance analysis.
+
+**Error handling**: If slack-digest fails or Slack MCP is unavailable, log the error and continue to Phase 5. Do not block the winddown flow.
 
 ---
 
@@ -515,18 +709,18 @@ PROMPT: |
 
 ### Must Complete
 > Blocking or directly tied to week outcomes.
-- [ ] <task> (due date if relevant) <!-- c:XXXXXXXX -->
+- [ ] <task> (due date if relevant) @from(commitment:XXXXXXXX)
 
 ### Should Complete  
 > High value, not strictly blocking. Strong preference to finish.
-- [ ] <task> <!-- c:XXXXXXXX -->
+- [ ] <task> @from(commitment:XXXXXXXX)
 
 ### Complete If Time
 > Nice to have. Will carry with no consequence if skipped.
 - [ ] <task>
 ```
 
-**Commitment linking**: When adding tasks from commitments, include `<!-- c:ID -->` (first 8 chars of commitment ID) at the end of the task line. This enables auto-resolution when the task is completed in daily-winddown or the next weekly-winddown. Tasks not derived from commitments (e.g., user-added priorities) don't need links.
+**Commitment linking**: When adding tasks from commitments, include `@from(commitment:ID)` metadata at the end of the task line. `TaskService.completeTask()` automatically resolves linked commitments when the task is marked complete — same mechanism used by daily-winddown. Tasks not derived from commitments (e.g., user-added priorities) don't need links.
 
 Reference the [week-plan](../week-plan/SKILL.md) skill for the full week.md template.
 
@@ -584,6 +778,13 @@ Makes all content from this session searchable for next week.
 - Key meetings: <from calendar>
 - Week file: now/week.md
 
+### Slack Digest
+- Status: {processed | skipped | disabled}
+- Conversations: {count}
+- Items extracted: {count}
+- Commitments resolved: {count}
+- Commitments added: {count}
+
 ### Notes
 - <steps skipped, subagent failures, errors>
 ```
@@ -601,6 +802,7 @@ Makes all content from this session searchable for next week.
 - **`arete brief` fails**: Subagent 6A reports failure. Orchestrator proceeds with manual context (quarter.md, week.md, projects, scratchpad) already gathered in Phase 1B.
 - **`arete index` fails**: Note failure but do not block final report.
 - **Commitment resolution fails**: Note which commitments could not be resolved. User can manually resolve later.
+- **Slack MCP unavailable**: Log "Slack digest skipped — MCP not connected" and continue to Phase 5. Never block the winddown flow.
 - **Many unprocessed meetings (>8)**: Batch into groups of 4 for Phase 2. Log progress between batches.
 - **Subagent returns malformed output**: Skip that subagent's data, note the issue, process what's available from other subagents.
 
@@ -612,25 +814,27 @@ Makes all content from this session searchable for next week.
 - **Scope**: Covers the full current week (7 days). For single-day reconciliation, use the **daily-winddown** skill.
 - **Friday ritual**: Best run Friday afternoon or end of last working day. Also works Monday morning to close the prior week.
 - **week.md is source of truth**: `now/week.md` is the canonical weekly plan. Commitments track obligations (what you owe, what others owe you). Tasks live inline in week.md.
-- **CLI extraction**: Phase 2 uses `arete meeting process` for AI-powered extraction with confidence scores, producing staged items compatible with `arete view` triage UI. Falls back to manual LLM extraction if the CLI command fails.
+- **CLI extraction**: Phase 2 follows the process-meetings skill (steps 1-4) using `arete meeting context` + `arete meeting extract --stage --reconcile`. Produces staged items compatible with `arete view` triage UI. Falls back to manual LLM extraction if a CLI command fails.
 - **Commitments for tracking**: Commitments (`arete commitments`) track obligations. "Waiting on others" items also go to `now/scratchpad.md` for visibility.
-- **Commitment linking**: Tasks from commitments include `<!-- c:ID -->` comments (8-char prefix). Phase 4c-1 auto-resolves linked tasks when marked complete. Phase 6 adds links when creating next week's plan from commitments. This closes the loop between task completion and commitment tracking.
+- **Commitment linking**: Tasks from commitments include `@from(commitment:ID)` metadata tags. `TaskService.completeTask()` auto-resolves linked commitments when the task is marked complete — same mechanism as daily-winddown. Phase 6 adds links when creating next week's plan from commitments. This closes the loop between task completion and commitment tracking.
+- **Slack digest is opt-in**: The Slack digest phase (4d) is disabled by default. Set `skills.weekly-winddown.slackDigest: true` in `arete.yaml` or pass `--slack` flag to enable. Requires Slack MCP integration connected via Claude Desktop or Claude Code. Runs after commitment reconciliation so its own reconciliation naturally deduplicates against meeting output and resolved commitments.
 - **Subagent limits**: Max 4 concurrent subagents. Phase 1 uses 2, Phase 2 batches at 4, Phase 4 uses 2, Phase 6 uses 2. All within limits.
 - **Verification principle**: The orchestrator always reads back files after writing in Phase 3a. Subagents verify their own safe writes before returning.
 - **Why hybrid writes**: Same as daily-winddown — subagents own conflict-free writes (frontmatter, new person files), return diffs for shared person files. Orchestrator merges once per person.
-- **Shared subagent prompt**: Phase 2 uses the same per-meeting subagent prompt template as daily-winddown (which uses `arete meeting process`). See [daily-winddown](../daily-winddown/SKILL.md) Phase 2 for the full template.
+- **Meeting processing pipeline**: Phase 1.5 + Phase 2 mirror daily-winddown's meeting pipeline (area association, agenda merge, per-meeting subagents following process-meetings steps 1-4). Both skills delegate to the same process-meetings source of truth.
+- **Area association**: Phase 1.5 uses `suggestAreaForMeeting()` to batch-associate meetings with areas before extraction — same pattern as daily-winddown Phase 1e and process-meetings Step 1b.
 
 ## References
 
-- **Daily winddown**: [daily-winddown](../daily-winddown/SKILL.md) — shares the per-meeting subagent prompt template
-- **Fathom**: `arete pull fathom --days 7`
-- **Process meetings**: [process-meetings](../process-meetings/SKILL.md)
+- **Daily winddown**: [daily-winddown](../daily-winddown/SKILL.md) — shares the meeting processing pipeline (area checkpoint, agenda merge, process-meetings delegation)
+- **Process meetings**: [process-meetings](../process-meetings/SKILL.md) — canonical source for per-meeting extraction (steps 1-4: context → area → extract → stage)
+- **Recordings**: `arete pull krisp --days 7` / `arete pull fathom --days 7` (whichever integrations are active in `arete.yaml`)
 - **Week plan**: [week-plan](../week-plan/SKILL.md)
 - **Week review**: [week-review](../week-review/SKILL.md) (this skill supersedes week-review for end-of-week use)
 - **Memory format**: See Phase 3b for required `## Heading` + `Date` + `Source` structure for decisions.md / learnings.md writes
-- **CLI meeting processing**: `arete meeting process --file <path> --json` (AI extraction, people intelligence, entity resolution, staged items)
-- **Commitments**: `arete commitments list`, `arete commitments resolve <id>`
+- **CLI meeting processing**: `arete meeting context <file> --json` + `arete meeting extract <file> --context - --stage --reconcile --json`
+- **Commitments**: `arete commitments list`, `TaskService.completeTask()` for auto-resolution via `@from(commitment:ID)`
 - **Week file**: `now/week.md` (source of truth for weekly plan and tasks)
 - **Quarter file**: `goals/quarter.md`
 - **Scratchpad**: `now/scratchpad.md` (waiting on others, parked items)
-- **Related skills**: daily-winddown, process-meetings, sync, week-plan, week-review, daily-plan
+- **Related skills**: daily-winddown, process-meetings, sync, week-plan, week-review, daily-plan, [slack-digest](../slack-digest/SKILL.md)

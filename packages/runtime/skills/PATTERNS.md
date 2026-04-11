@@ -222,7 +222,7 @@ recurring_meetings:
 
 **Purpose**: Scan content for candidate decisions and learnings, present for inline review, write approved items to memory.
 
-**Used by**: process-meetings, finalize-project
+**Used by**: process-meetings, finalize-project, slack-digest
 
 **When a context bundle is available** (assembled upstream by the calling skill via `context_bundle_assembly`), use the `significance_analyst` pattern for context-aware extraction. The analyst distinguishes genuine decisions from discussion, and genuine insights from passing comments, by reasoning about the builder's strategy, goals, and existing memory. **When no context bundle is available** (e.g., `finalize-project` which does not assemble a bundle), fall back to keyword scanning as described below.
 
@@ -269,7 +269,7 @@ Follow the `significance_analyst` pattern — see § significance_analyst below.
 
 **Purpose**: Keep person profiles up to date with repeated asks/concerns from meeting notes and transcripts.
 
-**Used by**: process-meetings, meeting-prep, prepare-meeting-agenda
+**Used by**: process-meetings, meeting-prep, prepare-meeting-agenda, slack-digest
 
 **Steps**:
 
@@ -558,7 +558,7 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 **Purpose**: Assemble the structured context bundle that expert agent patterns consume. Standardizes how skills gather strategy, memory, and people context before shifting into expert reasoning mode.
 
-**Used by**: process-meetings (before significance_analyst), meeting-prep (before relationship_intelligence), week-review (before significance_analyst)
+**Used by**: process-meetings (before significance_analyst), meeting-prep (before relationship_intelligence), week-review (before significance_analyst), slack-digest (before significance_analyst)
 
 **Inputs**: Topic string, list of relevant person slugs (optional).
 
@@ -678,7 +678,7 @@ Anything here that changes how you want to frame these priorities?"
 
 **Purpose**: Context-aware judgment about what from this content actually matters given everything we know — the builder's strategy, goals, existing decisions, and relationship context. Replaces keyword scanning with reasoning.
 
-**Used by**: process-meetings (Step 7 — extraction to workspace memory), week-review (weekly significance assessment)
+**Used by**: process-meetings (Step 7 — extraction to workspace memory), week-review (weekly significance assessment), slack-digest (Phase 2c — conversation extraction)
 
 **Inputs**:
 - Context bundle (assembled via `context_bundle_assembly`)

@@ -151,9 +151,9 @@ Patterns learned from the Krisp MCP OAuth integration. Applicable to any future 
 
 ### 1. Dynamic Client Registration
 
-No developer portal required. `POST https://mcp.krisp.ai/.well-known/oauth-registration` with no auth returns `{ client_id, client_secret }` immediately. Register once per configure run (or reuse stored `client_id`). Include `redirect_uri` (with the actual dynamic port) in the registration body.
+No developer portal required. `POST https://mcp.krisp.ai/.well-known/oauth-registration` with no auth returns `{ client_id, client_secret }` immediately. Always re-register on every configure run — never reuse stored `client_id`/`client_secret` because the `redirect_uri` port changes each run (see §3). Include `redirect_uri` (with the actual dynamic port) in the registration body.
 
-**Pattern**: Call register before building the auth URL; skip if `client_id` already in credentials.
+**Pattern**: Always register before building the auth URL — re-register on every configure run so the dynamic port in `redirect_uri` matches what the OAuth server expects.
 
 ### 2. Confidential Client + PKCE — Both Required
 
