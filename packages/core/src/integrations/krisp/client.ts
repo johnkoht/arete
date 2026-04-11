@@ -250,19 +250,11 @@ export class KrispMcpClient {
     let authorizationCode: string;
 
     try {
-      // Step 2: Register or reuse existing client credentials
-      let existingCreds = await loadKrispCredentials(storage, workspaceRoot);
-      let clientId: string;
-      let clientSecret: string;
-
-      if (existingCreds?.client_id && existingCreds?.client_secret) {
-        clientId = existingCreds.client_id;
-        clientSecret = existingCreds.client_secret;
-      } else {
-        const registered = await this.register(port);
-        clientId = registered.client_id;
-        clientSecret = registered.client_secret;
-      }
+      // Step 2: Register client credentials (always re-register so the
+      // dynamic port in redirect_uri matches what the OAuth server expects)
+      const registered = await this.register(port);
+      const clientId = registered.client_id;
+      const clientSecret = registered.client_secret;
 
       // Step 3: Generate PKCE
       const codeVerifier = generateCodeVerifier();
