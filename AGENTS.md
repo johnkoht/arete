@@ -59,6 +59,7 @@
 |zero_context_switching:When given a bug, just fix it. Point at logs/errors/failing tests, then resolve. Don't ask for hand-holding.
 |elegance_balanced:For non-trivial changes, ask "is there a more elegant way?" For simple fixes, don't over-engineer. Challenge your own work before presenting.
 |self_improve:After ANY correction, update nearest LEARNINGS.md with the pattern. Ruthlessly iterate until mistake rate drops.
+|isolation_gate:NEVER switch branches in the main repo — ask builder "here or worktree?" before any code changes
 |one_task_one_subagent:Use subagents liberally for research/exploration/parallel work. Keep each focused on a single task.
 
 [CLI]

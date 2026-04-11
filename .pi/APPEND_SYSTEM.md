@@ -74,6 +74,25 @@ User approves plan → review-plan outputs `recommended_track`
 
 ---
 
+## Branch & Isolation Protocol
+
+Before writing any code (edits, new files, refactors), determine the isolation level:
+
+**Ask the builder**: "Should I work here on the current branch, or set up a worktree?"
+
+Decision guide (suggest to builder, but they decide):
+- **In-place** (current branch): Quick fixes, single-file changes, config tweaks, typos
+- **Worktree** (isolated branch): Features, hotfixes, multi-file changes, anything you'd PR
+
+**Rules**:
+1. **NEVER `git checkout` or `git switch` to a new branch in the main repo.** This moves every session sharing this working directory.
+2. If the builder says "do it here" → work on the current branch as-is. No branch creation.
+3. If the builder says "isolate it" → create a worktree. All code changes happen there.
+4. If you're unsure → ask. The cost of asking is near zero; the cost of polluting the main working directory is high.
+5. Subagents inherit this decision. Pass the isolation mode in the dispatch context.
+
+---
+
 ## Direct Execution Protocol (non-PRD)
 
 1. Implement → 2. Test → 3. Verify (`npm run typecheck && npm test`) → 4. Review (spawn orchestrator for code review) → 5. Fix feedback → 6. Commit → 7. Report → 8. Maintenance
