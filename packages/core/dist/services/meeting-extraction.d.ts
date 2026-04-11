@@ -110,6 +110,15 @@ export declare function isTrivialDecision(text: string): string | null;
  */
 export declare function isTrivialLearning(text: string): string | null;
 /**
+ * Check if a decision matches trivial patterns.
+ * Safety: patterns do NOT match items containing decision verbs.
+ */
+export declare function isTrivialDecision(text: string): string | null;
+/**
+ * Check if a learning matches trivial patterns.
+ */
+export declare function isTrivialLearning(text: string): string | null;
+/**
  * Build exclusion list section for deduplication.
  * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.
  * Includes UPDATE exception for changed items.
