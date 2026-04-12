@@ -40,13 +40,13 @@ A reusable capability that converts user-provided inputs (pasted text, folder co
 
 - User has existing docs/content they want to import
 - User wants to bootstrap context from their company website
-- Called from getting-started skill Path A
+- Called from getting-started skill during onboarding
 - User says "dump my context" or "import my docs"
 
 ## When NOT to Use
 
 - User wants to import meeting history (use `seed-context` tool)
-- User wants guided Q&A to build context (use `getting-started` skill Path B)
+- User wants guided setup (use `getting-started` skill)
 - Context files already exist and are populated
 
 ---
@@ -376,7 +376,7 @@ Automatically extracted domain signals for downstream use.
 
 ## Related Skills
 
-- `getting-started` — Parent flow that invokes this skill (Path A)
+- `getting-started` — Parent flow that may pass pre-researched context
 - `seed-context` — For historical data import from integrations
 - `synthesize` — For deeper analysis after context is populated
 
