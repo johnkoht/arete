@@ -97,6 +97,7 @@ Collect context from one or more input types. Use fallback matrix when inputs ar
 | 2 | **Folder** | Read files from `inbox/` |
 | 3 | **Website URL** | Fetch and parse company website |
 | 4 | **Chat upload** | If supported by environment (optional) |
+| 5 | **Pre-researched context** | Received from getting-started skill's web research phase |
 
 ### Input Prompts
 
@@ -132,6 +133,17 @@ I'll extract:
 - Any public strategy/positioning
 ```
 
+### Pre-Researched Context (from getting-started)
+
+When invoked from the `getting-started` skill with pre-researched web findings:
+
+- **Consent already obtained** — getting-started handles consent in its Phase 2. Do NOT skip consent when running standalone.
+- **Skip input collection prompts** — accept the research findings as structured notes
+- **Proceed directly to Extraction** (Phase 3) — treat research as the primary input
+- **User-provided content takes precedence** — when merging, anything the user said directly overrides web research data
+
+This path is only activated when getting-started explicitly passes research context. In all other invocations, run the full consent + input collection flow.
+
 ### Fallback Matrix
 
 | Situation | Fallback |
@@ -140,6 +152,7 @@ I'll extract:
 | Folder empty or files unsupported | Continue with pasted text + URL |
 | Website inaccessible or low signal | Continue with folder/pasted text |
 | Chat upload unsupported | Route to folder or paste path |
+| Pre-researched context is thin for a given file | Ask user for that specific file's content during getting-started conversation |
 
 **Key principle**: Never block. If one input fails, gracefully continue with others.
 

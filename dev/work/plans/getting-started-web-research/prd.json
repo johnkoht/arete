@@ -1,0 +1,42 @@
+{
+  "name": "getting-started-web-research",
+  "branchName": "worktree-agent-a9fb47e5",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Rewrite getting-started/SKILL.md",
+      "file": "packages/runtime/skills/getting-started/SKILL.md",
+      "type": "rewrite"
+    },
+    {
+      "id": "task-2",
+      "title": "Update rapid-context-dump/SKILL.md",
+      "file": "packages/runtime/skills/rapid-context-dump/SKILL.md",
+      "type": "edit"
+    },
+    {
+      "id": "task-3",
+      "title": "Update GUIDE.md",
+      "file": "packages/runtime/GUIDE.md",
+      "type": "edit"
+    },
+    {
+      "id": "task-4",
+      "title": "Update skills-index.md",
+      "file": ".agents/sources/guide/skills-index.md",
+      "type": "edit"
+    },
+    {
+      "id": "task-5",
+      "title": "Regenerate dist/AGENTS.md",
+      "type": "command",
+      "command": "npx tsx scripts/build-agents.ts prod"
+    },
+    {
+      "id": "task-6",
+      "title": "Create LEARNINGS.md",
+      "file": "packages/runtime/skills/getting-started/LEARNINGS.md",
+      "type": "create"
+    }
+  ]
+}
