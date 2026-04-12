@@ -45,6 +45,18 @@ export type Briefing = {
 export type SkillContext = Briefing & {
     skill: SkillCandidate;
 };
+/** Result of AI-synthesized briefing */
+export type SynthesizedBriefing = {
+    /** The AI-generated synthesis text */
+    synthesis: string;
+    /** Whether the input was truncated before sending to AI */
+    truncated: boolean;
+    /** Token usage from the AI call */
+    usage: {
+        input: number;
+        output: number;
+    };
+};
 /** Proactive suggestion from the intelligence layer */
 export type Suggestion = {
     type: 'skill' | 'context' | 'memory' | 'entity';

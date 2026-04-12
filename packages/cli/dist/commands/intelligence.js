@@ -587,10 +587,11 @@ export function registerResolveCommand(program) {
 export function registerBriefCommand(program) {
     program
         .command('brief')
-        .description('Assemble primitive briefing before running a skill')
-        .requiredOption('--for <query>', 'Task description')
+        .description('Assemble and synthesize a briefing on a topic')
+        .requiredOption('--for <query>', 'Task or topic description')
         .option('--skill <name>', 'Skill name for the briefing')
         .option('--primitives <list>', 'Comma-separated primitives')
+        .option('--raw', 'Skip AI synthesis and show raw aggregated context')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         const task = opts.for;
@@ -603,7 +604,7 @@ export function registerBriefCommand(program) {
             }
             else {
                 error('Missing --for option');
-                info('Usage: arete brief --for "create PRD" --skill create-prd');
+                info('Usage: arete brief --for "topic" [--raw]');
             }
             process.exit(1);
         }
@@ -626,6 +627,20 @@ export function registerBriefCommand(program) {
             skillName: opts.skill,
             primitives,
         });
+        // Determine whether to use AI synthesis
+        const aiConfigured = services.ai.isConfigured();
+        const useAI = aiConfigured && !opts.raw;
+        let synthesisText;
+        let synthesized = false;
+        let truncated = false;
+        if (useAI) {
+            const result = await services.intelligence.synthesizeBriefing(briefing, task, services.ai);
+            if (result) {
+                synthesisText = result.synthesis;
+                synthesized = true;
+                truncated = result.truncated;
+            }
+        }
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
@@ -637,12 +652,37 @@ export function registerBriefCommand(program) {
                 memoryResults: briefing.memory.total,
                 entities: briefing.entities.length,
                 gaps: briefing.context.gaps.length,
-                markdown: briefing.markdown,
+                synthesized,
+                truncated,
+                synthesis: synthesisText ?? null,
+                raw: briefing.markdown,
             }, null, 2));
             return;
         }
-        console.log('');
-        console.log(briefing.markdown);
+        // Display output
+        if (synthesized && synthesisText) {
+            // AI-synthesized briefing
+            header(`Briefing: ${task}`);
+            console.log('');
+            console.log(synthesisText);
+            if (truncated) {
+                console.log('');
+                info('Context was truncated before AI synthesis. Use --raw for full context.');
+            }
+        }
+        else {
+            // Raw mode or fallback
+            if (!opts.raw && !aiConfigured) {
+                info('AI synthesis not available. Configure AI with `arete credentials set anthropic` for enhanced briefings.');
+                console.log('');
+            }
+            else if (!opts.raw && aiConfigured) {
+                // AI was configured but synthesis failed
+                warn('AI synthesis failed. Showing raw context.');
+                console.log('');
+            }
+            console.log(briefing.markdown);
+        }
     });
 }
 //# sourceMappingURL=intelligence.js.map

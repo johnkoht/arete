@@ -8,8 +8,9 @@
 import type { ContextService } from './context.js';
 import type { MemoryService } from './memory.js';
 import type { EntityService } from './entity.js';
+import type { AIService } from './ai.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
-import type { BriefingRequest, PrimitiveBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths } from '../models/index.js';
+import type { BriefingRequest, PrimitiveBriefing, SynthesizedBriefing, SkillDefinition, SkillContext, SkillCandidate, RoutedSkill, WorkspacePaths } from '../models/index.js';
 export declare class IntelligenceService {
     private context;
     private memory;
@@ -17,6 +18,19 @@ export declare class IntelligenceService {
     private emailProvider?;
     constructor(context: ContextService, memory: MemoryService, entities: EntityService, emailProvider?: (EmailProvider | null) | undefined);
     assembleBriefing(request: BriefingRequest): Promise<PrimitiveBriefing>;
+    /**
+     * Synthesize a briefing using AI.
+     *
+     * Takes an assembled primitive briefing and topic, sends the markdown
+     * context to AIService for synthesis, and returns a structured result.
+     * Truncates context to BRIEF_MAX_CONTEXT_CHARS before sending.
+     *
+     * @param briefing - The assembled primitive briefing
+     * @param topic - The original query/topic for the briefing
+     * @param aiService - The AIService instance for AI calls
+     * @returns SynthesizedBriefing or null if AI call fails
+     */
+    synthesizeBriefing(briefing: PrimitiveBriefing, topic: string, aiService: AIService): Promise<SynthesizedBriefing | null>;
     /**
      * Search for recent email threads related to resolved entities.
      * Only runs if emailProvider is available; returns empty array otherwise.
