@@ -391,6 +391,20 @@ Processing only happens via explicit paths: UI button (`POST /api/meetings/:slug
 
 **Pattern**: File watchers should notify, not act. Side effects belong to the user-initiated command or skill that decides when/how to process. This follows the existing `broadcastSseEvent is Caller-Owned` pattern but extends it: the watcher itself should only broadcast, never invoke processing services.
 
+### serveStatic SPA Fallback Must Use app.get, Not app.use (2026-04-13)
+
+`@hono/node-server`'s `serveStatic` middleware does NOT check the HTTP method. When configured
+with `path: 'index.html'` (SPA fallback), it serves `index.html` with status 200 for ALL methods
+— GET, POST, PUT, DELETE, etc. Using `app.use('*', serveStatic({ path: 'index.html' }))` causes
+POST/PUT/DELETE API requests to receive HTML instead of hitting their route handlers.
+
+**Fix**: Always use `app.get('*', serveStatic(...))` for the SPA fallback, not `app.use('*', ...)`.
+This ensures only GET requests fall through to `index.html`. HEAD requests still work because
+Hono's dispatch auto-converts HEAD→GET.
+
+**Symptom**: `"Unexpected token '<', "<!doctype "... is not valid JSON"` in the frontend when
+making POST API calls — the frontend's `res.json()` fails because it received HTML.
+
 ### Pre-Existing Test Failures in goals.test.ts (2026-03-06, updated 2026-03-07)
 
 The GET /quarter tests in `test/routes/goals.test.ts` were failing **before** iteration 3:
