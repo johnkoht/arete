@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.8.0] - 2026-04-15
+
+### Added
+- **Brief AI synthesis** — `arete brief --for "topic"` now produces concise 5-section AI-synthesized briefings (Current Status, Key Decisions, Key People, Recent Activity, Open Questions/Risks) instead of raw markdown dumps. Three modes: AI synthesis (default), raw fallback (AI not configured), explicit `--raw` flag
+- `SynthesizedBriefing` type and `'brief'` AITask with standard tier routing
+- `synthesizeBriefing()` method on IntelligenceService with method-parameter DI for AIService
+- 12K character context truncation ceiling for AI synthesis
+- **Getting-started web research** — onboarding skill now proactively researches the user's company via WebSearch/WebFetch before asking questions, replacing generic Q&A with an informed conversation
+- 8-phase getting-started flow: profile check, consent, web research, present findings, targeted conversation, draft & review, integration scavenge, first win, graduation
+- Graceful degradation ladder for web research failures
+- 15 new tests (7 core synthesis + 8 CLI brief command)
+
+### Fixed
+- **SPA fallback on POST requests** — `serveStatic` middleware no longer serves `index.html` for POST/PUT/DELETE API calls, fixing "Unexpected token '<'" JSON parse errors when dismissing meetings
+
+### Changed
+- Brief JSON output now includes `synthesized`, `truncated`, `synthesis`, and `raw` fields (replaces `markdown`)
+- Getting-started onboarding time updated from 15-30 to 30-45 minutes to reflect web research phase
+
+---
+
 ## [0.7.0] - 2026-04-10
 
 ### Added

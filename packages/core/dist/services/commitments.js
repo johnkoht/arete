@@ -133,11 +133,10 @@ export function computeCommitmentPriority(input) {
  * Must produce the same hash as computeActionItemHash() in person-signals.ts —
  * same algorithm, separate implementation to avoid circular deps.
  */
-// TODO: Commitment mirroring — the `personSlug` in the hash means the same
-// commitment text creates different hashes for "ours" vs "theirs" direction.
-// This causes duplicate entries when both directions are extracted from the
-// same meeting. Revisit after `merge-commitments-into-tasks` branch lands,
-// which may restructure how commitments are tracked. See extraction-intelligence plan.
+// NOTE: The `personSlug` in the hash means the same commitment text creates
+// different hashes for "ours" vs "theirs" direction. Cross-person dedup in
+// EntityService.refreshPersonMemory() suppresses owner self-reminder copies
+// when a bilateral entry already exists under the counterparty's slug.
 function computeCommitmentHash(text, personSlug, direction) {
     const normalized = text.toLowerCase().trim().replace(/\s+/g, ' ');
     return createHash('sha256')

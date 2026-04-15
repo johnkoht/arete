@@ -63,10 +63,10 @@ npm link
 ```
 </details>
 
-### First 15 Minutes
+### First 30 Minutes
 
-1. Open `context/business-overview.md` and fill in your company basics
-2. Open `context/users.md` and describe your users
+1. Run `arete onboard` to set up your profile (name, email, company)
+2. Say **"Let's get started"** — the agent researches your company and walks you through a guided setup
 3. Ask the AI: "Give me a tour" or "What can I do here?"
 4. (Optional) Set up QMD for semantic search - see [SETUP.md](SETUP.md)
 
@@ -231,7 +231,7 @@ Areté is organized as a monorepo with three packages:
 - **Temporal Intelligence** — Timeline queries, recency signals ("when was X last discussed?")
 - **Proactive Context** — Automatic deep source search across all workspace content with freshness tracking
 - **Entity Relationships** — Track who works on what, attended where, mentioned where
-- **Briefing Assembly** — Combine context + memory + entities + relationships into comprehensive briefings
+- **Briefing Assembly** — Combine context + memory + entities + relationships into comprehensive briefings, with AI synthesis
 
 ---
 
@@ -245,7 +245,7 @@ Areté provides intelligence that powers any workflow:
 - **Memory Retrieval** - Search past decisions and learnings, with temporal views
 - **Entity Resolution** - Match ambiguous names to people, meetings, projects
 - **Entity Relationships** - Track works_on, attended, mentioned_in relationships
-- **Briefing Assembly** - Gather context, memory, entities, and relationships before complex work
+- **Briefing Assembly** - Gather context, memory, entities, and relationships before complex work, with optional AI synthesis
 - **Temporal Intelligence** - Timeline queries showing how topics evolve over time
 
 These services run automatically during skills, or manually via CLI:
@@ -256,7 +256,8 @@ arete search "mobile app redesign" --inventory          # freshness dashboard
 arete search "pricing decisions" --scope memory
 arete search "onboarding" --timeline --days 90           # temporal view
 arete resolve "Jane"
-arete brief --for "competitive analysis"
+arete brief --for "competitive analysis"              # AI-synthesized briefing
+arete brief --for "competitive analysis" --raw        # raw context dump
 arete index                                              # re-index search after manual edits
 arete view                                               # open meeting triage web app
 ```

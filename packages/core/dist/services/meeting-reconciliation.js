@@ -12,6 +12,7 @@
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js';
+import { parseStagedSections } from '../integrations/staged-items.js';
 import { AreaParserService } from './area-parser.js';
 /** Similarity threshold for considering an item a workspace duplicate. */
 const WORKSPACE_MATCH_THRESHOLD = 0.85;
@@ -579,46 +580,90 @@ function parseFrontmatter(content) {
     };
 }
 /**
- * Extract MeetingIntelligence from meeting frontmatter staged items.
+ * Parse owner notation from approved_items action item strings.
+ *
+ * Supported formats:
+ * - "description (@ownerSlug → @counterpartySlug)" — i_owe_them with counterparty
+ * - "description (@ownerSlug ← @counterpartySlug)" — they_owe_me with counterparty
+ * - "description (@ownerSlug →)" — i_owe_them, no counterparty
+ * - "description (@ownerSlug ←)" — they_owe_me, no counterparty
+ * - "description (@ownerSlug)" — no arrow, defaults to i_owe_them
+ *
+ * Capture groups: [1] description, [2] ownerSlug, [3] arrow (→ or ←), [4] counterpartySlug
  */
-function extractIntelligenceFromFrontmatter(frontmatter) {
-    const stagedItems = frontmatter.staged_items;
-    if (!stagedItems || !Array.isArray(stagedItems))
-        return null;
+const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←])\s*(?:@([a-z0-9-]+))?)?\)\s*$/i;
+/**
+ * Extract MeetingIntelligence from meeting file content.
+ *
+ * Handles two formats:
+ * - Format A (staged/processed): Items in body sections (## Staged Action Items, etc.)
+ *   with owner metadata in frontmatter staged_item_owner map.
+ * - Format B (approved): Items in frontmatter approved_items object
+ *   ({ actionItems: string[], decisions: string[], learnings: string[] }).
+ */
+function extractIntelligenceFromFrontmatter(frontmatter, body) {
+    // Format A: Parse staged sections from body + owner metadata from frontmatter
+    const staged = parseStagedSections(body);
+    const ownerMap = (frontmatter.staged_item_owner ?? {});
     const actionItems = [];
     const decisions = [];
     const learnings = [];
-    for (const item of stagedItems) {
-        const type = item.type;
-        const text = (item.description || item.text);
-        if (!text)
-            continue;
-        if (type === 'action') {
+    for (const item of staged.actionItems) {
+        const ownerMeta = ownerMap[item.id];
+        actionItems.push({
+            owner: '',
+            ownerSlug: ownerMeta?.ownerSlug ?? item.ownerSlug ?? '',
+            description: item.text,
+            direction: (ownerMeta?.direction ?? item.direction ?? 'i_owe_them'),
+            counterpartySlug: ownerMeta?.counterpartySlug ?? item.counterpartySlug,
+        });
+    }
+    for (const item of staged.decisions) {
+        decisions.push(item.text);
+    }
+    for (const item of staged.learnings) {
+        learnings.push(item.text);
+    }
+    // If Format A yielded items, return them
+    if (actionItems.length > 0 || decisions.length > 0 || learnings.length > 0) {
+        return { summary: '', actionItems, nextSteps: [], decisions, learnings };
+    }
+    // Format B: approved_items in frontmatter
+    const approved = frontmatter.approved_items;
+    if (!approved)
+        return null;
+    for (const text of approved.actionItems ?? []) {
+        const match = text.match(APPROVED_OWNER_PATTERN);
+        if (match) {
+            const arrow = match[3]; // '→', '←', or undefined
+            const direction = arrow === '←' ? 'they_owe_me' : 'i_owe_them';
             actionItems.push({
-                owner: item.owner_name || '',
-                ownerSlug: item.owner || '',
-                description: text,
-                direction: item.direction || 'i_owe_them',
-                counterpartySlug: item.counterparty,
+                owner: '',
+                ownerSlug: match[2],
+                description: match[1].trim(),
+                direction,
+                counterpartySlug: match[4] || undefined,
             });
         }
-        else if (type === 'decision') {
-            decisions.push(text);
+        else {
+            actionItems.push({
+                owner: '',
+                ownerSlug: '',
+                description: text,
+                direction: 'i_owe_them',
+            });
         }
-        else if (type === 'learning') {
-            learnings.push(text);
-        }
+    }
+    for (const text of approved.decisions ?? []) {
+        decisions.push(text);
+    }
+    for (const text of approved.learnings ?? []) {
+        learnings.push(text);
     }
     if (actionItems.length === 0 && decisions.length === 0 && learnings.length === 0) {
         return null;
     }
-    return {
-        summary: '',
-        actionItems,
-        nextSteps: [],
-        decisions,
-        learnings,
-    };
+    return { summary: '', actionItems, nextSteps: [], decisions, learnings };
 }
 /**
  * Load recent processed meetings as extraction batches for reconciliation.
@@ -654,12 +699,12 @@ export async function loadRecentMeetingBatch(storage, meetingsDir, days = 7) {
         const content = await storage.read(filePath);
         if (!content)
             continue;
-        const { frontmatter } = parseFrontmatter(content);
+        const { frontmatter, body } = parseFrontmatter(content);
         // Only include processed/approved meetings
         if (!['processed', 'approved'].includes(frontmatter.status))
             continue;
-        // Extract staged items from frontmatter
-        const intelligence = extractIntelligenceFromFrontmatter(frontmatter);
+        // Extract staged items from body sections + frontmatter metadata
+        const intelligence = extractIntelligenceFromFrontmatter(frontmatter, body);
         if (!intelligence)
             continue;
         batches.push({

@@ -4,6 +4,28 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 13, 2026
+
+### AI-Powered Briefings
+
+**`arete brief` now actually briefs you.** Instead of dumping raw aggregated context, the command sends your workspace context through AI to produce a concise, structured briefing with five sections: Current Status, Key Decisions, Key People, Recent Activity, and Open Questions/Risks.
+
+- **Default**: AI synthesis when you have AI configured — just run `arete brief --for "topic"`
+- **`--raw` flag**: Skip AI and get the full raw context (useful for piping or debugging)
+- **Graceful fallback**: If AI isn't configured, you get the raw output with a tip on how to enable AI
+- **JSON mode**: `--json` output includes both `synthesis` and `raw` fields for programmatic consumers
+- Context is truncated to 12K characters before sending to AI to stay within token limits
+
+### Smarter Onboarding
+
+**Getting started is now research-first.** When you say "Let's get started", the agent researches your company from the web before asking questions. Instead of starting from scratch with generic questions, you get a targeted conversation that confirms or corrects what was found — much faster to get to accurate context files.
+
+- 8-phase flow: profile check, consent, web research, present findings, targeted conversation, draft & review, integration scavenge, first win
+- Graceful degradation if web search is unavailable or the user declines
+- Total onboarding time: 30-45 minutes (up from 15-30, but higher quality output)
+
+---
+
 ## Week of April 6, 2026
 
 ### Workspace Hygiene (CLI)
