@@ -122,6 +122,7 @@ export type {
   BriefingRequest,
   Briefing,
   PrimitiveBriefing,
+  SynthesizedBriefing,
   SkillContext,
   Suggestion,
 } from './intelligence.js';

@@ -326,27 +326,20 @@ arete commitments list --area glance-communications
 
 ## Getting Started
 
-### First 15 Minutes
+### First 30 Minutes
 
 1. **Set up your profile** *(if you haven't already)*
    - Run `arete onboard` in your terminal
-   - Collects your name, email, and company — bootstraps `context/profile.md`
+   - Collects name, email, company, website → `context/profile.md`
 
-2. **Connect integrations** *(optional but recommended)*
-   - Run `arete onboard` to configure calendar, Fathom, or other sources
-   - Enables meeting-prep and context-pull features from day one
+2. **Start guided onboarding in chat**
+   - Say **"Let's get started"**
+   - The agent researches your company from the web, asks targeted questions,
+     drafts context files, and optionally pulls from connected integrations
+   - Ends with your first valuable skill use (meeting-prep, week-plan, etc.)
 
-3. **Start guided onboarding in chat**
-   - Say **"Let's get started"** to your AI assistant
-   - The `getting-started` skill walks you through a 15–30 min guided setup:
-     - Imports existing docs, notes, or a company website URL
-     - Bootstraps your core context files (`business-overview`, `users-personas`, `goals`)
-     - Connects integrations if not done yet
-     - Ends with your first valuable skill use (meeting-prep, week-plan, etc.)
-
-4. **Take a tour** *(optional)*
+3. **Take a tour** *(optional)*
    - Ask: "Give me a tour" or "How does this workspace work?"
-   - The `workspace-tour` skill orients you to what's available
 
 ---
 

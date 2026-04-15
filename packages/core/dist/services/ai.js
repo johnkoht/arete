@@ -16,6 +16,7 @@ const DEFAULT_TASK_TIERS = {
     significance_analysis: 'standard',
     reconciliation: 'standard',
     synthesis: 'standard',
+    brief: 'standard',
 };
 /**
  * Parse a model string into provider and model ID.

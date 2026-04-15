@@ -136,8 +136,9 @@ export function createApp(workspaceRoot: string): Hono {
   // Serve static web app from packages/apps/web/dist/
   // Assets (JS/CSS with content-hashed filenames)
   app.use('/assets/*', serveStatic({ root: webDistRelative }));
-  // All other paths → index.html for client-side routing
-  app.use('*', serveStatic({ root: webDistRelative, path: 'index.html' }));
+  // All other GET paths → index.html for client-side routing
+  // Must be app.get (not app.use) so POST/PUT/DELETE API requests never receive HTML
+  app.get('*', serveStatic({ root: webDistRelative, path: 'index.html' }));
 
   // JSON error handler
   app.onError((err, c) => {

@@ -1,20 +1,8 @@
----
-title: Pm Wisdom Prioritized Backlog
-slug: pm-wisdom-prioritized-backlog
-status: idea
-size: unknown
-tags: [improvement]
-created: 2026-02-20T03:47:16Z
-updated: 2026-02-20T03:47:16Z
-completed: null
-execution: null
-has_review: false
-has_pre_mortem: false
-has_prd: false
-steps: 0
----
+# PM Wisdom — Prioritized Integration Backlog
 
-# PM Wisdom Prioritized Backlog
+> Reference catalog: 78 PM wisdom concepts mapped to skills, prioritized by impact/effort.  
+> Top 25 (high priority) integrated 2026-02-10. Items 26–78 remain for future phases.  
+> See also: `dev/wisdom-registry.md`
 
 **Generated**: 2026-02-10  
 **Source**: 78 deduplicated concepts from Phase A (articles) + Phase B (books)  
