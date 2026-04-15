@@ -6,9 +6,6 @@
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { IntelligenceService } from '../../src/services/intelligence.js';
 import { AIService } from '../../src/services/ai.js';
 import type { AIServiceTestDeps } from '../../src/services/ai.js';
