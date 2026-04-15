@@ -1,11 +1,11 @@
 ---
 title: "Enhance `brief` with AI Synthesis"
 slug: brief-ai-enhancement
-status: approved
+status: completed
 size: small
 tags: [cli, core, intelligence, ai, brief]
 created: "2026-03-10"
-updated: "2026-04-11"
+updated: "2026-04-13"
 notes: "Make brief actually brief by adding AI synthesis with graceful fallback"
 ---
 

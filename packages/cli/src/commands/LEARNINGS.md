@@ -78,6 +78,8 @@ CLI commands are registered via `registerXxxCommand(program: Command)` functions
 
 - **`hygiene apply` internal scan + approval pattern** (2026-04-08): `arete hygiene apply` runs `scan()` internally rather than accepting a pre-computed report. This avoids stale-report risks and simplifies the CLI flow. The command: scan → present checkbox (tier 1 pre-checked) → apply with approved IDs → optional `refreshQmdIndex()`. For `--yes` flag: auto-approve all items matching `--tier` filter. For `--json`: never block on stdin, auto-approve all. Follow this "internal scan then approve" pattern for any future two-phase commands.
 
+- **`arete brief` AI synthesis with graceful degradation pattern** (2026-04-12): The `brief` command has three output modes: (1) AI synthesis (when `services.ai.isConfigured()` and no `--raw`), (2) raw fallback with info message (when AI not configured), (3) explicit raw via `--raw` flag. The AI synthesis call goes through `services.intelligence.synthesizeBriefing()` which returns `null` on failure — the CLI catches this and falls back to raw. JSON output always includes both `synthesis` (string or null) and `raw` (always present) fields, plus `synthesized: boolean`. This pattern (attempt AI, fallback to non-AI, always provide raw) should be followed for any future AI-enhanced commands.
+
 ## Pre-Edit Checklist
 
 - [ ] Check `arete onboard` and `arete seed` for the prompt UX pattern before adding any interactive prompt to a new command

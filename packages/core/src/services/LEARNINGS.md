@@ -82,6 +82,8 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - ~~No integration test exercises the full `createServices()` → `services.X.method()` path~~ — Added 2026-02-21: `packages/core/test/integration/intelligence.test.ts` now contains a `createServices factory wires SearchProvider to EntityService` test that calls the real factory and exercises `entity.refreshPersonMemory(null)`.
 - `IntelligenceService` briefing assembly (`assembleBriefing()`) is tested in `packages/core/test/` but the entity extraction heuristic (capitalized proper nouns, skip-words list) has thin edge case coverage.
 
+- **`synthesizeBriefing()` accepts AIService as method parameter, not constructor dependency** (2026-04-12): `IntelligenceService.synthesizeBriefing(briefing, topic, aiService)` takes `AIService` as a method parameter rather than a constructor dependency. This preserves IntelligenceService's existing constructor signature (`context, memory, entity`) and avoids a factory.ts wiring change. The CLI command passes `services.ai` at call time. This is the recommended pattern for adding AI-powered features to existing services without disrupting the dependency graph. Truncation ceiling at `BRIEF_MAX_CONTEXT_CHARS = 12_000` characters prevents token limit issues.
+
 ## Patterns That Work
 
 - **DI via constructor**: Each service takes only what it needs at the constructor level. `ContextService(storage, search)`, `EntityService(storage, searchProvider?)`, `IntelligenceService(context, memory, entity)`. Test by passing mocks. Note: `EntityService` now accepts an optional second `SearchProvider` param (added 2026-02-21).

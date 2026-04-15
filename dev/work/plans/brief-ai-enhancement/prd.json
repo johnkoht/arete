@@ -1,0 +1,76 @@
+{
+  "name": "brief-ai-enhancement",
+  "branchName": "worktree-agent-ab2ab108",
+  "goal": "Make the brief command produce concise AI-synthesized briefings with graceful fallback and --raw flag",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Add brief AITask type and default tier mapping",
+      "description": "Extend the AITask union type to include 'brief' and add default tier mapping (brief → standard) in DEFAULT_TASK_TIERS.",
+      "acceptanceCriteria": [
+        "AITask type includes 'brief'",
+        "DEFAULT_TASK_TIERS maps brief to 'standard'",
+        "npm run typecheck passes",
+        "npm test passes (existing AI tests unaffected)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Create synthesizeBriefing() in IntelligenceService",
+      "description": "Add synthesizeBriefing() method that takes assembled briefing + topic, sends to AIService for synthesis with context truncation, returns structured result with graceful fallback.",
+      "acceptanceCriteria": [
+        "synthesizeBriefing(briefing, topic, aiService) method exists on IntelligenceService",
+        "Truncates assembled markdown to 12000 characters before sending to AI",
+        "Uses 'brief' AITask for model routing",
+        "Returns SynthesizedBriefing with synthesis text, truncated flag, and usage stats",
+        "Gracefully returns null when AI call fails",
+        "Prompt produces 5-section briefing: Status, Key Decisions, Key People, Recent Activity, Open Questions/Risks",
+        "Unit tests cover successful synthesis, truncation, and AI failure"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Add --raw flag and AI synthesis to CLI brief command",
+      "description": "Modify registerBriefCommand() to pipe assembled briefing through AI synthesis by default, with --raw flag to skip. Handle all combinations: AI configured, not configured, raw flag, JSON mode.",
+      "acceptanceCriteria": [
+        "--raw flag added to brief command",
+        "AI configured + no raw: displays AI synthesis",
+        "AI not configured: shows raw output + info message about configuring AI",
+        "--raw flag: shows raw output regardless of AI",
+        "--json includes synthesized, synthesis, and raw fields",
+        "AI failure: falls back to raw with warning",
+        "Unit tests cover AI path, raw path, no-AI fallback, JSON mode"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Integration testing and quality polish",
+      "description": "End-to-end testing of all paths, verify JSON mode completeness, backward compatibility, and quality gates.",
+      "acceptanceCriteria": [
+        "All existing brief tests still pass",
+        "Empty briefing handled gracefully in both AI and raw modes",
+        "--json output complete and parseable for all paths",
+        "npm run typecheck passes",
+        "npm test passes (full suite)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-12T03:31:33Z",
+    "totalTasks": 4,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}

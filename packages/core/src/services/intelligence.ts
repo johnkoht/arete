@@ -9,11 +9,13 @@
 import type { ContextService } from './context.js';
 import type { MemoryService } from './memory.js';
 import type { EntityService } from './entity.js';
+import type { AIService } from './ai.js';
 import type { EmailProvider } from '../integrations/gws/types.js';
 import type { ProductPrimitive, WorkType } from '../models/common.js';
 import type {
   BriefingRequest,
   PrimitiveBriefing,
+  SynthesizedBriefing,
   SkillDefinition,
   SkillContext,
   SkillCandidate,
@@ -120,6 +122,23 @@ function scoreMatch(query: string, skill: SkillCandidate): number {
 
   return score;
 }
+
+// ---------------------------------------------------------------------------
+// synthesizeBriefing constants
+// ---------------------------------------------------------------------------
+
+/** Maximum character length of briefing markdown sent to AI */
+const BRIEF_MAX_CONTEXT_CHARS = 12_000;
+
+const BRIEF_SYNTHESIS_PROMPT = `You are briefing a product manager on a topic. Based on the following context, create a concise briefing covering:
+
+1. **Current Status**: What's the current state?
+2. **Key Decisions**: What has been decided? By whom?
+3. **Key People**: Who are the stakeholders?
+4. **Recent Activity**: What happened recently (meetings, decisions)?
+5. **Open Questions/Risks**: What's unresolved or risky?
+
+Be concise. Use bullet points. Cite sources when possible. If a section has no relevant information, omit it entirely.`;
 
 // ---------------------------------------------------------------------------
 // assembleBriefing helpers
@@ -431,6 +450,52 @@ export class IntelligenceService {
       relationships,
       markdown,
     };
+  }
+
+  /**
+   * Synthesize a briefing using AI.
+   *
+   * Takes an assembled primitive briefing and topic, sends the markdown
+   * context to AIService for synthesis, and returns a structured result.
+   * Truncates context to BRIEF_MAX_CONTEXT_CHARS before sending.
+   *
+   * @param briefing - The assembled primitive briefing
+   * @param topic - The original query/topic for the briefing
+   * @param aiService - The AIService instance for AI calls
+   * @returns SynthesizedBriefing or null if AI call fails
+   */
+  async synthesizeBriefing(
+    briefing: PrimitiveBriefing,
+    topic: string,
+    aiService: AIService,
+  ): Promise<SynthesizedBriefing | null> {
+    let contextMarkdown = briefing.markdown;
+    const truncated = contextMarkdown.length > BRIEF_MAX_CONTEXT_CHARS;
+    if (truncated) {
+      contextMarkdown = contextMarkdown.slice(0, BRIEF_MAX_CONTEXT_CHARS) + '\n\n[...context truncated]';
+    }
+
+    const prompt = `${BRIEF_SYNTHESIS_PROMPT}
+
+Context:
+${contextMarkdown}
+
+Topic: ${topic}`;
+
+    try {
+      const result = await aiService.call('brief', prompt);
+      return {
+        synthesis: result.text,
+        truncated,
+        usage: {
+          input: result.usage.input,
+          output: result.usage.output,
+        },
+      };
+    } catch {
+      // Graceful fallback — AI failure should not break the brief command
+      return null;
+    }
   }
 
   /**
