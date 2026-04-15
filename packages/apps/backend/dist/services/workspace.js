@@ -475,8 +475,21 @@ export async function updateMeeting(workspaceRoot, slug, updates) {
         fm['summary'] = updates.summary;
     if (updates.area !== undefined)
         fm['area'] = updates.area;
+    if (updates.status !== undefined)
+        fm['status'] = updates.status;
     const updated = matter.stringify(parsed.content, fm);
     await fs.writeFile(filePath, updated, 'utf8');
+}
+/**
+ * Get the current status of a meeting from its frontmatter.
+ * Returns the explicit status if set, or detects from content.
+ */
+export async function getMeetingStatus(workspaceRoot, slug) {
+    const filePath = slugToPath(workspaceRoot, slug);
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = matter(raw);
+    const fm = parsed.data;
+    return detectMeetingStatus(fm, parsed.content);
 }
 export async function updateItemStatus(workspaceRoot, slug, itemId, options) {
     const filePath = slugToPath(workspaceRoot, slug);
