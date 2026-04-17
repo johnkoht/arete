@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1] - 2026-04-17
+
+### Fixed
+- **Meeting extraction fragmentation** — tightened `buildMeetingExtractionPrompt()` with a new Consolidation section that teaches the model to emit ONE action item per unit of work. Three named patterns now handled inline: handoff chain (A identifies → B agrees → C picks up = one item owned by the last person), collaborative-initiative split (pilot with multiple contributors = one item for the outcome, not one per sub-task), and same-outcome-different-verbs. Enabling sub-tasks ("get access", "provision Y", "send test data") now fold into the parent initiative rather than emitting as separate items. Speculation framing ("I wonder if…", "Maybe we try…") caps confidence at 0.5 instead of being elevated to commitments.
+- Verified against two real meetings at frontier tier: a Claude damage-estimation pilot collapsed from 7 action items to 3 (one consolidated pilot item), and a handoff chain on a state case-sensitivity bug correctly collapsed to a single item owned by the person who picked up the work.
+
+---
+
 ## [0.8.0] - 2026-04-15
 
 ### Added

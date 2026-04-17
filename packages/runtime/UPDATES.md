@@ -4,6 +4,21 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 17, 2026
+
+### Cleaner Action Items from Meeting Extraction
+
+**One unit of work now produces one action item, not three.** Previously, a single initiative with multiple contributors (e.g., a pilot where you investigate, someone else tests, and a third person gets access) was split into separate action items — so would a handoff chain where one person identified a bug and another picked it up. The extraction prompt now consolidates these patterns into one item owned by whoever actually does the work.
+
+- **Handoff chains collapse**: "A identifies → B agrees → C picks up" = one item owned by C
+- **Collaborative initiatives stay together**: a pilot is one item, not one-per-contributor
+- **Enabling sub-tasks fold in**: "get access", "provision X", "send test data" no longer emit as separate items when they exist only to unblock a parent initiative
+- **Speculation caps confidence**: "I wonder if we could…" or "Maybe we try…" caps at 0.5 instead of being elevated to commitments
+
+If you find your meetings still producing fragmented items, try setting `ai.tasks.extraction: frontier` in your `arete.yaml` — the consolidation rules work best at the frontier tier.
+
+---
+
 ## Week of April 13, 2026
 
 ### AI-Powered Briefings
