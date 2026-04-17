@@ -481,6 +481,25 @@ JSON schema:
 ✗ "We can discuss this later" — deferral, not action
 ✗ "We will touch base next week" — trivial check-in
 ✗ Long descriptions spanning multiple sentences
+✗ "I wonder if we could ask analytics about X" / "Maybe we try Y" — speculation, not commitment (cap confidence at 0.5 if included at all)
+✗ Mid-meeting commitments that get RESOLVED or OBVIATED later in the same transcript (e.g., someone agrees to find a test case, then the issue is live-debugged and no test case is needed). Read the full transcript before emitting — if the need goes away, the item goes away.
+
+## Consolidation — emit ONE item per unit of work (CRITICAL):
+Before emitting an action item, ask: "If I completed this, would that also complete another item on my list?" If yes, merge them into ONE item owned by whoever actually does the work.
+
+**Pattern 1 — Handoff chain.** Person A identifies a problem, Person B agrees to fix it, Person C picks it up. This is ONE action item owned by whoever ends up doing the work (usually the last person in the chain). Not three items.
+  ✗ BAD: ai_001 "Anthony to fix case-sensitivity bug" + ai_002 "Tim to pick up the case-sensitivity fix"
+  ✓ GOOD: ai_001 "Tim to fix case-sensitivity bug in state abbreviations" (owner = whoever actually owns it post-handoff)
+
+**Pattern 2 — Collaborative initiative split across contributors.** A single project/pilot/experiment with multiple people contributing different pieces is ONE action item describing the outcome, not one item per contributor's sub-task. Only split if sub-tasks have genuinely independent deliverables that could ship on different timelines.
+  ✗ BAD: ai_001 "John to investigate Claude for damage estimation" + ai_002 "Lindsay to test Claude on closed claims" + ai_003 "Crystal to get Claude access for team" + ai_004 "Crystal to send closed claim numbers to John"
+  ✓ GOOD: ai_001 "John + team to pilot Claude for damage estimation (review closed claims, validate outputs)" — one initiative, one item, owner = driver.
+
+  **Enabling sub-tasks fold in.** If a sub-task only exists TO UNBLOCK the parent initiative — "get X access", "provision Y", "send the test data", "find a claim to test on" — it is NOT a separate action item. It's a precondition of the parent, and naming the parent implicitly covers it. Only emit it separately if it's a genuinely independent deliverable that would still matter if the parent were cancelled.
+
+**Pattern 3 — Same outcome, different verbs.** "Investigate X", "review X", "validate X", "test X" said by the same or related speakers about the same target are usually ONE item. Pick the strongest verb; don't emit multiple.
+
+After drafting your action_items list, re-read it: if two items would be completed by the same piece of work, merge them before returning.
 
 ## What is NOT a decision (EXCLUDE these):
 ✗ "We discussed the product roadmap" — discussion summary, not a choice made
@@ -504,7 +523,7 @@ JSON schema:
 ## Action Item Confidence Guide:
 - 0.9-1.0: Explicit commitment with owner + deadline (e.g., "John will send docs by Friday")
 - 0.7-0.8: Clear owner + task but no deadline (e.g., "Sarah to review the PR")
-- 0.5-0.6: Implied commitment, owner inferable (e.g., "I'll look into the bug")
+- 0.5-0.6: Implied commitment, owner inferable (e.g., "I'll look into the bug"); speculative framing ("I wonder if...", "Maybe we could...") caps here even if an owner is named
 - 0.3-0.4: Vague intention (exclude these)
 - 0.0-0.2: Not an action item (exclude these)
 
