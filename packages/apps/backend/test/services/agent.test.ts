@@ -65,6 +65,12 @@ interface MockDepsOptions {
   /** Core extraction response for call() method */
   coreResponse?: MeetingIntelligence;
   aiError?: Error;
+  /**
+   * Per-path content overrides (match by path suffix). Used when a test needs
+   * different content for week.md / tasks.md / scratchpad.md vs the meeting
+   * file. Checked BEFORE `fileContent` default.
+   */
+  pathFixtures?: Record<string, string>;
 }
 
 /** Create ActionItem for core extraction format */
@@ -124,6 +130,12 @@ function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
     aiCalls,
     readFile: async (path: string) => {
       if (options.readError) throw options.readError;
+      // Per-path fixtures first (match by suffix: week.md, tasks.md, etc.)
+      if (options.pathFixtures) {
+        for (const [suffix, content] of Object.entries(options.pathFixtures)) {
+          if (path.endsWith(suffix)) return content;
+        }
+      }
       return options.fileContent ?? `---
 title: Test Meeting
 status: pending
@@ -1232,6 +1244,32 @@ Discussion about tasks.
       // Batch review event should be logged
       const events = jobs.appended.map((e) => e.line);
       assert.ok(events.some((e) => e.includes('Batch review dropped 1')));
+    });
+
+    it('logs per-source skip count when an action item matches an open task', async () => {
+      // Plan step 7: surface existing-task skips in the job event log so users
+      // (and future observability) can see WHY dedup skipped something.
+      const jobs = makeMockJobs();
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          // Near-paraphrase of the open task → should match existing-task.
+          actionItems: [mockActionItem('Promote LEAP templates to production this week', { confidence: 0.9 })],
+        }),
+        pathFixtures: {
+          'week.md': '## Must complete\n- [ ] Promote LEAP templates to production @area(glance-communications)\n',
+          'tasks.md': '',
+          'scratchpad.md': '',
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(
+        events.some((e) => /already tracked as open tasks/.test(e)),
+        `expected a summary event mentioning "already tracked as open tasks", got: ${events.join(' | ')}`,
+      );
     });
 
     it('batch LLM review uses the reconciliation tier, not extraction', async () => {

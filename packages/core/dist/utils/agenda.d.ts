@@ -28,4 +28,20 @@ export declare function getUncheckedAgendaItems(content: string): string[];
  * @returns Array of completed item texts
  */
 export declare function getCompletedItems(content: string): string[];
+/**
+ * Get OPEN (unchecked) task items as simple strings, with `@tag(value)` metadata stripped.
+ *
+ * Used by meeting extract to dedup extracted action items against tasks
+ * already tracked in `now/week.md` and `now/tasks.md`. Mirrors
+ * getCompletedItems but filters to `- [ ]` and strips the `@area(...)`,
+ * `@person(...)`, `@due(...)`, `@from(commitment:...)` metadata markers
+ * so Jaccard matching operates on the semantic task text only.
+ *
+ * Differs from getUncheckedAgendaItems in that it strips metadata tags —
+ * agendas don't typically carry them; task files do.
+ *
+ * @param content - Markdown content from week.md or tasks.md
+ * @returns Array of open task texts (metadata stripped, whitespace normalized)
+ */
+export declare function getOpenTasks(content: string): string[];
 //# sourceMappingURL=agenda.d.ts.map

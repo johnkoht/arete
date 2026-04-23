@@ -61,7 +61,22 @@ export interface ProcessingOptions {
   priorItems?: PriorItem[];
   /** Completed task texts to match against (from week.md/scratchpad.md) */
   completedItems?: string[];
-  /** Jaccard threshold for completed items reconciliation (default: 0.6). Items with similarity >= threshold are considered matches. Lower than dedupJaccard (0.7) because completed tasks in week.md are often abbreviated compared to meeting action items. */
+  /**
+   * Open task texts to match against (from week.md/tasks.md, with @tag(value) metadata stripped).
+   * Items matching openTasks by Jaccard (>= reconcileJaccard AND both sides have >= MIN_MATCH_TOKENS
+   * meaningful tokens) are marked source: 'existing-task', status: 'skipped'. This prevents
+   * extraction from re-introducing action items the user is already tracking.
+   *
+   * Ordering: completedItems is checked first so a genuinely-done task wins over a still-open one.
+   */
+  openTasks?: string[];
+  /**
+   * Jaccard threshold for completed-item AND open-task reconciliation (default: 0.7).
+   *
+   * Unified at 0.7 (promoted from the prior 0.6) after observing stopword-dominated false
+   * positives at 145-open-task scale. Combined with MIN_MATCH_TOKENS, this yields stricter
+   * matching than the raw Jaccard score alone. Workspaces can opt down via this option.
+   */
   reconcileJaccard?: number;
   /**
    * Meeting importance level for triage workflow.
@@ -95,7 +110,19 @@ export interface ProcessedMeetingResult {
 const DEFAULT_CONFIDENCE_INCLUDE = 0.65;
 const DEFAULT_CONFIDENCE_APPROVED = 0.8;
 const DEFAULT_DEDUP_JACCARD = 0.7;
-const DEFAULT_RECONCILE_JACCARD = 0.6;
+/**
+ * Unified Jaccard threshold for both completed-task (source: 'reconciled') and
+ * open-task (source: 'existing-task') matching. Promoted from the prior 0.6
+ * after 145-open-task scale revealed stopword-dominated false positives.
+ * Combined with MIN_MATCH_TOKENS it produces stricter matching than Jaccard alone.
+ */
+const DEFAULT_RECONCILE_JACCARD = 0.7;
+/**
+ * Minimum meaningful tokens on BOTH sides (after normalizeForJaccard) required
+ * for a match to be considered valid. Guards against short-phrase false positives
+ * where two 3-token strings coincidentally share stopwords.
+ */
+const MIN_MATCH_TOKENS = 4;
 
 // ---------------------------------------------------------------------------
 // User Notes Extraction
@@ -226,37 +253,61 @@ function itemMatchesPriorItems(
   return false;
 }
 
-/** Pre-tokenized completed item for efficient Jaccard comparison */
-interface TokenizedCompletedItem {
+/** Pre-tokenized text candidate for efficient Jaccard comparison */
+interface TokenizedCandidate {
   text: string;
   tokens: string[];
 }
 
+// Back-compat alias — existing call sites expect TokenizedCompletedItem.
+type TokenizedCompletedItem = TokenizedCandidate;
+
 /**
- * Find matching completed item text for reconciliation.
+ * Find matching candidate text via Jaccard similarity with a min-token guard.
+ *
+ * Used for both completed-item (→ 'reconciled') and open-task (→ 'existing-task')
+ * matching. A match requires BOTH:
+ *   - Jaccard similarity >= threshold
+ *   - Min MIN_MATCH_TOKENS meaningful tokens on BOTH sides (guards against
+ *     3-token coincidences dominated by stopwords).
+ *
  * @param itemText - The item text to check
- * @param tokenizedCompletedItems - Pre-tokenized completed items
+ * @param candidates - Pre-tokenized candidates to match against
  * @param threshold - Jaccard similarity threshold
- * @returns Matched completed text (truncated to 60 chars) or undefined if no match
+ * @returns Matched text (truncated to 60 chars) or undefined if no match
  */
+function findMatchingCandidate(
+  itemText: string,
+  candidates: TokenizedCandidate[],
+  threshold: number,
+): string | undefined {
+  if (candidates.length === 0) return undefined;
+
+  const itemTokens = normalizeForJaccard(itemText);
+  // Short-circuit on item side: if the extracted item has too few meaningful
+  // tokens, it's too short to safely match anything via Jaccard.
+  if (itemTokens.length < MIN_MATCH_TOKENS) return undefined;
+
+  for (const candidate of candidates) {
+    // Same guard on candidate side.
+    if (candidate.tokens.length < MIN_MATCH_TOKENS) continue;
+    const similarity = jaccardSimilarity(itemTokens, candidate.tokens);
+    if (similarity >= threshold) {
+      return candidate.text.length > 60
+        ? candidate.text.slice(0, 57) + '...'
+        : candidate.text;
+    }
+  }
+  return undefined;
+}
+
+/** @deprecated use findMatchingCandidate — retained for back-compat only. */
 function findMatchingCompletedItem(
   itemText: string,
   tokenizedCompletedItems: TokenizedCompletedItem[],
   threshold: number,
 ): string | undefined {
-  if (tokenizedCompletedItems.length === 0) return undefined;
-
-  const itemTokens = normalizeForJaccard(itemText);
-  for (const completed of tokenizedCompletedItems) {
-    const similarity = jaccardSimilarity(itemTokens, completed.tokens);
-    if (similarity >= threshold) {
-      // Truncate to 60 chars with "..." suffix if needed
-      return completed.text.length > 60
-        ? completed.text.slice(0, 57) + '...'
-        : completed.text;
-    }
-  }
-  return undefined;
+  return findMatchingCandidate(itemText, tokenizedCompletedItems, threshold);
 }
 
 // ---------------------------------------------------------------------------
@@ -318,7 +369,15 @@ export function processMeetingExtraction(
 
   // Pre-tokenize completed items for reconciliation (no cap needed — week.md is small)
   const completedItems = options?.completedItems ?? [];
-  const tokenizedCompletedItems: TokenizedCompletedItem[] = completedItems.map((text) => ({
+  const tokenizedCompletedItems: TokenizedCandidate[] = completedItems.map((text) => ({
+    text,
+    tokens: normalizeForJaccard(text),
+  }));
+
+  // Pre-tokenize OPEN tasks for existing-task dedup (no cap — local match is cheap;
+  // at 145 open tasks × ~20 extracted items the loop is trivial).
+  const openTasks = options?.openTasks ?? [];
+  const tokenizedOpenTasks: TokenizedCandidate[] = openTasks.map((text) => ({
     text,
     tokens: normalizeForJaccard(text),
   }));
@@ -348,7 +407,7 @@ export function processMeetingExtraction(
 
     // 1. Check reconciliation first (action items only): match against completed tasks
     // No negation marker bypass — these are completed items, not cross-meeting dedup
-    const matchedCompletedText = findMatchingCompletedItem(
+    const matchedCompletedText = findMatchingCandidate(
       text,
       tokenizedCompletedItems,
       reconcileJaccard,
@@ -366,6 +425,29 @@ export function processMeetingExtraction(
       stagedItemConfidence[id] = confidence;
       stagedItemSource[id] = 'reconciled';
       stagedItemMatchedText[id] = matchedCompletedText;
+      continue;
+    }
+
+    // 1b. Open-task dedup: match against unchecked tasks already in week.md/tasks.md.
+    // Ordering matters — completed (above) wins over open so a genuinely-done match
+    // is attributed correctly even if the same task is still listed as open somewhere.
+    const matchedOpenTaskText = findMatchingCandidate(
+      text,
+      tokenizedOpenTasks,
+      reconcileJaccard,
+    );
+    if (matchedOpenTaskText !== undefined) {
+      filteredItems.push({
+        id,
+        text,
+        type: 'action',
+        confidence,
+        ownerMeta: undefined,
+      });
+      stagedItemStatus[id] = 'skipped';
+      stagedItemConfidence[id] = confidence;
+      stagedItemSource[id] = 'existing-task';
+      stagedItemMatchedText[id] = matchedOpenTaskText;
       continue;
     }
 

@@ -17,7 +17,19 @@ import { normalizeForJaccard, jaccardSimilarity } from './meeting-extraction.js'
 const DEFAULT_CONFIDENCE_INCLUDE = 0.65;
 const DEFAULT_CONFIDENCE_APPROVED = 0.8;
 const DEFAULT_DEDUP_JACCARD = 0.7;
-const DEFAULT_RECONCILE_JACCARD = 0.6;
+/**
+ * Unified Jaccard threshold for both completed-task (source: 'reconciled') and
+ * open-task (source: 'existing-task') matching. Promoted from the prior 0.6
+ * after 145-open-task scale revealed stopword-dominated false positives.
+ * Combined with MIN_MATCH_TOKENS it produces stricter matching than Jaccard alone.
+ */
+const DEFAULT_RECONCILE_JACCARD = 0.7;
+/**
+ * Minimum meaningful tokens on BOTH sides (after normalizeForJaccard) required
+ * for a match to be considered valid. Guards against short-phrase false positives
+ * where two 3-token strings coincidentally share stopwords.
+ */
+const MIN_MATCH_TOKENS = 4;
 // ---------------------------------------------------------------------------
 // User Notes Extraction
 // ---------------------------------------------------------------------------
@@ -122,26 +134,43 @@ function itemMatchesPriorItems(itemText, tokenizedPriorItems, threshold) {
     return false;
 }
 /**
- * Find matching completed item text for reconciliation.
+ * Find matching candidate text via Jaccard similarity with a min-token guard.
+ *
+ * Used for both completed-item (→ 'reconciled') and open-task (→ 'existing-task')
+ * matching. A match requires BOTH:
+ *   - Jaccard similarity >= threshold
+ *   - Min MIN_MATCH_TOKENS meaningful tokens on BOTH sides (guards against
+ *     3-token coincidences dominated by stopwords).
+ *
  * @param itemText - The item text to check
- * @param tokenizedCompletedItems - Pre-tokenized completed items
+ * @param candidates - Pre-tokenized candidates to match against
  * @param threshold - Jaccard similarity threshold
- * @returns Matched completed text (truncated to 60 chars) or undefined if no match
+ * @returns Matched text (truncated to 60 chars) or undefined if no match
  */
-function findMatchingCompletedItem(itemText, tokenizedCompletedItems, threshold) {
-    if (tokenizedCompletedItems.length === 0)
+function findMatchingCandidate(itemText, candidates, threshold) {
+    if (candidates.length === 0)
         return undefined;
     const itemTokens = normalizeForJaccard(itemText);
-    for (const completed of tokenizedCompletedItems) {
-        const similarity = jaccardSimilarity(itemTokens, completed.tokens);
+    // Short-circuit on item side: if the extracted item has too few meaningful
+    // tokens, it's too short to safely match anything via Jaccard.
+    if (itemTokens.length < MIN_MATCH_TOKENS)
+        return undefined;
+    for (const candidate of candidates) {
+        // Same guard on candidate side.
+        if (candidate.tokens.length < MIN_MATCH_TOKENS)
+            continue;
+        const similarity = jaccardSimilarity(itemTokens, candidate.tokens);
         if (similarity >= threshold) {
-            // Truncate to 60 chars with "..." suffix if needed
-            return completed.text.length > 60
-                ? completed.text.slice(0, 57) + '...'
-                : completed.text;
+            return candidate.text.length > 60
+                ? candidate.text.slice(0, 57) + '...'
+                : candidate.text;
         }
     }
     return undefined;
+}
+/** @deprecated use findMatchingCandidate — retained for back-compat only. */
+function findMatchingCompletedItem(itemText, tokenizedCompletedItems, threshold) {
+    return findMatchingCandidate(itemText, tokenizedCompletedItems, threshold);
 }
 // ---------------------------------------------------------------------------
 // Main Processing Function
@@ -195,6 +224,13 @@ export function processMeetingExtraction(result, userNotes, options) {
         text,
         tokens: normalizeForJaccard(text),
     }));
+    // Pre-tokenize OPEN tasks for existing-task dedup (no cap — local match is cheap;
+    // at 145 open tasks × ~20 extracted items the loop is trivial).
+    const openTasks = options?.openTasks ?? [];
+    const tokenizedOpenTasks = openTasks.map((text) => ({
+        text,
+        tokens: normalizeForJaccard(text),
+    }));
     // Result collections
     const filteredItems = [];
     const stagedItemStatus = {};
@@ -216,7 +252,7 @@ export function processMeetingExtraction(result, userNotes, options) {
         const text = item.description;
         // 1. Check reconciliation first (action items only): match against completed tasks
         // No negation marker bypass — these are completed items, not cross-meeting dedup
-        const matchedCompletedText = findMatchingCompletedItem(text, tokenizedCompletedItems, reconcileJaccard);
+        const matchedCompletedText = findMatchingCandidate(text, tokenizedCompletedItems, reconcileJaccard);
         if (matchedCompletedText !== undefined) {
             // Item matches a completed task → skip it
             filteredItems.push({
@@ -230,6 +266,24 @@ export function processMeetingExtraction(result, userNotes, options) {
             stagedItemConfidence[id] = confidence;
             stagedItemSource[id] = 'reconciled';
             stagedItemMatchedText[id] = matchedCompletedText;
+            continue;
+        }
+        // 1b. Open-task dedup: match against unchecked tasks already in week.md/tasks.md.
+        // Ordering matters — completed (above) wins over open so a genuinely-done match
+        // is attributed correctly even if the same task is still listed as open somewhere.
+        const matchedOpenTaskText = findMatchingCandidate(text, tokenizedOpenTasks, reconcileJaccard);
+        if (matchedOpenTaskText !== undefined) {
+            filteredItems.push({
+                id,
+                text,
+                type: 'action',
+                confidence,
+                ownerMeta: undefined,
+            });
+            stagedItemStatus[id] = 'skipped';
+            stagedItemConfidence[id] = confidence;
+            stagedItemSource[id] = 'existing-task';
+            stagedItemMatchedText[id] = matchedOpenTaskText;
             continue;
         }
         // 2. Check for dedup: userNotes OR priorItems match → source: 'dedup'

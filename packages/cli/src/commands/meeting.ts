@@ -29,6 +29,7 @@ import {
   applyMeetingIntelligence,
   generateMeetingManifest,
   getCompletedItems,
+  getOpenTasks,
   calculateSpeakingRatio,
   inferUrgency,
   loadReconciliationContext,
@@ -871,17 +872,24 @@ export function registerMeetingCommands(program: Command): void {
         // Extract user notes and process extraction (filtering, dedup, metadata)
         const userNotes = extractUserNotes(body);
 
-        // Read completed items from week.md and scratchpad.md for reconciliation
+        // Read completed items from week.md and scratchpad.md for reconciliation,
+        // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
         const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
         const scratchpadContent = await services.storage.read(join(paths.now, 'scratchpad.md')) ?? '';
+        const tasksContent = await services.storage.read(join(paths.now, 'tasks.md')) ?? '';
         const completedItems = [
           ...getCompletedItems(weekContent),
           ...getCompletedItems(scratchpadContent),
+        ];
+        const openTasks = [
+          ...getOpenTasks(weekContent),
+          ...getOpenTasks(tasksContent),
         ];
 
         processed = processMeetingExtraction(extractionResult, userNotes, {
           priorItems,
           completedItems,
+          openTasks,
           importance: effectiveImportance,
         });
 
@@ -995,6 +1003,22 @@ export function registerMeetingCommands(program: Command): void {
           }))
         : [];
 
+      // Per-source skip tally (observability for dedup behavior).
+      // Lets users see why items were skipped without spelunking through frontmatter.
+      const skippedBySource = processed
+        ? Object.entries(processed.stagedItemStatus).reduce(
+            (acc, [id, status]) => {
+              if (status !== 'skipped') return acc;
+              const source = processed.stagedItemSource[id];
+              if (source === 'reconciled') acc.reconciled += 1;
+              else if (source === 'existing-task') acc.existingTask += 1;
+              else if (source === 'slack-resolved') acc.slackResolved += 1;
+              return acc;
+            },
+            { reconciled: 0, existingTask: 0, slackResolved: 0 },
+          )
+        : { reconciled: 0, existingTask: 0, slackResolved: 0 };
+
       // Build response
       const response: Record<string, unknown> = {
         success: true,
@@ -1006,6 +1030,7 @@ export function registerMeetingCommands(program: Command): void {
         contextUsed: !!contextBundle,
         priorItemsUsed: !!priorItems,
         reconciled,
+        skipped: skippedBySource,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
@@ -1046,6 +1071,16 @@ export function registerMeetingCommands(program: Command): void {
 
       if (shouldStage) {
         success(`Staged sections written to: ${meetingPath}`);
+
+        // Per-source skip summary
+        const totalSkipped = skippedBySource.reconciled + skippedBySource.existingTask + skippedBySource.slackResolved;
+        if (totalSkipped > 0) {
+          const parts: string[] = [];
+          if (skippedBySource.reconciled > 0) parts.push(`${skippedBySource.reconciled} reconciled`);
+          if (skippedBySource.existingTask > 0) parts.push(`${skippedBySource.existingTask} existing-task`);
+          if (skippedBySource.slackResolved > 0) parts.push(`${skippedBySource.slackResolved} slack-resolved`);
+          info(`Skipped ${totalSkipped} items: ${parts.join(', ')}`);
+        }
 
         // Display reconciliation details
         if (reconciliationResult) {

@@ -31,6 +31,7 @@ import {
   createServices,
   getWorkspacePaths,
   getCompletedItems,
+  getOpenTasks,
   reconcileMeetingBatch,
   loadReconciliationContext,
   loadRecentMeetingBatch,
@@ -234,20 +235,29 @@ export async function runProcessingSessionTestable(
       throw new Error(`AI extraction failed: ${message}`);
     }
 
-    // 4. Read completed items from week.md and scratchpad.md for reconciliation
+    // 4. Read completed items (week.md/scratchpad.md) for reconciliation
+    //    and open tasks (week.md/tasks.md) for existing-task dedup.
     let completedItems: string[] = [];
+    let openTasks: string[] = [];
     try {
       const weekPath = join(workspaceRoot, 'now', 'week.md');
       const weekContent = await deps.readFile(weekPath).catch(() => '');
       const scratchpadPath = join(workspaceRoot, 'now', 'scratchpad.md');
       const scratchpadContent = await deps.readFile(scratchpadPath).catch(() => '');
+      const tasksPath = join(workspaceRoot, 'now', 'tasks.md');
+      const tasksContent = await deps.readFile(tasksPath).catch(() => '');
       completedItems = [
         ...getCompletedItems(weekContent),
         ...getCompletedItems(scratchpadContent),
       ];
+      openTasks = [
+        ...getOpenTasks(weekContent),
+        ...getOpenTasks(tasksContent),
+      ];
     } catch {
       // Silently ignore errors - files may not exist
       completedItems = [];
+      openTasks = [];
     }
 
     // 5. Process extraction with filtering, dedup, and metadata using core function
@@ -256,6 +266,7 @@ export async function runProcessingSessionTestable(
     const processed = processMeetingExtraction(coreResult, userNotes, {
       priorItems: options.priorItems,
       completedItems,
+      openTasks,
     });
 
     // Log filtered counts (compare raw vs filtered items)
@@ -277,12 +288,18 @@ export async function runProcessingSessionTestable(
       jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
     }
 
-    // 7. Log reconciled items (matched completed tasks in workspace)
-    const reconciledCount = Object.values(processed.stagedItemSource).filter(
-      (s) => s === 'reconciled',
+    // 7. Log skipped items by source (completed reconciliation + open-task dedup)
+    const reconciledCount = Object.entries(processed.stagedItemStatus).filter(
+      ([id, status]) => status === 'skipped' && processed.stagedItemSource[id] === 'reconciled',
+    ).length;
+    const existingTaskCount = Object.entries(processed.stagedItemStatus).filter(
+      ([id, status]) => status === 'skipped' && processed.stagedItemSource[id] === 'existing-task',
     ).length;
     if (reconciledCount > 0) {
       jobs.appendEvent(jobId, `Skipped ${reconciledCount} items already completed in workspace.`);
+    }
+    if (existingTaskCount > 0) {
+      jobs.appendEvent(jobId, `Skipped ${existingTaskCount} items already tracked as open tasks.`);
     }
 
     // 8. Log high-confidence auto-approvals (excluding dedup)

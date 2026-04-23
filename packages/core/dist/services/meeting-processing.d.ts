@@ -48,7 +48,22 @@ export interface ProcessingOptions {
     priorItems?: PriorItem[];
     /** Completed task texts to match against (from week.md/scratchpad.md) */
     completedItems?: string[];
-    /** Jaccard threshold for completed items reconciliation (default: 0.6). Items with similarity >= threshold are considered matches. Lower than dedupJaccard (0.7) because completed tasks in week.md are often abbreviated compared to meeting action items. */
+    /**
+     * Open task texts to match against (from week.md/tasks.md, with @tag(value) metadata stripped).
+     * Items matching openTasks by Jaccard (>= reconcileJaccard AND both sides have >= MIN_MATCH_TOKENS
+     * meaningful tokens) are marked source: 'existing-task', status: 'skipped'. This prevents
+     * extraction from re-introducing action items the user is already tracking.
+     *
+     * Ordering: completedItems is checked first so a genuinely-done task wins over a still-open one.
+     */
+    openTasks?: string[];
+    /**
+     * Jaccard threshold for completed-item AND open-task reconciliation (default: 0.7).
+     *
+     * Unified at 0.7 (promoted from the prior 0.6) after observing stopword-dominated false
+     * positives at 145-open-task scale. Combined with MIN_MATCH_TOKENS, this yields stricter
+     * matching than the raw Jaccard score alone. Workspaces can opt down via this option.
+     */
     reconcileJaccard?: number;
     /**
      * Meeting importance level for triage workflow.
