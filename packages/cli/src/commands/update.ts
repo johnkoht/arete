@@ -2,7 +2,7 @@
  * arete update — pull latest skills/tools/integrations
  */
 
-import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig, GoalMigrationService } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig, GoalMigrationService, loadMemorySummary } from '@arete/core';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -59,7 +59,21 @@ export function registerUpdateCommand(program: Command): void {
         updates: basePaths.updates,
       };
 
-      const result = await services.workspace.update(root, { sourcePaths, ideTarget: ideOverride });
+      // Load memory summary so CLAUDE.md's Active Topics section is
+      // preserved across `arete update`. Without this, the Active Topics
+      // block is stripped on every version bump and reappears only after
+      // the next `arete memory refresh` — a days-long regression the
+      // topic-wiki-memory plan §9.4 explicitly prohibits. Failure to
+      // load degrades gracefully to `memorySummary: undefined` (strips
+      // topics for this one update; next refresh restores them).
+      const paths = services.workspace.getPaths(root);
+      const memorySummary = await loadMemorySummary(services.topicMemory, paths).catch(() => undefined);
+
+      const result = await services.workspace.update(root, {
+        sourcePaths,
+        ideTarget: ideOverride,
+        memorySummary,
+      });
 
       // Run goal migration (converts quarter.md to individual goal files)
       let migrationResult;

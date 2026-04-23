@@ -147,6 +147,80 @@ describe('WorkspaceService.regenerateRootFiles', () => {
     assert.strictEqual(new CursorAdapter().supportsMemoryInjection?.(), false);
   });
 
+  it('double-fallback preserves existing CLAUDE.md (does NOT overwrite with stub)', async () => {
+    await withTmp(async (root) => {
+      const svc = new WorkspaceService(new FileStorageAdapter());
+      const paths = makePaths(root);
+
+      // Write a known-good CLAUDE.md on disk first
+      const existing = '# User-facing CLAUDE.md\n\nImportant content.\n';
+      await import('node:fs/promises').then((fs) =>
+        fs.writeFile(join(root, 'CLAUDE.md'), existing, 'utf8'),
+      );
+
+      // Throwing adapter — simulates a generator bug
+      const throwingAdapter = {
+        target: 'claude' as const,
+        configDirName: '.claude',
+        ruleExtension: '.md',
+        getIDEDirs: () => [],
+        rulesDir: () => '.claude/rules',
+        toolsDir: () => '.claude/tools',
+        integrationsDir: () => '.claude/integrations',
+        formatRule: () => '',
+        transformRuleContent: (c: string) => c,
+        supportsMemoryInjection: () => true,
+        generateRootFiles: () => {
+          throw new Error('injected generator failure');
+        },
+        generateMinimalRootFiles: () => ({ 'CLAUDE.md': '# Stub\n' }),
+        detectInWorkspace: () => true,
+      };
+
+      const result = await svc.regenerateRootFiles(makeConfig(), paths, {
+        adapter: throwingAdapter,
+        memorySummary: MEMORY_WITH_TOPICS,
+      });
+
+      assert.strictEqual(result['CLAUDE.md'], 'failed', 'must report failed, not overwrite');
+      const current = await readFile(join(root, 'CLAUDE.md'), 'utf8');
+      assert.strictEqual(current, existing, 'existing CLAUDE.md must be untouched');
+      assert.ok(!current.includes('# Stub'), 'stub must NOT replace existing file');
+    });
+  });
+
+  it('double-fallback DOES write minimal stub when no existing file', async () => {
+    await withTmp(async (root) => {
+      const svc = new WorkspaceService(new FileStorageAdapter());
+      const paths = makePaths(root);
+
+      const throwingAdapter = {
+        target: 'claude' as const,
+        configDirName: '.claude',
+        ruleExtension: '.md',
+        getIDEDirs: () => [],
+        rulesDir: () => '.claude/rules',
+        toolsDir: () => '.claude/tools',
+        integrationsDir: () => '.claude/integrations',
+        formatRule: () => '',
+        transformRuleContent: (c: string) => c,
+        supportsMemoryInjection: () => true,
+        generateRootFiles: () => {
+          throw new Error('injected generator failure');
+        },
+        generateMinimalRootFiles: () => ({ 'CLAUDE.md': '# Minimal stub\n' }),
+        detectInWorkspace: () => true,
+      };
+
+      const result = await svc.regenerateRootFiles(makeConfig(), paths, {
+        adapter: throwingAdapter,
+      });
+      assert.strictEqual(result['CLAUDE.md'], 'updated');
+      const content = await readFile(join(root, 'CLAUDE.md'), 'utf8');
+      assert.match(content, /Minimal stub/);
+    });
+  });
+
   it('regeneration stays byte-equal across wall-clock days with identical memory', async () => {
     await withTmp(async (root) => {
       const svc = new WorkspaceService(new FileStorageAdapter());

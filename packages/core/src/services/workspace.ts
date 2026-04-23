@@ -77,17 +77,42 @@ export class WorkspaceService {
         ? options.memorySummary
         : undefined;
 
-    let rootFiles: Record<string, string>;
+    let rootFiles: Record<string, string> | null = null;
     try {
       rootFiles = adapter.generateRootFiles(config, workspacePaths.root, undefined, skills, memory);
     } catch {
-      // First fallback: retry without memory.
+      // First fallback: retry without memory. A memory-related generator
+      // bug must never wedge workspace init/update.
       try {
         rootFiles = adapter.generateRootFiles(config, workspacePaths.root, undefined, skills);
       } catch {
-        // Double fallback: leave whatever is on disk untouched.
-        return {};
+        rootFiles = null;
       }
+    }
+
+    // Double-fallback policy (plan §9.6): if the main generator threw
+    // twice, DO NOT overwrite any existing good file with a minimal stub.
+    // Write the minimal stub ONLY to files that don't exist yet (fresh
+    // install safety). Existing CLAUDE.md / AGENTS.md are preserved.
+    if (rootFiles === null) {
+      const minimal = adapter.generateMinimalRootFiles?.() ?? {};
+      const result: { [filename: string]: 'unchanged' | 'updated' | 'failed' } = {};
+      for (const [filename, content] of Object.entries(minimal)) {
+        const filePath = join(workspacePaths.root, filename);
+        const existing = await this.storage.read(filePath);
+        if (existing !== null) {
+          // Preserve existing — never replace user-facing file with stub.
+          result[filename] = 'failed';
+          continue;
+        }
+        try {
+          await this.storage.write(filePath, content);
+          result[filename] = 'updated';
+        } catch {
+          result[filename] = 'failed';
+        }
+      }
+      return result;
     }
 
     const result: { [filename: string]: 'unchanged' | 'updated' | 'failed' } = {};
@@ -780,12 +805,21 @@ export class WorkspaceService {
 
     // TODO: Copy memory.md template to areas/ on workspace update (P1-3)
 
-    // Regenerate AGENTS.md / CLAUDE.md on update (always refreshes to latest version)
-    const rootFiles = adapter.generateRootFiles(config, workspaceRoot, undefined, skills);
-    for (const [filename, content] of Object.entries(rootFiles)) {
-      const filePath = join(workspaceRoot, filename);
-      await this.storage.write(filePath, content);
-      result.updated.push(filename);
+    // Regenerate AGENTS.md / CLAUDE.md on update. Threads `options.memorySummary`
+    // through `regenerateRootFiles` so `arete update` preserves the Active
+    // Topics block across npm version bumps (topic-wiki-memory plan §9.4).
+    // CLI callers that don't load memory (e.g., bare `arete update`) get the
+    // pre-Step-9 behavior — no topics. Callers who want topics preserved
+    // must load memory first and pass it via options.memorySummary.
+    const regenResult = await this.regenerateRootFiles(config, paths, {
+      skills,
+      memorySummary: options.memorySummary,
+      adapter,
+    });
+    for (const [filename, status] of Object.entries(regenResult)) {
+      if (status === 'updated' || status === 'unchanged') {
+        if (!result.updated.includes(filename)) result.updated.push(filename);
+      }
     }
 
     return result;

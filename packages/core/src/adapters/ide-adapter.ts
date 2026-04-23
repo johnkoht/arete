@@ -48,6 +48,14 @@ export interface IDEAdapter {
     skills?: SkillDefinition[],
     memorySummary?: MemorySummary,
   ): Record<string, string>;
+  /**
+   * Last-resort minimal-stub content for the adapter's root files. Called
+   * by `WorkspaceService.regenerateRootFiles` only when `generateRootFiles`
+   * throws AND no existing file is on disk. Optional — adapters that
+   * don't implement it fall through to leaving files absent rather than
+   * writing a corrupt or empty file.
+   */
+  generateMinimalRootFiles?(): Record<string, string>;
   /** Generates IDE-specific command files for skills, or empty object if not supported. */
   generateCommands?(skills: SkillDefinition[]): Record<string, string>;
   detectInWorkspace(workspaceRoot: string): boolean;
