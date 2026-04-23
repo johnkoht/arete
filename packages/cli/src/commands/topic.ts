@@ -181,7 +181,7 @@ export function registerTopicCommands(program: Command): void {
   // ---------------------------------------------------------------------------
   topicCmd
     .command('refresh [slug]')
-    .description('Refresh topic page(s) by re-integrating source meetings (LLM-gated)')
+    .description('Refresh existing topic page(s) by re-integrating source meetings (LLM-gated). Use `arete topic seed` to create new pages from meeting frontmatter.')
     .option('--all', 'Refresh every topic (otherwise slug is required)')
     .option('--dry-run', 'Preview what would be refreshed; no LLM calls, no writes')
     .option('--allow-no-llm', 'Write Source trail only when no AI is configured (default: abort)')
@@ -691,7 +691,7 @@ export function registerTopicCommands(program: Command): void {
   // ---------------------------------------------------------------------------
   topicCmd
     .command('seed')
-    .description('One-shot backfill: create topic pages for every slug found in meeting frontmatter (refresh only updates pages that already exist). LLM-spending.')
+    .description('One-shot backfill: create topic pages for every unique slug found across all historical meeting frontmatter. Use this once when adopting topic-wiki-memory on an existing workspace; `arete meeting approve` integrates new meetings incrementally thereafter. LLM-spending.')
     .option('--dry-run', 'Preview scope + cost estimate without spending LLM')
     .option('-y, --yes', 'Skip the interactive confirmation prompt')
     .option('--allow-no-llm', 'Write Source trail only (no narrative synthesis)')

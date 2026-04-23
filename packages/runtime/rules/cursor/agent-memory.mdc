@@ -86,15 +86,47 @@ Area memory files are **computed views**, not manually maintained. Auto-generate
 
 Topic pages at `.arete/memory/topics/{slug}.md` are **materialized from meeting ingestion**. Every time `arete meeting apply` runs, the extracted topic slugs bump the alias/merge pass; committed meetings then trigger `integrateSource` which rewrites the touched sections of each topic page via an LLM call. Content-hash idempotency: re-running on the same (topic, meeting) pair is a no-op.
 
+**How topic pages materialize** — three distinct paths:
+
+1. **Live, per meeting** (the primary path). `arete meeting approve <slug>`
+   runs Hook 2 after committing staged items: integrates the meeting
+   into each tagged topic's page. This is the Karpathy pattern — knowledge
+   compounds as meetings arrive, not in weekly batches. `arete meeting
+   apply` also runs Hook 1 (alias/merge) to normalize LLM-proposed slugs
+   against existing pages so near-duplicates like `cover-whale-email-
+   templates` coerce to the existing `cover-whale-templates` canonical.
+2. **One-shot backfill** (once per workspace, when you first adopt topic
+   memory). `arete topic seed` scans every historical meeting's
+   `topics:` frontmatter and creates the full catalog. Content-hash
+   idempotency means a second `seed` run is a no-op.
+3. **Targeted refresh** (when you want to rebuild a specific page from
+   scratch). `arete topic refresh <slug>` — re-integrates all meetings
+   tagged with `<slug>` against the existing page.
+
 ```bash
-arete memory refresh          # Refresh all L3 surfaces (areas + topics + people + index)
-arete memory refresh --area <slug>  # Area-scoped (skips topics + index)
-arete topic seed              # One-shot: backfill topic pages from all historical meetings
-arete topic refresh <slug>    # Rebuild one topic page
-arete topic list              # Browse topics
-arete topic show <slug>       # View a topic page
-arete topic find <query>      # Retrieve top-k relevant topics for skill context
-arete topic lint              # Surface stale, stub, orphan, dangling topics
+# Canonical refresh — runs areas + topics + people + CLAUDE.md + index
+arete memory refresh          # full refresh
+arete memory refresh --area <slug>  # area-scoped (skips topics + index)
+
+# One-shot backfill (adopt topic memory on an existing workspace)
+arete topic seed
+
+# Targeted — existing pages only
+arete topic refresh <slug>    # rebuild a single topic
+arete topic refresh --all     # rebuild all existing topics from their sources
+
+# Browse + query
+arete topic list              # list all topics
+arete topic show <slug>       # view a single topic page
+arete topic find <query>      # retrieve top-k relevant topics for skills
+
+# Health
+arete topic lint              # surface stale, stub, orphan, dangling topics
+arete topic lint --fix-dangling  # rewrite dangling [[refs]] to plain text
+
+# Per-meeting escape hatch
+arete meeting apply --skip-topics      # skip alias/merge at apply time
+arete meeting approve --skip-topics    # skip Hook 2 integration at commit
 ```
 
 Topic memory is included in `arete search --scope memory` AND `arete topic find --json` for skill context injection. See `topic_page_retrieval` pattern in `PATTERNS.md`.
