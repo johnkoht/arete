@@ -25,6 +25,7 @@ import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
 import { TopicMemoryService } from './services/topic-memory.js';
+import { MemoryIndexService } from './services/memory-index.js';
 import { HygieneService } from './services/hygiene.js';
 import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider } from './integrations/gws/index.js';
 
@@ -46,6 +47,7 @@ export type AreteServices = {
   areaParser: AreaParserService;
   areaMemory: AreaMemoryService;
   topicMemory: TopicMemoryService;
+  memoryIndex: MemoryIndexService;
   hygiene: HygieneService;
   ai: AIService;
   tasks: TaskService;
@@ -118,6 +120,9 @@ export async function createServices(
   // Area memory (depends on storage + areaParser + commitments + memory + topicMemory for Topics section enrichment)
   const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory, topicMemory);
 
+  // Memory index (depends on topicMemory + entity + areaParser + commitments)
+  const memoryIndex = new MemoryIndexService(storage, topicMemory, entity, areaParser, commitments);
+
   // Workspace paths (used by hygiene + tasks)
   const workspacePaths = workspace.getPaths(workspaceRoot);
 
@@ -156,6 +161,7 @@ export async function createServices(
     areaParser,
     areaMemory,
     topicMemory,
+    memoryIndex,
     hygiene,
     ai,
     tasks,

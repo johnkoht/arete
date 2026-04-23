@@ -500,7 +500,21 @@ export function registerMemoryCommand(program: Command): void {
         });
       }
 
-      // 3. Refresh QMD index
+      // 3. Refresh memory index (`.arete/memory/index.md`) — Obsidian landing page.
+      // Idempotent: no write when content byte-equals existing file. Runs after
+      // area + person refresh so topic/person counts reflect fresh data. Skipped
+      // on --dry-run per convention.
+      let indexResult: 'unchanged' | 'updated' | 'skipped' = 'skipped';
+      if (!opts.dryRun && !opts.area) {
+        try {
+          indexResult = await services.memoryIndex.refreshMemoryIndex(paths);
+        } catch (err) {
+          // Non-fatal — area/person refresh already succeeded.
+          warn(`Memory index refresh failed: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      }
+
+      // 4. Refresh QMD index (existing behavior)
       let qmdResult: QmdRefreshResult | undefined;
       const totalUpdated = areaResult.updated + (personResult?.updated ?? 0);
       if (totalUpdated > 0 && !opts.skipQmd && !opts.dryRun) {
@@ -515,6 +529,7 @@ export function registerMemoryCommand(program: Command): void {
           areas: areaResult,
           synthesis: areaResult.synthesis ?? null,
           people: personResult ?? null,
+          memoryIndex: indexResult,
           qmd: qmdResult ?? { indexed: false, skipped: true },
         }, null, 2));
         return;
@@ -559,6 +574,13 @@ export function registerMemoryCommand(program: Command): void {
         }
         listItem('People scanned', String(personResult.scannedPeople));
         listItem('Meetings scanned', String(personResult.scannedMeetings));
+      }
+
+      // Memory index status
+      if (indexResult === 'updated') {
+        info('Memory index: updated (.arete/memory/index.md)');
+      } else if (indexResult === 'unchanged') {
+        info('Memory index: unchanged (no content change)');
       }
 
       displayQmdResult(qmdResult);
