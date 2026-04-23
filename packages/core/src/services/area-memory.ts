@@ -293,35 +293,90 @@ export function isAreaMemoryStale(lastRefreshed: string | null, staleDays: numbe
 }
 
 /**
+ * Sort TopicEntry[] by the canonical order used for both frontmatter and
+ * the `## Topics` rendered section. Deterministic — no locale sort.
+ */
+function sortTopicsForRender(topics: TopicEntry[]): TopicEntry[] {
+  return [...topics].sort((a, b) => {
+    if (a.openItems !== b.openItems) return b.openItems - a.openItems;
+    if (a.lastReferenced !== b.lastReferenced) return a.lastReferenced < b.lastReferenced ? 1 : -1;
+    if (a.slug < b.slug) return -1;
+    if (a.slug > b.slug) return 1;
+    return 0;
+  });
+}
+
+/**
+ * Derive `last_refreshed` from the area's *data* (not wall clock) so that
+ * identical inputs produce byte-equal files across days. Takes the max of
+ * all dated signals that could change in the file.
+ *
+ * Falls back to `referenceDate.toISOString().slice(0, 10)` when the area
+ * has no dated data at all (fresh workspace).
+ *
+ * Fixes the idempotency bug flagged in the Step 4 review: area files were
+ * dirtying git every refresh because `new Date().toISOString()` was used.
+ */
+function deriveLastRefreshed(
+  data: AreaMemoryData,
+  referenceDate: Date,
+): string {
+  const candidates: string[] = [];
+  for (const t of data.topics) {
+    candidates.push(t.lastReferenced);
+    if (t.pageLastRefreshed !== undefined) candidates.push(t.pageLastRefreshed);
+  }
+  for (const d of data.recentDecisions) {
+    if (d.date !== undefined) candidates.push(d.date);
+  }
+  for (const c of data.openCommitments) {
+    if (c.date !== undefined) candidates.push(c.date);
+  }
+  if (candidates.length === 0) {
+    return referenceDate.toISOString().slice(0, 10);
+  }
+  // Return max YYYY-MM-DD string (lexicographic sort is correct for ISO dates).
+  let max = candidates[0];
+  for (const c of candidates) {
+    if (c > max) max = c;
+  }
+  return max.slice(0, 10);
+}
+
+/**
  * Render area memory as markdown with YAML frontmatter.
  *
  * Shape (Step 4 of topic-wiki-memory):
- *  - Frontmatter: area_slug, area_name, last_refreshed, topics[] (structured)
+ *  - Frontmatter: area_slug, area_name, last_refreshed (data-derived), topics[] (structured, sorted)
  *  - Sections: Topics (wikilinks + status), Active People, Open Work, Recent Decisions
- *  - Removed vs prior: Keywords section (word salad), Recently Completed
- *    section (absorbed into topic-page narratives), Keywords frontmatter field
+ *  - Removed vs prior: Keywords section, Recently Completed section, keywords frontmatter field
  *
  * The area file becomes a **navigation index + operational snapshot** rather
  * than an attempted knowledge rollup. Encyclopedic content lives in topic pages.
  *
- * @param referenceDate used only for `last_refreshed` — inject in tests to
- *   pin output for idempotency assertions.
+ * **Idempotency contract**: for equal `data`, `renderAreaMemory(data)` returns
+ * byte-equal output. `last_refreshed` is data-derived via `deriveLastRefreshed`
+ * — no wall-clock reads unless the area has no dated data at all.
+ *
+ * @param referenceDate fallback for `last_refreshed` when no dated data exists.
+ *   Inject in tests to pin output across clock advancement.
  */
 function renderAreaMemory(
   data: AreaMemoryData,
   referenceDate: Date = new Date(),
 ): string {
-  const now = referenceDate.toISOString();
+  const lastRefreshed = deriveLastRefreshed(data, referenceDate);
+  const sortedTopics = sortTopicsForRender(data.topics);
   const lines: string[] = [];
 
   // YAML frontmatter — topics kept as structured list for tooling; keywords removed.
   lines.push('---');
   lines.push(`area_slug: ${data.slug}`);
   lines.push(`area_name: "${data.name}"`);
-  lines.push(`last_refreshed: "${now}"`);
-  if (data.topics.length > 0) {
+  lines.push(`last_refreshed: "${lastRefreshed}"`);
+  if (sortedTopics.length > 0) {
     lines.push('topics:');
-    for (const t of data.topics) {
+    for (const t of sortedTopics) {
       lines.push(`  - slug: ${t.slug}`);
       lines.push(`    name: ${t.name}`);
       lines.push(`    meeting_count: ${t.meetingCount}`);
@@ -342,17 +397,10 @@ function renderAreaMemory(
   lines.push('');
 
   // Topics — wikilinks to topic pages with status + one-line summary.
-  // Sort by (openItems desc, lastReferenced desc, slug asc) for idempotency.
-  if (data.topics.length > 0) {
+  // (Already sorted at top of function by sortTopicsForRender.)
+  if (sortedTopics.length > 0) {
     lines.push('## Topics');
     lines.push('');
-    const sortedTopics = [...data.topics].sort((a, b) => {
-      if (a.openItems !== b.openItems) return b.openItems - a.openItems;
-      if (a.lastReferenced !== b.lastReferenced) return a.lastReferenced < b.lastReferenced ? 1 : -1;
-      if (a.slug < b.slug) return -1;
-      if (a.slug > b.slug) return 1;
-      return 0;
-    });
     for (const t of sortedTopics) {
       const statusPart = t.pageStatus !== undefined ? ` — ${t.pageStatus}` : '';
       const summaryPart = t.pageHeadline !== undefined && t.pageHeadline.length > 0
@@ -477,7 +525,14 @@ export class AreaMemoryService {
     if (!options.dryRun) {
       const outputDir = join(workspacePaths.root, AREA_MEMORY_DIR);
       await this.storage.mkdir(outputDir);
-      await this.storage.write(join(outputDir, `${areaSlug}.md`), content);
+      const outPath = join(outputDir, `${areaSlug}.md`);
+      // Idempotent write — no git noise when content byte-equals existing.
+      // Falls back to plain write when adapter doesn't implement writeIfChanged.
+      if (this.storage.writeIfChanged !== undefined) {
+        await this.storage.writeIfChanged(outPath, content);
+      } else {
+        await this.storage.write(outPath, content);
+      }
     }
 
     return true;
@@ -812,8 +867,7 @@ ${synthesisResult.response}
     // Enrich topics with page status + headline from TopicMemoryService (if wired).
     const topics = await this.enrichTopicsWithPages(rawTopics, workspacePaths);
 
-    // Commitments for this area (open and recently completed — latter no longer rendered,
-    // but still available for topic-page integration downstream).
+    // Open commitments for this area — the rendered "Open Work" section.
     const openCommitments = await this.commitments.listOpen({ area: areaContext.slug });
 
     // Recent decisions
@@ -954,34 +1008,6 @@ ${synthesisResult.response}
     topicEntries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
 
     return { people: [...people], topics: topicEntries };
-  }
-
-  /**
-   * Get recently completed commitments for an area.
-   */
-  private async getRecentlyCompleted(
-    areaSlug: string,
-    workspacePaths: WorkspacePaths,
-  ): Promise<Commitment[]> {
-    // CommitmentsService.listOpen only returns open items, so we need to read
-    // the raw file to find resolved ones. This is a pragmatic workaround.
-    const commitmentsPath = join(workspacePaths.root, '.arete/commitments.json');
-    const content = await this.storage.read(commitmentsPath);
-    if (!content) return [];
-
-    try {
-      const parsed = JSON.parse(content) as { commitments: Commitment[] };
-      if (!Array.isArray(parsed.commitments)) return [];
-
-      return parsed.commitments.filter(c =>
-        c.area === areaSlug &&
-        c.status === 'resolved' &&
-        c.resolvedAt !== null &&
-        daysAgo(c.resolvedAt) <= RECENT_DAYS
-      );
-    } catch {
-      return [];
-    }
   }
 
   /**

@@ -517,6 +517,99 @@ describe('AreaMemoryService', () => {
       assert.match(content, /\[\[new-topic-no-page\]\] — \*\(no page yet\)\*/);
     });
 
+    it('produces byte-equal output across refreshes when inputs are unchanged', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `2026-04-22-m.md`),
+        `---\ntitle: "M"\ndate: "2026-04-22"\narea: glance-comms\ntopics:\n  - alpha\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+      const outPath = join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md');
+      const firstContent = storage.store.get(outPath)!;
+
+      // Mutate mtime without changing inputs — refresh again.
+      await service.refreshAreaMemory('glance-comms', paths);
+      const secondContent = storage.store.get(outPath)!;
+
+      assert.strictEqual(firstContent, secondContent, 'area file must be byte-equal when inputs unchanged');
+      assert.ok(!firstContent.includes(new Date().toISOString()), 'last_refreshed must not contain a wall-clock ISO timestamp');
+    });
+
+    it('uses data-derived last_refreshed (max of source dates), not wall clock', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      // Two meetings with explicit dates — max is 2026-04-15
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `2026-04-10-a.md`),
+        `---\ntitle: "A"\ndate: "2026-04-10"\narea: glance-comms\ntopics:\n  - alpha\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+      );
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `2026-04-15-b.md`),
+        `---\ntitle: "B"\ndate: "2026-04-15"\narea: glance-comms\ntopics:\n  - alpha\nopen_action_items: 1\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.match(content, /last_refreshed: "2026-04-15"/);
+    });
+
+    it('falls back to wall-clock date when area has no dated data', async () => {
+      const area = makeAreaContext({ slug: 'empty-area', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('empty-area', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/empty-area.md'))!;
+      const today = new Date().toISOString().slice(0, 10);
+      assert.match(content, new RegExp(`last_refreshed: "${today}"`));
+    });
+
+    it('falls back silently when TopicMemoryService.listAll throws', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `2026-04-22-m.md`),
+        `---\ntitle: "M"\ndate: "2026-04-22"\narea: glance-comms\ntopics:\n  - cover-whale-templates\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
+      );
+
+      const throwingTopicMemory = {
+        listAll: async () => {
+          throw new Error('injected failure');
+        },
+      } as unknown as import('../../src/services/topic-memory.js').TopicMemoryService;
+
+      const service = new AreaMemoryService(
+        storage,
+        areaParser,
+        commitments,
+        memoryService,
+        throwingTopicMemory,
+      );
+      const ok = await service.refreshAreaMemory('glance-comms', paths);
+      assert.strictEqual(ok, true);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      // Should render without enrichment — "(no page yet)" fallback
+      assert.match(content, /\[\[cover-whale-templates\]\] — \*\(no page yet\)\*/);
+    });
+
     it('sorts topics deterministically by (openItems desc, lastReferenced desc, slug asc)', async () => {
       const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
       const areaParser = createStubAreaParser([area]);

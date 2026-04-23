@@ -24,6 +24,7 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { TopicMemoryService } from './services/topic-memory.js';
 import { HygieneService } from './services/hygiene.js';
 import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider } from './integrations/gws/index.js';
 
@@ -44,6 +45,7 @@ export type AreteServices = {
   commitments: CommitmentsService;
   areaParser: AreaParserService;
   areaMemory: AreaMemoryService;
+  topicMemory: TopicMemoryService;
   hygiene: HygieneService;
   ai: AIService;
   tasks: TaskService;
@@ -110,8 +112,11 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
-  // Area memory (depends on storage + areaParser + commitments + memory)
-  const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
+  // Topic memory (L3 wiki — depends on storage only)
+  const topicMemory = new TopicMemoryService(storage);
+
+  // Area memory (depends on storage + areaParser + commitments + memory + topicMemory for Topics section enrichment)
+  const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory, topicMemory);
 
   // Workspace paths (used by hygiene + tasks)
   const workspacePaths = workspace.getPaths(workspaceRoot);
@@ -150,6 +155,7 @@ export async function createServices(
     commitments,
     areaParser,
     areaMemory,
+    topicMemory,
     hygiene,
     ai,
     tasks,
