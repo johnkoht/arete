@@ -14,6 +14,8 @@ import {
   renderTopicPage,
   estimateRefreshCostUsd,
   parseMeetingFile,
+  acquireSeedLock,
+  SeedLockHeldError,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { join, basename } from 'node:path';
@@ -606,7 +608,7 @@ export function registerTopicCommands(program: Command): void {
   // ---------------------------------------------------------------------------
   topicCmd
     .command('seed')
-    .description('One-shot backfill: materialize topic pages from all historical meetings (LLM-spending)')
+    .description('One-shot backfill: create topic pages for every slug found in meeting frontmatter (refresh only updates pages that already exist). LLM-spending.')
     .option('--dry-run', 'Preview scope + cost estimate without spending LLM')
     .option('-y, --yes', 'Skip the interactive confirmation prompt')
     .option('--allow-no-llm', 'Write Source trail only (no narrative synthesis)')
@@ -788,12 +790,44 @@ export function registerTopicCommands(program: Command): void {
         return;
       }
 
+      // ---- Acquire seed lock (pre-mortem Risk 15) ------------------------
+      // Prevents concurrent `arete meeting apply` from racing on topic-page
+      // writes while seed is in flight. Lock file lives at `.arete/.seed.lock`.
+      const areteDir = join(paths.root, '.arete');
+      let releaseLock: (() => Promise<void>) | undefined;
+      try {
+        releaseLock = await acquireSeedLock(areteDir, 'topic seed');
+      } catch (err) {
+        if (err instanceof SeedLockHeldError) {
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: false,
+              error: 'seed_lock_held',
+              lock: err.info,
+              hint: 'Wait for the other seed/refresh to finish, or `arete topic seed --break-lock` if stale.',
+            }, null, 2));
+          } else {
+            error(err.message);
+            info('If the previous process crashed, clear the stale lock file at .arete/.seed.lock.');
+          }
+          process.exit(1);
+        }
+        throw err;
+      }
+
       // ---- Real run ------------------------------------------------------
-      const result = await services.topicMemory.refreshAllFromMeetings(paths, {
-        today: today(),
-        callLLM,
-        slugs: targetSlugs,
-      });
+      let result;
+      try {
+        result = await services.topicMemory.refreshAllFromMeetings(paths, {
+          today: today(),
+          callLLM,
+          slugs: targetSlugs,
+        });
+      } finally {
+        if (releaseLock !== undefined) {
+          await releaseLock();
+        }
+      }
 
       // Log event
       try {

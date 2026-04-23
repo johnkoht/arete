@@ -7,6 +7,7 @@ import {
   createTopicStub,
   buildIntegratePrompt,
   hashSource,
+  hashMeetingSource,
   TopicMemoryService,
 } from '../../src/services/topic-memory.js';
 import type { TopicPage, TopicSourceRef } from '../../src/models/topic-page.js';
@@ -316,6 +317,57 @@ describe('hashSource', () => {
 
   it('returns 16-char hex', () => {
     assert.match(hashSource('any'), /^[0-9a-f]{16}$/);
+  });
+});
+
+describe('hashMeetingSource', () => {
+  const bodyA = 'Real meeting body content here.\n\nMore notes.\n';
+
+  it('hashes body only — frontmatter edits do NOT change the hash', () => {
+    const v1 = [
+      '---',
+      'title: "Original"',
+      'date: 2026-04-22',
+      'attendees: []',
+      '---',
+      '',
+      bodyA,
+    ].join('\n');
+
+    const v2 = [
+      '---',
+      'title: "Original"',
+      'date: 2026-04-22',
+      'attendees:',
+      '  - new.person@x.com',
+      'processed_at: 2026-04-23T09:15:00Z',
+      'status: approved',
+      '---',
+      '',
+      bodyA,
+    ].join('\n');
+
+    assert.strictEqual(
+      hashMeetingSource(v1),
+      hashMeetingSource(v2),
+      'frontmatter edits must not bust dedup when body is identical',
+    );
+  });
+
+  it('hash CHANGES when body changes', () => {
+    const v1 = `---\ntitle: x\n---\n\n${bodyA}`;
+    const v2 = `---\ntitle: x\n---\n\n${bodyA}\nAdded a line to body.`;
+    assert.notStrictEqual(hashMeetingSource(v1), hashMeetingSource(v2));
+  });
+
+  it('falls back to hashing full content when no frontmatter block', () => {
+    // Body-only string (legacy or non-meeting content)
+    const raw = 'just body with no frontmatter';
+    assert.strictEqual(hashMeetingSource(raw), hashSource(raw));
+  });
+
+  it('returns 16-char hex', () => {
+    assert.match(hashMeetingSource('---\ntitle: x\n---\n\nbody'), /^[0-9a-f]{16}$/);
   });
 });
 

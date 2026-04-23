@@ -480,11 +480,31 @@ export function parseIntegrateResponse(response: string): IntegrateOutput | null
 }
 
 /**
- * Content-hash a source (meeting file content) for idempotency.
- * Used in `sources_integrated[].hash` to detect already-applied sources.
+ * Content-hash a string for idempotency. Low-level primitive; callers
+ * should prefer `hashMeetingSource` for meeting files so frontmatter
+ * edits (attendee adds, status changes, post-processing metadata) don't
+ * bust dedup.
  */
 export function hashSource(content: string): string {
   return createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+/**
+ * Hash a meeting file's body only — excludes frontmatter. Used in
+ * `sources_integrated[].hash` so that editing a meeting's frontmatter
+ * (adding an attendee, fixing title typo, rewriting the `intelligence`
+ * block from re-extraction) does NOT bust topic-page idempotency. Only
+ * substantive body changes — the actual transcript / notes — trigger
+ * re-integration.
+ *
+ * For content that isn't a full meeting file (missing frontmatter), the
+ * raw string is hashed as-is.
+ */
+export function hashMeetingSource(content: string): string {
+  // Body is everything after the closing `---\n` of the frontmatter block.
+  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
+  const body = match !== null ? match[1] : content;
+  return hashSource(body);
 }
 
 /**
@@ -801,7 +821,7 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (
 
     if (options.dryRun) {
       for (const src of matching) {
-        const srcHash = hashSource(src.content);
+        const srcHash = hashMeetingSource(src.content);
         const already = page?.frontmatter.sources_integrated.some((s) => s.hash === srcHash) ?? false;
         if (already) skipped++;
         else integrated++;
@@ -863,7 +883,7 @@ TopicMemoryService.prototype.integrateSource = async function (
   options: IntegrateSourceOptions,
 ): Promise<IntegrateResult> {
   const today = options.today;
-  const sourceHash = hashSource(newSource.content);
+  const sourceHash = hashMeetingSource(newSource.content);
   const sourceRef: TopicSourceRef = {
     path: newSource.path,
     date: newSource.date,

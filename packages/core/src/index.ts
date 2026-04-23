@@ -141,6 +141,7 @@ export type {
 export {
   TopicMemoryService,
   hashSource,
+  hashMeetingSource,
   classifyByJaccard,
   tokenizeSlug,
   estimateRefreshCostUsd,
@@ -161,6 +162,13 @@ export type {
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
+export {
+  acquireSeedLock,
+  readSeedLock,
+  breakSeedLock,
+  SeedLockHeldError,
+} from './services/seed-lock.js';
+export type { SeedLockInfo } from './services/seed-lock.js';
 export {
   formatEvent as formatMemoryLogEvent,
   parseEvent as parseMemoryLogEvent,
