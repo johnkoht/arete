@@ -122,6 +122,52 @@ export type {
 export { createServices } from './factory.js';
 export type { AreteServices, CreateServicesOptions } from './factory.js';
 
+// Topic wiki memory (L3)
+export {
+  renderTopicPage,
+  parseTopicPage,
+  getTopicHeadline,
+  selectSectionsForBudget,
+  SECTION_NAMES,
+} from './models/topic-page.js';
+export type {
+  TopicPage,
+  TopicPageFrontmatter,
+  TopicSourceRef,
+  TopicSections,
+  TopicStatus,
+  SectionName,
+} from './models/topic-page.js';
+export {
+  TopicMemoryService,
+  hashSource,
+  classifyByJaccard,
+  tokenizeSlug,
+} from './services/topic-memory.js';
+export type {
+  TopicCandidate,
+  TopicIdentity,
+  AliasResult,
+  AliasDecision,
+  IntegrateOutput,
+  IntegrateSourceOptions,
+  IntegrateResult,
+} from './services/topic-memory.js';
+export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
+export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
+export { MemoryLogService } from './services/memory-log.js';
+export {
+  formatEvent as formatMemoryLogEvent,
+  parseEvent as parseMemoryLogEvent,
+  parseLog as parseMemoryLog,
+  appendEvent as appendMemoryLogEvent,
+  nowIsoSeconds,
+} from './utils/memory-log.js';
+export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
+
+// Meeting parsing helper
+export { parseMeetingFile } from './services/meeting-context.js';
+
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
 export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCredentials } from './integrations/calendar/google-auth.js';

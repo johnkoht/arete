@@ -22,6 +22,7 @@ import {
   registerBriefCommand,
 } from './commands/intelligence.js';
 import { registerPeopleCommands } from './commands/people.js';
+import { registerTopicCommands } from './commands/topic.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerToolCommands } from './commands/tool.js';
 import { registerIntegrationCommands } from './commands/integration.js';
@@ -146,6 +147,7 @@ registerMemoryCommand(program);
 registerResolveCommand(program);
 registerBriefCommand(program);
 registerPeopleCommands(program);
+registerTopicCommands(program);
 registerSkillCommands(program);
 registerToolCommands(program);
 registerIntegrationCommands(program);
