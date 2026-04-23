@@ -776,6 +776,21 @@ export function registerMeetingCommands(program: Command): void {
         return result.text;
       };
 
+      // Load active topic slugs (bare, no wikilinks) to bias the extraction
+      // prompt toward reusing existing topics — first line of sprawl defense
+      // (plan Phase A #3). Best-effort: failure to load degrades to no bias,
+      // which is the prior behavior.
+      let activeTopicSlugs: string | undefined;
+      try {
+        const { loadMemorySummary, renderActiveTopicsAsSlugList } = await import('@arete/core');
+        const paths = services.workspace.getPaths(root);
+        const memory = await loadMemorySummary(services.topicMemory, paths);
+        const rendered = renderActiveTopicsAsSlugList(memory.activeTopics);
+        activeTopicSlugs = rendered.length > 0 ? rendered : undefined;
+      } catch {
+        activeTopicSlugs = undefined;
+      }
+
       // Extract intelligence
       let extractionResult: MeetingExtractionResult;
       try {
@@ -784,6 +799,7 @@ export function registerMeetingCommands(program: Command): void {
           context: contextBundle,
           priorItems,
           mode,
+          activeTopicSlugs,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
