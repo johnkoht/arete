@@ -1607,12 +1607,14 @@ export function registerMeetingCommands(program: Command): void {
     .option('--skip-agenda', 'Skip agenda archival')
     .option('--clear', 'Clear existing staged sections before writing')
     .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--skip-topics', 'Skip topic alias/merge pass (write intelligence.topics verbatim; `arete memory refresh` will normalize later)')
     .option('--json', 'Output as JSON')
     .action(async (file: string, opts: {
       intelligence?: string;
       skipAgenda?: boolean;
       clear?: boolean;
       skipQmd?: boolean;
+      skipTopics?: boolean;
       json?: boolean;
     }) => {
       const services = await createServices(process.cwd());
@@ -1675,15 +1677,30 @@ export function registerMeetingCommands(program: Command): void {
       // Resolve file path
       const meetingPath = file.startsWith('/') ? file : join(root, file);
 
-      // Apply intelligence using the core service
+      // Apply intelligence using the core service. Threads TopicMemoryService
+      // + callLLM so the alias/merge pass (Phase A #1 of topic-wiki-memory)
+      // normalizes `intelligence.topics` against existing topic pages before
+      // writing frontmatter. `--skip-topics` bypasses the pass.
+      const applyCallLLM = services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1'
+        ? async (prompt: string) => {
+            const r = await services.ai.call('synthesis', prompt);
+            return r.text;
+          }
+        : undefined;
+      const applyPaths = services.workspace.getPaths(root);
+
       let result: ApplyMeetingResult;
       try {
         result = await applyMeetingIntelligence(meetingPath, intelligence, {
           storage: services.storage,
           workspaceRoot: root,
+          topicMemory: services.topicMemory,
+          workspacePaths: applyPaths,
+          callLLM: applyCallLLM,
         }, {
           skipAgenda: opts.skipAgenda,
           clear: opts.clear,
+          skipTopicAlias: opts.skipTopics,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
