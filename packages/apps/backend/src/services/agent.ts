@@ -179,6 +179,14 @@ export async function runProcessingSessionTestable(
       return result.text;
     };
 
+    // Reconciliation review runs on the cheaper 'reconciliation' tier
+    // (typically 'standard'/Sonnet) rather than 'extraction' (often Opus).
+    // Keeps main extraction unchanged; only batchLLMReview uses this.
+    const callLLMReconciliation = async (prompt: string): Promise<string> => {
+      const result = await deps.aiService.call('reconciliation', prompt);
+      return result.text;
+    };
+
     let coreResult: MeetingExtractionResult;
     try {
       // Track LLM errors separately since extractMeetingIntelligence catches them
@@ -353,7 +361,7 @@ export async function runProcessingSessionTestable(
         if (reviewItems.length > 0) {
           // Reuse cached context to avoid redundant I/O
           const ctx = cachedReconciliationContext ?? await deps.loadReconciliationContext();
-          const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLM);
+          const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLMReconciliation);
 
           if (drops.length > 0) {
             for (const drop of drops) {
@@ -481,6 +489,20 @@ export async function runProcessingSession(
     jobs.setJobStatus(jobId, 'error');
     jobs.appendEvent(jobId, 'Error: No AI provider configured. Set up API keys via arete credentials set anthropic.');
     throw new Error('No AI provider configured. Set up API keys via arete credentials set anthropic.');
+  }
+
+  // Fail-fast: backend always runs reconciliation via default deps
+  // (createDefaultDeps wires loadReconciliationContext + loadRecentBatch).
+  // batchLLMReview routes to the 'reconciliation' tier → 'standard' by default.
+  // If the standard tier isn't configured, fail now rather than after extraction
+  // has already paid the 'extraction' tier cost.
+  try {
+    moduleAiService.getModelForTask('reconciliation');
+  } catch {
+    const msg = 'Cross-meeting reconciliation requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+    jobs.setJobStatus(jobId, 'error');
+    jobs.appendEvent(jobId, `Error: ${msg}`);
+    throw new Error(msg);
   }
 
   // Build context for enhanced extraction (optional — skip on failure)

@@ -93,6 +93,42 @@ describe('meeting extract command', () => {
       assert.ok(result.error.includes('not found') || result.error.includes('nonexistent'));
     });
 
+    it('errors early when --reconcile is used without ai.tiers.standard configured', () => {
+      // Regression for plan step 2: the reconciliation review pass routes
+      // through the 'standard' tier. Without it, extraction would complete
+      // (paying the 'extraction' tier cost) and only then would batchLLMReview's
+      // catch swallow a cryptic tier-missing error. Fail-fast before any LLM call.
+      const areteYaml = join(tmpDir, 'arete.yaml');
+      const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+    frontier: anthropic/claude-opus-4-6
+  tasks:
+    extraction: frontier
+`;
+      writeFileSync(areteYaml, config, 'utf8');
+
+      const { stdout, code } = runCliRaw(
+        ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--json', '--skip-qmd'],
+        {
+          cwd: tmpDir,
+          env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+        },
+      );
+
+      assert.equal(code, 1);
+      const result = JSON.parse(stdout) as { success: boolean; error: string };
+      assert.equal(result.success, false);
+      assert.ok(
+        result.error.includes('standard'),
+        `expected error to mention 'standard' tier, got: ${result.error}`,
+      );
+      assert.ok(
+        result.error.includes('--reconcile') || result.error.includes('reconcile'),
+        `expected error to reference --reconcile, got: ${result.error}`,
+      );
+    });
+
     it('errors when not in a workspace', () => {
       const nonWorkspace = createTmpDir('arete-test-non-workspace');
       try {

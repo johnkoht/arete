@@ -530,6 +530,21 @@ export function registerMeetingCommands(program: Command): void {
       const config = await loadConfig(services.storage, root);
       const paths = services.workspace.getPaths(root);
 
+      // Fail-fast: --reconcile requires the 'standard' tier because
+      // batchLLMReview (and any future reconciliation-tier callers) route
+      // to it. Without this check, extraction would complete (paying the
+      // 'extraction' tier cost) and only then would batchLLMReview's generic
+      // catch swallow a cryptic "tier not configured" error.
+      if (opts.reconcile && !config.ai?.tiers?.standard) {
+        const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
       // Resolve file path
       const meetingPath = file.startsWith('/') ? file : join(root, file);
 
@@ -776,6 +791,15 @@ export function registerMeetingCommands(program: Command): void {
         return result.text;
       };
 
+      // Reconciliation review runs on the cheaper 'reconciliation' tier
+      // (typically 'standard'/Sonnet) rather than the 'extraction' tier
+      // (often 'frontier'/Opus). Keep callLLM bound to 'extraction' so the
+      // main extraction path is unchanged; only batchLLMReview uses this.
+      const callLLMReconciliation: MeetingLLMCallFn = async (prompt: string) => {
+        const result = await services.ai.call('reconciliation', prompt);
+        return result.text;
+      };
+
       // Extract intelligence
       let extractionResult: MeetingExtractionResult;
       try {
@@ -906,7 +930,7 @@ export function registerMeetingCommands(program: Command): void {
               const drops = await batchLLMReview(
                 reviewItems,
                 ctx.recentCommittedItems,
-                callLLM,
+                callLLMReconciliation,
               );
               for (const drop of drops) {
                 processed.stagedItemStatus[drop.id] = 'skipped';
