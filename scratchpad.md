@@ -8,6 +8,22 @@ Quick capture for build ideas, questions, and TODOs. Review periodically; move m
 
 <!-- Quick ideas — date them so you know when they came up -->
 
+### [2026-04-23] Cross-meeting reconciliation should populate `staged_item_matched_text`
+
+Surfaced while validating the `fewer-llm-calls-open-task-dedup` plan on `2026-04-22-john-lindsay-11.md`. The Jaccard paths (completed-task, open-task) set `stagedItemMatchedText[id]` so the web UI can show a tooltip like "Matched: 'xxx' from week.md". The cross-meeting reconciliation path in `packages/cli/src/commands/meeting.ts:914-921` (and the mirror in `packages/apps/backend/src/services/agent.ts` around the reconciliation merge block) only sets `stagedItemStatus` + `stagedItemSource`. So `reconciled`-sourced items from cross-meeting dedup show the "already done" badge with no explanation of *which* prior meeting they matched.
+
+Fix: when `reconciledItem.status === 'duplicate'` or `'completed'`, also populate `stagedItemMatchedText[matchingItem.id]` with the canonical source meeting's text (truncated to 60 chars, same convention as completed-items path). Small change; pure observability win.
+
+### [2026-04-23] Semantic task dedup (follow-on to fewer-llm-calls-open-task-dedup)
+
+Rule-based Jaccard (0.7 + min-4-tokens) catches near-paraphrases but misses synonym-level semantic duplicates. Observed on 2026-04-22-john-lindsay-11: extracted `ai_002` "Create testing spreadsheet for LEAP templates and assign to LEAP manager for team testing" should dedup against `week.md:76` `- [ ] Update LEAP testing assignment sheet + confirm Elyse's tester list` — same underlying work, different verbs + nouns, Jaccard ≈ 0.17.
+
+Two candidate implementations:
+- **Embedding similarity** — cheap per-call (ms scale), cosine distance on candidate pairs. Needs an embedding endpoint (OpenAI/Anthropic/Voyage/local). Most PM-tooling solutions land here.
+- **LLM-judge pass** — one batched `reconciliation`-tier call over unflagged action items. Natural extension of `batchLLMReview`. More accurate but costs one Sonnet call per extraction run.
+
+Blocked on `fewer-llm-calls-open-task-dedup` landing (needs shared `ItemSource` type + post-filter seam). Natural fit inside `computed-topic-memory` if that plan activates first. Probably also the right mechanism for slack-digest dedup cases that aren't near-paraphrases.
+
 ### [2026-03-05] `profile.md` as silent hard dependency for CommitmentsService
 Discovered during smoke test: if `context/profile.md` doesn't exist, `ownerSlug` is undefined in `entity.ts`, and `parseActionItemsFromMeeting` is silently skipped — meaning `arete commitments list` always returns empty with no warning. The entire CommitmentsService producer path is gated on this file. Fresh workspaces that skip profile setup will have broken commitments silently.
 
