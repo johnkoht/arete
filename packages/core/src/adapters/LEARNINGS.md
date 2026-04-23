@@ -22,6 +22,10 @@ The adapters layer provides IDE-specific implementations for workspace generatio
 
 - **Adapters may use `fs` directly (infrastructure exception).** Unlike services which must use `StorageAdapter`, adapters are infrastructure-level code that runs during install/update. They use `existsSync` and `readFileSync` directly for reading `dist/AGENTS.md` and detecting workspace type. This is documented in the file headers.
 
+- **Capability probe pattern for adapter feature opt-in** (2026-04-23, topic-wiki-memory): When a new feature (like memory injection into CLAUDE.md) is supported by one adapter but not another, add an optional capability method to the interface: `supportsMemoryInjection?(): boolean`. `ClaudeAdapter` returns `true` and accepts the new param; `CursorAdapter` returns `false` and explicitly ignores the param (with a doc comment pointing to the follow-up plan that will implement the cursor path). Callers (`WorkspaceService.regenerateRootFiles`) check the capability before even loading the data to pass — adapters that opt out never see the arg. This lets Phase B ship without breaking Cursor users AND without hiding a "silent accept-and-drop" footgun. The interface method is optional (`?:`) so adapters that predate the capability stay valid without changes.
+
+- **Double-fallback: don't write stubs over good files** (2026-04-23, topic-wiki-memory): The ClaudeAdapter originally caught generator exceptions internally and returned `generateMinimalAgentsMd()`. The service then wrote that stub over the user's existing CLAUDE.md — a generator bug would replace good content with a skeleton. The fix is: adapters propagate generator errors (no internal catch), and `WorkspaceService.regenerateRootFiles` owns the fallback policy. On double-throw, check if the file exists: if yes, don't write (preserve existing); if no, write the minimal stub (fresh-install safety). The adapter exposes a `generateMinimalRootFiles?()` method for the stub content. Split responsibilities: adapters GENERATE, services WRITE.
+
 ## Invariants
 
 - `CursorAdapter.generateRootFiles()` returns `{ 'AGENTS.md': content }` — always this exact key.

@@ -27,6 +27,14 @@
 - **Phantom task detection saves 80% of planned work** (2026-03-07, reimagine-v2): Before implementing ANY task, verify the proposed output doesn't already exist (ls the output files, grep for proposed function/class names). In reimagine-v2, this saved ~80% of the planned work. Now a mandatory pre-execution check.
 - **Sequential subagent execution, never parallel** (2026-03-05 reimagine-v1, 2026-03-25 workspace-areas): Running subagents in parallel on the same codebase causes lock contention and failures. Always dispatch subagents sequentially. This is a hard constraint, not a preference.
 
+- **Per-phase reviewer subagent protocol is load-bearing** (2026-04-23, topic-wiki-memory): User asks for "spawn a reviewer subagent for each phase or feature" and "incorporate their recommendations and then move to the next phase." Treat this as mandatory, not optional. Each phase: build → spawn focused lane-specific reviewer (core services, CLI/UX, search/indexing, skills/runtime) → synthesize must-fixes → fix → next phase. End-to-end final review before merge. The dual-round pattern caught real bugs (dark code, asymmetric locking, qmd path filter dropped) that neither tests nor my self-review would have found.
+
+- **"Services tested" ≠ "services shipped"** (2026-04-23, topic-wiki-memory): When declaring a plan `status: completed`, the predicate is NOT "all the new exports have tests and typecheck passes." It is "every production call path reaches the new code." User wants a dark-code audit before merge: `rg 'export.*function|export.*class'` added in the branch, then confirm every match has a non-test caller. I shipped `aliasAndMerge` and `renderActiveTopicsAsSlugList` as tested-but-never-called service methods in topic-wiki-memory; the end-to-end reviewer caught both. This is a recurring failure mode for me — build the service, write the tests, forget the caller. Flag when I see it.
+
+- **Reviewer prompts should be direct — "candid engineering judgment, not diplomatic hedging"** (2026-04-23): User wants reviewers to call out scope cuts, corner-cutting, and disagreements plainly. Adding that phrase to reviewer prompts materially changed the quality of the output (prior reviews hedged on "could be fine"; direct reviews say "this is a scope cut, defensible because X, but own it"). Include it in every reviewer prompt.
+
+- **"NEEDS FIXES BEFORE MERGE" is a stop-and-sync signal, not auto-continue** (2026-04-23): Previous instruction was "continue through entire plan unless critical." A `NEEDS FIXES BEFORE MERGE` verdict from an end-to-end reviewer counts as critical — pause and present findings for the user's direction rather than auto-fixing. Even if the fixes are clear, the user wants to see the reviewer's verdict and the proposed response before code moves.
+
 ---
 
 ## Design Philosophy
