@@ -227,6 +227,104 @@ Body content here.`,
   });
 
   // ---------------------------------------------------------------------------
+  // topic seed
+  // ---------------------------------------------------------------------------
+
+  describe('topic seed', () => {
+    function seedMeeting(name: string, topics: string[]): void {
+      const meetingsDir = join(tmpDir, 'resources', 'meetings');
+      mkdirSync(meetingsDir, { recursive: true });
+      const topicsList = topics.map((t) => `  - ${t}`).join('\n');
+      writeFileSync(
+        join(meetingsDir, `${name}.md`),
+        `---\ntitle: "${name}"\ndate: "2026-04-22"\ntopics:\n${topicsList}\nattendees: []\n---\n\nBody: ${name}`,
+      );
+    }
+
+    it('reports nothing-to-seed when no meetings have topics frontmatter', () => {
+      const r = runCliRaw(['topic', 'seed', '--json'], { cwd: tmpDir });
+      assert.strictEqual(r.code, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, true);
+      assert.match(parsed.message, /nothing to seed/);
+    });
+
+    it('errors out when no AI configured and no --allow-no-llm', () => {
+      seedMeeting('2026-04-22-example', ['cover-whale-templates']);
+      const r = runCliRaw(['topic', 'seed', '--json'], { cwd: tmpDir });
+      assert.strictEqual(r.code, 1);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, false);
+      assert.match(parsed.error, /AI not configured/);
+    });
+
+    it('dry-run reports scope + cost estimate without spending', () => {
+      seedMeeting('2026-04-22-a', ['cover-whale-templates', 'leap-templates']);
+      seedMeeting('2026-04-23-b', ['cover-whale-templates']);
+      const r = runCliRaw(
+        ['topic', 'seed', '--dry-run', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, true);
+      assert.strictEqual(parsed.dryRun, true);
+      assert.strictEqual(parsed.meetings_with_topics, 2);
+      assert.strictEqual(parsed.unique_slugs, 2);
+      assert.ok(parsed.estimate.cost_usd > 0);
+      assert.strictEqual(parsed.estimate.max_usd, 50); // default ceiling
+    });
+
+    it('honors ARETE_SEED_MAX_USD envvar for ceiling', () => {
+      seedMeeting('2026-04-22-a', ['cover-whale-templates']);
+      const r = runCliRaw(
+        ['topic', 'seed', '--dry-run', '--json'],
+        { cwd: tmpDir, env: { ARETE_SEED_MAX_USD: '100' } },
+      );
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.estimate.max_usd, 100);
+    });
+
+    it('with --allow-no-llm, materializes topic pages from meeting frontmatter', () => {
+      seedMeeting('2026-04-22-a', ['cover-whale-templates']);
+      seedMeeting('2026-04-23-b', ['leap-templates']);
+      const r = runCliRaw(
+        ['topic', 'seed', '--allow-no-llm', '--yes', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, true);
+      // Both topic pages should exist on disk
+      assert.ok(existsSync(join(tmpDir, '.arete/memory/topics/cover-whale-templates.md')));
+      assert.ok(existsSync(join(tmpDir, '.arete/memory/topics/leap-templates.md')));
+    });
+
+    it('is idempotent — second seed produces zero new integrations', () => {
+      seedMeeting('2026-04-22-a', ['cover-whale-templates']);
+      runCliRaw(['topic', 'seed', '--allow-no-llm', '--yes', '--json'], { cwd: tmpDir });
+
+      const r2 = runCliRaw(
+        ['topic', 'seed', '--allow-no-llm', '--yes', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r2.code, 0);
+      const parsed = JSON.parse(r2.stdout);
+      assert.strictEqual(parsed.totals.integrated, 0);
+      assert.ok(parsed.totals.skipped > 0 || parsed.totals.fallback > 0);
+    });
+
+    it('appends a seed event to log.md', () => {
+      seedMeeting('2026-04-22-a', ['t1']);
+      runCliRaw(['topic', 'seed', '--allow-no-llm', '--yes', '--json'], { cwd: tmpDir });
+      const logPath = join(tmpDir, '.arete', 'memory', 'log.md');
+      assert.ok(existsSync(logPath));
+      const log = readFileSync(logPath, 'utf8');
+      assert.match(log, /\] seed \|/);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // topic lint
   // ---------------------------------------------------------------------------
 

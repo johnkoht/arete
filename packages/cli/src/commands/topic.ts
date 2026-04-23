@@ -13,9 +13,10 @@ import {
   createServices,
   renderTopicPage,
   estimateRefreshCostUsd,
+  parseMeetingFile,
 } from '@arete/core';
 import type { Command } from 'commander';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import chalk from 'chalk';
 import {
   header,
@@ -598,5 +599,243 @@ export function registerTopicCommands(program: Command): void {
       }
       console.log('');
       listItem('Total findings', String(totalFindings));
+    });
+
+  // ---------------------------------------------------------------------------
+  // arete topic seed
+  // ---------------------------------------------------------------------------
+  topicCmd
+    .command('seed')
+    .description('One-shot backfill: materialize topic pages from all historical meetings (LLM-spending)')
+    .option('--dry-run', 'Preview scope + cost estimate without spending LLM')
+    .option('-y, --yes', 'Skip the interactive confirmation prompt')
+    .option('--allow-no-llm', 'Write Source trail only (no narrative synthesis)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: {
+      dryRun?: boolean;
+      yes?: boolean;
+      allowNoLlm?: boolean;
+      json?: boolean;
+    }) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+      const paths = services.workspace.getPaths(root);
+
+      // ---- Scan meetings for unique topic slugs --------------------------
+      // Run BEFORE the AI-configured check so empty workspaces exit 0 with a
+      // clear "nothing to seed" message rather than a misleading AI error.
+      const meetingsDir = join(paths.resources, 'meetings');
+      const meetingFiles = (await services.storage.exists(meetingsDir))
+        ? await services.storage.list(meetingsDir, { extensions: ['.md'] })
+        : [];
+
+      const slugSet = new Set<string>();
+      let meetingsWithTopics = 0;
+      for (const meetingPath of meetingFiles) {
+        if (basename(meetingPath) === 'index.md') continue;
+        const content = await services.storage.read(meetingPath);
+        if (content === null) continue;
+        const parsed = parseMeetingFile(content);
+        if (!parsed) continue;
+        const topics = parsed.frontmatter.topics;
+        if (!Array.isArray(topics) || topics.length === 0) continue;
+        meetingsWithTopics++;
+        for (const t of topics) {
+          if (typeof t === 'string' && t.length > 0) slugSet.add(t);
+        }
+      }
+
+      if (slugSet.size === 0) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: true,
+            message: 'No meetings with topics frontmatter found — nothing to seed',
+            meetings_scanned: meetingFiles.length,
+          }));
+        } else {
+          info('No meetings with topics frontmatter found.');
+          info('Seed runs over extracted topic slugs; ensure `arete meeting apply` has run on historical meetings first.');
+        }
+        return;
+      }
+
+      const targetSlugs = [...slugSet].sort();
+
+      // ---- AI configuration check (only matters when there IS work to do) -
+      const noLlmEnv = process.env.ARETE_NO_LLM === '1';
+      const callLLM =
+        services.ai.isConfigured() && !noLlmEnv
+          ? async (prompt: string) => {
+              const result = await services.ai.call('synthesis', prompt);
+              return result.text;
+            }
+          : undefined;
+
+      if (callLLM === undefined && !opts.allowNoLlm && !opts.dryRun) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'AI not configured — pass --allow-no-llm to seed with source trails only',
+          }));
+        } else {
+          error(noLlmEnv
+            ? 'ARETE_NO_LLM=1 is set. Seed requires an LLM for narrative synthesis.'
+            : 'AI not configured. Seed requires an LLM for narrative synthesis.');
+          info('Pass --allow-no-llm to backfill Source trail entries only.');
+        }
+        process.exit(1);
+      }
+
+      // ---- Cost estimate via dry-run through the batch helper ------------
+      const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+        today: today(),
+        dryRun: true,
+        slugs: targetSlugs,
+      });
+      const integrationsNeeded = estimate.totalIntegrated;
+      const estimatedCost = estimateRefreshCostUsd(integrationsNeeded);
+
+      // ---- Seed budget ceiling (pre-mortem Risk 2) -----------------------
+      // Honors ARETE_SEED_MAX_USD env var (default $50 — more generous than
+      // the per-refresh $1 confirm threshold because seed is explicitly bulk).
+      const seedMaxUsdEnv = process.env.ARETE_SEED_MAX_USD;
+      const seedMaxUsd =
+        seedMaxUsdEnv !== undefined && Number.isFinite(parseFloat(seedMaxUsdEnv))
+          ? parseFloat(seedMaxUsdEnv)
+          : 50.0;
+
+      if (callLLM !== undefined && estimatedCost > seedMaxUsd) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'seed_cost_exceeds_ceiling',
+            estimate: {
+              topics: targetSlugs.length,
+              integrations: integrationsNeeded,
+              cost_usd: estimatedCost,
+              max_usd: seedMaxUsd,
+            },
+            hint: 'Raise ARETE_SEED_MAX_USD or narrow scope via arete topic refresh --slug <slug>.',
+          }, null, 2));
+        } else {
+          error(
+            `Estimated cost $${estimatedCost.toFixed(2)} exceeds ceiling $${seedMaxUsd.toFixed(2)} ` +
+            `(${integrationsNeeded} integrations across ${targetSlugs.length} topics).`,
+          );
+          info('Raise ceiling with `ARETE_SEED_MAX_USD=100 arete topic seed`, or refresh slugs one at a time.');
+        }
+        process.exit(1);
+      }
+
+      // ---- Confirm gate --------------------------------------------------
+      if (!opts.dryRun && callLLM !== undefined && !opts.yes) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'confirm_required',
+            estimate: {
+              topics: targetSlugs.length,
+              integrations: integrationsNeeded,
+              cost_usd: estimatedCost,
+              meetings_scanned: meetingsWithTopics,
+            },
+            hint: 'Re-run with --yes to proceed, or --dry-run to inspect.',
+          }, null, 2));
+        } else {
+          warn(
+            `Seed will integrate ${integrationsNeeded} source(s) across ${targetSlugs.length} ` +
+            `topic(s) from ${meetingsWithTopics} meeting(s).`,
+          );
+          warn(`Estimated cost ~$${estimatedCost.toFixed(2)} (ceiling $${seedMaxUsd.toFixed(2)}).`);
+          info('Re-run with --yes to proceed, or --dry-run for a no-spend preview.');
+        }
+        process.exit(0);
+      }
+
+      // ---- Dry-run output ------------------------------------------------
+      if (opts.dryRun) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: true,
+            dryRun: true,
+            meetings_with_topics: meetingsWithTopics,
+            unique_slugs: targetSlugs.length,
+            topics: estimate.topics,
+            estimate: {
+              integrations: integrationsNeeded,
+              cost_usd: estimatedCost,
+              max_usd: seedMaxUsd,
+            },
+          }, null, 2));
+          return;
+        }
+        header('Topic Seed (dry run)');
+        listItem('Meetings with topics', String(meetingsWithTopics));
+        listItem('Unique topic slugs', String(targetSlugs.length));
+        listItem('Integrations needed', String(integrationsNeeded));
+        listItem('Estimated cost', `~$${estimatedCost.toFixed(2)}`);
+        listItem('Ceiling (ARETE_SEED_MAX_USD)', `$${seedMaxUsd.toFixed(2)}`);
+        console.log('');
+        info('Pass --yes to proceed.');
+        return;
+      }
+
+      // ---- Real run ------------------------------------------------------
+      const result = await services.topicMemory.refreshAllFromMeetings(paths, {
+        today: today(),
+        callLLM,
+        slugs: targetSlugs,
+      });
+
+      // Log event
+      try {
+        await services.memoryLog.append(paths, {
+          event: 'seed',
+          fields: {
+            meetings: String(meetingsWithTopics),
+            topics_total: String(targetSlugs.length),
+            integrated: String(result.totalIntegrated),
+            fallback: String(result.totalFallback),
+            skipped: String(result.totalSkipped),
+            llm_cost_usd: estimatedCost.toFixed(4),
+          },
+        });
+      } catch {
+        // best-effort
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({
+          success: true,
+          dryRun: false,
+          meetings_scanned: meetingsWithTopics,
+          topics: result.topics,
+          totals: {
+            integrated: result.totalIntegrated,
+            fallback: result.totalFallback,
+            skipped: result.totalSkipped,
+          },
+        }, null, 2));
+        return;
+      }
+
+      header('Topic Seed');
+      success(`Integrated ${result.totalIntegrated} source(s) across ${result.topics.length} topic(s).`);
+      if (result.totalFallback > 0) {
+        warn(`${result.totalFallback} fallback(s) — LLM errors; re-run seed to upgrade when AI is stable.`);
+      }
+      if (result.totalSkipped > 0) {
+        info(`${result.totalSkipped} already-integrated source(s) skipped (idempotent).`);
+      }
+      console.log('');
+      info('Run `arete topic list` to see materialized topic pages.');
     });
 }
