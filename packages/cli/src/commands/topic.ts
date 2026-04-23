@@ -469,8 +469,9 @@ export function registerTopicCommands(program: Command): void {
   topicCmd
     .command('lint')
     .description('Flag stale, stub, and orphan topic pages')
+    .option('--fix-dangling', 'Rewrite dangling wikilinks to plain text (removes [[brackets]] for targets that no longer exist)')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { json?: boolean }) => {
+    .action(async (opts: { fixDangling?: boolean; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -565,12 +566,67 @@ export function registerTopicCommands(program: Command): void {
         }
       }
 
+      // ---- --fix-dangling action ----------------------------------------
+      // Rewrite dangling `[[slug]]` references to plain text `slug` in each
+      // topic's narrative sections. Leaves Source trail untouched (we didn't
+      // scan it in the first place). Idempotent via writeIfChanged.
+      let fixedCount = 0;
+      const fixedPaths: string[] = [];
+      if (opts.fixDangling && dangling.length > 0) {
+        const { renderTopicPage } = await import('@arete/core');
+        // Group dangling refs by source slug for batched per-page rewrites.
+        const danglingByTopic = new Map<string, Set<string>>();
+        for (const d of dangling) {
+          if (!danglingByTopic.has(d.fromSlug)) danglingByTopic.set(d.fromSlug, new Set());
+          danglingByTopic.get(d.fromSlug)!.add(d.toSlug);
+        }
+        for (const [fromSlug, toSlugs] of danglingByTopic) {
+          const page = topics.find((t) => t.frontmatter.topic_slug === fromSlug);
+          if (!page) continue;
+          let mutated = false;
+          const newSections: typeof page.sections = { ...page.sections };
+          for (const sectionName of DANGLING_SCAN_SECTIONS) {
+            const body = page.sections[sectionName];
+            if (body === undefined) continue;
+            let rewritten = body;
+            for (const target of toSlugs) {
+              // Global, word-boundary-safe replace of [[target]] → target
+              const re = new RegExp(`\\[\\[${target.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]\\]`, 'g');
+              const next = rewritten.replace(re, target);
+              if (next !== rewritten) {
+                rewritten = next;
+                mutated = true;
+              }
+            }
+            if (mutated) newSections[sectionName] = rewritten;
+          }
+          if (mutated) {
+            const outPath = join(paths.memory, 'topics', `${fromSlug}.md`);
+            const newContent = renderTopicPage({ ...page, sections: newSections });
+            if (services.storage.writeIfChanged !== undefined) {
+              const r = await services.storage.writeIfChanged(outPath, newContent);
+              if (r === 'updated') {
+                fixedCount += toSlugs.size;
+                fixedPaths.push(fromSlug);
+              }
+            } else {
+              await services.storage.write(outPath, newContent);
+              fixedCount += toSlugs.size;
+              fixedPaths.push(fromSlug);
+            }
+          }
+        }
+      }
+
       const findings = {
         stale,
         stub,
         orphan,
         dangling,
         parse_errors: parseErrors.map((e) => ({ path: e.path, reason: e.reason })),
+        ...(opts.fixDangling
+          ? { fixed: { dangling: fixedCount, topicsModified: fixedPaths } }
+          : {}),
       };
       const totalFindings =
         stale.length + stub.length + orphan.length + dangling.length + parseErrors.length;
@@ -614,7 +670,12 @@ export function registerTopicCommands(program: Command): void {
         for (const s of orphan) console.log(`  - ${s}`);
       }
       if (dangling.length > 0) {
-        warn(`Dangling refs (wikilink → missing topic or person): ${dangling.length}`);
+        const fixedNote = opts.fixDangling && fixedCount > 0
+          ? ` — ${chalk.green(`${fixedCount} rewritten to plain text across ${fixedPaths.length} topic(s)`)}`
+          : opts.fixDangling
+            ? ` — ${chalk.dim('(nothing to fix)')}`
+            : '';
+        warn(`Dangling refs (wikilink → missing topic or person): ${dangling.length}${fixedNote}`);
         for (const d of dangling) console.log(`  - [[${d.toSlug}]] from ${d.fromSlug}`);
       }
       if (parseErrors.length > 0) {

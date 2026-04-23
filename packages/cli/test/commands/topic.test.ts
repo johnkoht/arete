@@ -474,5 +474,54 @@ Real content.
       const log = readFileSync(logPath, 'utf8');
       assert.match(log, /\] lint \|/);
     });
+
+    it('--fix-dangling rewrites dangling [[refs]] to plain text', () => {
+      seedTopic('source-topic', {
+        currentState: 'See [[missing-slug]] and [[another-missing]] for context.',
+      });
+      const r = runCliRaw(
+        ['topic', 'lint', '--fix-dangling', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.ok(parsed.findings.fixed !== undefined, 'fixed block must be present when --fix-dangling is set');
+      assert.strictEqual(parsed.findings.fixed.dangling, 2);
+      assert.deepStrictEqual(parsed.findings.fixed.topicsModified, ['source-topic']);
+
+      const contents = readFileSync(
+        join(tmpDir, '.arete', 'memory', 'topics', 'source-topic.md'),
+        'utf8',
+      );
+      assert.ok(contents.includes('missing-slug'), 'target text preserved');
+      assert.ok(contents.includes('another-missing'), 'target text preserved');
+      assert.ok(!contents.includes('[[missing-slug]]'), 'brackets stripped');
+      assert.ok(!contents.includes('[[another-missing]]'), 'brackets stripped');
+    });
+
+    it('--fix-dangling preserves valid wikilinks', () => {
+      // Source trail wikilinks must never be touched; real topic refs too.
+      seedTopic('real-target', { currentState: 'content' });
+      seedTopic('source-topic', {
+        currentState: 'See [[real-target]] and [[fake-slug]].',
+      });
+      runCliRaw(['topic', 'lint', '--fix-dangling', '--json'], { cwd: tmpDir });
+      const contents = readFileSync(
+        join(tmpDir, '.arete', 'memory', 'topics', 'source-topic.md'),
+        'utf8',
+      );
+      assert.ok(contents.includes('[[real-target]]'), 'valid wikilink preserved');
+      assert.ok(!contents.includes('[[fake-slug]]'), 'dangling wikilink stripped');
+    });
+
+    it('--fix-dangling is a no-op when nothing dangling', () => {
+      seedTopic('tidy-topic', { currentState: 'No wikilinks here.' });
+      const r = runCliRaw(
+        ['topic', 'lint', '--fix-dangling', '--json'],
+        { cwd: tmpDir },
+      );
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.findings.fixed.dangling, 0);
+    });
   });
 });
