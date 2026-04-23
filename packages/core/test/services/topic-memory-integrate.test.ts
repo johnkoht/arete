@@ -375,6 +375,122 @@ describe('hashMeetingSource', () => {
 // TopicMemoryService.integrateSource (end-to-end)
 // ---------------------------------------------------------------------------
 
+describe('TopicMemoryService.listTopicMemoryStatus', () => {
+  function makeStorage(files: Record<string, string> = {}) {
+    const store = new Map(Object.entries(files));
+    return {
+      store,
+      async read(p: string) { return store.get(p) ?? null; },
+      async write(p: string, c: string) { store.set(p, c); },
+      async exists(p: string) {
+        if (store.has(p)) return true;
+        for (const k of store.keys()) if (k.startsWith(p + '/')) return true;
+        return false;
+      },
+      async delete() {},
+      async list(dir: string) {
+        const prefix = dir.endsWith('/') ? dir : dir + '/';
+        const results: string[] = [];
+        for (const k of store.keys()) {
+          if (k.startsWith(prefix) && !k.slice(prefix.length).includes('/')) results.push(k);
+        }
+        return results;
+      },
+      async listSubdirectories() { return []; },
+      async mkdir() {},
+      async getModified() { return null; },
+    };
+  }
+
+  function topicFile(slug: string, lastRefreshed: string, currentState: string | null, refs: string[] = []): string {
+    const parts: string[] = [
+      '---',
+      `topic_slug: ${slug}`,
+      'status: active',
+      'first_seen: 2026-03-01',
+      `last_refreshed: ${lastRefreshed}`,
+      'sources_integrated: []',
+      '---',
+      '',
+      `# ${slug}`,
+      '',
+    ];
+    if (currentState !== null) {
+      parts.push('## Current state', '', currentState, '');
+    }
+    if (refs.length > 0) {
+      parts.push('## Relationships', '');
+      for (const r of refs) parts.push(`- See [[${r}]]`);
+    }
+    return parts.join('\n');
+  }
+
+  const paths = {
+    memory: '/.arete/memory',
+  } as import('../../src/models/workspace.js').WorkspacePaths;
+
+  it('flags stale topics (>60d)', async () => {
+    const today = new Date('2026-04-22T00:00:00Z');
+    const storage = makeStorage({
+      '/.arete/memory/topics/old.md': topicFile('old', '2025-12-01', 'content'),
+      '/.arete/memory/topics/fresh.md': topicFile('fresh', '2026-04-20', 'content'),
+    });
+    const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+    const svc = new TopicMemoryService(storage);
+    const out = await svc.listTopicMemoryStatus(paths, { today });
+    const oldEntry = out.find((s) => s.slug === 'old')!;
+    const freshEntry = out.find((s) => s.slug === 'fresh')!;
+    assert.strictEqual(oldEntry.stale, true);
+    assert.strictEqual(freshEntry.stale, false);
+  });
+
+  it('flags stub topics (no Current state)', async () => {
+    const today = new Date('2026-04-22T00:00:00Z');
+    const storage = makeStorage({
+      '/.arete/memory/topics/stub-topic.md': topicFile('stub-topic', '2026-04-22', null),
+    });
+    const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+    const svc = new TopicMemoryService(storage);
+    const out = await svc.listTopicMemoryStatus(paths, { today });
+    assert.strictEqual(out[0].stub, true);
+  });
+
+  it('flags orphan topics (no inbound [[refs]])', async () => {
+    const today = new Date('2026-04-22T00:00:00Z');
+    const storage = makeStorage({
+      '/.arete/memory/topics/referenced.md': topicFile('referenced', '2026-04-22', 'hi'),
+      '/.arete/memory/topics/a.md': topicFile('a', '2026-04-22', 'hi', ['referenced']),
+      '/.arete/memory/topics/orphaned.md': topicFile('orphaned', '2026-04-22', 'hi'),
+    });
+    const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+    const svc = new TopicMemoryService(storage);
+    const out = await svc.listTopicMemoryStatus(paths, { today });
+    const referenced = out.find((s) => s.slug === 'referenced')!;
+    const orphan = out.find((s) => s.slug === 'orphaned')!;
+    assert.strictEqual(referenced.orphan, false);
+    assert.strictEqual(orphan.orphan, true);
+  });
+
+  it('self-refs do not count as inbound (orphan still flagged)', async () => {
+    const today = new Date('2026-04-22T00:00:00Z');
+    const storage = makeStorage({
+      '/.arete/memory/topics/self.md': topicFile('self', '2026-04-22', 'hi', ['self']),
+    });
+    const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+    const svc = new TopicMemoryService(storage);
+    const out = await svc.listTopicMemoryStatus(paths, { today });
+    assert.strictEqual(out[0].orphan, true);
+  });
+
+  it('returns empty array when no topics exist', async () => {
+    const storage = makeStorage();
+    const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+    const svc = new TopicMemoryService(storage);
+    const out = await svc.listTopicMemoryStatus(paths);
+    assert.deepStrictEqual(out, []);
+  });
+});
+
 describe('TopicMemoryService.integrateSource', () => {
   const nullStorage = {
     read: async () => null,

@@ -911,6 +911,81 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (
  */
 export const ESTIMATED_USD_PER_INTEGRATION = 0.015;
 
+/**
+ * Per-topic health signal surfaced by `arete status`. Mirrors the
+ * `AreaMemoryService.listAreaMemoryStatus` shape so the CLI can apply
+ * uniform formatting across areas and topics.
+ *
+ * - `stale`: `last_refreshed` older than staleDays (default 60)
+ * - `stub`: Current state section missing or empty (topic page exists
+ *   but narrative was never populated)
+ * - `orphan`: zero inbound `[[slug]]` references from any other topic
+ */
+export interface TopicMemoryStatus {
+  slug: string;
+  lastRefreshed: string;
+  daysOld: number;
+  stale: boolean;
+  stub: boolean;
+  orphan: boolean;
+}
+
+export interface ListTopicMemoryStatusOptions {
+  /** Days since last_refreshed that marks a topic stale. Default 60. */
+  staleDays?: number;
+  /** Reference date for staleness calc. Default `new Date()`. */
+  today?: Date;
+}
+
+declare module './topic-memory.js' {
+  interface TopicMemoryService {
+    listTopicMemoryStatus(
+      paths: import('../models/workspace.js').WorkspacePaths,
+      options?: ListTopicMemoryStatusOptions,
+    ): Promise<TopicMemoryStatus[]>;
+  }
+}
+
+TopicMemoryService.prototype.listTopicMemoryStatus = async function (
+  this: TopicMemoryService,
+  paths,
+  options = {},
+): Promise<TopicMemoryStatus[]> {
+  const staleDays = options.staleDays ?? 60;
+  const today = options.today ?? new Date();
+
+  const { topics } = await this.listAll(paths);
+
+  // Inbound ref count map
+  const inboundRefs = new Map<string, number>();
+  const refRe = /\[\[([a-z0-9-]+)\]\]/g;
+  for (const t of topics) {
+    const body = Object.values(t.sections).join('\n');
+    const ownSlug = t.frontmatter.topic_slug;
+    let m: RegExpExecArray | null;
+    while ((m = refRe.exec(body)) !== null) {
+      if (m[1] === ownSlug) continue; // self-refs don't count for orphan detection
+      inboundRefs.set(m[1], (inboundRefs.get(m[1]) ?? 0) + 1);
+    }
+  }
+
+  const out: TopicMemoryStatus[] = [];
+  for (const t of topics) {
+    const slug = t.frontmatter.topic_slug;
+    const lastRefreshed = t.frontmatter.last_refreshed;
+    const refreshedDate = new Date(lastRefreshed);
+    const daysOld = Number.isNaN(refreshedDate.getTime())
+      ? Infinity
+      : Math.floor((today.getTime() - refreshedDate.getTime()) / (1000 * 60 * 60 * 24));
+    const stale = daysOld > staleDays;
+    const current = t.sections['Current state'];
+    const stub = current === undefined || current.trim().length === 0;
+    const orphan = (inboundRefs.get(slug) ?? 0) === 0;
+    out.push({ slug, lastRefreshed, daysOld, stale, stub, orphan });
+  }
+  return out;
+};
+
 export function estimateRefreshCostUsd(totalIntegrations: number): number {
   return totalIntegrations * ESTIMATED_USD_PER_INTEGRATION;
 }

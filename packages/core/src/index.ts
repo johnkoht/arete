@@ -171,6 +171,8 @@ export type {
   RefreshBatchOptions,
   RefreshBatchResult,
   RefreshBatchTopicResult,
+  TopicMemoryStatus,
+  ListTopicMemoryStatusOptions,
 } from './services/topic-memory.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';

@@ -216,6 +216,19 @@ export function registerStatusCommand(program: Command): void {
         areaMemoryTotal = areaStatuses.length;
         areaMemoryStale = areaStatuses.filter(s => s.stale).length;
       } catch { /* non-critical */ }
+
+      // Topic memory staleness (best-effort) — parallels area memory
+      let topicMemoryTotal = 0;
+      let topicMemoryStale = 0;
+      let topicMemoryStub = 0;
+      let topicMemoryOrphan = 0;
+      try {
+        const topicStatuses = await services.topicMemory.listTopicMemoryStatus(basePaths);
+        topicMemoryTotal = topicStatuses.length;
+        topicMemoryStale = topicStatuses.filter(s => s.stale).length;
+        topicMemoryStub = topicStatuses.filter(s => s.stub).length;
+        topicMemoryOrphan = topicStatuses.filter(s => s.orphan).length;
+      } catch { /* non-critical */ }
       try {
         const synthPath = join(root, '.arete', 'memory', 'areas', '_synthesis.md');
         const synthContent = await services.storage.read(synthPath);
@@ -272,6 +285,12 @@ export function registerStatusCommand(program: Command): void {
           decisions: decisionsCount,
           learnings: learningsCount,
           areaMemory: { total: areaMemoryTotal, stale: areaMemoryStale },
+          topicMemory: {
+            total: topicMemoryTotal,
+            stale: topicMemoryStale,
+            stub: topicMemoryStub,
+            orphan: topicMemoryOrphan,
+          },
           synthesis: { lastRefreshed: synthesisLastRefreshed },
         },
         intelligence: {
@@ -339,6 +358,20 @@ export function registerStatusCommand(program: Command): void {
           `  ${chalk.dim('📦 Area Memory:')} ${chalk.dim('none — run `arete memory refresh`')}`,
         );
       }
+      if (topicMemoryTotal > 0) {
+        const badges: string[] = [];
+        if (topicMemoryStale > 0) badges.push(chalk.yellow(`${topicMemoryStale} stale`));
+        if (topicMemoryStub > 0) badges.push(chalk.yellow(`${topicMemoryStub} stub`));
+        if (topicMemoryOrphan > 0) badges.push(chalk.dim(`${topicMemoryOrphan} orphan`));
+        const badgeStr = badges.length > 0 ? ` (${badges.join(', ')})` : chalk.green(' (all fresh)');
+        console.log(
+          `  ${chalk.dim('📚 Topic Memory:')} ${chalk.bold(String(topicMemoryTotal))} topics${badgeStr}`,
+        );
+      } else {
+        console.log(
+          `  ${chalk.dim('📚 Topic Memory:')} ${chalk.dim('none — run `arete topic seed` to backfill from meetings')}`,
+        );
+      }
       if (synthesisLastRefreshed) {
         const synthAge = Math.floor((Date.now() - new Date(synthesisLastRefreshed).getTime()) / (1000 * 60 * 60 * 24));
         const synthBadge = synthAge > 7
@@ -391,6 +424,13 @@ export function registerStatusCommand(program: Command): void {
       // Recommendations
       if (areaMemoryStale > 0) {
         console.log(chalk.yellow(`  Run \`arete memory refresh\` to update ${areaMemoryStale} stale area memory file(s).`));
+      }
+      if (topicMemoryStale > 0 || topicMemoryStub > 0 || topicMemoryOrphan > 0) {
+        const bits: string[] = [];
+        if (topicMemoryStale > 0) bits.push(`${topicMemoryStale} stale`);
+        if (topicMemoryStub > 0) bits.push(`${topicMemoryStub} stub`);
+        if (topicMemoryOrphan > 0) bits.push(`${topicMemoryOrphan} orphan`);
+        console.log(chalk.yellow(`  Topic memory: ${bits.join(', ')}. Run \`arete topic lint\` to see details.`));
       }
       console.log(chalk.dim('  Run `arete daily` for your morning brief.'));
       console.log(chalk.dim('  Run `arete momentum` for commitment and relationship momentum.'));
