@@ -1393,6 +1393,198 @@ describe('processMeetingExtraction - completedItems reconciliation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// processMeetingExtraction - openTasks dedup (source: 'existing-task')
+// ---------------------------------------------------------------------------
+
+describe('processMeetingExtraction - openTasks dedup', () => {
+  function createMockResult(intelligence: Partial<MeetingIntelligence>): MeetingExtractionResult {
+    return {
+      intelligence: {
+        summary: 'Test summary',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+        ...intelligence,
+      },
+      validationWarnings: [],
+    };
+  }
+
+  function createActionItem(description: string, confidence = 0.9): ActionItem {
+    return {
+      owner: 'Alice',
+      ownerSlug: 'alice',
+      description,
+      direction: 'i_owe_them',
+      confidence,
+    };
+  }
+
+  it("marks action item as skipped with source 'existing-task' when matching an open task (Jaccard ≥ 0.7)", () => {
+    // Realistic near-paraphrase: the LLM extraction added minor words on top of the
+    // tracked task text. Jaccard should be ~0.8+ on token-set, well above 0.7.
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Promote LEAP templates to production this week'),
+      ],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['Promote LEAP templates to production'],
+    });
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'existing-task');
+    assert.ok(
+      processed.stagedItemMatchedText?.['ai_001']?.toLowerCase().includes('leap'),
+      `expected matched text to reference LEAP, got: ${processed.stagedItemMatchedText?.['ai_001']}`,
+    );
+  });
+
+  // Known limitation (documented, not asserted): when the meeting extraction
+  // and the tracked task describe the same work with different verbs + synonyms
+  // (e.g. "Create testing spreadsheet for LEAP templates" vs "Update LEAP
+  // testing assignment sheet"), Jaccard similarity drops well below 0.7 and
+  // this rule-based post-filter does NOT catch the duplicate. Semantic-equivalence
+  // matching would require embedding similarity or an LLM judge — out of scope
+  // for this plan; see slack-evidence-dedup / computed-topic-memory follow-ons.
+  it('DOES NOT catch synonym-level semantic duplicates (documented limitation)', () => {
+    const result = createMockResult({
+      actionItems: [
+        createActionItem('Create testing spreadsheet for LEAP templates and assign to manager'),
+      ],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['Update LEAP testing assignment sheet with tester list'],
+    });
+    // Intentional: rule-based Jaccard does not catch this. If embedding-based
+    // matching is added later, this test should flip to assert 'existing-task'.
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+  });
+
+  it('does NOT mark item as existing-task when no matching open task', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Review quarterly revenue forecast report')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['Send welcome email to new hires'],
+    });
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+    assert.notEqual(processed.stagedItemStatus['ai_001'], 'skipped');
+  });
+
+  it("does NOT match when stopwords dominate (min-token guard rejects short matches)", () => {
+    // "send the report" and "review the report" share {the, report} → 2/4 = 0.5
+    // Jaccard alone at 0.5 < 0.7, but also both sides are only 3 meaningful tokens —
+    // the min-token guard would have caught it anyway. This test documents both layers.
+    const result = createMockResult({
+      actionItems: [createActionItem('send the report')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['review the report'],
+    });
+    assert.notEqual(processed.stagedItemSource['ai_001'], 'existing-task');
+  });
+
+  it("min-token guard rejects ≤3-token matches even at perfect Jaccard", () => {
+    // Two identical 3-token strings → Jaccard 1.0 — but min-token guard blocks.
+    // This protects against bogus matches on truncated task text.
+    const result = createMockResult({
+      actionItems: [createActionItem('ship the thing')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['ship the thing'],
+    });
+    assert.notEqual(processed.stagedItemSource['ai_001'], 'existing-task');
+  });
+
+  it('completed-item match wins over open-task match when both hit (ordering)', () => {
+    // Same item matches BOTH a completed task and an open task.
+    // Ordering: completed checked first → source should be 'reconciled', not 'existing-task'.
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex Johnson tomorrow morning')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      completedItems: ['Send auth doc to Alex Johnson tomorrow morning already done'],
+      openTasks: ['Send auth doc to Alex Johnson tomorrow morning still to do'],
+    });
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    assert.ok(
+      processed.stagedItemMatchedText?.['ai_001']?.includes('already done'),
+      `expected matched text to come from completedItems, got: ${processed.stagedItemMatchedText?.['ai_001']}`,
+    );
+  });
+
+  it('handles empty openTasks array (no dedup applied)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Any action item here with enough tokens')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: [],
+    });
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+  });
+
+  it('handles undefined openTasks (no dedup applied)', () => {
+    const result = createMockResult({
+      actionItems: [createActionItem('Any action item here with enough tokens')],
+    });
+    const processed = processMeetingExtraction(result, '', {});
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+  });
+
+  it('ignores openTasks candidates that themselves have fewer than 4 tokens', () => {
+    // Short open task "do laundry" (2 tokens) should NEVER participate in matches,
+    // even if the extracted item is long — protects against short task entries
+    // in the list dragging down specificity.
+    const result = createMockResult({
+      actionItems: [createActionItem('Make sure to do laundry this weekend')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['do laundry'],
+    });
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+  });
+
+  it('respects custom reconcileJaccard threshold', () => {
+    // With a high threshold (0.95), even a ~0.83 match is rejected.
+    const result = createMockResult({
+      actionItems: [createActionItem('Send auth doc to Alex soon')],
+    });
+    const processed = processMeetingExtraction(result, '', {
+      openTasks: ['Send auth doc to Alex'],
+      reconcileJaccard: 0.95,
+    });
+    assert.equal(processed.stagedItemSource['ai_001'], 'ai');
+  });
+
+  // Plan step 8d: benchmark against the reported 145-open-task workspace scale.
+  // Non-CI-enforced but logs actual duration via t.diagnostic — if consistently
+  // over ~250ms, consider caching tokenized open tasks across meetings in the
+  // parallel winddown path. Hard ceiling 500ms to catch pathological regressions.
+  it('benchmark: 145 open tasks × 20 action items completes under 500ms', (t) => {
+    const actionItems = Array.from({ length: 20 }, (_, i) =>
+      createActionItem(`Action item number ${i} with enough tokens to pass the guard`),
+    );
+    const openTasks = Array.from({ length: 145 }, (_, i) =>
+      `Open task ${i} with distinct identifying content token ${i}`,
+    );
+    const result = createMockResult({ actionItems });
+
+    const start = process.hrtime.bigint();
+    const processed = processMeetingExtraction(result, '', { openTasks });
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+
+    t.diagnostic(`processMeetingExtraction(145 openTasks × 20 items) took ${elapsedMs.toFixed(1)}ms`);
+    assert.ok(
+      elapsedMs < 500,
+      `expected < 500ms at 145-task scale; saw ${elapsedMs.toFixed(1)}ms (regression — consider tokenization cache)`,
+    );
+    // Sanity: 20 items remain (none matched the distinct-content open tasks).
+    assert.equal(processed.filteredItems.length, 20);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // calculateSpeakingRatio
 // ---------------------------------------------------------------------------
 

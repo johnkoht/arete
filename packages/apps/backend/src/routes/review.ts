@@ -10,7 +10,7 @@ import {
   FileStorageAdapter,
   createServices,
 } from '@arete/core';
-import type { StagedItem, WorkspaceTask, Commitment } from '@arete/core';
+import type { StagedItem, WorkspaceTask, Commitment, ItemSource } from '@arete/core';
 import * as workspaceService from '../services/workspace.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ type StagedMemoryItem = {
   meetingTitle: string;
   meetingDate: string;
   meetingArea?: string;
-  source?: 'ai' | 'dedup' | 'reconciled';
+  source?: ItemSource;
   confidence?: number;
   ownerSlug?: string;
   direction?: 'i_owe_them' | 'they_owe_me';

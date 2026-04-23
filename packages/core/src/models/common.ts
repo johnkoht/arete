@@ -4,6 +4,23 @@
  * RULE: This is a leaf module — it must NOT import from any other model file.
  */
 
+/**
+ * Origin of a staged item (extracted, deduped, or reconciled against workspace state).
+ * Canonical source of truth. Keep in sync with:
+ *   - packages/apps/backend/src/services/workspace.ts (parseStagedItemSource)
+ *   - packages/apps/web/src/api/types.ts (standalone duplicate — web has no @arete/core dep)
+ *   - packages/apps/web/src/api/meetings.ts (standalone duplicate)
+ * Drift is caught by packages/apps/backend/test/services/item-source-compat.test.ts.
+ *
+ * Values:
+ * - 'ai': LLM extracted
+ * - 'dedup': matched user notes in the meeting body
+ * - 'reconciled': matched a completed task in week.md/scratchpad.md OR dropped by cross-meeting reconciliation
+ * - 'existing-task': matched an OPEN task in week.md/tasks.md (avoids duplicating already-tracked work)
+ * - 'slack-resolved': reserved for slack-evidence-dedup follow-on plan; no producer today
+ */
+export type ItemSource = 'ai' | 'dedup' | 'reconciled' | 'existing-task' | 'slack-resolved';
+
 /** Product primitive — the five building blocks of product knowledge */
 export type ProductPrimitive = 'Problem' | 'User' | 'Solution' | 'Market' | 'Risk';
 

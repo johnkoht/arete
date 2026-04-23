@@ -6,6 +6,7 @@
 
 // Common leaf types
 export type {
+  ItemSource,
   ProductPrimitive,
   WorkType,
   SkillCategory,

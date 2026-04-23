@@ -4,7 +4,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems } from '../../src/utils/agenda.js';
+import { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems, getOpenTasks } from '../../src/utils/agenda.js';
 
 describe('parseAgendaItems', () => {
   it('parses basic unchecked items', () => {
@@ -216,5 +216,101 @@ Some regular text
 `;
     const items = getCompletedItems(content);
     assert.equal(items.length, 0);
+  });
+});
+
+describe('getOpenTasks', () => {
+  it('returns only unchecked tasks (ignores completed)', () => {
+    const content = `
+- [ ] Task one
+- [x] Task two
+- [ ] Task three
+- [X] Task four
+`;
+    assert.deepEqual(getOpenTasks(content), ['Task one', 'Task three']);
+  });
+
+  it('strips @tag(value) metadata from task text', () => {
+    const content = `
+- [ ] Update LEAP testing assignment sheet @area(glance-communications) @person(elyse-sack) @due(2026-04-22)
+- [ ] Follow up with team @area(pm-operations)
+`;
+    assert.deepEqual(getOpenTasks(content), [
+      'Update LEAP testing assignment sheet',
+      'Follow up with team',
+    ]);
+  });
+
+  it('strips @from(commitment:XXX) metadata cleanly', () => {
+    const content = '- [ ] Send report to Alice @from(commitment:abc123) @due(2026-04-30)';
+    assert.deepEqual(getOpenTasks(content), ['Send report to Alice']);
+  });
+
+  it('normalizes whitespace after tag removal', () => {
+    const content = '- [ ]  Task   with @area(x)   extra  spaces  ';
+    assert.deepEqual(getOpenTasks(content), ['Task with extra spaces']);
+  });
+
+  it('excludes task text that becomes empty after stripping tags', () => {
+    const content = `
+- [ ] @area(x)
+- [ ] Real task @due(2026-04-22)
+`;
+    assert.deepEqual(getOpenTasks(content), ['Real task']);
+  });
+
+  it('handles nested indentation (sub-tasks)', () => {
+    const content = `
+- [ ] Top-level task
+  - [ ] Nested subtask
+    - [ ] Deeper nested
+- [ ] Another top-level
+`;
+    assert.deepEqual(getOpenTasks(content), [
+      'Top-level task',
+      'Nested subtask',
+      'Deeper nested',
+      'Another top-level',
+    ]);
+  });
+
+  it('returns empty array for empty content', () => {
+    assert.deepEqual(getOpenTasks(''), []);
+  });
+
+  it('returns empty array when no tasks exist', () => {
+    assert.deepEqual(getOpenTasks('# Heading\n\nSome prose.'), []);
+  });
+
+  it('ignores mixed [x]/[ ] correctly in a file with both', () => {
+    // Mirrors the real week.md shape
+    const content = `
+## Must complete
+- [x] Activate CW production flag @area(glance-communications)
+- [ ] Promote LEAP templates to production @area(glance-communications)
+
+## Should complete
+- [x] Test Leap templates in staging
+- [ ] Update LEAP testing assignment sheet @area(glance-communications) @due(2026-04-22)
+`;
+    assert.deepEqual(getOpenTasks(content), [
+      'Promote LEAP templates to production',
+      'Update LEAP testing assignment sheet',
+    ]);
+  });
+
+  it('co-exists with getCompletedItems on the same content (no interference)', () => {
+    const content = `
+- [ ] Open task
+- [x] Done task
+`;
+    assert.deepEqual(getOpenTasks(content), ['Open task']);
+    assert.deepEqual(getCompletedItems(content), ['Done task']);
+  });
+
+  it('differs from getUncheckedAgendaItems: strips task metadata', () => {
+    const content = '- [ ] Task text @area(foo) @due(2026-04-22)';
+    assert.deepEqual(getOpenTasks(content), ['Task text']);
+    assert.deepEqual(getUncheckedAgendaItems(content), ['Task text @area(foo) @due(2026-04-22)']);
   });
 });

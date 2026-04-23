@@ -93,6 +93,42 @@ describe('meeting extract command', () => {
       assert.ok(result.error.includes('not found') || result.error.includes('nonexistent'));
     });
 
+    it('errors early when --reconcile is used without ai.tiers.standard configured', () => {
+      // Regression for plan step 2: the reconciliation review pass routes
+      // through the 'standard' tier. Without it, extraction would complete
+      // (paying the 'extraction' tier cost) and only then would batchLLMReview's
+      // catch swallow a cryptic tier-missing error. Fail-fast before any LLM call.
+      const areteYaml = join(tmpDir, 'arete.yaml');
+      const config = `ai:
+  tiers:
+    fast: anthropic/claude-3-haiku
+    frontier: anthropic/claude-opus-4-6
+  tasks:
+    extraction: frontier
+`;
+      writeFileSync(areteYaml, config, 'utf8');
+
+      const { stdout, code } = runCliRaw(
+        ['meeting', 'extract', 'resources/meetings/2026-03-01_sprint-planning.md', '--reconcile', '--json', '--skip-qmd'],
+        {
+          cwd: tmpDir,
+          env: { ...process.env, ANTHROPIC_API_KEY: 'test-key' },
+        },
+      );
+
+      assert.equal(code, 1);
+      const result = JSON.parse(stdout) as { success: boolean; error: string };
+      assert.equal(result.success, false);
+      assert.ok(
+        result.error.includes('standard'),
+        `expected error to mention 'standard' tier, got: ${result.error}`,
+      );
+      assert.ok(
+        result.error.includes('--reconcile') || result.error.includes('reconcile'),
+        `expected error to reference --reconcile, got: ${result.error}`,
+      );
+    });
+
     it('errors when not in a workspace', () => {
       const nonWorkspace = createTmpDir('arete-test-non-workspace');
       try {
@@ -1240,11 +1276,18 @@ describe('--reconcile flag', () => {
     );
 
     const result = JSON.parse(stdout) as { success: boolean; error?: string };
-    // Should proceed past option parsing (may fail at LLM call)
+    // Should proceed past option parsing (may fail later — tier fail-fast OR LLM call).
     if (!result.success) {
       assert.ok(!result.error?.includes('unknown option'), `Should not error about unknown option: ${result.error}`);
-      assert.ok(!result.error?.includes('--reconcile'), `Should not error about --reconcile flag: ${result.error}`);
+      // Note: post plan-step-2, the fail-fast error legitimately mentions --reconcile
+      // when ai.tiers.standard is unset. That's expected behavior, not an option-parser bug.
+      // The assertion here only checks that the flag itself was accepted.
+      assert.ok(
+        !result.error?.toLowerCase().includes('unknown option --reconcile'),
+        `Option parser should accept --reconcile: ${result.error}`,
+      );
     }
+    void code;
   });
 
   it('--reconcile-days accepts custom value', () => {

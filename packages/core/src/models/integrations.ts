@@ -4,6 +4,8 @@
  * Imports from common.ts ONLY.
  */
 
+import type { ItemSource } from './common.js';
+
 // ---------------------------------------------------------------------------
 // Staged item types (meeting triage)
 // ---------------------------------------------------------------------------
@@ -32,8 +34,8 @@ export type StagedItem = {
   id: string;   // e.g. "ai_001"
   text: string;
   type: 'ai' | 'de' | 'le';
-  /** Origin of this item: ai (LLM extracted), dedup (matched user notes), reconciled (matched weekly action item) */
-  source?: 'ai' | 'dedup' | 'reconciled';
+  /** Origin of this item — see ItemSource in models/common.ts for value meanings */
+  source?: ItemSource;
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
   /** Owner slug for action items (who is responsible) */

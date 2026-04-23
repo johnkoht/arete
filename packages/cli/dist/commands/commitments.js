@@ -120,6 +120,122 @@ export function registerCommitmentsCommand(program) {
         console.log('');
     });
     // ---------------------------------------------------------------------------
+    // arete commitments create <text>
+    // ---------------------------------------------------------------------------
+    commitmentsCmd
+        .command('create <text>')
+        .description('Create a commitment')
+        .requiredOption('--person <slug>', 'Person slug (e.g. anthony-avina)')
+        .requiredOption('--direction <direction>', 'Direction: i_owe_them or they_owe_me')
+        .option('--person-name <name>', 'Person display name (derived from slug if omitted)')
+        .option('--goal <slug>', 'Goal slug to link')
+        .option('--area <slug>', 'Area slug')
+        .option('--date <date>', 'Date (YYYY-MM-DD, defaults to today)')
+        .option('--source <source>', 'Source reference (e.g. meeting file)')
+        .option('--skip-qmd', 'Skip automatic qmd index update')
+        .option('--json', 'Output as JSON')
+        .action(async (text, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+                info('Run "arete install" to create a workspace');
+            }
+            process.exit(1);
+        }
+        // Validate direction
+        if (opts.direction !== 'i_owe_them' &&
+            opts.direction !== 'they_owe_me') {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Invalid direction: "${opts.direction}". Must be i_owe_them or they_owe_me`,
+                }));
+            }
+            else {
+                error(`Invalid direction: "${opts.direction}". Must be i_owe_them or they_owe_me`);
+            }
+            process.exit(1);
+        }
+        const direction = opts.direction;
+        // Derive person name from slug if not provided
+        const personName = opts.personName ??
+            opts.person
+                .split('-')
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' ');
+        // Parse date
+        const date = opts.date ? new Date(opts.date) : undefined;
+        if (date && Number.isNaN(date.getTime())) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: `Invalid date: "${opts.date}"` }));
+            }
+            else {
+                error(`Invalid date: "${opts.date}"`);
+            }
+            process.exit(1);
+        }
+        let result;
+        try {
+            result = await services.commitments.create(text, opts.person, personName, direction, {
+                goalSlug: opts.goal,
+                area: opts.area,
+                date,
+                source: opts.source,
+            });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to create commitment';
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
+        // Refresh QMD index
+        let qmdResult;
+        if (!opts.skipQmd) {
+            const config = await loadConfig(services.storage, root);
+            qmdResult = await refreshQmdIndex(root, config.qmd_collection);
+        }
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                commitment: {
+                    id: result.commitment.id,
+                    idShort: result.commitment.id.slice(0, 8),
+                    text: result.commitment.text,
+                    direction: result.commitment.direction,
+                    personSlug: result.commitment.personSlug,
+                    personName: result.commitment.personName,
+                    date: result.commitment.date,
+                    status: result.commitment.status,
+                },
+                ...(result.task
+                    ? { task: { id: result.task.id, destination: result.task.destination } }
+                    : {}),
+                qmd: qmdResult ?? { indexed: false, skipped: true },
+            }, null, 2));
+            return;
+        }
+        success('Commitment created.');
+        listItem('Text', result.commitment.text);
+        listItem('Person', personName);
+        listItem('Direction', direction === 'i_owe_them' ? 'I owe them' : 'They owe me');
+        listItem('ID', result.commitment.id.slice(0, 8));
+        if (result.task) {
+            listItem('Task', `${result.task.id} → ${result.task.destination}`);
+        }
+        displayQmdResult(qmdResult);
+        console.log('');
+    });
+    // ---------------------------------------------------------------------------
     // arete commitments resolve <id>
     // ---------------------------------------------------------------------------
     commitmentsCmd

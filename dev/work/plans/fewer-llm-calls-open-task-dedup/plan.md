@@ -1,13 +1,13 @@
 ---
 title: "Reduce extraction LLM cost + fix open-task duplication"
 slug: fewer-llm-calls-open-task-dedup
-status: draft
+status: building
 size: medium
 tags: [cli, core, backend, web, meetings, extraction, reconciliation, cost]
 created: "2026-04-22T00:00:00.000Z"
 updated: "2026-04-22T00:00:00.000Z"
 completed: null
-execution: null
+execution: "branch: worktree-fewer-llm-calls-open-task-dedup; 5 commits; awaiting manual QA + merge"
 has_review: true
 has_pre_mortem: true
 has_prd: false
@@ -44,6 +44,8 @@ Key revisions from review:
 
 - **Slack-digest evidence** → `slack-evidence-dedup` (stub at `dev/work/plans/slack-evidence-dedup/plan.md`). Depends on this plan landing first (shared type + post-filter infrastructure).
 - **Computed topic/area memory layer** (single `getCompletionEvidence()` primitive; `.arete/memory/summaries/` as computed cache). Separate plan. Per MEMORY.md entry "L3 memory should be automated."
+- **Semantic task dedup** (`semantic-task-dedup`, pending): catches synonym-level duplicates that Jaccard misses — e.g. "Create testing spreadsheet for LEAP templates" ≈ "Update LEAP testing assignment sheet" at Jaccard ≈ 0.17. Two candidate implementations: (a) embedding similarity + cosine distance on candidate pairs, (b) one batched `reconciliation`-tier LLM-judge call over unflagged action items (natural extension of `batchLLMReview`). Blocked on this plan landing (needs the shared type + post-filter seam). Natural fit inside `computed-topic-memory` if that plan activates first.
+- **Populate `staged_item_matched_text` for cross-meeting reconciliation**: the Jaccard paths (completed-tasks, open-tasks) set `stagedItemMatchedText[id]` so the web UI tooltip explains *why* items are skipped. The cross-meeting path in `meeting.ts:914-921` (and `agent.ts` analog) only sets status + source, leaving `reconciled` items with no matched-text explanation in the UI. Small change, pure observability improvement, low-risk.
 - Prompt tuning for decision/learning/action taxonomy.
 - Raising / area-scoping `MAX_EXISTING_TASKS = 20`.
 - Cross-invocation reconciliation-context cache for parallel winddown.

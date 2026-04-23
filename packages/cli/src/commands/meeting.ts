@@ -29,6 +29,7 @@ import {
   applyMeetingIntelligence,
   generateMeetingManifest,
   getCompletedItems,
+  getOpenTasks,
   calculateSpeakingRatio,
   inferUrgency,
   loadReconciliationContext,
@@ -530,6 +531,10 @@ export function registerMeetingCommands(program: Command): void {
       const config = await loadConfig(services.storage, root);
       const paths = services.workspace.getPaths(root);
 
+      // (Fail-fast for --reconcile + missing standard tier is deferred until
+      // after the importance-skip short-circuit below so `--importance skip`
+      // can exit without paying any LLM cost even on misconfigured workspaces.)
+
       // Resolve file path
       const meetingPath = file.startsWith('/') ? file : join(root, file);
 
@@ -740,6 +745,21 @@ export function registerMeetingCommands(program: Command): void {
         return;
       }
 
+      // Fail-fast (moved here from earlier): --reconcile requires the 'standard'
+      // tier because batchLLMReview routes to it. Placed AFTER the
+      // importance-skip short-circuit so `--importance skip` exits cleanly on
+      // workspaces missing the tier. Still runs before any LLM call, so no
+      // extraction tier cost is paid if config is bad.
+      if (opts.reconcile && !config.ai?.tiers?.standard) {
+        const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
+      }
+
       // Speaking ratio upgrade: If importance === 'light', check speaking ratio
       // If owner speaks > 40%, upgrade to 'normal' (they led the meeting)
       if (effectiveImportance === 'light') {
@@ -773,6 +793,15 @@ export function registerMeetingCommands(program: Command): void {
       // Create LLM call wrapper using AIService
       const callLLM: MeetingLLMCallFn = async (prompt: string) => {
         const result = await services.ai.call('extraction', prompt);
+        return result.text;
+      };
+
+      // Reconciliation review runs on the cheaper 'reconciliation' tier
+      // (typically 'standard'/Sonnet) rather than the 'extraction' tier
+      // (often 'frontier'/Opus). Keep callLLM bound to 'extraction' so the
+      // main extraction path is unchanged; only batchLLMReview uses this.
+      const callLLMReconciliation: MeetingLLMCallFn = async (prompt: string) => {
+        const result = await services.ai.call('reconciliation', prompt);
         return result.text;
       };
 
@@ -847,17 +876,24 @@ export function registerMeetingCommands(program: Command): void {
         // Extract user notes and process extraction (filtering, dedup, metadata)
         const userNotes = extractUserNotes(body);
 
-        // Read completed items from week.md and scratchpad.md for reconciliation
+        // Read completed items from week.md and scratchpad.md for reconciliation,
+        // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
         const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
         const scratchpadContent = await services.storage.read(join(paths.now, 'scratchpad.md')) ?? '';
+        const tasksContent = await services.storage.read(join(paths.now, 'tasks.md')) ?? '';
         const completedItems = [
           ...getCompletedItems(weekContent),
           ...getCompletedItems(scratchpadContent),
+        ];
+        const openTasks = [
+          ...getOpenTasks(weekContent),
+          ...getOpenTasks(tasksContent),
         ];
 
         processed = processMeetingExtraction(extractionResult, userNotes, {
           priorItems,
           completedItems,
+          openTasks,
           importance: effectiveImportance,
         });
 
@@ -906,7 +942,7 @@ export function registerMeetingCommands(program: Command): void {
               const drops = await batchLLMReview(
                 reviewItems,
                 ctx.recentCommittedItems,
-                callLLM,
+                callLLMReconciliation,
               );
               for (const drop of drops) {
                 processed.stagedItemStatus[drop.id] = 'skipped';
@@ -971,6 +1007,22 @@ export function registerMeetingCommands(program: Command): void {
           }))
         : [];
 
+      // Per-source skip tally (observability for dedup behavior).
+      // Lets users see why items were skipped without spelunking through frontmatter.
+      const skippedBySource = processed
+        ? Object.entries(processed.stagedItemStatus).reduce(
+            (acc, [id, status]) => {
+              if (status !== 'skipped') return acc;
+              const source = processed.stagedItemSource[id];
+              if (source === 'reconciled') acc.reconciled += 1;
+              else if (source === 'existing-task') acc.existingTask += 1;
+              else if (source === 'slack-resolved') acc.slackResolved += 1;
+              return acc;
+            },
+            { reconciled: 0, existingTask: 0, slackResolved: 0 },
+          )
+        : { reconciled: 0, existingTask: 0, slackResolved: 0 };
+
       // Build response
       const response: Record<string, unknown> = {
         success: true,
@@ -982,6 +1034,7 @@ export function registerMeetingCommands(program: Command): void {
         contextUsed: !!contextBundle,
         priorItemsUsed: !!priorItems,
         reconciled,
+        skippedBySource,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
@@ -1022,6 +1075,16 @@ export function registerMeetingCommands(program: Command): void {
 
       if (shouldStage) {
         success(`Staged sections written to: ${meetingPath}`);
+
+        // Per-source skip summary
+        const totalSkipped = skippedBySource.reconciled + skippedBySource.existingTask + skippedBySource.slackResolved;
+        if (totalSkipped > 0) {
+          const parts: string[] = [];
+          if (skippedBySource.reconciled > 0) parts.push(`${skippedBySource.reconciled} reconciled`);
+          if (skippedBySource.existingTask > 0) parts.push(`${skippedBySource.existingTask} existing-task`);
+          if (skippedBySource.slackResolved > 0) parts.push(`${skippedBySource.slackResolved} slack-resolved`);
+          info(`Skipped ${totalSkipped} items: ${parts.join(', ')}`);
+        }
 
         // Display reconciliation details
         if (reconciliationResult) {

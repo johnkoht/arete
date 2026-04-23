@@ -6,6 +6,7 @@
 import { join } from 'path';
 import fs from 'fs/promises';
 import matter from 'gray-matter';
+import type { ItemSource } from '@arete/core';
 import {
   FileStorageAdapter,
   parseStagedSections,
@@ -352,18 +353,35 @@ export async function listMeetings(workspaceRoot: string): Promise<MeetingSummar
   return summaries;
 }
 
-/** Parse `staged_item_source` from meeting file frontmatter. */
-function parseStagedItemSource(content: string): Record<string, 'ai' | 'dedup'> {
+/** Valid ItemSource values — must stay in sync with models/common.ts::ItemSource. */
+const VALID_ITEM_SOURCES: readonly ItemSource[] = [
+  'ai', 'dedup', 'reconciled', 'existing-task', 'slack-resolved',
+];
+
+function isItemSource(v: unknown): v is ItemSource {
+  return typeof v === 'string' && (VALID_ITEM_SOURCES as readonly string[]).includes(v);
+}
+
+/**
+ * Parse `staged_item_source` from meeting file frontmatter.
+ *
+ * Previously this allowlisted only 'ai' and 'dedup', silently dropping
+ * 'reconciled' (and would drop 'existing-task' and 'slack-resolved' once
+ * those ship). That caused the UI to display reconciled items as 'ai' via
+ * the `?? 'ai'` fallback downstream. Fixed to honor the full ItemSource union.
+ *
+ * Exported for unit testing; the production call site is `getMeeting` below.
+ */
+export function parseStagedItemSource(content: string): Record<string, ItemSource> {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return {};
   try {
     const fm = matter(content).data as Record<string, unknown>;
     const raw = fm['staged_item_source'];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-    // Validate values are 'ai' or 'dedup'
-    const result: Record<string, 'ai' | 'dedup'> = {};
+    const result: Record<string, ItemSource> = {};
     for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-      if (val === 'ai' || val === 'dedup') {
+      if (isItemSource(val)) {
         result[key] = val;
       }
     }

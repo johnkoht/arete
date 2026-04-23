@@ -8,7 +8,7 @@ export { checkDuplicate } from './dedup.js';
 export { buildContextDumpArtifacts, buildContextDumpQualityReport, } from './context-dump-quality.js';
 export { findAvailableSlots } from './availability.js';
 export { generateIntegrationSection, injectIntegrationSection, deriveIntegrationFromLegacy, } from './integration.js';
-export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems } from './agenda.js';
+export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems, getOpenTasks } from './agenda.js';
 export { extractAttendeeSlugs } from './attendees.js';
 export { jaccardSimilarity, normalizeForJaccard } from './similarity.js';
 //# sourceMappingURL=index.js.map

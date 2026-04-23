@@ -65,6 +65,12 @@ interface MockDepsOptions {
   /** Core extraction response for call() method */
   coreResponse?: MeetingIntelligence;
   aiError?: Error;
+  /**
+   * Per-path content overrides (match by path suffix). Used when a test needs
+   * different content for week.md / tasks.md / scratchpad.md vs the meeting
+   * file. Checked BEFORE `fileContent` default.
+   */
+  pathFixtures?: Record<string, string>;
 }
 
 /** Create ActionItem for core extraction format */
@@ -114,13 +120,22 @@ function toRawLLMJson(intelligence: MeetingIntelligence): object {
 
 function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
   writtenFiles: Array<{ path: string; content: string }>;
+  aiCalls: Array<{ task: string; prompt: string }>;
 } {
   const writtenFiles: Array<{ path: string; content: string }> = [];
+  const aiCalls: Array<{ task: string; prompt: string }> = [];
 
   return {
     writtenFiles,
+    aiCalls,
     readFile: async (path: string) => {
       if (options.readError) throw options.readError;
+      // Per-path fixtures first (match by suffix: week.md, tasks.md, etc.)
+      if (options.pathFixtures) {
+        for (const [suffix, content] of Object.entries(options.pathFixtures)) {
+          if (path.endsWith(suffix)) return content;
+        }
+      }
       return options.fileContent ?? `---
 title: Test Meeting
 status: pending
@@ -141,8 +156,14 @@ Bob: Sounds good. We've decided to postpone the refactor.
       writtenFiles.push({ path, content });
     },
     aiService: {
-      call: async () => {
+      call: async (task, prompt) => {
+        aiCalls.push({ task, prompt });
         if (options.aiError) throw options.aiError;
+        // Reconciliation tier returns an empty drops list so the JSON parse
+        // in batchLLMReview yields no changes (valid JSON that parses cleanly).
+        if (task === 'reconciliation') {
+          return { text: JSON.stringify({ drops: [] }) };
+        }
         const response = options.coreResponse ?? mockCoreExtractionResponse();
         // Convert to snake_case JSON that the core parser expects
         return { text: JSON.stringify(toRawLLMJson(response)) };
@@ -1223,6 +1244,57 @@ Discussion about tasks.
       // Batch review event should be logged
       const events = jobs.appended.map((e) => e.line);
       assert.ok(events.some((e) => e.includes('Batch review dropped 1')));
+    });
+
+    it('logs per-source skip count when an action item matches an open task', async () => {
+      // Plan step 7: surface existing-task skips in the job event log so users
+      // (and future observability) can see WHY dedup skipped something.
+      const jobs = makeMockJobs();
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          // Near-paraphrase of the open task → should match existing-task.
+          actionItems: [mockActionItem('Promote LEAP templates to production this week', { confidence: 0.9 })],
+        }),
+        pathFixtures: {
+          'week.md': '## Must complete\n- [ ] Promote LEAP templates to production @area(glance-communications)\n',
+          'tasks.md': '',
+          'scratchpad.md': '',
+        },
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const events = jobs.appended.map((e) => e.line);
+      assert.ok(
+        events.some((e) => /already tracked as open tasks/.test(e)),
+        `expected a summary event mentioning "already tracked as open tasks", got: ${events.join(' | ')}`,
+      );
+    });
+
+    it('batch LLM review uses the reconciliation tier, not extraction', async () => {
+      // Regression for plan step 1: batchLLMReview was piggybacking on the
+      // 'extraction' tier. In workspaces with extraction=frontier (Opus) and
+      // reconciliation=standard (Sonnet), this paid Opus on every review pass.
+      // Fix: extract path binds callLLMReconciliation to 'reconciliation' and
+      // passes that to batchLLMReview instead of the shared callLLM.
+      const jobs = makeMockJobs();
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          decisions: ['A real decision made in the meeting'],
+        }),
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const tasksCalled = deps.aiCalls.map((c) => c.task);
+      const extractionCalls = tasksCalled.filter((t) => t === 'extraction').length;
+      const reconciliationCalls = tasksCalled.filter((t) => t === 'reconciliation').length;
+      assert.equal(extractionCalls, 1, 'expected exactly one extraction call');
+      assert.equal(reconciliationCalls, 1, 'expected exactly one reconciliation (batchLLMReview) call');
+      // Belt-and-suspenders: no other task tiers should be hit on this path.
+      assert.equal(tasksCalled.length, 2, `expected only 2 AI calls, saw: ${tasksCalled.join(', ')}`);
     });
 
     it('batch LLM review degrades gracefully when LLM fails', async () => {

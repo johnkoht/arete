@@ -31,6 +31,7 @@ import {
   createServices,
   getWorkspacePaths,
   getCompletedItems,
+  getOpenTasks,
   reconcileMeetingBatch,
   loadReconciliationContext,
   loadRecentMeetingBatch,
@@ -179,6 +180,14 @@ export async function runProcessingSessionTestable(
       return result.text;
     };
 
+    // Reconciliation review runs on the cheaper 'reconciliation' tier
+    // (typically 'standard'/Sonnet) rather than 'extraction' (often Opus).
+    // Keeps main extraction unchanged; only batchLLMReview uses this.
+    const callLLMReconciliation = async (prompt: string): Promise<string> => {
+      const result = await deps.aiService.call('reconciliation', prompt);
+      return result.text;
+    };
+
     let coreResult: MeetingExtractionResult;
     try {
       // Track LLM errors separately since extractMeetingIntelligence catches them
@@ -226,20 +235,29 @@ export async function runProcessingSessionTestable(
       throw new Error(`AI extraction failed: ${message}`);
     }
 
-    // 4. Read completed items from week.md and scratchpad.md for reconciliation
+    // 4. Read completed items (week.md/scratchpad.md) for reconciliation
+    //    and open tasks (week.md/tasks.md) for existing-task dedup.
     let completedItems: string[] = [];
+    let openTasks: string[] = [];
     try {
       const weekPath = join(workspaceRoot, 'now', 'week.md');
       const weekContent = await deps.readFile(weekPath).catch(() => '');
       const scratchpadPath = join(workspaceRoot, 'now', 'scratchpad.md');
       const scratchpadContent = await deps.readFile(scratchpadPath).catch(() => '');
+      const tasksPath = join(workspaceRoot, 'now', 'tasks.md');
+      const tasksContent = await deps.readFile(tasksPath).catch(() => '');
       completedItems = [
         ...getCompletedItems(weekContent),
         ...getCompletedItems(scratchpadContent),
       ];
+      openTasks = [
+        ...getOpenTasks(weekContent),
+        ...getOpenTasks(tasksContent),
+      ];
     } catch {
       // Silently ignore errors - files may not exist
       completedItems = [];
+      openTasks = [];
     }
 
     // 5. Process extraction with filtering, dedup, and metadata using core function
@@ -248,6 +266,7 @@ export async function runProcessingSessionTestable(
     const processed = processMeetingExtraction(coreResult, userNotes, {
       priorItems: options.priorItems,
       completedItems,
+      openTasks,
     });
 
     // Log filtered counts (compare raw vs filtered items)
@@ -269,12 +288,18 @@ export async function runProcessingSessionTestable(
       jobs.appendEvent(jobId, `Found ${dedupCount} items matching your notes (auto-approved).`);
     }
 
-    // 7. Log reconciled items (matched completed tasks in workspace)
-    const reconciledCount = Object.values(processed.stagedItemSource).filter(
-      (s) => s === 'reconciled',
+    // 7. Log skipped items by source (completed reconciliation + open-task dedup)
+    const reconciledCount = Object.entries(processed.stagedItemStatus).filter(
+      ([id, status]) => status === 'skipped' && processed.stagedItemSource[id] === 'reconciled',
+    ).length;
+    const existingTaskCount = Object.entries(processed.stagedItemStatus).filter(
+      ([id, status]) => status === 'skipped' && processed.stagedItemSource[id] === 'existing-task',
     ).length;
     if (reconciledCount > 0) {
       jobs.appendEvent(jobId, `Skipped ${reconciledCount} items already completed in workspace.`);
+    }
+    if (existingTaskCount > 0) {
+      jobs.appendEvent(jobId, `Skipped ${existingTaskCount} items already tracked as open tasks.`);
     }
 
     // 8. Log high-confidence auto-approvals (excluding dedup)
@@ -353,7 +378,7 @@ export async function runProcessingSessionTestable(
         if (reviewItems.length > 0) {
           // Reuse cached context to avoid redundant I/O
           const ctx = cachedReconciliationContext ?? await deps.loadReconciliationContext();
-          const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLM);
+          const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLMReconciliation);
 
           if (drops.length > 0) {
             for (const drop of drops) {
@@ -481,6 +506,20 @@ export async function runProcessingSession(
     jobs.setJobStatus(jobId, 'error');
     jobs.appendEvent(jobId, 'Error: No AI provider configured. Set up API keys via arete credentials set anthropic.');
     throw new Error('No AI provider configured. Set up API keys via arete credentials set anthropic.');
+  }
+
+  // Fail-fast: backend always runs reconciliation via default deps
+  // (createDefaultDeps wires loadReconciliationContext + loadRecentBatch).
+  // batchLLMReview routes to the 'reconciliation' tier → 'standard' by default.
+  // If the standard tier isn't configured, fail now rather than after extraction
+  // has already paid the 'extraction' tier cost.
+  try {
+    moduleAiService.getModelForTask('reconciliation');
+  } catch {
+    const msg = 'Cross-meeting reconciliation requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+    jobs.setJobStatus(jobId, 'error');
+    jobs.appendEvent(jobId, `Error: ${msg}`);
+    throw new Error(msg);
   }
 
   // Build context for enhanced extraction (optional — skip on failure)

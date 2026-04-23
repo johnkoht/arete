@@ -59,7 +59,7 @@ export function getUncheckedAgendaItems(content: string): string[] {
 
 /**
  * Get completed (checked) items as simple strings.
- * 
+ *
  * @param content - Markdown content
  * @returns Array of completed item texts
  */
@@ -67,4 +67,34 @@ export function getCompletedItems(content: string): string[] {
   return parseAgendaItems(content)
     .filter(item => item.checked && item.text.length > 0)
     .map(item => item.text);
+}
+
+/**
+ * Get OPEN (unchecked) task items as simple strings, with `@tag(value)` metadata stripped.
+ *
+ * Used by meeting extract to dedup extracted action items against tasks
+ * already tracked in `now/week.md` and `now/tasks.md`. Mirrors
+ * getCompletedItems but filters to `- [ ]` and strips the `@area(...)`,
+ * `@person(...)`, `@due(...)`, `@from(commitment:...)` metadata markers
+ * so Jaccard matching operates on the semantic task text only.
+ *
+ * Differs from getUncheckedAgendaItems in that it strips metadata tags —
+ * agendas don't typically carry them; task files do.
+ *
+ * @param content - Markdown content from week.md or tasks.md
+ * @returns Array of open task texts (metadata stripped, whitespace normalized)
+ */
+export function getOpenTasks(content: string): string[] {
+  return parseAgendaItems(content)
+    .filter(item => !item.checked && item.text.length > 0)
+    .map(item => stripTaskMetadata(item.text))
+    .filter(text => text.length > 0);
+}
+
+/** Strip `@tag(value)` markers and normalize whitespace for Jaccard matching. */
+function stripTaskMetadata(text: string): string {
+  return text
+    .replace(/@[a-zA-Z]+\([^)]*\)/g, '')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
