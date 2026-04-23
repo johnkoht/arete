@@ -1102,12 +1102,14 @@ export function registerMeetingCommands(program: Command): void {
     .option('--items <ids>', 'Comma-separated item IDs to mark as approved (e.g., ai_001,de_001)')
     .option('--skip <ids>', 'Comma-separated item IDs to mark as skipped (won\'t be committed)')
     .option('--skip-qmd', 'Skip automatic qmd index update')
+    .option('--skip-topics', 'Skip topic page integration after commit (defer to `arete memory refresh`)')
     .option('--json', 'Output as JSON')
     .action(async (slug: string, opts: {
       all?: boolean;
       items?: string;
       skip?: string;
       skipQmd?: boolean;
+      skipTopics?: boolean;
       json?: boolean;
     }) => {
       const services = await createServices(process.cwd());
@@ -1320,6 +1322,63 @@ export function registerMeetingCommands(program: Command): void {
       await commitApprovedItems(services.storage, meetingPath, memoryDir);
 
       // --------------------------------------------------------------------------
+      // Hook 2 — Integrate this meeting into its topic wiki pages (Phase A #2)
+      //
+      // After commit succeeds, materialize the LLM-synthesized narrative into
+      // each topic page tagged on the meeting. Uses refreshAllFromMeetings
+      // scoped to this meeting's slugs — content-hash idempotency means only
+      // this new meeting's integration spends LLM; any previously-integrated
+      // sources for the same topics skip cleanly.
+      //
+      // Gated on `services.ai.isConfigured()` + `!opts.skipTopics`. Non-fatal:
+      // failure is reported to the user but never blocks the approve flow
+      // (the committed items are already persisted at this point).
+      // --------------------------------------------------------------------------
+      let topicIntegration: {
+        topics: number;
+        integrated: number;
+        fallback: number;
+        skipped: number;
+      } | undefined;
+      if (!opts.skipTopics && services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+        try {
+          // Re-read the just-committed file to get the post-alias topics list.
+          const committed = await services.storage.read(meetingPath);
+          if (committed !== null) {
+            const { parseMeetingFile } = await import('@arete/core');
+            const parsed = parseMeetingFile(committed);
+            const meetingTopics = parsed?.frontmatter.topics ?? [];
+            if (meetingTopics.length > 0) {
+              const topicCallLLM = async (prompt: string) => {
+                const r = await services.ai.call('synthesis', prompt);
+                return r.text;
+              };
+              const result = await services.topicMemory.refreshAllFromMeetings(paths, {
+                today: new Date().toISOString().slice(0, 10),
+                callLLM: topicCallLLM,
+                slugs: meetingTopics,
+                workspaceRoot: root,
+                lockLabel: 'meeting approve (topic ingest)',
+              });
+              topicIntegration = {
+                topics: result.topics.length,
+                integrated: result.totalIntegrated,
+                fallback: result.totalFallback,
+                skipped: result.totalSkipped,
+              };
+            }
+          }
+        } catch (err) {
+          // Non-fatal: approve already succeeded. Report and move on.
+          if (err instanceof Error && err.name === 'SeedLockHeldError') {
+            warn(`Topic integration skipped: ${err.message}`);
+          } else {
+            warn(`Topic integration failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+          }
+        }
+      }
+
+      // --------------------------------------------------------------------------
       // Create commitments and tasks from action items
       // --------------------------------------------------------------------------
       let tasksCreated = 0;
@@ -1430,6 +1489,7 @@ export function registerMeetingCommands(program: Command): void {
           learnings: (approvedItems?.learnings?.length ?? 0) > 0,
         },
         ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
+        topicIntegration: topicIntegration ?? null,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 
@@ -1454,6 +1514,15 @@ export function registerMeetingCommands(program: Command): void {
       }
       if (learningCount > 0) {
         listItem('Learnings', `${learningCount} (written to memory)`);
+      }
+      if (topicIntegration !== undefined) {
+        const parts: string[] = [];
+        if (topicIntegration.integrated > 0) parts.push(`${topicIntegration.integrated} integrated`);
+        if (topicIntegration.fallback > 0) parts.push(`${topicIntegration.fallback} fallback`);
+        if (topicIntegration.skipped > 0) parts.push(`${topicIntegration.skipped} skipped`);
+        if (parts.length > 0) {
+          listItem('Topics', `${topicIntegration.topics} touched (${parts.join(', ')})`);
+        }
       }
 
       displayQmdResult(qmdResult);
