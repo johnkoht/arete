@@ -695,11 +695,22 @@ Skills consuming the JSON should prefer `bodyForContext` (already truncated to b
    - Key attendee names (resolved to person slugs)
    - Related goal keywords (from goals/quarter.md)
 
-2. **Run targeted memory searches** — For each search term:
+2. **Run targeted memory searches** — Cover both atomic L2 items and
+   synthesized L3 topic pages. For each search term:
    ```bash
+   # Atomic: dated decisions and learnings
    arete search "<term>" --scope memory --limit 2
+
+   # Synthesized: topic-page narrative (1 per key term, tight budget)
+   arete topic find "<term>" --limit 1 --budget 250 --json
    ```
-   Use `--limit 2` per term to keep results focused. Cap total results at 5 items.
+   Use `--limit 2` per atomic term to keep results focused. Cap total atomic
+   results at 5 items. Topic-page narratives appear inline as 1–2 sentence
+   paraphrases (don't dump full `bodyForContext` into the user's view —
+   reference `[[topic-slug]]` for the full page).
+
+   When `arete topic find` returns `searchBackend: 'none'`, topic
+   retrieval is unavailable — note in output, don't crash.
 
 3. **Filter for relevance** — Not every result is worth surfacing. Keep only items that:
    - Directly inform the current planning context
