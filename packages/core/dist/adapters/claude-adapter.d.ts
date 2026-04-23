@@ -17,7 +17,24 @@ export declare class ClaudeAdapter implements IDEAdapter {
     integrationsDir(): string;
     formatRule(rule: CanonicalRule, _config: AreteConfig): string;
     transformRuleContent(content: string): string;
-    generateRootFiles(config: AreteConfig, _workspaceRoot: string, _sourceRulesDir?: string, skills?: SkillDefinition[]): Record<string, string>;
+    supportsMemoryInjection(): boolean;
+    /**
+     * Generate CLAUDE.md content. Propagates `generateClaudeMd`
+     * exceptions — caller (`WorkspaceService.regenerateRootFiles`)
+     * governs fallback: retry without memory, then leave existing file
+     * untouched (never wipe a good user-visible file with a minimal stub).
+     *
+     * For fresh installs where no CLAUDE.md exists yet, `generateMinimalRootFiles`
+     * provides a safe last-resort stub.
+     */
+    generateRootFiles(config: AreteConfig, _workspaceRoot: string, _sourceRulesDir?: string, skills?: SkillDefinition[], memorySummary?: import('../models/memory-summary.js').MemorySummary): Record<string, string>;
+    /**
+     * Last-resort minimal content, used by `regenerateRootFiles` only when
+     * the main generator throws AND no existing file is on disk. Ensures
+     * fresh installs never end up without CLAUDE.md even under a
+     * generator bug.
+     */
+    generateMinimalRootFiles(): Record<string, string>;
     generateCommands(skills: SkillDefinition[]): Record<string, string>;
     detectInWorkspace(workspaceRoot: string): boolean;
 }

@@ -64,15 +64,30 @@ export class ClaudeAdapter {
             .replace(/\.cursor\//g, '.claude/')
             .replace(/\.mdc\b/g, '.md');
     }
-    generateRootFiles(config, _workspaceRoot, _sourceRulesDir, skills) {
-        let claudeMd;
-        try {
-            claudeMd = generateClaudeMd(config, skills ?? []);
-        }
-        catch {
-            claudeMd = generateMinimalAgentsMd();
-        }
+    supportsMemoryInjection() {
+        return true;
+    }
+    /**
+     * Generate CLAUDE.md content. Propagates `generateClaudeMd`
+     * exceptions — caller (`WorkspaceService.regenerateRootFiles`)
+     * governs fallback: retry without memory, then leave existing file
+     * untouched (never wipe a good user-visible file with a minimal stub).
+     *
+     * For fresh installs where no CLAUDE.md exists yet, `generateMinimalRootFiles`
+     * provides a safe last-resort stub.
+     */
+    generateRootFiles(config, _workspaceRoot, _sourceRulesDir, skills, memorySummary) {
+        const claudeMd = generateClaudeMd(config, skills ?? [], memorySummary);
         return { 'CLAUDE.md': claudeMd };
+    }
+    /**
+     * Last-resort minimal content, used by `regenerateRootFiles` only when
+     * the main generator throws AND no existing file is on disk. Ensures
+     * fresh installs never end up without CLAUDE.md even under a
+     * generator bug.
+     */
+    generateMinimalRootFiles() {
+        return { 'CLAUDE.md': generateMinimalAgentsMd() };
     }
     generateCommands(skills) {
         return generateAllSkillCommands(skills);

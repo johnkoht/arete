@@ -21,6 +21,9 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { TopicMemoryService } from './services/topic-memory.js';
+import { MemoryIndexService } from './services/memory-index.js';
+import { MemoryLogService } from './services/memory-log.js';
 import { HygieneService } from './services/hygiene.js';
 /**
  * All services created by the factory, keyed by role.
@@ -39,6 +42,9 @@ export type AreteServices = {
     commitments: CommitmentsService;
     areaParser: AreaParserService;
     areaMemory: AreaMemoryService;
+    topicMemory: TopicMemoryService;
+    memoryIndex: MemoryIndexService;
+    memoryLog: MemoryLogService;
     hygiene: HygieneService;
     ai: AIService;
     tasks: TaskService;

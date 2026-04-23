@@ -227,9 +227,15 @@ export declare function batchLLMReview(currentItems: Array<{
  */
 export declare function loadReconciliationContext(storage: StorageAdapter, workspaceRoot: string): Promise<ReconciliationContext>;
 /**
- * Extract MeetingIntelligence from meeting frontmatter staged items.
+ * Extract MeetingIntelligence from meeting file content.
+ *
+ * Handles two formats:
+ * - Format A (staged/processed): Items in body sections (## Staged Action Items, etc.)
+ *   with owner metadata in frontmatter staged_item_owner map.
+ * - Format B (approved): Items in frontmatter approved_items object
+ *   ({ actionItems: string[], decisions: string[], learnings: string[] }).
  */
-declare function extractIntelligenceFromFrontmatter(frontmatter: Record<string, unknown>): MeetingIntelligence | null;
+declare function extractIntelligenceFromFrontmatter(frontmatter: Record<string, unknown>, body: string): MeetingIntelligence | null;
 /**
  * Load recent processed meetings as extraction batches for reconciliation.
  *

@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
  * All arrow notation variations we accept.
  * Order matters for regex construction (longer patterns first).
  */
-const ARROW_VARIANTS = ['-->', '=>', '->', '→'];
+const ARROW_VARIANTS = ['-->', '=>', '->', '→', '←'];
 /**
  * Regex to match ## Approved Action Items section header specifically.
  * This is tried FIRST because meetings may have both an empty "## Action Items"
@@ -101,11 +101,11 @@ function buildArrowPattern() {
 }
 const ARROW_PATTERN = buildArrowPattern();
 /**
- * Owner-only notation pattern: (@slug) without arrow or counterparty.
+ * Owner-only notation pattern: (@slug) with optional trailing arrow.
  * Used when an action item has an owner but no explicit counterparty.
- * Example: "Review the proposal (@john-koht)"
+ * Examples: "Review the proposal (@john-koht)", "Store config (@anthony-avina ←)"
  */
-const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*\)$/i;
+const OWNER_ONLY_PATTERN = /\(\s*@?([a-z0-9-]+)\s*(?:[→←])?\s*\)$/i;
 function parseActionItemLine(line) {
     const trimmed = line.trim();
     // Match checkbox: - [ ] or - [x] or - [X]

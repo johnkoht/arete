@@ -10,6 +10,7 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
+import type { TopicMemoryService } from './topic-memory.js';
 import type { WorkspacePaths } from '../models/index.js';
 /** Function that calls the LLM with a prompt and returns the response text. */
 export type LLMCallFn = (prompt: string) => Promise<string>;
@@ -82,7 +83,21 @@ export declare class AreaMemoryService {
     private readonly areaParser;
     private readonly commitments;
     private readonly memory;
-    constructor(storage: StorageAdapter, areaParser: AreaParserService, commitments: CommitmentsService, memory: MemoryService);
+    /**
+     * Optional TopicMemoryService for enriching the Topics section with
+     * page status + headline. When undefined, Topics render with meeting
+     * aggregates only (no wikilink status) — no crash, just less signal.
+     * Factory wiring will pass it; older construction sites remain valid.
+     */
+    private readonly topicMemory?;
+    constructor(storage: StorageAdapter, areaParser: AreaParserService, commitments: CommitmentsService, memory: MemoryService, 
+    /**
+     * Optional TopicMemoryService for enriching the Topics section with
+     * page status + headline. When undefined, Topics render with meeting
+     * aggregates only (no wikilink status) — no crash, just less signal.
+     * Factory wiring will pass it; older construction sites remain valid.
+     */
+    topicMemory?: TopicMemoryService | undefined);
     /**
      * Refresh area memory for a single area.
      *
@@ -148,6 +163,13 @@ export declare class AreaMemoryService {
     private writeSynthesisFile;
     private computeAreaData;
     /**
+     * Enrich raw TopicEntry aggregates (from meeting frontmatter scan) with
+     * status + headline + last_refreshed from the matching topic page, when one
+     * exists. Partial-state tolerant — `listAll()` errors are swallowed silently
+     * here; the unenriched topics still render with "no page yet" prose.
+     */
+    private enrichTopicsWithPages;
+    /**
      * Single-pass scan of area-matched meeting files.
      *
      * Collects both recent attendee IDs (for active people) and topic aggregates
@@ -158,10 +180,6 @@ export declare class AreaMemoryService {
      * matched meetings (stale exclusion applied at the end).
      */
     private scanAreaMeetings;
-    /**
-     * Get recently completed commitments for an area.
-     */
-    private getRecentlyCompleted;
     /**
      * Get recent decisions that match an area.
      */

@@ -583,24 +583,28 @@ export function registerTopicCommands(program: Command): void {
         for (const [fromSlug, toSlugs] of danglingByTopic) {
           const page = topics.find((t) => t.frontmatter.topic_slug === fromSlug);
           if (!page) continue;
-          let mutated = false;
+          let pageMutated = false;
           const newSections: typeof page.sections = { ...page.sections };
           for (const sectionName of DANGLING_SCAN_SECTIONS) {
             const body = page.sections[sectionName];
             if (body === undefined) continue;
             let rewritten = body;
+            let sectionMutated = false;
             for (const target of toSlugs) {
               // Global, word-boundary-safe replace of [[target]] → target
               const re = new RegExp(`\\[\\[${target.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]\\]`, 'g');
               const next = rewritten.replace(re, target);
               if (next !== rewritten) {
                 rewritten = next;
-                mutated = true;
+                sectionMutated = true;
               }
             }
-            if (mutated) newSections[sectionName] = rewritten;
+            if (sectionMutated) {
+              newSections[sectionName] = rewritten;
+              pageMutated = true;
+            }
           }
-          if (mutated) {
+          if (pageMutated) {
             const outPath = join(paths.memory, 'topics', `${fromSlug}.md`);
             const newContent = renderTopicPage({ ...page, sections: newSections });
             if (services.storage.writeIfChanged !== undefined) {

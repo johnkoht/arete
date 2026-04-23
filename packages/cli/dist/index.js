@@ -14,6 +14,7 @@ import { registerStatusCommand } from './commands/status.js';
 import { registerRouteCommand } from './commands/route.js';
 import { registerContextCommand, registerMemoryCommand, registerResolveCommand, registerBriefCommand, } from './commands/intelligence.js';
 import { registerPeopleCommands } from './commands/people.js';
+import { registerTopicCommands } from './commands/topic.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerToolCommands } from './commands/tool.js';
 import { registerIntegrationCommands } from './commands/integration.js';
@@ -94,6 +95,7 @@ ${chalk.bold('Integrations')}
 
 ${chalk.bold('Commitments')}
   commitments list [--direction]   List open commitments
+  commitments create <text>        Create a commitment
   commitments resolve <id>         Resolve or drop a commitment
 
 ${chalk.bold('Availability & Calendar')}
@@ -129,6 +131,7 @@ registerMemoryCommand(program);
 registerResolveCommand(program);
 registerBriefCommand(program);
 registerPeopleCommands(program);
+registerTopicCommands(program);
 registerSkillCommands(program);
 registerToolCommands(program);
 registerIntegrationCommands(program);

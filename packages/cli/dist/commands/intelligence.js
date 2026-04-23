@@ -400,7 +400,100 @@ export function registerMemoryCommand(program) {
                 commitments: services.commitments,
             });
         }
-        // 3. Refresh QMD index
+        // 2b. Refresh topic pages (Step 6 wiring — `arete memory refresh` now
+        // transparently refreshes topics when AI is configured, same pattern
+        // as cross-area synthesis). Gated on callLLM presence AND non-area
+        // scope (area-scoped refresh is a targeted operation, not a bulk
+        // memory sweep). Graceful fallback on error: topics stay as-is.
+        let topicResult;
+        if (!opts.area && !opts.dryRun && callLLM !== undefined) {
+            try {
+                topicResult = await services.topicMemory.refreshAllFromMeetings(paths, {
+                    today: new Date().toISOString().slice(0, 10),
+                    callLLM,
+                    workspaceRoot: root,
+                    lockLabel: 'memory refresh',
+                });
+            }
+            catch (err) {
+                // SeedLockHeldError surfaces here if seed or another refresh is
+                // running — friendly message rather than a stack trace.
+                if (err instanceof Error && err.name === 'SeedLockHeldError') {
+                    warn(`Topic refresh skipped: ${err.message}`);
+                }
+                else {
+                    warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+                }
+            }
+        }
+        // 2c. Regenerate CLAUDE.md with Active Topics boot-context
+        // (Step 9 — agent boot context). Only when AI is configured AND
+        // not targeting a specific area (area-scoped refresh is targeted
+        // work, not bulk boot-context refresh). Idempotent: no write when
+        // byte-equal to existing file. Non-fatal on failure.
+        let claudeMdRegen;
+        if (!opts.area && !opts.dryRun) {
+            try {
+                const { loadMemorySummary } = await import('@arete/core');
+                const config = await loadConfig(services.storage, root);
+                const skillList = await services.skills.list(root);
+                const memorySummary = await loadMemorySummary(services.topicMemory, paths);
+                claudeMdRegen = await services.workspace.regenerateRootFiles(config, paths, { skills: skillList, memorySummary });
+            }
+            catch (err) {
+                warn(`CLAUDE.md regeneration skipped: ${err instanceof Error ? err.message : 'unknown'}`);
+            }
+        }
+        // 3. Refresh memory index (`.arete/memory/index.md`) — Obsidian landing page.
+        // Idempotent: no write when content byte-equals existing file. Runs after
+        // area + person refresh so topic/person counts reflect fresh data. Skipped
+        // on --dry-run per convention.
+        let indexStatus = 'skipped';
+        let indexErrors = [];
+        if (!opts.dryRun && !opts.area) {
+            try {
+                const r = await services.memoryIndex.refreshMemoryIndex(paths);
+                indexStatus = r.status;
+                indexErrors = r.errors;
+            }
+            catch (err) {
+                // Non-fatal — area/person refresh already succeeded.
+                warn(`Memory index refresh failed: ${err instanceof Error ? err.message : 'unknown'}`);
+            }
+        }
+        // 3b. Emit a `refresh` event to .arete/memory/log.md — dogfoods the
+        // grammar and gives replay tooling a timeline. Best-effort; log write
+        // failure never blocks the refresh.
+        if (!opts.dryRun) {
+            try {
+                await services.memoryLog.append(paths, {
+                    event: 'refresh',
+                    fields: {
+                        scope: opts.area !== undefined ? 'area' : 'all',
+                        areas_updated: String(areaResult.updated),
+                        people_updated: String(personResult?.updated ?? 0),
+                        index_status: indexStatus,
+                        index_errors: String(indexErrors.length),
+                    },
+                });
+                // Companion event for CLAUDE.md regen — distinct event kind
+                // so replay can distinguish agent-boot-context changes from
+                // data refreshes.
+                if (claudeMdRegen !== undefined) {
+                    const claudeMdStatus = claudeMdRegen['CLAUDE.md'] ?? 'skipped';
+                    await services.memoryLog.append(paths, {
+                        event: 'claude-md-regen',
+                        fields: {
+                            result: claudeMdStatus,
+                        },
+                    });
+                }
+            }
+            catch {
+                // swallow — log best-effort
+            }
+        }
+        // 4. Refresh QMD index (existing behavior)
         let qmdResult;
         const totalUpdated = areaResult.updated + (personResult?.updated ?? 0);
         if (totalUpdated > 0 && !opts.skipQmd && !opts.dryRun) {
@@ -414,6 +507,14 @@ export function registerMemoryCommand(program) {
                 areas: areaResult,
                 synthesis: areaResult.synthesis ?? null,
                 people: personResult ?? null,
+                topics: topicResult ?? null,
+                bootContext: claudeMdRegen !== undefined
+                    ? { claudeMd: claudeMdRegen['CLAUDE.md'] ?? 'skipped' }
+                    : null,
+                memoryIndex: {
+                    status: indexStatus,
+                    errors: indexErrors,
+                },
                 qmd: qmdResult ?? { indexed: false, skipped: true },
             }, null, 2));
             return;
@@ -460,6 +561,51 @@ export function registerMemoryCommand(program) {
             }
             listItem('People scanned', String(personResult.scannedPeople));
             listItem('Meetings scanned', String(personResult.scannedMeetings));
+        }
+        // Topic results
+        if (topicResult !== undefined) {
+            console.log('');
+            if (topicResult.totalIntegrated > 0) {
+                success(`Integrated ${topicResult.totalIntegrated} source(s) into ${topicResult.topics.length} topic page(s).`);
+            }
+            else {
+                info('Topics: no new sources to integrate.');
+            }
+            if (topicResult.totalFallback > 0) {
+                warn(`Topic refresh: ${topicResult.totalFallback} fallback(s) (LLM errors — re-run when AI stable)`);
+            }
+        }
+        // CLAUDE.md regen status — distinguish updated vs unchanged so
+        // users know whether git status will reflect a change.
+        if (claudeMdRegen !== undefined) {
+            const claudeMdResult = claudeMdRegen['CLAUDE.md'];
+            if (claudeMdResult === 'updated') {
+                info('Boot context: CLAUDE.md updated (Active Topics section refreshed)');
+            }
+            else if (claudeMdResult === 'unchanged') {
+                info('Boot context: CLAUDE.md unchanged (no content change)');
+            }
+            else if (claudeMdResult === 'failed') {
+                warn('Boot context: CLAUDE.md regeneration failed (pre-existing file untouched)');
+            }
+        }
+        // Memory index status — surface errors prominently so users know
+        // when topic files are being silently excluded.
+        if (indexStatus === 'updated') {
+            if (indexErrors.length > 0) {
+                warn(`Memory index: updated (${indexErrors.length} item(s) excluded due to errors — run \`arete topic lint\`)`);
+            }
+            else {
+                info('Memory index: updated (.arete/memory/index.md)');
+            }
+        }
+        else if (indexStatus === 'unchanged') {
+            if (indexErrors.length > 0) {
+                warn(`Memory index: unchanged (${indexErrors.length} item(s) excluded due to errors — run \`arete topic lint\`)`);
+            }
+            else {
+                info('Memory index: unchanged (no content change)');
+            }
         }
         displayQmdResult(qmdResult);
         console.log('');

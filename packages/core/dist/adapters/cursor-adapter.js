@@ -62,7 +62,17 @@ export class CursorAdapter {
     transformRuleContent(content) {
         return content;
     }
-    generateRootFiles(config, _workspaceRoot, _sourceRulesDir, _skills) {
+    /**
+     * Cursor does NOT yet support memory injection into the generated
+     * AGENTS.md. `dist/AGENTS.md` is a static distributed artifact;
+     * per-workspace memory needs a post-process injection step (Phase B
+     * of topic-wiki-memory). Until then we explicitly return false so
+     * callers know to skip memory loading for Cursor workspaces.
+     */
+    supportsMemoryInjection() {
+        return false;
+    }
+    generateRootFiles(config, _workspaceRoot, _sourceRulesDir, _skills, _memorySummary) {
         const timestamp = new Date().toISOString();
         const version = config.version || '1.0.0';
         // Try to read pre-built comprehensive AGENTS.md from dist/

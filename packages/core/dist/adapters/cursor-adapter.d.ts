@@ -18,7 +18,15 @@ export declare class CursorAdapter implements IDEAdapter {
     generateCommands(_skills: SkillDefinition[]): Record<string, string>;
     formatRule(rule: CanonicalRule, _config: AreteConfig): string;
     transformRuleContent(content: string): string;
-    generateRootFiles(config: AreteConfig, _workspaceRoot: string, _sourceRulesDir?: string, _skills?: SkillDefinition[]): Record<string, string>;
+    /**
+     * Cursor does NOT yet support memory injection into the generated
+     * AGENTS.md. `dist/AGENTS.md` is a static distributed artifact;
+     * per-workspace memory needs a post-process injection step (Phase B
+     * of topic-wiki-memory). Until then we explicitly return false so
+     * callers know to skip memory loading for Cursor workspaces.
+     */
+    supportsMemoryInjection(): boolean;
+    generateRootFiles(config: AreteConfig, _workspaceRoot: string, _sourceRulesDir?: string, _skills?: SkillDefinition[], _memorySummary?: import('../models/memory-summary.js').MemorySummary): Record<string, string>;
     detectInWorkspace(workspaceRoot: string): boolean;
 }
 //# sourceMappingURL=cursor-adapter.d.ts.map

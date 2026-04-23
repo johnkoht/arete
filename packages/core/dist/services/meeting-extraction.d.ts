@@ -110,15 +110,6 @@ export declare function isTrivialDecision(text: string): string | null;
  */
 export declare function isTrivialLearning(text: string): string | null;
 /**
- * Check if a decision matches trivial patterns.
- * Safety: patterns do NOT match items containing decision verbs.
- */
-export declare function isTrivialDecision(text: string): string | null;
-/**
- * Check if a learning matches trivial patterns.
- */
-export declare function isTrivialLearning(text: string): string | null;
-/**
  * Build exclusion list section for deduplication.
  * Groups items by type (action items, decisions, learnings) with positive "SKIP" framing.
  * Includes UPDATE exception for changed items.
@@ -142,8 +133,15 @@ export declare function buildExclusionListSection(context?: MeetingContextBundle
  * @param context - Optional MeetingContextBundle for enhanced extraction
  * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  * @param ownerName - Owner's full name for speaking ratio and owner synthesis
+ * @param activeTopicSlugs - Pre-rendered slug list (`slug — status: summary` per line)
+ *   from `renderActiveTopicsAsSlugList(getActiveTopics(topics))`. When provided,
+ *   the extraction prompt instructs the LLM to prefer existing slugs at propose-
+ *   time, biasing against topic sprawl. This is the first line of defense against
+ *   duplicate topics; Jaccard + LLM alias adjudication at meeting-apply is the
+ *   backstop. Bare slugs, no wikilinks — `[[...]]` in the prompt would leak
+ *   into the JSON `topics[]` output.
  */
-export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[], ownerName?: string): string;
+export declare function buildMeetingExtractionPrompt(transcript: string, attendees?: string[], ownerSlug?: string, context?: MeetingContextBundle, priorItems?: PriorItem[], ownerName?: string, activeTopicSlugs?: string): string;
 /**
  * Build a lightweight LLM prompt for minimal extraction.
  * ~50% shorter than normal prompt, focused on summary + domain learnings.
@@ -179,6 +177,15 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
     mode?: ExtractionMode;
     /** Owner's full name for speaking ratio */
     ownerName?: string;
+    /**
+     * Pre-rendered active-topic slug list (bare slugs, no wikilinks) for
+     * biasing the extraction LLM toward reusing existing topic slugs.
+     * Build via `renderActiveTopicsAsSlugList(getActiveTopics(topics))`.
+     * When present, injected after the JSON schema. See
+     * `meeting-extraction.ts:buildMeetingExtractionPrompt` for the
+     * full rationale.
+     */
+    activeTopicSlugs?: string;
 }): Promise<MeetingExtractionResult>;
 /**
  * Format extraction result as markdown sections.

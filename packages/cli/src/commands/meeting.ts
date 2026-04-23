@@ -1339,6 +1339,7 @@ export function registerMeetingCommands(program: Command): void {
         integrated: number;
         fallback: number;
         skipped: number;
+        durationMs?: number;
       } | undefined;
       if (!opts.skipTopics && services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
         try {
@@ -1353,6 +1354,7 @@ export function registerMeetingCommands(program: Command): void {
                 const r = await services.ai.call('synthesis', prompt);
                 return r.text;
               };
+              const integrationStart = Date.now();
               const result = await services.topicMemory.refreshAllFromMeetings(paths, {
                 today: new Date().toISOString().slice(0, 10),
                 callLLM: topicCallLLM,
@@ -1365,6 +1367,7 @@ export function registerMeetingCommands(program: Command): void {
                 integrated: result.totalIntegrated,
                 fallback: result.totalFallback,
                 skipped: result.totalSkipped,
+                durationMs: Date.now() - integrationStart,
               };
             }
           }
@@ -1522,6 +1525,11 @@ export function registerMeetingCommands(program: Command): void {
         if (topicIntegration.skipped > 0) parts.push(`${topicIntegration.skipped} skipped`);
         if (parts.length > 0) {
           listItem('Topics', `${topicIntegration.topics} touched (${parts.join(', ')})`);
+        }
+        const dur = topicIntegration.durationMs ?? 0;
+        if (dur > 5000 || topicIntegration.topics > 2) {
+          const secs = (dur / 1000).toFixed(1);
+          warn(`Topic integration took ${secs}s (${topicIntegration.topics} topics). Use --skip-topics to defer; run \`arete memory refresh\` later to catch up.`);
         }
       }
 
