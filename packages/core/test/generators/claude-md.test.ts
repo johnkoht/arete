@@ -115,4 +115,103 @@ describe('generateClaudeMd', () => {
       'Should reference .agents/profiles/ directory'
     );
   });
+
+  // ---------------------------------------------------------------------
+  // Step 9 — Active Topics section + idempotency contract
+  // ---------------------------------------------------------------------
+
+  describe('Active Topics section (memory arg)', () => {
+    it('omits section entirely when memory is undefined (fresh workspace)', () => {
+      const output = generateClaudeMd(makeConfig(), []);
+      assert.ok(!output.includes('## Active Topics'));
+      assert.ok(!output.includes('Reflects memory as of'));
+    });
+
+    it('omits section entirely when activeTopics is empty', () => {
+      const output = generateClaudeMd(makeConfig(), [], { activeTopics: [] });
+      assert.ok(!output.includes('## Active Topics'));
+    });
+
+    it('renders section with wikilinks when activeTopics non-empty', () => {
+      const output = generateClaudeMd(makeConfig(), [], {
+        activeTopics: [
+          {
+            slug: 'cover-whale-templates',
+            area: 'glance-comms',
+            status: 'active',
+            summary: 'Staging-validated.',
+            lastRefreshed: '2026-04-22',
+          },
+        ],
+      });
+      assert.match(output, /^## Active Topics$/m);
+      assert.match(output, /Reflects memory as of 2026-04-22/);
+      assert.match(output, /- \[\[cover-whale-templates\]\] \(glance-comms\) — active — Staging-validated\./);
+    });
+
+    it('header date is max(entries[].lastRefreshed), not wall-clock', () => {
+      const output = generateClaudeMd(makeConfig(), [], {
+        activeTopics: [
+          { slug: 'a', status: 'active', summary: '', lastRefreshed: '2026-04-10' },
+          { slug: 'b', status: 'active', summary: '', lastRefreshed: '2026-04-22' },
+          { slug: 'c', status: 'active', summary: '', lastRefreshed: '2026-04-15' },
+        ],
+      });
+      assert.match(output, /Reflects memory as of 2026-04-22/);
+    });
+  });
+
+  describe('idempotency contract', () => {
+    it('produces byte-equal output for equal (config, skills, memory)', () => {
+      const cfg = makeConfig();
+      const memory = {
+        activeTopics: [
+          { slug: 'x', status: 'active', summary: 'ok', lastRefreshed: '2026-04-22' },
+        ],
+      };
+      const a = generateClaudeMd(cfg, [], memory);
+      const b = generateClaudeMd(cfg, [], memory);
+      assert.strictEqual(a, b);
+    });
+
+    it('stays byte-equal across wall-clock days (footer has no Date.now)', () => {
+      const original = Date;
+      const cfg = makeConfig();
+      const memory = {
+        activeTopics: [
+          { slug: 'x', status: 'active', summary: 'ok', lastRefreshed: '2026-04-22' },
+        ],
+      };
+
+      // Day 1
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis as any).Date = class extends original {
+        constructor() { super('2026-04-23T00:00:00Z'); }
+        static now() { return new original('2026-04-23T00:00:00Z').getTime(); }
+      };
+      const a = generateClaudeMd(cfg, [], memory);
+
+      // Day 2
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis as any).Date = class extends original {
+        constructor() { super('2026-05-15T12:00:00Z'); }
+        static now() { return new original('2026-05-15T12:00:00Z').getTime(); }
+      };
+      const b = generateClaudeMd(cfg, [], memory);
+
+      // Restore
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis as any).Date = original;
+
+      assert.strictEqual(a, b, 'output must be byte-equal across wall-clock days');
+    });
+
+    it('footer contains no ISO timestamp', () => {
+      const output = generateClaudeMd(makeConfig(), []);
+      // The only date pattern allowed is topic last_refreshed dates
+      // (none expected when memory is undefined).
+      const isoTimestampRe = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+      assert.ok(!isoTimestampRe.test(output), 'footer must not embed wall-clock ISO timestamp');
+    });
+  });
 });

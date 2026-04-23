@@ -139,6 +139,17 @@ export type {
   SectionName,
 } from './models/topic-page.js';
 export {
+  getActiveTopics,
+  renderActiveTopicsAsWikilinks,
+  renderActiveTopicsAsSlugList,
+  maxLastRefreshed,
+} from './models/active-topics.js';
+export type {
+  ActiveTopicEntry,
+  GetActiveTopicsOptions,
+} from './models/active-topics.js';
+export type { MemorySummary } from './models/memory-summary.js';
+export {
   TopicMemoryService,
   hashSource,
   hashMeetingSource,
