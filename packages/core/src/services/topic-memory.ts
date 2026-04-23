@@ -396,8 +396,386 @@ export class TopicMemoryService {
 }
 
 // ---------------------------------------------------------------------------
-// Reserved for Step 3 (integrateSource) — stub exports
+// Step 3 — integrateSource
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type _StubFrontmatterRef = TopicPageFrontmatter; // prevents unused-import warning
+import { createHash } from 'crypto';
+import { renderTopicPage, SECTION_NAMES, type SectionName, type TopicSourceRef } from '../models/topic-page.js';
+
+/**
+ * Shape the LLM must return from the integrate-source prompt.
+ *
+ * Per pre-mortem Risk 4: key-validation is enum-restricted (only
+ * known section names accepted; unknown keys dropped silently).
+ * `new_change_log_entry` is REQUIRED — an integration that produces
+ * no log entry is a malformed response and should fall back.
+ */
+export interface IntegrateOutput {
+  updated_sections: Partial<Record<SectionName, string>>;
+  new_change_log_entry: string;
+  new_open_questions?: string[];
+  new_known_gaps?: string[];
+}
+
+/**
+ * Parse + validate the LLM's integrate-source JSON response.
+ * Returns null when malformed (caller falls back to minimal update path).
+ *
+ * Invariants enforced (Risk 4 mitigations):
+ *  - Section keys restricted to SECTION_NAMES enum
+ *  - Section bodies cannot contain raw `---` (would break frontmatter
+ *    on next parse)
+ *  - Section bodies capped at 8000 chars (prevents LLM echoing the
+ *    whole page into one section)
+ *  - `new_change_log_entry` required and non-empty
+ */
+export function parseIntegrateResponse(response: string): IntegrateOutput | null {
+  const cleaned = response.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const rec = parsed as Record<string, unknown>;
+
+  // new_change_log_entry required + non-empty
+  const changeLog = rec.new_change_log_entry;
+  if (typeof changeLog !== 'string' || changeLog.trim().length === 0) return null;
+
+  // updated_sections — narrow to the enum
+  const rawSections = rec.updated_sections;
+  const updated: Partial<Record<SectionName, string>> = {};
+  if (rawSections !== null && typeof rawSections === 'object' && !Array.isArray(rawSections)) {
+    for (const [key, val] of Object.entries(rawSections as Record<string, unknown>)) {
+      if (!(SECTION_NAMES as readonly string[]).includes(key)) continue;
+      if (typeof val !== 'string') continue;
+      if (val.length > 8000) continue;      // Risk 4: cap size
+      if (val.includes('\n---\n') || val.startsWith('---\n') || val.endsWith('\n---')) continue; // no frontmatter injection
+      updated[key as SectionName] = val;
+    }
+  }
+
+  // Optional arrays
+  const pickStringArray = (v: unknown): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined;
+    const out = v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+    return out.length > 0 ? out : undefined;
+  };
+
+  const result: IntegrateOutput = {
+    updated_sections: updated,
+    new_change_log_entry: changeLog.trim(),
+  };
+  const oq = pickStringArray(rec.new_open_questions);
+  if (oq !== undefined) result.new_open_questions = oq;
+  const kg = pickStringArray(rec.new_known_gaps);
+  if (kg !== undefined) result.new_known_gaps = kg;
+  return result;
+}
+
+/**
+ * Content-hash a source (meeting file content) for idempotency.
+ * Used in `sources_integrated[].hash` to detect already-applied sources.
+ */
+export function hashSource(content: string): string {
+  return createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+/**
+ * Apply an `IntegrateOutput` onto an existing topic page, returning the
+ * updated page. Pure: no I/O. Caller does the write.
+ */
+export function applyIntegrateOutput(
+  page: TopicPage,
+  output: IntegrateOutput,
+  source: TopicSourceRef,
+  today: string,
+): TopicPage {
+  const sections: TopicPage['sections'] = { ...page.sections };
+
+  // Overwrite any sections the LLM updated.
+  for (const [name, body] of Object.entries(output.updated_sections)) {
+    if (body === undefined) continue;
+    sections[name as SectionName] = body;
+  }
+
+  // Append change log entry (newest at top for easy scanning).
+  const existingLog = sections['Change log'] ?? '';
+  const newLogLine = `- ${today}: ${output.new_change_log_entry}`;
+  sections['Change log'] = existingLog.length > 0
+    ? `${newLogLine}\n${existingLog}`
+    : newLogLine;
+
+  // Append open questions / known gaps (dedup against existing lines).
+  if (output.new_open_questions !== undefined) {
+    const existing = sections['Open questions'] ?? '';
+    const existingLines = new Set(
+      existing.split('\n').map((l) => l.trim()).filter((l) => l.length > 0),
+    );
+    const additions = output.new_open_questions
+      .map((q) => `- [ ] ${q.replace(/^-\s*\[\s*\]\s*/, '').trim()}`)
+      .filter((line) => !existingLines.has(line));
+    if (additions.length > 0) {
+      sections['Open questions'] = existing.length > 0
+        ? `${existing}\n${additions.join('\n')}`
+        : additions.join('\n');
+    }
+  }
+
+  if (output.new_known_gaps !== undefined) {
+    const existing = sections['Known gaps'] ?? '';
+    const existingLines = new Set(
+      existing.split('\n').map((l) => l.trim()).filter((l) => l.length > 0),
+    );
+    const additions = output.new_known_gaps
+      .map((g) => `- ${g.replace(/^-\s*/, '').trim()}`)
+      .filter((line) => !existingLines.has(line));
+    if (additions.length > 0) {
+      sections['Known gaps'] = existing.length > 0
+        ? `${existing}\n${additions.join('\n')}`
+        : additions.join('\n');
+    }
+  }
+
+  // Update frontmatter — append source (if not already integrated), bump refresh date.
+  const existingHashes = new Set(page.frontmatter.sources_integrated.map((s) => s.hash));
+  const sources = existingHashes.has(source.hash)
+    ? page.frontmatter.sources_integrated
+    : [...page.frontmatter.sources_integrated, source];
+
+  return {
+    frontmatter: {
+      ...page.frontmatter,
+      last_refreshed: today,
+      sources_integrated: sources,
+    },
+    sections,
+  };
+}
+
+/**
+ * Build a fallback page update for the no-LLM / malformed-output case.
+ * Records the source in `sources_integrated` and appends a minimal
+ * Change log + Source trail entry, but does not synthesize narrative.
+ * Keeps the topic page retrievable; next refresh can upgrade it.
+ */
+export function applyFallbackUpdate(
+  page: TopicPage,
+  source: TopicSourceRef,
+  today: string,
+  reason: string,
+): TopicPage {
+  const sections: TopicPage['sections'] = { ...page.sections };
+
+  const existingLog = sections['Change log'] ?? '';
+  const newLogLine = `- ${today}: Source appended (no narrative: ${reason}).`;
+  sections['Change log'] = existingLog.length > 0
+    ? `${newLogLine}\n${existingLog}`
+    : newLogLine;
+
+  const existingTrail = sections['Source trail'] ?? '';
+  const trailLine = `- [[${source.path.replace(/^.*\//, '').replace(/\.md$/, '')}]] (${source.date})`;
+  if (!existingTrail.includes(trailLine)) {
+    sections['Source trail'] = existingTrail.length > 0
+      ? `${existingTrail}\n${trailLine}`
+      : trailLine;
+  }
+
+  const existingHashes = new Set(page.frontmatter.sources_integrated.map((s) => s.hash));
+  const sources = existingHashes.has(source.hash)
+    ? page.frontmatter.sources_integrated
+    : [...page.frontmatter.sources_integrated, source];
+
+  return {
+    frontmatter: {
+      ...page.frontmatter,
+      last_refreshed: today,
+      sources_integrated: sources,
+    },
+    sections,
+  };
+}
+
+/**
+ * Create a stub TopicPage for a freshly-proposed new topic. Empty
+ * sections; status=new. Step 3 will populate on first integrateSource.
+ */
+export function createTopicStub(
+  slug: string,
+  today: string,
+  options: { area?: string; aliases?: string[] } = {},
+): TopicPage {
+  const frontmatter: TopicPageFrontmatter = {
+    topic_slug: slug,
+    status: 'new',
+    first_seen: today,
+    last_refreshed: today,
+    sources_integrated: [],
+  };
+  if (options.area !== undefined) frontmatter.area = options.area;
+  if (options.aliases !== undefined && options.aliases.length > 0) {
+    frontmatter.aliases = options.aliases;
+  }
+  return { frontmatter, sections: {} };
+}
+
+/**
+ * Build the LLM prompt for incremental source integration.
+ *
+ * Layout:
+ *  - Existing page (if any) so the LLM can revise rather than regen
+ *  - New source (meeting content)
+ *  - Relevant L2 items (decisions, learnings) — filtered by caller
+ *  - Response schema + constraints
+ */
+export function buildIntegratePrompt(
+  topicSlug: string,
+  existingPage: TopicPage | null,
+  newSource: { path: string; date: string; content: string },
+  relevantL2: string,
+): string {
+  const existingBody = existingPage === null
+    ? '(no existing page — this is the first source for this topic)'
+    : renderTopicPage(existingPage);
+
+  return `You are maintaining a compiled wiki page for the topic "${topicSlug}". A new source has arrived. Integrate it into the existing page by updating ONLY the sections the new source substantively changes.
+
+EXISTING TOPIC PAGE:
+${existingBody}
+
+NEW SOURCE (${newSource.path}, ${newSource.date}):
+${newSource.content}
+
+RELEVANT L2 MEMORY (prior decisions and learnings):
+${relevantL2 || '(none)'}
+
+Return ONLY a JSON object with this exact shape (no markdown fences, no prose):
+
+{
+  "updated_sections": {
+    "Current state"?: "string — rewrite only if status changed",
+    "Why/background"?: "string — rewrite only if the rationale evolved",
+    "Scope and behavior"?: "string — rewrite only if scope changed",
+    "Rollout/timeline"?: "string — rewrite only if timeline shifted",
+    "Relationships"?: "string — rewrite only if new cross-references"
+  },
+  "new_change_log_entry": "string — one-line summary of what this source contributed (REQUIRED)",
+  "new_open_questions"?: ["string — new questions raised by this source (if any)"],
+  "new_known_gaps"?: ["string — new gaps identified (if any)"]
+}
+
+Constraints:
+- Omit section keys that don't change. Do not re-emit unchanged content.
+- Never include '---' inside a section body — it would break the frontmatter.
+- Each section body must be under 8000 characters.
+- Prefer terse synthesis over copying source text verbatim.
+- Use Obsidian-style wikilinks [[slug]] to reference related topics or people.`;
+}
+
+export interface IntegrateSourceOptions {
+  callLLM?: LLMCallFn;
+  relevantL2?: string;
+  today: string;           // YYYY-MM-DD — injected for determinism
+}
+
+export interface IntegrateResult {
+  page: TopicPage;
+  decision: 'integrated' | 'fallback' | 'skipped-already-integrated';
+  reason?: string;          // when fallback, why
+}
+
+// Extend the service class with integrateSource.
+// NOTE: TypeScript doesn't support "reopening" a class literally like this;
+// we attach the method via declaration merging below. See service file.
+declare module './topic-memory.js' {
+  interface TopicMemoryService {
+    integrateSource(
+      topicSlug: string,
+      existingPage: TopicPage | null,
+      newSource: { path: string; date: string; content: string },
+      options: IntegrateSourceOptions,
+    ): Promise<IntegrateResult>;
+  }
+}
+
+TopicMemoryService.prototype.integrateSource = async function (
+  this: TopicMemoryService,
+  topicSlug: string,
+  existingPage: TopicPage | null,
+  newSource: { path: string; date: string; content: string },
+  options: IntegrateSourceOptions,
+): Promise<IntegrateResult> {
+  const today = options.today;
+  const sourceHash = hashSource(newSource.content);
+  const sourceRef: TopicSourceRef = {
+    path: newSource.path,
+    date: newSource.date,
+    hash: sourceHash,
+  };
+
+  // Idempotency: if source already integrated, no-op.
+  if (existingPage !== null) {
+    const already = existingPage.frontmatter.sources_integrated.some(
+      (s) => s.hash === sourceHash,
+    );
+    if (already) {
+      return {
+        page: existingPage,
+        decision: 'skipped-already-integrated',
+      };
+    }
+  }
+
+  // Start from existing or create stub.
+  const startPage =
+    existingPage ??
+    createTopicStub(topicSlug, today);
+
+  if (options.callLLM === undefined) {
+    return {
+      page: applyFallbackUpdate(startPage, sourceRef, today, 'callLLM not provided'),
+      decision: 'fallback',
+      reason: 'no-llm',
+    };
+  }
+
+  const prompt = buildIntegratePrompt(
+    topicSlug,
+    existingPage,
+    newSource,
+    options.relevantL2 ?? '',
+  );
+
+  let response: string;
+  try {
+    response = await options.callLLM(prompt);
+  } catch (err) {
+    return {
+      page: applyFallbackUpdate(
+        startPage,
+        sourceRef,
+        today,
+        `LLM threw: ${err instanceof Error ? err.message : 'unknown'}`,
+      ),
+      decision: 'fallback',
+      reason: 'llm-error',
+    };
+  }
+
+  const output = parseIntegrateResponse(response);
+  if (output === null) {
+    return {
+      page: applyFallbackUpdate(startPage, sourceRef, today, 'malformed LLM response'),
+      decision: 'fallback',
+      reason: 'malformed-output',
+    };
+  }
+
+  return {
+    page: applyIntegrateOutput(startPage, output, sourceRef, today),
+    decision: 'integrated',
+  };
+};
+
