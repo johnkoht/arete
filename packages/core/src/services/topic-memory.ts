@@ -736,6 +736,27 @@ export interface RefreshBatchOptions {
   today: string;
   /** Only refresh these slugs; omit for all existing topics. */
   slugs?: string[];
+  /**
+   * When true, skip acquiring the `.arete/.seed.lock`. Use only when
+   * the caller already holds the lock (e.g., `arete topic seed`
+   * acquires at the CLI boundary and threads `skipLock: true` so
+   * it doesn't double-acquire and EEXIST against itself).
+   *
+   * Default false — `arete memory refresh` and `arete topic refresh`
+   * acquire the lock so concurrent runs (cron + interactive shell)
+   * cannot race on topic-page writes.
+   */
+  skipLock?: boolean;
+  /**
+   * Workspace root — used to locate `.arete/` for the lock file when
+   * `skipLock !== true`. Required unless `skipLock: true`.
+   */
+  workspaceRoot?: string;
+  /**
+   * Short label written into the lock file for user-facing diagnosis.
+   * Default 'topic refresh'.
+   */
+  lockLabel?: string;
 }
 
 export interface RefreshBatchTopicResult {
@@ -771,6 +792,20 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (
   paths,
   options,
 ): Promise<RefreshBatchResult> {
+  // Acquire the seed lock unless the caller already holds it (seed does).
+  // Prevents concurrent `arete memory refresh` runs (cron + interactive)
+  // from racing on topic-page writes.
+  let releaseLock: (() => Promise<void>) | undefined;
+  if (!options.skipLock && !options.dryRun) {
+    const { acquireSeedLock } = await import('./seed-lock.js');
+    const areteDir = options.workspaceRoot !== undefined
+      ? pathJoin(options.workspaceRoot, '.arete')
+      : pathJoin(paths.memory, '..');
+    releaseLock = await acquireSeedLock(areteDir, options.lockLabel ?? 'topic refresh');
+  }
+
+  try {
+
   const { topics: existing } = await this.listAll(paths);
   const existingBySlug = new Map<string, TopicPage>(
     existing.map((t) => [t.frontmatter.topic_slug, t]),
@@ -863,6 +898,11 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (
     totalFallback: perTopic.reduce((s, t) => s + t.fallback, 0),
     totalSkipped: perTopic.reduce((s, t) => s + t.skipped, 0),
   };
+  } finally {
+    if (releaseLock !== undefined) {
+      await releaseLock();
+    }
+  }
 };
 
 /**

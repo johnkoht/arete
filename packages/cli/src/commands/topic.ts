@@ -323,12 +323,34 @@ export function registerTopicCommands(program: Command): void {
         return;
       }
 
-      // Real run via the shared batch helper.
-      const result = await services.topicMemory.refreshAllFromMeetings(paths, {
-        today: today(),
-        callLLM,
-        slugs,
-      });
+      // Real run via the shared batch helper. Acquires `.seed.lock` so
+      // concurrent refresh (e.g., from `arete memory refresh` in cron)
+      // cannot race on topic-page writes.
+      let result;
+      try {
+        result = await services.topicMemory.refreshAllFromMeetings(paths, {
+          today: today(),
+          callLLM,
+          slugs,
+          workspaceRoot: root,
+          lockLabel: 'topic refresh',
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === 'SeedLockHeldError') {
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: false,
+              error: 'seed_lock_held',
+              hint: err.message,
+            }, null, 2));
+          } else {
+            error(err.message);
+            info('Wait for the other refresh/seed to finish.');
+          }
+          process.exit(1);
+        }
+        throw err;
+      }
 
       // Log event (best-effort)
       try {
@@ -816,12 +838,15 @@ export function registerTopicCommands(program: Command): void {
       }
 
       // ---- Real run ------------------------------------------------------
+      // Seed holds the outer .seed.lock; pass `skipLock: true` so the
+      // service doesn't try to double-acquire.
       let result;
       try {
         result = await services.topicMemory.refreshAllFromMeetings(paths, {
           today: today(),
           callLLM,
           slugs: targetSlugs,
+          skipLock: true,
         });
       } finally {
         if (releaseLock !== undefined) {

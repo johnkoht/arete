@@ -511,9 +511,17 @@ export function registerMemoryCommand(program: Command): void {
           topicResult = await services.topicMemory.refreshAllFromMeetings(paths, {
             today: new Date().toISOString().slice(0, 10),
             callLLM,
+            workspaceRoot: root,
+            lockLabel: 'memory refresh',
           });
         } catch (err) {
-          warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+          // SeedLockHeldError surfaces here if seed or another refresh is
+          // running — friendly message rather than a stack trace.
+          if (err instanceof Error && err.name === 'SeedLockHeldError') {
+            warn(`Topic refresh skipped: ${err.message}`);
+          } else {
+            warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+          }
         }
       }
 
