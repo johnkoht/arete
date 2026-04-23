@@ -149,6 +149,8 @@ export type {
   GetActiveTopicsOptions,
 } from './models/active-topics.js';
 export type { MemorySummary } from './models/memory-summary.js';
+export { loadMemorySummary } from './services/memory-summary-loader.js';
+export type { LoadMemorySummaryOptions } from './services/memory-summary-loader.js';
 export {
   TopicMemoryService,
   hashSource,

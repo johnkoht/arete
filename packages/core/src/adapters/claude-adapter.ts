@@ -75,17 +75,29 @@ export class ClaudeAdapter implements IDEAdapter {
       .replace(/\.mdc\b/g, '.md');
   }
 
+  supportsMemoryInjection(): boolean {
+    return true;
+  }
+
   generateRootFiles(
     config: AreteConfig,
     _workspaceRoot: string,
     _sourceRulesDir?: string,
-    skills?: SkillDefinition[]
+    skills?: SkillDefinition[],
+    memorySummary?: import('../models/memory-summary.js').MemorySummary,
   ): Record<string, string> {
     let claudeMd: string;
     try {
-      claudeMd = generateClaudeMd(config, skills ?? []);
+      claudeMd = generateClaudeMd(config, skills ?? [], memorySummary);
     } catch {
-      claudeMd = generateMinimalAgentsMd();
+      // First-fallback: retry without memory. A memory-related generator
+      // bug must never wedge workspace init/update.
+      try {
+        claudeMd = generateClaudeMd(config, skills ?? []);
+      } catch {
+        // Double-fallback: minimal stub so CLAUDE.md is never missing.
+        claudeMd = generateMinimalAgentsMd();
+      }
     }
     return { 'CLAUDE.md': claudeMd };
   }

@@ -517,6 +517,28 @@ export function registerMemoryCommand(program: Command): void {
         }
       }
 
+      // 2c. Regenerate CLAUDE.md with Active Topics boot-context
+      // (Step 9 — agent boot context). Only when AI is configured AND
+      // not targeting a specific area (area-scoped refresh is targeted
+      // work, not bulk boot-context refresh). Idempotent: no write when
+      // byte-equal to existing file. Non-fatal on failure.
+      let claudeMdRegen: Record<string, 'unchanged' | 'updated' | 'failed'> | undefined;
+      if (!opts.area && !opts.dryRun) {
+        try {
+          const { loadMemorySummary } = await import('@arete/core');
+          const config = await loadConfig(services.storage, root);
+          const skillList = await services.skills.list(root);
+          const memorySummary = await loadMemorySummary(services.topicMemory, paths);
+          claudeMdRegen = await services.workspace.regenerateRootFiles(
+            config,
+            paths,
+            { skills: skillList, memorySummary },
+          );
+        } catch (err) {
+          warn(`CLAUDE.md regeneration skipped: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      }
+
       // 3. Refresh memory index (`.arete/memory/index.md`) — Obsidian landing page.
       // Idempotent: no write when content byte-equals existing file. Runs after
       // area + person refresh so topic/person counts reflect fresh data. Skipped
@@ -549,6 +571,18 @@ export function registerMemoryCommand(program: Command): void {
               index_errors: String(indexErrors.length),
             },
           });
+          // Companion event for CLAUDE.md regen — distinct event kind
+          // so replay can distinguish agent-boot-context changes from
+          // data refreshes.
+          if (claudeMdRegen !== undefined) {
+            const claudeMdStatus = claudeMdRegen['CLAUDE.md'] ?? 'skipped';
+            await services.memoryLog.append(paths, {
+              event: 'claude-md-regen',
+              fields: {
+                result: claudeMdStatus,
+              },
+            });
+          }
         } catch {
           // swallow — log best-effort
         }
@@ -570,6 +604,9 @@ export function registerMemoryCommand(program: Command): void {
           synthesis: areaResult.synthesis ?? null,
           people: personResult ?? null,
           topics: topicResult ?? null,
+          bootContext: claudeMdRegen !== undefined
+            ? { claudeMd: claudeMdRegen['CLAUDE.md'] ?? 'skipped' }
+            : null,
           memoryIndex: {
             status: indexStatus,
             errors: indexErrors,
@@ -630,6 +667,19 @@ export function registerMemoryCommand(program: Command): void {
         }
         if (topicResult.totalFallback > 0) {
           warn(`Topic refresh: ${topicResult.totalFallback} fallback(s) (LLM errors — re-run when AI stable)`);
+        }
+      }
+
+      // CLAUDE.md regen status — distinguish updated vs unchanged so
+      // users know whether git status will reflect a change.
+      if (claudeMdRegen !== undefined) {
+        const claudeMdResult = claudeMdRegen['CLAUDE.md'];
+        if (claudeMdResult === 'updated') {
+          info('Boot context: CLAUDE.md updated (Active Topics section refreshed)');
+        } else if (claudeMdResult === 'unchanged') {
+          info('Boot context: CLAUDE.md unchanged (no content change)');
+        } else if (claudeMdResult === 'failed') {
+          warn('Boot context: CLAUDE.md regeneration failed (pre-existing file untouched)');
         }
       }
 
