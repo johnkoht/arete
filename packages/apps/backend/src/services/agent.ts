@@ -37,9 +37,11 @@ import {
   loadRecentMeetingBatch,
   batchLLMReview,
   FileStorageAdapter,
+  TopicMemoryService,
   type ExtractionMode,
   type MeetingExtractionBatch,
   type ReconciliationContext,
+  type WorkspacePaths,
 } from '@arete/core';
 import type {
   AIService,
@@ -114,6 +116,11 @@ export interface ProcessingDeps {
   // Optional reconciliation deps (for testability)
   loadReconciliationContext?: () => Promise<ReconciliationContext>;
   loadRecentBatch?: () => Promise<MeetingExtractionBatch[]>;
+  // Optional topic-memory deps for Hook 1 (alias/merge of LLM-proposed
+  // topic slugs against existing topic pages). When omitted, topics are
+  // written to frontmatter verbatim — same fallback meeting-apply.ts uses.
+  topicMemory?: TopicMemoryService;
+  workspacePaths?: WorkspacePaths;
 }
 
 /** Options for processing session */
@@ -407,6 +414,49 @@ export async function runProcessingSessionTestable(
     // Note: Core returns camelCase; backend frontmatter uses snake_case
     fm['status'] = 'processed';
     fm['processed_at'] = new Date().toISOString();
+
+    // Topics + item counts — mirror meeting-apply.ts:229-264 so backend
+    // processing populates the same agent-facing frontmatter the CLI does.
+    // Hook 1 (alias/merge) runs when topicMemory is reachable; otherwise
+    // topics are written verbatim. Failure is non-fatal: keep proposed slugs
+    // and surface a warning event.
+    //
+    // Alias/merge uses the 'synthesis' tier (matches CLI meeting.ts:1826),
+    // not the 'extraction' tier — synthesis is for short-form structured
+    // judgment (slug-vs-slug "same topic?"), extraction is for the heavy
+    // meeting-content pass that already ran above.
+    const proposedTopics = coreResult.intelligence.topics ?? [];
+    let normalizedTopics = proposedTopics;
+    if (
+      proposedTopics.length > 0 &&
+      deps.topicMemory !== undefined &&
+      deps.workspacePaths !== undefined
+    ) {
+      try {
+        const aliasCallLLM = async (prompt: string): Promise<string> => {
+          const result = await deps.aiService.call('synthesis', prompt);
+          return result.text;
+        };
+        const { topics: existingPages } = await deps.topicMemory.listAll(deps.workspacePaths);
+        const existingIdentities = TopicMemoryService.toIdentities(existingPages);
+        const aliasResults = await deps.topicMemory.aliasAndMerge(
+          proposedTopics,
+          existingIdentities,
+          { callLLM: aliasCallLLM },
+        );
+        normalizedTopics = aliasResults.map((r) => r.resolved);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown';
+        jobs.appendEvent(jobId, `Warning: topic alias/merge failed (non-fatal): ${msg}`);
+      }
+    }
+    fm['topics'] = normalizedTopics;
+    fm['open_action_items'] = coreResult.intelligence.actionItems.length;
+    fm['my_commitments'] = coreResult.intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
+    fm['their_commitments'] = coreResult.intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;
+    fm['decisions_count'] = coreResult.intelligence.decisions.length;
+    fm['learnings_count'] = coreResult.intelligence.learnings.length;
+
     fm['staged_item_source'] = processed.stagedItemSource;
     fm['staged_item_confidence'] = processed.stagedItemConfidence;
     fm['staged_item_status'] = processed.stagedItemStatus;
@@ -439,8 +489,20 @@ export async function runProcessingSessionTestable(
 /**
  * Default dependencies using real fs and provided AIService.
  */
-function createDefaultDeps(aiService: AIService, workspaceRoot: string): ProcessingDeps {
+async function createDefaultDeps(aiService: AIService, workspaceRoot: string): Promise<ProcessingDeps> {
   const storage = new FileStorageAdapter();
+  // Lazy-resolve topic-memory + workspace paths so production callers get
+  // Hook 1 (alias/merge) for free; tests skip this branch by passing
+  // ProcessingDeps directly.
+  let topicMemory: TopicMemoryService | undefined;
+  let workspacePaths: WorkspacePaths | undefined;
+  try {
+    const services = await getOrCreateServices(workspaceRoot);
+    topicMemory = services.topicMemory;
+    workspacePaths = services.workspace.getPaths(workspaceRoot);
+  } catch {
+    // Non-fatal: fall back to no-alias behavior (topics written verbatim).
+  }
   return {
     readFile: (path: string) => fs.readFile(path, 'utf8'),
     writeFile: (path: string, content: string) => fs.writeFile(path, content, 'utf8'),
@@ -452,11 +514,30 @@ function createDefaultDeps(aiService: AIService, workspaceRoot: string): Process
     },
     loadReconciliationContext: () => loadReconciliationContext(storage, workspaceRoot),
     loadRecentBatch: () => loadRecentMeetingBatch(storage, join(workspaceRoot, 'resources', 'meetings'), 7),
+    topicMemory,
+    workspacePaths,
   };
 }
 
 // Module-level AIService reference, set by initializeAIService()
 let moduleAiService: AIService | null = null;
+
+// Module-level services cache. createServices() loads arete.yaml from disk
+// (~ms) and constructs ~10 service instances. We cache the promise per
+// workspaceRoot so concurrent callers reuse the same construction. In
+// practice the backend serves one workspace per process, so this Map has
+// one entry. Both runProcessingSession (Hook 1) and the approve route
+// (Hook 2) share this cache.
+const servicesByRoot = new Map<string, Promise<Awaited<ReturnType<typeof createServices>>>>();
+
+export function getOrCreateServices(workspaceRoot: string): Promise<Awaited<ReturnType<typeof createServices>>> {
+  let entry = servicesByRoot.get(workspaceRoot);
+  if (!entry) {
+    entry = createServices(workspaceRoot);
+    servicesByRoot.set(workspaceRoot, entry);
+  }
+  return entry;
+}
 
 /**
  * Initialize the AIService for meeting processing.
@@ -579,7 +660,7 @@ export async function runProcessingSession(
     }
   }
 
-  const deps = createDefaultDeps(moduleAiService, workspaceRoot);
+  const deps = await createDefaultDeps(moduleAiService, workspaceRoot);
   const optionsWithContext: ProcessingOptions = { ...options, context, priorItems };
   return runProcessingSessionTestable(workspaceRoot, meetingSlug, jobId, jobs, deps, optionsWithContext);
 }

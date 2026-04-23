@@ -5,10 +5,10 @@
 import { Hono } from 'hono';
 import { spawn } from 'node:child_process';
 import { getEnvApiKey } from '@mariozechner/pi-ai';
-import { hasOAuthCredentials, FileStorageAdapter, AreaParserService } from '@arete/core';
+import { hasOAuthCredentials, FileStorageAdapter, AreaParserService, parseMeetingFile } from '@arete/core';
 import * as workspaceService from '../services/workspace.js';
 import * as jobsService from '../services/jobs.js';
-import { runProcessingSession } from '../services/agent.js';
+import { runProcessingSession, getOrCreateServices } from '../services/agent.js';
 
 // Per-slug write queue — prevents concurrent write races
 const writeQueue = new Map<string, Promise<void>>();
@@ -222,6 +222,40 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
       const meeting = await withSlugLock(slug, () =>
         workspaceService.approveMeeting(workspaceRoot, slug, { goalSlug })
       );
+
+      // Hook 2 (topic-wiki-memory) — incremental topic-page integration on
+      // approve. Mirrors `arete meeting approve` (CLI) lines 1407-1445.
+      // Non-fatal: the commit already succeeded, so failure here MUST NOT
+      // turn into a 500. Skipped silently when AI isn't configured.
+      try {
+        const services = await getOrCreateServices(workspaceRoot);
+        if (services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+          const paths = services.workspace.getPaths(workspaceRoot);
+          const meetingPath = `${paths.resources}/meetings/${slug}.md`;
+          const committed = await services.storage.read(meetingPath);
+          if (committed !== null) {
+            const parsed = parseMeetingFile(committed);
+            const meetingTopics = parsed?.frontmatter.topics ?? [];
+            if (meetingTopics.length > 0) {
+              const topicCallLLM = async (prompt: string) => {
+                const r = await services.ai.call('synthesis', prompt);
+                return r.text;
+              };
+              await services.topicMemory.refreshAllFromMeetings(paths, {
+                today: new Date().toISOString().slice(0, 10),
+                callLLM: topicCallLLM,
+                slugs: meetingTopics,
+                workspaceRoot,
+                lockLabel: 'web approve (topic ingest)',
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // Non-fatal: log and return the approved meeting unchanged.
+        console.warn(`[meetings] topic integration after approve (slug=${slug}) failed (non-fatal):`, err);
+      }
+
       return c.json(meeting);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

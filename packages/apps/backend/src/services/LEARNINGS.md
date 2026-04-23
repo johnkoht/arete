@@ -52,3 +52,72 @@ or user reports. The only way to catch it is to test the full round-trip
 from disk → parser → response payload. The E2E test in `workspace.test.ts`
 (getMeeting with all 5 source values) closes the bug class for this
 specific parser; apply the same pattern to other frontmatter parsers.
+
+## agent.ts
+
+### Backend hand-rolls frontmatter writes parallel to meeting-apply.ts — keep them in sync
+
+**Date**: 2026-04-23
+**Bug**: `runProcessingSessionTestable` in `agent.ts` writes frontmatter
+inline (currently around L408–L460) instead of calling
+`applyMeetingIntelligence` from `@arete/core`. Over time the two paths
+drifted: `meeting-apply.ts:259-264` writes `topics`, `open_action_items`,
+`my_commitments`, `their_commitments`, `decisions_count`,
+`learnings_count`; the backend wrote NONE of these. Result: every meeting
+processed via web UI / backend lacked the frontmatter fields the rest
+of the system depends on. Topic-wiki-memory (2026-04-23) silently broke
+on this path because no `topics:` ever made it to disk for backend-
+processed meetings.
+
+This is the **third** time this dual-implementation drift has bitten:
+- 2026-03-17 (`approval-integration.test.ts`): backend approve never
+  resolved attendees → CommitmentsService received empty input. Fixed
+  by adding attendee resolution into `approveMeeting()`.
+- 2026-04-05 (`feat(meeting-apply): write topics + item counts`):
+  CLI-only fix; backend was missed.
+- 2026-04-23 (this entry): topic-wiki-memory's Hook 1 (alias/merge at
+  apply) and Hook 2 (integrateSource at approve) were wired into the
+  CLI but not the backend; symptom was the same as 2026-04-05 (no
+  topics on disk).
+
+**Root cause**: the backend imports `applyMeetingIntelligence` from
+`@arete/core` (`agent.ts:30`) but never calls it — it has its own
+parallel implementation. The two diverge whenever someone touches the
+core function and forgets the backend.
+
+**Fix** (this hotfix):
+- Backend now writes the same six frontmatter fields meeting-apply
+  writes, in the same order (`agent.ts` ~L408–L460).
+- Hook 1 (alias/merge) runs inline when `topicMemory` + `workspacePaths`
+  are reachable via `getOrCreateServices(workspaceRoot)` — uses
+  `synthesis` tier (matches CLI).
+- Hook 2 (integrateSource) added to the approve route handler in
+  `routes/meetings.ts` after `approveMeeting()` succeeds. Non-fatal:
+  failure logs but returns the approved meeting unchanged.
+
+**Invariant going forward**:
+- Any frontmatter field written by `meeting-apply.ts` MUST also be
+  written by `agent.ts:runProcessingSessionTestable` — they are two
+  entry points to the same logical operation.
+- When adding a new field to `meeting-apply.ts` frontmatter writes:
+  grep `agent.ts` for the existing fm assignments and add the
+  equivalent there in the same commit.
+
+**Better long-term fix** (not this hotfix): refactor `agent.ts` to call
+`applyMeetingIntelligence` instead of hand-rolling the write. The
+current divergence (SSE events, `staged_item_*` writes,
+`processMeetingExtraction` post-filtering) makes that non-trivial — it
+requires either threading SSE callbacks into `applyMeetingIntelligence`
+or restructuring the SSE event reporting around the core function. See
+Phase C plan for AI-mock CLI test infrastructure that would make this
+refactor safer to ship.
+
+**Regression coverage**:
+- `test/services/agent.test.ts` — new test "writes topics + item count
+  fields to frontmatter (Hook 1 inputs)" asserts all six fields land
+  after a processing run with no topicMemory dep (verbatim path).
+- Hook 2 (route-level) lacks a unit test because the existing meetings
+  route test pattern reimplements routes inline; testing Hook 2 there
+  would mostly test a mocked replica. Deferred to Phase C plan item 5
+  (AI mock infrastructure) for end-to-end coverage. Manual QA on a
+  real workspace is the current verification path.

@@ -319,6 +319,40 @@ describe('runProcessingSession', () => {
       assert.ok(content.includes('processed_at:'));
     });
 
+    // Regression for backend dual-implementation drift: agent.ts hand-rolled
+    // the frontmatter write parallel to meeting-apply.ts and silently dropped
+    // `topics` + item-count fields for months. Any meeting processed via web
+    // UI / backend would never get topic-wiki-memory's biased extraction
+    // working downstream because no `topics:` ever made it to disk. Asserts
+    // that the same six fields meeting-apply writes also land here.
+    it('writes topics + item count fields to frontmatter (Hook 1 inputs)', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [
+            mockActionItem('Owe them', { direction: 'i_owe_them' }),
+            mockActionItem('They owe me', { direction: 'they_owe_me' }),
+            mockActionItem('Another mine', { direction: 'i_owe_them' }),
+          ],
+          decisions: ['Decision 1', 'Decision 2'],
+          learnings: ['Learning 1'],
+        }),
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      // topics: written verbatim (no topicMemory dep → no alias/merge)
+      // — extraction mock does not emit topics, so we expect an empty array.
+      assert.ok(content.includes('topics:'), 'expected topics field present');
+      assert.ok(content.includes('open_action_items: 3'), 'expected open_action_items count');
+      assert.ok(content.includes('my_commitments: 2'), 'expected my_commitments (i_owe_them) count');
+      assert.ok(content.includes('their_commitments: 1'), 'expected their_commitments (they_owe_me) count');
+      assert.ok(content.includes('decisions_count: 2'), 'expected decisions_count');
+      assert.ok(content.includes('learnings_count: 1'), 'expected learnings_count');
+    });
+
     it('uses zero-padded 3-digit IDs', async () => {
       const jobs = makeMockJobs();
       // Core extraction limits action items to 7, so we test with that limit
