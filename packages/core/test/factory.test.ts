@@ -52,11 +52,14 @@ describe('createServices', () => {
       'integrations',
       'intelligence',
       'memory',
+      'memoryIndex',
+      'memoryLog',
       'search',
       'skills',
       'storage',
       'tasks',
       'tools',
+      'topicMemory',
       'workspace',
     ]);
   });
