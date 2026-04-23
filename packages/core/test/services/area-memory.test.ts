@@ -320,9 +320,10 @@ describe('AreaMemoryService', () => {
       assert.ok(content.includes('meeting_count: 1'), 'Should have meeting_count: 1');
       assert.ok(content.includes('open_items: 2'), 'Should have open_items: 2');
       assert.ok(content.includes(`last_referenced: "${today}"`), 'Should have last_referenced');
-      // Topics section in body
+      // Topics section in body — now rendered as wikilinks to topic pages
+      // (Step 4 of topic-wiki-memory; see .arete/memory/topics/ for the pages).
       assert.ok(content.includes('## Topics'), 'Should have Topics section');
-      assert.ok(content.includes('**Email Templates**'), 'Should have bold topic name');
+      assert.ok(content.includes('[[email-templates]]'), 'Should render topic as wikilink');
     });
 
     it('aggregates topics from meetings matched by recurring title', async () => {
@@ -392,6 +393,163 @@ describe('AreaMemoryService', () => {
 
       const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
       assert.ok(!content.includes('## Topics'), 'Should not have Topics section when no topics');
+    });
+  });
+
+  describe('Step 4 — shrink + topic-page enrichment', () => {
+    it('does NOT render a Keywords section (removed in Step 4)', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', name: 'Glance Comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-m.md`),
+        `---\ntitle: "M"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - cover-whale-templates\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.ok(!content.includes('## Keywords'), 'Keywords section must not be rendered');
+      assert.ok(!content.includes('keywords:'), 'keywords frontmatter field must not appear');
+    });
+
+    it('does NOT render a Recently Completed section (removed in Step 4)', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      // Seed a resolved commitment into .arete/commitments.json to exercise
+      // the getRecentlyCompleted reader — the Step 4 change is that even
+      // when this data exists, it doesn't get rendered.
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/commitments.json'),
+        JSON.stringify([
+          {
+            id: 'c1',
+            text: 'shipped thing',
+            personSlug: 'a',
+            personName: 'Alice',
+            direction: 'i_owe_them',
+            area: 'glance-comms',
+            status: 'resolved',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            resolvedAt: new Date().toISOString(),
+            source: 'test',
+            date: new Date().toISOString().slice(0, 10),
+          },
+        ]),
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.ok(!content.includes('## Recently Completed'), 'Recently Completed must not appear');
+      assert.ok(!content.includes('shipped thing'), 'resolved commitments must not render in area file');
+    });
+
+    it('enriches Topics with page status + headline when TopicMemoryService provided', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-m.md`),
+        `---\ntitle: "M"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - cover-whale-templates\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
+      );
+
+      // Seed a topic page for cover-whale-templates
+      storage.store.set(
+        join(WORKSPACE_ROOT, '.arete/memory/topics/cover-whale-templates.md'),
+        `---\ntopic_slug: cover-whale-templates\nstatus: active\nfirst_seen: 2026-03-01\nlast_refreshed: 2026-04-22\nsources_integrated: []\n---\n\n# Cover Whale Templates\n\n## Current state\n\nStaging-validated; awaiting pilot adjusters.\n`,
+      );
+
+      const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+      const topicMemory = new TopicMemoryService(storage);
+
+      const service = new AreaMemoryService(
+        storage,
+        areaParser,
+        commitments,
+        memoryService,
+        topicMemory,
+      );
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.match(content, /\[\[cover-whale-templates\]\] — active — Staging-validated/);
+      assert.match(content, /updated: 2026-04-22/);
+    });
+
+    it('renders "(no page yet)" when topic has no page and TopicMemoryService provided', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-m.md`),
+        `---\ntitle: "M"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - new-topic-no-page\nopen_action_items: 0\nattendees: []\n---\n\nBody.`,
+      );
+
+      const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+      const topicMemory = new TopicMemoryService(storage);
+
+      const service = new AreaMemoryService(
+        storage,
+        areaParser,
+        commitments,
+        memoryService,
+        topicMemory,
+      );
+      await service.refreshAreaMemory('glance-comms', paths);
+
+      const content = storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      assert.match(content, /\[\[new-topic-no-page\]\] — \*\(no page yet\)\*/);
+    });
+
+    it('sorts topics deterministically by (openItems desc, lastReferenced desc, slug asc)', async () => {
+      const area = makeAreaContext({ slug: 'glance-comms', recurringMeetings: [] });
+      const areaParser = createStubAreaParser([area]);
+      const commitments = createStubCommitments();
+      const memoryService = createStubMemory();
+
+      // Three topics with identical open_items + date to exercise slug tiebreak
+      const today = new Date().toISOString().slice(0, 10);
+      storage.store.set(
+        join(WORKSPACE_ROOT, 'resources/meetings', `${today}-m.md`),
+        `---\ntitle: "M"\ndate: "${today}"\narea: glance-comms\ntopics:\n  - zebra-topic\n  - apple-topic\n  - mango-topic\nopen_action_items: 2\nattendees: []\n---\n\nBody.`,
+      );
+
+      const service = new AreaMemoryService(storage, areaParser, commitments, memoryService);
+      const runOnce = async () => {
+        await service.refreshAreaMemory('glance-comms', paths);
+        return storage.store.get(join(WORKSPACE_ROOT, '.arete/memory/areas/glance-comms.md'))!;
+      };
+
+      const content = await runOnce();
+      const appleIdx = content.indexOf('[[apple-topic]]');
+      const mangoIdx = content.indexOf('[[mango-topic]]');
+      const zebraIdx = content.indexOf('[[zebra-topic]]');
+      assert.ok(appleIdx > 0 && mangoIdx > appleIdx && zebraIdx > mangoIdx, 'slug tiebreak is ASCII ascending');
+
+      // Idempotency of the Topics section's ordering (same input → same output order)
+      const again = await runOnce();
+      const extractTopicsBlock = (s: string) => {
+        const start = s.indexOf('## Topics');
+        const end = s.indexOf('##', start + 3);
+        return s.slice(start, end);
+      };
+      assert.strictEqual(extractTopicsBlock(content), extractTopicsBlock(again));
     });
   });
 
