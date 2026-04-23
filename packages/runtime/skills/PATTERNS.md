@@ -568,7 +568,11 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 2. **Gather strategy & goals** — Run `arete search "<topic>" --scope context`. Take the top 3 results, max 300 words each. If results are empty, note: `context_quality: sparse-strategy`.
 
-3. **Gather existing memory** — Run `arete search "<topic>" --scope memory`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`. **Also run `arete topic find "<topic>" --json --limit 2` (see `topic_page_retrieval` pattern) to pull the top 1–2 relevant topic-page narratives — these provide synthesized context that atomic L2 items don't, and are budget-aware so inclusion doesn't blow the memory section word limit.**
+3. **Gather existing memory** (split across atomic L2 items + synthesized topic pages — both fit inside the ~1000 word memory budget):
+   - **Atomic items** (~600 words budget): `arete search "<topic>" --scope memory --limit 3`. Top 3 results, ~200 words each. These are dated decisions/learnings from `.arete/memory/items/`.
+   - **Synthesized topic pages** (~400 words budget): `arete topic find "<topic>" --limit 1 --budget 400 --json`. Top 1 topic page with budget-truncated `bodyForContext`. Provides narrative synthesis that atomic items don't.
+   - If both return empty, note: `context_quality: sparse-memory`.
+   - **JSON contract**: `arete topic find` returns `{ results, searchBackend }`. A `searchBackend: 'none'` means no search provider configured — surface that as a degraded-capability warning rather than treating it as "no relevant topics."
 
 4. **Gather people context** (when person slugs are available) — For each person: `arete people show <slug> --memory`. Extract ONLY: stances, open items, and relationship health sections. Skip full profile body. Max ~200 words per person. **If you've already run `get_meeting_context` upstream, reuse its people context — do not re-run `arete people show`.** For attendees still in `unknown_queue` (unresolved from process-meetings Step 2), skip person context and add to the bundle header: "Unresolved attendees (no person context): [names]".
 

@@ -4,7 +4,11 @@ import { TopicMemoryService } from '../../src/services/topic-memory.js';
 import { renderTopicPage, type TopicPage } from '../../src/models/topic-page.js';
 import type { SearchProvider, SearchResult } from '../../src/search/types.js';
 
-function topicPage(slug: string, overrides: Partial<TopicPage['frontmatter']> = {}, sections: Record<string, string> = {}): TopicPage {
+function topicPage(
+  slug: string,
+  overrides: Partial<TopicPage['frontmatter']> = {},
+  sections: Record<string, string> = {},
+): TopicPage {
   return {
     frontmatter: {
       topic_slug: slug,
@@ -21,107 +25,238 @@ function topicPage(slug: string, overrides: Partial<TopicPage['frontmatter']> = 
   };
 }
 
-function makeStorage() {
+/**
+ * Make a storage adapter pre-populated with a map of path → content.
+ * retrieveRelevant now reads files via storage.read(path), so tests must
+ * seed the storage with the paths the mock search provider returns.
+ */
+function makeStorage(files: Record<string, string> = {}) {
+  const store = new Map(Object.entries(files));
   return {
-    read: async () => null,
-    write: async () => {},
-    exists: async () => false,
-    delete: async () => {},
-    list: async () => [],
-    listSubdirectories: async () => [],
-    mkdir: async () => {},
-    getModified: async () => null,
+    store,
+    async read(path: string) {
+      return store.get(path) ?? null;
+    },
+    async write(path: string, content: string) {
+      store.set(path, content);
+    },
+    async exists(path: string) {
+      return store.has(path);
+    },
+    async delete() {},
+    async list() {
+      return [];
+    },
+    async listSubdirectories() {
+      return [];
+    },
+    async mkdir() {},
+    async getModified() {
+      return null;
+    },
   };
 }
 
-function makeSearchProvider(results: Array<{ path: string; content: string; score: number }>): SearchProvider {
+/**
+ * Make a SearchProvider mock with a specific backend `name` so backend
+ * classification can be tested. By default returns the `results` verbatim
+ * from semanticSearch.
+ */
+function makeSearchProvider(
+  results: Array<{ path: string; content?: string; score: number }>,
+  name = 'fallback',
+): SearchProvider {
   return {
-    name: 'mock',
+    name,
     async isAvailable() {
       return true;
     },
     async search() {
       return results.map(
-        (r): SearchResult => ({ ...r, matchType: 'keyword' }),
+        (r): SearchResult => ({
+          path: r.path,
+          content: r.content ?? '',
+          score: r.score,
+          matchType: 'keyword',
+        }),
       );
     },
     async semanticSearch() {
       return results.map(
-        (r): SearchResult => ({ ...r, matchType: 'semantic' }),
+        (r): SearchResult => ({
+          path: r.path,
+          content: r.content ?? '',
+          score: r.score,
+          matchType: 'semantic',
+        }),
       );
     },
   };
 }
 
+const TOPIC_PATH = (slug: string) => `.arete/memory/topics/${slug}.md`;
+
+// ---------------------------------------------------------------------------
+
 describe('TopicMemoryService.retrieveRelevant', () => {
-  it('returns empty array when searchProvider not injected', async () => {
+  it('returns searchBackend: "none" when provider not injected', async () => {
     const svc = new TopicMemoryService(makeStorage());
-    const results = await svc.retrieveRelevant('anything');
-    assert.deepStrictEqual(results, []);
+    const result = await svc.retrieveRelevant('anything');
+    assert.deepStrictEqual(result.results, []);
+    assert.strictEqual(result.searchBackend, 'none');
   });
 
-  it('returns empty when search returns no candidates', async () => {
+  it('returns empty results when search returns no candidates', async () => {
     const svc = new TopicMemoryService(makeStorage(), makeSearchProvider([]));
-    const results = await svc.retrieveRelevant('anything');
-    assert.deepStrictEqual(results, []);
+    const r = await svc.retrieveRelevant('anything');
+    assert.strictEqual(r.results.length, 0);
+    assert.strictEqual(r.searchBackend, 'fallback');
+  });
+
+  it('classifies searchBackend as "qmd" when provider name is "qmd"', async () => {
+    const page = topicPage('x');
+    const storage = makeStorage({
+      [TOPIC_PATH('x')]: renderTopicPage(page),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([{ path: TOPIC_PATH('x'), score: 1 }], 'qmd'),
+    );
+    const r = await svc.retrieveRelevant('q');
+    assert.strictEqual(r.searchBackend, 'qmd');
+  });
+
+  it('post-filters by .arete/memory/topics/ path prefix (qmd paths-ignored path)', async () => {
+    // Simulate qmd's behavior: returns results from across the entire
+    // workspace, ignoring the `paths` filter we passed.
+    const topicA = topicPage('real-topic');
+    const storage = makeStorage({
+      [TOPIC_PATH('real-topic')]: renderTopicPage(topicA),
+      'resources/meetings/some-meeting.md': 'body',
+      'people/internal/jane.md': 'body',
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider(
+        [
+          { path: 'resources/meetings/some-meeting.md', score: 0.9 },
+          { path: 'people/internal/jane.md', score: 0.85 },
+          { path: TOPIC_PATH('real-topic'), score: 0.5 },
+        ],
+        'qmd',
+      ),
+    );
+    const r = await svc.retrieveRelevant('q');
+    assert.strictEqual(r.results.length, 1, 'non-topic paths must be filtered out');
+    assert.strictEqual(r.results[0].slug, 'real-topic');
+  });
+
+  it('tolerates absolute-prefix paths (different qmd path formats)', async () => {
+    const page = topicPage('x');
+    const storage = makeStorage({
+      // Note: storage-adapter path matches what search returned
+      '/ws/.arete/memory/topics/x.md': renderTopicPage(page),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider(
+        [{ path: '/ws/.arete/memory/topics/x.md', score: 1.0 }],
+        'qmd',
+      ),
+    );
+    const r = await svc.retrieveRelevant('q');
+    assert.strictEqual(r.results.length, 1, 'absolute path with /.arete/memory/topics/ must match');
+  });
+
+  it('re-reads full file content from disk (ignores snippet in result.content)', async () => {
+    // qmd returns snippets, not full files. retrieveRelevant must read
+    // from storage, not trust c.content.
+    const fullPage = topicPage('cover-whale-templates');
+    const storage = makeStorage({
+      [TOPIC_PATH('cover-whale-templates')]: renderTopicPage(fullPage),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      // Search returns a snippet that would NOT parse as a topic page
+      makeSearchProvider(
+        [{
+          path: TOPIC_PATH('cover-whale-templates'),
+          content: '@@ -10,4 @@\n## Current state\n\nStaging.\n',
+          score: 0.9,
+        }],
+        'qmd',
+      ),
+    );
+    const r = await svc.retrieveRelevant('cover whale');
+    assert.strictEqual(r.results.length, 1, 'must re-read full file, not trust snippet');
+    assert.strictEqual(r.results[0].slug, 'cover-whale-templates');
   });
 
   it('ranks by combined score (qmd × 0.6) + recency bonus', async () => {
-    // Two candidates:
-    //  - `recent`: qmd score 0.5 → weighted 0.30, + 0.2 recency bonus (within 30d) = 0.50
-    //  - `old`:    qmd score 0.8 → weighted 0.48, no recency bonus                 = 0.48
-    // Recent should edge out the higher raw score.
     const today = new Date();
     const recentDate = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const oldDate = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    const recentPage = topicPage('recent', { last_refreshed: recentDate });
-    const oldPage = topicPage('old', { last_refreshed: oldDate });
+    const recent = topicPage('recent', { last_refreshed: recentDate });
+    const old = topicPage('old', { last_refreshed: oldDate });
 
-    const provider = makeSearchProvider([
-      { path: 'recent.md', content: renderTopicPage(recentPage), score: 0.5 },
-      { path: 'old.md', content: renderTopicPage(oldPage), score: 0.8 },
-    ]);
-
-    const svc = new TopicMemoryService(makeStorage(), provider);
-    const results = await svc.retrieveRelevant('query');
-    assert.strictEqual(results[0].slug, 'recent', 'recent should rank first (recency bonus)');
-    assert.strictEqual(results[1].slug, 'old');
+    const storage = makeStorage({
+      [TOPIC_PATH('recent')]: renderTopicPage(recent),
+      [TOPIC_PATH('old')]: renderTopicPage(old),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([
+        { path: TOPIC_PATH('recent'), score: 0.5 },
+        { path: TOPIC_PATH('old'), score: 0.8 },
+      ]),
+    );
+    const r = await svc.retrieveRelevant('query');
+    assert.strictEqual(r.results[0].slug, 'recent', 'recent rises despite lower raw score');
+    assert.strictEqual(r.results[1].slug, 'old');
   });
 
   it('applies area-match bonus when options.area provided', async () => {
-    // Both equally recent; only area match differs.
     const today = new Date().toISOString().slice(0, 10);
     const match = topicPage('match', { area: 'my-area', last_refreshed: today });
     const noMatch = topicPage('no-match', { area: 'other-area', last_refreshed: today });
 
-    const provider = makeSearchProvider([
-      { path: 'match.md', content: renderTopicPage(match), score: 0.5 },
-      { path: 'no-match.md', content: renderTopicPage(noMatch), score: 0.5 },
-    ]);
-
-    const svc = new TopicMemoryService(makeStorage(), provider);
-    const results = await svc.retrieveRelevant('query', { area: 'my-area' });
-    assert.strictEqual(results[0].slug, 'match', 'area-tagged topic ranks first');
-    assert.ok(results[0].score > results[1].score);
+    const storage = makeStorage({
+      [TOPIC_PATH('match')]: renderTopicPage(match),
+      [TOPIC_PATH('no-match')]: renderTopicPage(noMatch),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([
+        { path: TOPIC_PATH('match'), score: 0.5 },
+        { path: TOPIC_PATH('no-match'), score: 0.5 },
+      ]),
+    );
+    const r = await svc.retrieveRelevant('query', { area: 'my-area' });
+    assert.strictEqual(r.results[0].slug, 'match');
+    assert.ok(r.results[0].score > r.results[1].score);
   });
 
   it('respects --limit (default 3)', async () => {
     const pages = Array.from({ length: 10 }, (_, i) => topicPage(`t${i}`));
-    const provider = makeSearchProvider(
-      pages.map((p, i) => ({
-        path: `${p.frontmatter.topic_slug}.md`,
-        content: renderTopicPage(p),
-        score: 1 - i * 0.01,
-      })),
+    const storage = makeStorage(
+      Object.fromEntries(pages.map((p) => [TOPIC_PATH(p.frontmatter.topic_slug), renderTopicPage(p)])),
     );
-    const svc = new TopicMemoryService(makeStorage(), provider);
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider(
+        pages.map((p, i) => ({
+          path: TOPIC_PATH(p.frontmatter.topic_slug),
+          score: 1 - i * 0.01,
+        })),
+      ),
+    );
 
     const defaultLimit = await svc.retrieveRelevant('q');
-    assert.strictEqual(defaultLimit.length, 3);
+    assert.strictEqual(defaultLimit.results.length, 3);
 
     const customLimit = await svc.retrieveRelevant('q', { limit: 5 });
-    assert.strictEqual(customLimit.length, 5);
+    assert.strictEqual(customLimit.results.length, 5);
   });
 
   it('truncates bodyForContext to the word budget', async () => {
@@ -131,16 +266,17 @@ describe('TopicMemoryService.retrieveRelevant', () => {
       'Current state': longCurrent,
       'Why/background': longBackground,
     });
-    const provider = makeSearchProvider([
-      { path: 'fat.md', content: renderTopicPage(page), score: 1.0 },
-    ]);
-    const svc = new TopicMemoryService(makeStorage(), provider);
-    const results = await svc.retrieveRelevant('q', { budgetWords: 100 });
-    assert.strictEqual(results.length, 1);
-    // selectSectionsForBudget always includes Current state (even if over budget);
-    // the over-budget section fills the budget and subsequent sections are excluded.
-    assert.ok(results[0].bodyForContext.includes('## Current state'));
-    assert.ok(!results[0].bodyForContext.includes('## Why/background'));
+    const storage = makeStorage({
+      [TOPIC_PATH('fat')]: renderTopicPage(page),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([{ path: TOPIC_PATH('fat'), score: 1.0 }]),
+    );
+    const r = await svc.retrieveRelevant('q', { budgetWords: 100 });
+    assert.strictEqual(r.results.length, 1);
+    assert.ok(r.results[0].bodyForContext.includes('## Current state'));
+    assert.ok(!r.results[0].bodyForContext.includes('## Why/background'));
   });
 
   it('skips Source trail and Change log from bodyForContext', async () => {
@@ -149,52 +285,93 @@ describe('TopicMemoryService.retrieveRelevant', () => {
       'Source trail': '- [[some-meeting]]',
       'Change log': '- 2026-04-22: updated',
     });
-    const provider = makeSearchProvider([
-      { path: 't.md', content: renderTopicPage(page), score: 1.0 },
-    ]);
-    const svc = new TopicMemoryService(makeStorage(), provider);
-    const results = await svc.retrieveRelevant('q', { budgetWords: 10000 });
-    assert.ok(!results[0].bodyForContext.includes('Source trail'));
-    assert.ok(!results[0].bodyForContext.includes('Change log'));
-  });
-
-  it('deterministic tiebreak by slug for equal scores', async () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const a = topicPage('a-topic', { last_refreshed: today });
-    const b = topicPage('b-topic', { last_refreshed: today });
-    const c = topicPage('c-topic', { last_refreshed: today });
-
-    const provider1 = makeSearchProvider([
-      { path: 'c.md', content: renderTopicPage(c), score: 0.5 },
-      { path: 'a.md', content: renderTopicPage(a), score: 0.5 },
-      { path: 'b.md', content: renderTopicPage(b), score: 0.5 },
-    ]);
-    const provider2 = makeSearchProvider([
-      { path: 'a.md', content: renderTopicPage(a), score: 0.5 },
-      { path: 'b.md', content: renderTopicPage(b), score: 0.5 },
-      { path: 'c.md', content: renderTopicPage(c), score: 0.5 },
-    ]);
-
-    const r1 = await new TopicMemoryService(makeStorage(), provider1).retrieveRelevant('q');
-    const r2 = await new TopicMemoryService(makeStorage(), provider2).retrieveRelevant('q');
-
-    assert.deepStrictEqual(
-      r1.map((r) => r.slug),
-      r2.map((r) => r.slug),
-      'reshuffled candidates produce identical ranked output',
+    const storage = makeStorage({
+      [TOPIC_PATH('t')]: renderTopicPage(page),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([{ path: TOPIC_PATH('t'), score: 1.0 }]),
     );
-    assert.deepStrictEqual(r1.map((r) => r.slug), ['a-topic', 'b-topic', 'c-topic']);
+    const r = await svc.retrieveRelevant('q', { budgetWords: 10000 });
+    assert.ok(!r.results[0].bodyForContext.includes('Source trail'));
+    assert.ok(!r.results[0].bodyForContext.includes('Change log'));
   });
 
-  it('skips candidates that fail to parse', async () => {
+  it('tiebreaks equal scores by last_refreshed DESC then slug ASC', async () => {
+    // All three have equal qmd score and equal recency bonus → test
+    // last_refreshed tiebreak (newer first), with slug ASC as final tiebreak.
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400 * 1000).toISOString().slice(0, 10);
+
+    const newA = topicPage('a-topic', { last_refreshed: tomorrow });
+    const oldB = topicPage('b-topic', { last_refreshed: today });
+    const newC = topicPage('c-topic', { last_refreshed: tomorrow });
+
+    const storage = makeStorage({
+      [TOPIC_PATH('a-topic')]: renderTopicPage(newA),
+      [TOPIC_PATH('b-topic')]: renderTopicPage(oldB),
+      [TOPIC_PATH('c-topic')]: renderTopicPage(newC),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([
+        { path: TOPIC_PATH('c-topic'), score: 0.5 },
+        { path: TOPIC_PATH('a-topic'), score: 0.5 },
+        { path: TOPIC_PATH('b-topic'), score: 0.5 },
+      ]),
+    );
+    const r = await svc.retrieveRelevant('q');
+    // Newer (a, c) tie by date; slug ASC puts 'a' first. Older 'b' last.
+    assert.deepStrictEqual(
+      r.results.map((x) => x.slug),
+      ['a-topic', 'c-topic', 'b-topic'],
+    );
+  });
+
+  it('skips candidates that do not exist in storage', async () => {
     const good = topicPage('valid');
-    const provider = makeSearchProvider([
-      { path: 'valid.md', content: renderTopicPage(good), score: 0.9 },
-      { path: 'bogus.md', content: 'not-a-topic-page', score: 0.95 },
-    ]);
-    const svc = new TopicMemoryService(makeStorage(), provider);
-    const results = await svc.retrieveRelevant('q');
-    assert.strictEqual(results.length, 1);
-    assert.strictEqual(results[0].slug, 'valid');
+    const storage = makeStorage({
+      [TOPIC_PATH('valid')]: renderTopicPage(good),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([
+        { path: TOPIC_PATH('valid'), score: 0.9 },
+        { path: TOPIC_PATH('not-on-disk'), score: 0.95 },
+      ]),
+    );
+    const r = await svc.retrieveRelevant('q');
+    assert.strictEqual(r.results.length, 1);
+    assert.strictEqual(r.results[0].slug, 'valid');
+  });
+
+  it('handles malformed last_refreshed without crashing', async () => {
+    const bad = topicPage('bad', { last_refreshed: 'not-a-date' });
+    const storage = makeStorage({
+      [TOPIC_PATH('bad')]: renderTopicPage(bad),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([{ path: TOPIC_PATH('bad'), score: 1.0 }]),
+    );
+    const r = await svc.retrieveRelevant('q');
+    // Still returned (no bonus, but included) — graceful degradation.
+    assert.strictEqual(r.results.length, 1);
+  });
+
+  it('computes max score ≤ 0.9 (qmd × 0.6 + recency 0.2 + area 0.1)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const page = topicPage('x', { area: 'my-area', last_refreshed: today });
+    const storage = makeStorage({
+      [TOPIC_PATH('x')]: renderTopicPage(page),
+    });
+    const svc = new TopicMemoryService(
+      storage,
+      makeSearchProvider([{ path: TOPIC_PATH('x'), score: 1.0 }]),
+    );
+    const r = await svc.retrieveRelevant('q', { area: 'my-area' });
+    // qmd 1.0 × 0.6 = 0.6, + recency 0.2 + area 0.1 = 0.9
+    assert.ok(r.results[0].score <= 0.9 + 1e-9, `score ${r.results[0].score} exceeds max 0.9`);
+    assert.ok(r.results[0].score >= 0.9 - 1e-9, `score ${r.results[0].score} should be at max 0.9`);
   });
 });

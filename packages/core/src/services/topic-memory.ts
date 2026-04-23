@@ -955,9 +955,32 @@ export interface TopicPageContext {
   score: number;
 }
 
+/**
+ * Result envelope for `retrieveRelevant`. Distinguishes genuine empty
+ * results from degraded capability (no search provider available), so
+ * callers can decide whether to fall back to atomic L2 search or warn.
+ */
+export interface RetrieveRelevantResult {
+  results: TopicPageContext[];
+  /**
+   * Which search backend produced these results:
+   *  - 'qmd'      — semantic search via qmd CLI
+   *  - 'fallback' — token-based search (no embeddings)
+   *  - 'none'     — no search provider configured; results is always []
+   */
+  searchBackend: 'qmd' | 'fallback' | 'none';
+}
+
 const TOPIC_PATH_PREFIX = '.arete/memory/topics/';
 const DEFAULT_RETRIEVAL_LIMIT = 3;
 const DEFAULT_BUDGET_WORDS = 1000;
+
+// qmd ignores the `paths` option in SearchOptions and returns candidates
+// from the entire indexed workspace. To compensate we over-fetch by this
+// multiplier and post-filter by path prefix. Fallback DOES honor paths so
+// the over-fetch is only wasteful (not needed), but cheap.
+const QMD_OVERFETCH_MULTIPLIER = 10;
+const FALLBACK_OVERFETCH_MULTIPLIER = 3;
 
 const RECENCY_BONUS_30D = 0.2;
 const RECENCY_BONUS_90D = 0.1;
@@ -970,12 +993,21 @@ function daysBetween(a: string, b: Date): number {
   return Math.floor((b.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Classify a provider name as one of the three known backends.
+ * Unknown provider names bucket as 'fallback' (conservative — they at
+ * least implement the SearchProvider interface).
+ */
+function classifyBackend(name: string): 'qmd' | 'fallback' {
+  return name === 'qmd' ? 'qmd' : 'fallback';
+}
+
 declare module './topic-memory.js' {
   interface TopicMemoryService {
     retrieveRelevant(
       query: string,
       options?: RetrieveRelevantOptions,
-    ): Promise<TopicPageContext[]>;
+    ): Promise<RetrieveRelevantResult>;
   }
 }
 
@@ -983,29 +1015,61 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
   this: TopicMemoryService,
   query: string,
   options: RetrieveRelevantOptions = {},
-): Promise<TopicPageContext[]> {
+): Promise<RetrieveRelevantResult> {
   const limit = options.limit ?? DEFAULT_RETRIEVAL_LIMIT;
   const budgetWords = options.budgetWords ?? DEFAULT_BUDGET_WORDS;
 
-  const searchProvider = (this as unknown as { searchProvider?: SearchProvider }).searchProvider;
+  const self = this as unknown as {
+    searchProvider?: SearchProvider;
+    storage: StorageAdapter;
+  };
+  const searchProvider = self.searchProvider;
   if (searchProvider === undefined) {
-    return [];
+    return { results: [], searchBackend: 'none' };
   }
 
-  // Broader candidate set (limit * 3) so re-ranking with recency + area
-  // bonuses can promote near-misses over exact-text matches.
-  const candidates = await searchProvider.semanticSearch(query, {
+  const backend = classifyBackend(searchProvider.name);
+  const overfetchMult = backend === 'qmd' ? QMD_OVERFETCH_MULTIPLIER : FALLBACK_OVERFETCH_MULTIPLIER;
+
+  const rawCandidates = await searchProvider.semanticSearch(query, {
     paths: [TOPIC_PATH_PREFIX],
-    limit: limit * 3,
+    limit: limit * overfetchMult,
   });
 
-  if (candidates.length === 0) return [];
+  if (rawCandidates.length === 0) {
+    return { results: [], searchBackend: backend };
+  }
 
+  // Post-filter by path prefix — qmd ignores `paths` (see qmd.ts),
+  // so we must filter here. Paths from qmd are workspace-relative; we
+  // accept both `.arete/memory/topics/foo.md` and an absolute-path
+  // variant for safety.
+  const candidatePaths = rawCandidates
+    .filter((c) => {
+      const normalized = c.path.replace(/\\/g, '/');
+      return (
+        normalized.includes('/.arete/memory/topics/') ||
+        normalized.startsWith('.arete/memory/topics/') ||
+        normalized.startsWith(TOPIC_PATH_PREFIX)
+      );
+    })
+    .map((c) => ({ path: c.path, score: c.score }));
+
+  if (candidatePaths.length === 0) {
+    return { results: [], searchBackend: backend };
+  }
+
+  // Re-read full file content from disk — `c.content` from qmd is a
+  // snippet (excerpt with line markers), not the full document, so
+  // `parseTopicPage` fails on it. Reading from storage guarantees we
+  // parse the whole frontmatter + sections.
   const now = new Date();
   const ranked: Array<{ page: TopicPage; score: number }> = [];
 
-  for (const c of candidates) {
-    const page = parseTopicPage(c.content);
+  for (const c of candidatePaths) {
+    const content = await self.storage.read(c.path);
+    if (content === null) continue;
+    const page = parseTopicPage(content);
     if (page === null) continue;
 
     let score = c.score * QMD_SCORE_WEIGHT;
@@ -1026,7 +1090,13 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
 
   ranked.sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score;
-    // Deterministic tiebreak on slug to keep output stable across identical scores.
+    // Tiebreak for equal scores: prefer fresher `last_refreshed` so
+    // "when relevance is indistinguishable, prefer more recent" —
+    // better skill UX than alphabetical. Slug-asc tiebreak of tiebreak
+    // keeps output fully deterministic.
+    const aDate = a.page.frontmatter.last_refreshed;
+    const bDate = b.page.frontmatter.last_refreshed;
+    if (aDate !== bDate) return aDate < bDate ? 1 : -1;
     const aSlug = a.page.frontmatter.topic_slug;
     const bSlug = b.page.frontmatter.topic_slug;
     return aSlug < bSlug ? -1 : aSlug > bSlug ? 1 : 0;
@@ -1034,10 +1104,13 @@ TopicMemoryService.prototype.retrieveRelevant = async function (
 
   const topK = ranked.slice(0, limit);
 
-  return topK.map(({ page, score }) => ({
-    slug: page.frontmatter.topic_slug,
-    frontmatter: page.frontmatter,
-    bodyForContext: selectSectionsForBudget(page, budgetWords),
-    score,
-  }));
+  return {
+    results: topK.map(({ page, score }) => ({
+      slug: page.frontmatter.topic_slug,
+      frontmatter: page.frontmatter,
+      bodyForContext: selectSectionsForBudget(page, budgetWords),
+      score,
+    })),
+    searchBackend: backend,
+  };
 };

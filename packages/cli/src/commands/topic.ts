@@ -399,23 +399,33 @@ export function registerTopicCommands(program: Command): void {
         process.exit(1);
       }
 
-      const results = await services.topicMemory.retrieveRelevant(query, {
+      const retrieval = await services.topicMemory.retrieveRelevant(query, {
         limit: opts.limit,
         area: opts.area,
         budgetWords: opts.budget,
       });
 
       if (opts.json) {
-        console.log(JSON.stringify({ success: true, query, results }, null, 2));
+        console.log(JSON.stringify({
+          success: true,
+          query,
+          results: retrieval.results,
+          searchBackend: retrieval.searchBackend,
+        }, null, 2));
         return;
       }
 
       header(`Topic Retrieval — "${query}"`);
-      if (results.length === 0) {
+      if (retrieval.searchBackend === 'none') {
+        warn('No search provider configured — topic retrieval unavailable.');
+        info('Run `arete index` to set up qmd, or install the fallback provider.');
+        return;
+      }
+      if (retrieval.results.length === 0) {
         info('No matching topics.');
         return;
       }
-      for (const r of results) {
+      for (const r of retrieval.results) {
         console.log('');
         console.log(chalk.bold(`[[${r.slug}]]`) + chalk.dim(` (score ${r.score.toFixed(2)})`));
         const area = r.frontmatter.area !== undefined ? `area: ${r.frontmatter.area} • ` : '';
