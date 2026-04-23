@@ -1,13 +1,13 @@
 ---
 title: "Reduce extraction LLM cost + fix open-task duplication"
 slug: fewer-llm-calls-open-task-dedup
-status: draft
+status: building
 size: medium
 tags: [cli, core, backend, web, meetings, extraction, reconciliation, cost]
 created: "2026-04-22T00:00:00.000Z"
 updated: "2026-04-22T00:00:00.000Z"
 completed: null
-execution: null
+execution: "branch: worktree-fewer-llm-calls-open-task-dedup; 5 commits; awaiting manual QA + merge"
 has_review: true
 has_pre_mortem: true
 has_prd: false
