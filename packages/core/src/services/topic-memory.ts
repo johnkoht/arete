@@ -700,6 +700,157 @@ declare module './topic-memory.js' {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Step 6 review — batch refresh used by BOTH `arete topic refresh --all` and
+// `arete memory refresh`. Single path avoids duplicate meeting-discovery
+// loops and silent-staleness gap where `memory refresh` didn't touch topics.
+// ---------------------------------------------------------------------------
+
+export interface RefreshBatchOptions {
+  callLLM?: LLMCallFn;
+  dryRun?: boolean;
+  today: string;
+  /** Only refresh these slugs; omit for all existing topics. */
+  slugs?: string[];
+}
+
+export interface RefreshBatchTopicResult {
+  slug: string;
+  integrated: number;
+  fallback: number;
+  skipped: number;
+  status: 'ok' | 'no-sources';
+}
+
+export interface RefreshBatchResult {
+  topics: RefreshBatchTopicResult[];
+  totalIntegrated: number;
+  totalFallback: number;
+  totalSkipped: number;
+}
+
+declare module './topic-memory.js' {
+  interface TopicMemoryService {
+    refreshAllFromMeetings(
+      paths: import('../models/workspace.js').WorkspacePaths,
+      options: RefreshBatchOptions,
+    ): Promise<RefreshBatchResult>;
+  }
+}
+
+import { join as pathJoin, basename as pathBasename } from 'node:path';
+import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
+import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
+
+TopicMemoryService.prototype.refreshAllFromMeetings = async function (
+  this: TopicMemoryService,
+  paths,
+  options,
+): Promise<RefreshBatchResult> {
+  const { topics: existing } = await this.listAll(paths);
+  const existingBySlug = new Map<string, TopicPage>(
+    existing.map((t) => [t.frontmatter.topic_slug, t]),
+  );
+
+  const targetSlugs =
+    options.slugs !== undefined
+      ? options.slugs
+      : existing.map((t) => t.frontmatter.topic_slug);
+
+  // Gather meeting files once — shared across all targets.
+  // Accessing private storage through `(this as any)` avoids needing a public
+  // accessor for this internal batch operation.
+  const storage = (this as unknown as { storage: StorageAdapter }).storage;
+  const meetingsDir = pathJoin(paths.resources, 'meetings');
+  const meetingFiles = (await storage.exists(meetingsDir))
+    ? await storage.list(meetingsDir, { extensions: ['.md'] })
+    : [];
+
+  const perTopic: RefreshBatchTopicResult[] = [];
+
+  for (const targetSlug of targetSlugs) {
+    let page: TopicPage | null = existingBySlug.get(targetSlug) ?? null;
+    let integrated = 0;
+    let fallback = 0;
+    let skipped = 0;
+
+    const matching: Array<{ path: string; date: string; content: string }> = [];
+    for (const meetingPath of meetingFiles) {
+      const fileName = pathBasename(meetingPath);
+      const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) continue;
+      const content = await storage.read(meetingPath);
+      if (content === null) continue;
+      const parsed = parseMeetingFileExternal(content);
+      if (!parsed) continue;
+      const meetingTopics = parsed.frontmatter.topics;
+      if (!Array.isArray(meetingTopics) || !meetingTopics.includes(targetSlug)) continue;
+      matching.push({ path: meetingPath, date: dateMatch[1], content });
+    }
+
+    matching.sort((a, b) => a.date.localeCompare(b.date));
+
+    if (matching.length === 0) {
+      perTopic.push({ slug: targetSlug, integrated: 0, fallback: 0, skipped: 0, status: 'no-sources' });
+      continue;
+    }
+
+    if (options.dryRun) {
+      for (const src of matching) {
+        const srcHash = hashSource(src.content);
+        const already = page?.frontmatter.sources_integrated.some((s) => s.hash === srcHash) ?? false;
+        if (already) skipped++;
+        else integrated++;
+      }
+      perTopic.push({ slug: targetSlug, integrated, fallback, skipped, status: 'ok' });
+      continue;
+    }
+
+    for (const src of matching) {
+      const result = await this.integrateSource(
+        targetSlug,
+        page,
+        src,
+        { today: options.today, callLLM: options.callLLM },
+      );
+      if (result.decision === 'integrated') integrated++;
+      else if (result.decision === 'fallback') fallback++;
+      else if (result.decision === 'skipped-already-integrated') skipped++;
+      page = result.page;
+    }
+
+    // Write the final page
+    if (page !== null) {
+      const outPath = pathJoin(paths.memory, 'topics', `${targetSlug}.md`);
+      await storage.mkdir(pathJoin(paths.memory, 'topics'));
+      if (storage.writeIfChanged !== undefined) {
+        await storage.writeIfChanged(outPath, renderTopicPageExternal(page));
+      } else {
+        await storage.write(outPath, renderTopicPageExternal(page));
+      }
+    }
+
+    perTopic.push({ slug: targetSlug, integrated, fallback, skipped, status: 'ok' });
+  }
+
+  return {
+    topics: perTopic,
+    totalIntegrated: perTopic.reduce((s, t) => s + t.integrated, 0),
+    totalFallback: perTopic.reduce((s, t) => s + t.fallback, 0),
+    totalSkipped: perTopic.reduce((s, t) => s + t.skipped, 0),
+  };
+};
+
+/**
+ * Cost estimate helper — rough Haiku cost per (topic, meeting) integration.
+ * Used by CLI for `--dry-run` and `--confirm` prompts.
+ */
+export const ESTIMATED_USD_PER_INTEGRATION = 0.015;
+
+export function estimateRefreshCostUsd(totalIntegrations: number): number {
+  return totalIntegrations * ESTIMATED_USD_PER_INTEGRATION;
+}
+
 TopicMemoryService.prototype.integrateSource = async function (
   this: TopicMemoryService,
   topicSlug: string,

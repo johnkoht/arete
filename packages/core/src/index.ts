@@ -143,6 +143,8 @@ export {
   hashSource,
   classifyByJaccard,
   tokenizeSlug,
+  estimateRefreshCostUsd,
+  ESTIMATED_USD_PER_INTEGRATION,
 } from './services/topic-memory.js';
 export type {
   TopicCandidate,
@@ -152,6 +154,9 @@ export type {
   IntegrateOutput,
   IntegrateSourceOptions,
   IntegrateResult,
+  RefreshBatchOptions,
+  RefreshBatchResult,
+  RefreshBatchTopicResult,
 } from './services/topic-memory.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';

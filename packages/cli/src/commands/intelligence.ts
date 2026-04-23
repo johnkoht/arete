@@ -500,6 +500,23 @@ export function registerMemoryCommand(program: Command): void {
         });
       }
 
+      // 2b. Refresh topic pages (Step 6 wiring — `arete memory refresh` now
+      // transparently refreshes topics when AI is configured, same pattern
+      // as cross-area synthesis). Gated on callLLM presence AND non-area
+      // scope (area-scoped refresh is a targeted operation, not a bulk
+      // memory sweep). Graceful fallback on error: topics stay as-is.
+      let topicResult: { topics: unknown[]; totalIntegrated: number; totalFallback: number; totalSkipped: number } | undefined;
+      if (!opts.area && !opts.dryRun && callLLM !== undefined) {
+        try {
+          topicResult = await services.topicMemory.refreshAllFromMeetings(paths, {
+            today: new Date().toISOString().slice(0, 10),
+            callLLM,
+          });
+        } catch (err) {
+          warn(`Topic refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      }
+
       // 3. Refresh memory index (`.arete/memory/index.md`) — Obsidian landing page.
       // Idempotent: no write when content byte-equals existing file. Runs after
       // area + person refresh so topic/person counts reflect fresh data. Skipped
@@ -552,6 +569,7 @@ export function registerMemoryCommand(program: Command): void {
           areas: areaResult,
           synthesis: areaResult.synthesis ?? null,
           people: personResult ?? null,
+          topics: topicResult ?? null,
           memoryIndex: {
             status: indexStatus,
             errors: indexErrors,
@@ -600,6 +618,19 @@ export function registerMemoryCommand(program: Command): void {
         }
         listItem('People scanned', String(personResult.scannedPeople));
         listItem('Meetings scanned', String(personResult.scannedMeetings));
+      }
+
+      // Topic results
+      if (topicResult !== undefined) {
+        console.log('');
+        if (topicResult.totalIntegrated > 0) {
+          success(`Integrated ${topicResult.totalIntegrated} source(s) into ${topicResult.topics.length} topic page(s).`);
+        } else {
+          info('Topics: no new sources to integrate.');
+        }
+        if (topicResult.totalFallback > 0) {
+          warn(`Topic refresh: ${topicResult.totalFallback} fallback(s) (LLM errors — re-run when AI stable)`);
+        }
       }
 
       // Memory index status — surface errors prominently so users know

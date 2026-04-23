@@ -12,12 +12,10 @@
 import {
   createServices,
   renderTopicPage,
-  parseMeetingFile,
-  hashSource,
-  type TopicPage,
+  estimateRefreshCostUsd,
 } from '@arete/core';
 import type { Command } from 'commander';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import chalk from 'chalk';
 import {
   header,
@@ -180,14 +178,23 @@ export function registerTopicCommands(program: Command): void {
   // ---------------------------------------------------------------------------
   topicCmd
     .command('refresh [slug]')
-    .description('Refresh a topic page by re-integrating all source meetings')
+    .description('Refresh topic page(s) by re-integrating source meetings (LLM-gated)')
     .option('--all', 'Refresh every topic (otherwise slug is required)')
     .option('--dry-run', 'Preview what would be refreshed; no LLM calls, no writes')
     .option('--allow-no-llm', 'Write Source trail only when no AI is configured (default: abort)')
+    .option('-y, --yes', 'Skip the interactive confirmation prompt (scripted mode)')
+    .option('--cost-threshold <usd>', 'Estimated-cost threshold that triggers confirm (default 1.00)', parseFloat, 1.00)
     .option('--json', 'Output as JSON')
     .action(async (
       slug: string | undefined,
-      opts: { all?: boolean; dryRun?: boolean; allowNoLlm?: boolean; json?: boolean },
+      opts: {
+        all?: boolean;
+        dryRun?: boolean;
+        allowNoLlm?: boolean;
+        yes?: boolean;
+        costThreshold: number;
+        json?: boolean;
+      },
     ) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
@@ -211,12 +218,15 @@ export function registerTopicCommands(program: Command): void {
         process.exit(1);
       }
 
-      const callLLM = services.ai.isConfigured()
-        ? async (prompt: string) => {
-            const result = await services.ai.call('synthesis', prompt);
-            return result.text;
-          }
-        : undefined;
+      // Honor ARETE_NO_LLM envvar regardless of AI configuration.
+      const noLlmEnv = process.env.ARETE_NO_LLM === '1';
+      const callLLM =
+        services.ai.isConfigured() && !noLlmEnv
+          ? async (prompt: string) => {
+              const result = await services.ai.call('synthesis', prompt);
+              return result.text;
+            }
+          : undefined;
 
       if (callLLM === undefined && !opts.allowNoLlm && !opts.dryRun) {
         if (opts.json) {
@@ -225,27 +235,27 @@ export function registerTopicCommands(program: Command): void {
             error: 'AI not configured — pass --allow-no-llm to write source trails only',
           }));
         } else {
-          error('AI not configured. Topic refresh requires an LLM for narrative synthesis.');
+          error(noLlmEnv
+            ? 'ARETE_NO_LLM=1 is set. Topic refresh requires an LLM for narrative synthesis.'
+            : 'AI not configured. Topic refresh requires an LLM for narrative synthesis.');
           info('Pass --allow-no-llm to write Source trail entries only (no narrative).');
         }
         process.exit(1);
       }
 
-      // Load existing topics
-      const { topics: existing } = await services.topicMemory.listAll(paths);
-      const existingBySlug = new Map<string, TopicPage>(
-        existing.map((t) => [t.frontmatter.topic_slug, t]),
-      );
+      // --- Cost estimate via dry-run through the batch helper. This also
+      // surfaces how many integrations would actually happen (accounting for
+      // content-hash dedup of previously-integrated meetings).
+      const slugs = opts.all ? undefined : slug !== undefined ? [slug] : [];
+      const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+        today: today(),
+        dryRun: true,
+        slugs,
+      });
+      const integrationsNeeded = estimate.totalIntegrated;
+      const estimatedCost = estimateRefreshCostUsd(integrationsNeeded);
 
-      // Determine target slugs
-      const targetSlugs: string[] = [];
-      if (opts.all) {
-        for (const t of existing) targetSlugs.push(t.frontmatter.topic_slug);
-      } else if (slug !== undefined) {
-        targetSlugs.push(slug);
-      }
-
-      if (targetSlugs.length === 0) {
+      if (estimate.topics.length === 0) {
         if (opts.json) {
           console.log(JSON.stringify({ success: true, refreshed: [], message: 'No topics to refresh' }));
         } else {
@@ -254,131 +264,113 @@ export function registerTopicCommands(program: Command): void {
         return;
       }
 
-      // For each target, find meetings that tag it and integrate one at a time
-      const meetingsDir = join(paths.resources, 'meetings');
-      const meetingFiles = (await services.storage.exists(meetingsDir))
-        ? await services.storage.list(meetingsDir, { extensions: ['.md'] })
-        : [];
-
-      const perTopic: Array<{
-        slug: string;
-        integrated: number;
-        fallback: number;
-        skipped: number;
-        status: 'ok' | 'no-sources';
-      }> = [];
-
-      for (const targetSlug of targetSlugs) {
-        let page = existingBySlug.get(targetSlug) ?? null;
-        let integrated = 0;
-        let fallback = 0;
-        let skipped = 0;
-
-        // Find meetings that tag this slug in frontmatter
-        const matching: Array<{ path: string; date: string; content: string }> = [];
-        for (const meetingPath of meetingFiles) {
-          const fileName = basename(meetingPath);
-          const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (!dateMatch) continue;
-          const content = await services.storage.read(meetingPath);
-          if (content === null) continue;
-          const parsed = parseMeetingFile(content);
-          if (!parsed) continue;
-          const meetingTopics = parsed.frontmatter.topics;
-          if (!Array.isArray(meetingTopics) || !meetingTopics.includes(targetSlug)) continue;
-          matching.push({ path: meetingPath, date: dateMatch[1], content });
-        }
-
-        matching.sort((a, b) => a.date.localeCompare(b.date));
-
-        if (matching.length === 0) {
-          perTopic.push({ slug: targetSlug, integrated: 0, fallback: 0, skipped: 0, status: 'no-sources' });
-          continue;
-        }
-
-        if (opts.dryRun) {
-          // Dry run: don't spend LLM; just report which meetings would be integrated
-          for (const src of matching) {
-            const srcHash = hashSource(src.content);
-            const already = page?.frontmatter.sources_integrated.some((s) => s.hash === srcHash) ?? false;
-            if (already) skipped++;
-            else integrated++;
-          }
-          perTopic.push({ slug: targetSlug, integrated, fallback, skipped, status: 'ok' });
-          continue;
-        }
-
-        // Real run
-        for (const src of matching) {
-          const result = await services.topicMemory.integrateSource(
-            targetSlug,
-            page,
-            src,
-            { today: today(), callLLM },
+      // Confirm-gate: required when cost crosses threshold AND not scripted.
+      if (!opts.dryRun && callLLM !== undefined && estimatedCost >= opts.costThreshold && !opts.yes) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: false,
+            error: 'confirm_required',
+            estimate: {
+              topics: estimate.topics.length,
+              integrations: integrationsNeeded,
+              cost_usd: estimatedCost,
+              threshold_usd: opts.costThreshold,
+            },
+            hint: 'Re-run with --yes to proceed, or --dry-run to inspect.',
+          }, null, 2));
+        } else {
+          warn(
+            `Will integrate ${integrationsNeeded} source(s) across ${estimate.topics.length} topic(s) ` +
+            `— estimated cost ~$${estimatedCost.toFixed(2)}.`,
           );
-          if (result.decision === 'integrated') integrated++;
-          else if (result.decision === 'fallback') fallback++;
-          else if (result.decision === 'skipped-already-integrated') skipped++;
-          page = result.page;
+          info('Re-run with --yes to proceed, or --dry-run for a no-spend preview.');
         }
-
-        // Write the final page
-        if (page !== null) {
-          const outPath = join(paths.memory, 'topics', `${targetSlug}.md`);
-          await services.storage.mkdir(join(paths.memory, 'topics'));
-          if (services.storage.writeIfChanged !== undefined) {
-            await services.storage.writeIfChanged(outPath, renderTopicPage(page));
-          } else {
-            await services.storage.write(outPath, renderTopicPage(page));
-          }
-        }
-
-        perTopic.push({ slug: targetSlug, integrated, fallback, skipped, status: 'ok' });
+        process.exit(0);
       }
 
-      // Log event (best-effort)
-      if (!opts.dryRun) {
-        try {
-          await services.memoryLog.append(paths, {
-            event: 'refresh',
-            fields: {
-              scope: opts.all ? 'topic_all' : 'topic_one',
-              targets: String(targetSlugs.length),
-              integrated: String(perTopic.reduce((s, t) => s + t.integrated, 0)),
-              fallback: String(perTopic.reduce((s, t) => s + t.fallback, 0)),
+      // If dry-run, just report the estimate and exit.
+      if (opts.dryRun) {
+        if (opts.json) {
+          console.log(JSON.stringify({
+            success: true,
+            dryRun: true,
+            topics: estimate.topics,
+            estimate: {
+              integrations: integrationsNeeded,
+              cost_usd: estimatedCost,
             },
-          });
-        } catch {
-          // best-effort
+          }, null, 2));
+          return;
         }
+        header('Topic Refresh (dry run)');
+        for (const t of estimate.topics) {
+          if (t.status === 'no-sources') {
+            info(`${t.slug}: no meetings tag this topic yet`);
+            continue;
+          }
+          const parts: string[] = [];
+          if (t.integrated > 0) parts.push(chalk.green(`${t.integrated} would integrate`));
+          if (t.skipped > 0) parts.push(chalk.dim(`${t.skipped} already integrated`));
+          console.log(`  ${t.slug}: ${parts.join(', ')}`);
+        }
+        if (integrationsNeeded > 0) {
+          console.log('');
+          info(`Estimated cost: ~$${estimatedCost.toFixed(2)} for ${integrationsNeeded} integration(s).`);
+        }
+        return;
+      }
+
+      // Real run via the shared batch helper.
+      const result = await services.topicMemory.refreshAllFromMeetings(paths, {
+        today: today(),
+        callLLM,
+        slugs,
+      });
+
+      // Log event (best-effort)
+      try {
+        await services.memoryLog.append(paths, {
+          event: 'refresh',
+          fields: {
+            scope: opts.all ? 'topic_all' : 'topic_one',
+            targets: String(result.topics.length),
+            integrated: String(result.totalIntegrated),
+            fallback: String(result.totalFallback),
+            skipped: String(result.totalSkipped),
+          },
+        });
+      } catch {
+        // best-effort
       }
 
       if (opts.json) {
         console.log(JSON.stringify({
           success: true,
-          dryRun: Boolean(opts.dryRun),
-          topics: perTopic,
+          dryRun: false,
+          topics: result.topics,
+          totals: {
+            integrated: result.totalIntegrated,
+            fallback: result.totalFallback,
+            skipped: result.totalSkipped,
+          },
         }, null, 2));
         return;
       }
 
-      header(opts.dryRun ? 'Topic Refresh (dry run)' : 'Topic Refresh');
-      for (const t of perTopic) {
+      header('Topic Refresh');
+      for (const t of result.topics) {
         if (t.status === 'no-sources') {
           info(`${t.slug}: no meetings tag this topic yet`);
           continue;
         }
-        const parts = [];
+        const parts: string[] = [];
         if (t.integrated > 0) parts.push(chalk.green(`${t.integrated} integrated`));
         if (t.fallback > 0) parts.push(chalk.yellow(`${t.fallback} fallback`));
         if (t.skipped > 0) parts.push(chalk.dim(`${t.skipped} skipped`));
         console.log(`  ${t.slug}: ${parts.join(', ')}`);
       }
-      if (!opts.dryRun) {
-        const totalIntegrated = perTopic.reduce((s, t) => s + t.integrated, 0);
-        if (totalIntegrated > 0) {
-          success(`Refreshed ${perTopic.length} topic(s), ${totalIntegrated} sources integrated.`);
-        }
+      if (result.totalIntegrated > 0) {
+        success(`Refreshed ${result.topics.length} topic(s), ${result.totalIntegrated} sources integrated.`);
       }
     });
 
@@ -404,15 +396,47 @@ export function registerTopicCommands(program: Command): void {
 
       const { topics, errors: parseErrors } = await services.topicMemory.listAll(paths);
 
-      // Find inbound wikilink references across all topic pages — orphan
-      // detection treats a topic with zero inbound references as an orphan.
+      // Known-valid wikilink targets: topic slugs + person slugs + area slugs.
+      // Anything pointing outside this set is flagged as dangling.
+      const allSlugs = new Set(topics.map((t) => t.frontmatter.topic_slug));
+      const people = await services.entity.listPeople(paths).catch(() => []);
+      const personSlugs = new Set(people.map((p) => p.slug));
+      const areas = await services.areaParser.listAreas().catch(() => []);
+      const areaSlugs = new Set(areas.map((a) => a.slug));
+
+      // Meeting-file refs (date-prefixed filenames without `.md`) are valid
+      // targets from Source trail and are resolved elsewhere (Obsidian
+      // follows the filename). Recognize them by pattern.
+      const meetingSlugRe = /^\d{4}-\d{2}-\d{2}-/;
+
+      // Sections we scan for dangling refs. Source trail intentionally
+      // excluded — it records meeting wikilinks by design.
+      const DANGLING_SCAN_SECTIONS = [
+        'Current state',
+        'Why/background',
+        'Scope and behavior',
+        'Rollout/timeline',
+        'Open questions',
+        'Known gaps',
+        'Relationships',
+        'Change log',
+      ] as const;
+
+      // Find inbound wikilink references across all topic pages for orphan
+      // detection — a topic with zero inbound references from another topic
+      // is an orphan. (Source trail IS scanned here because self-references
+      // should not satisfy the orphan check.)
       const refRe = /\[\[([a-z0-9-]+)\]\]/g;
-      const referenced = new Set<string>();
+      const inboundRefs = new Map<string, Set<string>>(); // target → sources
       for (const t of topics) {
+        const fromSlug = t.frontmatter.topic_slug;
         const body = Object.values(t.sections).join('\n');
         let m: RegExpExecArray | null;
         while ((m = refRe.exec(body)) !== null) {
-          referenced.add(m[1]);
+          const target = m[1];
+          if (target === fromSlug) continue; // self-ref doesn't count
+          if (!inboundRefs.has(target)) inboundRefs.set(target, new Set());
+          inboundRefs.get(target)!.add(fromSlug);
         }
       }
 
@@ -420,8 +444,6 @@ export function registerTopicCommands(program: Command): void {
       const stub: string[] = [];
       const orphan: string[] = [];
       const dangling: Array<{ fromSlug: string; toSlug: string }> = [];
-
-      const allSlugs = new Set(topics.map((t) => t.frontmatter.topic_slug));
 
       for (const t of topics) {
         const slug = t.frontmatter.topic_slug;
@@ -432,19 +454,23 @@ export function registerTopicCommands(program: Command): void {
         if (current === undefined || current.trim().length === 0) {
           stub.push(slug);
         }
-        if (!referenced.has(slug)) {
+        if ((inboundRefs.get(slug)?.size ?? 0) === 0) {
           orphan.push(slug);
         }
-        // dangling: refs from this topic that point to non-existent slugs
-        const body = Object.values(t.sections).join('\n');
-        let m: RegExpExecArray | null;
-        const re = /\[\[([a-z0-9-]+)\]\]/g;
-        while ((m = re.exec(body)) !== null) {
-          const target = m[1];
-          if (!allSlugs.has(target)) {
-            // Skip refs to people (convention: people slugs are two-word; skip is imperfect)
-            // For now, flag all non-topic refs as potential dangling topic refs.
-            // User review handles false positives on people links.
+
+        // Dangling refs — scan narrative sections only, exclude Source trail.
+        // Resolve targets against topics ∪ people ∪ areas ∪ meeting-slug pattern.
+        for (const sectionName of DANGLING_SCAN_SECTIONS) {
+          const body = t.sections[sectionName];
+          if (body === undefined) continue;
+          const re = /\[\[([a-z0-9-]+)\]\]/g;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(body)) !== null) {
+            const target = m[1];
+            if (allSlugs.has(target)) continue;
+            if (personSlugs.has(target)) continue;
+            if (areaSlugs.has(target)) continue;
+            if (meetingSlugRe.test(target)) continue;
             dangling.push({ fromSlug: slug, toSlug: target });
           }
         }
