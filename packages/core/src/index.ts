@@ -122,6 +122,80 @@ export type {
 export { createServices } from './factory.js';
 export type { AreteServices, CreateServicesOptions } from './factory.js';
 
+// Topic wiki memory (L3)
+export {
+  renderTopicPage,
+  parseTopicPage,
+  getTopicHeadline,
+  selectSectionsForBudget,
+  SECTION_NAMES,
+} from './models/topic-page.js';
+export type {
+  TopicPage,
+  TopicPageFrontmatter,
+  TopicSourceRef,
+  TopicSections,
+  TopicStatus,
+  SectionName,
+} from './models/topic-page.js';
+export {
+  getActiveTopics,
+  renderActiveTopicsAsWikilinks,
+  renderActiveTopicsAsSlugList,
+  maxLastRefreshed,
+} from './models/active-topics.js';
+export type {
+  ActiveTopicEntry,
+  GetActiveTopicsOptions,
+} from './models/active-topics.js';
+export type { MemorySummary } from './models/memory-summary.js';
+export { loadMemorySummary } from './services/memory-summary-loader.js';
+export type { LoadMemorySummaryOptions } from './services/memory-summary-loader.js';
+export {
+  TopicMemoryService,
+  hashSource,
+  hashMeetingSource,
+  classifyByJaccard,
+  tokenizeSlug,
+  estimateRefreshCostUsd,
+  ESTIMATED_USD_PER_INTEGRATION,
+} from './services/topic-memory.js';
+export type {
+  TopicCandidate,
+  TopicIdentity,
+  AliasResult,
+  AliasDecision,
+  IntegrateOutput,
+  IntegrateSourceOptions,
+  IntegrateResult,
+  RefreshBatchOptions,
+  RefreshBatchResult,
+  RefreshBatchTopicResult,
+  TopicMemoryStatus,
+  ListTopicMemoryStatusOptions,
+} from './services/topic-memory.js';
+export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
+export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
+export { MemoryLogService } from './services/memory-log.js';
+export {
+  acquireSeedLock,
+  readSeedLock,
+  breakSeedLock,
+  SeedLockHeldError,
+} from './services/seed-lock.js';
+export type { SeedLockInfo } from './services/seed-lock.js';
+export {
+  formatEvent as formatMemoryLogEvent,
+  parseEvent as parseMemoryLogEvent,
+  parseLog as parseMemoryLog,
+  appendEvent as appendMemoryLogEvent,
+  nowIsoSeconds,
+} from './utils/memory-log.js';
+export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
+
+// Meeting parsing helper
+export { parseMeetingFile } from './services/meeting-context.js';
+
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';
 export { authenticate as authenticateGoogle, loadGoogleCredentials, getClientCredentials } from './integrations/calendar/google-auth.js';

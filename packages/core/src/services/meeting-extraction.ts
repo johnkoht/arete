@@ -593,6 +593,13 @@ function buildAttendeeSlugLookup(context: MeetingContextBundle): Map<string, str
  * @param context - Optional MeetingContextBundle for enhanced extraction
  * @param priorItems - Items already extracted from earlier meetings in a batch (for deduplication)
  * @param ownerName - Owner's full name for speaking ratio and owner synthesis
+ * @param activeTopicSlugs - Pre-rendered slug list (`slug — status: summary` per line)
+ *   from `renderActiveTopicsAsSlugList(getActiveTopics(topics))`. When provided,
+ *   the extraction prompt instructs the LLM to prefer existing slugs at propose-
+ *   time, biasing against topic sprawl. This is the first line of defense against
+ *   duplicate topics; Jaccard + LLM alias adjudication at meeting-apply is the
+ *   backstop. Bare slugs, no wikilinks — `[[...]]` in the prompt would leak
+ *   into the JSON `topics[]` output.
  */
 export function buildMeetingExtractionPrompt(
   transcript: string,
@@ -601,6 +608,7 @@ export function buildMeetingExtractionPrompt(
   context?: MeetingContextBundle,
   priorItems?: PriorItem[],
   ownerName?: string,
+  activeTopicSlugs?: string,
 ): string {
   const attendeeContext = attendees?.length
     ? `\n\nMeeting attendees: ${attendees.join(', ')}`
@@ -650,6 +658,13 @@ JSON schema:
   "learnings": [{ "text": "string — key insight or learning", "confidence": "number (0-1) — your confidence this is a genuine insight" }],
   "topics": ["string — 3-6 slugified keywords for what this meeting was substantively about"]
 }
+${activeTopicSlugs !== undefined && activeTopicSlugs.length > 0 ? `
+**Prefer these existing topic slugs when applicable.** Only propose a new slug
+when the meeting is substantively about something not covered. Matching an
+existing slug keeps knowledge compounding instead of sprawling:
+
+${activeTopicSlugs}
+` : ''}
 
 ## What IS an action item (INCLUDE these — high confidence ≥0.8):
 ✓ "John to send API docs to Sarah by Friday" — specific owner, deliverable, deadline
@@ -1147,6 +1162,15 @@ export async function extractMeetingIntelligence(
     mode?: ExtractionMode;
     /** Owner's full name for speaking ratio */
     ownerName?: string;
+    /**
+     * Pre-rendered active-topic slug list (bare slugs, no wikilinks) for
+     * biasing the extraction LLM toward reusing existing topic slugs.
+     * Build via `renderActiveTopicsAsSlugList(getActiveTopics(topics))`.
+     * When present, injected after the JSON schema. See
+     * `meeting-extraction.ts:buildMeetingExtractionPrompt` for the
+     * full rationale.
+     */
+    activeTopicSlugs?: string;
   },
 ): Promise<MeetingExtractionResult> {
   if (!transcript || transcript.trim() === '') {
@@ -1184,6 +1208,7 @@ export async function extractMeetingIntelligence(
         options?.context,
         options?.priorItems,
         options?.ownerName,
+        options?.activeTopicSlugs,
       );
       limits = THOROUGH_LIMITS;
       break;
@@ -1197,6 +1222,7 @@ export async function extractMeetingIntelligence(
         options?.context,
         options?.priorItems,
         options?.ownerName,
+        options?.activeTopicSlugs,
       );
       limits = CATEGORY_LIMITS;
       break;

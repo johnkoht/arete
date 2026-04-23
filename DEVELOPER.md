@@ -455,20 +455,29 @@ Areté supports both Cursor and Claude Code using an **adapter pattern**:
 **Purpose**: Capture and preserve institutional knowledge.
 
 **Key files**:
-- `.arete/memory/items/` - Atomic facts (decisions, learnings, observations)
-- `.arete/memory/summaries/` - Synthesized (collaboration, sessions)
-- `.arete/activity/` - Activity log
-- `resources/` - Raw inputs (meetings, notes)
+- `.arete/memory/items/` — L2 atomic facts (decisions, learnings, observations; user-approved)
+- `.arete/memory/areas/` — L3 per-area operational snapshot (computed)
+- `.arete/memory/topics/` — L3 per-topic encyclopedic wiki (computed, LLM-synthesized)
+- `.arete/memory/summaries/` — L3 synthesized (collaboration, sessions)
+- `.arete/memory/index.md` — catalog of topic + person + area pages
+- `.arete/memory/log.md` — append-only audit of ingest/refresh/lint events
+- `.arete/activity/` — activity log
+- `resources/` — raw inputs (meetings, notes)
 
 **Three layers**:
-1. **L1 Resources** - Raw, immutable (meetings, notes)
-2. **L2 Items** - Extracted facts (decisions, learnings)
-3. **L3 Summaries** - Synthesized context (collaboration profile, sessions)
+1. **L1 Resources** — Raw, immutable (meetings, notes)
+2. **L2 Items** — Extracted atomic facts (decisions, learnings, observations), user-approved and citable
+3. **L3 Computed views** — three complementary auto-regenerated surfaces:
+   - Areas: operational snapshot per work domain
+   - Topics: encyclopedic wiki per topic (LLM-synthesized; source of CLAUDE.md boot context)
+   - Summaries: free-form synthesis (collaboration, sessions)
 
 **Key patterns**:
-- Never write to memory without user approval
-- extract_decisions_learnings pattern (scan → present → approve → write)
+- Never write L2 items without user approval
+- `extract_decisions_learnings` pattern (scan → present → approve → write)
+- `integrateSource` pattern for topic pages (existing page + new source → LLM → section merge)
 - Memory search finds relevant history for current work
+- `topic_page_retrieval` pattern for skill context injection (see `packages/runtime/skills/PATTERNS.md`)
 
 ### 10. Search Provider System
 

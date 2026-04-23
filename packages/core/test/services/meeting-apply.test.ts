@@ -556,4 +556,172 @@ Hello world.
     assert.ok(updatedContent.includes('decisions_count: 0'), 'Should have decisions_count: 0');
     assert.ok(updatedContent.includes('learnings_count: 0'), 'Should have learnings_count: 0');
   });
+
+  // ---------------------------------------------------------------------
+  // Phase A #1 — alias/merge normalization of intelligence.topics
+  // ---------------------------------------------------------------------
+
+  describe('topic alias/merge', () => {
+    async function makePaths(root: string) {
+      const { WorkspaceService } = await import('../../src/services/workspace.js');
+      return new WorkspaceService(storage).getPaths(root);
+    }
+
+    function seedTopicPage(root: string, slug: string, aliases: string[] = []): void {
+      const dir = join(root, '.arete', 'memory', 'topics');
+      mkdirSync(dir, { recursive: true });
+      const lines = [
+        '---',
+        `topic_slug: ${slug}`,
+        'status: active',
+        'first_seen: 2026-03-01',
+        'last_refreshed: 2026-04-22',
+        'sources_integrated: []',
+      ];
+      if (aliases.length > 0) {
+        lines.push('aliases:');
+        for (const a of aliases) lines.push(`  - ${a}`);
+      }
+      lines.push('---');
+      lines.push('');
+      lines.push(`# ${slug}`);
+      writeFileSync(join(dir, `${slug}.md`), lines.join('\n'));
+    }
+
+    it('normalizes LLM-proposed slugs against existing canonical slugs', async () => {
+      writeMeetingFile(tmpDir, 'm.md', {
+        title: 'M',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# M\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', 'm.md');
+
+      seedTopicPage(tmpDir, 'cover-whale-templates');
+
+      const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+      const topicMemory = new TopicMemoryService(storage);
+
+      const intelligence = {
+        summary: 's',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+        topics: ['cover-whale-email-templates'], // near-dup of existing
+      };
+
+      const paths = await makePaths(tmpDir);
+      await applyMeetingIntelligence(meetingPath, intelligence, {
+        storage,
+        workspaceRoot: tmpDir,
+        topicMemory,
+        workspacePaths: paths,
+      });
+
+      const updated = readFileSync(meetingPath, 'utf8');
+      // Jaccard(3/4) = 0.75 > 0.67 threshold → coerced to existing slug
+      assert.ok(updated.includes('- cover-whale-templates'),
+        'near-dup must be coerced to existing canonical slug');
+      assert.ok(!updated.includes('cover-whale-email-templates'),
+        'original near-dup slug must NOT appear in frontmatter');
+    });
+
+    it('keeps low-overlap proposed slugs as new topics', async () => {
+      writeMeetingFile(tmpDir, 'm.md', {
+        title: 'M',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# M\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', 'm.md');
+
+      seedTopicPage(tmpDir, 'cover-whale-templates');
+
+      const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+      const topicMemory = new TopicMemoryService(storage);
+
+      const intelligence = {
+        summary: 's',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+        topics: ['completely-different-subject'],
+      };
+
+      const paths = await makePaths(tmpDir);
+      await applyMeetingIntelligence(meetingPath, intelligence, {
+        storage,
+        workspaceRoot: tmpDir,
+        topicMemory,
+        workspacePaths: paths,
+      });
+
+      const updated = readFileSync(meetingPath, 'utf8');
+      assert.ok(updated.includes('- completely-different-subject'),
+        'disjoint slug stays as-is');
+    });
+
+    it('skipTopicAlias: true bypasses the pass (--skip-topics path)', async () => {
+      writeMeetingFile(tmpDir, 'm.md', {
+        title: 'M',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# M\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', 'm.md');
+
+      seedTopicPage(tmpDir, 'cover-whale-templates');
+
+      const { TopicMemoryService } = await import('../../src/services/topic-memory.js');
+      const topicMemory = new TopicMemoryService(storage);
+
+      const intelligence = {
+        summary: 's',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+        topics: ['cover-whale-email-templates'],
+      };
+
+      const paths = await makePaths(tmpDir);
+      await applyMeetingIntelligence(
+        meetingPath,
+        intelligence,
+        { storage, workspaceRoot: tmpDir, topicMemory, workspacePaths: paths },
+        { skipTopicAlias: true },
+      );
+
+      const updated = readFileSync(meetingPath, 'utf8');
+      // With skipTopicAlias, the original slug is written verbatim (no coercion).
+      assert.ok(updated.includes('- cover-whale-email-templates'),
+        '--skip-topics must preserve raw slugs verbatim');
+    });
+
+    it('no topicMemory dep: passes topics through unchanged (backward compat)', async () => {
+      writeMeetingFile(tmpDir, 'm.md', {
+        title: 'M',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# M\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', 'm.md');
+
+      const intelligence = {
+        summary: 's',
+        actionItems: [],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+        topics: ['anything-goes'],
+      };
+
+      await applyMeetingIntelligence(meetingPath, intelligence, {
+        storage,
+        workspaceRoot: tmpDir,
+      });
+
+      const updated = readFileSync(meetingPath, 'utf8');
+      assert.ok(updated.includes('- anything-goes'),
+        'pre-topic-wiki-memory callers (no topicMemory dep) are unaffected');
+    });
+  });
 });

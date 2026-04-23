@@ -170,6 +170,15 @@ export type UpdateWorkspaceOptions = {
   sourcePaths?: SourcePaths;
   /** Override IDE target (useful for adding a second IDE without changing arete.yaml). */
   ideTarget?: 'cursor' | 'claude';
+  /**
+   * Optional pre-loaded memory summary threaded into `CLAUDE.md`
+   * regeneration during update. When present, the Active Topics
+   * section is preserved across npm version bumps. When absent, the
+   * section is stripped (the topic-wiki-memory plan makes this a
+   * must — callers should load memory via `loadMemorySummary` before
+   * calling update).
+   */
+  memorySummary?: import('./memory-summary.js').MemorySummary;
 };
 
 /** Return type of parseSourceType() */

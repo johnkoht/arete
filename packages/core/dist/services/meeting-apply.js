@@ -123,8 +123,32 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
     // 6. Update frontmatter
     data['status'] = 'processed';
     data['processed_at'] = new Date().toISOString();
-    // Write topics + item counts for agent-facing frontmatter
-    data['topics'] = intelligence.topics ?? [];
+    // Write topics + item counts for agent-facing frontmatter.
+    //
+    // Alias/merge pass (Phase A #1 of topic-wiki-memory): coerce LLM-proposed
+    // slugs against existing topic pages so near-duplicates (e.g.,
+    // `cover-whale-email-templates` → `cover-whale-templates`) collapse to
+    // one canonical slug instead of sprawling into two topic pages on next
+    // refresh. Skipped when `options.skipTopicAlias` or when dependencies
+    // aren't provided (pre-topic-wiki-memory behavior).
+    const proposedTopics = intelligence.topics ?? [];
+    let normalizedTopics = proposedTopics;
+    if (!options.skipTopicAlias &&
+        deps.topicMemory !== undefined &&
+        deps.workspacePaths !== undefined &&
+        proposedTopics.length > 0) {
+        try {
+            const { TopicMemoryService } = await import('./topic-memory.js');
+            const { topics: existingPages } = await deps.topicMemory.listAll(deps.workspacePaths);
+            const existingIdentities = TopicMemoryService.toIdentities(existingPages);
+            const aliasResults = await deps.topicMemory.aliasAndMerge(proposedTopics, existingIdentities, { callLLM: deps.callLLM });
+            normalizedTopics = aliasResults.map((r) => r.resolved);
+        }
+        catch (err) {
+            warnings.push(`topic alias/merge failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+    }
+    data['topics'] = normalizedTopics;
     data['open_action_items'] = intelligence.actionItems.length;
     data['my_commitments'] = intelligence.actionItems.filter(i => i.direction === 'i_owe_them').length;
     data['their_commitments'] = intelligence.actionItems.filter(i => i.direction === 'they_owe_me').length;

@@ -49,6 +49,94 @@ describe('FileStorageAdapter', () => {
         assert.strictEqual(content, 'content');
       });
     });
+
+    it('overwrites existing content', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        await storage.write(path, 'first');
+        await storage.write(path, 'second');
+        assert.strictEqual(await storage.read(path), 'second');
+      });
+    });
+
+    it('does not leave behind temp files on successful write', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        await storage.write(path, 'content');
+        const entries = await storage.list(dir);
+        const tmps = entries.filter((e) => /\.tmp$/.test(e));
+        assert.deepStrictEqual(tmps, [], 'expected no .tmp files after write');
+      });
+    });
+
+    it('concurrent writes do not corrupt the file (either-old-or-new invariant)', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        // Seed with initial content so readers always have something valid.
+        await storage.write(path, 'initial-content');
+
+        // Fire concurrent writes of two distinct contents. After all settle,
+        // the file must equal one of them; it must never be truncated or
+        // partially written. Repeat to increase chance of catching interleave.
+        for (let round = 0; round < 10; round++) {
+          const contentA = `A-${round}-`.padEnd(4096, 'x');
+          const contentB = `B-${round}-`.padEnd(4096, 'y');
+          await Promise.all([
+            storage.write(path, contentA),
+            storage.write(path, contentB),
+          ]);
+          const final = await storage.read(path);
+          assert.ok(
+            final === contentA || final === contentB,
+            `round ${round}: final content is neither A nor B`
+          );
+        }
+      });
+    });
+  });
+
+  describe('writeIfChanged', () => {
+    it('returns "updated" and writes when file does not exist', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        const result = await storage.writeIfChanged(path, 'hello');
+        assert.strictEqual(result, 'updated');
+        assert.strictEqual(await storage.read(path), 'hello');
+      });
+    });
+
+    it('returns "updated" and writes when content differs', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        await storage.write(path, 'old');
+        const result = await storage.writeIfChanged(path, 'new');
+        assert.strictEqual(result, 'updated');
+        assert.strictEqual(await storage.read(path), 'new');
+      });
+    });
+
+    it('returns "unchanged" and skips write when content matches byte-for-byte', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        await storage.write(path, 'same');
+        const mtimeBefore = (await storage.getModified(path))!.getTime();
+        // Wait enough that a real write would bump mtime.
+        await new Promise((r) => setTimeout(r, 15));
+        const result = await storage.writeIfChanged(path, 'same');
+        assert.strictEqual(result, 'unchanged');
+        const mtimeAfter = (await storage.getModified(path))!.getTime();
+        assert.strictEqual(mtimeBefore, mtimeAfter, 'mtime must not change on "unchanged"');
+      });
+    });
+
+    it('treats trailing newline as meaningful difference', async () => {
+      await withTempDir(async (dir, storage) => {
+        const path = join(dir, 'file.txt');
+        await storage.write(path, 'line');
+        const result = await storage.writeIfChanged(path, 'line\n');
+        assert.strictEqual(result, 'updated');
+      });
+    });
   });
 
   describe('exists', () => {

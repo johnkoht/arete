@@ -94,27 +94,39 @@ Run **get_meeting_context** (see [PATTERNS.md](../PATTERNS.md)). Use the outputs
 
 ### 4.5. Search Related Memory
 
-Search for past decisions and learnings related to this meeting.
+Gather both atomic L2 items (decisions, learnings) and synthesized
+L3 topic pages related to this meeting. See `topic_page_retrieval`
+and `context_bundle_assembly` in `PATTERNS.md` for the full contract.
 
 1. **Extract search terms**:
    - Meeting topic keywords (e.g., "CoverWhale compliance", "roadmap review")
    - Each key attendee name
 
-2. **Run searches**:
+2. **Run searches** (split the ~1000-word memory budget: ~600w atomic,
+   ~400w topic-page narrative):
    ```bash
+   # Atomic L2 items — decisions, learnings, observations
    arete search "<meeting topic>" --scope memory --limit 3
    arete search "<attendee name>" --scope memory --limit 2
+
+   # Synthesized L3 topic pages — narrative that compounds with each meeting
+   arete topic find "<meeting topic>" --limit 1 --budget 400 --json
    ```
-   Run for each key attendee (cap at 3 attendees to avoid noise).
+   Run attendee searches for up to 3 key attendees (cap at 3 to avoid noise).
+   `arete topic find` returns `{ results, searchBackend }`. If
+   `searchBackend: 'none'`, no search provider is configured — note
+   the degraded-capability signal instead of treating it as "no topics."
 
 3. **Filter for relevance**:
    - Keep only items that directly inform this meeting
-   - Prioritize recent decisions (last 30 days)
+   - Prioritize recent decisions (last 30 days) and topic pages with
+     `status: active`
    - Skip generic matches that don't add prep value
 
 4. **Include in prep brief**:
-   - Add findings under a "Related Memory" section (see Step 6)
-   - Keep concise: 2-4 items max
+   - Atomic items → "Related Memory" section (see Step 6), 2-4 items max
+   - Topic-page `bodyForContext` → inline narrative quote, 1-2 sentences
+     per topic max; link out to `[[topic-slug]]` for the full page
 
 5. **Empty results**: If no relevant memory found, omit the "Related Memory" section entirely. Don't say "nothing found."
 

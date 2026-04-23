@@ -74,11 +74,23 @@ export class CursorAdapter implements IDEAdapter {
     return content;
   }
 
+  /**
+   * Cursor does NOT yet support memory injection into the generated
+   * AGENTS.md. `dist/AGENTS.md` is a static distributed artifact;
+   * per-workspace memory needs a post-process injection step (Phase B
+   * of topic-wiki-memory). Until then we explicitly return false so
+   * callers know to skip memory loading for Cursor workspaces.
+   */
+  supportsMemoryInjection(): boolean {
+    return false;
+  }
+
   generateRootFiles(
     config: AreteConfig,
     _workspaceRoot: string,
     _sourceRulesDir?: string,
-    _skills?: SkillDefinition[]
+    _skills?: SkillDefinition[],
+    _memorySummary?: import('../models/memory-summary.js').MemorySummary,
   ): Record<string, string> {
     const timestamp = new Date().toISOString();
     const version = config.version || '1.0.0';

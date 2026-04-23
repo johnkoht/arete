@@ -17,6 +17,7 @@ Index of significant changes to **Arete’s build, tooling, and architecture**. 
 ## Index
 
 <!-- Add new entries at the top -->
+- 2026-04-23: [topic-wiki-memory-learnings](entries/2026-04-23_topic-wiki-memory-learnings.md) — L3 topic wiki (Karpathy pattern): `.arete/memory/topics/{slug}.md` LLM-synthesized + incremental via `integrateSource` at `meeting approve`; alias/merge at apply; symmetric `.seed.lock`; CLAUDE.md Active Topics block for turn-1 boot context; `arete topic list/show/refresh/find/lint/seed`. 26 commits, ~340 tests, 2 end-to-end reviews. Key learning: "services tested ≠ services wired" — dark-code audit is a distinct pre-merge check from test coverage.
 - 2026-04-13: [brief-ai-enhancement-learnings](entries/2026-04-13_brief-ai-enhancement-learnings.md) — AI synthesis for `arete brief`: 5-section structured output, method-parameter DI pattern, 12K char truncation, graceful 3-mode fallback. 15 new tests.
 - 2026-04-10: [krisp-oauth-weekly-winddown-alignment](entries/2026-04-10_krisp-oauth-weekly-winddown-alignment.md) — Krisp OAuth redirect URI fix, weekly-winddown aligned with daily meeting pipeline (area association, agenda merge, commitment format fix, subagent template).
 - 2026-04-08: [workspace-hygiene-learnings](entries/2026-04-08_workspace-hygiene-learnings.md) — Workspace hygiene Phase 1: HygieneService scan/apply, Jaccard extraction, purgeResolved, compactLearnings, CLI commands. 18 files, 56 new tests.

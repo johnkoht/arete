@@ -17,6 +17,14 @@ export interface ApplyMeetingOptions {
     skipAgenda?: boolean;
     /** Clear existing staged sections before writing new ones. */
     clear?: boolean;
+    /**
+     * Skip the topic alias/merge pass (Phase A #1 of topic-wiki-memory).
+     * When set, `intelligence.topics` is written to frontmatter verbatim
+     * without normalization against existing topic slugs. Use with
+     * `--skip-topics` on `arete meeting apply` when you want apply to
+     * be fast and will run `arete memory refresh` later.
+     */
+    skipTopicAlias?: boolean;
 }
 /**
  * Result of applying meeting intelligence.
@@ -42,6 +50,27 @@ export interface ApplyMeetingDeps {
     storage: StorageAdapter;
     /** Workspace root path for resolving relative paths. */
     workspaceRoot: string;
+    /**
+     * Optional TopicMemoryService — when provided, `intelligence.topics`
+     * runs through `aliasAndMerge` before being written to frontmatter.
+     * Coerces near-duplicate LLM-proposed slugs (e.g.,
+     * `cover-whale-email-templates` → `cover-whale-templates`) against
+     * existing topic pages. First-line sprawl defense sits in the
+     * extraction prompt (see `meeting-extraction.ts:activeTopicSlugs`);
+     * this is the backstop for cases where the bias didn't hold.
+     */
+    topicMemory?: import('./topic-memory.js').TopicMemoryService;
+    /**
+     * Optional WorkspacePaths — required when `topicMemory` is provided,
+     * for reading the topic-page directory to derive existing identities.
+     */
+    workspacePaths?: import('../models/workspace.js').WorkspacePaths;
+    /**
+     * Optional LLM function for adjudicating the 0.4–0.67 ambiguous
+     * alias band. Without it, ambiguous candidates stay as proposed
+     * (conservative; lint catches residual sprawl later).
+     */
+    callLLM?: import('../integrations/conversations/extract.js').LLMCallFn;
 }
 /**
  * Remove all staged sections from meeting body content.

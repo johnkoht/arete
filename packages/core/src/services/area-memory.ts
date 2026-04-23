@@ -12,8 +12,10 @@ import type { StorageAdapter } from '../storage/adapter.js';
 import type { AreaParserService } from './area-parser.js';
 import type { CommitmentsService } from './commitments.js';
 import type { MemoryService } from './memory.js';
+import type { TopicMemoryService } from './topic-memory.js';
 import type { WorkspacePaths, Commitment, AreaContext } from '../models/index.js';
 import { parseMeetingFile } from './meeting-context.js';
+import { getTopicHeadline, type TopicPage, type TopicStatus } from '../models/topic-page.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,15 +113,19 @@ interface TopicEntry {
   meetingCount: number;
   openItems: number;
   lastReferenced: string;
+  /** Status from the topic page (if one exists). Undefined = no page yet. */
+  pageStatus?: TopicStatus;
+  /** Headline from the topic page's Current state section. Undefined when no page. */
+  pageHeadline?: string;
+  /** Last refresh date from the topic page frontmatter. */
+  pageLastRefreshed?: string;
 }
 
 interface AreaMemoryData {
   slug: string;
   name: string;
-  keywords: string[];
   activePeople: string[];
   openCommitments: Commitment[];
-  recentlyCompleted: Commitment[];
   recentDecisions: DecisionEntry[];
   topics: TopicEntry[];
 }
@@ -239,9 +245,12 @@ function daysAgo(dateStr: string, referenceDate: Date = new Date()): number {
 }
 
 /**
- * Extract keywords from a collection of text strings.
- * Returns the most frequent meaningful words.
+ * @deprecated No longer used after Step 4 (topic-wiki-memory) removed the
+ * Keywords section from area memory output. Kept for now to avoid churning
+ * internal callers during the refactor; flag for deletion once verified
+ * unused elsewhere in the repo.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractKeywords(texts: string[], maxKeywords = 10): string[] {
   const stopWords = new Set([
     'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
@@ -284,28 +293,98 @@ export function isAreaMemoryStale(lastRefreshed: string | null, staleDays: numbe
 }
 
 /**
- * Render area memory as markdown with YAML frontmatter.
+ * Sort TopicEntry[] by the canonical order used for both frontmatter and
+ * the `## Topics` rendered section. Deterministic — no locale sort.
  */
-function renderAreaMemory(data: AreaMemoryData): string {
-  const now = new Date().toISOString();
+function sortTopicsForRender(topics: TopicEntry[]): TopicEntry[] {
+  return [...topics].sort((a, b) => {
+    if (a.openItems !== b.openItems) return b.openItems - a.openItems;
+    if (a.lastReferenced !== b.lastReferenced) return a.lastReferenced < b.lastReferenced ? 1 : -1;
+    if (a.slug < b.slug) return -1;
+    if (a.slug > b.slug) return 1;
+    return 0;
+  });
+}
+
+/**
+ * Derive `last_refreshed` from the area's *data* (not wall clock) so that
+ * identical inputs produce byte-equal files across days. Takes the max of
+ * all dated signals that could change in the file.
+ *
+ * Falls back to `referenceDate.toISOString().slice(0, 10)` when the area
+ * has no dated data at all (fresh workspace).
+ *
+ * Fixes the idempotency bug flagged in the Step 4 review: area files were
+ * dirtying git every refresh because `new Date().toISOString()` was used.
+ */
+function deriveLastRefreshed(
+  data: AreaMemoryData,
+  referenceDate: Date,
+): string {
+  const candidates: string[] = [];
+  for (const t of data.topics) {
+    candidates.push(t.lastReferenced);
+    if (t.pageLastRefreshed !== undefined) candidates.push(t.pageLastRefreshed);
+  }
+  for (const d of data.recentDecisions) {
+    if (d.date !== undefined) candidates.push(d.date);
+  }
+  for (const c of data.openCommitments) {
+    if (c.date !== undefined) candidates.push(c.date);
+  }
+  if (candidates.length === 0) {
+    return referenceDate.toISOString().slice(0, 10);
+  }
+  // Return max YYYY-MM-DD string (lexicographic sort is correct for ISO dates).
+  let max = candidates[0];
+  for (const c of candidates) {
+    if (c > max) max = c;
+  }
+  return max.slice(0, 10);
+}
+
+/**
+ * Render area memory as markdown with YAML frontmatter.
+ *
+ * Shape (Step 4 of topic-wiki-memory):
+ *  - Frontmatter: area_slug, area_name, last_refreshed (data-derived), topics[] (structured, sorted)
+ *  - Sections: Topics (wikilinks + status), Active People, Open Work, Recent Decisions
+ *  - Removed vs prior: Keywords section, Recently Completed section, keywords frontmatter field
+ *
+ * The area file becomes a **navigation index + operational snapshot** rather
+ * than an attempted knowledge rollup. Encyclopedic content lives in topic pages.
+ *
+ * **Idempotency contract**: for equal `data`, `renderAreaMemory(data)` returns
+ * byte-equal output. `last_refreshed` is data-derived via `deriveLastRefreshed`
+ * — no wall-clock reads unless the area has no dated data at all.
+ *
+ * @param referenceDate fallback for `last_refreshed` when no dated data exists.
+ *   Inject in tests to pin output across clock advancement.
+ */
+function renderAreaMemory(
+  data: AreaMemoryData,
+  referenceDate: Date = new Date(),
+): string {
+  const lastRefreshed = deriveLastRefreshed(data, referenceDate);
+  const sortedTopics = sortTopicsForRender(data.topics);
   const lines: string[] = [];
 
-  // YAML frontmatter
+  // YAML frontmatter — topics kept as structured list for tooling; keywords removed.
   lines.push('---');
   lines.push(`area_slug: ${data.slug}`);
   lines.push(`area_name: "${data.name}"`);
-  lines.push(`last_refreshed: "${now}"`);
-  if (data.keywords.length > 0) {
-    lines.push(`keywords: [${data.keywords.map(k => `"${k}"`).join(', ')}]`);
-  }
-  if (data.topics.length > 0) {
+  lines.push(`last_refreshed: "${lastRefreshed}"`);
+  if (sortedTopics.length > 0) {
     lines.push('topics:');
-    for (const t of data.topics) {
+    for (const t of sortedTopics) {
       lines.push(`  - slug: ${t.slug}`);
       lines.push(`    name: ${t.name}`);
       lines.push(`    meeting_count: ${t.meetingCount}`);
       lines.push(`    open_items: ${t.openItems}`);
       lines.push(`    last_referenced: "${t.lastReferenced}"`);
+      if (t.pageStatus !== undefined) {
+        lines.push(`    page_status: ${t.pageStatus}`);
+      }
     }
   }
   lines.push('---');
@@ -317,21 +396,20 @@ function renderAreaMemory(data: AreaMemoryData): string {
   lines.push('> Auto-generated area context. Do not edit manually — regenerated by `arete memory refresh`.');
   lines.push('');
 
-  // Keywords
-  if (data.keywords.length > 0) {
-    lines.push('## Keywords');
-    lines.push('');
-    lines.push(data.keywords.join(', '));
-    lines.push('');
-  }
-
-  // Topics
-  if (data.topics.length > 0) {
+  // Topics — wikilinks to topic pages with status + one-line summary.
+  // (Already sorted at top of function by sortTopicsForRender.)
+  if (sortedTopics.length > 0) {
     lines.push('## Topics');
     lines.push('');
-    for (const t of data.topics) {
-      const openStr = t.openItems > 0 ? ` — ${t.openItems} open` : '';
-      lines.push(`- **${t.name}** (${t.meetingCount} meetings${openStr}, last: ${t.lastReferenced})`);
+    for (const t of sortedTopics) {
+      const statusPart = t.pageStatus !== undefined ? ` — ${t.pageStatus}` : '';
+      const summaryPart = t.pageHeadline !== undefined && t.pageHeadline.length > 0
+        ? ` — ${t.pageHeadline}`
+        : t.pageStatus === undefined ? ' — *(no page yet)*' : '';
+      const datePart = t.pageLastRefreshed !== undefined
+        ? ` _(updated: ${t.pageLastRefreshed})_`
+        : ` _(last mentioned: ${t.lastReferenced})_`;
+      lines.push(`- [[${t.slug}]]${statusPart}${summaryPart}${datePart}`);
     }
     lines.push('');
   }
@@ -346,7 +424,7 @@ function renderAreaMemory(data: AreaMemoryData): string {
     lines.push('');
   }
 
-  // Open Commitments
+  // Open Commitments — the area's operational inbox view.
   if (data.openCommitments.length > 0) {
     lines.push('## Open Work');
     lines.push('');
@@ -357,17 +435,7 @@ function renderAreaMemory(data: AreaMemoryData): string {
     lines.push('');
   }
 
-  // Recently Completed
-  if (data.recentlyCompleted.length > 0) {
-    lines.push('## Recently Completed');
-    lines.push('');
-    for (const c of data.recentlyCompleted) {
-      lines.push(`- ${c.text} (${c.personName}, resolved ${c.resolvedAt?.split('T')[0] ?? 'unknown'})`);
-    }
-    lines.push('');
-  }
-
-  // Recent Decisions
+  // Recent Decisions — pointers to atomic L2 items in .arete/memory/items/decisions.md
   if (data.recentDecisions.length > 0) {
     lines.push('## Recent Decisions');
     lines.push('');
@@ -428,6 +496,13 @@ export class AreaMemoryService {
     private readonly areaParser: AreaParserService,
     private readonly commitments: CommitmentsService,
     private readonly memory: MemoryService,
+    /**
+     * Optional TopicMemoryService for enriching the Topics section with
+     * page status + headline. When undefined, Topics render with meeting
+     * aggregates only (no wikilink status) — no crash, just less signal.
+     * Factory wiring will pass it; older construction sites remain valid.
+     */
+    private readonly topicMemory?: TopicMemoryService,
   ) {}
 
   /**
@@ -450,7 +525,14 @@ export class AreaMemoryService {
     if (!options.dryRun) {
       const outputDir = join(workspacePaths.root, AREA_MEMORY_DIR);
       await this.storage.mkdir(outputDir);
-      await this.storage.write(join(outputDir, `${areaSlug}.md`), content);
+      const outPath = join(outputDir, `${areaSlug}.md`);
+      // Idempotent write — no git noise when content byte-equals existing.
+      // Falls back to plain write when adapter doesn't implement writeIfChanged.
+      if (this.storage.writeIfChanged !== undefined) {
+        await this.storage.writeIfChanged(outPath, content);
+      } else {
+        await this.storage.write(outPath, content);
+      }
     }
 
     return true;
@@ -770,56 +852,67 @@ ${synthesisResult.response}
     areaContext: AreaContext,
     workspacePaths: WorkspacePaths,
   ): Promise<AreaMemoryData> {
-    // 1. Keywords from area name, recurring meeting titles, decisions
-    const keywordSources: string[] = [areaContext.name];
-    for (const meeting of areaContext.recurringMeetings) {
-      keywordSources.push(meeting.title);
-    }
-
-    // 2. Active people from recurring meetings
+    // Active people: union of recurring-meeting attendees + recent-meeting attendees (30d window)
     const activePeopleSet = new Set<string>();
     for (const meeting of areaContext.recurringMeetings) {
       for (const attendee of meeting.attendees) {
         activePeopleSet.add(attendee);
       }
     }
-    // Also scan recent meetings for attendees and topics (single pass)
-    const { people: recentMeetingPeople, topics } = await this.scanAreaMeetings(areaContext, workspacePaths);
+    const { people: recentMeetingPeople, topics: rawTopics } = await this.scanAreaMeetings(areaContext, workspacePaths);
     for (const person of recentMeetingPeople) {
       activePeopleSet.add(person);
     }
 
-    // 3. Commitments for this area
+    // Enrich topics with page status + headline from TopicMemoryService (if wired).
+    const topics = await this.enrichTopicsWithPages(rawTopics, workspacePaths);
+
+    // Open commitments for this area — the rendered "Open Work" section.
     const openCommitments = await this.commitments.listOpen({ area: areaContext.slug });
-    // Get recently resolved — load all and filter
-    // Note: listOpen only returns open, so we read the file for resolved ones
-    const recentlyCompleted = await this.getRecentlyCompleted(areaContext.slug, workspacePaths);
 
-    // 4. Recent decisions
+    // Recent decisions
     const recentDecisions = await this.getRecentDecisions(areaContext, workspacePaths);
-
-    // Add decision titles to keyword sources
-    for (const d of recentDecisions) {
-      keywordSources.push(d.title);
-    }
-
-    // Add commitment text to keyword sources
-    for (const c of openCommitments) {
-      keywordSources.push(c.text);
-    }
-
-    const keywords = extractKeywords(keywordSources);
 
     return {
       slug: areaContext.slug,
       name: areaContext.name,
-      keywords,
       activePeople: [...activePeopleSet],
       openCommitments,
-      recentlyCompleted,
       recentDecisions,
       topics,
     };
+  }
+
+  /**
+   * Enrich raw TopicEntry aggregates (from meeting frontmatter scan) with
+   * status + headline + last_refreshed from the matching topic page, when one
+   * exists. Partial-state tolerant — `listAll()` errors are swallowed silently
+   * here; the unenriched topics still render with "no page yet" prose.
+   */
+  private async enrichTopicsWithPages(
+    rawTopics: TopicEntry[],
+    workspacePaths: WorkspacePaths,
+  ): Promise<TopicEntry[]> {
+    if (this.topicMemory === undefined) return rawTopics;
+
+    let pagesBySlug: Map<string, TopicPage>;
+    try {
+      const { topics: pages } = await this.topicMemory.listAll(workspacePaths);
+      pagesBySlug = new Map(pages.map((p) => [p.frontmatter.topic_slug, p]));
+    } catch {
+      return rawTopics;
+    }
+
+    return rawTopics.map((t) => {
+      const page = pagesBySlug.get(t.slug);
+      if (page === undefined) return t;
+      return {
+        ...t,
+        pageStatus: page.frontmatter.status,
+        pageHeadline: getTopicHeadline(page),
+        pageLastRefreshed: page.frontmatter.last_refreshed,
+      };
+    });
   }
 
   /**
@@ -915,34 +1008,6 @@ ${synthesisResult.response}
     topicEntries.sort((a, b) => b.openItems - a.openItems || b.meetingCount - a.meetingCount);
 
     return { people: [...people], topics: topicEntries };
-  }
-
-  /**
-   * Get recently completed commitments for an area.
-   */
-  private async getRecentlyCompleted(
-    areaSlug: string,
-    workspacePaths: WorkspacePaths,
-  ): Promise<Commitment[]> {
-    // CommitmentsService.listOpen only returns open items, so we need to read
-    // the raw file to find resolved ones. This is a pragmatic workaround.
-    const commitmentsPath = join(workspacePaths.root, '.arete/commitments.json');
-    const content = await this.storage.read(commitmentsPath);
-    if (!content) return [];
-
-    try {
-      const parsed = JSON.parse(content) as { commitments: Commitment[] };
-      if (!Array.isArray(parsed.commitments)) return [];
-
-      return parsed.commitments.filter(c =>
-        c.area === areaSlug &&
-        c.status === 'resolved' &&
-        c.resolvedAt !== null &&
-        daysAgo(c.resolvedAt) <= RECENT_DAYS
-      );
-    } catch {
-      return [];
-    }
   }
 
   /**

@@ -94,6 +94,7 @@ Override: /ship --single | /ship --multi
 [PHASE 4] Build (worktree branch)
   4.1 Execute PRD                    → GATE: Task failures
   4.2 Final Review                   → GATE: Major rework needed
+  4.3 Dark-Code Audit                → GATE: Unwired exports
 [PHASE 5] Wrap & Report (worktree branch)
   5.1 Create Memory Entry
   5.2 Update LEARNINGS.md
@@ -217,6 +218,37 @@ Return READY or NEEDS_REWORK with specific feedback.`
 | NEEDS_REWORK | → **PAUSE**: report issues, offer fix/override/abort |
 
 **Build log**: Outcome "Final review: {verdict}".
+
+### 4.3 Dark-Code Audit
+
+Catch exports that ship but are never wired at their documented
+integration points. This fails silently under normal review because
+tests exercise the unit, typecheck passes, and the only missing piece
+is the call-site. It is cheap to check mechanically.
+
+```bash
+# List every symbol exported by files changed in this branch.
+# Adjust base ref if the branch wasn't cut from origin/main.
+git diff --name-only origin/main...HEAD -- '*.ts' '*.tsx' \
+  | xargs -I{} rg -n '^export (function|class|const|async function) (\w+)' {} --no-filename -o -r '$2'
+```
+
+For each exported symbol, grep the full repo for non-self, non-test
+call-sites. An export with *only* its own file + a `.test.ts` file as
+callers is a **dark-code candidate**.
+
+**Gate: Dark-Code Audit**
+| Condition | Action |
+|-----------|--------|
+| All new exports have production call-sites | → Proceed to Phase 5 |
+| Export is intentionally unused (public API, future hook) | → Document in commit message or LEARNINGS.md, proceed |
+| Export should be wired but isn't | → **PAUSE**: surface to builder with the intended integration point from the plan |
+
+Rule of thumb: if the plan says "Hook X fires at call-site Y" and the
+only callers of `hookX` are `hookX.test.ts`, the hook is dark. Wire it
+before merge.
+
+**Build log**: Outcome "Dark-code audit: {N} new exports, {N} verified wired, {N} intentional, {N} dark".
 
 ---
 

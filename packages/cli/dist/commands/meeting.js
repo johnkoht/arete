@@ -662,6 +662,21 @@ export function registerMeetingCommands(program) {
             const result = await services.ai.call('reconciliation', prompt);
             return result.text;
         };
+        // Load active topic slugs (bare, no wikilinks) to bias the extraction
+        // prompt toward reusing existing topics — first line of sprawl defense
+        // (plan Phase A #3). Best-effort: failure to load degrades to no bias,
+        // which is the prior behavior.
+        let activeTopicSlugs;
+        try {
+            const { loadMemorySummary, renderActiveTopicsAsSlugList } = await import('@arete/core');
+            const paths = services.workspace.getPaths(root);
+            const memory = await loadMemorySummary(services.topicMemory, paths);
+            const rendered = renderActiveTopicsAsSlugList(memory.activeTopics);
+            activeTopicSlugs = rendered.length > 0 ? rendered : undefined;
+        }
+        catch {
+            activeTopicSlugs = undefined;
+        }
         // Extract intelligence
         let extractionResult;
         try {
@@ -670,6 +685,7 @@ export function registerMeetingCommands(program) {
                 context: contextBundle,
                 priorItems,
                 mode,
+                activeTopicSlugs,
             });
         }
         catch (err) {
@@ -961,6 +977,7 @@ export function registerMeetingCommands(program) {
         .option('--items <ids>', 'Comma-separated item IDs to mark as approved (e.g., ai_001,de_001)')
         .option('--skip <ids>', 'Comma-separated item IDs to mark as skipped (won\'t be committed)')
         .option('--skip-qmd', 'Skip automatic qmd index update')
+        .option('--skip-topics', 'Skip topic page integration after commit (defer to `arete memory refresh`)')
         .option('--json', 'Output as JSON')
         .action(async (slug, opts) => {
         const services = await createServices(process.cwd());
@@ -1162,6 +1179,61 @@ export function registerMeetingCommands(program) {
         const memoryDir = join(root, '.arete', 'memory', 'items');
         await commitApprovedItems(services.storage, meetingPath, memoryDir);
         // --------------------------------------------------------------------------
+        // Hook 2 — Integrate this meeting into its topic wiki pages (Phase A #2)
+        //
+        // After commit succeeds, materialize the LLM-synthesized narrative into
+        // each topic page tagged on the meeting. Uses refreshAllFromMeetings
+        // scoped to this meeting's slugs — content-hash idempotency means only
+        // this new meeting's integration spends LLM; any previously-integrated
+        // sources for the same topics skip cleanly.
+        //
+        // Gated on `services.ai.isConfigured()` + `!opts.skipTopics`. Non-fatal:
+        // failure is reported to the user but never blocks the approve flow
+        // (the committed items are already persisted at this point).
+        // --------------------------------------------------------------------------
+        let topicIntegration;
+        if (!opts.skipTopics && services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+            try {
+                // Re-read the just-committed file to get the post-alias topics list.
+                const committed = await services.storage.read(meetingPath);
+                if (committed !== null) {
+                    const { parseMeetingFile } = await import('@arete/core');
+                    const parsed = parseMeetingFile(committed);
+                    const meetingTopics = parsed?.frontmatter.topics ?? [];
+                    if (meetingTopics.length > 0) {
+                        const topicCallLLM = async (prompt) => {
+                            const r = await services.ai.call('synthesis', prompt);
+                            return r.text;
+                        };
+                        const integrationStart = Date.now();
+                        const result = await services.topicMemory.refreshAllFromMeetings(paths, {
+                            today: new Date().toISOString().slice(0, 10),
+                            callLLM: topicCallLLM,
+                            slugs: meetingTopics,
+                            workspaceRoot: root,
+                            lockLabel: 'meeting approve (topic ingest)',
+                        });
+                        topicIntegration = {
+                            topics: result.topics.length,
+                            integrated: result.totalIntegrated,
+                            fallback: result.totalFallback,
+                            skipped: result.totalSkipped,
+                            durationMs: Date.now() - integrationStart,
+                        };
+                    }
+                }
+            }
+            catch (err) {
+                // Non-fatal: approve already succeeded. Report and move on.
+                if (err instanceof Error && err.name === 'SeedLockHeldError') {
+                    warn(`Topic integration skipped: ${err.message}`);
+                }
+                else {
+                    warn(`Topic integration failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+                }
+            }
+        }
+        // --------------------------------------------------------------------------
         // Create commitments and tasks from action items
         // --------------------------------------------------------------------------
         let tasksCreated = 0;
@@ -1239,6 +1311,7 @@ export function registerMeetingCommands(program) {
                 learnings: (approvedItems?.learnings?.length ?? 0) > 0,
             },
             ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
+            topicIntegration: topicIntegration ?? null,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         if (opts.json) {
@@ -1259,6 +1332,23 @@ export function registerMeetingCommands(program) {
         }
         if (learningCount > 0) {
             listItem('Learnings', `${learningCount} (written to memory)`);
+        }
+        if (topicIntegration !== undefined) {
+            const parts = [];
+            if (topicIntegration.integrated > 0)
+                parts.push(`${topicIntegration.integrated} integrated`);
+            if (topicIntegration.fallback > 0)
+                parts.push(`${topicIntegration.fallback} fallback`);
+            if (topicIntegration.skipped > 0)
+                parts.push(`${topicIntegration.skipped} skipped`);
+            if (parts.length > 0) {
+                listItem('Topics', `${topicIntegration.topics} touched (${parts.join(', ')})`);
+            }
+            const dur = topicIntegration.durationMs ?? 0;
+            if (dur > 5000 || topicIntegration.topics > 2) {
+                const secs = (dur / 1000).toFixed(1);
+                warn(`Topic integration took ${secs}s (${topicIntegration.topics} topics). Use --skip-topics to defer; run \`arete memory refresh\` later to catch up.`);
+            }
         }
         displayQmdResult(qmdResult);
     });
@@ -1397,6 +1487,7 @@ export function registerMeetingCommands(program) {
         .option('--skip-agenda', 'Skip agenda archival')
         .option('--clear', 'Clear existing staged sections before writing')
         .option('--skip-qmd', 'Skip automatic qmd index update')
+        .option('--skip-topics', 'Skip topic alias/merge pass (write intelligence.topics verbatim; `arete memory refresh` will normalize later)')
         .option('--json', 'Output as JSON')
         .action(async (file, opts) => {
         const services = await createServices(process.cwd());
@@ -1459,15 +1550,29 @@ export function registerMeetingCommands(program) {
         }
         // Resolve file path
         const meetingPath = file.startsWith('/') ? file : join(root, file);
-        // Apply intelligence using the core service
+        // Apply intelligence using the core service. Threads TopicMemoryService
+        // + callLLM so the alias/merge pass (Phase A #1 of topic-wiki-memory)
+        // normalizes `intelligence.topics` against existing topic pages before
+        // writing frontmatter. `--skip-topics` bypasses the pass.
+        const applyCallLLM = services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1'
+            ? async (prompt) => {
+                const r = await services.ai.call('synthesis', prompt);
+                return r.text;
+            }
+            : undefined;
+        const applyPaths = services.workspace.getPaths(root);
         let result;
         try {
             result = await applyMeetingIntelligence(meetingPath, intelligence, {
                 storage: services.storage,
                 workspaceRoot: root,
+                topicMemory: services.topicMemory,
+                workspacePaths: applyPaths,
+                callLLM: applyCallLLM,
             }, {
                 skipAgenda: opts.skipAgenda,
                 clear: opts.clear,
+                skipTopicAlias: opts.skipTopics,
             });
         }
         catch (err) {

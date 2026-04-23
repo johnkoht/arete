@@ -24,6 +24,9 @@ import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
 import { TaskService } from './services/tasks.js';
 import { AreaMemoryService } from './services/area-memory.js';
+import { TopicMemoryService } from './services/topic-memory.js';
+import { MemoryIndexService } from './services/memory-index.js';
+import { MemoryLogService } from './services/memory-log.js';
 import { HygieneService } from './services/hygiene.js';
 import { detectGws, getEmailProvider, getDriveProvider, getDocsProvider, getSheetsProvider, getDirectoryProvider } from './integrations/gws/index.js';
 
@@ -44,6 +47,9 @@ export type AreteServices = {
   commitments: CommitmentsService;
   areaParser: AreaParserService;
   areaMemory: AreaMemoryService;
+  topicMemory: TopicMemoryService;
+  memoryIndex: MemoryIndexService;
+  memoryLog: MemoryLogService;
   hygiene: HygieneService;
   ai: AIService;
   tasks: TaskService;
@@ -110,8 +116,17 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
-  // Area memory (depends on storage + areaParser + commitments + memory)
-  const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory);
+  // Topic memory (L3 wiki — depends on storage + search for retrieval)
+  const topicMemory = new TopicMemoryService(storage, search);
+
+  // Area memory (depends on storage + areaParser + commitments + memory + topicMemory for Topics section enrichment)
+  const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory, topicMemory);
+
+  // Memory index (depends on topicMemory + entity + areaParser + commitments)
+  const memoryIndex = new MemoryIndexService(storage, topicMemory, entity, areaParser, commitments);
+
+  // Memory log — atomic-append writer-of-record for .arete/memory/log.md
+  const memoryLog = new MemoryLogService(storage);
 
   // Workspace paths (used by hygiene + tasks)
   const workspacePaths = workspace.getPaths(workspaceRoot);
@@ -150,6 +165,9 @@ export async function createServices(
     commitments,
     areaParser,
     areaMemory,
+    topicMemory,
+    memoryIndex,
+    memoryLog,
     hygiene,
     ai,
     tasks,

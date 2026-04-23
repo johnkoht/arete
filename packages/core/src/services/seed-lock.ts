@@ -1,0 +1,110 @@
+/**
+ * Advisory lock for `arete topic seed` / concurrent topic refreshes.
+ *
+ * Mitigates pre-mortem Risk 15: running `arete meeting apply` while a
+ * seed is in flight races on topic-page writes (both paths call
+ * `integrateSource` → write), and last-writer-wins can lose integrations.
+ *
+ * Uses `fs.open(path, 'wx')` which maps to POSIX `O_CREAT | O_EXCL`:
+ * creation is atomic and fails if the file already exists. The lock
+ * records the PID and start time so stale locks (crashed processes)
+ * can be identified by the user without automatic takeover.
+ */
+
+import { open, readFile, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+
+const LOCK_RELATIVE_PATH = '.seed.lock';
+
+export interface SeedLockInfo {
+  pid: number;
+  started: string; // ISO-8601
+  command: string; // 'seed' | 'refresh --all' etc.
+}
+
+export class SeedLockHeldError extends Error {
+  readonly kind = 'SeedLockHeldError' as const;
+  constructor(public readonly info: SeedLockInfo | null) {
+    super(
+      info === null
+        ? 'Seed lock is held by another process'
+        : `Seed lock held by pid ${info.pid} (started ${info.started}, command: ${info.command})`,
+    );
+  }
+}
+
+function lockPath(areteDir: string): string {
+  return join(areteDir, LOCK_RELATIVE_PATH);
+}
+
+/**
+ * Acquire the seed lock. Throws `SeedLockHeldError` if already held.
+ * Returns a release function to call in a `finally` block.
+ *
+ * @param areteDir `.arete/` directory at workspace root
+ * @param command  short label written into the lock file for user-facing diagnosis
+ */
+export async function acquireSeedLock(
+  areteDir: string,
+  command: string,
+): Promise<() => Promise<void>> {
+  const path = lockPath(areteDir);
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(path, 'wx');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      let info: SeedLockInfo | null = null;
+      try {
+        const content = await readFile(path, 'utf8');
+        info = JSON.parse(content) as SeedLockInfo;
+      } catch {
+        // stale / malformed lock; report without info
+      }
+      throw new SeedLockHeldError(info);
+    }
+    throw err;
+  }
+
+  const info: SeedLockInfo = {
+    pid: process.pid,
+    started: new Date().toISOString(),
+    command,
+  };
+  await handle.writeFile(JSON.stringify(info, null, 2));
+  await handle.close();
+
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    try {
+      await unlink(path);
+    } catch {
+      // already gone
+    }
+  };
+}
+
+/**
+ * Read the current lock owner without acquiring. Returns null if no lock exists.
+ */
+export async function readSeedLock(areteDir: string): Promise<SeedLockInfo | null> {
+  try {
+    const content = await readFile(lockPath(areteDir), 'utf8');
+    return JSON.parse(content) as SeedLockInfo;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Force-clear the lock. Use only when a prior process is known dead.
+ */
+export async function breakSeedLock(areteDir: string): Promise<void> {
+  try {
+    await unlink(lockPath(areteDir));
+  } catch {
+    // ignore
+  }
+}

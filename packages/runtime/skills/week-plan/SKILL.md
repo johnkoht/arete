@@ -173,11 +173,19 @@ Use the **contextual_memory_search** pattern (see [PATTERNS.md](../PATTERNS.md))
 2. Confirmed meeting titles (from Step 2.5)
 3. Key attendees (resolved from meetings)
 
-**Run searches** (batch, keep concise):
+**Run searches** (batch, keep concise). Use both atomic L2 items AND
+synthesized L3 topic pages — topic pages provide the narrative
+thread across the week's priorities that individual decisions can't.
+See `topic_page_retrieval` in `PATTERNS.md`.
+
 ```bash
+# Atomic memory items (decisions, learnings)
 arete search "<priority keyword>" --scope memory --limit 2
 arete search "<meeting topic>" --scope memory --limit 2
 arete search "<key attendee>" --scope memory --limit 2
+
+# Synthesized topic-page narrative (skip if `searchBackend: 'none'`)
+arete topic find "<priority keyword>" --limit 1 --budget 300 --json
 ```
 
 **Surface relevant items** (max 5 total, only if genuinely useful):
