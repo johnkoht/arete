@@ -1276,11 +1276,18 @@ describe('--reconcile flag', () => {
     );
 
     const result = JSON.parse(stdout) as { success: boolean; error?: string };
-    // Should proceed past option parsing (may fail at LLM call)
+    // Should proceed past option parsing (may fail later — tier fail-fast OR LLM call).
     if (!result.success) {
       assert.ok(!result.error?.includes('unknown option'), `Should not error about unknown option: ${result.error}`);
-      assert.ok(!result.error?.includes('--reconcile'), `Should not error about --reconcile flag: ${result.error}`);
+      // Note: post plan-step-2, the fail-fast error legitimately mentions --reconcile
+      // when ai.tiers.standard is unset. That's expected behavior, not an option-parser bug.
+      // The assertion here only checks that the flag itself was accepted.
+      assert.ok(
+        !result.error?.toLowerCase().includes('unknown option --reconcile'),
+        `Option parser should accept --reconcile: ${result.error}`,
+      );
     }
+    void code;
   });
 
   it('--reconcile-days accepts custom value', () => {

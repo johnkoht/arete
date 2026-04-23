@@ -46,8 +46,10 @@ npx tsx $ARETE meeting extract \
   > /tmp/extract-out.json
 
 # Observations
-jq '.skipped' /tmp/extract-out.json
+jq '.skippedBySource' /tmp/extract-out.json
 # Expected shape: { "reconciled": N, "existingTask": M, "slackResolved": 0 }
+# Note: response also has a top-level `skipped: true` boolean on the
+# importance=skip short-circuit path. Use `.skippedBySource` for counts.
 
 grep -A 8 "staged_item_source:" resources/meetings/2026-04-22-john-lindsay-11.md
 # Expected: at least one ai_XXX: existing-task (any paraphrase-level match)
@@ -58,7 +60,7 @@ grep -A 3 "staged_item_matched_text:" resources/meetings/2026-04-22-john-lindsay
 
 **Record observations**:
 
-- [ ] `jq '.skipped'` output shape is `{ reconciled, existingTask, slackResolved }`: YES / NO
+- [ ] `jq '.skippedBySource'` output shape is `{ reconciled, existingTask, slackResolved }`: YES / NO
 - [ ] Number of `existing-task` skips: ___
 - [ ] Number of `reconciled` skips: ___
 - [ ] Total action items extracted: ___
@@ -86,7 +88,7 @@ for slug in \
     echo "=== $slug ==="
     npx tsx $ARETE meeting extract "$slug" \
       --stage --dry-run --reconcile --json \
-      | jq '{ file: .file, skipped: .skipped }'
+      | jq '{ file: .file, skippedBySource: .skippedBySource }'
 done
 ```
 

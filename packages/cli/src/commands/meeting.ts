@@ -531,20 +531,9 @@ export function registerMeetingCommands(program: Command): void {
       const config = await loadConfig(services.storage, root);
       const paths = services.workspace.getPaths(root);
 
-      // Fail-fast: --reconcile requires the 'standard' tier because
-      // batchLLMReview (and any future reconciliation-tier callers) route
-      // to it. Without this check, extraction would complete (paying the
-      // 'extraction' tier cost) and only then would batchLLMReview's generic
-      // catch swallow a cryptic "tier not configured" error.
-      if (opts.reconcile && !config.ai?.tiers?.standard) {
-        const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
-        if (opts.json) {
-          console.log(JSON.stringify({ success: false, error: msg }));
-        } else {
-          error(msg);
-        }
-        process.exit(1);
-      }
+      // (Fail-fast for --reconcile + missing standard tier is deferred until
+      // after the importance-skip short-circuit below so `--importance skip`
+      // can exit without paying any LLM cost even on misconfigured workspaces.)
 
       // Resolve file path
       const meetingPath = file.startsWith('/') ? file : join(root, file);
@@ -754,6 +743,21 @@ export function registerMeetingCommands(program: Command): void {
           info(`Skipped extraction: ${meetingPath} (importance: skip)`);
         }
         return;
+      }
+
+      // Fail-fast (moved here from earlier): --reconcile requires the 'standard'
+      // tier because batchLLMReview routes to it. Placed AFTER the
+      // importance-skip short-circuit so `--importance skip` exits cleanly on
+      // workspaces missing the tier. Still runs before any LLM call, so no
+      // extraction tier cost is paid if config is bad.
+      if (opts.reconcile && !config.ai?.tiers?.standard) {
+        const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          error(msg);
+        }
+        process.exit(1);
       }
 
       // Speaking ratio upgrade: If importance === 'light', check speaking ratio
@@ -1030,7 +1034,7 @@ export function registerMeetingCommands(program: Command): void {
         contextUsed: !!contextBundle,
         priorItemsUsed: !!priorItems,
         reconciled,
-        skipped: skippedBySource,
+        skippedBySource,
         qmd: qmdResult ?? { indexed: false, skipped: true },
       };
 

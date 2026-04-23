@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -329,12 +329,16 @@ export function registerMeetingCommands(program) {
         .option('--dry-run', 'Show what would be written without writing')
         .option('--skip-qmd', 'Skip automatic qmd index update')
         .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
+        .option('--clear', 'Alias for --clear-approved (requires --stage)')
         .option('--context <file>', 'Context bundle JSON file (use - for stdin)')
         .option('--prior-items <file>', 'Prior items JSON file for deduplication (use - for stdin)')
         .option('--importance <level>', 'Override importance level (skip, light, normal, important)')
         .option('--reconcile', 'Run cross-meeting reconciliation (dedup + relevance scoring)')
         .option('--reconcile-days <n>', 'Days of recent meetings to include (default: 7)', '7')
         .action(async (file, opts) => {
+        // Merge --clear into --clear-approved
+        if (opts.clear)
+            opts.clearApproved = true;
         const services = await createServices(process.cwd());
         // Early check: --clear-approved requires --stage
         if (opts.clearApproved && !opts.stage) {
@@ -387,6 +391,9 @@ export function registerMeetingCommands(program) {
         }
         const config = await loadConfig(services.storage, root);
         const paths = services.workspace.getPaths(root);
+        // (Fail-fast for --reconcile + missing standard tier is deferred until
+        // after the importance-skip short-circuit below so `--importance skip`
+        // can exit without paying any LLM cost even on misconfigured workspaces.)
         // Resolve file path
         const meetingPath = file.startsWith('/') ? file : join(root, file);
         // Read meeting content
@@ -599,6 +606,21 @@ export function registerMeetingCommands(program) {
             }
             return;
         }
+        // Fail-fast (moved here from earlier): --reconcile requires the 'standard'
+        // tier because batchLLMReview routes to it. Placed AFTER the
+        // importance-skip short-circuit so `--importance skip` exits cleanly on
+        // workspaces missing the tier. Still runs before any LLM call, so no
+        // extraction tier cost is paid if config is bad.
+        if (opts.reconcile && !config.ai?.tiers?.standard) {
+            const msg = '`--reconcile` requires `ai.tiers.standard` to be set in arete.yaml. Run `arete credentials configure` or set the standard tier explicitly.';
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: msg }));
+            }
+            else {
+                error(msg);
+            }
+            process.exit(1);
+        }
         // Speaking ratio upgrade: If importance === 'light', check speaking ratio
         // If owner speaks > 40%, upgrade to 'normal' (they led the meeting)
         if (effectiveImportance === 'light') {
@@ -632,6 +654,14 @@ export function registerMeetingCommands(program) {
             const result = await services.ai.call('extraction', prompt);
             return result.text;
         };
+        // Reconciliation review runs on the cheaper 'reconciliation' tier
+        // (typically 'standard'/Sonnet) rather than the 'extraction' tier
+        // (often 'frontier'/Opus). Keep callLLM bound to 'extraction' so the
+        // main extraction path is unchanged; only batchLLMReview uses this.
+        const callLLMReconciliation = async (prompt) => {
+            const result = await services.ai.call('reconciliation', prompt);
+            return result.text;
+        };
         // Extract intelligence
         let extractionResult;
         try {
@@ -654,10 +684,11 @@ export function registerMeetingCommands(program) {
         }
         // Run cross-meeting reconciliation if requested
         let reconciliationResult;
+        let cachedReconciliationContext;
         if (opts.reconcile) {
             try {
-                // Load reconciliation context (area memories)
-                const reconciliationContext = await loadReconciliationContext(services.storage, root);
+                // Load reconciliation context (area memories + committed items)
+                cachedReconciliationContext = await loadReconciliationContext(services.storage, root);
                 // Load recent meetings batch
                 const meetingsDir = join(root, paths.resources, 'meetings');
                 const days = parseInt(opts.reconcileDays || '7', 10);
@@ -668,7 +699,7 @@ export function registerMeetingCommands(program) {
                     extraction: extractionResult.intelligence,
                 };
                 // Run reconciliation
-                reconciliationResult = reconcileMeetingBatch([...recentBatch, currentBatch], reconciliationContext);
+                reconciliationResult = reconcileMeetingBatch([...recentBatch, currentBatch], cachedReconciliationContext);
             }
             catch (err) {
                 // Graceful degradation: log warning but continue without reconciliation
@@ -688,16 +719,23 @@ export function registerMeetingCommands(program) {
         if (shouldStage) {
             // Extract user notes and process extraction (filtering, dedup, metadata)
             const userNotes = extractUserNotes(body);
-            // Read completed items from week.md and scratchpad.md for reconciliation
+            // Read completed items from week.md and scratchpad.md for reconciliation,
+            // and read OPEN tasks from week.md and tasks.md for existing-task dedup.
             const weekContent = await services.storage.read(join(paths.now, 'week.md')) ?? '';
             const scratchpadContent = await services.storage.read(join(paths.now, 'scratchpad.md')) ?? '';
+            const tasksContent = await services.storage.read(join(paths.now, 'tasks.md')) ?? '';
             const completedItems = [
                 ...getCompletedItems(weekContent),
                 ...getCompletedItems(scratchpadContent),
             ];
+            const openTasks = [
+                ...getOpenTasks(weekContent),
+                ...getOpenTasks(tasksContent),
+            ];
             processed = processMeetingExtraction(extractionResult, userNotes, {
                 priorItems,
                 completedItems,
+                openTasks,
                 importance: effectiveImportance,
             });
             // Merge reconciliation decisions into processed items
@@ -723,6 +761,32 @@ export function registerMeetingCommands(program) {
                     if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
                         processed.stagedItemStatus[matchingItem.id] = 'skipped';
                         processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                    }
+                }
+            }
+            // Run batch LLM quality review when reconciliation is active
+            if (opts.reconcile && processed) {
+                try {
+                    const proc = processed;
+                    const reviewItems = proc.filteredItems
+                        .filter(fi => proc.stagedItemStatus[fi.id] !== 'skipped')
+                        .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
+                    if (reviewItems.length > 0) {
+                        // Reuse cached context to avoid redundant I/O
+                        const ctx = cachedReconciliationContext ?? await loadReconciliationContext(services.storage, root);
+                        const drops = await batchLLMReview(reviewItems, ctx.recentCommittedItems, callLLMReconciliation);
+                        for (const drop of drops) {
+                            processed.stagedItemStatus[drop.id] = 'skipped';
+                            processed.stagedItemSource[drop.id] = 'reconciled';
+                        }
+                        if (drops.length > 0 && !opts.json) {
+                            warn(`Batch review dropped ${drops.length} item(s)`);
+                        }
+                    }
+                }
+                catch {
+                    if (!opts.json) {
+                        warn('Batch LLM review skipped due to error');
                     }
                 }
             }
@@ -765,6 +829,22 @@ export function registerMeetingCommands(program) {
                 matchedText,
             }))
             : [];
+        // Per-source skip tally (observability for dedup behavior).
+        // Lets users see why items were skipped without spelunking through frontmatter.
+        const skippedBySource = processed
+            ? Object.entries(processed.stagedItemStatus).reduce((acc, [id, status]) => {
+                if (status !== 'skipped')
+                    return acc;
+                const source = processed.stagedItemSource[id];
+                if (source === 'reconciled')
+                    acc.reconciled += 1;
+                else if (source === 'existing-task')
+                    acc.existingTask += 1;
+                else if (source === 'slack-resolved')
+                    acc.slackResolved += 1;
+                return acc;
+            }, { reconciled: 0, existingTask: 0, slackResolved: 0 })
+            : { reconciled: 0, existingTask: 0, slackResolved: 0 };
         // Build response
         const response = {
             success: true,
@@ -776,6 +856,7 @@ export function registerMeetingCommands(program) {
             contextUsed: !!contextBundle,
             priorItemsUsed: !!priorItems,
             reconciled,
+            skippedBySource,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         // Add reconciliation stats when reconciliation was run
@@ -812,6 +893,18 @@ export function registerMeetingCommands(program) {
         }
         if (shouldStage) {
             success(`Staged sections written to: ${meetingPath}`);
+            // Per-source skip summary
+            const totalSkipped = skippedBySource.reconciled + skippedBySource.existingTask + skippedBySource.slackResolved;
+            if (totalSkipped > 0) {
+                const parts = [];
+                if (skippedBySource.reconciled > 0)
+                    parts.push(`${skippedBySource.reconciled} reconciled`);
+                if (skippedBySource.existingTask > 0)
+                    parts.push(`${skippedBySource.existingTask} existing-task`);
+                if (skippedBySource.slackResolved > 0)
+                    parts.push(`${skippedBySource.slackResolved} slack-resolved`);
+                info(`Skipped ${totalSkipped} items: ${parts.join(', ')}`);
+            }
             // Display reconciliation details
             if (reconciliationResult) {
                 displayReconciliationDetails(reconciliationResult, reconciled);
