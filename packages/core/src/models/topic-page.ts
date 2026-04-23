@@ -371,6 +371,12 @@ export function getTopicHeadline(page: TopicPage, maxChars = 120): string {
 /**
  * Priority order for section inclusion when budget is tight.
  * Higher priority sections are included first.
+ *
+ * `Source trail` and `Change log` are deliberately excluded: they carry
+ * provenance/audit data (low information density for skill context
+ * injection) and `topic_page_retrieval` callers want synthesized
+ * narrative, not a list of meeting references. To include those, callers
+ * read the raw topic page directly via `renderTopicPage`.
  */
 const SECTION_PRIORITY: SectionName[] = [
   'Current state',
@@ -380,8 +386,6 @@ const SECTION_PRIORITY: SectionName[] = [
   'Known gaps',
   'Relationships',
   'Rollout/timeline',
-  'Source trail',
-  'Change log',
 ];
 
 /**

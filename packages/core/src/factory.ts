@@ -116,8 +116,8 @@ export async function createServices(
   const commitments = new CommitmentsService(storage, workspaceRoot);
   const areaParser = new AreaParserService(storage, workspaceRoot);
 
-  // Topic memory (L3 wiki — depends on storage only)
-  const topicMemory = new TopicMemoryService(storage);
+  // Topic memory (L3 wiki — depends on storage + search for retrieval)
+  const topicMemory = new TopicMemoryService(storage, search);
 
   // Area memory (depends on storage + areaParser + commitments + memory + topicMemory for Topics section enrichment)
   const areaMemory = new AreaMemoryService(storage, areaParser, commitments, memory, topicMemory);

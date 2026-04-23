@@ -568,7 +568,7 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 
 2. **Gather strategy & goals** — Run `arete search "<topic>" --scope context`. Take the top 3 results, max 300 words each. If results are empty, note: `context_quality: sparse-strategy`.
 
-3. **Gather existing memory** — Run `arete search "<topic>" --scope memory`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`.
+3. **Gather existing memory** — Run `arete search "<topic>" --scope memory`. Take the top 5 results, max 200 words each. If results are empty, note: `context_quality: sparse-memory`. **Also run `arete topic find "<topic>" --json --limit 2` (see `topic_page_retrieval` pattern) to pull the top 1–2 relevant topic-page narratives — these provide synthesized context that atomic L2 items don't, and are budget-aware so inclusion doesn't blow the memory section word limit.**
 
 4. **Gather people context** (when person slugs are available) — For each person: `arete people show <slug> --memory`. Extract ONLY: stances, open items, and relationship health sections. Skip full profile body. Max ~200 words per person. **If you've already run `get_meeting_context` upstream, reuse its people context — do not re-run `arete people show`.** For attendees still in `unknown_queue` (unresolved from process-meetings Step 2), skip person context and add to the bundle header: "Unresolved attendees (no person context): [names]".
 
@@ -597,6 +597,75 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 **Outputs**: Compiled context bundle with section headers, word counts, and completeness signal.
 
 **See also**: `get_meeting_context` — when both apply, `context_bundle_assembly` consumes `get_meeting_context` outputs for the people context section. Do not run both independently.
+
+---
+
+## topic_page_retrieval
+
+**Purpose**: Retrieve the most relevant topic pages (L3 wiki — `.arete/memory/topics/*.md`) for a given query, with budget-aware section truncation, so skills can inject encyclopedic context without blowing the memory word budget in `context_bundle_assembly`.
+
+**Used by**: meeting-prep (attendee topic context), create-prd (prior decisions on the feature area), week-plan (ongoing topic threads), process-meetings (related topic lookups).
+
+**Relationship to `contextual_memory_search`**: `contextual_memory_search` returns atomic L2 items (decisions, learnings). This pattern returns synthesized topic-page narratives — complementary, not a replacement. Use both when relevant.
+
+**Inputs**:
+- `query` — natural language search string (meeting title, priority phrase, topic slug)
+- `area` (optional) — area slug to prefer; matching topics get a +0.1 rank boost
+- `limit` (default 3) — top-k topics to return
+- `budget` (default 1000 words) — word cap on `bodyForContext` per topic
+
+### Mechanism — use the CLI, not manual path walking
+
+```bash
+arete topic find "<query>" [--area <slug>] [--limit N] [--budget N] --json
+```
+
+Internal flow:
+
+1. `SearchProvider.semanticSearch(query, { paths: ['.arete/memory/topics/'], limit: k*3 })` — broader candidate set for re-ranking. Falls back to token search automatically when qmd is not configured.
+2. Re-rank each candidate by:
+   - `qmd score × 0.6` (base relevance)
+   - `+0.2` if `last_refreshed` within 30 days
+   - `+0.1` if within 90 days
+   - `+0.1` if frontmatter `area` matches `options.area`
+3. Deterministic slug-asc tiebreak for equal scores (stable output).
+4. Take top-k.
+
+**Budget & truncation** (per topic page, applied in priority order until budget exhausted):
+
+1. **Current state** (always included — highest-signal section)
+2. **Open questions**
+3. **Scope and behavior**
+4. **Why/background**
+5. **Known gaps**
+6. **Relationships**
+7. **Rollout/timeline**
+
+Skipped entirely (low information density for skill context): `Source trail`, `Change log`.
+
+**Output shape** (from `--json`):
+
+```json
+{
+  "success": true,
+  "query": "cover whale templates",
+  "results": [
+    {
+      "slug": "cover-whale-templates",
+      "frontmatter": { "topic_slug": "...", "status": "active", "area": "...", ... },
+      "bodyForContext": "## Current state\n\n...\n\n## Open questions\n\n...",
+      "score": 0.87
+    },
+    ...
+  ]
+}
+```
+
+Skills consuming the JSON should prefer `bodyForContext` (already truncated to budget) over re-parsing the topic page.
+
+**Empty results**: `{ results: [] }` with `success: true`. Skills should note "No directly relevant topic pages for <query>" and proceed rather than fail.
+
+**See also**: `context_bundle_assembly` — consumes `topic_page_retrieval` output as a memory-section augmentation. `contextual_memory_search` — atomic L2 item retrieval, complementary.
 
 ---
 

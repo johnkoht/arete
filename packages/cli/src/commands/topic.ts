@@ -375,6 +375,60 @@ export function registerTopicCommands(program: Command): void {
     });
 
   // ---------------------------------------------------------------------------
+  // arete topic find <query>
+  // ---------------------------------------------------------------------------
+  topicCmd
+    .command('find <query>')
+    .description('Retrieve relevant topic pages for skill context injection')
+    .option('--limit <n>', 'Top k topics to return (default 3)', parseInt, 3)
+    .option('--area <slug>', 'Boost topics tagged to this area')
+    .option('--budget <n>', 'Word budget for bodyForContext per topic (default 1000)', parseInt, 1000)
+    .option('--json', 'Output as JSON (skills consume this)')
+    .action(async (
+      query: string,
+      opts: { limit: number; area?: string; budget: number; json?: boolean },
+    ) => {
+      const services = await createServices(process.cwd());
+      const root = await services.workspace.findRoot();
+      if (!root) {
+        if (opts.json) {
+          console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        } else {
+          error('Not in an Areté workspace');
+        }
+        process.exit(1);
+      }
+
+      const results = await services.topicMemory.retrieveRelevant(query, {
+        limit: opts.limit,
+        area: opts.area,
+        budgetWords: opts.budget,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify({ success: true, query, results }, null, 2));
+        return;
+      }
+
+      header(`Topic Retrieval — "${query}"`);
+      if (results.length === 0) {
+        info('No matching topics.');
+        return;
+      }
+      for (const r of results) {
+        console.log('');
+        console.log(chalk.bold(`[[${r.slug}]]`) + chalk.dim(` (score ${r.score.toFixed(2)})`));
+        const area = r.frontmatter.area !== undefined ? `area: ${r.frontmatter.area} • ` : '';
+        console.log(chalk.dim(`  ${area}status: ${r.frontmatter.status} • updated: ${r.frontmatter.last_refreshed}`));
+        if (r.bodyForContext.length > 0) {
+          console.log('');
+          console.log(r.bodyForContext);
+        }
+      }
+      console.log('');
+    });
+
+  // ---------------------------------------------------------------------------
   // arete topic lint
   // ---------------------------------------------------------------------------
   topicCmd

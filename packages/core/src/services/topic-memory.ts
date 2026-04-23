@@ -15,10 +15,12 @@
 
 import { join } from 'path';
 import type { StorageAdapter } from '../storage/adapter.js';
+import type { SearchProvider } from '../search/types.js';
 import type { WorkspacePaths } from '../models/workspace.js';
 import type { LLMCallFn } from '../integrations/conversations/extract.js';
 import {
   parseTopicPage,
+  selectSectionsForBudget,
   type TopicPage,
   type TopicPageFrontmatter,
 } from '../models/topic-page.js';
@@ -273,9 +275,11 @@ export interface AliasAndMergeOptions {
 
 export class TopicMemoryService {
   private readonly storage: StorageAdapter;
+  private readonly searchProvider?: SearchProvider;
 
-  constructor(storage: StorageAdapter) {
+  constructor(storage: StorageAdapter, searchProvider?: SearchProvider) {
     this.storage = storage;
+    this.searchProvider = searchProvider;
   }
 
   /**
@@ -930,3 +934,110 @@ TopicMemoryService.prototype.integrateSource = async function (
   };
 };
 
+
+// ---------------------------------------------------------------------------
+// Step 7 — retrieveRelevant (topic_page_retrieval pattern)
+// ---------------------------------------------------------------------------
+
+export interface RetrieveRelevantOptions {
+  /** Limit top-k results returned after re-ranking. Default 3. */
+  limit?: number;
+  /** Optional area bias — matching topics get +0.1 rank bonus. */
+  area?: string;
+  /** Word budget for `bodyForContext` per topic. Default 1000. */
+  budgetWords?: number;
+}
+
+export interface TopicPageContext {
+  slug: string;
+  frontmatter: TopicPageFrontmatter;
+  bodyForContext: string;
+  score: number;
+}
+
+const TOPIC_PATH_PREFIX = '.arete/memory/topics/';
+const DEFAULT_RETRIEVAL_LIMIT = 3;
+const DEFAULT_BUDGET_WORDS = 1000;
+
+const RECENCY_BONUS_30D = 0.2;
+const RECENCY_BONUS_90D = 0.1;
+const AREA_MATCH_BONUS = 0.1;
+const QMD_SCORE_WEIGHT = 0.6;
+
+function daysBetween(a: string, b: Date): number {
+  const d = new Date(a);
+  if (Number.isNaN(d.getTime())) return Infinity;
+  return Math.floor((b.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+declare module './topic-memory.js' {
+  interface TopicMemoryService {
+    retrieveRelevant(
+      query: string,
+      options?: RetrieveRelevantOptions,
+    ): Promise<TopicPageContext[]>;
+  }
+}
+
+TopicMemoryService.prototype.retrieveRelevant = async function (
+  this: TopicMemoryService,
+  query: string,
+  options: RetrieveRelevantOptions = {},
+): Promise<TopicPageContext[]> {
+  const limit = options.limit ?? DEFAULT_RETRIEVAL_LIMIT;
+  const budgetWords = options.budgetWords ?? DEFAULT_BUDGET_WORDS;
+
+  const searchProvider = (this as unknown as { searchProvider?: SearchProvider }).searchProvider;
+  if (searchProvider === undefined) {
+    return [];
+  }
+
+  // Broader candidate set (limit * 3) so re-ranking with recency + area
+  // bonuses can promote near-misses over exact-text matches.
+  const candidates = await searchProvider.semanticSearch(query, {
+    paths: [TOPIC_PATH_PREFIX],
+    limit: limit * 3,
+  });
+
+  if (candidates.length === 0) return [];
+
+  const now = new Date();
+  const ranked: Array<{ page: TopicPage; score: number }> = [];
+
+  for (const c of candidates) {
+    const page = parseTopicPage(c.content);
+    if (page === null) continue;
+
+    let score = c.score * QMD_SCORE_WEIGHT;
+
+    const daysOld = daysBetween(page.frontmatter.last_refreshed, now);
+    if (daysOld <= 30) score += RECENCY_BONUS_30D;
+    else if (daysOld <= 90) score += RECENCY_BONUS_90D;
+
+    if (
+      options.area !== undefined &&
+      page.frontmatter.area === options.area
+    ) {
+      score += AREA_MATCH_BONUS;
+    }
+
+    ranked.push({ page, score });
+  }
+
+  ranked.sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    // Deterministic tiebreak on slug to keep output stable across identical scores.
+    const aSlug = a.page.frontmatter.topic_slug;
+    const bSlug = b.page.frontmatter.topic_slug;
+    return aSlug < bSlug ? -1 : aSlug > bSlug ? 1 : 0;
+  });
+
+  const topK = ranked.slice(0, limit);
+
+  return topK.map(({ page, score }) => ({
+    slug: page.frontmatter.topic_slug,
+    frontmatter: page.frontmatter,
+    bodyForContext: selectSectionsForBudget(page, budgetWords),
+    score,
+  }));
+};
