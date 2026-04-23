@@ -147,24 +147,32 @@ export class MemoryIndexService {
    * Gather data from all memory surfaces and render `index.md`. Idempotent:
    * when content byte-equals existing file, no write is performed.
    *
-   * Returns the write result for observability:
-   *   'unchanged' → no write (content stable)
-   *   'updated'   → new content written
+   * Returns both the write status AND any errors encountered during
+   * gathering — surfaces partial-state corruption to CLI observability
+   * so users know when topic files are being silently excluded.
    */
   async refreshMemoryIndex(
     workspacePaths: WorkspacePaths,
-  ): Promise<'unchanged' | 'updated'> {
+  ): Promise<{ status: 'unchanged' | 'updated'; errors: string[] }> {
     const data = await this.gatherIndexData(workspacePaths);
     const content = renderMemoryIndex(data);
     const outPath = join(workspacePaths.memory, 'index.md');
+    const errors = data.errors ?? [];
 
+    let status: 'unchanged' | 'updated';
     if (this.storage.writeIfChanged !== undefined) {
-      return this.storage.writeIfChanged(outPath, content);
+      status = await this.storage.writeIfChanged(outPath, content);
+    } else {
+      const existing = await this.storage.read(outPath);
+      if (existing === content) {
+        status = 'unchanged';
+      } else {
+        await this.storage.write(outPath, content);
+        status = 'updated';
+      }
     }
-    const existing = await this.storage.read(outPath);
-    if (existing === content) return 'unchanged';
-    await this.storage.write(outPath, content);
-    return 'updated';
+
+    return { status, errors };
   }
 
   /**

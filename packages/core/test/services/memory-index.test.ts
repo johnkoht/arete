@@ -238,7 +238,7 @@ describe('MemoryIndexService.refreshMemoryIndex', () => {
       deps.commitments,
     );
     const result = await svc.refreshMemoryIndex(paths);
-    assert.strictEqual(result, 'updated');
+    assert.strictEqual(result.status, 'updated');
     const content = storage.store.get('/ws/.arete/memory/index.md');
     assert.ok(content !== undefined);
     assert.match(content, /## Topics \(2\)/);
@@ -258,7 +258,8 @@ describe('MemoryIndexService.refreshMemoryIndex', () => {
     );
     await svc.refreshMemoryIndex(paths);
     const result2 = await svc.refreshMemoryIndex(paths);
-    assert.strictEqual(result2, 'unchanged');
+    assert.strictEqual(result2.status, 'unchanged');
+    assert.deepStrictEqual(result2.errors, []);
   });
 
   it('gracefully surfaces errors when a source throws', async () => {
@@ -278,7 +279,9 @@ describe('MemoryIndexService.refreshMemoryIndex', () => {
       deps.commitments,
     );
     const result = await svc.refreshMemoryIndex(paths);
-    assert.strictEqual(result, 'updated');
+    assert.strictEqual(result.status, 'updated');
+    assert.ok(result.errors.length > 0, 'errors must be surfaced in return value');
+    assert.match(result.errors[0], /topic listAll failed: kaboom/);
     const content = storage.store.get('/ws/.arete/memory/index.md')!;
     assert.match(content, /excluded due to errors/);
     // People and Areas should still render — partial-state tolerant.
@@ -311,8 +314,8 @@ describe('MemoryIndexService.refreshMemoryIndex', () => {
       deps.commitments,
     );
     const first = await svc.refreshMemoryIndex(paths);
-    assert.strictEqual(first, 'updated');
+    assert.strictEqual(first.status, 'updated');
     const second = await svc.refreshMemoryIndex(paths);
-    assert.strictEqual(second, 'unchanged');
+    assert.strictEqual(second.status, 'unchanged');
   });
 });

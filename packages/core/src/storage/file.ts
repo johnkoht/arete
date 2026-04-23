@@ -48,6 +48,21 @@ export class FileStorageAdapter implements StorageAdapter {
     return 'updated';
   }
 
+  /**
+   * Atomically append content to the file. `fs.appendFile` uses the
+   * default `'a'` flag → POSIX `O_APPEND`. The kernel guarantees
+   * atomicity for writes up to PIPE_BUF (~4KB Linux, ~512B macOS); a
+   * single log-event line is always well under that.
+   *
+   * Creates parent dirs if missing, file if missing. Safe under
+   * concurrent appenders — no read-modify-write race.
+   */
+  async append(path: string, content: string): Promise<void> {
+    const dir = join(path, '..');
+    await fs.ensureDir(dir);
+    await fs.appendFile(path, content, { encoding: 'utf8' });
+  }
+
   async exists(path: string): Promise<boolean> {
     return fs.pathExists(path);
   }

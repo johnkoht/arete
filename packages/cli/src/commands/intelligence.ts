@@ -504,13 +504,36 @@ export function registerMemoryCommand(program: Command): void {
       // Idempotent: no write when content byte-equals existing file. Runs after
       // area + person refresh so topic/person counts reflect fresh data. Skipped
       // on --dry-run per convention.
-      let indexResult: 'unchanged' | 'updated' | 'skipped' = 'skipped';
+      let indexStatus: 'unchanged' | 'updated' | 'skipped' = 'skipped';
+      let indexErrors: string[] = [];
       if (!opts.dryRun && !opts.area) {
         try {
-          indexResult = await services.memoryIndex.refreshMemoryIndex(paths);
+          const r = await services.memoryIndex.refreshMemoryIndex(paths);
+          indexStatus = r.status;
+          indexErrors = r.errors;
         } catch (err) {
           // Non-fatal — area/person refresh already succeeded.
           warn(`Memory index refresh failed: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      }
+
+      // 3b. Emit a `refresh` event to .arete/memory/log.md — dogfoods the
+      // grammar and gives replay tooling a timeline. Best-effort; log write
+      // failure never blocks the refresh.
+      if (!opts.dryRun) {
+        try {
+          await services.memoryLog.append(paths, {
+            event: 'refresh',
+            fields: {
+              scope: opts.area !== undefined ? 'area' : 'all',
+              areas_updated: String(areaResult.updated),
+              people_updated: String(personResult?.updated ?? 0),
+              index_status: indexStatus,
+              index_errors: String(indexErrors.length),
+            },
+          });
+        } catch {
+          // swallow — log best-effort
         }
       }
 
@@ -529,7 +552,10 @@ export function registerMemoryCommand(program: Command): void {
           areas: areaResult,
           synthesis: areaResult.synthesis ?? null,
           people: personResult ?? null,
-          memoryIndex: indexResult,
+          memoryIndex: {
+            status: indexStatus,
+            errors: indexErrors,
+          },
           qmd: qmdResult ?? { indexed: false, skipped: true },
         }, null, 2));
         return;
@@ -576,11 +602,20 @@ export function registerMemoryCommand(program: Command): void {
         listItem('Meetings scanned', String(personResult.scannedMeetings));
       }
 
-      // Memory index status
-      if (indexResult === 'updated') {
-        info('Memory index: updated (.arete/memory/index.md)');
-      } else if (indexResult === 'unchanged') {
-        info('Memory index: unchanged (no content change)');
+      // Memory index status — surface errors prominently so users know
+      // when topic files are being silently excluded.
+      if (indexStatus === 'updated') {
+        if (indexErrors.length > 0) {
+          warn(`Memory index: updated (${indexErrors.length} item(s) excluded due to errors — run \`arete topic lint\`)`);
+        } else {
+          info('Memory index: updated (.arete/memory/index.md)');
+        }
+      } else if (indexStatus === 'unchanged') {
+        if (indexErrors.length > 0) {
+          warn(`Memory index: unchanged (${indexErrors.length} item(s) excluded due to errors — run \`arete topic lint\`)`);
+        } else {
+          info('Memory index: unchanged (no content change)');
+        }
       }
 
       displayQmdResult(qmdResult);

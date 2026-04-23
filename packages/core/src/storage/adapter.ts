@@ -26,6 +26,15 @@ export interface StorageAdapter {
    * doesn't implement it.
    */
   writeIfChanged?(path: string, content: string): Promise<'unchanged' | 'updated'>;
+  /**
+   * Atomically append content to the file. Creates the file (and parent
+   * dirs) if missing. Safe against concurrent appenders: on POSIX,
+   * `O_APPEND` guarantees atomicity for writes up to PIPE_BUF (~4KB+).
+   * A single log-event line is always well under that limit.
+   * Services that need append semantics should prefer this over
+   * read-modify-write, which is racy under concurrent refreshes.
+   */
+  append?(path: string, content: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   delete(path: string): Promise<void>;
   list(dir: string, options?: ListOptions): Promise<string[]>;
