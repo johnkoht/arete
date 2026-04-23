@@ -313,6 +313,13 @@ export type WorkspaceTask = {
   source: { file: string; section: string };
 };
 
+/**
+ * Origin of a staged item — standalone duplicate of @arete/core::ItemSource
+ * (web has no @arete/core dep; full type lives in packages/core/src/models/common.ts).
+ * Keep in sync; drift caught by packages/apps/backend/test/services/item-source-compat.test.ts.
+ */
+export type ItemSource = 'ai' | 'dedup' | 'reconciled' | 'existing-task' | 'slack-resolved';
+
 export type StagedMemoryItem = {
   id: string;
   text: string;
@@ -321,7 +328,7 @@ export type StagedMemoryItem = {
   meetingTitle: string;
   meetingDate: string;
   meetingArea?: string;
-  source?: 'ai' | 'dedup' | 'reconciled';
+  source?: ItemSource;
   confidence?: number;
   ownerSlug?: string;
   direction?: 'i_owe_them' | 'they_owe_me';
@@ -408,8 +415,8 @@ export type ReviewItem = {
   status: ItemStatus;
   /** Optional goal association for action items */
   goalSlug?: string;
-  /** Origin of this item: ai (LLM extracted), dedup (matched user notes), reconciled (matched completed task in week.md) */
-  source?: 'ai' | 'dedup' | 'reconciled';
+  /** Origin of this item — see ItemSource union above for value meanings */
+  source?: ItemSource;
   /** LLM confidence score (0-1) for extracted items */
   confidence?: number;
   /** Owner slug for action items (who is responsible) */

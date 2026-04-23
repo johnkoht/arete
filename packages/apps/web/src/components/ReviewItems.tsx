@@ -99,6 +99,22 @@ function ItemCard({ item, onStatusChange, onTextChange, onGoalChange, goals, rea
               </TooltipContent>
             </Tooltip>
           )}
+          {/* "already tracked" badge for items matching an OPEN task in week.md/tasks.md */}
+          {item.source === "existing-task" && (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground cursor-help">
+                  <CheckCheck className="mr-1 h-3 w-3" />
+                  already tracked as a task
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="text-xs">
+                  Matched: "{item.matchedText ?? 'open task in week.md/tasks.md'}"
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {/* Owner badge for action items with owner info */}
           {isAction && item.ownerSlug && (
             <Badge variant="secondary" className="text-xs font-normal">

@@ -3,6 +3,7 @@
  *
  * Imports from common.ts ONLY.
  */
+import type { ItemSource } from './common.js';
 /** Status of an individual staged item — pending until the user acts on it */
 export type StagedItemStatus = Record<string, 'approved' | 'skipped' | 'pending'>;
 /** Map of itemId → edited text (only present when the user edits the default text) */
@@ -22,8 +23,8 @@ export type StagedItem = {
     id: string;
     text: string;
     type: 'ai' | 'de' | 'le';
-    /** Origin of this item: ai (LLM extracted), dedup (matched user notes), reconciled (matched weekly action item) */
-    source?: 'ai' | 'dedup' | 'reconciled';
+    /** Origin of this item — see ItemSource in models/common.ts for value meanings */
+    source?: ItemSource;
     /** LLM confidence score (0-1) for extracted items */
     confidence?: number;
     /** Owner slug for action items (who is responsible) */

@@ -12,8 +12,8 @@
  */
 import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js';
 import type { Importance } from '../integrations/meetings.js';
-/** Item source type: 'ai' (LLM extracted), 'dedup' (matched user notes), or 'reconciled' (matched completed task) */
-export type ItemSource = 'ai' | 'dedup' | 'reconciled';
+export type { ItemSource } from '../models/common.js';
+import type { ItemSource } from '../models/common.js';
 /** Item status: 'approved' (auto or dedup), 'pending' (needs review), or 'skipped' (matched completed task) */
 export type ItemStatus = 'approved' | 'pending' | 'skipped';
 /** Owner metadata for action items */

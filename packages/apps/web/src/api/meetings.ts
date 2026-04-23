@@ -20,6 +20,7 @@ import type {
   SyncResponse,
   ProcessResponse,
   PatchItemParams,
+  ItemSource,
 } from './types.js';
 
 // ── Raw backend wire types ──────────────────────────────────────────────────
@@ -41,7 +42,7 @@ type RawStagedItem = {
   id: string;
   text: string;
   type: 'ai' | 'de' | 'le';
-  source?: 'ai' | 'dedup' | 'reconciled';
+  source?: ItemSource;
   confidence?: number;
   ownerSlug?: string;
   direction?: 'i_owe_them' | 'they_owe_me';

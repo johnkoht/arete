@@ -19,8 +19,10 @@ import type { Importance } from '../integrations/meetings.js';
 // Types
 // ---------------------------------------------------------------------------
 
-/** Item source type: 'ai' (LLM extracted), 'dedup' (matched user notes), or 'reconciled' (matched completed task) */
-export type ItemSource = 'ai' | 'dedup' | 'reconciled';
+// Re-export canonical ItemSource from models/common.ts for backward compat.
+// Canonical definition and documentation live in models/common.ts.
+export type { ItemSource } from '../models/common.js';
+import type { ItemSource } from '../models/common.js';
 
 /** Item status: 'approved' (auto or dedup), 'pending' (needs review), or 'skipped' (matched completed task) */
 export type ItemStatus = 'approved' | 'pending' | 'skipped';
