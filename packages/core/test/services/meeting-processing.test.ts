@@ -1556,6 +1556,32 @@ describe('processMeetingExtraction - openTasks dedup', () => {
     });
     assert.equal(processed.stagedItemSource['ai_001'], 'ai');
   });
+
+  // Plan step 8d: benchmark against the reported 145-open-task workspace scale.
+  // Non-CI-enforced but logs actual duration via t.diagnostic — if consistently
+  // over ~250ms, consider caching tokenized open tasks across meetings in the
+  // parallel winddown path. Hard ceiling 500ms to catch pathological regressions.
+  it('benchmark: 145 open tasks × 20 action items completes under 500ms', (t) => {
+    const actionItems = Array.from({ length: 20 }, (_, i) =>
+      createActionItem(`Action item number ${i} with enough tokens to pass the guard`),
+    );
+    const openTasks = Array.from({ length: 145 }, (_, i) =>
+      `Open task ${i} with distinct identifying content token ${i}`,
+    );
+    const result = createMockResult({ actionItems });
+
+    const start = process.hrtime.bigint();
+    const processed = processMeetingExtraction(result, '', { openTasks });
+    const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+
+    t.diagnostic(`processMeetingExtraction(145 openTasks × 20 items) took ${elapsedMs.toFixed(1)}ms`);
+    assert.ok(
+      elapsedMs < 500,
+      `expected < 500ms at 145-task scale; saw ${elapsedMs.toFixed(1)}ms (regression — consider tokenization cache)`,
+    );
+    // Sanity: 20 items remain (none matched the distinct-content open tasks).
+    assert.equal(processed.filteredItems.length, 20);
+  });
 });
 
 // ---------------------------------------------------------------------------
