@@ -11,7 +11,7 @@ has_review: false
 has_pre_mortem: false
 has_prd: false
 depends_on: topic-wiki-memory
-steps: 7
+steps: 8
 ---
 
 # Topic Wiki Memory — Phase C (Deferred Follow-Ups)
@@ -163,11 +163,59 @@ assertion (delete). Do not expand scope: this is a cleanup.
 is green OR the test file is deleted with a LEARNINGS.md entry
 explaining why.
 
+### 8. Slack-digest → topic-wiki integration
+
+**Problem.** `slack-digest` skill writes approved items to L2 memory
+(decisions.md, learnings.md), commitments, and person memory — but has
+no hook into the topic-wiki layer. A Slack thread that resolves a pilot
+question about Cover Whale templates updates commitments but leaves the
+`cover-whale-templates` topic page untouched. Meetings get Hook 2 at
+approve; Slack gets nothing. Users who rely on Slack for async decisions
+have a systematically stale wiki.
+
+Surfaced 2026-04-24 during topic-wiki-memory QA on arete-reserv. Not
+covered by the original topic-wiki-memory plan (scoped to meetings only)
+and not on the Phase C list until now.
+
+**Approach.** Treat slack-digest files as topic sources, same class as
+meetings. Two sub-problems:
+
+1. *Topic extraction on slack digests.* The slack-digest skill already
+   extracts decisions/learnings via the significance-analyst pattern.
+   Extend the extraction to also emit 3–6 topic slugs per digest, biased
+   by active topics (reuse `renderActiveTopicsAsSlugList()` from
+   meeting extraction — same pattern).
+
+2. *Source integration.* After slack-digest commits, fire Hook 2
+   equivalent: `services.topicMemory.refreshAllFromMeetings(paths, {
+   slugs: digestTopics, sourcePath: <digest-file-path>, ... })`. This
+   requires widening `refreshAllFromMeetings`' source discovery — today
+   it scans `resources/meetings/*.md`; it needs to also pick up slack
+   digest files (probably `resources/slack-digests/*.md` or wherever
+   the skill writes them, subject to naming conventions).
+
+**Approach alternative (lighter).** Skip the extraction extension;
+require users to manually tag slack-digest output with `topics:`
+frontmatter at approve time via the UI. Then `arete memory refresh`
+picks them up automatically as long as `refreshAllFromMeetings` is
+source-agnostic (sub-problem 2 only).
+
+**Acceptance.** A slack-digest approval that references
+`cover-whale-templates` in its topic frontmatter results in the
+corresponding topic page receiving a new entry in `sources_integrated`
+and an updated narrative reflecting the digest content. Meetings-only
+behavior is preserved (existing tests still pass).
+
+**Related.** Connected to `slack-evidence-dedup` plan (semantic dedup
+of commitments from slack vs. meetings) but architecturally distinct —
+that plan reuses the ItemSource `'slack-resolved'` reserved slot;
+this item adds slack as a topic-integration source.
+
 ## Notes
 
-- Items 1, 2, 4, and 6 are net-new features with LLM cost.
+- Items 1, 2, 4, 6, and 8 are net-new features with LLM cost.
   Item 6 (historical backfill) is probably the highest-leverage of the
-  four — it unlocks the value of the whole system for pre-existing
+  five — it unlocks the value of the whole system for pre-existing
   workspaces.
 - Item 3 unblocks Cursor parity — good candidate for a small
   standalone PR once the interface is stable.
@@ -175,3 +223,7 @@ explaining why.
   downstream CLI change, not just topic work. Consider prioritizing
   early even though it doesn't ship user-visible value.
 - Item 7 is tech debt cleanup.
+- Item 8 unblocks the "Slack is a first-class knowledge source" story.
+  Size depends on which approach (full extraction extension vs.
+  manual-tag + refresh-source-agnostic); estimate ranges from 1 day
+  (manual-tag alternative) to 3-5 days (full extension).
