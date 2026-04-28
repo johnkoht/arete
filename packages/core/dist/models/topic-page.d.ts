@@ -94,4 +94,37 @@ export declare function getTopicHeadline(page: TopicPage, maxChars?: number): st
  * `context_bundle_assembly`.
  */
 export declare function selectSectionsForBudget(page: TopicPage, budgetWords: number): string;
+/**
+ * Render a TopicPage as a compact extraction-time context block.
+ *
+ * Used by the meeting-extraction prompt (`buildTopicWikiContextSection`) to
+ * inject what the wiki *already knows* for a detected topic, so the LLM emits
+ * only **deltas** (new decisions, changed scope, raised gaps) rather than
+ * re-extracting captured content.
+ *
+ * Differs from `selectSectionsForBudget`:
+ *   - Includes `Change log` (deliberately excluded from `SECTION_PRIORITY`).
+ *   - Truncates `Scope and behavior` at a fixed cap rather than competing for
+ *     a word budget.
+ *   - Always selects the same fixed five sections — no priority skipping.
+ *
+ * Section order matches `SECTION_NAMES` ordering:
+ *   Current state → Scope and behavior → Open questions → Known gaps → Change log
+ *
+ * Output style mirrors `selectSectionsForBudget` (`## ${name}\n\n${trimmed}`,
+ * joined by `\n\n`). Missing or whitespace-only sections are omitted entirely.
+ *
+ * Pure & synchronous: no I/O, no clock reads.
+ *
+ * @param page         Topic page to render.
+ * @param opts.changeLogEntries  Max number of Change log entries to keep
+ *                                (most recent first; default 3).
+ * @param opts.scopeMaxChars     Char cap for `Scope and behavior` (default 1000).
+ *                                When the trimmed body exceeds the cap, it is
+ *                                truncated and an ellipsis (`…`) is appended.
+ */
+export declare function renderForExtractionContext(page: TopicPage, opts?: {
+    changeLogEntries?: number;
+    scopeMaxChars?: number;
+}): string;
 //# sourceMappingURL=topic-page.d.ts.map
