@@ -52,10 +52,18 @@ export declare const AMBIGUOUS_LOW_THRESHOLD = 0.4;
 /**
  * An existing topic's identity surface for alias matching: its canonical
  * slug + any declared aliases.
+ *
+ * `lastRefreshed` (YYYY-MM-DD) is sourced from the topic page's
+ * frontmatter `last_refreshed` and used by the lexical detector
+ * (`detectTopicsLexical`) as a recency tiebreaker on equal scores.
+ * Optional — pages without `last_refreshed` continue to work; they
+ * just lose the tiebreaker and fall through to the canonical-asc
+ * fallback.
  */
 export interface TopicIdentity {
     canonical: string;
     aliases: string[];
+    lastRefreshed?: string;
 }
 /**
  * Tokenize a slug for Jaccard comparison.

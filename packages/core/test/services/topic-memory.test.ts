@@ -338,5 +338,9 @@ describe('TopicMemoryService.toIdentities', () => {
     assert.strictEqual(identities[0].canonical, 'cover-whale-templates');
     assert.deepStrictEqual(identities[0].aliases, ['cw-templates']);
     assert.deepStrictEqual(identities[1].aliases, []);
+    // lastRefreshed populated from frontmatter for the recency tiebreaker
+    // used by detectTopicsLexical.
+    assert.strictEqual(identities[0].lastRefreshed, '2026-04-22');
+    assert.strictEqual(identities[1].lastRefreshed, '2026-04-20');
   });
 });

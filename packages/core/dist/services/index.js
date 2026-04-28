@@ -32,6 +32,8 @@ export { computeRelationshipHealth } from './person-health.js';
 export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
 // Goal parsing
 export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
+// Topic detection (lexical pre-pass before extraction)
+export { detectTopicsLexical, STOP_TOKENS } from './topic-detection.js';
 // Meeting context assembly
 export { buildMeetingContext } from './meeting-context.js';
 // Note: AgendaItem is exported from '../utils/agenda.js' — don't re-export here

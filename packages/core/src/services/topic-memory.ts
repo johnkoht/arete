@@ -72,10 +72,18 @@ export const AMBIGUOUS_LOW_THRESHOLD = 0.4;
 /**
  * An existing topic's identity surface for alias matching: its canonical
  * slug + any declared aliases.
+ *
+ * `lastRefreshed` (YYYY-MM-DD) is sourced from the topic page's
+ * frontmatter `last_refreshed` and used by the lexical detector
+ * (`detectTopicsLexical`) as a recency tiebreaker on equal scores.
+ * Optional — pages without `last_refreshed` continue to work; they
+ * just lose the tiebreaker and fall through to the canonical-asc
+ * fallback.
  */
 export interface TopicIdentity {
   canonical: string;
   aliases: string[];
+  lastRefreshed?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -320,10 +328,18 @@ export class TopicMemoryService {
    * topic pages.
    */
   static toIdentities(topics: TopicPage[]): TopicIdentity[] {
-    return topics.map((t) => ({
-      canonical: t.frontmatter.topic_slug,
-      aliases: t.frontmatter.aliases ?? [],
-    }));
+    return topics.map((t) => {
+      const identity: TopicIdentity = {
+        canonical: t.frontmatter.topic_slug,
+        aliases: t.frontmatter.aliases ?? [],
+      };
+      // Populate the recency tiebreaker for `detectTopicsLexical`. Kept
+      // optional so pages without a `last_refreshed` continue to work.
+      if (typeof t.frontmatter.last_refreshed === 'string' && t.frontmatter.last_refreshed.length > 0) {
+        identity.lastRefreshed = t.frontmatter.last_refreshed;
+      }
+      return identity;
+    });
   }
 
   /**

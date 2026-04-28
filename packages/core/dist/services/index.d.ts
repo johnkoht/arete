@@ -32,6 +32,8 @@ export type { HealthIndicator, RelationshipHealth } from './person-health.js';
 export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
 export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
 export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
+export { detectTopicsLexical, STOP_TOKENS } from './topic-detection.js';
+export type { DetectTopicsOptions } from './topic-detection.js';
 export { buildMeetingContext } from './meeting-context.js';
 export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, AgendaCandidate, } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';
