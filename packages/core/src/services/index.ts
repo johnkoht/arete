@@ -3,7 +3,7 @@
  */
 
 export { ContextService } from './context.js';
-export { MemoryService } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';

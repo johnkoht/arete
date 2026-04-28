@@ -1,6 +1,7 @@
 /**
  * MemoryService — manages memory entries and search.
  */
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tokenize } from '../search/tokenize.js';
 // ---------------------------------------------------------------------------
@@ -18,41 +19,146 @@ const RECENCY_30_BOOST = 0.2;
 const RECENCY_90_BOOST = 0.1;
 const THEME_MIN_OCCURRENCES = 3;
 const THEME_MAX_COUNT = 10;
-function parseMemorySections(content) {
+// Header shapes, applied in priority order per line. First match wins.
+// Anchored to line start; `$` in the regex is the line-end since each line is
+// matched individually (no `m` flag needed when matching one line at a time).
+const HEADER_NEW = /^## (.+)$/; // Task 1+ writer convention: `## Title`
+const HEADER_LEGACY_DATED = /^### (\d{4}-\d{2}-\d{2}):\s*(.+)$/; // Legacy `### YYYY-MM-DD: Title`
+const HEADER_LEGACY_BARE = /^### (.+)$/; // Legacy `### Title`
+// Metadata bullets (case-sensitive bold field names per writer convention).
+const META_DATE = /^- \*\*Date\*\*:\s*(.+)$/;
+const META_SOURCE = /^- \*\*Source\*\*:\s*(.+)$/;
+const META_TOPICS = /^- \*\*Topics\*\*:\s*(.+)$/;
+function finalizeSection(p) {
+    return {
+        title: p.title,
+        date: p.date,
+        source: p.source,
+        topics: p.topics,
+        body: p.bodyLines.join('\n').trim(),
+        raw: p.rawLines.join('\n').trim(),
+    };
+}
+/**
+ * Try to classify a line as a new section header.
+ * Returns the parsed { title, date? } or null if no header shape matches.
+ *
+ * Priority order (no fall-through — first match wins):
+ *   1. `## Title` — new writer convention (Task 1 onwards)
+ *   2. `### YYYY-MM-DD: Title` — legacy date-prefixed
+ *   3. `### Title` — legacy bare
+ *
+ * Empty/whitespace-only titles are rejected (returns null) so a stray
+ * `## ` line with no actual title doesn't open a phantom section.
+ */
+function classifyHeader(line) {
+    const m1 = line.match(HEADER_NEW);
+    if (m1) {
+        const title = m1[1].trim();
+        if (title.length === 0)
+            return null;
+        return { title };
+    }
+    const m2 = line.match(HEADER_LEGACY_DATED);
+    if (m2) {
+        const title = m2[2].trim();
+        if (title.length === 0)
+            return null;
+        return { title, date: m2[1] };
+    }
+    const m3 = line.match(HEADER_LEGACY_BARE);
+    if (m3) {
+        const title = m3[1].trim();
+        if (title.length === 0)
+            return null;
+        return { title };
+    }
+    return null;
+}
+/**
+ * Parse memory file content into sections.
+ *
+ * Single-pass classifier:
+ *   - Tracks fenced code blocks (toggled by lines starting with ```);
+ *     headers inside code fences are NOT parsed as sections.
+ *   - For each non-fence line: tries header shapes in priority order
+ *     (## Title → ### YYYY-MM-DD: Title → ### Title). First match wins.
+ *   - Metadata bullets (- **Date**:, - **Source**:, - **Topics**:) attach
+ *     to the most-recently-opened section. Bullets that appear before any
+ *     header are discarded (no preamble stub is emitted).
+ *   - Topics bullet is split on comma and trimmed; empty entries are
+ *     dropped. Absent Topics bullet → section.topics is `undefined`
+ *     (preserves "absent" vs. "empty" semantics).
+ */
+export function parseMemorySections(content) {
     const sections = [];
     const lines = content.split('\n');
     let current = null;
+    let inFence = false;
     for (const line of lines) {
-        const headingMatch = line.match(/^###\s+(?:(\d{4}-\d{2}-\d{2}):\s*)?(.+)/);
-        if (headingMatch) {
+        // Toggle code-fence state on lines starting with ``` (with optional
+        // language tag). The fence line itself is body content of the current
+        // section, if any.
+        if (/^```/.test(line)) {
+            inFence = !inFence;
             if (current) {
-                sections.push({
-                    title: current.title,
-                    date: current.date,
-                    body: current.bodyLines.join('\n').trim(),
-                    raw: current.rawLines.join('\n').trim(),
-                });
+                current.bodyLines.push(line);
+                current.rawLines.push(line);
             }
+            continue;
+        }
+        // Inside a fence: never classify as header. Pass through as body.
+        if (inFence) {
+            if (current) {
+                current.bodyLines.push(line);
+                current.rawLines.push(line);
+            }
+            continue;
+        }
+        const header = classifyHeader(line);
+        if (header) {
+            if (current)
+                sections.push(finalizeSection(current));
             current = {
-                title: headingMatch[2].trim(),
-                date: headingMatch[1] || undefined,
+                title: header.title,
+                date: header.date,
+                source: undefined,
+                topics: undefined,
                 bodyLines: [],
                 rawLines: [line],
             };
+            continue;
         }
-        else if (current) {
+        // Metadata bullets attach to the current section. They also count as
+        // body content (so existing search/scoring still sees them).
+        if (current) {
+            const dateMatch = line.match(META_DATE);
+            if (dateMatch && !current.date) {
+                const v = dateMatch[1].trim();
+                if (v.length > 0)
+                    current.date = v;
+            }
+            const sourceMatch = line.match(META_SOURCE);
+            if (sourceMatch && !current.source) {
+                const v = sourceMatch[1].trim();
+                if (v.length > 0)
+                    current.source = v;
+            }
+            const topicsMatch = line.match(META_TOPICS);
+            if (topicsMatch && current.topics === undefined) {
+                const parts = topicsMatch[1]
+                    .split(',')
+                    .map((p) => p.trim())
+                    .filter((p) => p.length > 0);
+                if (parts.length > 0)
+                    current.topics = parts;
+            }
             current.bodyLines.push(line);
             current.rawLines.push(line);
         }
     }
-    if (current) {
-        sections.push({
-            title: current.title,
-            date: current.date,
-            body: current.bodyLines.join('\n').trim(),
-            raw: current.rawLines.join('\n').trim(),
-        });
-    }
+    if (current)
+        sections.push(finalizeSection(current));
     return sections;
 }
 function calculateRecencyBoost(dateStr) {
@@ -408,11 +514,96 @@ export class MemoryService {
                     title: s.title,
                     content: s.body,
                     date: s.date ?? '',
-                    source: fileName,
+                    source: s.source ?? fileName,
+                    ...(s.topics !== undefined ? { topics: s.topics } : {}),
                 });
             }
         }
         return { decisions, learnings, observations, lastUpdated: now };
     }
+}
+// ---------------------------------------------------------------------------
+// Public helper: getMemoryItemsForTopics
+// ---------------------------------------------------------------------------
+const DEFAULT_PER_SLUG_LIMIT = 5;
+const DEFAULT_SINCE_DAYS = 90;
+/**
+ * Compute the YYYY-MM-DD cutoff string for a since-days window.
+ *
+ * Compare on the YYYY-MM-DD prefix so we don't have to parse partial dates.
+ */
+function computeSinceCutoff(sinceDays, now = new Date()) {
+    const cutoff = new Date(now.getTime() - sinceDays * 24 * 60 * 60 * 1000);
+    return cutoff.toISOString().slice(0, 10);
+}
+/**
+ * Read the given memory files and return entries whose `topics` intersects
+ * any of the requested slugs. Recency-filtered (default 90 days) and
+ * per-slug capped (default 5/slug).
+ *
+ * Per-slug cap: each requested slug is independently capped at `limit`.
+ * An entry tagged with two requested slugs counts toward both caps but
+ * is only emitted once (deduped by section identity within a file).
+ *
+ * The function is async so it composes with the rest of the codebase
+ * (which uses `node:fs/promises`); callers in async contexts can `await`
+ * it directly.
+ */
+export async function getMemoryItemsForTopics(paths, topicSlugs, opts) {
+    if (paths.length === 0 || topicSlugs.length === 0)
+        return [];
+    const limit = opts?.limit ?? DEFAULT_PER_SLUG_LIMIT;
+    const sinceDays = opts?.sinceDays ?? DEFAULT_SINCE_DAYS;
+    const cutoff = computeSinceCutoff(sinceDays);
+    const requested = new Set(topicSlugs);
+    // perSlugCounts tracks how many entries we've emitted per requested slug.
+    const perSlugCounts = new Map();
+    for (const slug of topicSlugs)
+        perSlugCounts.set(slug, 0);
+    const out = [];
+    for (const filePath of paths) {
+        let content;
+        try {
+            content = await readFile(filePath, 'utf8');
+        }
+        catch {
+            // File missing or unreadable — skip silently. Caller is responsible
+            // for resolving paths; missing files are not an error here.
+            continue;
+        }
+        const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+        const memType = getMemoryTypeFromPath(filePath);
+        const sections = parseMemorySections(content);
+        for (const section of sections) {
+            if (!section.topics || section.topics.length === 0)
+                continue;
+            // Find which requested slugs this entry matches.
+            const matchedSlugs = section.topics.filter((t) => requested.has(t));
+            if (matchedSlugs.length === 0)
+                continue;
+            // Recency filter: keep entries with no date (cannot prove staleness)
+            // OR entries with a date >= cutoff.
+            if (section.date && section.date < cutoff)
+                continue;
+            // Per-slug cap: only emit if at least one matched slug still has
+            // capacity. Increment all matched slugs that still had capacity at
+            // emit time.
+            const slugsWithCapacity = matchedSlugs.filter((s) => (perSlugCounts.get(s) ?? 0) < limit);
+            if (slugsWithCapacity.length === 0)
+                continue;
+            for (const s of slugsWithCapacity) {
+                perSlugCounts.set(s, (perSlugCounts.get(s) ?? 0) + 1);
+            }
+            out.push({
+                type: memType ?? 'observations',
+                title: section.title,
+                content: section.body,
+                date: section.date ?? '',
+                source: section.source ?? fileName,
+                topics: section.topics,
+            });
+        }
+    }
+    return out;
 }
 //# sourceMappingURL=memory.js.map
