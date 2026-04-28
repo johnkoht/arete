@@ -14,6 +14,7 @@ export type MemoryEntry = {
     date: string;
     source: string;
     relatedEntities?: string[];
+    topics?: string[];
 };
 /** A single memory search result */
 export type MemoryResult = {
@@ -23,6 +24,7 @@ export type MemoryResult = {
     date?: string;
     relevance: string;
     score?: number;
+    topics?: string[];
 };
 /** Request to search memory */
 export type MemorySearchRequest = {

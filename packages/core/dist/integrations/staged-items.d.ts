@@ -61,6 +61,8 @@ export type MeetingMetadata = {
     date: string;
     /** Source string: "Meeting Title (Attendee1, Attendee2)" */
     source: string;
+    /** Topic slugs associated with the meeting (defaults to []) */
+    topics: string[];
 };
 /**
  * Commit all approved staged items:

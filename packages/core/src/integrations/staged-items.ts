@@ -335,6 +335,8 @@ export type MeetingMetadata = {
   date: string;
   /** Source string: "Meeting Title (Attendee1, Attendee2)" */
   source: string;
+  /** Topic slugs associated with the meeting (defaults to []) */
+  topics: string[];
 };
 
 /**
@@ -342,7 +344,7 @@ export type MeetingMetadata = {
  */
 function extractMeetingMetadata(data: Record<string, unknown>): MeetingMetadata {
   const title = typeof data['title'] === 'string' ? data['title'] : 'Unknown Meeting';
-  
+
   // Parse date - handle ISO strings and YYYY-MM-DD
   let date = 'Unknown';
   if (typeof data['date'] === 'string') {
@@ -350,7 +352,7 @@ function extractMeetingMetadata(data: Record<string, unknown>): MeetingMetadata 
     const dateMatch = data['date'].match(/^(\d{4}-\d{2}-\d{2})/);
     date = dateMatch ? dateMatch[1] : data['date'].slice(0, 10);
   }
-  
+
   // Build attendee names list
   const attendeeNames: string[] = [];
   const attendees = data['attendees'];
@@ -363,13 +365,25 @@ function extractMeetingMetadata(data: Record<string, unknown>): MeetingMetadata 
       }
     }
   }
-  
+
   // Build source string: "Meeting Title (Attendee1, Attendee2)"
   const source = attendeeNames.length > 0
     ? `${title} (${attendeeNames.join(', ')})`
     : title;
-  
-  return { title, date, source };
+
+  // Topic slugs from frontmatter (set by meeting-apply.ts after alias/merge).
+  // Defaults to [] when missing or malformed — never undefined.
+  const topics: string[] = [];
+  const rawTopics = data['topics'];
+  if (Array.isArray(rawTopics)) {
+    for (const t of rawTopics) {
+      if (typeof t === 'string' && t.trim() !== '') {
+        topics.push(t);
+      }
+    }
+  }
+
+  return { title, date, source, topics };
 }
 
 /**
@@ -563,12 +577,13 @@ function removeStagedSections(body: string): string {
 /**
  * Append a list of approved items to a memory file.
  * Creates the file + directory if they don't exist.
- * 
+ *
  * Each item is formatted as a proper entry:
  * ```
  * ## [Title derived from item text]
  * - **Date**: YYYY-MM-DD
  * - **Source**: Meeting Title (Attendees)
+ * - **Topics**: slug-a, slug-b   (omitted entirely when meta.topics is empty)
  * - Item content
  * ```
  */
@@ -585,18 +600,22 @@ async function appendToMemoryFile(
   await storage.mkdir(memoryDir);
 
   const existing = (await storage.read(filePath)) ?? '';
-  
+
   // Format each item as a proper memory entry
   const entries = items.map((item) => {
     const entryTitle = generateEntryTitle(item.text);
-    return [
+    const lines: string[] = [
       `## ${entryTitle}`,
       `- **Date**: ${meta.date}`,
       `- **Source**: ${meta.source}`,
-      `- ${item.text}`,
-    ].join('\n');
+    ];
+    if (meta.topics.length > 0) {
+      lines.push(`- **Topics**: ${meta.topics.join(', ')}`);
+    }
+    lines.push(`- ${item.text}`);
+    return lines.join('\n');
   }).join('\n\n');
-  
+
   const separator = existing.endsWith('\n') || existing === '' ? '\n' : '\n\n';
   await storage.write(filePath, `${existing}${separator}${entries}\n`);
 }
