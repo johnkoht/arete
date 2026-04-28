@@ -10,13 +10,17 @@ import {
   formatStagedSections,
   updateMeetingContent,
   buildExclusionListSection,
+  buildTopicWikiContextSection,
+  truncateTopicWikiContextToBudget,
+  mergeDetectedSlugsIntoActiveList,
+  MAX_TOPIC_WIKI_CONTEXT_CHARS,
   isTrivialDecision,
   isTrivialLearning,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   CATEGORY_LIMITS,
 } from '../../src/services/meeting-extraction.js';
-import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem } from '../../src/services/meeting-extraction.js';
+import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
 
 // ---------------------------------------------------------------------------
@@ -3951,5 +3955,414 @@ describe('garbage/trivial filters applied to decisions in parsing', () => {
     const result = parseMeetingExtractionResponse(response);
     assert.equal(result.intelligence.learnings.length, 1);
     assert.equal(result.intelligence.learnings[0], longLearning);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Topic-Wiki Context Section (Task 6 — delta-only extraction)
+// ---------------------------------------------------------------------------
+
+describe('buildTopicWikiContextSection', () => {
+  it('renders one block per detected topic with sections and L2 excerpts', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'pricing-model',
+          sections: '## Current state\n\nPriced at $149/month.',
+          l2Excerpts: [
+            '2026-04-20: Sara confirmed margin model works at $149.',
+            '2026-04-15: Open question on pricing tier.',
+          ],
+        },
+        {
+          slug: 'onboarding-v2',
+          sections: '## Current state\n\nOnboarding flow rewrite in progress.',
+          l2Excerpts: ['2026-04-22: Reduced onboarding steps from 8 to 5.'],
+        },
+      ],
+    };
+
+    const out = buildTopicWikiContextSection(ctx);
+
+    assert.ok(out.includes('## Topic Wiki (already known to the reader — DO NOT re-extract)'));
+    assert.ok(out.includes('### [[pricing-model]]'));
+    assert.ok(out.includes('### [[onboarding-v2]]'));
+    assert.ok(out.includes('Priced at $149/month.'));
+    assert.ok(out.includes('Onboarding flow rewrite in progress.'));
+    assert.ok(out.includes('Prior captured items for this topic:'));
+    assert.ok(out.includes('- 2026-04-20: Sara confirmed margin model works at $149.'));
+    assert.ok(out.includes('- 2026-04-22: Reduced onboarding steps from 8 to 5.'));
+  });
+
+  it('returns empty string when context is undefined', () => {
+    assert.equal(buildTopicWikiContextSection(undefined), '');
+  });
+
+  it('returns empty string when detectedTopics is empty', () => {
+    assert.equal(buildTopicWikiContextSection({ detectedTopics: [] }), '');
+  });
+
+  it('omits "Prior captured items for this topic:" line when l2Excerpts is empty', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'pricing-model',
+          sections: '## Current state\n\nPriced at $149/month.',
+          l2Excerpts: [],
+        },
+      ],
+    };
+
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes('### [[pricing-model]]'));
+    assert.ok(out.includes('Priced at $149/month.'));
+    assert.ok(!out.includes('Prior captured items for this topic:'));
+  });
+
+  it('emits sections verbatim (does not re-render)', () => {
+    const sections = '## Current state\n\nLine 1.\n\n## Open questions\n\n- q1';
+    const ctx: TopicWikiContext = {
+      detectedTopics: [{ slug: 'foo', sections, l2Excerpts: [] }],
+    };
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes(sections));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delta-only directive presence/absence
+// ---------------------------------------------------------------------------
+
+function makeBundleWithWikiContext(
+  detectedTopics: TopicWikiContext['detectedTopics'],
+): MeetingContextBundle {
+  return {
+    meeting: {
+      path: '/path/to/meeting.md',
+      title: 'Test Meeting',
+      date: '2026-04-25',
+      attendees: [],
+      transcript: 'transcript',
+    },
+    agenda: null,
+    attendees: [],
+    unknownAttendees: [],
+    relatedContext: {
+      goals: [],
+      projects: [],
+      recentDecisions: [],
+      recentLearnings: [],
+    },
+    warnings: [],
+    topicWikiContext: { detectedTopics },
+  };
+}
+
+describe('buildMeetingExtractionPrompt — delta directive', () => {
+  it('includes the full delta directive when topicWikiContext is present', () => {
+    const bundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nPriced at $149.',
+        l2Excerpts: ['2026-04-20: Margin confirmed at $149.'],
+      },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    // Header
+    assert.ok(prompt.includes('## Delta-only extraction'));
+
+    // 5 DELTA rules
+    assert.ok(prompt.includes('NEW decision: a choice made in this meeting that the wiki doesn\'t already record'));
+    assert.ok(prompt.includes('CHANGED plan: this meeting reverses, narrows, or rescopes something the wiki shows'));
+    assert.ok(prompt.includes('NEW risk or gap raised'));
+    assert.ok(prompt.includes('NEW open question raised (not already in the wiki\'s Open questions)'));
+    assert.ok(prompt.includes('CONFIRMATION ONLY when the wiki shows a prior plan as uncertain and this meeting'));
+
+    // 4 do-NOT-emit rules
+    assert.ok(prompt.includes('Restatements of decisions or learnings already in the wiki'));
+    assert.ok(prompt.includes('Confirmations of plans the wiki already shows as committed'));
+    assert.ok(prompt.includes('Status updates on items the wiki already records'));
+    assert.ok(prompt.includes('The same fact described differently than the wiki\'s existing phrasing'));
+  });
+
+  it('does NOT include delta directive when topicWikiContext is undefined', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(!prompt.includes('## Delta-only extraction'));
+    assert.ok(!prompt.includes('When in doubt, INCLUDE'));
+    assert.ok(!prompt.includes('Pricing tier — $99 or $149?'));
+  });
+
+  it('does NOT include delta directive when topicWikiContext.detectedTopics is empty', () => {
+    const bundle = makeBundleWithWikiContext([]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+    assert.ok(!prompt.includes('## Delta-only extraction'));
+    assert.ok(!prompt.includes('## Topic Wiki'));
+  });
+
+  it('includes "When in doubt, INCLUDE" tiebreaker', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+    assert.ok(prompt.includes('When in doubt, INCLUDE'));
+    assert.ok(prompt.includes('A duplicate gets caught downstream by dedup'));
+    assert.ok(prompt.includes('a\nmissed real delta is invisible and lost.'));
+  });
+
+  it('includes the CONFIRMATION-of-uncertainty example verbatim', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('### Example: CONFIRMATION-of-uncertainty (the load-bearing escape hatch)'));
+    assert.ok(prompt.includes('Pricing tier — $99 or $149?'));
+    assert.ok(prompt.includes("'Pricing tier set to $149"));
+    assert.ok(prompt.includes('Sara confirmed the margin model works'));
+  });
+
+  it('includes the counter-example verbatim', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('Yeah, pricing is $149'));
+    assert.ok(prompt.includes('Do NOT emit. Already committed.'));
+  });
+
+  it('inserts wiki context section between enhanced context and exclusion list', () => {
+    const bundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nPriced at $149.',
+        l2Excerpts: ['2026-04-20: Margin confirmed.'],
+      },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('## Topic Wiki (already known to the reader — DO NOT re-extract)'));
+    assert.ok(prompt.includes('### [[pricing-model]]'));
+    // Confirm the wiki section sits before the transcript
+    const wikiIdx = prompt.indexOf('## Topic Wiki');
+    const transcriptIdx = prompt.indexOf('Transcript:');
+    assert.ok(wikiIdx > 0 && wikiIdx < transcriptIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Char budget guard — truncateTopicWikiContextToBudget
+// ---------------------------------------------------------------------------
+
+describe('truncateTopicWikiContextToBudget', () => {
+  it('returns context unchanged when already under budget', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'foo',
+          sections: '## Current state\n\nshort',
+          l2Excerpts: ['2026-04-20: a', '2026-04-15: b'],
+        },
+      ],
+    };
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, 10000);
+    assert.deepEqual(out, ctx);
+    assert.ok(totalChars > 0);
+    assert.ok(totalChars < 10000);
+  });
+
+  it('Tier 1: drops oldest L2 excerpts first when over budget', () => {
+    // Build a context where dropping L2 alone brings it under budget.
+    // Sections small, lots of L2.
+    const sections = '## Current state\n\nshort';
+    const longExcerpt = 'X'.repeat(200); // 200 chars per excerpt
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'topic-a',
+          sections,
+          l2Excerpts: [
+            `2026-04-25: newest ${longExcerpt}`,
+            `2026-04-20: middle ${longExcerpt}`,
+            `2026-04-15: oldest ${longExcerpt}`,
+          ],
+        },
+      ],
+    };
+
+    const before = buildTopicWikiContextSection(ctx).length;
+    // Set budget below initial size but above what one excerpt removed gives.
+    const budget = before - 250;
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Tier 1 only — topic count and sections preserved
+    assert.equal(out.detectedTopics.length, 1);
+    assert.equal(out.detectedTopics[0].sections, sections);
+    // Oldest dropped (pop removes from end)
+    assert.ok(out.detectedTopics[0].l2Excerpts.length < 3);
+    // Newest preserved
+    assert.ok(out.detectedTopics[0].l2Excerpts[0].includes('newest'));
+  });
+
+  it('Tier 2: halves the longest sections string on a \\n boundary when tier 1 alone is not enough', () => {
+    // Build sections with clear \n boundaries
+    const longSections = Array.from({ length: 40 }, (_, i) => `Line ${i}: ${'x'.repeat(50)}`).join('\n');
+    const shortSections = '## Current state\n\nshort';
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-a', sections: longSections, l2Excerpts: [] },
+        { slug: 'topic-b', sections: shortSections, l2Excerpts: [] },
+      ],
+    };
+
+    const initial = buildTopicWikiContextSection(ctx).length;
+    // Budget that requires truncating the long sections string but not dropping topics
+    const budget = initial - Math.floor(longSections.length / 3);
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Both topics preserved (Tier 3 not triggered)
+    assert.equal(out.detectedTopics.length, 2);
+    // Long section was halved
+    assert.ok(out.detectedTopics[0].sections.length < longSections.length);
+    // Short section untouched
+    assert.equal(out.detectedTopics[1].sections, shortSections);
+  });
+
+  it('Tier 2 boundary: section truncation cuts on \\n, not mid-line', () => {
+    // Carefully constructed: each line ends with \n so half-mark lands inside a line
+    const lines = Array.from({ length: 20 }, (_, i) => `LINE-${i}-MARKER`);
+    const longSections = lines.join('\n'); // No trailing newline; lines separated by \n
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-a', sections: longSections, l2Excerpts: [] },
+      ],
+    };
+
+    const initial = buildTopicWikiContextSection(ctx).length;
+    const budget = initial - Math.floor(longSections.length / 3);
+    const { ctx: out } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    const truncated = out.detectedTopics[0].sections;
+    // Result must be shorter than original (truncation occurred)
+    assert.ok(truncated.length < longSections.length);
+    // Result must not end mid-token: it must end at a complete LINE-N-MARKER token
+    // (i.e., the final character is either nothing or `R`, not part of "LINE-")
+    if (truncated.length > 0) {
+      // Verify no partial line-marker at the end:
+      // every line in truncated should be complete (matches `LINE-\d+-MARKER`)
+      const truncatedLines = truncated.split('\n');
+      for (const line of truncatedLines) {
+        if (line.length === 0) continue;
+        assert.match(line, /^LINE-\d+-MARKER$/, `line "${line}" should be a complete LINE-N-MARKER`);
+      }
+    }
+  });
+
+  it('Tier 3: drops the lowest-scored topic (last element) when tiers 1-2 are not enough', () => {
+    const bigSections = 'X'.repeat(500);
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-high', sections: bigSections, l2Excerpts: [] },
+        { slug: 'topic-mid', sections: bigSections, l2Excerpts: [] },
+        { slug: 'topic-low', sections: bigSections, l2Excerpts: [] },
+      ],
+    };
+
+    // Budget tight enough that even halving doesn't fit all three
+    const budget = 800;
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Highest-scored survives
+    assert.equal(out.detectedTopics[0].slug, 'topic-high');
+    // Lowest-scored dropped
+    const remainingSlugs = out.detectedTopics.map(t => t.slug);
+    assert.ok(!remainingSlugs.includes('topic-low'));
+  });
+
+  it('NEVER drops the highest-scored topic, even with extreme budget pressure', () => {
+    const hugeSections = 'X'.repeat(50000); // Way over any budget
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-high', sections: hugeSections, l2Excerpts: ['big1', 'big2'] },
+        { slug: 'topic-mid', sections: hugeSections, l2Excerpts: ['big3'] },
+        { slug: 'topic-low', sections: hugeSections, l2Excerpts: [] },
+      ],
+    };
+
+    const { ctx: out } = truncateTopicWikiContextToBudget(ctx, 100);
+
+    assert.ok(out.detectedTopics.length >= 1, 'must keep at least one topic');
+    assert.equal(out.detectedTopics[0].slug, 'topic-high');
+  });
+
+  it('MAX_TOPIC_WIKI_CONTEXT_CHARS const is 6000', () => {
+    assert.equal(MAX_TOPIC_WIKI_CONTEXT_CHARS, 6000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Caller-layer slug merge
+// ---------------------------------------------------------------------------
+
+describe('mergeDetectedSlugsIntoActiveList', () => {
+  it('returns undefined when both inputs are empty/undefined', () => {
+    assert.equal(mergeDetectedSlugsIntoActiveList(undefined, undefined), undefined);
+    assert.equal(mergeDetectedSlugsIntoActiveList('', []), undefined);
+  });
+
+  it('appends detected slugs to existing active list', () => {
+    const active = 'pricing-model — active: $149/mo plan\nonboarding-v2 — active: rewrite';
+    const merged = mergeDetectedSlugsIntoActiveList(active, ['new-topic']);
+    assert.ok(merged !== undefined);
+    assert.ok(merged.includes('pricing-model — active'));
+    assert.ok(merged.includes('onboarding-v2 — active'));
+    assert.ok(merged.endsWith('new-topic'));
+  });
+
+  it('skips detected slugs that are already in the active list', () => {
+    const active = 'pricing-model — active: $149/mo plan';
+    const merged = mergeDetectedSlugsIntoActiveList(active, ['pricing-model', 'new-topic']);
+    assert.ok(merged !== undefined);
+    // Should only contain pricing-model once
+    const matches = merged.match(/pricing-model/g);
+    assert.equal(matches?.length, 1);
+    assert.ok(merged.includes('new-topic'));
+  });
+
+  it('returns just the detected slugs when active list is undefined', () => {
+    const merged = mergeDetectedSlugsIntoActiveList(undefined, ['foo', 'bar']);
+    assert.equal(merged, 'foo\nbar');
+  });
+
+  it('integration: detected slugs end up in the rendered prompt active-slugs block', async () => {
+    // Build a bundle with topicWikiContext and call extractMeetingIntelligence;
+    // capture the prompt to verify the active-slugs block contains detected slugs.
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return '{}';
+    };
+
+    const bundle: MeetingContextBundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nstate',
+        l2Excerpts: [],
+      },
+    ]);
+
+    await extractMeetingIntelligence('transcript', mockLLM, {
+      context: bundle,
+      activeTopicSlugs: 'existing-topic — active: in flight',
+    });
+
+    // Both should appear under "Prefer these existing topic slugs"
+    assert.ok(capturedPrompt.includes('Prefer these existing topic slugs'));
+    assert.ok(capturedPrompt.includes('existing-topic — active'));
+    assert.ok(capturedPrompt.includes('pricing-model'));
   });
 });

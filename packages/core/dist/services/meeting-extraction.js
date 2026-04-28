@@ -291,6 +291,161 @@ function buildContextSection(context) {
 ${sections.join('\n\n')}`;
 }
 // ---------------------------------------------------------------------------
+// Topic Wiki Context Section
+// ---------------------------------------------------------------------------
+/**
+ * Char budget for the rendered topic-wiki context block.
+ *
+ * Mirrors the `MAX_EXCLUSION_CHARS = 4000` precedent. Roughly 1.5K tokens.
+ * When a rendered `topicWikiContext` exceeds this, `truncateTopicWikiContextToBudget`
+ * applies a tiered truncation that preserves the highest-scored topic.
+ */
+export const MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000;
+/**
+ * Render the topic-wiki context section for the extraction prompt.
+ *
+ * Each detected topic produces a `### [[<slug>]]` block with its pre-rendered
+ * sections (Task 5: emit verbatim — already rendered by `renderForExtractionContext`),
+ * followed by a "Prior captured items" bullet list of L2 excerpts when present.
+ * The "Prior captured items" line is omitted entirely when `l2Excerpts` is empty.
+ *
+ * Returns an empty string (no `## Topic Wiki` heading) when:
+ *   - `ctx` is undefined
+ *   - `ctx.detectedTopics` is empty
+ *
+ * The caller (`buildMeetingExtractionPrompt`) inserts the result between
+ * `enhancedContext` and `exclusionList`. The companion delta-only directive,
+ * inserted earlier in the prompt, references this section by name.
+ */
+export function buildTopicWikiContextSection(ctx) {
+    if (!ctx || ctx.detectedTopics.length === 0)
+        return '';
+    const blocks = [];
+    for (const topic of ctx.detectedTopics) {
+        const lines = [`### [[${topic.slug}]]`, '', topic.sections];
+        if (topic.l2Excerpts.length > 0) {
+            lines.push('', 'Prior captured items for this topic:');
+            for (const excerpt of topic.l2Excerpts) {
+                lines.push(`- ${excerpt}`);
+            }
+        }
+        blocks.push(lines.join('\n'));
+    }
+    return `\n\n## Topic Wiki (already known to the reader — DO NOT re-extract)\n\n${blocks.join('\n\n')}`;
+}
+/**
+ * Apply tiered truncation so that `buildTopicWikiContextSection(ctx)` fits in `maxChars`.
+ *
+ * Truncation tiers (applied in sequence until rendered length ≤ `maxChars`):
+ *   1. Drop OLDEST L2 excerpts within each topic, round-robin (preserve newest).
+ *      L2 excerpts are pre-formatted `${date}: ${content}` strings produced by
+ *      Task 5; we treat them as opaque strings ordered newest-first (excerpts[0]
+ *      is newest), so dropping from the END of each excerpt array drops oldest.
+ *   2. Halve the LONGEST topic page `sections` string, slicing on a `\n` boundary
+ *      at-or-before the half-length mark so the output stays parseable.
+ *   3. Drop the LOWEST-SCORED topic (last element of `detectedTopics`).
+ *   4. The HIGHEST-SCORED topic (`detectedTopics[0]`) is never dropped.
+ *
+ * Returns the truncated context plus the rendered char count for telemetry/tests.
+ * Never mutates the input.
+ */
+export function truncateTopicWikiContextToBudget(ctx, maxChars) {
+    // Deep-clone so we never mutate the caller's bundle.
+    let working = {
+        detectedTopics: ctx.detectedTopics.map(t => ({
+            slug: t.slug,
+            sections: t.sections,
+            l2Excerpts: [...t.l2Excerpts],
+        })),
+    };
+    const measure = (c) => buildTopicWikiContextSection(c).length;
+    // Tier 1: drop oldest L2 excerpts round-robin (oldest = end of each array).
+    // Loop while still over budget AND any topic has excerpts to drop.
+    while (measure(working) > maxChars) {
+        let dropped = false;
+        for (const topic of working.detectedTopics) {
+            if (topic.l2Excerpts.length > 0) {
+                topic.l2Excerpts.pop();
+                dropped = true;
+                if (measure(working) <= maxChars)
+                    break;
+            }
+        }
+        if (!dropped)
+            break;
+    }
+    // Tier 2: halve the longest sections string on a `\n` boundary.
+    while (measure(working) > maxChars) {
+        let longestIdx = -1;
+        let longestLen = -1;
+        for (let i = 0; i < working.detectedTopics.length; i++) {
+            const len = working.detectedTopics[i].sections.length;
+            if (len > longestLen) {
+                longestLen = len;
+                longestIdx = i;
+            }
+        }
+        if (longestIdx === -1 || longestLen === 0)
+            break;
+        const original = working.detectedTopics[longestIdx].sections;
+        const halfMark = Math.floor(original.length / 2);
+        // Slice at the last \n at-or-before halfMark so we don't cut mid-line.
+        const lastNewline = original.lastIndexOf('\n', halfMark);
+        const cutAt = lastNewline > 0 ? lastNewline : halfMark;
+        const truncated = original.slice(0, cutAt);
+        if (truncated.length === original.length)
+            break; // No progress possible.
+        working.detectedTopics[longestIdx] = {
+            ...working.detectedTopics[longestIdx],
+            sections: truncated,
+        };
+    }
+    // Tier 3: drop the lowest-scored topic (last element). Never drop the highest-scored.
+    while (measure(working) > maxChars && working.detectedTopics.length > 1) {
+        working = {
+            detectedTopics: working.detectedTopics.slice(0, -1),
+        };
+    }
+    return { ctx: working, totalChars: measure(working) };
+}
+/**
+ * Merge wiki-detected topic slugs into a pre-rendered active-topics slug list.
+ *
+ * The active-topics list (built via `renderActiveTopicsAsSlugList`) is one entry
+ * per line in the form `<slug> — <status>: <summary>`. Wiki-detected slugs only
+ * have a slug (no status, no summary), so they're appended as bare-slug lines.
+ * Slugs already present in the active list are skipped — first-line-token compare,
+ * trim-tolerant, prevents duplicate entries.
+ *
+ * Returns the merged string, or `undefined` when both inputs are empty (so the
+ * "Prefer these existing topic slugs" block continues to be omitted entirely).
+ */
+export function mergeDetectedSlugsIntoActiveList(activeTopicSlugs, detectedSlugs) {
+    const baseLines = activeTopicSlugs && activeTopicSlugs.length > 0
+        ? activeTopicSlugs.split('\n')
+        : [];
+    const existing = new Set();
+    for (const line of baseLines) {
+        const slug = line.trim().split(/\s+/)[0];
+        if (slug.length > 0)
+            existing.add(slug);
+    }
+    const additions = [];
+    if (detectedSlugs) {
+        for (const slug of detectedSlugs) {
+            if (slug.length === 0)
+                continue;
+            if (existing.has(slug))
+                continue;
+            existing.add(slug);
+            additions.push(slug);
+        }
+    }
+    if (baseLines.length === 0 && additions.length === 0)
+        return undefined;
+    return [...baseLines, ...additions].join('\n');
+}
+// ---------------------------------------------------------------------------
 // Exclusion List Building
 // ---------------------------------------------------------------------------
 /** Token budget for exclusion list (~1000 tokens ≈ 4000 chars). */
@@ -439,6 +594,53 @@ ${speakingRatio !== undefined ? `Speaking ratio: ${(speakingRatio * 100).toFixed
         : '';
     // Build enhanced context section if context bundle is provided
     const enhancedContext = context ? buildContextSection(context) : '';
+    // Build topic-wiki context section (delta-only extraction support).
+    // Truncates to MAX_TOPIC_WIKI_CONTEXT_CHARS via the testable budget helper.
+    // The companion delta directive (below) appears earlier in the prompt — it
+    // references this section by name, so the two must move together.
+    const rawWikiCtx = context?.topicWikiContext;
+    const hasWikiContext = !!rawWikiCtx && rawWikiCtx.detectedTopics.length > 0;
+    const wikiContextSection = hasWikiContext
+        ? buildTopicWikiContextSection(truncateTopicWikiContextToBudget(rawWikiCtx, MAX_TOPIC_WIKI_CONTEXT_CHARS).ctx)
+        : '';
+    // Delta-only directive — only injected when topic-wiki context is present.
+    // Without context, the directive's references to "the Topic Wiki section below"
+    // would dangle and confuse the LLM. Verbatim text below is load-bearing —
+    // tests assert literal substrings to catch drift (R3 mitigation).
+    const deltaDirective = hasWikiContext
+        ? `
+## Delta-only extraction
+The "Topic Wiki" section below shows what is ALREADY captured for the topics
+this meeting touches. Treat all of it as known by the reader.
+
+Extract a learning, decision, action, or open question ONLY when it is a DELTA:
+- NEW decision: a choice made in this meeting that the wiki doesn't already record
+- CHANGED plan: this meeting reverses, narrows, or rescopes something the wiki shows
+- NEW risk or gap raised
+- NEW open question raised (not already in the wiki's Open questions)
+- CONFIRMATION ONLY when the wiki shows a prior plan as uncertain and this meeting
+  pins it down (record as a new decision; cite what was uncertain)
+
+Do NOT emit:
+- Restatements of decisions or learnings already in the wiki
+- Confirmations of plans the wiki already shows as committed
+- Status updates on items the wiki already records
+- The same fact described differently than the wiki's existing phrasing
+
+When in doubt, INCLUDE. A duplicate gets caught downstream by dedup; a
+missed real delta is invisible and lost.
+
+### Example: CONFIRMATION-of-uncertainty (the load-bearing escape hatch)
+
+Wiki shows under Open questions: "Pricing tier — $99 or $149?"
+Meeting transcript: "We're going with $149 — Sara confirmed the margin model works."
+→ Emit as a NEW decision: "Pricing tier set to $149 (resolves prior open question
+  on margin model)." Cite the wiki's uncertainty.
+
+Counter-example: Wiki shows under Current state: "Pricing tier locked at $149."
+Meeting transcript: "Yeah, pricing is $149." → Do NOT emit. Already committed.
+`
+        : '';
     // Build exclusion list for deduplication (from prior items and recent memory)
     const exclusionList = buildExclusionListSection(context, priorItems);
     return `You are analyzing a meeting transcript to extract structured intelligence.
@@ -477,7 +679,7 @@ when the meeting is substantively about something not covered. Matching an
 existing slug keeps knowledge compounding instead of sprawling:
 
 ${activeTopicSlugs}
-` : ''}
+` : ''}${deltaDirective}
 
 ## What IS an action item (INCLUDE these — high confidence ≥0.8):
 ✓ "John to send API docs to Sarah by Friday" — specific owner, deliverable, deadline
@@ -565,7 +767,7 @@ Rules:
 - Topics: format as lowercase-hyphenated slugs (e.g. 'email-templates', 'q2-planning', 'onboarding-v2'). 3–6 topics max. Exclude generic words: meeting, discussion, update, call, sync, review, followup, follow-up, next-steps.
 - Include confidence (0-1) for EVERY decision and learning
 - Before finalizing, review your list: remove any decisions that are status updates or meeting logistics, remove any learnings that are personal facts or common knowledge, remove duplicates with different wording
-${enhancedContext}${exclusionList}
+${enhancedContext}${wikiContextSection}${exclusionList}
 
 Transcript:
 ${transcript}`;
@@ -944,6 +1146,12 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
         };
     }
     const mode = options?.mode ?? 'normal';
+    // Merge detected topic-wiki slugs into the active-slugs string so the
+    // existing "Prefer these existing topic slugs" prompt block sees both.
+    // The contract at `buildMeetingExtractionPrompt` (lines 596–602) is that
+    // the builder receives a pre-rendered string — keep this merge at the
+    // caller layer, NOT inside the builder.
+    const mergedActiveTopicSlugs = mergeDetectedSlugsIntoActiveList(options?.activeTopicSlugs, options?.context?.topicWikiContext?.detectedTopics.map(t => t.slug));
     // Select prompt and limits based on mode
     let prompt;
     let limits;
@@ -955,13 +1163,13 @@ export async function extractMeetingIntelligence(transcript, callLLM, options) {
             break;
         case 'thorough':
             // Thorough mode: full prompt with higher limits
-            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName, options?.activeTopicSlugs);
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName, mergedActiveTopicSlugs);
             limits = THOROUGH_LIMITS;
             break;
         case 'normal':
         default:
             // Normal mode: full prompt with standard limits
-            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName, options?.activeTopicSlugs);
+            prompt = buildMeetingExtractionPrompt(transcript, options?.attendees, options?.ownerSlug, options?.context, options?.priorItems, options?.ownerName, mergedActiveTopicSlugs);
             limits = CATEGORY_LIMITS;
             break;
     }
