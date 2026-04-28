@@ -1,0 +1,306 @@
+{
+  "name": "wiki-leaning-meeting-extraction",
+  "branchName": "worktree-wiki-leaning-extraction",
+  "goal": "Make meeting extraction lean on the topic-wiki: inject existing topic-page content + topic-tagged L2 items so the LLM emits only deltas. Reshape recap into Core + Could include. Tag L2 entries with topics for precise per-topic queryability. Fix two latent bugs (L2 parser/writer mismatch, backend missing activeTopicSlugs) as side effects.",
+  "userStories": [
+    {
+      "id": "task-1-l2-writer-topics",
+      "title": "Add topics to L2 writer + MeetingMetadata",
+      "description": "Extend MeetingMetadata with topics: string[], populate from frontmatter, write **Topics**: bullet alongside Date/Source in appendToMemoryFile. Add optional topics?: string[] to MemoryEntry/MemoryResult. Files: packages/core/src/integrations/staged-items.ts, packages/core/src/models/memory.ts.",
+      "acceptanceCriteria": [
+        "MeetingMetadata includes topics: string[] (defaults to empty array)",
+        "appendToMemoryFile emits **Topics**: ... line when topics non-empty; omits cleanly when empty",
+        "Per-item entry header stays ## <Title>",
+        "MemoryEntry and MemoryResult extended with topics?: string[]",
+        "Unit test: writer produces correct entry shape with topics",
+        "Unit test: writer produces correct entry shape without topics (no **Topics**: line)"
+      ],
+      "warnings": [],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/integrations/staged-items.ts",
+        "packages/core/src/models/memory.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2-memory-parser-topics",
+      "title": "Memory parser update + getMemoryItemsForTopics helper",
+      "description": "Extend parseMemorySections to single-pass classifier matching all three header shapes (## Title, ### YYYY-MM-DD: Title, ### Title) with anchored regex. Parse metadata bullets into structured fields. Add getMemoryItemsForTopics helper. File: packages/core/src/services/memory.ts.",
+      "acceptanceCriteria": [
+        "All three header shapes parse correctly in mixed file",
+        "Header inside fenced code block does NOT match (anchored regex, code-fence aware)",
+        "Trailing whitespace tolerance on header line; empty title rejected",
+        "Metadata bullets parsed: topics?: string[], source?: string, date?: string",
+        "MemorySection extended with topics?: string[], source?: string",
+        "getMemoryItemsForTopics returns entries matching any requested slug, capped per-slug, recency-filtered (default 5/slug, 90 days)",
+        "Unit tests cover: three header shapes, code-fence negative case, empty topics filtering, recency window",
+        "Sanity check: parser run against worktree's actual .arete/memory/items/learnings.md and decisions.md produces sensible output (manual)"
+      ],
+      "warnings": [
+        "Pre-Mortem R1: Three-shape header match could double-match or mis-classify on real data. Use single-pass classifier with priority — each line classifies into exactly one shape; no fall-through. Sanity-check against actual learnings.md/decisions.md before merge."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "dev/work/plans/wiki-leaning-meeting-extraction/pre-mortem.md",
+        "packages/core/src/services/memory.ts",
+        "packages/core/src/models/memory.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-1-l2-writer-topics"]
+    },
+    {
+      "id": "task-3-topic-detection-service",
+      "title": "New topic-detection.ts service (lexical pre-pass)",
+      "description": "Pure function detectTopicsLexical(transcript, identities, options?). Tokenize transcript with normalizeForJaccard, score each identity (canonical+aliases) against transcript token set. Stop-token list for generic words. File: packages/core/src/services/topic-detection.ts (new).",
+      "acceptanceCriteria": [
+        "Stop-token list as top-level const STOP_TOKENS = new Set([planning, review, sync, discussion, meeting, update, status, team, weekly, daily])",
+        "Threshold: ≥2 distinct multi-char non-stop slug tokens AND topic-token-coverage ≥ 0.5",
+        "Slug must hit on at least one non-stop token to score",
+        "Cap at 3 candidate slugs at rollout (Decision #6)",
+        "Sort by score desc; ties broken by last_refreshed desc",
+        "Pure function (no I/O); fully unit-testable",
+        "Unit tests: threshold cases (≥2 non-stop hits passes, single hit rejected)",
+        "Unit test: recency tiebreaker on equal scores",
+        "Unit test: stop-token rejection (weekly-sync slug NOT matching generic-status transcript)",
+        "Unit test: coincidence rejection (q2-planning NOT matching every transcript with planning)"
+      ],
+      "warnings": [
+        "Pre-Mortem R2: False positives silently suppress real deltas. Stop-tokens + ≥2 non-stop slug tokens + ≥0.5 coverage are the precision levers."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/utils/similarity.ts",
+        "packages/core/src/services/topic-memory.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4-render-extraction-context",
+      "title": "renderForExtractionContext helper on TopicPage model",
+      "description": "Pure helper that concatenates Current state + Scope and behavior (truncated 1000 chars) + Open questions + Known gaps + last 3 Change log entries. Mirrors selectSectionsForBudget style. File: packages/core/src/models/topic-page.ts.",
+      "acceptanceCriteria": [
+        "Renders the four sections in stable order with clear separators",
+        "Scope and behavior truncated at 1000 chars when over",
+        "Last 3 Change log entries appended (configurable via opts.changeLogEntries)",
+        "Pure function; no I/O",
+        "Unit tests: full page rendering, missing-section handling, scope truncation, change-log limit"
+      ],
+      "warnings": [],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/models/topic-page.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5-meeting-context-enrichment",
+      "title": "meeting-context.ts topicWikiContext enrichment + callsite sweep",
+      "description": "Add topicWikiContext to MeetingContextBundle. Add topicMemory: TopicMemoryService to MeetingContextDeps. After related-context step, add Step 7 that runs detection, renders sections, fetches L2 items per topic. Sweep all callsites and mock factories. File: packages/core/src/services/meeting-context.ts.",
+      "acceptanceCriteria": [
+        "MeetingContextBundle.topicWikiContext populated when topics detected; undefined when none",
+        "MeetingContextDeps.topicMemory required",
+        "createServices() factory wires topicMemory if not already present",
+        "All callsite + factory mock updates committed (grep -r MeetingContextDeps and buildMeetingContext is clean)",
+        "Backward compat: existing tests pass with stub returning empty identities",
+        "Unit test: bundle has topicWikiContext.detectedTopics populated for meeting with known topic",
+        "Unit test: bundle has no topicWikiContext when transcript matches no topics"
+      ],
+      "warnings": [
+        "Pre-Mortem R5: Sweep all callsites and mock factories. grep for MeetingContextDeps and buildMeetingContext across packages/core/, packages/cli/, packages/apps/backend/, packages/core/test/. Update test factories to provide a topicMemory mock. Tests not exercising wiki injection use a stub returning empty identities."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/services/meeting-context.ts",
+        "packages/core/src/factory.ts",
+        "packages/core/src/services/topic-memory.ts",
+        "packages/core/test/factories",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-2-memory-parser-topics", "task-3-topic-detection-service", "task-4-render-extraction-context"]
+    },
+    {
+      "id": "task-6-extraction-prompt-wiki-context",
+      "title": "buildTopicWikiContextSection + delta directive + char budget guard",
+      "description": "Add wiki context section renderer. Wire into buildMeetingExtractionPrompt. Insert delta-only directive (full text in plan §Thread B) with When in doubt INCLUDE tiebreaker and one-shot CONFIRMATION-of-uncertainty example. Add MAX_TOPIC_WIKI_CONTEXT_CHARS=6000 with truncation order. File: packages/core/src/services/meeting-extraction.ts.",
+      "acceptanceCriteria": [
+        "buildTopicWikiContextSection renders wiki context as specified in plan §Thread B",
+        "Delta-only directive in prompt with all 5 DELTA rules + 4 do-NOT-emit rules",
+        "When in doubt, INCLUDE tiebreaker present verbatim",
+        "One-shot CONFIRMATION example (pricing $99/$149) present verbatim",
+        "MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000 enforced",
+        "Truncation order: drop oldest L2 excerpts first; if still over, halve longest section; if still over, drop lowest-scored topic. Highest-scored topic never dropped",
+        "Pass activeTopicSlugs derived from topicWikiContext.detectedTopics[].slug to existing slug-bias system",
+        "Unit tests: prompt rendering with wiki context, prompt-char measurement, truncation behavior at each tier, 'when in doubt INCLUDE' string presence, CONFIRMATION example presence"
+      ],
+      "warnings": [
+        "Pre-Mortem R3: LLM over-suppression is highest-impact, invisible failure mode. The 'When in doubt, INCLUDE' tiebreaker + one-shot CONFIRMATION-of-uncertainty example are load-bearing — verify both appear verbatim in the assembled prompt.",
+        "Pre-Mortem R4: Token budget overflow. Implement truncation order exactly; instrument prompt-char totals."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "dev/work/plans/wiki-leaning-meeting-extraction/pre-mortem.md",
+        "packages/core/src/services/meeting-extraction.ts",
+        "packages/core/src/services/meeting-context.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-5-meeting-context-enrichment"]
+    },
+    {
+      "id": "task-7-core-could-include-schema",
+      "title": "core/could_include schema + parser + frontmatter sanitizer",
+      "description": "Extend extraction JSON schema with core: string and could_include: string[]. Update parseMeetingExtractionResponse to parse both, validate could_include (trim, ≤200 chars, hard-cap 8), apply frontmatter-injection sanitizer rejecting line-start ---. Keep summary for backward compat. File: packages/core/src/services/meeting-extraction.ts.",
+      "acceptanceCriteria": [
+        "JSON schema includes core (description: 'Free-form prose. Lead with most actionable, decided, or changed thing. Do not restate wiki content. No bullet caps')",
+        "JSON schema includes could_include (description with priority + 8-cap + headline-format guidance)",
+        "Parser hard-caps could_include at 8 entries (drops excess)",
+        "Parser trims items, rejects empty, rejects >200 char items",
+        "Sanitizer rejects raw --- in core and any could_include[] item — strips line, logs warning, does NOT fail extraction",
+        "summary parsing preserved (backward compat)",
+        "MeetingIntelligence extended with core?: string, could_include?: string[]",
+        "Unit tests: sanitizer (raw --- rejected with warning), 8-cap enforcement, trim/length validation, summary fallback when core absent"
+      ],
+      "warnings": [
+        "Pre-Mortem R7: LLM-generated strings flowing into staged sections of YAML-frontmattered meeting files must reject raw ---. Same sanitizer pattern in topic-page writes per topic-wiki-memory learnings (2026-04-23)."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/services/meeting-extraction.ts",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-6-extraction-prompt-wiki-context"]
+    },
+    {
+      "id": "task-8-staged-headers-formatters",
+      "title": "STAGED_HEADERS + formatStagedSections + formatFilteredStagedSections",
+      "description": "Add 'core' and 'could include' to STAGED_HEADERS alongside existing 'summary' (DO NOT remove summary). Update formatters to render ## Core (with summary fallback) and ## Could include (omitted if empty). Files: packages/core/src/services/meeting-apply.ts, packages/core/src/services/meeting-processing.ts, packages/core/src/services/meeting-extraction.ts (formatStagedSections).",
+      "acceptanceCriteria": [
+        "STAGED_HEADERS contains summary, core, could include (case as existing convention)",
+        "formatStagedSections emits ## Core (using core ?? summary) followed by ## Could include (only if list non-empty)",
+        "formatFilteredStagedSections accepts new params core and couldInclude; renders identically",
+        "## Could include block fully omitted when list empty (no empty header line)",
+        "Existing ## Summary blocks still parse without truncation in historical files",
+        "Unit tests: render with both fields, render with only core, render with summary fallback, render with empty could_include (block omitted)",
+        "Manual grep: grep -r '## Summary' packages/apps/ packages/cli/test/golden/ reviewed for downstream assumptions"
+      ],
+      "warnings": [
+        "Pre-Mortem R6: Per integrations LEARNINGS, parseStagedSections stops at any ## non-staged header — removing summary would silently truncate historical meeting files on re-parse. Grep ## Summary across packages/apps/ and packages/cli/test/golden/ before merging."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/core/src/services/meeting-apply.ts",
+        "packages/core/src/services/meeting-processing.ts",
+        "packages/core/src/services/meeting-extraction.ts",
+        "packages/core/src/integrations/LEARNINGS.md",
+        ".pi/expertise/core/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-7-core-could-include-schema"]
+    },
+    {
+      "id": "task-9-cli-dry-run-topics",
+      "title": "CLI --dry-run-topics flag",
+      "description": "Add --dry-run-topics flag to arete meeting extract. Runs detectTopicsLexical, prints detected topics with scores + matching tokens, skips actual extraction. Used for empirical tuning. File: packages/cli/src/commands/meeting.ts.",
+      "acceptanceCriteria": [
+        "--dry-run-topics flag accepted on arete meeting extract",
+        "When set: runs topic detection only, prints results, exits without writing extraction artifacts",
+        "Output includes per-detected-slug: score, matching tokens (separated into stop and non-stop), last_refreshed date",
+        "Works with --json for machine-readable output",
+        "CLI smoke test: invocation with sample transcript prints expected structure, exits cleanly"
+      ],
+      "warnings": [
+        "Pre-Mortem R2: This flag is the empirical-tuning lever. Output must include enough detail to debug false positives."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/cli/src/commands/meeting.ts",
+        "packages/core/src/services/topic-detection.ts",
+        ".pi/expertise/cli/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-3-topic-detection-service"]
+    },
+    {
+      "id": "task-10-callsite-plumbing",
+      "title": "Call-site plumbing — CLI + backend (incl. activeTopicSlugs fix)",
+      "description": "CLI meeting.ts:981 and backend agent.ts:220: thread intelligence.core ?? intelligence.summary and intelligence.could_include to formatFilteredStagedSections. Backend: ALSO pass activeTopicSlugs (latent gap fixed).",
+      "acceptanceCriteria": [
+        "CLI extract command threads core + could_include through to formatter",
+        "Backend agent.ts threads same fields through to formatter",
+        "Backend agent.ts passes activeTopicSlugs to extraction (matches CLI behavior)",
+        "Existing CLI golden tests pass or are deliberately updated with rationale",
+        "Backend integration tests pass or are updated with rationale"
+      ],
+      "warnings": [
+        "Pre-Mortem R9: Backend activeTopicSlugs addition is a behavior change for the web path. Check fixtures that assume current (slug-bias-disabled) extraction output; update or note as expected drift."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "packages/cli/src/commands/meeting.ts",
+        "packages/apps/backend/src/services/agent.ts",
+        ".pi/expertise/cli/PROFILE.md",
+        ".pi/expertise/backend/PROFILE.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-8-staged-headers-formatters"]
+    },
+    {
+      "id": "task-11-ab-validation-merge-gate",
+      "title": "5-meeting A/B validation (merge gate)",
+      "description": "Run extraction on 5 historical meetings with diverse topic coverage in two modes: Control (current main) vs Treatment (this branch). Compare item counts, save to ab-results.md (uncommitted). This task is the final pre-merge sign-off.",
+      "acceptanceCriteria": [
+        "5 historical meetings selected with diverse topic coverage (mix of fresh-topic and wiki-resident-topic meetings)",
+        "Both runs executed; results saved to dev/work/plans/wiki-leaning-meeting-extraction/ab-results.md",
+        "Acceptance: Treatment ≤ Control in item counts on most meetings (deltas only is the goal)",
+        "No meeting where Treatment loses an item that Control captured AND that the wiki didn't already record (manual inspection of borderlines, max 1-2 expected)",
+        "No fabricated items in Treatment that Control didn't surface",
+        "ab-results.md documents the comparison and verdict",
+        "This task is the final pre-merge sign-off"
+      ],
+      "warnings": [
+        "Pre-Mortem R3: LLM over-suppression is invisible. This A/B is the only signal we have before merge."
+      ],
+      "contextFiles": [
+        "dev/work/plans/wiki-leaning-meeting-extraction/plan.md",
+        "dev/work/plans/wiki-leaning-meeting-extraction/pre-mortem.md"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0,
+      "dependsOn": ["task-10-callsite-plumbing"]
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-28T03:25:46Z",
+    "totalTasks": 11,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
