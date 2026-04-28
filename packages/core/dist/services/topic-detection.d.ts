@@ -43,11 +43,52 @@ export interface DetectTopicsOptions {
     maxResults?: number;
 }
 /**
+ * Detailed detection result. Used by the `--dry-run-topics` debug path
+ * (Task 9) — operators need the score + which tokens triggered the
+ * match to tune `STOP_TOKENS` and threshold constants.
+ *
+ * `score` is the coverage ratio (0..1).
+ * `nonStopMatches` are the multi-char non-stop slug tokens that
+ * actually appeared in the transcript token set.
+ * `stopMatches` are the multi-char stop slug tokens that appeared in
+ * the transcript token set — they did NOT contribute to the score, but
+ * are surfaced so operators can see why a generic-looking slug
+ * triggered.
+ * `lastRefreshed` is YYYY-MM-DD when present on the source identity,
+ * otherwise undefined.
+ */
+export interface DetectedTopic {
+    slug: string;
+    score: number;
+    nonStopMatches: string[];
+    stopMatches: string[];
+    lastRefreshed: string | undefined;
+}
+/**
+ * Detect which existing topics a transcript likely discusses, with
+ * full detail per detected topic (score + matched tokens +
+ * lastRefreshed). Used by `arete meeting extract --dry-run-topics`
+ * (Task 9) for empirical tuning of `STOP_TOKENS` and the threshold
+ * constants.
+ *
+ * Pure & synchronous. Same sort order and `maxResults` cap as
+ * {@link detectTopicsLexical}; only the return shape differs.
+ *
+ * For each identity the BEST surface (canonical or any alias) wins —
+ * `nonStopMatches` / `stopMatches` come from the winning surface, so
+ * what you see is the surface the score was computed against.
+ */
+export declare function detectTopicsLexicalDetailed(transcript: string, identities: TopicIdentity[], options?: DetectTopicsOptions): DetectedTopic[];
+/**
  * Detect which existing topics a transcript likely discusses.
  *
  * Pure & synchronous. Returns canonical slugs (not aliases) sorted by
  * score desc, with `lastRefreshed` desc as the recency tiebreaker and
  * canonical-asc as the final deterministic fallback.
+ *
+ * Thin wrapper over {@link detectTopicsLexicalDetailed} that drops the
+ * detail. Use the detailed variant when you need scores or matched
+ * tokens (e.g., debug output).
  */
 export declare function detectTopicsLexical(transcript: string, identities: TopicIdentity[], options?: DetectTopicsOptions): string[];
 //# sourceMappingURL=topic-detection.d.ts.map

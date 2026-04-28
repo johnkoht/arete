@@ -37,7 +37,7 @@ export { renderTopicPage, parseTopicPage, getTopicHeadline, selectSectionsForBud
 export { getActiveTopics, renderActiveTopicsAsWikilinks, renderActiveTopicsAsSlugList, maxLastRefreshed, } from './models/active-topics.js';
 export { loadMemorySummary } from './services/memory-summary-loader.js';
 export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, } from './services/topic-memory.js';
-export { detectTopicsLexical, STOP_TOKENS } from './services/topic-detection.js';
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
 export { acquireSeedLock, readSeedLock, breakSeedLock, SeedLockHeldError, } from './services/seed-lock.js';

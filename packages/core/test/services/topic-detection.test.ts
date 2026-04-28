@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   detectTopicsLexical,
+  detectTopicsLexicalDetailed,
   STOP_TOKENS,
 } from '../../src/services/topic-detection.js';
 import type { TopicIdentity } from '../../src/services/topic-memory.js';
@@ -226,5 +227,108 @@ describe('detectTopicsLexical', () => {
     ]) {
       assert.ok(STOP_TOKENS.has(t), `STOP_TOKENS should contain "${t}"`);
     }
+  });
+});
+
+describe('detectTopicsLexicalDetailed', () => {
+  it('returns slug + score + matched tokens + lastRefreshed', () => {
+    const identities: TopicIdentity[] = [
+      {
+        canonical: 'cover-whale-templates',
+        aliases: [],
+        lastRefreshed: '2026-04-15',
+      },
+    ];
+    const transcript =
+      'We talked about cover whale templates and how the new ones look great.';
+    const detected = detectTopicsLexicalDetailed(transcript, identities);
+    assert.equal(detected.length, 1);
+    assert.equal(detected[0].slug, 'cover-whale-templates');
+    assert.equal(detected[0].score, 1); // 3/3 non-stop hits
+    assert.deepStrictEqual(
+      detected[0].nonStopMatches.slice().sort(),
+      ['cover', 'templates', 'whale'],
+    );
+    assert.deepStrictEqual(detected[0].stopMatches, []);
+    assert.equal(detected[0].lastRefreshed, '2026-04-15');
+  });
+
+  it('separates stop matches from non-stop matches', () => {
+    // q2-planning has 1 non-stop ('q2') and 1 stop ('planning'). Won't
+    // pass threshold (only 1 non-stop), so it does NOT appear in
+    // results. But this test exercises the partition logic via a slug
+    // with both non-stop and stop matches that DOES pass.
+    const identities: TopicIdentity[] = [
+      // 'sprint-planning-cadence': non-stop ['sprint', 'cadence'], stop ['planning']
+      {
+        canonical: 'sprint-planning-cadence',
+        aliases: [],
+        lastRefreshed: '2026-04-01',
+      },
+    ];
+    const transcript =
+      'Talked about our sprint cadence and weekly planning rhythm.';
+    const detected = detectTopicsLexicalDetailed(transcript, identities);
+    assert.equal(detected.length, 1);
+    assert.equal(detected[0].slug, 'sprint-planning-cadence');
+    // 2 non-stop hits (sprint, cadence), coverage 2/2 = 1.0
+    assert.equal(detected[0].score, 1);
+    assert.deepStrictEqual(
+      detected[0].nonStopMatches.slice().sort(),
+      ['cadence', 'sprint'],
+    );
+    assert.deepStrictEqual(detected[0].stopMatches, ['planning']);
+  });
+
+  it('omits sub-threshold identities (does not return failed scores)', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'cover-whale-templates', aliases: [] },
+    ];
+    // Only 'cover' present — single non-stop hit.
+    const transcript = 'We need to cover the basics again.';
+    const detected = detectTopicsLexicalDetailed(transcript, identities);
+    assert.deepStrictEqual(detected, []);
+  });
+
+  it('lastRefreshed is undefined when not on the identity', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'cover-whale-templates', aliases: [] },
+    ];
+    const transcript = 'cover whale templates discussion';
+    const detected = detectTopicsLexicalDetailed(transcript, identities);
+    assert.equal(detected.length, 1);
+    assert.equal(detected[0].lastRefreshed, undefined);
+  });
+
+  it('detectTopicsLexical and detectTopicsLexicalDetailed agree on slug order', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'alpha-beta', aliases: [], lastRefreshed: '2026-02-01' },
+      { canonical: 'gamma-delta', aliases: [], lastRefreshed: '2026-04-01' },
+    ];
+    const transcript = 'alpha beta gamma delta everywhere';
+    const slugs = detectTopicsLexical(transcript, identities);
+    const detailed = detectTopicsLexicalDetailed(transcript, identities);
+    assert.deepStrictEqual(slugs, detailed.map((d) => d.slug));
+    // gamma-delta has newer lastRefreshed → first on tie
+    assert.deepStrictEqual(slugs, ['gamma-delta', 'alpha-beta']);
+  });
+
+  it('respects maxResults cap', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'alpha-beta', aliases: [] },
+      { canonical: 'gamma-delta', aliases: [] },
+      { canonical: 'epsilon-zeta', aliases: [] },
+      { canonical: 'eta-theta', aliases: [] },
+    ];
+    const transcript = 'alpha beta gamma delta epsilon zeta eta theta';
+    const detailed = detectTopicsLexicalDetailed(transcript, identities, { maxResults: 2 });
+    assert.equal(detailed.length, 2);
+  });
+
+  it('returns empty array on empty transcript', () => {
+    const identities: TopicIdentity[] = [
+      { canonical: 'cover-whale-templates', aliases: [] },
+    ];
+    assert.deepStrictEqual(detectTopicsLexicalDetailed('', identities), []);
   });
 });

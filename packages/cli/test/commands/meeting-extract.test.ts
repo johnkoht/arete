@@ -285,6 +285,152 @@ describe('meeting extract command - integration with mocked AI', () => {
   });
 });
 
+describe('--dry-run-topics flag', () => {
+  let tmpDir: string;
+  let meetingFile: string;
+
+  // Transcript that mentions cover whale templates → should match the
+  // seeded topic page below.
+  const TOPIC_MEETING_CONTENT = `---
+title: Cover Whale Templates Sync
+date: "2026-04-26"
+attendees:
+  - Alice Smith
+---
+
+# Cover Whale Templates Sync
+
+## Transcript
+
+**Alice Smith**: We talked about cover whale templates and how the new ones look great.
+`;
+
+  // Transcript with no topic-relevant content. Should produce empty
+  // results.
+  const NEUTRAL_MEETING_CONTENT = `---
+title: Neutral Meeting
+date: "2026-04-26"
+---
+
+# Neutral Meeting
+
+## Transcript
+
+**Alice Smith**: Just a quick general check-in. Nothing specific.
+`;
+
+  // Minimal valid topic-page fixture for `cover-whale-templates`.
+  // Required frontmatter (per parseTopicPage): topic_slug, status,
+  // first_seen, last_refreshed, sources_integrated.
+  const TOPIC_PAGE_CONTENT = `---
+topic_slug: cover-whale-templates
+status: active
+first_seen: "2026-04-01"
+last_refreshed: "2026-04-15"
+sources_integrated: []
+---
+
+# Cover Whale Templates
+
+## Current state
+
+Staging-validated.
+`;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('arete-test-dry-run-topics');
+    runCli(['install', tmpDir, '--skip-qmd', '--json', '--ide', 'cursor']);
+    mkdirSync(join(tmpDir, 'resources', 'meetings'), { recursive: true });
+    mkdirSync(join(tmpDir, '.arete', 'memory', 'topics'), { recursive: true });
+    meetingFile = join(tmpDir, 'resources', 'meetings', '2026-04-26_cwt-sync.md');
+    writeFileSync(meetingFile, TOPIC_MEETING_CONTENT, 'utf8');
+    writeFileSync(
+      join(tmpDir, '.arete', 'memory', 'topics', 'cover-whale-templates.md'),
+      TOPIC_PAGE_CONTENT,
+      'utf8',
+    );
+  });
+
+  afterEach(() => {
+    cleanupTmpDir(tmpDir);
+  });
+
+  it('detects topic + prints expected text-mode shape; exits 0', () => {
+    // No AI config — proves the flag does NOT require an AI provider
+    // (it skips extraction entirely).
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-04-26_cwt-sync.md', '--dry-run-topics'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0, `expected exit 0, got ${code}; stdout=${stdout}`);
+    assert.ok(stdout.includes('Detected topics:'), `expected header; got: ${stdout}`);
+    assert.ok(stdout.includes('cover-whale-templates'), `expected slug; got: ${stdout}`);
+    assert.ok(stdout.includes('Score:'), `expected Score line; got: ${stdout}`);
+    assert.ok(stdout.includes('Non-stop matches:'), `expected Non-stop matches line; got: ${stdout}`);
+    assert.ok(stdout.includes('Stop matches:'), `expected Stop matches line; got: ${stdout}`);
+    assert.ok(stdout.includes('Last refreshed:'), `expected Last refreshed line; got: ${stdout}`);
+    assert.ok(stdout.includes('2026-04-15'), `expected last_refreshed date; got: ${stdout}`);
+  });
+
+  it('--json produces machine-readable shape', () => {
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-04-26_cwt-sync.md', '--dry-run-topics', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as {
+      detectedTopics: Array<{
+        slug: string;
+        score: number;
+        nonStopMatches: string[];
+        stopMatches: string[];
+        lastRefreshed: string | null;
+      }>;
+    };
+    assert.ok(Array.isArray(result.detectedTopics));
+    assert.equal(result.detectedTopics.length, 1);
+    assert.equal(result.detectedTopics[0].slug, 'cover-whale-templates');
+    assert.equal(typeof result.detectedTopics[0].score, 'number');
+    assert.ok(result.detectedTopics[0].score > 0);
+    assert.ok(Array.isArray(result.detectedTopics[0].nonStopMatches));
+    assert.ok(result.detectedTopics[0].nonStopMatches.length >= 2);
+    assert.deepStrictEqual(result.detectedTopics[0].stopMatches, []);
+    assert.equal(result.detectedTopics[0].lastRefreshed, '2026-04-15');
+  });
+
+  it('empty result when transcript matches no topics', () => {
+    // Replace the meeting with neutral content.
+    writeFileSync(meetingFile, NEUTRAL_MEETING_CONTENT, 'utf8');
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-04-26_cwt-sync.md', '--dry-run-topics', '--json'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0);
+    const result = JSON.parse(stdout) as { detectedTopics: unknown[] };
+    assert.deepStrictEqual(result.detectedTopics, []);
+  });
+
+  it('text mode prints "(none)" when no topics match', () => {
+    writeFileSync(meetingFile, NEUTRAL_MEETING_CONTENT, 'utf8');
+    const { stdout, code } = runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-04-26_cwt-sync.md', '--dry-run-topics'],
+      { cwd: tmpDir },
+    );
+    assert.equal(code, 0);
+    assert.ok(stdout.includes('Detected topics: (none)'), `expected (none) marker; got: ${stdout}`);
+  });
+
+  it('does not modify the meeting file (no extraction artifacts written)', () => {
+    const before = readFileSync(meetingFile, 'utf8');
+    runCliRaw(
+      ['meeting', 'extract', 'resources/meetings/2026-04-26_cwt-sync.md', '--dry-run-topics'],
+      { cwd: tmpDir },
+    );
+    const after = readFileSync(meetingFile, 'utf8');
+    assert.equal(after, before, 'meeting file should be unchanged');
+  });
+});
+
 describe('--clear-approved flag', () => {
   let tmpDir: string;
   let meetingFile: string;

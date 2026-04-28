@@ -74,6 +74,11 @@ const DEFAULT_MAX_RESULTS = 3;
  *
  * Pure stop-token surfaces (`weekly-sync` → all tokens stop) score 0:
  * the denominator is 0, coverage is 0, and the hit count is 0 anyway.
+ *
+ * Also returns the matched stop / non-stop tokens for debugging
+ * (`--dry-run-topics`). When the threshold is not met, the matches
+ * arrays are still populated based on the raw transcript hits — the
+ * dry-run path renders them so operators can see WHY a slug failed.
  */
 function scoreSurface(surface, transcriptTokens) {
     const slugTokens = tokenizeSlug(surface);
@@ -83,33 +88,44 @@ function scoreSurface(surface, transcriptTokens) {
     const multiCharTokens = slugTokens.filter((t) => t.length >= MIN_TOKEN_LENGTH);
     // Partition into non-stop vs stop.
     const nonStopTokens = multiCharTokens.filter((t) => !STOP_TOKENS.has(t));
+    const stopTokens = multiCharTokens.filter((t) => STOP_TOKENS.has(t));
+    // Compute hit lists (distinct, transcript-overlapping). These are
+    // returned regardless of whether the threshold passes — the dry-run
+    // debug path needs visibility into why a slug failed too.
+    const distinctNonStop = Array.from(new Set(nonStopTokens));
+    const distinctStop = Array.from(new Set(stopTokens));
+    const nonStopMatches = distinctNonStop.filter((t) => transcriptTokens.has(t));
+    const stopMatches = distinctStop.filter((t) => transcriptTokens.has(t));
     // Pure stop-token surface — cannot score (rejects the "weekly-sync"
     // case in AC K3 explicitly: no non-stop tokens means denominator is
     // 0 and we never reach the threshold).
-    if (nonStopTokens.length === 0)
-        return 0;
-    // Distinct non-stop hits (Set so repeated tokens count once).
-    const distinctNonStop = new Set(nonStopTokens);
-    let hits = 0;
-    for (const t of distinctNonStop) {
-        if (transcriptTokens.has(t))
-            hits++;
+    if (distinctNonStop.length === 0) {
+        return { score: 0, nonStopMatches, stopMatches };
     }
-    if (hits < MIN_NON_STOP_HITS)
-        return 0;
-    const coverage = hits / distinctNonStop.size;
-    if (coverage < MIN_COVERAGE)
-        return 0;
-    return coverage;
+    if (nonStopMatches.length < MIN_NON_STOP_HITS) {
+        return { score: 0, nonStopMatches, stopMatches };
+    }
+    const coverage = nonStopMatches.length / distinctNonStop.length;
+    if (coverage < MIN_COVERAGE) {
+        return { score: 0, nonStopMatches, stopMatches };
+    }
+    return { score: coverage, nonStopMatches, stopMatches };
 }
 /**
- * Detect which existing topics a transcript likely discusses.
+ * Detect which existing topics a transcript likely discusses, with
+ * full detail per detected topic (score + matched tokens +
+ * lastRefreshed). Used by `arete meeting extract --dry-run-topics`
+ * (Task 9) for empirical tuning of `STOP_TOKENS` and the threshold
+ * constants.
  *
- * Pure & synchronous. Returns canonical slugs (not aliases) sorted by
- * score desc, with `lastRefreshed` desc as the recency tiebreaker and
- * canonical-asc as the final deterministic fallback.
+ * Pure & synchronous. Same sort order and `maxResults` cap as
+ * {@link detectTopicsLexical}; only the return shape differs.
+ *
+ * For each identity the BEST surface (canonical or any alias) wins —
+ * `nonStopMatches` / `stopMatches` come from the winning surface, so
+ * what you see is the surface the score was computed against.
  */
-export function detectTopicsLexical(transcript, identities, options) {
+export function detectTopicsLexicalDetailed(transcript, identities, options) {
     const maxResults = options?.maxResults ?? DEFAULT_MAX_RESULTS;
     // Tokenize the transcript once (AC C).
     const transcriptTokens = new Set(normalizeForJaccard(transcript));
@@ -121,16 +137,18 @@ export function detectTopicsLexical(transcript, identities, options) {
     const scored = [];
     for (const identity of identities) {
         const surfaces = [identity.canonical, ...identity.aliases];
-        let bestScore = 0;
+        let best = { score: 0, nonStopMatches: [], stopMatches: [] };
         for (const surface of surfaces) {
             const s = scoreSurface(surface, transcriptTokens);
-            if (s > bestScore)
-                bestScore = s;
+            if (s.score > best.score)
+                best = s;
         }
-        if (bestScore > 0) {
+        if (best.score > 0) {
             scored.push({
-                canonical: identity.canonical,
-                score: bestScore,
+                slug: identity.canonical,
+                score: best.score,
+                nonStopMatches: best.nonStopMatches,
+                stopMatches: best.stopMatches,
                 lastRefreshed: identity.lastRefreshed,
             });
         }
@@ -145,8 +163,22 @@ export function detectTopicsLexical(transcript, identities, options) {
         if (aDate !== bDate)
             return aDate < bDate ? 1 : -1;
         // Canonical-asc as the final deterministic fallback.
-        return a.canonical < b.canonical ? -1 : a.canonical > b.canonical ? 1 : 0;
+        return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
     });
-    return scored.slice(0, maxResults).map((s) => s.canonical);
+    return scored.slice(0, maxResults);
+}
+/**
+ * Detect which existing topics a transcript likely discusses.
+ *
+ * Pure & synchronous. Returns canonical slugs (not aliases) sorted by
+ * score desc, with `lastRefreshed` desc as the recency tiebreaker and
+ * canonical-asc as the final deterministic fallback.
+ *
+ * Thin wrapper over {@link detectTopicsLexicalDetailed} that drops the
+ * detail. Use the detailed variant when you need scores or matched
+ * tokens (e.g., debug output).
+ */
+export function detectTopicsLexical(transcript, identities, options) {
+    return detectTopicsLexicalDetailed(transcript, identities, options).map((t) => t.slug);
 }
 //# sourceMappingURL=topic-detection.js.map

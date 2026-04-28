@@ -113,8 +113,8 @@ export {
 } from './goal-parser.js';
 
 // Topic detection (lexical pre-pass before extraction)
-export { detectTopicsLexical, STOP_TOKENS } from './topic-detection.js';
-export type { DetectTopicsOptions } from './topic-detection.js';
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './topic-detection.js';
+export type { DetectTopicsOptions, DetectedTopic } from './topic-detection.js';
 
 // Meeting context assembly
 export { buildMeetingContext } from './meeting-context.js';
