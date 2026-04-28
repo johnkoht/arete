@@ -1382,6 +1382,7 @@ export function registerMeetingCommands(program) {
                 intelligence: services.intelligence,
                 entity: services.entity,
                 paths,
+                topicMemory: services.topicMemory,
             }, {
                 skipAgenda: opts.skipAgenda,
                 skipPeople: opts.skipPeople,

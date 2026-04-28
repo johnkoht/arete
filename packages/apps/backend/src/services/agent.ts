@@ -617,6 +617,7 @@ export async function runProcessingSession(
         intelligence: services.intelligence,
         entity: services.entity,
         paths,
+        topicMemory: services.topicMemory,
       });
 
       // Log context stats

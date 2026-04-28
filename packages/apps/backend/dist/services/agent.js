@@ -463,6 +463,7 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
                 intelligence: services.intelligence,
                 entity: services.entity,
                 paths,
+                topicMemory: services.topicMemory,
             });
             // Log context stats
             const attendeeCount = context.attendees.length;

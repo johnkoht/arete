@@ -15,6 +15,10 @@ import { AreaParserService } from './area-parser.js';
 import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import { findMatchingAgenda } from '../integrations/meetings.js';
 import { slugifyPersonName } from './entity.js';
+import { TopicMemoryService } from './topic-memory.js';
+import { detectTopicsLexical } from './topic-detection.js';
+import { renderForExtractionContext } from '../models/topic-page.js';
+import { getMemoryItemsForTopics } from './memory.js';
 /**
  * Parse meeting file frontmatter and body.
  */
@@ -661,7 +665,7 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
     catch {
         // Non-fatal: if task files can't be read, continue without them
     }
-    return {
+    const bundle = {
         meeting,
         agenda,
         agendaMatch,
@@ -672,6 +676,49 @@ export async function buildMeetingContext(meetingPath, deps, options = {}) {
         warnings,
         ...(existingTasks.length > 0 && { existingTasks }),
     };
+    // 7. Topic-wiki context (delta-only extraction support)
+    // Detect topics lexically in the transcript, render the wiki sections for
+    // each detected page, and gather recent topic-tagged L2 memory entries.
+    // Non-fatal: any failure here leaves topicWikiContext undefined.
+    try {
+        const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
+        if (allTopicPages.length > 0) {
+            const identities = TopicMemoryService.toIdentities(allTopicPages);
+            const detectedSlugs = detectTopicsLexical(transcript, identities);
+            if (detectedSlugs.length > 0) {
+                const pageBySlug = new Map();
+                for (const page of allTopicPages) {
+                    if (page.frontmatter.topic_slug) {
+                        pageBySlug.set(page.frontmatter.topic_slug, page);
+                    }
+                }
+                const learningsPath = join(paths.memory, 'items', 'learnings.md');
+                const decisionsPath = join(paths.memory, 'items', 'decisions.md');
+                const detectedTopics = [];
+                for (const slug of detectedSlugs) {
+                    const page = pageBySlug.get(slug);
+                    if (!page)
+                        continue;
+                    const sections = renderForExtractionContext(page);
+                    const items = await getMemoryItemsForTopics([learningsPath, decisionsPath], [slug], { limit: 5, sinceDays: 90 });
+                    const l2Excerpts = items.map((item) => {
+                        const date = item.date && item.date.length > 0 ? item.date : '?';
+                        const content = item.content ?? '';
+                        return `${date}: ${content}`.trim();
+                    });
+                    detectedTopics.push({ slug, sections, l2Excerpts });
+                }
+                if (detectedTopics.length > 0) {
+                    bundle.topicWikiContext = { detectedTopics };
+                }
+            }
+        }
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        warnings.push(`Topic-wiki context failed: ${msg}`);
+    }
+    return bundle;
 }
 // ---------------------------------------------------------------------------
 // Exports for testing (internal functions exposed for unit tests)

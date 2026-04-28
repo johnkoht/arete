@@ -15,6 +15,7 @@ import type { IntelligenceService } from './intelligence.js';
 import type { EntityService } from './entity.js';
 import { AreaParserService } from './area-parser.js';
 import type { AgendaItem } from '../utils/agenda.js';
+import { TopicMemoryService } from './topic-memory.js';
 export type { AgendaItem } from '../utils/agenda.js';
 /**
  * Resolved attendee with full person context.
@@ -95,6 +96,24 @@ export interface MeetingContextBundle {
      * Cap at 20 items to avoid bloating the prompt.
      */
     existingTasks?: string[];
+    /**
+     * Topic-wiki context for delta-only extraction.
+     *
+     * For each topic detected lexically in the transcript, this carries the
+     * pre-rendered wiki sections plus recent topic-tagged L2 memory entries.
+     * The extraction LLM uses this so it emits only deltas (new decisions,
+     * changed scope, raised gaps) rather than re-extracting captured content.
+     *
+     * Undefined when no topics are detected. The detected slugs are also
+     * the natural input for `activeTopicSlugs` in the extraction prompt.
+     */
+    topicWikiContext?: {
+        detectedTopics: Array<{
+            slug: string;
+            sections: string;
+            l2Excerpts: string[];
+        }>;
+    };
 }
 /**
  * Options for building meeting context.
@@ -114,6 +133,14 @@ export interface MeetingContextDeps {
     entity: EntityService;
     paths: WorkspacePaths;
     areaParser?: AreaParserService;
+    /**
+     * Topic memory service — required for the topic-wiki context step.
+     *
+     * `createServices()` already wires this. Tests that don't exercise the
+     * topic-wiki path should provide a stub whose `listAll(paths)` returns
+     * `{ topics: [], errors: [] }` (causing the wiki step to no-op).
+     */
+    topicMemory: TopicMemoryService;
 }
 export interface ParsedMeetingFrontmatter {
     title: string;
