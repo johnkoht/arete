@@ -1185,6 +1185,74 @@ describe('formatFilteredStagedSections', () => {
     assert.ok(!result.includes('## Staged Decisions'));
     assert.ok(!result.includes('## Staged Learnings'));
   });
+
+  // -------------------------------------------------------------------------
+  // Task 8: core / could_include rendering
+  // -------------------------------------------------------------------------
+
+  it('emits ## Core when core provided and drops ## Summary', () => {
+    const items: FilteredItem[] = [
+      { id: 'ai_001', text: 'Action', type: 'action', confidence: 0.9 },
+    ];
+
+    const result = formatFilteredStagedSections(items, 'Legacy summary', 'Wiki-aware lead.');
+
+    assert.ok(result.includes('## Core'));
+    assert.ok(result.includes('Wiki-aware lead.'));
+    assert.ok(!result.includes('## Summary'));
+    assert.ok(!result.includes('Legacy summary'));
+  });
+
+  it('falls back to ## Summary when core is empty/whitespace (backward compat)', () => {
+    const items: FilteredItem[] = [];
+
+    const result = formatFilteredStagedSections(items, 'Backward summary', '   ');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(result.includes('Backward summary'));
+    assert.ok(!result.includes('## Core'));
+  });
+
+  it('falls back to ## Summary when core is undefined (backward compat)', () => {
+    const items: FilteredItem[] = [];
+
+    const result = formatFilteredStagedSections(items, 'Backward summary');
+
+    assert.ok(result.includes('## Summary'));
+    assert.ok(!result.includes('## Core'));
+  });
+
+  it('emits ## Could include with bullets when list non-empty', () => {
+    const items: FilteredItem[] = [];
+
+    const result = formatFilteredStagedSections(
+      items,
+      'unused',
+      'Lead',
+      ['Risks: Sara flagged churn', 'Pricing: tier may shift'],
+    );
+
+    assert.ok(result.includes('## Could include'));
+    assert.ok(result.includes('- Risks: Sara flagged churn'));
+    assert.ok(result.includes('- Pricing: tier may shift'));
+  });
+
+  it('omits ## Could include block when list is empty', () => {
+    const items: FilteredItem[] = [];
+
+    const result = formatFilteredStagedSections(items, 'unused', 'Lead', []);
+
+    assert.ok(result.includes('## Core'));
+    assert.ok(!result.includes('## Could include'));
+  });
+
+  it('omits ## Could include block when list is undefined', () => {
+    const items: FilteredItem[] = [];
+
+    const result = formatFilteredStagedSections(items, 'unused', 'Lead');
+
+    assert.ok(!result.includes('## Could include'));
+  });
 });
 
 // ---------------------------------------------------------------------------

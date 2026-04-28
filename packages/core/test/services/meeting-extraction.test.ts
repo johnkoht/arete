@@ -1488,6 +1488,189 @@ describe('formatStagedSections - section inclusion', () => {
 });
 
 // ---------------------------------------------------------------------------
+// formatStagedSections - core / could_include (Task 8)
+// ---------------------------------------------------------------------------
+
+describe('formatStagedSections - core / could_include (Task 8)', () => {
+  function baseIntelligence(): MeetingExtractionResult['intelligence'] {
+    return {
+      summary: 'Legacy summary text',
+      actionItems: [],
+      nextSteps: [],
+      decisions: [],
+      learnings: [],
+    };
+  }
+
+  it('emits ## Core when both core and summary are present (drops summary)', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'New wiki-aware lead.',
+        summary: 'Legacy summary text',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'), 'must emit ## Core');
+    assert.ok(output.includes('New wiki-aware lead.'), 'must include core text');
+    assert.ok(!output.includes('## Summary'), 'must NOT emit ## Summary when core present');
+    assert.ok(!output.includes('Legacy summary text'), 'must NOT include summary text when core wins');
+  });
+
+  it('emits ## Core only when only core is present', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        summary: '',
+        core: 'Just the core.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'));
+    assert.ok(output.includes('Just the core.'));
+    assert.ok(!output.includes('## Summary'));
+  });
+
+  it('emits ## Summary only when only summary is present (backward compat)', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        summary: 'Backward-compatible summary.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+    assert.ok(output.includes('Backward-compatible summary.'));
+    assert.ok(!output.includes('## Core'));
+  });
+
+  it('treats whitespace-only core as absent and falls back to summary', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: '   \n  ',
+        summary: 'Real summary.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+    assert.ok(output.includes('Real summary.'));
+    assert.ok(!output.includes('## Core'));
+  });
+
+  it('emits ## Could include with bullets when list non-empty', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+        could_include: ['Risks: Sara flagged churn', 'Pricing: tier may shift'],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Could include'));
+    assert.ok(output.includes('- Risks: Sara flagged churn'));
+    assert.ok(output.includes('- Pricing: tier may shift'));
+    // Sanity: Could-include block sits between Core and any Staged sections
+    const coreIdx = output.indexOf('## Core');
+    const couldIdx = output.indexOf('## Could include');
+    assert.ok(coreIdx >= 0 && couldIdx > coreIdx, 'Could-include must follow Core');
+  });
+
+  it('omits ## Could include block entirely when list is empty', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+        could_include: [],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'));
+    assert.ok(!output.includes('## Could include'));
+  });
+
+  it('omits ## Could include block when list is undefined', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(!output.includes('## Could include'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateMeetingContent - dual-anchor (Summary or Core)
+// ---------------------------------------------------------------------------
+
+describe('updateMeetingContent - dual-anchor lead heading', () => {
+  it('replaces staged sections when anchor is ## Core (not ## Summary)', () => {
+    const original = `---
+title: Wiki-aware Meeting
+---
+
+# Notes
+
+## Core
+Old core lead.
+
+## Staged Action Items
+- ai_001: Old action
+
+## Transcript
+Speaker 1: hi`;
+
+    const staged = `## Core
+New core lead.
+
+## Staged Action Items
+- ai_001: Replaced action
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('# Notes'), 'preserves content before lead heading');
+    assert.ok(result.includes('## Transcript'), 'preserves content after staged');
+    assert.ok(result.includes('New core lead.'));
+    assert.ok(!result.includes('Old core lead.'));
+    assert.ok(!result.includes('Old action'));
+    // Lead heading should appear exactly once (no append-duplicates)
+    const matches = result.match(/^##\s+Core\s*$/gm) ?? [];
+    assert.equal(matches.length, 1, 'Core heading appears exactly once');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // updateMeetingContent - basic operations
 // ---------------------------------------------------------------------------
 

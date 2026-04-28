@@ -305,7 +305,10 @@ export declare function extractMeetingIntelligence(transcript: string, callLLM: 
 export declare function formatStagedSections(result: MeetingExtractionResult): string;
 /**
  * Replace or insert staged sections in meeting content.
- * Preserves content before ## Summary and after staged sections.
+ * Preserves content before the lead-prose heading (## Summary or ## Core)
+ * and content after staged sections. Accepts either heading as the anchor
+ * so files written under the new wiki-aware shape are correctly rewritten
+ * on subsequent passes (Task 8 / Decision #7).
  *
  * @param originalContent - The original meeting file content
  * @param stagedSections - The formatted staged sections to insert

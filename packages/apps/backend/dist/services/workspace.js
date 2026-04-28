@@ -63,8 +63,9 @@ function extractSummary(fm, body) {
     if (fm['summary'] && typeof fm['summary'] === 'string') {
         return fm['summary'];
     }
-    // Try ## Summary section in body
-    const match = body.match(/^##\s+Summary\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
+    // Try lead-prose section in body. Accept either ## Summary (legacy) or
+    // ## Core (wiki-aware shape, Task 8); both are permanent per Decision #7.
+    const match = body.match(/^##\s+(?:Summary|Core)\s*\n([\s\S]*?)(?=\n##\s|\n---|$)/im);
     if (match) {
         const summaryText = match[1].trim();
         // Skip placeholder text

@@ -156,6 +156,34 @@ Hello world.
     const result = clearStagedSections('');
     assert.equal(result, '');
   });
+
+  it('removes ## Core and ## Could include staged sections (Task 8)', () => {
+    const content = `# Meeting Notes
+
+## Core
+Wiki-aware lead prose.
+
+## Could include
+- Risks: Sara flagged churn
+- Pricing: tier may shift
+
+## Staged Action Items
+- ai_001: Do something
+
+## Transcript
+Speaker 1: Hello
+`;
+
+    const result = clearStagedSections(content);
+
+    assert.ok(!result.includes('## Core'), 'Should not contain ## Core');
+    assert.ok(!result.includes('Wiki-aware lead'), 'Should drop core body');
+    assert.ok(!result.includes('## Could include'), 'Should not contain ## Could include');
+    assert.ok(!result.includes('Sara flagged churn'), 'Should drop could-include body');
+    assert.ok(!result.includes('## Staged Action Items'));
+    assert.ok(result.includes('# Meeting Notes'));
+    assert.ok(result.includes('## Transcript'));
+  });
 });
 
 // ---------------------------------------------------------------------------

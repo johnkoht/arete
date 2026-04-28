@@ -1306,10 +1306,34 @@ function formatActionItem(item, index) {
 export function formatStagedSections(result) {
     const { intelligence } = result;
     const lines = [];
-    // Summary section (always included)
-    lines.push('## Summary');
-    lines.push(intelligence.summary);
-    lines.push('');
+    // Lead-prose section: Core takes precedence over Summary when present.
+    // Strategy (Task 8, Decision #7): emit ## Core when LLM provided non-empty
+    // `core`; otherwise emit ## Summary for backward compat (existing files,
+    // existing parsers, existing test fixtures all assume Summary). When both
+    // are present, prefer Core (the LLM signaled wiki-aware extraction);
+    // `summary` is dropped to avoid double-writing the same lead.
+    const core = intelligence.core?.trim();
+    if (core) {
+        lines.push('## Core');
+        lines.push(core);
+        lines.push('');
+    }
+    else {
+        // Existing behavior: emit ## Summary even when summary is the empty
+        // string (preserves backward compat with historical fixtures and the
+        // pre-Task-8 "always includes Summary" assertion).
+        lines.push('## Summary');
+        lines.push(intelligence.summary);
+        lines.push('');
+    }
+    // Could include (only if non-empty list provided)
+    if (intelligence.could_include && intelligence.could_include.length > 0) {
+        lines.push('## Could include');
+        for (const headline of intelligence.could_include) {
+            lines.push(`- ${headline}`);
+        }
+        lines.push('');
+    }
     // Staged Action Items (only if non-empty)
     if (intelligence.actionItems.length > 0) {
         lines.push('## Staged Action Items');
@@ -1344,28 +1368,35 @@ export function formatStagedSections(result) {
  */
 const STAGED_HEADERS = new Set([
     'Summary',
+    'Core',
+    'Could include',
     'Staged Action Items',
     'Staged Decisions',
     'Staged Learnings',
 ]);
 /**
  * Replace or insert staged sections in meeting content.
- * Preserves content before ## Summary and after staged sections.
+ * Preserves content before the lead-prose heading (## Summary or ## Core)
+ * and content after staged sections. Accepts either heading as the anchor
+ * so files written under the new wiki-aware shape are correctly rewritten
+ * on subsequent passes (Task 8 / Decision #7).
  *
  * @param originalContent - The original meeting file content
  * @param stagedSections - The formatted staged sections to insert
  * @returns Updated content with staged sections replaced/inserted
  */
 export function updateMeetingContent(originalContent, stagedSections) {
-    // Find where ## Summary starts (or where to insert)
-    const summaryMatch = originalContent.match(/^## Summary\s*$/m);
-    if (!summaryMatch) {
-        // No existing summary — append staged sections at end
+    // Find where the lead-prose heading starts. Accept either ## Summary
+    // (legacy / backward-compat) or ## Core (new shape). Pick whichever
+    // appears first in the file.
+    const leadMatch = originalContent.match(/^##\s+(?:Summary|Core)\s*$/m);
+    if (!leadMatch) {
+        // No existing lead heading — append staged sections at end
         return originalContent.trimEnd() + '\n\n' + stagedSections;
     }
-    // Find the position of ## Summary
-    const summaryIndex = originalContent.indexOf(summaryMatch[0]);
-    // Get content before ## Summary
+    // Find the position of the lead heading
+    const summaryIndex = originalContent.indexOf(leadMatch[0]);
+    // Get content before the lead heading
     const beforeSummary = originalContent.substring(0, summaryIndex).trimEnd();
     // Find content after staged sections (look for ## that isn't a staged header)
     const afterSummaryContent = originalContent.substring(summaryIndex);

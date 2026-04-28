@@ -118,6 +118,8 @@ function serializeFrontmatter(data: Record<string, unknown>, body: string): stri
  */
 const STAGED_HEADERS = new Set([
   'summary',
+  'core',
+  'could include',
   'staged action items',
   'staged decisions',
   'staged learnings',
