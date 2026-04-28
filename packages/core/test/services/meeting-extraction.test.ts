@@ -16,6 +16,7 @@ import {
   MAX_TOPIC_WIKI_CONTEXT_CHARS,
   isTrivialDecision,
   isTrivialLearning,
+  stripYamlDocSeparator,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   CATEGORY_LIMITS,
@@ -4364,5 +4365,165 @@ describe('mergeDetectedSlugsIntoActiveList', () => {
     assert.ok(capturedPrompt.includes('Prefer these existing topic slugs'));
     assert.ok(capturedPrompt.includes('existing-topic — active'));
     assert.ok(capturedPrompt.includes('pricing-model'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// core/could_include + frontmatter sanitizer (Task 7)
+// ---------------------------------------------------------------------------
+
+describe('core/could_include + frontmatter sanitizer', () => {
+  // Helper: silence console.warn during sanitizer tests so test output is clean.
+  const withSilencedWarn = <T>(fn: () => T): T => {
+    const orig = console.warn;
+    console.warn = () => {};
+    try {
+      return fn();
+    } finally {
+      console.warn = orig;
+    }
+  };
+
+  it('schema description for core mentions actionable, decided, or changed', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    // Find the `"core":` schema line
+    const coreLine = prompt.split('\n').find((l) => l.includes('"core":'));
+    assert.ok(coreLine, 'expected "core" line in JSON schema');
+    const lower = coreLine.toLowerCase();
+    assert.ok(
+      lower.includes('actionable') || lower.includes('decided') || lower.includes('changed'),
+      `core schema description should mention actionable/decided/changed; got: ${coreLine}`,
+    );
+  });
+
+  it('schema description for could_include mentions 8 and headline or self-contained', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    const ciLine = prompt.split('\n').find((l) => l.includes('"could_include":'));
+    assert.ok(ciLine, 'expected "could_include" line in JSON schema');
+    assert.ok(ciLine.includes('8'), `could_include schema should mention "8"; got: ${ciLine}`);
+    const lower = ciLine.toLowerCase();
+    assert.ok(
+      lower.includes('headline') || lower.includes('self-contained'),
+      `could_include schema should mention headline/self-contained; got: ${ciLine}`,
+    );
+  });
+
+  it('parser parses populated core field on response', () => {
+    const response = JSON.stringify({
+      summary: 'fallback summary',
+      core: 'Decided to ship the new pricing model on Friday after Sara confirmed legal sign-off.',
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(
+      result.intelligence.core,
+      'Decided to ship the new pricing model on Friday after Sara confirmed legal sign-off.',
+    );
+    // backward compat: summary still present
+    assert.equal(result.intelligence.summary, 'fallback summary');
+  });
+
+  it('parser hard-caps could_include at 8 (12 in → 8 out)', () => {
+    const entries: string[] = [];
+    for (let i = 1; i <= 12; i += 1) entries.push(`Headline ${i}: side thread number ${i}`);
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: entries,
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.equal(result.intelligence.could_include!.length, 8);
+    // Order preserved — first 8 retained, last 4 dropped
+    assert.equal(result.intelligence.could_include![0], 'Headline 1: side thread number 1');
+    assert.equal(result.intelligence.could_include![7], 'Headline 8: side thread number 8');
+  });
+
+  it('parser trims whitespace and rejects empty after trim', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: ['  spaced headline  ', '   ', '', 'real headline'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, ['spaced headline', 'real headline']);
+  });
+
+  it('parser rejects could_include items > 200 chars', () => {
+    const longEntry = 'x'.repeat(201);
+    const okEntry = 'normal headline';
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: [longEntry, okEntry],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, [okEntry]);
+  });
+
+  it('sanitizer strips raw --- from core (response with "a\\n---\\nb" → core becomes "a\\nb")', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      core: 'a\n---\nb',
+    });
+    const result = withSilencedWarn(() => parseMeetingExtractionResponse(response));
+    assert.equal(result.intelligence.core, 'a\nb');
+  });
+
+  it('sanitizer strips raw --- from could_include items', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: ['safe headline', 'before\n---\nafter', 'plain'],
+    });
+    const result = withSilencedWarn(() => parseMeetingExtractionResponse(response));
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, [
+      'safe headline',
+      'before\nafter',
+      'plain',
+    ]);
+  });
+
+  it('summary-only response still parses (backward compat)', () => {
+    const response = JSON.stringify({ summary: 'just a summary, no core or could_include' });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.summary, 'just a summary, no core or could_include');
+    assert.equal(result.intelligence.core, undefined);
+    assert.equal(result.intelligence.could_include, undefined);
+  });
+
+  it('both summary and core in response → both fields populated', () => {
+    const response = JSON.stringify({
+      summary: 'two-sentence summary',
+      core: 'lead prose',
+      could_include: ['Risks: Sara flagged churn assumption'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.summary, 'two-sentence summary');
+    assert.equal(result.intelligence.core, 'lead prose');
+    assert.deepEqual(result.intelligence.could_include, [
+      'Risks: Sara flagged churn assumption',
+    ]);
+  });
+
+  it('stripYamlDocSeparator helper: detects line-start --- and reports stripped count', () => {
+    const result1 = stripYamlDocSeparator('a\n---\nb');
+    assert.equal(result1.sanitized, 'a\nb'); // separator line removed entirely; surviving lines re-joined
+    assert.equal(result1.stripped, 1);
+
+    const result2 = stripYamlDocSeparator('no separators here');
+    assert.equal(result2.sanitized, 'no separators here');
+    assert.equal(result2.stripped, 0);
+
+    // Multiple separators
+    const result3 = stripYamlDocSeparator('---\nfoo\n---\nbar\n---');
+    assert.equal(result3.stripped, 3);
+
+    // Indented `---` is NOT treated as a separator (regex anchors to line start)
+    const result4 = stripYamlDocSeparator('  ---  ');
+    assert.equal(result4.stripped, 0);
+    assert.equal(result4.sanitized, '  ---  ');
+
+    // `---` with trailing whitespace IS stripped
+    const result5 = stripYamlDocSeparator('a\n---  \nb');
+    assert.equal(result5.stripped, 1);
   });
 });

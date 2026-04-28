@@ -58,6 +58,19 @@ export type MeetingIntelligence = {
     learningConfidences?: (number | undefined)[];
     /** Slugified topic keywords (e.g. 'email-templates', 'q2-planning'). 3–6 items. */
     topics?: string[];
+    /**
+     * Free-form prose lead — most actionable / decided / changed thing surfaced
+     * by the LLM. Preferred over `summary` when present (callers in Tasks 8/10).
+     * Sanitized of raw `---` lines before assignment to prevent YAML doc-separator
+     * injection in downstream frontmattered files (R7 mitigation).
+     */
+    core?: string;
+    /**
+     * Up to 8 informative one-line headlines for side threads worth knowing
+     * about. Ordered by importance. Each headline is self-contained. Sanitized
+     * of raw `---` lines per entry (R7 mitigation).
+     */
+    could_include?: string[];
 };
 /** Validation warning for rejected items. */
 export type ValidationWarning = {
@@ -78,6 +91,27 @@ export type MeetingExtractionResult = {
     validationWarnings: ValidationWarning[];
     /** All items parsed from LLM response before validation filtering (for debugging). */
     rawItems: RawExtractedItem[];
+};
+/**
+ * Strip line-start `---` separators that would corrupt downstream frontmatter
+ * parsing if these LLM-generated strings get written into a YAML-frontmattered
+ * file (e.g., a meeting markdown's staged section). Pure helper; safe to call
+ * on any string.
+ *
+ * Returns the sanitized string and the count of stripped lines (callers may
+ * log a warning when count > 0). Lines matching `^---\s*$` are removed
+ * entirely (the line and its trailing newline).
+ *
+ * Pre-mortem R7 mitigation. See also `parseIntegrateResponse` in
+ * `topic-memory.ts:475`, which DROPS the entire field instead — we strip
+ * here because rejecting `core`/`could_include[]` outright would cause the
+ * extraction to silently lose lead-prose content; the LLM is the author and
+ * a noisy doc-separator is more often a formatting accident than a malicious
+ * payload.
+ */
+export declare function stripYamlDocSeparator(s: string): {
+    sanitized: string;
+    stripped: number;
 };
 /** Category limits: max items per category (keep first N in LLM response order). */
 export declare const CATEGORY_LIMITS: {

@@ -20,6 +20,36 @@
  */
 import { calculateSpeakingRatio } from './meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
+/**
+ * Strip line-start `---` separators that would corrupt downstream frontmatter
+ * parsing if these LLM-generated strings get written into a YAML-frontmattered
+ * file (e.g., a meeting markdown's staged section). Pure helper; safe to call
+ * on any string.
+ *
+ * Returns the sanitized string and the count of stripped lines (callers may
+ * log a warning when count > 0). Lines matching `^---\s*$` are removed
+ * entirely (the line and its trailing newline).
+ *
+ * Pre-mortem R7 mitigation. See also `parseIntegrateResponse` in
+ * `topic-memory.ts:475`, which DROPS the entire field instead — we strip
+ * here because rejecting `core`/`could_include[]` outright would cause the
+ * extraction to silently lose lead-prose content; the LLM is the author and
+ * a noisy doc-separator is more often a formatting accident than a malicious
+ * payload.
+ */
+export function stripYamlDocSeparator(s) {
+    const lines = s.split('\n');
+    let stripped = 0;
+    const kept = [];
+    for (const line of lines) {
+        if (/^---\s*$/.test(line)) {
+            stripped += 1;
+            continue;
+        }
+        kept.push(line);
+    }
+    return { sanitized: kept.join('\n'), stripped };
+}
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -657,6 +687,8 @@ ${attendeeContext}${ownerContext}
 JSON schema:
 {
   "summary": "string — 2-3 sentence summary. If workspace owner participated, include their perspective.",
+  "core": "Free-form prose. Lead with the most actionable, decided, or changed thing. Do not restate wiki content. No bullet caps; use whatever shape fits the substance.",
+  "could_include": ["Up to 8 informative one-line headlines for side threads worth knowing about. Order by importance — most worth surfacing first; drop the least important when over budget. Each headline must be self-contained (e.g., 'Risks: Sara flagged churn assumption' — not just 'Risks')."],
   "action_items": [
     {
       "owner": "string — full name of person who owns this action",
@@ -867,6 +899,54 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
     const rawItems = [];
     // Parse summary
     const summary = typeof raw.summary === 'string' ? raw.summary.trim() : '';
+    // Parse `core` — optional free-form prose. Sanitize against raw `---` (R7).
+    let core;
+    if (typeof raw.core === 'string') {
+        const trimmedCore = raw.core.trim();
+        if (trimmedCore) {
+            const { sanitized, stripped } = stripYamlDocSeparator(trimmedCore);
+            if (stripped > 0) {
+                // eslint-disable-next-line no-console
+                console.warn(`[meeting-extraction] stripped ${stripped} YAML doc separator line(s) from core`);
+            }
+            // Re-trim — sanitizer may leave leading/trailing newlines after a
+            // separator line was removed.
+            const finalCore = sanitized.replace(/^\n+|\n+$/g, '');
+            if (finalCore)
+                core = finalCore;
+        }
+    }
+    // Parse `could_include` — optional list of headlines. Hard-cap at 8.
+    // Trim each entry, reject empty-after-trim, reject > 200 chars. Sanitize
+    // each entry against raw `---` (R7).
+    const COULD_INCLUDE_MAX_COUNT = 8;
+    const COULD_INCLUDE_MAX_CHARS = 200;
+    let couldInclude;
+    if (Array.isArray(raw.could_include)) {
+        const out = [];
+        for (const entry of raw.could_include) {
+            if (out.length >= COULD_INCLUDE_MAX_COUNT)
+                break; // hard-cap; drop excess
+            if (typeof entry !== 'string')
+                continue;
+            const trimmed = entry.trim();
+            if (!trimmed)
+                continue; // reject empty after trim
+            if (trimmed.length > COULD_INCLUDE_MAX_CHARS)
+                continue; // reject overly long
+            const { sanitized, stripped } = stripYamlDocSeparator(trimmed);
+            if (stripped > 0) {
+                // eslint-disable-next-line no-console
+                console.warn(`[meeting-extraction] stripped ${stripped} YAML doc separator line(s) from could_include`);
+            }
+            const finalEntry = sanitized.replace(/^\n+|\n+$/g, '').trim();
+            if (!finalEntry)
+                continue;
+            out.push(finalEntry);
+        }
+        if (out.length > 0)
+            couldInclude = out;
+    }
     // Parse action items with validation
     if (Array.isArray(raw.action_items)) {
         for (const item of raw.action_items) {
@@ -1115,6 +1195,8 @@ export function parseMeetingExtractionResponse(response, limits = CATEGORY_LIMIT
             ...(hasDecisionConf && { decisionConfidences: limitedDecisionConfidences }),
             ...(hasLearningConf && { learningConfidences: limitedLearningConfidences }),
             topics,
+            ...(core !== undefined && { core }),
+            ...(couldInclude !== undefined && { could_include: couldInclude }),
         },
         validationWarnings,
         rawItems,
