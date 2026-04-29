@@ -42,6 +42,7 @@ export {
   updateMeetingContent,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
+  TOPIC_BIAS_BLOCK_PROMPT,
 } from './meeting-extraction.js';
 export type {
   MeetingIntelligence,

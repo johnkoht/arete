@@ -15,7 +15,7 @@ export { AIService, parseModelSpec } from './ai.js';
 // Similarity utilities (shared Jaccard computation)
 export { normalizeForJaccard, jaccardSimilarity } from '../utils/similarity.js';
 // Meeting extraction
-export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, LIGHT_LIMITS, THOROUGH_LIMITS, } from './meeting-extraction.js';
+export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingExtractionResponse, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, LIGHT_LIMITS, THOROUGH_LIMITS, TOPIC_BIAS_BLOCK_PROMPT, } from './meeting-extraction.js';
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing

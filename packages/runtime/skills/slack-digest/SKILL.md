@@ -132,6 +132,10 @@ arete search "recent decisions" --scope memory --json
 
 # Existing commitments (for dedup)
 arete commitments list --json
+
+# Active topic slugs — biases per-thread topic extraction in Phase 2c.
+# Same rendering meeting-extraction.ts uses; output shape: {"slugs": [...]}.
+arete topic list --active --slugs --json
 ```
 
 For each resolved participant, gather person context:
@@ -186,6 +190,40 @@ Extract these item types:
 - Cross-conversation duplicates (same topic in multiple channels)
 
 Flag potential dupes: "This looks similar to existing commitment: [existing]. Skip? / Keep both?"
+
+**Per-thread topic slugs** — For each conversation/thread, also propose
+**1–3 topic slugs** describing what the thread is substantively about. These
+flow into the digest's `topics:` frontmatter (Phase 5a, union across approved
+threads) and drive Hook 2 source integration on the receiving topic pages.
+
+Bias the proposals against the active-topic slug list captured in Phase 2a
+(`arete topic list --active --slugs --json`). Render the slug list as bare
+slugs (one per line, e.g. `cover-whale-templates — active: pilot in flight`)
+and include the block below verbatim — the wording is byte-equal to the
+meeting-extraction prompt's bias block (`TOPIC_BIAS_BLOCK_PROMPT` in
+`packages/core/src/services/meeting-extraction.ts`) and a test enforces that
+equality. Edit both surfaces together or the test fails.
+
+<!-- BIAS_BLOCK_START -->
+**Prefer these existing topic slugs when applicable.** Only propose a new slug
+when the meeting is substantively about something not covered. Matching an
+existing slug keeps knowledge compounding instead of sprawling:
+<!-- BIAS_BLOCK_END -->
+
+Per-thread output shape inside the skill's intermediate state:
+
+```ts
+{
+  channel_id: string,
+  participants: string[],
+  topics: string[],  // 1-3 slugs, biased toward the active-slug list above
+  // ...other extracted items
+}
+```
+
+A thread with no clear topic match emits zero slugs (an empty `topics: []`)
+rather than a forced match. Two threads in the same digest may legitimately
+emit the same slug — the union dedups in Phase 5a.
 
 #### 2d. Area Association (Optional)
 
@@ -448,7 +486,11 @@ arete index
 
 #### 5a. Save Digest File
 
-Write to `resources/notes/YYYY-MM-DD-slack-digest.md`:
+Write to `resources/notes/YYYY-MM-DD-slack-digest.md`. The `topics:` frontmatter
+field is the **deduped union of per-thread topic slugs** from Phase 2c, scoped
+to threads the user approved in Phase 4b. Drop unapproved threads' slugs.
+A thread with `topics: []` contributes nothing to the union. Sort the final
+list for stable output:
 
 ```markdown
 ---
@@ -463,6 +505,7 @@ tasks_updated: N
 commitments_resolved: N
 commitments_added: N
 areas: [area-slug1, ...]
+topics: [slug1, slug2, ...]
 ---
 
 # Slack Digest — YYYY-MM-DD
