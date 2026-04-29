@@ -73,6 +73,7 @@ User-visible: new CLI flag `arete meeting extract --dry-run-topics` for empirica
 - Trusting full-file `--test` runs via background bash on large test files (meeting-extraction.test.ts is the canonical offender).
 
 **Start**:
+- **Pick the right success metric *before* writing the AC, especially for prompt work.** This PR's count-based AC ("Treatment ≤ Control on item counts") was a wrong-shaped proxy — wiki-leaning *reshapes* output (core + could_include) more than it *reduces* item counts. The actual value showed up in recap quality and side-thread surfacing, neither of which the AC measured. For future LLM-prompt PRDs: ACs should target *quality of output* and *no real-delta suppression* (manually inspectable), not count drops. Worth re-phrasing Decision-style entries as "Treatment captures every real net-new item AND adds new value via reshape" rather than relying on a count threshold.
 - For tasks with bash-tool-suspect tests, hand the developer the explicit `stdbuf` + `--test-reporter=spec` + `--test-name-pattern` incantation in the prompt.
 - File refactor backlog items eagerly during reviews — captured `refactor-extract-topic-wiki-context-step` for the `buildTopicWikiContext` helper extraction (T5 reviewer suggestion).
 - When a test fails because the ALGORITHM is right but the TEST is wrong (Tier 3 budget, CONFIRMATION quote-style), fix the test — and write the diagnosis in the commit body so the reasoning sticks.
@@ -85,6 +86,8 @@ User-visible: new CLI flag `arete meeting extract --dry-run-topics` for empirica
 - **Refactor backlog**: `dev/work/plans/refactor-extract-topic-wiki-context-step/plan.md` (tiny — extract Step 7 from `meeting-context.ts:978-1025` into a standalone helper for testability and easier swap-in of LLM-based detection).
 - **Backend agent.test.ts pre-existing failures** (3 tests: dedup precedence, boundary 0.5 confidence, auto-approves matching priorItems) — confirmed pre-existing on main `e9bb3361`, NOT introduced by this branch. Worth a separate investigation; orthogonal to wiki-leaning work.
 - **Optional LEARNINGS entry** on CLI/backend extraction parameter parity (T10 reviewer suggestion). Inline comment at `agent.ts:218-227` references CLI:852 mirror; LEARNINGS would make the parity-invariant grep-discoverable. Defer until a third extraction parameter divergence appears.
+- **STOP_TOKENS tunability** (filed at `dev/work/plans/refactor-stop-tokens-tunable-per-workspace/plan.md`, status `idea`). The list is hardcoded; workspace-specific vocabularies will eventually need to override it. Small refactor (~30 LOC + config key) when the need surfaces.
+- **Dual-anchor regex watch.** The `/^##\s+(?:Summary|Core)\s*$/m` pattern lives at 4 production parser sites today (intelligence.ts, workspace.ts, patterns.ts, plus updateMeetingContent's anchor in meeting-extraction.ts). Policy: factor into a shared helper if a 5th appears. Practical signal: in 6 months, grep the pattern; if there are 7 copies, the threshold has been exceeded silently — refactor then.
 
 ## File Anchors
 
