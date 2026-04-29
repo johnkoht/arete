@@ -52,6 +52,10 @@ interface ActionItem {
 /** Full meeting intelligence from core extraction (matches @arete/core MeetingIntelligence) */
 interface MeetingIntelligence {
   summary: string;
+  /** Lead-prose alternative to summary (Task 7/8 wiki-aware extraction). */
+  core?: string;
+  /** Headlines for side-thread items (Task 7/8). */
+  could_include?: string[];
   actionItems: ActionItem[];
   nextSteps: string[];
   decisions: string[];
@@ -87,13 +91,16 @@ function mockActionItem(description: string, opts?: Partial<ActionItem>): Action
 
 /** Create full MeetingIntelligence response for core extraction */
 function mockCoreExtractionResponse(opts?: Partial<MeetingIntelligence>): MeetingIntelligence {
-  return {
+  const base: MeetingIntelligence = {
     summary: opts?.summary ?? 'Meeting summary.',
     actionItems: opts?.actionItems ?? [mockActionItem('Default action item')],
     nextSteps: opts?.nextSteps ?? [],
     decisions: opts?.decisions ?? [],
     learnings: opts?.learnings ?? [],
   };
+  if (opts?.core !== undefined) base.core = opts.core;
+  if (opts?.could_include !== undefined) base.could_include = opts.could_include;
+  return base;
 }
 
 /**
@@ -101,7 +108,7 @@ function mockCoreExtractionResponse(opts?: Partial<MeetingIntelligence>): Meetin
  * The core parser expects snake_case field names from the LLM.
  */
 function toRawLLMJson(intelligence: MeetingIntelligence): object {
-  return {
+  const out: Record<string, unknown> = {
     summary: intelligence.summary,
     action_items: intelligence.actionItems.map((ai) => ({
       owner: ai.owner,
@@ -116,6 +123,11 @@ function toRawLLMJson(intelligence: MeetingIntelligence): object {
     decisions: intelligence.decisions,
     learnings: intelligence.learnings,
   };
+  // Task 10: thread Task 7's wiki-aware lead-prose fields through the LLM
+  // mock so end-to-end tests can verify ## Core / ## Could include rendering.
+  if (intelligence.core !== undefined) out['core'] = intelligence.core;
+  if (intelligence.could_include !== undefined) out['could_include'] = intelligence.could_include;
+  return out;
 }
 
 function makeMockDeps(options: MockDepsOptions = {}): ProcessingDeps & {
@@ -306,6 +318,67 @@ describe('runProcessingSession', () => {
       assert.ok(content.includes('## Staged Action Items'));
       assert.ok(!content.includes('## Staged Decisions'));
       assert.ok(!content.includes('## Staged Learnings'));
+    });
+
+    // Task 10: end-to-end wiring of `core` + `could_include` from extraction
+    // through to the staged sections written into the meeting file. Verifies
+    // backend agent.ts threads both fields to formatFilteredStagedSections
+    // (task-10-callsite-plumbing acceptance criterion C).
+    it('renders ## Core and ## Could include when extraction populates them', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Generic summary fallback.',
+          core: 'We landed on weekly invoicing for the pilot.',
+          could_include: [
+            'Considered monthly invoicing — deferred',
+            'Open question: PO requirements',
+          ],
+          actionItems: [mockActionItem('Draft pilot SOW', { confidence: 0.95 })],
+        }),
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      // Lead-prose: Core takes precedence over Summary when present (Task 8).
+      assert.ok(content.includes('## Core'), 'expected ## Core heading');
+      assert.ok(
+        content.includes('We landed on weekly invoicing for the pilot.'),
+        'expected core lead-prose body',
+      );
+      assert.ok(!content.includes('## Summary'), 'expected no ## Summary when ## Core is present');
+      // Could include: emitted as bullet list when non-empty.
+      assert.ok(content.includes('## Could include'), 'expected ## Could include heading');
+      assert.ok(
+        content.includes('- Considered monthly invoicing — deferred'),
+        'expected first could-include bullet',
+      );
+      assert.ok(
+        content.includes('- Open question: PO requirements'),
+        'expected second could-include bullet',
+      );
+    });
+
+    // Task 10: the formatter's summary fallback path must keep working when
+    // the extraction omits `core` (legacy behavior). Backend keeps emitting
+    // `## Summary` so historical files re-parse cleanly.
+    it('falls back to ## Summary when core is absent', async () => {
+      const jobs = makeMockJobs();
+      const deps = makeMockDeps({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Plain summary text.',
+          // core + could_include intentionally omitted
+        }),
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('## Summary'), 'expected ## Summary fallback');
+      assert.ok(content.includes('Plain summary text.'));
+      assert.ok(!content.includes('## Core'), 'expected no ## Core when omitted');
+      assert.ok(!content.includes('## Could include'), 'expected no ## Could include when omitted');
     });
 
     it('updates frontmatter with status: processed and processed_at timestamp', async () => {

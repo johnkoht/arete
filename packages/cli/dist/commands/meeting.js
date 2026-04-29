@@ -845,8 +845,12 @@ export function registerMeetingCommands(program) {
                     }
                 }
             }
-            // Format body sections from filtered items (IDs in body match IDs in metadata)
-            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary);
+            // Format body sections from filtered items (IDs in body match IDs in metadata).
+            // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
+            // extraction) so the formatter emits `## Core` + `## Could include`
+            // when the LLM populates them. Falls back to `## Summary` when absent
+            // (formatter handles the precedence — see meeting-processing.ts:625).
+            stagedSections = formatFilteredStagedSections(processed.filteredItems, extractionResult.intelligence.summary, extractionResult.intelligence.core, extractionResult.intelligence.could_include);
             if (!dryRun) {
                 // Clone frontmatter before mutating (pre-mortem mitigation: caching/mutation)
                 const fm = { ...frontmatter };

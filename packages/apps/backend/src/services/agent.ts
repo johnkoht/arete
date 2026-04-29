@@ -36,6 +36,8 @@ import {
   loadReconciliationContext,
   loadRecentMeetingBatch,
   batchLLMReview,
+  loadMemorySummary,
+  renderActiveTopicsAsSlugList,
   FileStorageAdapter,
   TopicMemoryService,
   type ExtractionMode,
@@ -216,12 +218,31 @@ export async function runProcessingSessionTestable(
         (fm['attendees'] as Array<{ name: string; email: string }>) || []
       ).map((a) => a.name);
 
-      // Call core extraction service with optional context, prior items, and mode
+      // Load active topic slugs (bare, no wikilinks) to bias the extraction
+      // prompt toward reusing existing topics — first line of sprawl defense
+      // (mirrors CLI meeting.ts:852). Latent gap fix (Task 10 / R9): the
+      // backend was silently skipping this bias, producing different
+      // extractions than the CLI for the same transcript. Best-effort:
+      // failure to load degrades to no bias (prior backend behavior).
+      let activeTopicSlugs: string | undefined;
+      if (deps.topicMemory && deps.workspacePaths) {
+        try {
+          const memory = await loadMemorySummary(deps.topicMemory, deps.workspacePaths);
+          const rendered = renderActiveTopicsAsSlugList(memory.activeTopics);
+          activeTopicSlugs = rendered.length > 0 ? rendered : undefined;
+        } catch {
+          activeTopicSlugs = undefined;
+        }
+      }
+
+      // Call core extraction service with optional context, prior items, mode,
+      // and active-topic bias.
       coreResult = await extractMeetingIntelligence(content, callLLMWithErrorCapture, {
         attendees: attendeeNames,
         context: options.context,
         priorItems: options.priorItems,
         mode: options.mode,
+        activeTopicSlugs,
       });
 
       // If LLM failed and we got empty results, propagate the original error
@@ -401,10 +422,16 @@ export async function runProcessingSessionTestable(
       }
     }
 
-    // 10. Format staged sections
+    // 10. Format staged sections.
+    // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
+    // extraction) so the formatter emits `## Core` + `## Could include`
+    // when populated. Falls back to `## Summary` when absent — formatter
+    // handles precedence (meeting-processing.ts:625).
     const stagedSections = formatFilteredStagedSections(
       processed.filteredItems,
       coreResult.intelligence.summary,
+      coreResult.intelligence.core,
+      coreResult.intelligence.could_include,
     );
 
     // 11. Update content with staged sections
