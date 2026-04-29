@@ -83,6 +83,7 @@
   - `--stage` - Write staged sections (Summary, Action Items, Decisions, Learnings) to meeting file with full metadata
   - `--clear-approved` - Clear approved sections before re-extracting (requires --stage)
   - `--dry-run` - Show what would be written without writing
+  - `--dry-run-topics` - Run topic detection only (lexical pre-pass for wiki-aware extraction); print detected slugs with score + matched tokens + last_refreshed; skip extraction. Used to tune detection thresholds against real meetings.
   - `--skip-qmd` - Skip automatic qmd index update
   - `--importance <level>` - Override importance level (skip, light, normal, important). Controls extraction depth: skip=none, light=summary+2 learnings, normal=standard, important=thorough
   - Requires AI configuration (see `arete credentials set`)
