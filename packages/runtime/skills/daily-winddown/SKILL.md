@@ -470,6 +470,75 @@ PROMPT: |
 
 ---
 
+### Phase 2.4: Surface Could-Include Side Threads (orchestrator)
+
+After meetings stage, scan each meeting file's `## Could include` section for side threads the LLM flagged but didn't promote to action items / decisions / learnings (these are wiki-aware extraction's "worth knowing about, not load-bearing enough to commit" bullets — they default to *informational only*, not staged).
+
+If any meeting has a `## Could include` section with at least one bullet, surface them to the user for *selective* promotion.
+
+#### 2.4.1 Collect items
+
+For each processed meeting file, read the `## Could include` block and extract bullets. Aggregate across meetings into one flat list with a globally numbered prefix (the user replies with numbers, not slugs).
+
+#### 2.4.2 Present to user
+
+Format as a single numbered list, grouped by meeting for readability:
+
+```
+Side threads worth flagging from today's meetings (default: skip all):
+
+[2026-04-28-anthony-john-weekly]
+  1. Risks: Sara flagged churn assumption on Q3 retention model
+  2. Authority limits: restructured to adjuster-exposure level
+
+[2026-04-28-email-templates-weekly]
+  3. POP automated email fix: hardcoded PDF needs a PR
+  4. Rippling won't track customer account assignments
+
+[2026-04-23-glance-comms-team-weekly]
+  5. Tim's bandwidth flagged as a concern for upcoming weeks
+  6. Default Attachments (PLAT-10291) may be ready for testing
+
+Reply with `keep 1,4,5` to promote those (or `keep all` / `none`).
+```
+
+#### 2.4.3 Handle response
+
+- `none` (or empty / no response in 30s) → skip Phase 2.4 entirely. Items stay in `## Could include` as informational text; not staged.
+- `keep all` → promote every item.
+- `keep N,M,P` → promote only the listed numbers.
+
+#### 2.4.4 Promote each kept item
+
+For each kept item, edit the source meeting file to move the bullet into a staged section:
+
+1. **Choose type** from the item's category prefix:
+   - `Risks:` / `Concerns:` / `Issue:` / `Gap:` → **learning** (`le_NNN`)
+   - `Decision:` / `Picked:` / `Locked:` / `Settled:` → **decision** (`de_NNN`)
+   - `Action:` / `Next:` / `TODO:` / `Follow up:` / `Owner:` → **action item** (`ai_NNN`)
+   - **Ambiguous prefix or no prefix** → ask the user inline:
+     > "#5 'Tim's bandwidth flagged as a concern' — save as **learning**, **decision**, or **action**?"
+2. **Generate the next ID** for that section by reading the meeting file and finding the highest existing `<prefix>_NNN` in the matching `## Staged ...` section, then incrementing.
+3. **Edit the meeting file** in two places:
+   - Append `- <prefix>_NNN: <body without category prefix>` to the matching `## Staged Action Items` / `## Staged Decisions` / `## Staged Learnings` section. Strip the leading category prefix (`/^[^:]+:\s*/`) from the body so the staged item reads naturally.
+   - Remove the corresponding bullet from `## Could include` to avoid double-display in chat / future re-reads.
+4. **Status**: items absent from the frontmatter `staged_item_status` map default to `pending`, which is exactly what we want — promoted items show up in the UI's pending queue and follow the normal approve flow. No frontmatter mutation needed.
+
+#### 2.4.5 Confirm and continue
+
+Report back to the user briefly:
+
+> "Promoted #1 → learning (le_007), #4 → action item (ai_012), #5 → learning (le_008). 3 items moved from could-include to staging across 2 meetings."
+
+Then continue to Phase 2.5.
+
+**Notes**:
+- Default behavior is **skip all** — could_include items are by design not load-bearing; promoting them should be opt-in.
+- If the user says nothing, don't block — proceed to Phase 2.5 with no promotions.
+- If the LLM emitted *no* `## Could include` blocks across all meetings (which is normal for meetings with no wiki context), skip Phase 2.4 silently. Don't present an empty list.
+
+---
+
 ### Phase 2.5: Optional Review UI
 
 > **OPT-IN FEATURE**: Review UI is disabled by default. Users who prefer the traditional CLI triage workflow are unaffected. Enable only when you want the visual review experience.

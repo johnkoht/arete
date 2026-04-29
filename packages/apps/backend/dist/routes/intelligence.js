@@ -70,8 +70,10 @@ function extractCompletionText(body) {
         const nextSection = afterHeader.search(/\n## /);
         return nextSection >= 0 ? afterHeader.slice(0, nextSection) : afterHeader.slice(0, 2000);
     }
-    // Extract from ## Summary
-    const summary = extractSection(/^## Summary\s*$/m);
+    // Extract from lead-prose section. Accept either ## Summary (legacy /
+    // light extraction shape) or ## Core (wiki-aware shape, Task 8). Both are
+    // permanent — historical files keep their existing heading per Decision #7.
+    const summary = extractSection(/^##\s+(?:Summary|Core)\s*$/m);
     if (summary.trim()) {
         // Split on sentence-ending punctuation and add each sentence
         const sentences = summary

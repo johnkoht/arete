@@ -90,8 +90,10 @@ function extractTopicsFromContent(body: string): string[] {
     }
   }
 
-  // 2. Summary section — first 3 sentences
-  const summary = extractSection(/^## Summary\s*$/m);
+  // 2. Lead-prose section — first 3 sentences. Accept either ## Summary
+  // (legacy / light extraction) or ## Core (wiki-aware shape, Task 8); both
+  // are permanent per Decision #7.
+  const summary = extractSection(/^##\s+(?:Summary|Core)\s*$/m);
   if (summary.trim()) {
     // Split on sentence-ending punctuation and take first 3 non-empty sentences
     const sentences = summary

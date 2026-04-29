@@ -29,6 +29,11 @@
  * 22. commitApprovedItems — writes ## Approved Learnings section to body
  * 23. commitApprovedItems — approved sections appear before ## Transcript
  * 24. commitApprovedItems — only writes sections for types with approved items
+ * 32. appendToMemoryFile — emits **Topics** line when topics non-empty
+ * 33. appendToMemoryFile — omits **Topics** line when topics absent
+ * 34. appendToMemoryFile — omits **Topics** line when topics is empty array
+ * 35. appendToMemoryFile — filters non-string / empty-string topic entries
+ * 36. appendToMemoryFile — orders **Topics** between **Source** and content
  */
 
 import { describe, it, beforeEach } from 'node:test';
@@ -848,5 +853,166 @@ describe('generateItemId', () => {
     assert.equal(generateItemId('ai', 1), 'ai_001');
     assert.equal(generateItemId('de', 42), 'de_042');
     assert.equal(generateItemId('le', 100), 'le_100');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Topics on memory entries (Task 1 — wiki-leaning-meeting-extraction)
+//
+// `extractMeetingMetadata` and `appendToMemoryFile` are internal helpers,
+// so we exercise them through `commitApprovedItems`, the existing pattern.
+// ---------------------------------------------------------------------------
+
+describe('appendToMemoryFile — topics line', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+  });
+
+  it('emits **Topics** line when topics non-empty', async () => {
+    const meetingWithTopics = `---
+title: "Pricing Strategy"
+date: "2026-04-15"
+attendees:
+  - name: John Koht
+topics:
+  - pricing-tiers
+  - q2-launch
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Lock in tiered pricing for Q2
+`;
+    storage.files.set(MEETING_FILE, meetingWithTopics);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions, 'decisions.md should be created');
+    assert.ok(
+      decisions.includes('- **Topics**: pricing-tiers, q2-launch'),
+      'should emit Topics line with comma-separated slugs',
+    );
+    // Spot-check entry shape stays correct around the new line.
+    assert.ok(decisions.includes('## Lock in tiered pricing for Q2'), 'header preserved');
+    assert.ok(decisions.includes('- **Date**: 2026-04-15'), 'date preserved');
+    assert.ok(decisions.includes('- **Source**: Pricing Strategy (John Koht)'), 'source preserved');
+    assert.ok(decisions.includes('- Lock in tiered pricing for Q2'), 'content preserved');
+  });
+
+  it('omits **Topics** line entirely when topics absent', async () => {
+    const meetingWithoutTopics = `---
+title: "No Topics Meeting"
+date: "2026-04-16"
+attendees:
+  - name: John Koht
+staged_item_status:
+  le_001: approved
+---
+
+## Staged Learnings
+- le_001: Customer success team needs more telemetry
+`;
+    storage.files.set(MEETING_FILE, meetingWithoutTopics);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`);
+    assert.ok(learnings, 'learnings.md should be created');
+    assert.ok(
+      !learnings.includes('**Topics**'),
+      'should NOT emit any Topics line when frontmatter has no topics',
+    );
+    // Sanity-check: the entry still has the standard fields.
+    assert.ok(learnings.includes('- **Date**: 2026-04-16'));
+    assert.ok(learnings.includes('- **Source**: No Topics Meeting (John Koht)'));
+  });
+
+  it('omits **Topics** line when topics is an empty array', async () => {
+    const meetingEmptyTopics = `---
+title: "Empty Topics"
+date: "2026-04-17"
+attendees:
+  - name: John Koht
+topics: []
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Decision with empty topics array
+`;
+    storage.files.set(MEETING_FILE, meetingEmptyTopics);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions, 'decisions.md should be created');
+    assert.ok(
+      !decisions.includes('**Topics**'),
+      'empty topics array must not produce a blank Topics line',
+    );
+  });
+
+  it('filters non-string and empty-string entries from topics frontmatter', async () => {
+    // Defensive: malformed frontmatter shouldn't break entry shape.
+    const meetingMalformedTopics = `---
+title: "Malformed Topics"
+date: "2026-04-18"
+attendees:
+  - name: John Koht
+topics:
+  - valid-slug
+  - ""
+  - other-slug
+staged_item_status:
+  de_001: approved
+---
+
+## Staged Decisions
+- de_001: Decision body
+`;
+    storage.files.set(MEETING_FILE, meetingMalformedTopics);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const decisions = storage.files.get(`${MEMORY_DIR}/decisions.md`);
+    assert.ok(decisions);
+    assert.ok(
+      decisions.includes('- **Topics**: valid-slug, other-slug'),
+      'empty-string entries must be dropped, valid slugs preserved in order',
+    );
+  });
+
+  it('places **Topics** line between **Source** and the content bullet', async () => {
+    const meetingWithTopics = `---
+title: "Order Test"
+date: "2026-04-19"
+attendees:
+  - name: John Koht
+topics:
+  - ordering-check
+staged_item_status:
+  le_001: approved
+---
+
+## Staged Learnings
+- le_001: Order matters for parser stability
+`;
+    storage.files.set(MEETING_FILE, meetingWithTopics);
+
+    await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
+
+    const learnings = storage.files.get(`${MEMORY_DIR}/learnings.md`)!;
+    const sourceIdx = learnings.indexOf('- **Source**:');
+    const topicsIdx = learnings.indexOf('- **Topics**:');
+    const contentIdx = learnings.indexOf('- Order matters for parser stability');
+
+    assert.ok(sourceIdx >= 0 && topicsIdx >= 0 && contentIdx >= 0, 'all three lines present');
+    assert.ok(sourceIdx < topicsIdx, 'Topics comes after Source');
+    assert.ok(topicsIdx < contentIdx, 'Topics comes before the content line');
   });
 });

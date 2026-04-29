@@ -34,6 +34,8 @@ function serializeFrontmatter(data, body) {
  */
 const STAGED_HEADERS = new Set([
     'summary',
+    'core',
+    'could include',
     'staged action items',
     'staged decisions',
     'staged learnings',

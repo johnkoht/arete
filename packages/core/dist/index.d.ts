@@ -33,6 +33,8 @@ export { loadMemorySummary } from './services/memory-summary-loader.js';
 export type { LoadMemorySummaryOptions } from './services/memory-summary-loader.js';
 export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, } from './services/topic-memory.js';
 export type { TopicCandidate, TopicIdentity, AliasResult, AliasDecision, IntegrateOutput, IntegrateSourceOptions, IntegrateResult, RefreshBatchOptions, RefreshBatchResult, RefreshBatchTopicResult, TopicMemoryStatus, ListTopicMemoryStatusOptions, } from './services/topic-memory.js';
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
+export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';

@@ -21,6 +21,10 @@ import { parseAgendaItems, getUncheckedAgendaItems } from '../utils/agenda.js';
 import type { AgendaItem } from '../utils/agenda.js';
 import { findMatchingAgenda, type AgendaMatchResult } from '../integrations/meetings.js';
 import { slugifyPersonName } from './entity.js';
+import { TopicMemoryService } from './topic-memory.js';
+import { detectTopicsLexical } from './topic-detection.js';
+import { renderForExtractionContext, type TopicPage } from '../models/topic-page.js';
+import { getMemoryItemsForTopics } from './memory.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,6 +108,24 @@ export interface MeetingContextBundle {
    * Cap at 20 items to avoid bloating the prompt.
    */
   existingTasks?: string[];
+  /**
+   * Topic-wiki context for delta-only extraction.
+   *
+   * For each topic detected lexically in the transcript, this carries the
+   * pre-rendered wiki sections plus recent topic-tagged L2 memory entries.
+   * The extraction LLM uses this so it emits only deltas (new decisions,
+   * changed scope, raised gaps) rather than re-extracting captured content.
+   *
+   * Undefined when no topics are detected. The detected slugs are also
+   * the natural input for `activeTopicSlugs` in the extraction prompt.
+   */
+  topicWikiContext?: {
+    detectedTopics: Array<{
+      slug: string;
+      sections: string;
+      l2Excerpts: string[];
+    }>;
+  };
 }
 
 /**
@@ -125,6 +147,14 @@ export interface MeetingContextDeps {
   entity: EntityService;
   paths: WorkspacePaths;
   areaParser?: AreaParserService;
+  /**
+   * Topic memory service — required for the topic-wiki context step.
+   *
+   * `createServices()` already wires this. Tests that don't exercise the
+   * topic-wiki path should provide a stub whose `listAll(paths)` returns
+   * `{ topics: [], errors: [] }` (causing the wiki step to no-op).
+   */
+  topicMemory: TopicMemoryService;
 }
 
 // ---------------------------------------------------------------------------
@@ -933,7 +963,7 @@ export async function buildMeetingContext(
     // Non-fatal: if task files can't be read, continue without them
   }
 
-  return {
+  const bundle: MeetingContextBundle = {
     meeting,
     agenda,
     agendaMatch,
@@ -944,6 +974,57 @@ export async function buildMeetingContext(
     warnings,
     ...(existingTasks.length > 0 && { existingTasks }),
   };
+
+  // 7. Topic-wiki context (delta-only extraction support)
+  // Detect topics lexically in the transcript, render the wiki sections for
+  // each detected page, and gather recent topic-tagged L2 memory entries.
+  // Non-fatal: any failure here leaves topicWikiContext undefined.
+  try {
+    const { topics: allTopicPages } = await deps.topicMemory.listAll(paths);
+    if (allTopicPages.length > 0) {
+      const identities = TopicMemoryService.toIdentities(allTopicPages);
+      const detectedSlugs = detectTopicsLexical(transcript, identities);
+
+      if (detectedSlugs.length > 0) {
+        const pageBySlug = new Map<string, TopicPage>();
+        for (const page of allTopicPages) {
+          if (page.frontmatter.topic_slug) {
+            pageBySlug.set(page.frontmatter.topic_slug, page);
+          }
+        }
+
+        const learningsPath = join(paths.memory, 'items', 'learnings.md');
+        const decisionsPath = join(paths.memory, 'items', 'decisions.md');
+
+        const detectedTopics: Array<{ slug: string; sections: string; l2Excerpts: string[] }> = [];
+        for (const slug of detectedSlugs) {
+          const page = pageBySlug.get(slug);
+          if (!page) continue;
+          const sections = renderForExtractionContext(page);
+          const items = await getMemoryItemsForTopics(
+            [learningsPath, decisionsPath],
+            [slug],
+            { limit: 5, sinceDays: 90 },
+          );
+          const l2Excerpts = items.map((item) => {
+            const date = item.date && item.date.length > 0 ? item.date : '?';
+            const content = item.content ?? '';
+            return `${date}: ${content}`.trim();
+          });
+          detectedTopics.push({ slug, sections, l2Excerpts });
+        }
+
+        if (detectedTopics.length > 0) {
+          bundle.topicWikiContext = { detectedTopics };
+        }
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Topic-wiki context failed: ${msg}`);
+  }
+
+  return bundle;
 }
 
 // ---------------------------------------------------------------------------

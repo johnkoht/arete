@@ -134,11 +134,19 @@ export declare function clearApprovedSections(content: string): string;
  * Uses pre-generated IDs from FilteredItem (e.g., ai_001, de_001, le_001).
  * Takes FilteredItem[] from processMeetingExtraction() and original summary.
  *
+ * Lead-prose section: emits `## Core` when `core` is provided non-empty,
+ * otherwise falls back to `## Summary` for backward compat. Optional
+ * `couldInclude` renders as a `## Could include` bullet list when non-empty.
+ * (Task 8 / Decision #7 — historical files keep ## Summary; new wiki-aware
+ * meetings get ## Core.)
+ *
  * @param filteredItems - Items from processMeetingExtraction()
- * @param summary - The meeting summary text
- * @returns Markdown string with Summary and Staged sections
+ * @param summary - The meeting summary text (used as fallback when `core` absent)
+ * @param core - Optional lead-prose from wiki-aware extraction
+ * @param couldInclude - Optional headlines for side-thread items
+ * @returns Markdown string with lead + Could-include + Staged sections
  */
-export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string): string;
+export declare function formatFilteredStagedSections(filteredItems: FilteredItem[], summary: string, core?: string, couldInclude?: string[]): string;
 /**
  * Calculate the speaking ratio for a meeting owner based on transcript speaker labels.
  *

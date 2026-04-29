@@ -1,3 +1,14 @@
+---
+title: Wiki-leaning meeting extraction
+slug: wiki-leaning-meeting-extraction
+status: complete
+size: large
+tags: [core, cli, backend, meeting-extraction, topic-wiki, delta-only]
+created: 2026-04-27
+updated: 2026-04-29
+completed: 2026-04-29
+---
+
 # Wiki-leaning meeting extraction
 
 ## Goal

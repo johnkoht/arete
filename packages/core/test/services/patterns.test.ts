@@ -291,6 +291,81 @@ ${points.map((p) => `- ${p}`).join('\n')}
     });
   });
 
+  describe('lead-prose heading dual-anchor (Task 8)', () => {
+    // Verifies extractTopicsFromContent accepts both ## Summary and ## Core.
+    // The function is private; we exercise it through detectCrossPersonPatterns.
+    function makeMeetingWithLead(
+      slug: string,
+      date: string,
+      attendees: string[],
+      lead: { heading: 'Summary' | 'Core'; text: string },
+    ): string {
+      const attendeeYaml = `attendee_ids:\n${attendees.map((a) => `  - ${a}`).join('\n')}`;
+      return `---
+title: Meeting ${slug}
+date: ${date}
+status: synced
+${attendeeYaml}
+---
+
+## ${lead.heading}
+${lead.text}
+`;
+    }
+
+    it('reads topics from ## Core (new shape)', async () => {
+      const d1 = new Date(); d1.setDate(d1.getDate() - 3);
+      const d2 = new Date(); d2.setDate(d2.getDate() - 7);
+      // Use sentence-cased text so each sentence parses cleanly. Repeated
+      // topic across two meetings with disjoint attendees → cross-person pattern.
+      const files: Record<string, string> = {
+        [`${meetingsDir}/m1.md`]: makeMeetingWithLead(
+          'm1',
+          d1.toISOString().slice(0, 10),
+          ['alice', 'bob'],
+          { heading: 'Core', text: 'Pricing tier locked at $149 for Q2 launch.' },
+        ),
+        [`${meetingsDir}/m2.md`]: makeMeetingWithLead(
+          'm2',
+          d2.toISOString().slice(0, 10),
+          ['carol', 'dave'],
+          { heading: 'Core', text: 'Pricing tier locked at $149 for Q2 launch.' },
+        ),
+      };
+
+      const storage = createMockStorage(files);
+      const patterns = await detectCrossPersonPatterns(meetingsDir, storage, { days: 30 });
+
+      const found = patterns.find((p) => p.topic.toLowerCase().includes('pricing tier'));
+      assert.ok(found, 'Expected to detect the pattern from ## Core');
+    });
+
+    it('reads topics from ## Summary (backward compat)', async () => {
+      const d1 = new Date(); d1.setDate(d1.getDate() - 3);
+      const d2 = new Date(); d2.setDate(d2.getDate() - 7);
+      const files: Record<string, string> = {
+        [`${meetingsDir}/m1.md`]: makeMeetingWithLead(
+          'm1',
+          d1.toISOString().slice(0, 10),
+          ['alice', 'bob'],
+          { heading: 'Summary', text: 'Pricing tier locked at $149 for Q2 launch.' },
+        ),
+        [`${meetingsDir}/m2.md`]: makeMeetingWithLead(
+          'm2',
+          d2.toISOString().slice(0, 10),
+          ['carol', 'dave'],
+          { heading: 'Summary', text: 'Pricing tier locked at $149 for Q2 launch.' },
+        ),
+      };
+
+      const storage = createMockStorage(files);
+      const patterns = await detectCrossPersonPatterns(meetingsDir, storage, { days: 30 });
+
+      const found = patterns.find((p) => p.topic.toLowerCase().includes('pricing tier'));
+      assert.ok(found, 'Expected to detect the pattern from ## Summary (backward compat)');
+    });
+  });
+
   describe('deduplication', () => {
     it('deduplicates topics from the same meeting', async () => {
       const d1 = new Date(); d1.setDate(d1.getDate() - 3);

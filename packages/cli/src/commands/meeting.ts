@@ -453,6 +453,7 @@ export function registerMeetingCommands(program: Command): void {
     .option('--json', 'Output as JSON')
     .option('--stage', 'Write staged sections to the meeting file')
     .option('--dry-run', 'Show what would be written without writing')
+    .option('--dry-run-topics', 'Run lexical topic detection only (no LLM call); print detected topics with scores + matched tokens for tuning')
     .option('--skip-qmd', 'Skip automatic qmd index update')
     .option('--clear-approved', 'Clear approved sections before re-extracting (requires --stage)')
     .option('--clear', 'Alias for --clear-approved (requires --stage)')
@@ -465,6 +466,7 @@ export function registerMeetingCommands(program: Command): void {
       json?: boolean;
       stage?: boolean;
       dryRun?: boolean;
+      dryRunTopics?: boolean;
       skipQmd?: boolean;
       clearApproved?: boolean;
       clear?: boolean;
@@ -506,7 +508,9 @@ export function registerMeetingCommands(program: Command): void {
       }
 
       // Early check: is AI configured?
-      if (!services.ai.isConfigured()) {
+      // --dry-run-topics skips the LLM entirely (lexical detection only),
+      // so don't require an AI provider for that path.
+      if (!opts.dryRunTopics && !services.ai.isConfigured()) {
         if (opts.json) {
           console.log(JSON.stringify({
             success: false,
@@ -576,6 +580,42 @@ export function registerMeetingCommands(program: Command): void {
           error('Meeting file has no content to extract from');
         }
         process.exit(1);
+      }
+
+      // --dry-run-topics: lexical topic detection only. Pre-mortem R2's
+      // empirical-tuning lever — operator sees the score + matched
+      // tokens for each detected topic so they can tune STOP_TOKENS and
+      // the threshold constants without paying any LLM cost. Skips the
+      // actual extraction call entirely.
+      if (opts.dryRunTopics) {
+        const { detectTopicsLexicalDetailed, TopicMemoryService } = await import('@arete/core');
+        const { topics } = await services.topicMemory.listAll(paths);
+        const identities = TopicMemoryService.toIdentities(topics);
+        const detected = detectTopicsLexicalDetailed(transcript, identities);
+
+        if (opts.json) {
+          console.log(JSON.stringify({
+            detectedTopics: detected.map((d) => ({
+              slug: d.slug,
+              score: d.score,
+              nonStopMatches: d.nonStopMatches,
+              stopMatches: d.stopMatches,
+              lastRefreshed: d.lastRefreshed ?? null,
+            })),
+          }, null, 2));
+        } else if (detected.length === 0) {
+          info('Detected topics: (none)');
+        } else {
+          info('Detected topics:');
+          detected.forEach((d, idx) => {
+            console.log(`  ${idx + 1}. ${d.slug}`);
+            console.log(`     Score: ${d.score.toFixed(2)}`);
+            console.log(`     Non-stop matches: ${d.nonStopMatches.length > 0 ? d.nonStopMatches.join(', ') : '(none)'}`);
+            console.log(`     Stop matches: ${d.stopMatches.length > 0 ? d.stopMatches.join(', ') : '(none)'}`);
+            console.log(`     Last refreshed: ${d.lastRefreshed ?? '(unknown)'}`);
+          });
+        }
+        return;
       }
 
       // Get attendees from frontmatter if available
@@ -975,10 +1015,16 @@ export function registerMeetingCommands(program: Command): void {
           }
         }
 
-        // Format body sections from filtered items (IDs in body match IDs in metadata)
+        // Format body sections from filtered items (IDs in body match IDs in metadata).
+        // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
+        // extraction) so the formatter emits `## Core` + `## Could include`
+        // when the LLM populates them. Falls back to `## Summary` when absent
+        // (formatter handles the precedence — see meeting-processing.ts:625).
         stagedSections = formatFilteredStagedSections(
           processed.filteredItems,
           extractionResult.intelligence.summary,
+          extractionResult.intelligence.core,
+          extractionResult.intelligence.could_include,
         );
 
         if (!dryRun) {
@@ -1635,6 +1681,7 @@ export function registerMeetingCommands(program: Command): void {
           intelligence: services.intelligence,
           entity: services.entity,
           paths,
+          topicMemory: services.topicMemory,
         }, {
           skipAgenda: opts.skipAgenda,
           skipPeople: opts.skipPeople,

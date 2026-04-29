@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Wiki-leaning meeting extraction** — when topics are detected on a transcript, the LLM sees existing topic-page sections + topic-tagged L2 items as "already known" and emits only deltas (new decisions, changed plans, new risks/questions). Verbatim delta directive includes a "When in doubt, INCLUDE" tiebreaker and a one-shot CONFIRMATION-of-uncertainty example. Char budget guard (`MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000`) with 3-tier truncation; highest-scored topic never dropped.
+- **Recap reshape** — extraction now produces `## Core` (free-form, principle-based — what's actionable/decided/changed) and `## Could include` (≤8 prioritized one-line headlines for side threads). `## Summary` retained for backward compat; both headings parse permanently. Production parsers (`apps/backend/src/routes/intelligence.ts`, `services/workspace.ts`, `services/patterns.ts`) updated to dual-anchor `/^##\s+(?:Summary|Core)\s*$/m`.
+- **Topic detection** — new `detectTopicsLexical` / `detectTopicsLexicalDetailed` services with stop-token list (10 generic words: planning, review, sync, discussion, meeting, update, status, team, weekly, daily) and ≥2 non-stop slug tokens + ≥0.5 coverage threshold. Cap at 3 candidates at rollout.
+- **L2 topic tags** — `learnings.md` and `decisions.md` entries gain `**Topics**: slug-a, slug-b` bullet for per-topic queryability. New `getMemoryItemsForTopics(paths, slugs, opts)` helper. Memory parser (`parseMemorySections`) now matches all three header shapes (`## Title`, `### YYYY-MM-DD: Title`, `### Title`) via single-pass classifier with priority order + code-fence tracking.
+- **CLI tuning lever** — `arete meeting extract --dry-run-topics` runs detection only, prints score + matched tokens (separated stop vs non-stop) + last_refreshed for each detected slug; supports `--json`. Used to tune detection thresholds against real meetings before A/B rollout.
+- **Frontmatter sanitizer** — `stripYamlDocSeparator` strips line-start `---` from LLM-generated `core` and `could_include[]` strings before they're written into staged sections of YAML-frontmattered meeting files. Strip-and-warn pattern (deliberately diverged from topic-memory.ts's drop-on-detect: LLM prose is more likely accidental than malicious).
+
+### Changed
+- **`daily-winddown` and `weekly-winddown` skills** gain a new orchestrator phase (Phase 2.4 daily / Phase 2.5 weekly) that scans each processed meeting's `## Could include` section and surfaces side-thread bullets to the user for selective promotion via chat. User replies `keep N,M,P` / `keep all` / `none` (default skip-all). Agent picks type from category prefix (`Risks:` → learning, `Decision:` → decision, `Action:` → action item; ambiguous → asks inline), generates next ID, moves bullet from `## Could include` into the matching staged section. Items left unpromoted stay as informational text in the meeting markdown — visible to future chat sessions, invisible to the staging UI. Pairs with the wiki-leaning extraction `could_include` field.
+
+### Fixed
+- **L2 parser/writer mismatch** — newly written learnings/decisions were unsearchable because writer emitted `## Title` while parser only matched `### Title`. Parser now matches all three header shapes.
+- **Backend missing `activeTopicSlugs`** — CLI passed it to `extractMeetingIntelligence`; backend silently skipped, producing different extractions on the web path. Backend now mirrors CLI's assembly via `loadMemorySummary` + `renderActiveTopicsAsSlugList`.
+- **`updateMeetingContent` anchor bug** — anchor regex looked for `## Summary` only; on files with `## Core` (post-rollout), would fail to anchor and APPEND new content rather than REPLACE, duplicating staged sections on re-extraction. Now dual-anchor.
+
 ## [0.8.1] - 2026-04-17
 
 ### Fixed

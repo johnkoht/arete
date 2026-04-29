@@ -174,6 +174,8 @@ export type {
   TopicMemoryStatus,
   ListTopicMemoryStatusOptions,
 } from './services/topic-memory.js';
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
+export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';

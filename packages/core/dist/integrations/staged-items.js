@@ -273,7 +273,18 @@ function extractMeetingMetadata(data) {
     const source = attendeeNames.length > 0
         ? `${title} (${attendeeNames.join(', ')})`
         : title;
-    return { title, date, source };
+    // Topic slugs from frontmatter (set by meeting-apply.ts after alias/merge).
+    // Defaults to [] when missing or malformed — never undefined.
+    const topics = [];
+    const rawTopics = data['topics'];
+    if (Array.isArray(rawTopics)) {
+        for (const t of rawTopics) {
+            if (typeof t === 'string' && t.trim() !== '') {
+                topics.push(t);
+            }
+        }
+    }
+    return { title, date, source, topics };
 }
 /**
  * Generate a short title from item text (first sentence or truncated).
@@ -443,6 +454,7 @@ function removeStagedSections(body) {
  * ## [Title derived from item text]
  * - **Date**: YYYY-MM-DD
  * - **Source**: Meeting Title (Attendees)
+ * - **Topics**: slug-a, slug-b   (omitted entirely when meta.topics is empty)
  * - Item content
  * ```
  */
@@ -455,12 +467,16 @@ async function appendToMemoryFile(storage, memoryDir, filename, items, meta) {
     // Format each item as a proper memory entry
     const entries = items.map((item) => {
         const entryTitle = generateEntryTitle(item.text);
-        return [
+        const lines = [
             `## ${entryTitle}`,
             `- **Date**: ${meta.date}`,
             `- **Source**: ${meta.source}`,
-            `- ${item.text}`,
-        ].join('\n');
+        ];
+        if (meta.topics.length > 0) {
+            lines.push(`- **Topics**: ${meta.topics.join(', ')}`);
+        }
+        lines.push(`- ${item.text}`);
+        return lines.join('\n');
     }).join('\n\n');
     const separator = existing.endsWith('\n') || existing === '' ? '\n' : '\n\n';
     await storage.write(filePath, `${existing}${separator}${entries}\n`);

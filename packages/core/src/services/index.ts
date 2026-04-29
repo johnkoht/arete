@@ -3,7 +3,7 @@
  */
 
 export { ContextService } from './context.js';
-export { MemoryService } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
@@ -111,6 +111,10 @@ export {
   parseIndividualGoals,
   parseLegacyQuarterFile,
 } from './goal-parser.js';
+
+// Topic detection (lexical pre-pass before extraction)
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './topic-detection.js';
+export type { DetectTopicsOptions, DetectedTopic } from './topic-detection.js';
 
 // Meeting context assembly
 export { buildMeetingContext } from './meeting-context.js';

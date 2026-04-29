@@ -437,6 +437,100 @@ function countWords(text: string): number {
   return matches === null ? 0 : matches.length;
 }
 
+/**
+ * Render a TopicPage as a compact extraction-time context block.
+ *
+ * Used by the meeting-extraction prompt (`buildTopicWikiContextSection`) to
+ * inject what the wiki *already knows* for a detected topic, so the LLM emits
+ * only **deltas** (new decisions, changed scope, raised gaps) rather than
+ * re-extracting captured content.
+ *
+ * Differs from `selectSectionsForBudget`:
+ *   - Includes `Change log` (deliberately excluded from `SECTION_PRIORITY`).
+ *   - Truncates `Scope and behavior` at a fixed cap rather than competing for
+ *     a word budget.
+ *   - Always selects the same fixed five sections — no priority skipping.
+ *
+ * Section order matches `SECTION_NAMES` ordering:
+ *   Current state → Scope and behavior → Open questions → Known gaps → Change log
+ *
+ * Output style mirrors `selectSectionsForBudget` (`## ${name}\n\n${trimmed}`,
+ * joined by `\n\n`). Missing or whitespace-only sections are omitted entirely.
+ *
+ * Pure & synchronous: no I/O, no clock reads.
+ *
+ * @param page         Topic page to render.
+ * @param opts.changeLogEntries  Max number of Change log entries to keep
+ *                                (most recent first; default 3).
+ * @param opts.scopeMaxChars     Char cap for `Scope and behavior` (default 1000).
+ *                                When the trimmed body exceeds the cap, it is
+ *                                truncated and an ellipsis (`…`) is appended.
+ */
+export function renderForExtractionContext(
+  page: TopicPage,
+  opts?: { changeLogEntries?: number; scopeMaxChars?: number },
+): string {
+  const changeLogEntries = opts?.changeLogEntries ?? 3;
+  const scopeMaxChars = opts?.scopeMaxChars ?? 1000;
+
+  const order: SectionName[] = [
+    'Current state',
+    'Scope and behavior',
+    'Open questions',
+    'Known gaps',
+    'Change log',
+  ];
+
+  const out: string[] = [];
+
+  for (const name of order) {
+    const body = page.sections[name];
+    if (body === undefined) continue;
+    const trimmed = body.trim();
+    if (trimmed.length === 0) continue;
+
+    let content = trimmed;
+    if (name === 'Scope and behavior' && content.length > scopeMaxChars) {
+      content = content.slice(0, scopeMaxChars) + '…';
+    } else if (name === 'Change log') {
+      content = limitChangeLogEntries(trimmed, changeLogEntries);
+      if (content.length === 0) continue;
+    }
+
+    out.push(`## ${name}\n\n${content}`);
+  }
+
+  return out.join('\n\n');
+}
+
+/**
+ * Keep at most `n` of the most-recent Change log entries.
+ *
+ * Convention (see `topic-memory.ts` `applyExtractionUpdate`): entries are
+ * stored **newest-at-top** as `- YYYY-MM-DD: …` bullets. To preserve a
+ * single-entry's continuation lines (rare but possible), we group lines by
+ * detecting the bullet prefix `- ` at line-start; non-bullet lines attach to
+ * the preceding entry. Entries before any bullet are dropped (defensive).
+ */
+function limitChangeLogEntries(section: string, n: number): string {
+  if (n <= 0) return '';
+  const lines = section.split('\n');
+  const entries: string[][] = [];
+  let current: string[] | null = null;
+  for (const line of lines) {
+    if (/^- /.test(line)) {
+      current = [line];
+      entries.push(current);
+    } else if (current !== null) {
+      current.push(line);
+    }
+    // Lines before the first bullet are skipped.
+  }
+  if (entries.length === 0) return '';
+  const kept = entries.slice(0, n).map((e) => e.join('\n').replace(/\s+$/, ''));
+  return kept.join('\n');
+}
+
 function asEntities(v: unknown): TopicEntities | undefined {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return undefined;
   const rec = v as Record<string, unknown>;

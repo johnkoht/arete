@@ -2,7 +2,7 @@
  * Services barrel export.
  */
 export { ContextService } from './context.js';
-export { MemoryService } from './memory.js';
+export { MemoryService, getMemoryItemsForTopics } from './memory.js';
 export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
@@ -32,6 +32,8 @@ export type { HealthIndicator, RelationshipHealth } from './person-health.js';
 export { GoalMigrationService, slugifyTitle, extractQuarter } from './goal-migration.js';
 export type { ParsedGoal, GoalMigrationResult } from './goal-migration.js';
 export { parseGoals, parseIndividualGoals, parseLegacyQuarterFile, } from './goal-parser.js';
+export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './topic-detection.js';
+export type { DetectTopicsOptions, DetectedTopic } from './topic-detection.js';
 export { buildMeetingContext } from './meeting-context.js';
 export type { ResolvedAttendee, UnknownAttendee, RelatedContext, MeetingContextBundle, BuildMeetingContextOptions, MeetingContextDeps, AgendaCandidate, } from './meeting-context.js';
 export { applyMeetingIntelligence, clearStagedSections } from './meeting-apply.js';

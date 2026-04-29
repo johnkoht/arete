@@ -224,10 +224,18 @@ export class TopicMemoryService {
      * topic pages.
      */
     static toIdentities(topics) {
-        return topics.map((t) => ({
-            canonical: t.frontmatter.topic_slug,
-            aliases: t.frontmatter.aliases ?? [],
-        }));
+        return topics.map((t) => {
+            const identity = {
+                canonical: t.frontmatter.topic_slug,
+                aliases: t.frontmatter.aliases ?? [],
+            };
+            // Populate the recency tiebreaker for `detectTopicsLexical`. Kept
+            // optional so pages without a `last_refreshed` continue to work.
+            if (typeof t.frontmatter.last_refreshed === 'string' && t.frontmatter.last_refreshed.length > 0) {
+                identity.lastRefreshed = t.frontmatter.last_refreshed;
+            }
+            return identity;
+        });
     }
     /**
      * Alias/merge a batch of candidate slugs against existing topics.

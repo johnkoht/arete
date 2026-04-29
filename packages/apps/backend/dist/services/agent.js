@@ -17,7 +17,7 @@
 import { join } from 'node:path';
 import fs from 'node:fs/promises';
 import matter from 'gray-matter';
-import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, buildMeetingContext, createServices, getWorkspacePaths, getCompletedItems, getOpenTasks, reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, batchLLMReview, FileStorageAdapter, TopicMemoryService, } from '@arete/core';
+import { updateMeetingContent, extractMeetingIntelligence, processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, buildMeetingContext, createServices, getWorkspacePaths, getCompletedItems, getOpenTasks, reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, batchLLMReview, loadMemorySummary, renderActiveTopicsAsSlugList, FileStorageAdapter, TopicMemoryService, } from '@arete/core';
 import * as jobsService from './jobs.js';
 // ---------------------------------------------------------------------------
 // ActionItem → StagedItem mapping
@@ -114,12 +114,31 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             };
             // Get attendees from frontmatter (extract names from {name, email} objects)
             const attendeeNames = (fm['attendees'] || []).map((a) => a.name);
-            // Call core extraction service with optional context, prior items, and mode
+            // Load active topic slugs (bare, no wikilinks) to bias the extraction
+            // prompt toward reusing existing topics — first line of sprawl defense
+            // (mirrors CLI meeting.ts:852). Latent gap fix (Task 10 / R9): the
+            // backend was silently skipping this bias, producing different
+            // extractions than the CLI for the same transcript. Best-effort:
+            // failure to load degrades to no bias (prior backend behavior).
+            let activeTopicSlugs;
+            if (deps.topicMemory && deps.workspacePaths) {
+                try {
+                    const memory = await loadMemorySummary(deps.topicMemory, deps.workspacePaths);
+                    const rendered = renderActiveTopicsAsSlugList(memory.activeTopics);
+                    activeTopicSlugs = rendered.length > 0 ? rendered : undefined;
+                }
+                catch {
+                    activeTopicSlugs = undefined;
+                }
+            }
+            // Call core extraction service with optional context, prior items, mode,
+            // and active-topic bias.
             coreResult = await extractMeetingIntelligence(content, callLLMWithErrorCapture, {
                 attendees: attendeeNames,
                 context: options.context,
                 priorItems: options.priorItems,
                 mode: options.mode,
+                activeTopicSlugs,
             });
             // If LLM failed and we got empty results, propagate the original error
             // (core extraction catches errors and returns empty results)
@@ -275,8 +294,12 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
                 jobs.appendEvent(jobId, 'Warning: Batch LLM review skipped due to error');
             }
         }
-        // 10. Format staged sections
-        const stagedSections = formatFilteredStagedSections(processed.filteredItems, coreResult.intelligence.summary);
+        // 10. Format staged sections.
+        // Task 10: thread `core` and `could_include` (from Task 7's wiki-aware
+        // extraction) so the formatter emits `## Core` + `## Could include`
+        // when populated. Falls back to `## Summary` when absent — formatter
+        // handles precedence (meeting-processing.ts:625).
+        const stagedSections = formatFilteredStagedSections(processed.filteredItems, coreResult.intelligence.summary, coreResult.intelligence.core, coreResult.intelligence.could_include);
         // 11. Update content with staged sections
         const updatedContent = updateMeetingContent(content, stagedSections);
         // 12. Update frontmatter with status, sources, confidence, owner, and item status
@@ -463,6 +486,7 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
                 intelligence: services.intelligence,
                 entity: services.entity,
                 paths,
+                topicMemory: services.topicMemory,
             });
             // Log context stats
             const attendeeCount = context.attendees.length;

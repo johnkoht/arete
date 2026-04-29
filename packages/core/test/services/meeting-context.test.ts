@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -20,6 +20,7 @@ import { ContextService } from '../../src/services/context.js';
 import { MemoryService } from '../../src/services/memory.js';
 import { IntelligenceService } from '../../src/services/intelligence.js';
 import { AreaParserService } from '../../src/services/area-parser.js';
+import { TopicMemoryService } from '../../src/services/topic-memory.js';
 import { getSearchProvider } from '../../src/search/factory.js';
 import type { WorkspacePaths } from '../../src/models/index.js';
 import type { MeetingContextDeps } from '../../src/services/meeting-context.js';
@@ -101,7 +102,11 @@ function createDeps(root: string, paths: WorkspacePaths): MeetingContextDeps {
   const context = new ContextService(storage, search);
   const memory = new MemoryService(storage, search);
   const intelligence = new IntelligenceService(context, memory, entity);
-  return { storage, intelligence, entity, paths };
+  // TopicMemoryService.listAll handles missing `.arete/memory/topics/`
+  // gracefully (returns `{ topics: [], errors: [] }`), so tests that don't
+  // exercise the topic-wiki path don't need to set up topic pages.
+  const topicMemory = new TopicMemoryService(storage, search);
+  return { storage, intelligence, entity, paths, topicMemory };
 }
 
 function writeAreaFile(
@@ -1767,5 +1772,211 @@ Legacy meeting content.`;
     // Verify backward compatibility - title matching still works
     assert.ok(bundle.areaContext, 'areaContext should be populated via title matching for legacy meetings');
     assert.equal(bundle.areaContext!.slug, 'operations');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// topicWikiContext (Task 5 — wiki-leaning meeting extraction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a topic page file to `.arete/memory/topics/<slug>.md` with the given
+ * sections. Uses the canonical writer (`renderTopicPage`) so the round-trip
+ * invariant holds and `parseTopicPage` is exercised by `listAll`.
+ */
+function writeTopicPage(
+  root: string,
+  slug: string,
+  sections: Record<string, string>,
+  opts?: { aliases?: string[]; lastRefreshed?: string },
+): void {
+  const dir = join(root, '.arete', 'memory', 'topics');
+  mkdirSync(dir, { recursive: true });
+  // Build YAML frontmatter inline (avoids importing the writer just for tests).
+  const aliasesYaml =
+    opts?.aliases && opts.aliases.length > 0
+      ? `\naliases:\n${opts.aliases.map((a) => `  - ${a}`).join('\n')}`
+      : '';
+  const fm = `---
+topic_slug: ${slug}
+status: active${aliasesYaml}
+first_seen: 2026-01-01
+last_refreshed: ${opts?.lastRefreshed ?? '2026-04-15'}
+sources_integrated: []
+---
+
+# ${slug}
+`;
+  const sectionBlocks = Object.entries(sections)
+    .map(([name, body]) => `\n## ${name}\n\n${body}\n`)
+    .join('');
+  writeFileSync(join(dir, `${slug}.md`), `${fm}${sectionBlocks}`, 'utf8');
+}
+
+/**
+ * Write a memory items file (learnings.md or decisions.md) with one entry
+ * matching the new L2 writer shape (## Title + metadata bullets + content).
+ */
+function writeMemoryItem(
+  root: string,
+  type: 'learnings' | 'decisions',
+  title: string,
+  date: string,
+  topics: string[],
+  content: string,
+): void {
+  const dir = join(root, '.arete', 'memory', 'items');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${type}.md`);
+  const topicsLine = topics.length > 0 ? `- **Topics**: ${topics.join(', ')}\n` : '';
+  const entry = `## ${title}\n- **Date**: ${date}\n- **Source**: test.md\n${topicsLine}- ${content}\n\n`;
+  // Append to existing file if any
+  const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  writeFileSync(file, existing + entry, 'utf8');
+}
+
+describe('buildMeetingContext topicWikiContext', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let deps: MeetingContextDeps;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'meeting-ctx-wiki-'));
+    paths = makePaths(tmpDir);
+    deps = createDeps(tmpDir, paths);
+    mkdirSync(join(tmpDir, '.arete'), { recursive: true });
+    writeFileSync(join(tmpDir, 'arete.yaml'), 'version: 1\n', 'utf8');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('populates topicWikiContext.detectedTopics when transcript matches a known topic', async () => {
+    // Need ≥2 distinct multi-char non-stop slug tokens AND coverage ≥ 0.5.
+    // Slug 'pricing-tiers' tokens: ['pricing', 'tiers'] (both non-stop, both ≥2 chars).
+    // Transcript hits both → 2 hits, coverage 1.0 → passes.
+    writeTopicPage(tmpDir, 'pricing-tiers', {
+      'Current state': 'We have free, pro, and enterprise tiers.',
+      'Open questions': 'Should we add a team tier between pro and enterprise?',
+    });
+
+    writeMeetingFile(tmpDir, '2026-04-15-pricing-discussion.md', {
+      title: 'Pricing Discussion',
+      date: '2026-04-15',
+      attendees: [],
+    }, '## Transcript\n\nWe debated our pricing tiers extensively.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-pricing-discussion.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    assert.ok(bundle.topicWikiContext, 'topicWikiContext should be populated');
+    assert.equal(bundle.topicWikiContext!.detectedTopics.length, 1);
+    const detected = bundle.topicWikiContext!.detectedTopics[0];
+    assert.equal(detected.slug, 'pricing-tiers');
+    // Sections should include the rendered wiki body.
+    assert.ok(detected.sections.includes('Current state'), 'sections should include Current state heading');
+    assert.ok(detected.sections.includes('free, pro, and enterprise tiers'), 'sections should include body content');
+    assert.ok(Array.isArray(detected.l2Excerpts), 'l2Excerpts is always an array');
+  });
+
+  it('leaves topicWikiContext undefined when transcript matches no topics', async () => {
+    // Topic exists but transcript talks about something else entirely.
+    writeTopicPage(tmpDir, 'pricing-tiers', {
+      'Current state': 'We have free, pro, and enterprise tiers.',
+    });
+
+    writeMeetingFile(tmpDir, '2026-04-15-unrelated.md', {
+      title: 'Unrelated Sync',
+      date: '2026-04-15',
+      attendees: [],
+    }, '## Transcript\n\nWe discussed kubernetes deployment timelines.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-unrelated.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    assert.equal(bundle.topicWikiContext, undefined, 'topicWikiContext should be undefined when no detection');
+  });
+
+  it('leaves topicWikiContext undefined when no topic pages exist', async () => {
+    writeMeetingFile(tmpDir, '2026-04-15-empty-wiki.md', {
+      title: 'Anything',
+      date: '2026-04-15',
+      attendees: [],
+    }, '## Transcript\n\nPricing tiers and onboarding flows.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-empty-wiki.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    assert.equal(bundle.topicWikiContext, undefined, 'topicWikiContext should be undefined when wiki is empty');
+  });
+
+  it('populates l2Excerpts with topic-tagged memory entries', async () => {
+    writeTopicPage(tmpDir, 'pricing-tiers', {
+      'Current state': 'Free, pro, enterprise.',
+    });
+
+    // Recent (within sinceDays=90 default) and tagged with the topic.
+    const recent = new Date();
+    const recentDate = recent.toISOString().slice(0, 10);
+    writeMemoryItem(
+      tmpDir,
+      'learnings',
+      'Pricing experiment results',
+      recentDate,
+      ['pricing-tiers'],
+      'Customers prefer the $99 tier over the $149 tier 3:1.',
+    );
+
+    writeMeetingFile(tmpDir, '2026-04-15-pricing-review.md', {
+      title: 'Pricing Review',
+      date: '2026-04-15',
+      attendees: [],
+    }, '## Transcript\n\nWe revisited our pricing tiers.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-pricing-review.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    assert.ok(bundle.topicWikiContext, 'topicWikiContext should be populated');
+    const detected = bundle.topicWikiContext!.detectedTopics[0];
+    assert.equal(detected.slug, 'pricing-tiers');
+    assert.equal(detected.l2Excerpts.length, 1, 'one matching L2 entry expected');
+    assert.ok(
+      detected.l2Excerpts[0].includes('99 tier'),
+      `excerpt should include item content; got: ${detected.l2Excerpts[0]}`,
+    );
+    assert.ok(
+      detected.l2Excerpts[0].startsWith(recentDate),
+      `excerpt should be prefixed by date; got: ${detected.l2Excerpts[0]}`,
+    );
+  });
+
+  it('returns empty l2Excerpts when detected topic has no tagged memory items', async () => {
+    writeTopicPage(tmpDir, 'pricing-tiers', {
+      'Current state': 'Free, pro, enterprise.',
+    });
+    // Memory item tagged with a different slug — should not surface.
+    writeMemoryItem(
+      tmpDir,
+      'learnings',
+      'Onboarding flow note',
+      new Date().toISOString().slice(0, 10),
+      ['onboarding-flow'],
+      'Users drop off at step 3.',
+    );
+
+    writeMeetingFile(tmpDir, '2026-04-15-pricing-only.md', {
+      title: 'Pricing Only',
+      date: '2026-04-15',
+      attendees: [],
+    }, '## Transcript\n\nPricing tiers debate.');
+
+    const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-15-pricing-only.md');
+    const bundle = await buildMeetingContext(meetingPath, deps, { skipPeople: true });
+
+    assert.ok(bundle.topicWikiContext, 'topicWikiContext should be populated');
+    const detected = bundle.topicWikiContext!.detectedTopics[0];
+    assert.equal(detected.slug, 'pricing-tiers');
+    assert.deepEqual(detected.l2Excerpts, [], 'l2Excerpts is empty when no items match topic');
   });
 });

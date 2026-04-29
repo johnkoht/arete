@@ -10,13 +10,18 @@ import {
   formatStagedSections,
   updateMeetingContent,
   buildExclusionListSection,
+  buildTopicWikiContextSection,
+  truncateTopicWikiContextToBudget,
+  mergeDetectedSlugsIntoActiveList,
+  MAX_TOPIC_WIKI_CONTEXT_CHARS,
   isTrivialDecision,
   isTrivialLearning,
+  stripYamlDocSeparator,
   LIGHT_LIMITS,
   THOROUGH_LIMITS,
   CATEGORY_LIMITS,
 } from '../../src/services/meeting-extraction.js';
-import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem } from '../../src/services/meeting-extraction.js';
+import type { LLMCallFn, MeetingExtractionResult, ActionItem, PriorItem, TopicWikiContext } from '../../src/services/meeting-extraction.js';
 import type { MeetingContextBundle } from '../../src/services/meeting-context.js';
 
 // ---------------------------------------------------------------------------
@@ -1479,6 +1484,189 @@ describe('formatStagedSections - section inclusion', () => {
     const output = formatStagedSections(result);
 
     assert.ok(output.includes('## Summary'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatStagedSections - core / could_include (Task 8)
+// ---------------------------------------------------------------------------
+
+describe('formatStagedSections - core / could_include (Task 8)', () => {
+  function baseIntelligence(): MeetingExtractionResult['intelligence'] {
+    return {
+      summary: 'Legacy summary text',
+      actionItems: [],
+      nextSteps: [],
+      decisions: [],
+      learnings: [],
+    };
+  }
+
+  it('emits ## Core when both core and summary are present (drops summary)', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'New wiki-aware lead.',
+        summary: 'Legacy summary text',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'), 'must emit ## Core');
+    assert.ok(output.includes('New wiki-aware lead.'), 'must include core text');
+    assert.ok(!output.includes('## Summary'), 'must NOT emit ## Summary when core present');
+    assert.ok(!output.includes('Legacy summary text'), 'must NOT include summary text when core wins');
+  });
+
+  it('emits ## Core only when only core is present', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        summary: '',
+        core: 'Just the core.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'));
+    assert.ok(output.includes('Just the core.'));
+    assert.ok(!output.includes('## Summary'));
+  });
+
+  it('emits ## Summary only when only summary is present (backward compat)', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        summary: 'Backward-compatible summary.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+    assert.ok(output.includes('Backward-compatible summary.'));
+    assert.ok(!output.includes('## Core'));
+  });
+
+  it('treats whitespace-only core as absent and falls back to summary', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: '   \n  ',
+        summary: 'Real summary.',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Summary'));
+    assert.ok(output.includes('Real summary.'));
+    assert.ok(!output.includes('## Core'));
+  });
+
+  it('emits ## Could include with bullets when list non-empty', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+        could_include: ['Risks: Sara flagged churn', 'Pricing: tier may shift'],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Could include'));
+    assert.ok(output.includes('- Risks: Sara flagged churn'));
+    assert.ok(output.includes('- Pricing: tier may shift'));
+    // Sanity: Could-include block sits between Core and any Staged sections
+    const coreIdx = output.indexOf('## Core');
+    const couldIdx = output.indexOf('## Could include');
+    assert.ok(coreIdx >= 0 && couldIdx > coreIdx, 'Could-include must follow Core');
+  });
+
+  it('omits ## Could include block entirely when list is empty', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+        could_include: [],
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(output.includes('## Core'));
+    assert.ok(!output.includes('## Could include'));
+  });
+
+  it('omits ## Could include block when list is undefined', () => {
+    const result: MeetingExtractionResult = {
+      intelligence: {
+        ...baseIntelligence(),
+        core: 'Lead',
+      },
+      validationWarnings: [],
+      rawItems: [],
+    };
+
+    const output = formatStagedSections(result);
+
+    assert.ok(!output.includes('## Could include'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateMeetingContent - dual-anchor (Summary or Core)
+// ---------------------------------------------------------------------------
+
+describe('updateMeetingContent - dual-anchor lead heading', () => {
+  it('replaces staged sections when anchor is ## Core (not ## Summary)', () => {
+    const original = `---
+title: Wiki-aware Meeting
+---
+
+# Notes
+
+## Core
+Old core lead.
+
+## Staged Action Items
+- ai_001: Old action
+
+## Transcript
+Speaker 1: hi`;
+
+    const staged = `## Core
+New core lead.
+
+## Staged Action Items
+- ai_001: Replaced action
+`;
+
+    const result = updateMeetingContent(original, staged);
+
+    assert.ok(result.includes('# Notes'), 'preserves content before lead heading');
+    assert.ok(result.includes('## Transcript'), 'preserves content after staged');
+    assert.ok(result.includes('New core lead.'));
+    assert.ok(!result.includes('Old core lead.'));
+    assert.ok(!result.includes('Old action'));
+    // Lead heading should appear exactly once (no append-duplicates)
+    const matches = result.match(/^##\s+Core\s*$/gm) ?? [];
+    assert.equal(matches.length, 1, 'Core heading appears exactly once');
   });
 });
 
@@ -3951,5 +4139,577 @@ describe('garbage/trivial filters applied to decisions in parsing', () => {
     const result = parseMeetingExtractionResponse(response);
     assert.equal(result.intelligence.learnings.length, 1);
     assert.equal(result.intelligence.learnings[0], longLearning);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Topic-Wiki Context Section (Task 6 — delta-only extraction)
+// ---------------------------------------------------------------------------
+
+describe('buildTopicWikiContextSection', () => {
+  it('renders one block per detected topic with sections and L2 excerpts', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'pricing-model',
+          sections: '## Current state\n\nPriced at $149/month.',
+          l2Excerpts: [
+            '2026-04-20: Sara confirmed margin model works at $149.',
+            '2026-04-15: Open question on pricing tier.',
+          ],
+        },
+        {
+          slug: 'onboarding-v2',
+          sections: '## Current state\n\nOnboarding flow rewrite in progress.',
+          l2Excerpts: ['2026-04-22: Reduced onboarding steps from 8 to 5.'],
+        },
+      ],
+    };
+
+    const out = buildTopicWikiContextSection(ctx);
+
+    assert.ok(out.includes('## Topic Wiki (already known to the reader — DO NOT re-extract)'));
+    assert.ok(out.includes('### [[pricing-model]]'));
+    assert.ok(out.includes('### [[onboarding-v2]]'));
+    assert.ok(out.includes('Priced at $149/month.'));
+    assert.ok(out.includes('Onboarding flow rewrite in progress.'));
+    assert.ok(out.includes('Prior captured items for this topic:'));
+    assert.ok(out.includes('- 2026-04-20: Sara confirmed margin model works at $149.'));
+    assert.ok(out.includes('- 2026-04-22: Reduced onboarding steps from 8 to 5.'));
+  });
+
+  it('returns empty string when context is undefined', () => {
+    assert.equal(buildTopicWikiContextSection(undefined), '');
+  });
+
+  it('returns empty string when detectedTopics is empty', () => {
+    assert.equal(buildTopicWikiContextSection({ detectedTopics: [] }), '');
+  });
+
+  it('omits "Prior captured items for this topic:" line when l2Excerpts is empty', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'pricing-model',
+          sections: '## Current state\n\nPriced at $149/month.',
+          l2Excerpts: [],
+        },
+      ],
+    };
+
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes('### [[pricing-model]]'));
+    assert.ok(out.includes('Priced at $149/month.'));
+    assert.ok(!out.includes('Prior captured items for this topic:'));
+  });
+
+  it('emits sections verbatim (does not re-render)', () => {
+    const sections = '## Current state\n\nLine 1.\n\n## Open questions\n\n- q1';
+    const ctx: TopicWikiContext = {
+      detectedTopics: [{ slug: 'foo', sections, l2Excerpts: [] }],
+    };
+    const out = buildTopicWikiContextSection(ctx);
+    assert.ok(out.includes(sections));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delta-only directive presence/absence
+// ---------------------------------------------------------------------------
+
+function makeBundleWithWikiContext(
+  detectedTopics: TopicWikiContext['detectedTopics'],
+): MeetingContextBundle {
+  return {
+    meeting: {
+      path: '/path/to/meeting.md',
+      title: 'Test Meeting',
+      date: '2026-04-25',
+      attendees: [],
+      transcript: 'transcript',
+    },
+    agenda: null,
+    attendees: [],
+    unknownAttendees: [],
+    relatedContext: {
+      goals: [],
+      projects: [],
+      recentDecisions: [],
+      recentLearnings: [],
+    },
+    warnings: [],
+    topicWikiContext: { detectedTopics },
+  };
+}
+
+describe('buildMeetingExtractionPrompt — delta directive', () => {
+  it('includes the full delta directive when topicWikiContext is present', () => {
+    const bundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nPriced at $149.',
+        l2Excerpts: ['2026-04-20: Margin confirmed at $149.'],
+      },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    // Header
+    assert.ok(prompt.includes('## Delta-only extraction'));
+
+    // 5 DELTA rules
+    assert.ok(prompt.includes('NEW decision: a choice made in this meeting that the wiki doesn\'t already record'));
+    assert.ok(prompt.includes('CHANGED plan: this meeting reverses, narrows, or rescopes something the wiki shows'));
+    assert.ok(prompt.includes('NEW risk or gap raised'));
+    assert.ok(prompt.includes('NEW open question raised (not already in the wiki\'s Open questions)'));
+    assert.ok(prompt.includes('CONFIRMATION ONLY when the wiki shows a prior plan as uncertain and this meeting'));
+
+    // 4 do-NOT-emit rules
+    assert.ok(prompt.includes('Restatements of decisions or learnings already in the wiki'));
+    assert.ok(prompt.includes('Confirmations of plans the wiki already shows as committed'));
+    assert.ok(prompt.includes('Status updates on items the wiki already records'));
+    assert.ok(prompt.includes('The same fact described differently than the wiki\'s existing phrasing'));
+  });
+
+  it('does NOT include delta directive when topicWikiContext is undefined', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    assert.ok(!prompt.includes('## Delta-only extraction'));
+    assert.ok(!prompt.includes('When in doubt, INCLUDE'));
+    assert.ok(!prompt.includes('Pricing tier — $99 or $149?'));
+  });
+
+  it('does NOT include delta directive when topicWikiContext.detectedTopics is empty', () => {
+    const bundle = makeBundleWithWikiContext([]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+    assert.ok(!prompt.includes('## Delta-only extraction'));
+    assert.ok(!prompt.includes('## Topic Wiki'));
+  });
+
+  it('includes "When in doubt, INCLUDE" tiebreaker', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+    assert.ok(prompt.includes('When in doubt, INCLUDE'));
+    assert.ok(prompt.includes('A duplicate gets caught downstream by dedup'));
+    assert.ok(prompt.includes('a\nmissed real delta is invisible and lost.'));
+  });
+
+  it('includes the CONFIRMATION-of-uncertainty example verbatim', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('### Example: CONFIRMATION-of-uncertainty (the load-bearing escape hatch)'));
+    assert.ok(prompt.includes('Pricing tier — $99 or $149?'));
+    assert.ok(prompt.includes('"Pricing tier set to $149'));
+    assert.ok(prompt.includes('Sara confirmed the margin model works'));
+  });
+
+  it('includes the counter-example verbatim', () => {
+    const bundle = makeBundleWithWikiContext([
+      { slug: 'foo', sections: '## Current state\n\nstate', l2Excerpts: [] },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('Yeah, pricing is $149'));
+    assert.ok(prompt.includes('Do NOT emit. Already committed.'));
+  });
+
+  it('inserts wiki context section between enhanced context and exclusion list', () => {
+    const bundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nPriced at $149.',
+        l2Excerpts: ['2026-04-20: Margin confirmed.'],
+      },
+    ]);
+    const prompt = buildMeetingExtractionPrompt('transcript', undefined, undefined, bundle);
+
+    assert.ok(prompt.includes('## Topic Wiki (already known to the reader — DO NOT re-extract)'));
+    assert.ok(prompt.includes('### [[pricing-model]]'));
+    // Confirm the wiki section sits before the transcript
+    const wikiIdx = prompt.indexOf('## Topic Wiki');
+    const transcriptIdx = prompt.indexOf('Transcript:');
+    assert.ok(wikiIdx > 0 && wikiIdx < transcriptIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Char budget guard — truncateTopicWikiContextToBudget
+// ---------------------------------------------------------------------------
+
+describe('truncateTopicWikiContextToBudget', () => {
+  it('returns context unchanged when already under budget', () => {
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'foo',
+          sections: '## Current state\n\nshort',
+          l2Excerpts: ['2026-04-20: a', '2026-04-15: b'],
+        },
+      ],
+    };
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, 10000);
+    assert.deepEqual(out, ctx);
+    assert.ok(totalChars > 0);
+    assert.ok(totalChars < 10000);
+  });
+
+  it('Tier 1: drops oldest L2 excerpts first when over budget', () => {
+    // Build a context where dropping L2 alone brings it under budget.
+    // Sections small, lots of L2.
+    const sections = '## Current state\n\nshort';
+    const longExcerpt = 'X'.repeat(200); // 200 chars per excerpt
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        {
+          slug: 'topic-a',
+          sections,
+          l2Excerpts: [
+            `2026-04-25: newest ${longExcerpt}`,
+            `2026-04-20: middle ${longExcerpt}`,
+            `2026-04-15: oldest ${longExcerpt}`,
+          ],
+        },
+      ],
+    };
+
+    const before = buildTopicWikiContextSection(ctx).length;
+    // Set budget below initial size but above what one excerpt removed gives.
+    const budget = before - 250;
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Tier 1 only — topic count and sections preserved
+    assert.equal(out.detectedTopics.length, 1);
+    assert.equal(out.detectedTopics[0].sections, sections);
+    // Oldest dropped (pop removes from end)
+    assert.ok(out.detectedTopics[0].l2Excerpts.length < 3);
+    // Newest preserved
+    assert.ok(out.detectedTopics[0].l2Excerpts[0].includes('newest'));
+  });
+
+  it('Tier 2: halves the longest sections string on a \\n boundary when tier 1 alone is not enough', () => {
+    // Build sections with clear \n boundaries
+    const longSections = Array.from({ length: 40 }, (_, i) => `Line ${i}: ${'x'.repeat(50)}`).join('\n');
+    const shortSections = '## Current state\n\nshort';
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-a', sections: longSections, l2Excerpts: [] },
+        { slug: 'topic-b', sections: shortSections, l2Excerpts: [] },
+      ],
+    };
+
+    const initial = buildTopicWikiContextSection(ctx).length;
+    // Budget that requires truncating the long sections string but not dropping topics
+    const budget = initial - Math.floor(longSections.length / 3);
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Both topics preserved (Tier 3 not triggered)
+    assert.equal(out.detectedTopics.length, 2);
+    // Long section was halved
+    assert.ok(out.detectedTopics[0].sections.length < longSections.length);
+    // Short section untouched
+    assert.equal(out.detectedTopics[1].sections, shortSections);
+  });
+
+  it('Tier 2 boundary: section truncation cuts on \\n, not mid-line', () => {
+    // Carefully constructed: each line ends with \n so half-mark lands inside a line
+    const lines = Array.from({ length: 20 }, (_, i) => `LINE-${i}-MARKER`);
+    const longSections = lines.join('\n'); // No trailing newline; lines separated by \n
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-a', sections: longSections, l2Excerpts: [] },
+      ],
+    };
+
+    const initial = buildTopicWikiContextSection(ctx).length;
+    const budget = initial - Math.floor(longSections.length / 3);
+    const { ctx: out } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    const truncated = out.detectedTopics[0].sections;
+    // Result must be shorter than original (truncation occurred)
+    assert.ok(truncated.length < longSections.length);
+    // Result must not end mid-token: it must end at a complete LINE-N-MARKER token
+    // (i.e., the final character is either nothing or `R`, not part of "LINE-")
+    if (truncated.length > 0) {
+      // Verify no partial line-marker at the end:
+      // every line in truncated should be complete (matches `LINE-\d+-MARKER`)
+      const truncatedLines = truncated.split('\n');
+      for (const line of truncatedLines) {
+        if (line.length === 0) continue;
+        assert.match(line, /^LINE-\d+-MARKER$/, `line "${line}" should be a complete LINE-N-MARKER`);
+      }
+    }
+  });
+
+  it('Tier 3: drops the lowest-scored topic (last element) when tiers 1-2 are not enough', () => {
+    const bigSections = 'X'.repeat(500);
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-high', sections: bigSections, l2Excerpts: [] },
+        { slug: 'topic-mid', sections: bigSections, l2Excerpts: [] },
+        { slug: 'topic-low', sections: bigSections, l2Excerpts: [] },
+      ],
+    };
+
+    // Budget tight enough that even Tier 2's worst-case (sections trimmed to 0)
+    // can't fit three topics: 3-topic floor is 129 chars (header 67 + 3 blocks
+    // of `### [[slug]]\n\n` + 2 inter-block joins). 2-topic floor is 108 chars.
+    // Budget = 120 forces Tier 3 to drop the lowest-scored topic.
+    const budget = 120;
+    const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
+
+    assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
+    // Highest-scored survives
+    assert.equal(out.detectedTopics[0].slug, 'topic-high');
+    // Lowest-scored dropped
+    const remainingSlugs = out.detectedTopics.map(t => t.slug);
+    assert.ok(!remainingSlugs.includes('topic-low'));
+  });
+
+  it('NEVER drops the highest-scored topic, even with extreme budget pressure', () => {
+    const hugeSections = 'X'.repeat(50000); // Way over any budget
+    const ctx: TopicWikiContext = {
+      detectedTopics: [
+        { slug: 'topic-high', sections: hugeSections, l2Excerpts: ['big1', 'big2'] },
+        { slug: 'topic-mid', sections: hugeSections, l2Excerpts: ['big3'] },
+        { slug: 'topic-low', sections: hugeSections, l2Excerpts: [] },
+      ],
+    };
+
+    const { ctx: out } = truncateTopicWikiContextToBudget(ctx, 100);
+
+    assert.ok(out.detectedTopics.length >= 1, 'must keep at least one topic');
+    assert.equal(out.detectedTopics[0].slug, 'topic-high');
+  });
+
+  it('MAX_TOPIC_WIKI_CONTEXT_CHARS const is 6000', () => {
+    assert.equal(MAX_TOPIC_WIKI_CONTEXT_CHARS, 6000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Caller-layer slug merge
+// ---------------------------------------------------------------------------
+
+describe('mergeDetectedSlugsIntoActiveList', () => {
+  it('returns undefined when both inputs are empty/undefined', () => {
+    assert.equal(mergeDetectedSlugsIntoActiveList(undefined, undefined), undefined);
+    assert.equal(mergeDetectedSlugsIntoActiveList('', []), undefined);
+  });
+
+  it('appends detected slugs to existing active list', () => {
+    const active = 'pricing-model — active: $149/mo plan\nonboarding-v2 — active: rewrite';
+    const merged = mergeDetectedSlugsIntoActiveList(active, ['new-topic']);
+    assert.ok(merged !== undefined);
+    assert.ok(merged.includes('pricing-model — active'));
+    assert.ok(merged.includes('onboarding-v2 — active'));
+    assert.ok(merged.endsWith('new-topic'));
+  });
+
+  it('skips detected slugs that are already in the active list', () => {
+    const active = 'pricing-model — active: $149/mo plan';
+    const merged = mergeDetectedSlugsIntoActiveList(active, ['pricing-model', 'new-topic']);
+    assert.ok(merged !== undefined);
+    // Should only contain pricing-model once
+    const matches = merged.match(/pricing-model/g);
+    assert.equal(matches?.length, 1);
+    assert.ok(merged.includes('new-topic'));
+  });
+
+  it('returns just the detected slugs when active list is undefined', () => {
+    const merged = mergeDetectedSlugsIntoActiveList(undefined, ['foo', 'bar']);
+    assert.equal(merged, 'foo\nbar');
+  });
+
+  it('integration: detected slugs end up in the rendered prompt active-slugs block', async () => {
+    // Build a bundle with topicWikiContext and call extractMeetingIntelligence;
+    // capture the prompt to verify the active-slugs block contains detected slugs.
+    let capturedPrompt = '';
+    const mockLLM: LLMCallFn = async (prompt) => {
+      capturedPrompt = prompt;
+      return '{}';
+    };
+
+    const bundle: MeetingContextBundle = makeBundleWithWikiContext([
+      {
+        slug: 'pricing-model',
+        sections: '## Current state\n\nstate',
+        l2Excerpts: [],
+      },
+    ]);
+
+    await extractMeetingIntelligence('transcript', mockLLM, {
+      context: bundle,
+      activeTopicSlugs: 'existing-topic — active: in flight',
+    });
+
+    // Both should appear under "Prefer these existing topic slugs"
+    assert.ok(capturedPrompt.includes('Prefer these existing topic slugs'));
+    assert.ok(capturedPrompt.includes('existing-topic — active'));
+    assert.ok(capturedPrompt.includes('pricing-model'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// core/could_include + frontmatter sanitizer (Task 7)
+// ---------------------------------------------------------------------------
+
+describe('core/could_include + frontmatter sanitizer', () => {
+  // Helper: silence console.warn during sanitizer tests so test output is clean.
+  const withSilencedWarn = <T>(fn: () => T): T => {
+    const orig = console.warn;
+    console.warn = () => {};
+    try {
+      return fn();
+    } finally {
+      console.warn = orig;
+    }
+  };
+
+  it('schema description for core mentions actionable, decided, or changed', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    // Find the `"core":` schema line
+    const coreLine = prompt.split('\n').find((l) => l.includes('"core":'));
+    assert.ok(coreLine, 'expected "core" line in JSON schema');
+    const lower = coreLine.toLowerCase();
+    assert.ok(
+      lower.includes('actionable') || lower.includes('decided') || lower.includes('changed'),
+      `core schema description should mention actionable/decided/changed; got: ${coreLine}`,
+    );
+  });
+
+  it('schema description for could_include mentions 8 and headline or self-contained', () => {
+    const prompt = buildMeetingExtractionPrompt('transcript');
+    const ciLine = prompt.split('\n').find((l) => l.includes('"could_include":'));
+    assert.ok(ciLine, 'expected "could_include" line in JSON schema');
+    assert.ok(ciLine.includes('8'), `could_include schema should mention "8"; got: ${ciLine}`);
+    const lower = ciLine.toLowerCase();
+    assert.ok(
+      lower.includes('headline') || lower.includes('self-contained'),
+      `could_include schema should mention headline/self-contained; got: ${ciLine}`,
+    );
+  });
+
+  it('parser parses populated core field on response', () => {
+    const response = JSON.stringify({
+      summary: 'fallback summary',
+      core: 'Decided to ship the new pricing model on Friday after Sara confirmed legal sign-off.',
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(
+      result.intelligence.core,
+      'Decided to ship the new pricing model on Friday after Sara confirmed legal sign-off.',
+    );
+    // backward compat: summary still present
+    assert.equal(result.intelligence.summary, 'fallback summary');
+  });
+
+  it('parser hard-caps could_include at 8 (12 in → 8 out)', () => {
+    const entries: string[] = [];
+    for (let i = 1; i <= 12; i += 1) entries.push(`Headline ${i}: side thread number ${i}`);
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: entries,
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.equal(result.intelligence.could_include!.length, 8);
+    // Order preserved — first 8 retained, last 4 dropped
+    assert.equal(result.intelligence.could_include![0], 'Headline 1: side thread number 1');
+    assert.equal(result.intelligence.could_include![7], 'Headline 8: side thread number 8');
+  });
+
+  it('parser trims whitespace and rejects empty after trim', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: ['  spaced headline  ', '   ', '', 'real headline'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, ['spaced headline', 'real headline']);
+  });
+
+  it('parser rejects could_include items > 200 chars', () => {
+    const longEntry = 'x'.repeat(201);
+    const okEntry = 'normal headline';
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: [longEntry, okEntry],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, [okEntry]);
+  });
+
+  it('sanitizer strips raw --- from core (response with "a\\n---\\nb" → core becomes "a\\nb")', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      core: 'a\n---\nb',
+    });
+    const result = withSilencedWarn(() => parseMeetingExtractionResponse(response));
+    assert.equal(result.intelligence.core, 'a\nb');
+  });
+
+  it('sanitizer strips raw --- from could_include items', () => {
+    const response = JSON.stringify({
+      summary: 's',
+      could_include: ['safe headline', 'before\n---\nafter', 'plain'],
+    });
+    const result = withSilencedWarn(() => parseMeetingExtractionResponse(response));
+    assert.ok(result.intelligence.could_include);
+    assert.deepEqual(result.intelligence.could_include, [
+      'safe headline',
+      'before\nafter',
+      'plain',
+    ]);
+  });
+
+  it('summary-only response still parses (backward compat)', () => {
+    const response = JSON.stringify({ summary: 'just a summary, no core or could_include' });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.summary, 'just a summary, no core or could_include');
+    assert.equal(result.intelligence.core, undefined);
+    assert.equal(result.intelligence.could_include, undefined);
+  });
+
+  it('both summary and core in response → both fields populated', () => {
+    const response = JSON.stringify({
+      summary: 'two-sentence summary',
+      core: 'lead prose',
+      could_include: ['Risks: Sara flagged churn assumption'],
+    });
+    const result = parseMeetingExtractionResponse(response);
+    assert.equal(result.intelligence.summary, 'two-sentence summary');
+    assert.equal(result.intelligence.core, 'lead prose');
+    assert.deepEqual(result.intelligence.could_include, [
+      'Risks: Sara flagged churn assumption',
+    ]);
+  });
+
+  it('stripYamlDocSeparator helper: detects line-start --- and reports stripped count', () => {
+    const result1 = stripYamlDocSeparator('a\n---\nb');
+    assert.equal(result1.sanitized, 'a\nb'); // separator line removed entirely; surviving lines re-joined
+    assert.equal(result1.stripped, 1);
+
+    const result2 = stripYamlDocSeparator('no separators here');
+    assert.equal(result2.sanitized, 'no separators here');
+    assert.equal(result2.stripped, 0);
+
+    // Multiple separators
+    const result3 = stripYamlDocSeparator('---\nfoo\n---\nbar\n---');
+    assert.equal(result3.stripped, 3);
+
+    // Indented `---` is NOT treated as a separator (regex anchors to line start)
+    const result4 = stripYamlDocSeparator('  ---  ');
+    assert.equal(result4.stripped, 0);
+    assert.equal(result4.sanitized, '  ---  ');
+
+    // `---` with trailing whitespace IS stripped
+    const result5 = stripYamlDocSeparator('a\n---  \nb');
+    assert.equal(result5.stripped, 1);
   });
 });

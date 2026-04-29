@@ -329,6 +329,28 @@ Batch all meetings (unprocessed + already processed) into groups of 4 for subage
 
 ---
 
+### Phase 2.5: Surface Could-Include Side Threads (orchestrator)
+
+After meetings stage, scan each meeting file's `## Could include` section for side threads the LLM flagged but didn't promote to action items / decisions / learnings (these are wiki-aware extraction's "worth knowing about, not load-bearing enough to commit" bullets — they default to *informational only*, not staged).
+
+If any meeting has a `## Could include` section with at least one bullet, surface them to the user for *selective* promotion. Same workflow as daily-winddown Phase 2.4 — see that skill for the full step-by-step. Summary:
+
+1. **Collect**: read `## Could include` bullets across all processed meetings; aggregate into one numbered list grouped by meeting.
+2. **Present**: show the list with global numbering (e.g. 1–14 across the week's meetings); ask the user to reply `keep N,M,P` / `keep all` / `none`. Default is skip-all.
+3. **Promote each kept item** by editing the source meeting file:
+   - Determine type from category prefix (`Risks:` → learning, `Decision:` → decision, `Action:`/`Next:` → action item; ambiguous → ask inline).
+   - Generate next `<prefix>_NNN` ID for the matching staged section.
+   - Append the bullet to `## Staged Action Items` / `## Staged Decisions` / `## Staged Learnings`, stripping the category prefix from the body.
+   - Remove the bullet from `## Could include`.
+   - Status defaults to `pending` (no `staged_item_status` mutation needed).
+4. **Confirm and continue** to Phase 3.
+
+**Weekly-specific note**: a week's worth of meetings can produce 30+ could_include bullets. Truncate the presented list to the top ~15 (one or two per meeting); show the rest behind a `more` reply. Avoid overwhelming the user with a flat 30+ list.
+
+If no meeting has a `## Could include` block, skip this phase silently.
+
+---
+
 ### Phase 3: Merge & Intelligence (orchestrator — sequential)
 
 #### 3a. Merge Person File Diffs
