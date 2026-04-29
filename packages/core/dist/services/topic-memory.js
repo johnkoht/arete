@@ -548,7 +548,7 @@ Constraints:
 import { join as pathJoin, basename as pathBasename } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
-TopicMemoryService.prototype.refreshAllFromMeetings = async function (paths, options) {
+TopicMemoryService.prototype.refreshAllFromSources = async function (paths, options) {
     // Acquire the seed lock unless the caller already holds it (seed does).
     // Prevents concurrent `arete memory refresh` runs (cron + interactive)
     // from racing on topic-page writes.

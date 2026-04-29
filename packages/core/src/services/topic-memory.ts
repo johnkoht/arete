@@ -792,7 +792,7 @@ export interface RefreshBatchResult {
 
 declare module './topic-memory.js' {
   interface TopicMemoryService {
-    refreshAllFromMeetings(
+    refreshAllFromSources(
       paths: import('../models/workspace.js').WorkspacePaths,
       options: RefreshBatchOptions,
     ): Promise<RefreshBatchResult>;
@@ -803,7 +803,7 @@ import { join as pathJoin, basename as pathBasename } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
 
-TopicMemoryService.prototype.refreshAllFromMeetings = async function (
+TopicMemoryService.prototype.refreshAllFromSources = async function (
   this: TopicMemoryService,
   paths,
   options,

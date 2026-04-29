@@ -291,7 +291,7 @@ export interface RefreshBatchResult {
 }
 declare module './topic-memory.js' {
     interface TopicMemoryService {
-        refreshAllFromMeetings(paths: import('../models/workspace.js').WorkspacePaths, options: RefreshBatchOptions): Promise<RefreshBatchResult>;
+        refreshAllFromSources(paths: import('../models/workspace.js').WorkspacePaths, options: RefreshBatchOptions): Promise<RefreshBatchResult>;
     }
 }
 /**

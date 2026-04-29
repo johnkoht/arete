@@ -1228,7 +1228,7 @@ export function registerMeetingCommands(program) {
         // Hook 2 — Integrate this meeting into its topic wiki pages (Phase A #2)
         //
         // After commit succeeds, materialize the LLM-synthesized narrative into
-        // each topic page tagged on the meeting. Uses refreshAllFromMeetings
+        // each topic page tagged on the meeting. Uses refreshAllFromSources
         // scoped to this meeting's slugs — content-hash idempotency means only
         // this new meeting's integration spends LLM; any previously-integrated
         // sources for the same topics skip cleanly.
@@ -1252,7 +1252,7 @@ export function registerMeetingCommands(program) {
                             return r.text;
                         };
                         const integrationStart = Date.now();
-                        const result = await services.topicMemory.refreshAllFromMeetings(paths, {
+                        const result = await services.topicMemory.refreshAllFromSources(paths, {
                             today: new Date().toISOString().slice(0, 10),
                             callLLM: topicCallLLM,
                             slugs: meetingTopics,

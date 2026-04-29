@@ -250,7 +250,7 @@ export function registerTopicCommands(program: Command): void {
       // surfaces how many integrations would actually happen (accounting for
       // content-hash dedup of previously-integrated meetings).
       const slugs = opts.all ? undefined : slug !== undefined ? [slug] : [];
-      const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+      const estimate = await services.topicMemory.refreshAllFromSources(paths, {
         today: today(),
         dryRun: true,
         slugs,
@@ -328,7 +328,7 @@ export function registerTopicCommands(program: Command): void {
       // cannot race on topic-page writes.
       let result;
       try {
-        result = await services.topicMemory.refreshAllFromMeetings(paths, {
+        result = await services.topicMemory.refreshAllFromSources(paths, {
           today: today(),
           callLLM,
           slugs,
@@ -784,7 +784,7 @@ export function registerTopicCommands(program: Command): void {
       }
 
       // ---- Cost estimate via dry-run through the batch helper ------------
-      const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+      const estimate = await services.topicMemory.refreshAllFromSources(paths, {
         today: today(),
         dryRun: true,
         slugs: targetSlugs,
@@ -907,7 +907,7 @@ export function registerTopicCommands(program: Command): void {
       // service doesn't try to double-acquire.
       let result;
       try {
-        result = await services.topicMemory.refreshAllFromMeetings(paths, {
+        result = await services.topicMemory.refreshAllFromSources(paths, {
           today: today(),
           callLLM,
           slugs: targetSlugs,
