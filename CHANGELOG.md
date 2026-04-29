@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.0] - 2026-04-29
 
 ### Added
 - **Wiki-leaning meeting extraction** — when topics are detected on a transcript, the LLM sees existing topic-page sections + topic-tagged L2 items as "already known" and emits only deltas (new decisions, changed plans, new risks/questions). Verbatim delta directive includes a "When in doubt, INCLUDE" tiebreaker and a one-shot CONFIRMATION-of-uncertainty example. Char budget guard (`MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000`) with 3-tier truncation; highest-scored topic never dropped.

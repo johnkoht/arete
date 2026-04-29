@@ -4,6 +4,25 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 27, 2026
+
+### Wiki-Leaning Meeting Extraction
+
+**Meetings now produce thinner, sharper recaps that lean on what your topic wiki already knows.** When a meeting touches topics you've already built up — pricing, a specific initiative, a vendor — the extractor sees the relevant topic-page sections and prior tagged items as "already known" and emits only deltas: new decisions, changed plans, new risks, new open questions. Less repetition of stuff your wiki already records, more signal in the recap.
+
+- **New `## Core` section in meeting recaps** — replaces the diplomatic status-recap of `## Summary` with a principle-based, action-oriented narrative. Leads with what's actionable, decided, or changed.
+- **New `## Could include` section** — up to 8 prioritized one-line headlines for side threads worth knowing about (risks, parking-lot items, contextual notes). The daily and weekly winddown skills now surface these for selective promotion into staged learnings/decisions/actions — `keep all`, `keep 1,3` or `none`.
+- **`## Summary` still works** — historical meetings keep their original shape; both headings parse permanently.
+- **L2 items now carry topic tags.** New `learnings.md` / `decisions.md` entries get a `**Topics**: slug-a, slug-b` bullet so they're queryable per topic. Tag-forward only — historical entries are unchanged.
+- **New `arete meeting extract --dry-run-topics` flag** — runs lexical topic detection only and prints which topics matched (with scores + matched tokens). Use this to tune detection against real meetings before relying on the wiki-aware path.
+
+### Side Effects (bug fixes that came along for the ride)
+
+- **`learnings.md` / `decisions.md` are searchable again.** A latent header mismatch meant newly written L2 entries weren't found by memory queries. The parser now matches all three historical header shapes.
+- **The web app produces the same extractions as the CLI.** A missing `activeTopicSlugs` parameter on the backend path silently changed extraction behavior — fixed.
+
+---
+
 ## Week of April 17, 2026
 
 ### Cleaner Action Items from Meeting Extraction
