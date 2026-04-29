@@ -69,14 +69,14 @@ describe('integration: context + brief seeded journey', () => {
     const briefResult = JSON.parse(briefOutput) as {
       success: boolean;
       contextFiles: number;
-      markdown: string;
+      raw: string;
       confidence: string;
     };
 
     assert.equal(briefResult.success, true);
     assert.ok(briefResult.contextFiles > 0, 'brief should include context files');
-    assert.ok(briefResult.markdown.includes('Bob Buyer'), 'brief should include Bob Buyer context');
-    assert.ok(briefResult.markdown.includes('Acme'), 'brief should include Acme thread context');
+    assert.ok(briefResult.raw.includes('Bob Buyer'), 'brief should include Bob Buyer context');
+    assert.ok(briefResult.raw.includes('Acme'), 'brief should include Acme thread context');
     assert.ok(['High', 'Medium', 'Low'].includes(briefResult.confidence));
   });
 });
