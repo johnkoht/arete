@@ -4302,7 +4302,7 @@ describe('buildMeetingExtractionPrompt — delta directive', () => {
 
     assert.ok(prompt.includes('### Example: CONFIRMATION-of-uncertainty (the load-bearing escape hatch)'));
     assert.ok(prompt.includes('Pricing tier — $99 or $149?'));
-    assert.ok(prompt.includes("'Pricing tier set to $149"));
+    assert.ok(prompt.includes('"Pricing tier set to $149'));
     assert.ok(prompt.includes('Sara confirmed the margin model works'));
   });
 
@@ -4455,8 +4455,11 @@ describe('truncateTopicWikiContextToBudget', () => {
       ],
     };
 
-    // Budget tight enough that even halving doesn't fit all three
-    const budget = 800;
+    // Budget tight enough that even Tier 2's worst-case (sections trimmed to 0)
+    // can't fit three topics: 3-topic floor is 129 chars (header 67 + 3 blocks
+    // of `### [[slug]]\n\n` + 2 inter-block joins). 2-topic floor is 108 chars.
+    // Budget = 120 forces Tier 3 to drop the lowest-scored topic.
+    const budget = 120;
     const { ctx: out, totalChars } = truncateTopicWikiContextToBudget(ctx, budget);
 
     assert.ok(totalChars <= budget, `totalChars ${totalChars} should fit in budget ${budget}`);
