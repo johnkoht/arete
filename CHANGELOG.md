@@ -10,6 +10,9 @@
 - **CLI tuning lever** — `arete meeting extract --dry-run-topics` runs detection only, prints score + matched tokens (separated stop vs non-stop) + last_refreshed for each detected slug; supports `--json`. Used to tune detection thresholds against real meetings before A/B rollout.
 - **Frontmatter sanitizer** — `stripYamlDocSeparator` strips line-start `---` from LLM-generated `core` and `could_include[]` strings before they're written into staged sections of YAML-frontmattered meeting files. Strip-and-warn pattern (deliberately diverged from topic-memory.ts's drop-on-detect: LLM prose is more likely accidental than malicious).
 
+### Changed
+- **`daily-winddown` and `weekly-winddown` skills** gain a new orchestrator phase (Phase 2.4 daily / Phase 2.5 weekly) that scans each processed meeting's `## Could include` section and surfaces side-thread bullets to the user for selective promotion via chat. User replies `keep N,M,P` / `keep all` / `none` (default skip-all). Agent picks type from category prefix (`Risks:` → learning, `Decision:` → decision, `Action:` → action item; ambiguous → asks inline), generates next ID, moves bullet from `## Could include` into the matching staged section. Items left unpromoted stay as informational text in the meeting markdown — visible to future chat sessions, invisible to the staging UI. Pairs with the wiki-leaning extraction `could_include` field.
+
 ### Fixed
 - **L2 parser/writer mismatch** — newly written learnings/decisions were unsearchable because writer emitted `## Title` while parser only matched `### Title`. Parser now matches all three header shapes.
 - **Backend missing `activeTopicSlugs`** — CLI passed it to `extractMeetingIntelligence`; backend silently skipped, producing different extractions on the web path. Backend now mirrors CLI's assembly via `loadMemorySummary` + `renderActiveTopicsAsSlugList`.
