@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-04-06",
+  "lastUpdated": "2026-04-29",
   "workspace": "arete-build",
   "capabilities": [
     {
@@ -331,10 +331,14 @@
       "implementationPaths": [
         "packages/cli/src/commands/meeting.ts",
         "packages/core/src/services/meeting-extraction.ts",
-        "packages/core/src/services/meeting-processing.ts"
+        "packages/core/src/services/meeting-processing.ts",
+        "packages/core/src/services/topic-detection.ts",
+        "packages/core/src/services/meeting-context.ts",
+        "packages/apps/backend/src/services/agent.ts"
       ],
       "entrypoints": [
         "arete meeting extract <file>",
+        "arete meeting extract <file> --dry-run-topics",
         "arete meeting approve <slug>"
       ],
       "readBeforeChange": [
@@ -357,9 +361,14 @@
         "Decisions and learnings default to 0.9 confidence when extracted",
         "Meetings support optional area: slug in YAML frontmatter for area association before processing",
         "suggestAreaForMeeting() in area-parser.ts provides content-based area suggestions with confidence scores",
-        "Area context (current state, recent decisions) is injected into extraction prompt when area is set"
+        "Area context (current state, recent decisions) is injected into extraction prompt when area is set",
+        "Wiki-aware extraction: when topics are detected on a transcript, injects topic-page sections + topic-tagged L2 items as 'already known'; LLM emits only deltas via verbatim delta directive",
+        "Recap: ## Core (free-form, principle-based) + ## Could include (≤8 prioritized headlines); ## Summary retained for backward compat — both headings parse permanently",
+        "Topic detection (lexical pre-pass): detectTopicsLexical / detectTopicsLexicalDetailed; stop-token list + ≥2 non-stop slug tokens + ≥0.5 coverage; cap 3 at rollout",
+        "--dry-run-topics flag prints detected topics with score + matched tokens for empirical threshold tuning before A/B rollout",
+        "L2 entries (learnings.md, decisions.md) gain **Topics**: bullet for per-topic queryability via getMemoryItemsForTopics(paths, slugs, opts)"
       ],
-      "lastVerified": "2026-03-16"
+      "lastVerified": "2026-04-29"
     },
     {
       "id": "unified-search",
