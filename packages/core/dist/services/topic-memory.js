@@ -703,7 +703,27 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
         // Accessing private storage through `(this as any)` avoids needing a public
         // accessor for this internal batch operation.
         const storage = this.storage;
-        const allSources = await discoverTopicSources(paths, storage);
+        const discovered = await discoverTopicSources(paths, storage);
+        // `--source <path>` scopes discovery to a single file BEFORE the per-
+        // slug filter runs. Mirrors the skill's "integrate just the digest I
+        // just wrote" semantics. Two-step matching tolerates absolute vs.
+        // workspace-relative path mismatches between the CLI's
+        // `path.resolve(cwd, arg)` and the storage adapter's listed paths
+        // (some adapters return absolute, some return relative). We accept
+        // an entry that matches by exact equality OR by suffix on either
+        // side — small enough surface that ambiguity is implausible
+        // (entries are unique paths, scoped flag passes one path at a time).
+        const allSources = options.sourcePath !== undefined
+            ? discovered.filter((src) => {
+                if (src.path === options.sourcePath)
+                    return true;
+                if (src.path.endsWith(options.sourcePath))
+                    return true;
+                if (options.sourcePath.endsWith(src.path))
+                    return true;
+                return false;
+            })
+            : discovered;
         const perTopic = [];
         for (const targetSlug of targetSlugs) {
             let page = existingBySlug.get(targetSlug) ?? null;

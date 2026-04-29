@@ -274,6 +274,20 @@ export interface RefreshBatchOptions {
     /** Only refresh these slugs; omit for all existing topics. */
     slugs?: string[];
     /**
+     * When set, scope source discovery to a single file. The
+     * `discoverTopicSources` output is filtered to entries where
+     * `entry.path === sourcePath` BEFORE the per-slug source filter
+     * runs. Used by the slack-digest skill (Hook 2) to integrate ONLY
+     * the just-written digest, not every prior digest tagged with the
+     * same slugs.
+     *
+     * Pre-mortem Risk 4 / memory bullet 5: this is a behavioral filter,
+     * NOT a label-only logging hint. Without it, a workspace with N
+     * prior digests tagged `cover-whale-templates` runs N× the user's
+     * expected cost.
+     */
+    sourcePath?: string;
+    /**
      * When true, skip acquiring the `.arete/.seed.lock`. Use only when
      * the caller already holds the lock (e.g., `arete topic seed`
      * acquires at the CLI boundary and threads `skipLock: true` so
