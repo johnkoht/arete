@@ -16,6 +16,8 @@ import {
   parseMeetingFile,
   acquireSeedLock,
   SeedLockHeldError,
+  getActiveTopics,
+  renderActiveTopicsAsSlugList,
 } from '@arete/core';
 import type { Command } from 'commander';
 import { join, basename } from 'node:path';
@@ -61,8 +63,10 @@ export function registerTopicCommands(program: Command): void {
     .command('list')
     .description('List all topic pages')
     .option('--area <slug>', 'Filter to topics in this area')
+    .option('--active', 'Filter to active topics (open items OR refreshed within recency window)')
+    .option('--slugs', 'Emit the bare-slug active-topics list (the same shape the meeting-extraction prompt is biased with). Requires --active. With --json: { slugs: string[] }; without --json: one `slug — status: summary` per line.')
     .option('--json', 'Output as JSON')
-    .action(async (opts: { area?: string; json?: boolean }) => {
+    .action(async (opts: { area?: string; active?: boolean; slugs?: boolean; json?: boolean }) => {
       const services = await createServices(process.cwd());
       const root = await services.workspace.findRoot();
       if (!root) {
@@ -76,6 +80,44 @@ export function registerTopicCommands(program: Command): void {
       const paths = services.workspace.getPaths(root);
 
       const { topics, errors } = await services.topicMemory.listAll(paths);
+
+      // ---- --active --slugs primitive ------------------------------------
+      // Emits the active-topics slug list (canonical interchange shape used
+      // by the meeting-extraction prompt bias). External consumers — e.g.
+      // the slack-digest skill — pipe this into their own extraction prompts
+      // so both source classes propose against the same slug universe.
+      //
+      // Implementation deliberately calls
+      // `renderActiveTopicsAsSlugList(getActiveTopics(...))` directly. Do
+      // NOT inline a slug-list renderer here; rendering must be reachable
+      // from one place to keep the dual-tier sprawl defense single-sourced.
+      if (opts.slugs) {
+        if (opts.active !== true) {
+          if (opts.json) {
+            console.log(JSON.stringify({ success: false, error: '--slugs requires --active' }));
+          } else {
+            error('--slugs requires --active.');
+            info('e.g., `arete topic list --active --slugs --json`');
+          }
+          process.exit(1);
+        }
+        const activeEntries = getActiveTopics(topics);
+        if (opts.json) {
+          // JSON object form per PRD AC: `{ slugs: string[] }`. This is the
+          // canonical interchange shape; consumers parse `.slugs` to feed
+          // the meeting-extraction-equivalent prompt bias.
+          console.log(JSON.stringify({
+            slugs: activeEntries.map((e) => e.slug),
+          }));
+        } else {
+          // Plain form: byte-equal to renderActiveTopicsAsSlugList output.
+          // (The meeting-extraction prompt embeds this exact string.)
+          const rendered = renderActiveTopicsAsSlugList(activeEntries);
+          if (rendered.length > 0) console.log(rendered);
+        }
+        return;
+      }
+
       const filtered = opts.area !== undefined
         ? topics.filter((t) => t.frontmatter.area === opts.area)
         : topics;
