@@ -30,6 +30,11 @@ export class SeedLockHeldError extends Error {
         ? 'Seed lock is held by another process'
         : `Seed lock held by pid ${info.pid} (started ${info.started}, command: ${info.command})`,
     );
+    // Set `name` so `err.name === 'SeedLockHeldError'` checks work
+    // alongside `instanceof SeedLockHeldError`. Several callers
+    // (meeting.ts approve, etc.) rely on the name-based check; without
+    // this set, a custom Error subclass keeps `name = 'Error'`.
+    this.name = 'SeedLockHeldError';
   }
 }
 

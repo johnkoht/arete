@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
 import {
   runCli,
   runCliRaw,
@@ -223,6 +223,204 @@ Body content here.`,
       );
       assert.match(topicContent, /## Source trail/);
       assert.match(topicContent, /2026-04-22-example/);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // topic refresh — Task 5: --slugs, --source, --skip-topics, lock-held
+  // ---------------------------------------------------------------------------
+
+  describe('topic refresh --slugs / --source / --skip-topics (Task 5)', () => {
+    function seedSlackDigest(name: string, topics: string[], date: string): string {
+      const notesDir = join(tmpDir, 'resources', 'notes');
+      mkdirSync(notesDir, { recursive: true });
+      const topicList = `[${topics.join(', ')}]`;
+      const digestPath = join(notesDir, `${name}.md`);
+      writeFileSync(
+        digestPath,
+        `---
+title: "Slack Digest — ${date}"
+date: ${date}
+type: slack-digest
+participants: [person-a]
+items_extracted: 1
+items_approved: 1
+topics: ${topicList}
+---
+
+# Slack Digest — ${date}
+
+## Conversations
+
+### 1. DM with Person A
+Discussed ${topics.join(', ')} on ${date}.
+`,
+      );
+      return digestPath;
+    }
+
+    it('--slugs comma-list refreshes only listed slugs', () => {
+      seedTopic('foo');
+      seedTopic('bar');
+      seedTopic('baz');
+      seedSlackDigest('2026-04-28-slack-digest', ['foo', 'bar', 'baz'], '2026-04-28');
+      const r = runCliRaw(
+        ['topic', 'refresh', '--slugs', 'foo,bar', '--allow-no-llm', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0, `stderr=${r.stderr} stdout=${r.stdout}`);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, true);
+      const slugs = parsed.topics.map((t: { slug: string }) => t.slug).sort();
+      assert.deepStrictEqual(slugs, ['bar', 'foo']);
+    });
+
+    it('--slugs and positional <slug> together is an error', () => {
+      seedTopic('foo');
+      const r = runCliRaw(
+        ['topic', 'refresh', 'foo', '--slugs', 'bar', '--allow-no-llm', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 1);
+      const parsed = JSON.parse(r.stdout);
+      assert.match(parsed.error, /Cannot pass both/);
+    });
+
+    it('--skip-topics short-circuits without LLM/writes', () => {
+      seedTopic('foo');
+      seedSlackDigest('2026-04-28-slack-digest', ['foo'], '2026-04-28');
+      const r = runCliRaw(
+        ['topic', 'refresh', '--slugs', 'foo', '--skip-topics', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0);
+      const parsed = JSON.parse(r.stdout);
+      assert.strictEqual(parsed.success, true);
+      assert.strictEqual(parsed.skipped, 'topics');
+      // Topic page's sources_integrated must remain empty.
+      const topicContent = readFileSync(
+        join(tmpDir, '.arete', 'memory', 'topics', 'foo.md'),
+        'utf8',
+      );
+      assert.match(topicContent, /sources_integrated: \[\]/);
+    });
+
+    it('--source rejects non-existent path', () => {
+      seedTopic('foo');
+      const r = runCliRaw(
+        [
+          'topic',
+          'refresh',
+          '--slugs',
+          'foo',
+          '--source',
+          'resources/notes/does-not-exist.md',
+          '--allow-no-llm',
+          '--json',
+        ],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 1);
+      const parsed = JSON.parse(r.stdout);
+      assert.match(parsed.error, /does not exist/);
+    });
+
+    it('--source rejects file with non-conforming filename', () => {
+      seedTopic('foo');
+      // A real file but wrong filename shape.
+      const notesDir = join(tmpDir, 'resources', 'notes');
+      mkdirSync(notesDir, { recursive: true });
+      const badPath = join(notesDir, 'random-note.md');
+      writeFileSync(badPath, '---\ntopics: [foo]\n---\n\nBody.');
+      const r = runCliRaw(
+        ['topic', 'refresh', '--slugs', 'foo', '--source', badPath, '--allow-no-llm', '--json'],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 1);
+      const parsed = JSON.parse(r.stdout);
+      assert.match(parsed.error, /must be a meeting.*or slack-digest/);
+    });
+
+    it('--source scopes integration to a single digest (no cost-blowup)', () => {
+      seedTopic('foo');
+      // Three prior digests + one new digest, all tagged `foo`.
+      seedSlackDigest('2026-04-20-slack-digest', ['foo'], '2026-04-20');
+      seedSlackDigest('2026-04-22-slack-digest', ['foo'], '2026-04-22');
+      seedSlackDigest('2026-04-25-slack-digest', ['foo'], '2026-04-25');
+      const newDigest = seedSlackDigest('2026-04-28-slack-digest', ['foo'], '2026-04-28');
+
+      const r = runCliRaw(
+        [
+          'topic',
+          'refresh',
+          '--slugs',
+          'foo',
+          '--source',
+          newDigest,
+          '--allow-no-llm',
+          '--json',
+        ],
+        { cwd: tmpDir },
+      );
+      assert.strictEqual(r.code, 0, `stderr=${r.stderr} stdout=${r.stdout}`);
+      const parsed = JSON.parse(r.stdout);
+      // Exactly 1 source integrated (fallback path since --allow-no-llm).
+      assert.strictEqual(parsed.totals.fallback, 1);
+      assert.strictEqual(parsed.totals.integrated, 0);
+
+      const topicContent = readFileSync(
+        join(tmpDir, '.arete', 'memory', 'topics', 'foo.md'),
+        'utf8',
+      );
+      assert.match(topicContent, /2026-04-28-slack-digest/);
+      // Prior digests must NOT appear.
+      assert.doesNotMatch(topicContent, /2026-04-20-slack-digest/);
+      assert.doesNotMatch(topicContent, /2026-04-22-slack-digest/);
+      assert.doesNotMatch(topicContent, /2026-04-25-slack-digest/);
+    });
+
+    it('emits stable seed_lock_held JSON when .arete/.seed.lock is held', () => {
+      seedTopic('foo');
+      const newDigest = seedSlackDigest('2026-04-28-slack-digest', ['foo'], '2026-04-28');
+      // Hold the lock externally by writing the file with O_EXCL semantics.
+      // The CLI must detect EEXIST and exit with the seed_lock_held marker.
+      const lockPath = join(tmpDir, '.arete', '.seed.lock');
+      mkdirSync(join(tmpDir, '.arete'), { recursive: true });
+      writeFileSync(
+        lockPath,
+        JSON.stringify({ pid: 99999, started: new Date().toISOString(), command: 'test-hold' }),
+        { flag: 'wx' },
+      );
+
+      try {
+        const r = runCliRaw(
+          [
+            'topic',
+            'refresh',
+            '--slugs',
+            'foo',
+            '--source',
+            newDigest,
+            '--allow-no-llm',
+            '--json',
+          ],
+          { cwd: tmpDir },
+        );
+        assert.strictEqual(r.code, 1, 'CLI exits non-zero on lock contention');
+        // Stdout must contain the parseable JSON marker for the
+        // slack-digest skill's catch+warn behavior. The skill's bash
+        // invocation greps for `"error":"seed_lock_held"`.
+        assert.match(r.stdout, /"error":\s*"seed_lock_held"/);
+        // No stack trace leakage in stderr.
+        assert.doesNotMatch(r.stderr, /\s+at\s+.*\(.*:\d+:\d+\)/);
+      } finally {
+        // Cleanup so afterEach() rmSync doesn't trip on stale lock.
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          /* already gone */
+        }
+      }
     });
   });
 

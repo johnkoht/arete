@@ -541,11 +541,48 @@ topics: [slug1, slug2, ...]
 - Learning: Inbound email + threading are top feature priorities -> learnings.md
 ```
 
-#### 5b. Re-index
+#### 5b. Integrate Topics & Re-index
+
+After the digest file is written (5a), trigger Hook 2 — integrate the
+just-written digest into each affected topic page's `sources_integrated`
+trail and narrative — THEN run `arete index` so search picks up both the
+digest and any topic-page updates.
+
+The topic refresh is **scoped to the digest file** via `--source <path>`
+so only this digest is integrated, not every prior digest tagged with
+the same slugs (cost-correct semantics; see `--source` help text).
 
 ```bash
+# Comma-separated union of approved-thread slugs from Phase 5a's `topics:` frontmatter.
+SLUGS="<comma-separated topics from digest frontmatter>"
+DIGEST="resources/notes/YYYY-MM-DD-slack-digest.md"
+
+# Topic refresh — non-fatal on lock contention. The CLI exits non-zero
+# with stdout JSON `{"error":"seed_lock_held",...}` if the seed lock is
+# held by a concurrent `meeting approve` (or another topic refresh).
+# Treat that case as recoverable: warn the user, leave the digest's
+# `topics:` un-integrated, and recommend a manual re-run when the
+# conflicting operation completes. Do NOT abort the rest of Phase 5.
+if [ -n "$SLUGS" ]; then
+  TOPIC_OUT=$(arete topic refresh --slugs "$SLUGS" --source "$DIGEST" --yes --json 2>&1) || true
+  if echo "$TOPIC_OUT" | grep -q '"error":"seed_lock_held"'; then
+    echo "Topic refresh deferred — seed lock held by another operation."
+    echo "Re-run when complete: arete topic refresh --slugs $SLUGS --source $DIGEST --yes"
+  fi
+fi
+
 arete index
 ```
+
+**Lock-contention contract**: `arete topic refresh` exits non-zero with
+the JSON marker `{"error":"seed_lock_held"}` on stdout when the
+`.arete/.seed.lock` is held by another process (meeting approve, another
+topic refresh, etc.). The skill MUST catch this and continue — the
+digest file, commitments, memory items, and people refreshes from
+earlier phases have already committed; only the topic-narrative side-
+effect is deferred. Re-running the same `arete topic refresh --slugs ...
+--source ...` after the conflicting operation completes is idempotent
+(content-hash dedup applies).
 
 #### 5c. Handle Unresolved Participants
 

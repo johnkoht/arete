@@ -527,3 +527,128 @@ Confirmed cover-whale-templates v2 timing and scope.
     assert.strictEqual(second.topics[0].integrated, 0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// `--source <path>` scoping (Task 5 of slack-digest-topic-wiki).
+//
+// Verifies that `refreshAllFromSources({ sourcePath })` filters discovery
+// to ONLY that file before per-slug filtering, mirroring the slack-digest
+// skill's "integrate just the digest I just wrote" semantics. Without
+// this, a workspace with N prior digests tagged the same slug runs N×
+// the user's expected cost on first integration.
+// ---------------------------------------------------------------------------
+describe('TopicMemoryService.refreshAllFromSources (sourcePath scoping)', () => {
+  let tmpDir: string;
+  let paths: WorkspacePaths;
+  let storage: FileStorageAdapter;
+
+  function digest(date: string): string {
+    return `---
+title: "Slack Digest — ${date}"
+date: ${date}
+type: slack-digest
+participants: [person-a]
+items_extracted: 1
+items_approved: 1
+topics: [foo]
+---
+
+# Slack Digest — ${date}
+
+## Conversations
+
+### 1. DM
+Talked about foo on ${date}.
+`;
+  }
+
+  const SEED_TOPIC: TopicPage = {
+    frontmatter: {
+      topic_slug: 'foo',
+      status: 'active',
+      first_seen: '2026-03-01',
+      last_refreshed: '2026-04-15',
+      sources_integrated: [],
+    },
+    sections: { 'Current state': 'Foo is being explored.' },
+  };
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'refresh-source-scope-'));
+    paths = makePathsForRefresh(tmpDir);
+    storage = new FileStorageAdapter();
+
+    writeFileForRefresh(
+      tmpDir,
+      '.arete/memory/topics/foo.md',
+      renderTopicPage(SEED_TOPIC),
+    );
+    // Three prior digests + one new digest, all tagged `foo`.
+    writeFileForRefresh(tmpDir, 'resources/notes/2026-04-20-slack-digest.md', digest('2026-04-20'));
+    writeFileForRefresh(tmpDir, 'resources/notes/2026-04-22-slack-digest.md', digest('2026-04-22'));
+    writeFileForRefresh(tmpDir, 'resources/notes/2026-04-25-slack-digest.md', digest('2026-04-25'));
+    writeFileForRefresh(tmpDir, 'resources/notes/2026-04-28-slack-digest.md', digest('2026-04-28'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('without --source: integrates ALL 4 digests tagged with the slug', async () => {
+    const svc = new TopicMemoryService(storage);
+
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['foo'],
+      skipLock: true,
+    });
+
+    assert.strictEqual(result.topics[0].fallback, 4, 'all 4 digests integrated via fallback');
+
+    const written = await storage.read(join(tmpDir, '.arete/memory/topics/foo.md'));
+    const { parseTopicPage } = await import('../../src/models/topic-page.js');
+    const parsed = parseTopicPage(written!);
+    assert.strictEqual(parsed!.frontmatter.sources_integrated.length, 4);
+  });
+
+  it('with --source: integrates ONLY the matching digest (cost-correct)', async () => {
+    const svc = new TopicMemoryService(storage);
+
+    const newDigestPath = join(tmpDir, 'resources/notes/2026-04-28-slack-digest.md');
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['foo'],
+      sourcePath: newDigestPath,
+      skipLock: true,
+    });
+
+    assert.strictEqual(result.topics[0].fallback, 1, 'only 1 digest integrated');
+    assert.strictEqual(result.topics[0].skipped, 0);
+
+    const written = await storage.read(join(tmpDir, '.arete/memory/topics/foo.md'));
+    const { parseTopicPage } = await import('../../src/models/topic-page.js');
+    const parsed = parseTopicPage(written!);
+    const sources = parsed!.frontmatter.sources_integrated;
+    assert.strictEqual(sources.length, 1, 'only the new digest in sources_integrated');
+    assert.match(sources[0].path, /2026-04-28-slack-digest\.md$/);
+    // Prior digests must NOT appear in sources_integrated.
+    for (const s of sources) {
+      assert.doesNotMatch(s.path, /2026-04-20|2026-04-22|2026-04-25/);
+    }
+  });
+
+  it('with --source: returns no-sources when path matches no slug-tagged file', async () => {
+    const svc = new TopicMemoryService(storage);
+
+    // Path exists but no entry has it as path AND tags `bar`.
+    const newDigestPath = join(tmpDir, 'resources/notes/2026-04-28-slack-digest.md');
+    const result = await svc.refreshAllFromSources(paths, {
+      today: '2026-04-29',
+      slugs: ['bar'], // not in any digest
+      sourcePath: newDigestPath,
+      skipLock: true,
+    });
+
+    assert.strictEqual(result.topics[0].status, 'no-sources');
+  });
+});

@@ -772,6 +772,20 @@ export interface RefreshBatchOptions {
   /** Only refresh these slugs; omit for all existing topics. */
   slugs?: string[];
   /**
+   * When set, scope source discovery to a single file. The
+   * `discoverTopicSources` output is filtered to entries where
+   * `entry.path === sourcePath` BEFORE the per-slug source filter
+   * runs. Used by the slack-digest skill (Hook 2) to integrate ONLY
+   * the just-written digest, not every prior digest tagged with the
+   * same slugs.
+   *
+   * Pre-mortem Risk 4 / memory bullet 5: this is a behavioral filter,
+   * NOT a label-only logging hint. Without it, a workspace with N
+   * prior digests tagged `cover-whale-templates` runs N× the user's
+   * expected cost.
+   */
+  sourcePath?: string;
+  /**
    * When true, skip acquiring the `.arete/.seed.lock`. Use only when
    * the caller already holds the lock (e.g., `arete topic seed`
    * acquires at the CLI boundary and threads `skipLock: true` so
@@ -990,7 +1004,25 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (
   // Accessing private storage through `(this as any)` avoids needing a public
   // accessor for this internal batch operation.
   const storage = (this as unknown as { storage: StorageAdapter }).storage;
-  const allSources = await discoverTopicSources(paths, storage);
+  const discovered = await discoverTopicSources(paths, storage);
+  // `--source <path>` scopes discovery to a single file BEFORE the per-
+  // slug filter runs. Mirrors the skill's "integrate just the digest I
+  // just wrote" semantics. Two-step matching tolerates absolute vs.
+  // workspace-relative path mismatches between the CLI's
+  // `path.resolve(cwd, arg)` and the storage adapter's listed paths
+  // (some adapters return absolute, some return relative). We accept
+  // an entry that matches by exact equality OR by suffix on either
+  // side — small enough surface that ambiguity is implausible
+  // (entries are unique paths, scoped flag passes one path at a time).
+  const allSources =
+    options.sourcePath !== undefined
+      ? discovered.filter((src) => {
+          if (src.path === options.sourcePath) return true;
+          if (src.path.endsWith(options.sourcePath!)) return true;
+          if (options.sourcePath!.endsWith(src.path)) return true;
+          return false;
+        })
+      : discovered;
 
   const perTopic: RefreshBatchTopicResult[] = [];
 
