@@ -776,10 +776,16 @@ export interface RefreshBatchOptions {
   /**
    * When set, scope source discovery to a single file. The
    * `discoverTopicSources` output is filtered to entries where
-   * `entry.path === sourcePath` BEFORE the per-slug source filter
+   * `entry.path === sourcePath` (exact equality, after both sides are
+   * resolved to absolute paths) BEFORE the per-slug source filter
    * runs. Used by the slack-digest skill (Hook 2) to integrate ONLY
    * the just-written digest, not every prior digest tagged with the
    * same slugs.
+   *
+   * **Must be an absolute path.** If a relative path is passed,
+   * `refreshAllFromSources` resolves it against `paths.root` before
+   * matching. Path normalization is the caller's responsibility — the
+   * service rejects ambiguous suffix matches by design (cost-correct).
    *
    * Pre-mortem Risk 4 / memory bullet 5: this is a behavioral filter,
    * NOT a label-only logging hint. Without it, a workspace with N
@@ -834,7 +840,7 @@ declare module './topic-memory.js' {
   }
 }
 
-import { join as pathJoin, basename as pathBasename } from 'node:path';
+import { join as pathJoin, basename as pathBasename, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
 
@@ -1032,21 +1038,22 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (
   const discovered = await discoverTopicSources(paths, storage);
   // `--source <path>` scopes discovery to a single file BEFORE the per-
   // slug filter runs. Mirrors the skill's "integrate just the digest I
-  // just wrote" semantics. Two-step matching tolerates absolute vs.
-  // workspace-relative path mismatches between the CLI's
-  // `path.resolve(cwd, arg)` and the storage adapter's listed paths
-  // (some adapters return absolute, some return relative). We accept
-  // an entry that matches by exact equality OR by suffix on either
-  // side — small enough surface that ambiguity is implausible
-  // (entries are unique paths, scoped flag passes one path at a time).
+  // just wrote" semantics. Match is **exact-equality only** on absolute
+  // paths — fuzzy `endsWith` matching was a footgun for programmatic
+  // callers (a bare filename like `slack-digest.md` would match every
+  // digest in the workspace, defeating cost-correctness). The CLI
+  // already passes absolute paths via `path.resolve(cwd, arg)`; if a
+  // caller passes a relative `sourcePath`, we resolve it here against
+  // `paths.root` so the equality check is well-defined.
+  let resolvedSourcePath: string | undefined;
+  if (options.sourcePath !== undefined) {
+    resolvedSourcePath = pathIsAbsolute(options.sourcePath)
+      ? options.sourcePath
+      : pathResolve(paths.root, options.sourcePath);
+  }
   const allSources =
-    options.sourcePath !== undefined
-      ? discovered.filter((src) => {
-          if (src.path === options.sourcePath) return true;
-          if (src.path.endsWith(options.sourcePath!)) return true;
-          if (options.sourcePath!.endsWith(src.path)) return true;
-          return false;
-        })
+    resolvedSourcePath !== undefined
+      ? discovered.filter((src) => src.path === resolvedSourcePath)
       : discovered;
 
   const perTopic: RefreshBatchTopicResult[] = [];

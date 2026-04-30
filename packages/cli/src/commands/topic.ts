@@ -332,7 +332,7 @@ export function registerTopicCommands(program: Command): void {
       let resolvedSourcePath: string | undefined;
       if (opts.source !== undefined) {
         const { resolve: resolvePath, basename } = await import('node:path');
-        const { existsSync } = await import('node:fs');
+        const { existsSync, realpathSync } = await import('node:fs');
         const abs = resolvePath(process.cwd(), opts.source);
         if (!existsSync(abs)) {
           const msg = `--source path does not exist: ${opts.source}`;
@@ -355,7 +355,13 @@ export function registerTopicCommands(program: Command): void {
           }
           process.exit(1);
         }
-        resolvedSourcePath = abs;
+        // Pass the realpath form to the service so its strict-equality
+        // filter matches the path returned by the storage adapter's
+        // listing (which is itself rooted at `findRoot()` → realpath on
+        // macOS, where `/var` is a symlink to `/private/var`). Without
+        // this normalization an absolute `--source` like `/var/...`
+        // would never strict-equal `/private/var/...` from discovery.
+        resolvedSourcePath = realpathSync(abs);
       }
 
       // Honor ARETE_NO_LLM envvar regardless of AI configuration.

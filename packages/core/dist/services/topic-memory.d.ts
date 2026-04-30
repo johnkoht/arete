@@ -277,10 +277,16 @@ export interface RefreshBatchOptions {
     /**
      * When set, scope source discovery to a single file. The
      * `discoverTopicSources` output is filtered to entries where
-     * `entry.path === sourcePath` BEFORE the per-slug source filter
+     * `entry.path === sourcePath` (exact equality, after both sides are
+     * resolved to absolute paths) BEFORE the per-slug source filter
      * runs. Used by the slack-digest skill (Hook 2) to integrate ONLY
      * the just-written digest, not every prior digest tagged with the
      * same slugs.
+     *
+     * **Must be an absolute path.** If a relative path is passed,
+     * `refreshAllFromSources` resolves it against `paths.root` before
+     * matching. Path normalization is the caller's responsibility — the
+     * service rejects ambiguous suffix matches by design (cost-correct).
      *
      * Pre-mortem Risk 4 / memory bullet 5: this is a behavioral filter,
      * NOT a label-only logging hint. Without it, a workspace with N
