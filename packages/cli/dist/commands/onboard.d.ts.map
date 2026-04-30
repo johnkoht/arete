@@ -1,1 +1,1 @@
-{"version":3,"file":"onboard.d.ts","sourceRoot":"","sources":["../../src/commands/onboard.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAeH,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAqDzC,wBAAgB,sBAAsB,CAAC,OAAO,EAAE,OAAO,GAAG,IAAI,CA0oB7D"}
+{"version":3,"file":"onboard.d.ts","sourceRoot":"","sources":["../../src/commands/onboard.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAeH,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAUzC;;;;;;;;;;GAUG;AACH,eAAO,MAAM,yBAAyB;;;;;;;;;;;;;;CAc5B,CAAC;AA6CX,wBAAgB,sBAAsB,CAAC,OAAO,EAAE,OAAO,GAAG,IAAI,CAwmB7D"}
