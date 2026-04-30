@@ -41,6 +41,21 @@ Patterns and gotchas that apply across multiple skills. Read when working on ski
 
 **Source**: build-context-injection pre-mortem Risk 3 (2026-03-28) — accepted as low-probability, documented for awareness.
 
+### 5. In constrained environments where subagents can't dispatch sub-subagents, parent must orchestrate per-task while playing reviewer
+
+**Problem**: The /ship Phase 4 build pattern assumes a parent orchestrator dispatches both a developer subagent AND a reviewer subagent per task. When the runtime sandbox restricts subagent depth (sub-subagents not allowed), the developer subagent has no way to spawn its own reviewer — it must return to the parent. This breaks the canonical "parallel developer + reviewer" pattern that /ship documents.
+
+**Fix**: Parent orchestrator dispatches the developer subagent for a task, reads the resulting diff + commits when the subagent returns, then runs the reviewer prompt itself (or as a fresh subagent invocation, in series rather than parallel) before allowing the next task's dispatch. Trade-offs:
+- **Pro**: Stricter context control — the parent sees every diff before approving the next task, catches cross-task inconsistencies (e.g., line-number drift in PRD ACs after Task 5's flag wiring shifts Task 7's expected callsites).
+- **Con**: Parent context grows linearly with tasks; for 8+ task builds this matters. Mitigate with `--continue` resumption from the build log if context fills.
+- **Con**: Per-task reviews are scoped to one PRD task and can miss cross-cutting invariants. **Compensate with a profile-driven holistic review at the end** — that's the load-bearing review for cross-package branches in this constrained mode.
+
+**When to detect**: If your subagent dispatch fails with a "cannot spawn nested subagents" error, or if the developer subagent's task definition includes a "now spawn the reviewer" step that returns failure, you're in the constrained mode. Switch the parent into reviewer-as-well duty for the rest of the build.
+
+**What to instrument**: The build log should record both the developer-dispatch outcome AND the parent's reviewer pass for each task — they're separate gates even when run by the same agent.
+
+**Source**: slack-digest-topic-wiki build (2026-04-29) — entire 8-task build executed in this mode. Worked cleanly; final review (loaded with backend + core + cli profiles) caught a backend dark-code gap that per-task reviews missed (`packages/apps/backend/src/routes/meetings.ts:244` rename was typecheck-only verified, no integration test). Per-task reviews don't have the cross-package profile context to catch this class.
+
 ---
 
 ## References
