@@ -513,21 +513,6 @@ export class ContextService {
     }
   }
 
-  async getContextForSkill(
-    skill: SkillDefinition,
-    task: string,
-    paths: WorkspacePaths
-  ): Promise<ContextBundle> {
-    const primitives = skill.primitives && skill.primitives.length > 0
-      ? skill.primitives
-      : undefined;
-    return this.getRelevantContext({
-      query: task,
-      paths,
-      primitives,
-    });
-  }
-
   async getContextInventory(
     paths: WorkspacePaths,
     options?: { staleThresholdDays?: number },

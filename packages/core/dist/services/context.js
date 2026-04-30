@@ -494,16 +494,6 @@ export class ContextService {
             return null;
         }
     }
-    async getContextForSkill(skill, task, paths) {
-        const primitives = skill.primitives && skill.primitives.length > 0
-            ? skill.primitives
-            : undefined;
-        return this.getRelevantContext({
-            query: task,
-            paths,
-            primitives,
-        });
-    }
     async getContextInventory(paths, options) {
         const now = new Date();
         const scannedAt = now.toISOString();
