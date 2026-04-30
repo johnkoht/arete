@@ -45,7 +45,7 @@ sentence order ossifies, a factual correction made in source 5 never
 fully overrides the phrasing introduced in source 2.
 
 **Approach.** Add an opt-in "full rebuild" mode to
-`TopicMemoryService.refreshAllFromMeetings` — every Nth refresh (or on
+`TopicMemoryService.refreshAllFromSources` — every Nth refresh (or on
 demand via `arete memory refresh --full-rebuild`), re-synthesize the
 whole page from `sources_integrated` as a batch rather than
 incrementally. Start N=conservative (e.g. 20) and tune.
@@ -133,7 +133,7 @@ path via the mock. Mock scripting feels easier than current
 **Problem.** Discovered during arete-reserv dry-run: 5 of 187 historical
 meetings have `topics:` frontmatter. The biased-extraction prompt from
 Phase A populates `topics:` going forward, but pre-existing meetings
-are invisible to `arete topic seed` and `refreshAllFromMeetings`. The
+are invisible to `arete topic seed` and `refreshAllFromSources`. The
 wiki substrate is therefore only as rich as the user's recent activity
 unless we backfill.
 
@@ -202,7 +202,7 @@ meetings. Two sub-problems:
 **Approach alternative (lighter).** Skip the extraction extension;
 require users to manually tag slack-digest output with `topics:`
 frontmatter at approve time via the UI. Then `arete memory refresh`
-picks them up automatically as long as `refreshAllFromMeetings` is
+picks them up automatically as long as `refreshAllFromSources` is
 source-agnostic (sub-problem 2 only).
 
 **Acceptance.** A slack-digest approval that references

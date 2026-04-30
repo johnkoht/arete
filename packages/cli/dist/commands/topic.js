@@ -434,9 +434,9 @@ export function registerTopicCommands(program) {
             // parsing arbitrary stack traces. The single-line stderr
             // warning is for human consumers running the CLI interactively.
             //
-            // Note: use `instanceof SeedLockHeldError` (NOT `err.name ===`).
-            // The class doesn't set `this.name`, so `err.name` is `'Error'`
-            // for instances — `instanceof` is the only reliable check.
+            // Note: `instanceof SeedLockHeldError` is the canonical check.
+            // The class also sets `this.name = 'SeedLockHeldError'` (since
+            // 2026-04-29) so `err.name === 'SeedLockHeldError'` works too.
             if (err instanceof SeedLockHeldError) {
                 if (opts.json) {
                     console.log(JSON.stringify({

@@ -688,4 +688,10 @@ After completing this skill's workflow:
 **Output**: Save to `resources/notes/{date}-slack-digest.md`.
 
 **Indexing**: Run `arete index` to make output searchable by brief, context, and other skills.
+
+### Topic Wiki Coverage
+
+Going forward, this skill writes `topics: [...]` frontmatter (Phase 5a) and triggers Hook 2 via `arete topic refresh` (Phase 5b) so each digest contributes to the topic wiki at `memory/topics/`.
+
+**Pre-existing digests** (written before topic-wiki integration shipped) lack `topics:` frontmatter and are silently skipped by `discoverTopicSources`. To pick them up: re-run this skill with `--days-back=N` over the relevant window. The new run produces fresh digests with `topics:` populated and Hook 2 then integrates them. Backfill at the historical-meeting level is tracked separately in `dev/work/plans/topic-wiki-memory-phase-c/plan.md` item 6.
 <!-- ARETE_INTEGRATION_END -->
