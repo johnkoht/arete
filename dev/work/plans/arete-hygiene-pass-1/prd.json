@@ -1,0 +1,121 @@
+{
+  "name": "arete-hygiene-pass-1",
+  "branchName": "feature/arete-hygiene-pass-1",
+  "goal": "Cut ~2.7K LOC of verified-dead and verifiably-redundant code from packages/core/ and the repo root, plus extract one inline helper that the wiki-leaning team flagged as refactor backlog. Zero behavioral change for users; smaller surface area for the next round of structural work.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Remove pre-monorepo legacy src/, test/, tsconfig.test.json",
+      "description": "Delete the pre-monorepo /src/ (13 files) and /test/ (4 files) directories at the repo root, plus the orphan tsconfig.test.json and one stale doc reference in .pi/standards/build-standards.md:44. None of these files are in the active build (verified: tsconfig.json references only packages/core+cli; package.json:42 globs only packages/*/test). Files do not even compile (broken imports). Per pre-mortem R4, this task MUST land before T2 because T2 deletes PRODUCT_RULES_ALLOW_LIST whose only callers live in test/commands/update.test.ts and test/core/rule-transpiler.test.ts (both deleted here).",
+      "acceptanceCriteria": [
+        "npm run typecheck passes (none of these files are in the active build).",
+        "npm test passes.",
+        "git grep -E \"from .*(src/commands|src/core)/\" -- packages returns zero results.",
+        ".pi/standards/build-standards.md no longer references tsconfig.test.json.",
+        "No CI workflow file references the deleted paths.",
+        "Commit message: chore: remove pre-monorepo legacy src/ test/ tsconfig.test.json"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Delete four @deprecated named functions with zero production callers",
+      "description": "Delete extractKeywords (file-private, area-memory.ts:254), findMatchingCompletedItem (file-private, meeting-processing.ts:305), getDocument (KrispMcpClient method, krisp/client.ts:523), PRODUCT_RULES_ALLOW_LIST (const, workspace-structure.ts:64). Delete the one related krisp test case. Update krisp/LEARNINGS.md if it implies the method exists. PREREQUISITE: T1 must have committed first (per pinned ordering — R4).",
+      "acceptanceCriteria": [
+        "git grep -nE \"extractKeywords|findMatchingCompletedItem|PRODUCT_RULES_ALLOW_LIST\" -- packages src returns zero matches.",
+        "git grep -nE \"\\.getDocument\\(\" -- packages returns zero matches.",
+        "npm run typecheck passes.",
+        "Krisp test count drops by exactly 1 (verify with npx tsx --test packages/core/test/integrations/krisp.test.ts 2>&1 | tail -3).",
+        "No @deprecated JSDoc remains attached to a function that does not exist.",
+        "Commit message: chore(core): remove four zero-caller @deprecated symbols"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Delete person-signals.ts action-item LLM cluster",
+      "description": "Delete the self-contained action-item LLM extraction path: buildActionItemPrompt, parseActionItemResponse, extractActionItemsForPerson, plus the RawActionItemResult type and VALID_ACTION_ITEM_DIRECTIONS const. Delete their 4 describe blocks in person-signals.test.ts (~50 tests total). entity.ts imports a different non-overlapping set (extractStancesForPerson, isActionItemStale, deduplicateActionItems, capActionItems) — those stay. Per pre-mortem R6, orphan type/const cleanup must be explicit. PRE-TASK SETUP: Capture pre-deletion test count via npx tsx --test packages/core/test/services/person-signals.test.ts 2>&1 | tail -3 and record N_before; count tests in the four deleted describe blocks to compute expected N_drop.",
+      "acceptanceCriteria": [
+        "git grep -nE \"buildActionItemPrompt|parseActionItemResponse|extractActionItemsForPerson\" -- packages returns zero matches.",
+        "git grep -nE \"RawActionItemResult|VALID_ACTION_ITEM_DIRECTIONS\" -- packages returns zero matches (per R6).",
+        "npm run typecheck passes — no orphan type/import references.",
+        "npm test -- --test-name-pattern person-signals passes.",
+        "Test count for person-signals.test.ts drops by exactly N (where N = sum of test cases in the four deleted describe blocks: extractActionItemsForPerson, extractActionItemsForPerson (LLM path), buildActionItemPrompt, parseActionItemResponse); remaining tests cover only live exports.",
+        "entity.ts still typechecks against its person-signals.js imports.",
+        "Commit message: chore(core): delete person-signals action-item LLM cluster"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Delete ContextService.getContextForSkill",
+      "description": "Delete the unused getContextForSkill method on ContextService (zero in-repo callers). Update the .pi/expertise/core/PROFILE.md key-exports list to remove the reference. Run npm run build:agents:dev to refresh dist mirror if present (per pre-mortem R9).",
+      "acceptanceCriteria": [
+        "git grep -n \"getContextForSkill\" -- packages .pi returns zero matches.",
+        "npm run typecheck passes.",
+        "npm test passes.",
+        "ContextService retains all other public methods (getRelevantContext, getContextInventory, listProjectSubdirs, listProjectFiles, readFile).",
+        "After running npm run build:agents:dev (if dist/.pi/expertise/core/PROFILE.md exists), git diff -- '.pi/expertise/core/PROFILE.md' 'dist/.pi/expertise/core/PROFILE.md' shows symmetric edits (or both files staged); if no dist mirror exists, this is N/A.",
+        "Commit message: chore(core): remove unused ContextService.getContextForSkill"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Convert ToolService to free listTools/getTool functions",
+      "description": "ToolService has only list() and get() methods with no instance state beyond a StorageAdapter. The class header says 'Mirrors SkillService pattern for consistency' — symmetry without payoff. Convert to two free functions listTools(storage, toolsDir) and getTool(storage, id, toolsDir). Update factory.ts (remove import, AreteServices entry, instantiation, returned key), services/index.ts (replace barrel export, add namespace comment), 4 call sites (cli/tool.ts, cli/route.ts:41, cli/skill.ts:289), factory.test.ts (drop ToolService assertion), tools.test.ts (migrate to direct function calls). Per pre-mortem R3: npm run build mandatory before merge — verify dist files staged. Per pre-mortem R5: cross-package consumer audit. Per pre-mortem R10: namespace concern → add one-line comment in services/index.ts. PRE-TASK SETUP: From main, run arete tool list > /tmp/tool-list-before.txt to capture byte-baseline output for the smoke test below.",
+      "acceptanceCriteria": [
+        "git grep -n \"ToolService\\|services\\.tools\" -- packages returns zero matches (in source AND tests).",
+        "git grep -nE \"services\\\\.tools|new ToolService\" -- packages returns matches only in T5-modified files; no hits in packages/apps/, packages/runtime/, or packages/cli/src/lib/ (per R5).",
+        "git grep -n \"listTools\\|getTool\" -- packages returns the new exports + 4 call sites + tests.",
+        "npm run typecheck passes (cli + core both).",
+        "npm test -- --test-name-pattern \"tools|factory\" passes with the same number of test cases as before.",
+        "arete tool list produces byte-identical output to /tmp/tool-list-before.txt; diff /tmp/tool-list-before.txt <(arete tool list) is empty.",
+        "arete tool show <name> smoke test on a known tool produces output of equivalent shape (header + frontmatter fields).",
+        "arete skill route \"test\" and arete route \"test\" still produce skill suggestions.",
+        "services.tools is no longer in the createServices() return type.",
+        "After npm run build, git status -- 'packages/core/dist/factory.{js,d.ts}' 'packages/core/dist/services/tools.{js,d.ts}' 'packages/core/dist/services/index.{js,d.ts}' 'packages/cli/dist/commands/tool.js' 'packages/cli/dist/commands/route.js' 'packages/cli/dist/commands/skill.js' shows the modified dist files staged (per R3).",
+        "One-line comment in services/index.ts next to listTools/getTool exports clarifying namespace (per R10).",
+        "Commit message: refactor(core): ToolService → free listTools/getTool functions"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Extract buildTopicWikiContext helper from meeting-context.ts",
+      "description": "The wiki-leaning team's final review explicitly flagged this as refactor backlog. Extract the 47-line inline block at meeting-context.ts:978-1025 into a module-private helper buildTopicWikiContext(deps, paths, transcript): Promise<{ context?: TopicWikiContext; warning?: string }>. The caller becomes a 3-line conditional assignment + warning push. Per pre-mortem R1: keep helper module-private (no export keyword) to avoid name collision with existing buildTopicWikiContextSection. Do NOT add to services/index.ts barrel. Per pre-mortem R2: helper returns value, never mutates inputs. Caller pattern: 'const wiki = await buildTopicWikiContext(deps, paths, transcript); if (wiki.context) bundle.topicWikiContext = wiki.context; if (wiki.warning) warnings.push(wiki.warning);'. Per pre-mortem R7: caller MUST never assign bundle.topicWikiContext = undefined — only assign when wiki.context is defined.",
+      "acceptanceCriteria": [
+        "Helper buildTopicWikiContext exists, is NOT exported (no export keyword), returns { context?; warning? }.",
+        "buildMeetingContext reduced by ~47 lines at the topic-wiki step (replaced by 3-line caller pattern).",
+        "Caller assigns bundle.topicWikiContext only when wiki.context is defined; never bundle.topicWikiContext = undefined.",
+        "Caller pushes warning string verbatim: 'Topic-wiki context failed: ${msg}'.",
+        "All 5 topicWikiContext enrichment tests in meeting-context.test.ts pass without modification.",
+        "All 66 tests in meeting-context.test.ts pass.",
+        "npm run typecheck passes.",
+        "git grep -nE \"^export.*\\bbuildTopicWikiContext\\(\" -- packages/core/src returns at most ONE pre-existing line (buildTopicWikiContextSection in meeting-extraction.ts); the new helper is NOT in the grep.",
+        "git grep -n \"buildTopicWikiContext\" -- packages/core/src/services/index.ts returns nothing.",
+        "grep -n \"topicWikiContext\" packages/core/test/services/meeting-context.test.ts review: no test asserts === undefined on the bundle.topicWikiContext key (per R7); if any such assertion exists, document the equivalence in commit message.",
+        "Commit message: refactor(core): extract buildTopicWikiContext helper from meeting-context"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-04-30T03:50:00Z",
+    "totalTasks": 6,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
