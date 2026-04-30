@@ -16,7 +16,6 @@ import { IntelligenceService } from '../src/services/intelligence.js';
 import { WorkspaceService } from '../src/services/workspace.js';
 import { SkillService } from '../src/services/skills.js';
 import { IntegrationService } from '../src/services/integrations.js';
-import { ToolService } from '../src/services/tools.js';
 import { CommitmentsService } from '../src/services/commitments.js';
 import { AreaParserService } from '../src/services/area-parser.js';
 import { AreaMemoryService } from '../src/services/area-memory.js';
@@ -58,7 +57,6 @@ describe('createServices', () => {
       'skills',
       'storage',
       'tasks',
-      'tools',
       'topicMemory',
       'workspace',
     ]);
@@ -73,7 +71,6 @@ describe('createServices', () => {
     assert.ok(services.intelligence instanceof IntelligenceService, 'intelligence is IntelligenceService');
     assert.ok(services.workspace instanceof WorkspaceService, 'workspace is WorkspaceService');
     assert.ok(services.skills instanceof SkillService, 'skills is SkillService');
-    assert.ok(services.tools instanceof ToolService, 'tools is ToolService');
     assert.ok(services.integrations instanceof IntegrationService, 'integrations is IntegrationService');
     assert.ok(services.commitments instanceof CommitmentsService, 'commitments is CommitmentsService');
     assert.ok(services.areaParser instanceof AreaParserService, 'areaParser is AreaParserService');

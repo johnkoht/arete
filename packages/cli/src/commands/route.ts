@@ -2,7 +2,7 @@
  * arete route <query> — route to skill + model tier suggestion
  */
 
-import { createServices } from '@arete/core';
+import { createServices, listTools } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import type { SkillCandidate } from '@arete/core';
@@ -38,7 +38,7 @@ export function registerRouteCommand(program: Command): void {
         }));
 
         const paths = services.workspace.getPaths(root);
-        const tools = await services.tools.list(paths.tools);
+        const tools = await listTools(services.storage, paths.tools);
         candidates.push(...toolsToCandidates(tools));
 
         skillRoute = services.intelligence.routeToSkill(query, candidates);

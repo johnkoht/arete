@@ -1,7 +1,7 @@
 /**
  * Tool commands — list, show
  */
-import { createServices } from '@arete/core';
+import { createServices, listTools, getTool } from '@arete/core';
 import { header, listItem, error, success } from '../formatters.js';
 export function registerToolCommands(program) {
     const toolCmd = program.command('tool').description('Manage tools');
@@ -22,7 +22,7 @@ export function registerToolCommands(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
-        const tools = await services.tools.list(paths.tools);
+        const tools = await listTools(services.storage, paths.tools);
         if (opts.json) {
             console.log(JSON.stringify({
                 success: true,
@@ -72,7 +72,7 @@ export function registerToolCommands(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
-        const tool = await services.tools.get(name, paths.tools);
+        const tool = await getTool(services.storage, name, paths.tools);
         if (!tool) {
             if (opts.json) {
                 console.log(JSON.stringify({ success: false, error: `Tool '${name}' not found` }));

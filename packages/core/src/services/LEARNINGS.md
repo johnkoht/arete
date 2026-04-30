@@ -1,6 +1,6 @@
 ## How This Works
 
-The services layer provides eight domain-specific classes: `ContextService`, `MemoryService`, `EntityService`, `IntelligenceService`, `WorkspaceService`, `SkillService`, `ToolService`, `IntegrationService`. They are not instantiated directly by callers — `createServices(workspaceRoot)` in `packages/core/src/factory.ts` wires all dependencies and returns an `AreteServices` object. The dependency graph flows from infrastructure (`FileStorageAdapter`, `SearchProvider`) → core services (context, memory, entity) → orchestration (`IntelligenceService`). Services do NOT use direct `fs` calls; all file I/O goes through `StorageAdapter`. The barrel export in `packages/core/src/services/index.ts` only exports the classes; `createServices` is exported from `packages/core/src/index.ts` via `factory.ts`. Tests mock `StorageAdapter` and `SearchProvider` to avoid touching the filesystem.
+The services layer provides seven domain-specific classes: `ContextService`, `MemoryService`, `EntityService`, `IntelligenceService`, `WorkspaceService`, `SkillService`, `IntegrationService`. They are not instantiated directly by callers — `createServices(workspaceRoot)` in `packages/core/src/factory.ts` wires all dependencies and returns an `AreteServices` object. The dependency graph flows from infrastructure (`FileStorageAdapter`, `SearchProvider`) → core services (context, memory, entity) → orchestration (`IntelligenceService`). Services do NOT use direct `fs` calls; all file I/O goes through `StorageAdapter`. The barrel export in `packages/core/src/services/index.ts` only exports the classes; `createServices` is exported from `packages/core/src/index.ts` via `factory.ts`. Tests mock `StorageAdapter` and `SearchProvider` to avoid touching the filesystem. Workspace tool discovery is two free functions (`listTools` / `getTool`) rather than a service class — see `services/tools.ts`.
 
 ## Key References
 
@@ -9,7 +9,7 @@ The services layer provides eight domain-specific classes: `ContextService`, `Me
 - `packages/core/src/services/memory.ts` — `MemoryService` (token-based memory search)
 - `packages/core/src/services/entity.ts` — `EntityService` (fuzzy person/meeting/project resolution)
 - `packages/core/src/services/intelligence.ts` — `IntelligenceService` (briefing assembly, ties services together)
-- `packages/core/src/services/tools.ts` — `ToolService` (tool discovery from workspace tools directory)
+- `packages/core/src/services/tools.ts` — `listTools` / `getTool` free functions (workspace tool discovery; no service class)
 - `packages/core/src/services/integrations.ts` — `IntegrationService` (Fathom pull, calendar)
 - `packages/core/src/storage/adapter.ts` — `StorageAdapter` interface (read/write/list/exists)
 - `packages/core/test/` — service tests (mock StorageAdapter pattern)
@@ -232,7 +232,7 @@ Only `commitment` type triggers auto-resolution; `meeting` type references are i
 
 ## Pre-Edit Checklist
 
-- **`ToolService` mirrors `SkillService` but takes `toolsDir: string` (not `workspaceRoot`)** (2026-02-22): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `ToolService.list(toolsDir)` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep ToolService IDE-agnostic.
+- **Tool discovery `listTools(storage, toolsDir)` takes a resolved directory, not `workspaceRoot`** (2026-02-22 / refactored to free functions 2026-04-30): `SkillService.list(workspaceRoot)` hardcodes the skills path as `join(workspaceRoot, '.agents', 'skills')`. `listTools` accepts the resolved tools directory directly because tools paths are IDE-specific (`.cursor/tools/` vs `.claude/tools/`). The caller (CLI) resolves the path via `services.workspace.getPaths(root).tools`. This was an intentional design decision to keep tool discovery IDE-agnostic. Originally a `ToolService` class mirroring `SkillService`; collapsed to free functions in arete-hygiene-pass-1 since the class held no state beyond the storage adapter.
 
 - **New capabilities must be routable** (2026-02-25): When a PRD adds new user-facing capabilities (CLI commands, skills, tools), verify they can be discovered via `arete route "natural query"`. Missed for calendar FreeBusy integration — the `arete availability find` command was documented in AGENTS.md, but queries like "find availability with John" don't route because "availability" isn't in `WORK_TYPE_KEYWORDS`. See `IntelligenceService.routeToSkill()` for the scoring algorithm. For skills/tools, ensure `triggers` array in frontmatter includes natural language phrases users might say. For CLI commands that aren't skill-backed, document them clearly in AGENTS.md § CLI.
 

@@ -15,7 +15,6 @@ import { IntelligenceService } from './services/intelligence.js';
 import { WorkspaceService } from './services/workspace.js';
 import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
-import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
@@ -37,7 +36,6 @@ export type AreteServices = {
     intelligence: IntelligenceService;
     workspace: WorkspaceService;
     skills: SkillService;
-    tools: ToolService;
     integrations: IntegrationService;
     commitments: CommitmentsService;
     areaParser: AreaParserService;
