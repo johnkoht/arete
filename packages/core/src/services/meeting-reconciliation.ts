@@ -919,15 +919,25 @@ function extractIntelligenceFromFrontmatter(
  * filters by recency and status (`processed` or `approved`), and extracts
  * staged intelligence items from frontmatter.
  *
+ * Pass `excludePath` when reprocessing a meeting whose status is already
+ * `processed` or `approved` — without it, the meeting being reprocessed shows
+ * up in the batch with its OLD staged items, and the caller's
+ * `[...recentBatch, currentBatch]` pattern flips the fresh extraction into
+ * `findDuplicates` against itself ("first occurrence wins" → disk version
+ * canonical, fresh items marked duplicate). Exact string match against
+ * `storage.list()` output (absolute paths); do not normalize via `resolve()`.
+ *
  * @param storage - Storage adapter for file access
  * @param meetingsDir - Path to meetings directory (e.g., resources/meetings)
  * @param days - Lookback window in days (default: 7)
+ * @param excludePath - Absolute path of a meeting to omit from results
  * @returns Array of extraction batches from recent meetings
  */
 export async function loadRecentMeetingBatch(
   storage: StorageAdapter,
   meetingsDir: string,
   days: number = 7,
+  excludePath?: string,
 ): Promise<MeetingExtractionBatch[]> {
   const batches: MeetingExtractionBatch[] = [];
   const cutoffDate = new Date();
@@ -939,6 +949,8 @@ export async function loadRecentMeetingBatch(
   const files = await storage.list(meetingsDir, { extensions: ['.md'] });
 
   for (const filePath of files) {
+    if (excludePath && filePath === excludePath) continue;
+
     // Extract filename from full path for date parsing
     const filename = filePath.split('/').pop() ?? '';
 

@@ -12,6 +12,7 @@ import {
   parseMemoryItems,
   batchLLMReview,
   loadReconciliationContext,
+  loadRecentMeetingBatch,
   WORKSPACE_MATCH_THRESHOLD,
   COMPLETED_MATCH_THRESHOLD,
   MEMORY_MATCH_THRESHOLD,
@@ -1619,5 +1620,113 @@ describe('loadReconciliationContext', () => {
     const context = await loadReconciliationContext(mockStorage, '/test/workspace');
     assert.equal(context.recentCommittedItems.length, 0);
     assert.deepStrictEqual(context.completedTasks, []);
+  });
+});
+
+describe('loadRecentMeetingBatch', () => {
+  // Build a small fixture of two processed meetings, both within the lookback
+  // window. Each meeting has the same staged action item — that's deliberate:
+  // it lets the regression test prove the self-match bug is fixed (the item
+  // appearing in both `recentBatch` and `currentBatch` would otherwise flag
+  // the fresh extraction as a duplicate of itself in findDuplicates).
+  function makeMeetingFile(actionText: string, status: string = 'processed'): string {
+    return [
+      '---',
+      `status: ${status}`,
+      'staged_item_owner: {}',
+      '---',
+      '',
+      '## Staged Action Items',
+      `- ai_001: ${actionText}`,
+      '',
+    ].join('\n');
+  }
+
+  function todayMinus(days: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().split('T')[0];
+  }
+
+  function makeFsStorage(files: Map<string, string>) {
+    return {
+      read: async (p: string) => files.get(p) ?? null,
+      write: async () => {},
+      exists: async () => false,
+      delete: async () => {},
+      list: async (_dir: string) => [...files.keys()],
+      listSubdirectories: async () => [] as string[],
+      mkdir: async () => {},
+      getModified: async () => null,
+    };
+  }
+
+  it('without excludePath: includes all matching meetings (back-compat)', async () => {
+    const dir = '/workspace/resources/meetings';
+    const recent = todayMinus(2);
+    const current = `${dir}/${recent}-current.md`;
+    const prior = `${dir}/${recent}-prior.md`;
+    const files = new Map<string, string>([
+      [current, makeMeetingFile('Send report to Alice')],
+      [prior, makeMeetingFile('Send report to Alice')],
+    ]);
+
+    const result = await loadRecentMeetingBatch(makeFsStorage(files), dir, 7);
+
+    assert.equal(result.length, 2, 'both files included when no excludePath set');
+    const paths = new Set(result.map((b) => b.meetingPath));
+    assert.ok(paths.has(current));
+    assert.ok(paths.has(prior));
+  });
+
+  it('with excludePath: omits the matching file, keeps the others', async () => {
+    const dir = '/workspace/resources/meetings';
+    const recent = todayMinus(2);
+    const current = `${dir}/${recent}-current.md`;
+    const prior = `${dir}/${recent}-prior.md`;
+    const files = new Map<string, string>([
+      [current, makeMeetingFile('Send report to Alice')],
+      [prior, makeMeetingFile('Send report to Alice')],
+    ]);
+
+    const result = await loadRecentMeetingBatch(makeFsStorage(files), dir, 7, current);
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].meetingPath, prior);
+  });
+
+  it('regression: reprocessing a status:processed meeting does not self-match in findDuplicates', async () => {
+    // Mirrors the actual incident: a meeting with status:processed already on
+    // disk, holding staged items identical to the fresh extraction. Without
+    // excludePath, [...recentBatch, currentBatch] contains the meeting twice
+    // and findDuplicates would flip the fresh items to status:'duplicate'.
+    const dir = '/workspace/resources/meetings';
+    const recent = todayMinus(1);
+    const meetingPath = `${dir}/${recent}-claude-code-for-reserv-product.md`;
+    const itemText = 'Fix the dev tools CLI/hook system so auto-update runs on session load';
+    const files = new Map<string, string>([
+      [meetingPath, makeMeetingFile(itemText, 'processed')],
+    ]);
+
+    const recentBatch = await loadRecentMeetingBatch(makeFsStorage(files), dir, 7, meetingPath);
+
+    // Caller's [...recentBatch, currentBatch] pattern; build currentBatch fresh.
+    const currentBatch: MeetingExtractionBatch = {
+      meetingPath,
+      extraction: {
+        summary: '',
+        actionItems: [{ owner: '', ownerSlug: 'john-koht', description: itemText, direction: 'i_owe_them' }],
+        nextSteps: [],
+        decisions: [],
+        learnings: [],
+      },
+    };
+
+    const result = reconcileMeetingBatch([...recentBatch, currentBatch], makeContext());
+
+    // Only one item in the batch (current meeting) — no duplicates found,
+    // because excludePath kept the on-disk copy out of recentBatch.
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].status, 'keep');
   });
 });

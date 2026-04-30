@@ -226,7 +226,10 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
             try {
                 jobs.appendEvent(jobId, 'Running cross-meeting reconciliation...');
                 cachedReconciliationContext = await deps.loadReconciliationContext();
-                const recentBatch = await deps.loadRecentBatch();
+                // Exclude the current meeting from the recent batch — without this, a
+                // reprocess (status already 'processed') self-matches in findDuplicates
+                // and the fresh extraction loses to its on-disk predecessor.
+                const recentBatch = await deps.loadRecentBatch(meetingPath);
                 // Build current meeting batch entry
                 const currentBatch = {
                     meetingPath: meetingPath,
@@ -396,7 +399,7 @@ async function createDefaultDeps(aiService, workspaceRoot) {
             },
         },
         loadReconciliationContext: () => loadReconciliationContext(storage, workspaceRoot),
-        loadRecentBatch: () => loadRecentMeetingBatch(storage, join(workspaceRoot, 'resources', 'meetings'), 7),
+        loadRecentBatch: (excludePath) => loadRecentMeetingBatch(storage, join(workspaceRoot, 'resources', 'meetings'), 7, excludePath),
         topicMemory,
         workspacePaths,
     };
@@ -506,13 +509,17 @@ export async function runProcessingSession(workspaceRoot, meetingSlug, jobId, jo
         // Use provided context
         context = options.context;
     }
-    // Load prior items from recent meetings for prompt-level dedup (if not already provided)
+    // Load prior items from recent meetings for prompt-level dedup (if not already provided).
+    // Exclude the current meeting — on reprocess, its own on-disk staged items would
+    // otherwise feed back into the extraction prompt as "already extracted, skip these"
+    // and silently suppress the fresh extraction from re-surfacing them.
     let priorItems = options.priorItems;
     if (!priorItems) {
         try {
             const storage = new FileStorageAdapter();
             const meetingsDir = join(workspaceRoot, 'resources', 'meetings');
-            const recentBatch = await loadRecentMeetingBatch(storage, meetingsDir, 7);
+            const currentMeetingPath = join(meetingsDir, `${meetingSlug}.md`);
+            const recentBatch = await loadRecentMeetingBatch(storage, meetingsDir, 7, currentMeetingPath);
             priorItems = recentBatch.flatMap(batch => [
                 ...batch.extraction.decisions.map(text => ({ type: 'decision', text })),
                 ...batch.extraction.learnings.map(text => ({ type: 'learning', text })),

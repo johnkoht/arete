@@ -744,10 +744,13 @@ export function registerMeetingCommands(program) {
             try {
                 // Load reconciliation context (area memories + committed items)
                 cachedReconciliationContext = await loadReconciliationContext(services.storage, root);
-                // Load recent meetings batch
+                // Load recent meetings batch.
+                // Excludes meetingPath so a reprocess (status: processed | approved)
+                // doesn't pick up its own on-disk staged items and flag the fresh
+                // extraction as a duplicate of itself in findDuplicates.
                 const meetingsDir = join(root, paths.resources, 'meetings');
                 const days = parseInt(opts.reconcileDays || '7', 10);
-                const recentBatch = await loadRecentMeetingBatch(services.storage, meetingsDir, days);
+                const recentBatch = await loadRecentMeetingBatch(services.storage, meetingsDir, days, meetingPath);
                 // Add current extraction to batch
                 const currentBatch = {
                     meetingPath: meetingPath,
