@@ -245,46 +245,6 @@ function daysAgo(dateStr: string, referenceDate: Date = new Date()): number {
 }
 
 /**
- * @deprecated No longer used after Step 4 (topic-wiki-memory) removed the
- * Keywords section from area memory output. Kept for now to avoid churning
- * internal callers during the refactor; flag for deletion once verified
- * unused elsewhere in the repo.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function extractKeywords(texts: string[], maxKeywords = 10): string[] {
-  const stopWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
-    'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been',
-    'has', 'have', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those',
-    'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your',
-    'he', 'she', 'his', 'her', 'not', 'no', 'so', 'if', 'then', 'else',
-    'about', 'up', 'out', 'all', 'also', 'just', 'more', 'some', 'very',
-    'what', 'when', 'where', 'how', 'who', 'which', 'each', 'every',
-    'any', 'both', 'few', 'most', 'other', 'into', 'over', 'after',
-    'before', 'between', 'under', 'again', 'there', 'here', 'than',
-    'still', 'while', 'during', 'through', 'well', 'back', 'being',
-    'date', 'source', 'meeting', 'meetings', 'decision', 'decisions',
-    'item', 'items', 'none', 'null', 'undefined',
-  ]);
-
-  const wordCounts = new Map<string, number>();
-  for (const text of texts) {
-    const words = text.toLowerCase().replace(/[^a-z0-9\s-]/g, '').split(/\s+/).filter(Boolean);
-    for (const word of words) {
-      if (word.length < 3 || stopWords.has(word)) continue;
-      wordCounts.set(word, (wordCounts.get(word) ?? 0) + 1);
-    }
-  }
-
-  return [...wordCounts.entries()]
-    .filter(([, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxKeywords)
-    .map(([word]) => word);
-}
-
-/**
  * Check if an area memory file is stale.
  */
 export function isAreaMemoryStale(lastRefreshed: string | null, staleDays: number = DEFAULT_STALE_DAYS): boolean {

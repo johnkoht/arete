@@ -53,19 +53,6 @@ export function getProductRulesAllowList(ideTarget) {
     return base; // Claude: reduced set
 }
 /**
- * Rule files to copy on install (product rules only).
- * @deprecated Use getProductRulesAllowList(ideTarget) instead.
- */
-export const PRODUCT_RULES_ALLOW_LIST = [
-    'routing-mandatory.mdc',
-    'arete-vision.mdc',
-    'pm-workspace.mdc',
-    'agent-memory.mdc',
-    'context-management.mdc',
-    'project-management.mdc',
-    'qmd-search.mdc',
-];
-/**
  * Default files created when missing. Key = path relative to workspace root.
  */
 export const DEFAULT_FILES = {
