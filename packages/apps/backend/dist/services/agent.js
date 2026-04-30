@@ -221,6 +221,7 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
         }
         // 9b. Run cross-meeting reconciliation
         let reconciliationStats = { duplicates: 0, completed: 0, lowRelevance: 0 };
+        const silentlyMerged = { decisions: 0, learnings: 0 };
         let cachedReconciliationContext;
         if (deps.loadReconciliationContext && deps.loadRecentBatch) {
             try {
@@ -250,8 +251,31 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
                     if (processed.stagedItemStatus[matchingItem.id] === 'skipped')
                         continue;
                     if (item.status === 'duplicate' || item.status === 'completed') {
-                        processed.stagedItemStatus[matchingItem.id] = 'skipped';
-                        processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                        // action items: flip to skipped/reconciled (visible with marker —
+                        // "already done" is coherent for a commitment).
+                        // decisions/learnings: silent merge. Already in committed memory;
+                        // surfacing as "skipped" forces the user to dismiss something that
+                        // was never going to add value. Drop from filteredItems + maps.
+                        if (matchingItem.type === 'action') {
+                            processed.stagedItemStatus[matchingItem.id] = 'skipped';
+                            processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                        }
+                        else {
+                            processed.filteredItems = processed.filteredItems.filter((fi) => fi.id !== matchingItem.id);
+                            delete processed.stagedItemStatus[matchingItem.id];
+                            delete processed.stagedItemSource[matchingItem.id];
+                            delete processed.stagedItemConfidence[matchingItem.id];
+                            if (processed.stagedItemMatchedText) {
+                                delete processed.stagedItemMatchedText[matchingItem.id];
+                            }
+                            if (processed.stagedItemOwner) {
+                                delete processed.stagedItemOwner[matchingItem.id];
+                            }
+                            if (matchingItem.type === 'decision')
+                                silentlyMerged.decisions++;
+                            else if (matchingItem.type === 'learning')
+                                silentlyMerged.learnings++;
+                        }
                         if (item.status === 'duplicate')
                             reconciliationStats.duplicates++;
                         else
@@ -265,6 +289,10 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
                 if (reconciliationStats.duplicates > 0 || reconciliationStats.completed > 0) {
                     jobs.appendEvent(jobId, `Cross-meeting: ${reconciliationStats.duplicates} duplicates, ${reconciliationStats.completed} completed`);
                 }
+                const totalMerged = silentlyMerged.decisions + silentlyMerged.learnings;
+                if (totalMerged > 0) {
+                    jobs.appendEvent(jobId, `Merged into committed memory: ${silentlyMerged.decisions} decision(s), ${silentlyMerged.learnings} learning(s)`);
+                }
             }
             catch (err) {
                 // Graceful degradation — log warning and continue
@@ -272,12 +300,18 @@ export async function runProcessingSessionTestable(workspaceRoot, meetingSlug, j
                 jobs.appendEvent(jobId, 'Warning: Cross-meeting reconciliation skipped due to error');
             }
         }
-        // 9c. Batch LLM quality review — semantic dedup against committed memory
+        // 9c. Batch LLM quality review — semantic dedup against committed memory.
+        // Limited to action items: "skipped" / "already done" is coherent vocabulary
+        // for a commitment, but a learning is an insight and a decision is a
+        // point-in-time fact — neither has a "done" state. Duplicate detection for
+        // those types happens via cross-meeting matching above and is handled as
+        // silent merge into committed memory.
         if (deps.loadReconciliationContext) {
             try {
-                // Collect non-skipped items for review
+                // Collect non-skipped action items for review
                 const reviewItems = processed.filteredItems
                     .filter(fi => processed.stagedItemStatus[fi.id] !== 'skipped')
+                    .filter(fi => fi.type === 'action')
                     .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
                 if (reviewItems.length > 0) {
                     // Reuse cached context to avoid redundant I/O

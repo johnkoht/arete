@@ -774,6 +774,8 @@ export function registerMeetingCommands(program) {
         // For --stage: process extraction to get filtered items and metadata
         let stagedSections;
         let processed;
+        // Lifted so the post-merge response can surface counts to the user.
+        const silentlyMerged = { decisions: 0, learnings: 0 };
         if (shouldStage) {
             // Extract user notes and process extraction (filtering, dedup, metadata)
             const userNotes = extractUserNotes(body);
@@ -796,7 +798,9 @@ export function registerMeetingCommands(program) {
                 openTasks,
                 importance: effectiveImportance,
             });
-            // Merge reconciliation decisions into processed items
+            // Merge reconciliation decisions into processed items.
+            // silentlyMerged counts surface to the user via JSON output and the
+            // post-extract summary so silent merges aren't truly invisible.
             if (reconciliationResult) {
                 for (const reconciledItem of reconciliationResult.items) {
                     // Skip items that reconciliation wants to keep
@@ -815,19 +819,49 @@ export function registerMeetingCommands(program) {
                     const currentStatus = processed.stagedItemStatus[matchingItem.id];
                     if (currentStatus === 'skipped')
                         continue;
-                    // Items flagged 'duplicate' or 'completed' → skipped
+                    // Items flagged 'duplicate' or 'completed':
+                    //  - action items: flip to skipped/reconciled (visible in staging
+                    //    with the marker — "already done" is coherent for a commitment)
+                    //  - decisions/learnings: silent merge. The matching content is
+                    //    already in committed memory; surfacing the duplicate as
+                    //    "skipped" forces the user to dismiss something that was never
+                    //    going to add value. Drop from filteredItems + metadata maps.
                     if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
-                        processed.stagedItemStatus[matchingItem.id] = 'skipped';
-                        processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                        if (matchingItem.type === 'action') {
+                            processed.stagedItemStatus[matchingItem.id] = 'skipped';
+                            processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                        }
+                        else {
+                            processed.filteredItems = processed.filteredItems.filter((fi) => fi.id !== matchingItem.id);
+                            delete processed.stagedItemStatus[matchingItem.id];
+                            delete processed.stagedItemSource[matchingItem.id];
+                            delete processed.stagedItemConfidence[matchingItem.id];
+                            if (processed.stagedItemMatchedText) {
+                                delete processed.stagedItemMatchedText[matchingItem.id];
+                            }
+                            if (processed.stagedItemOwner) {
+                                delete processed.stagedItemOwner[matchingItem.id];
+                            }
+                            if (matchingItem.type === 'decision')
+                                silentlyMerged.decisions += 1;
+                            else if (matchingItem.type === 'learning')
+                                silentlyMerged.learnings += 1;
+                        }
                     }
                 }
             }
-            // Run batch LLM quality review when reconciliation is active
+            // Run batch LLM quality review when reconciliation is active.
+            // Limited to action items: "skipped" / "already done" is coherent
+            // vocabulary for a commitment, but a learning is an insight and a
+            // decision is a point-in-time fact — neither has a "done" state. For
+            // those types, duplicate detection happens via cross-meeting matching
+            // above and is handled as silent merge into committed memory.
             if (opts.reconcile && processed) {
                 try {
                     const proc = processed;
                     const reviewItems = proc.filteredItems
                         .filter(fi => proc.stagedItemStatus[fi.id] !== 'skipped')
+                        .filter(fi => fi.type === 'action')
                         .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
                     if (reviewItems.length > 0) {
                         // Reuse cached context to avoid redundant I/O
@@ -919,6 +953,7 @@ export function registerMeetingCommands(program) {
             priorItemsUsed: !!priorItems,
             reconciled,
             skippedBySource,
+            silentlyMerged,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         // Add reconciliation stats when reconciliation was run
@@ -966,6 +1001,17 @@ export function registerMeetingCommands(program) {
                 if (skippedBySource.slackResolved > 0)
                     parts.push(`${skippedBySource.slackResolved} slack-resolved`);
                 info(`Skipped ${totalSkipped} items: ${parts.join(', ')}`);
+            }
+            // Silent-merge summary — duplicate decisions/learnings dropped from
+            // staging (already in committed memory).
+            const totalMerged = silentlyMerged.decisions + silentlyMerged.learnings;
+            if (totalMerged > 0) {
+                const parts = [];
+                if (silentlyMerged.decisions > 0)
+                    parts.push(`${silentlyMerged.decisions} decision${silentlyMerged.decisions === 1 ? '' : 's'}`);
+                if (silentlyMerged.learnings > 0)
+                    parts.push(`${silentlyMerged.learnings} learning${silentlyMerged.learnings === 1 ? '' : 's'}`);
+                info(`Merged into committed memory: ${parts.join(', ')}`);
             }
             // Display reconciliation details
             if (reconciliationResult) {

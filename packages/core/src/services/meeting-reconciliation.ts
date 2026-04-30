@@ -700,7 +700,6 @@ DROP criteria:
 - Semantic duplicate of a committed item (same meaning, different wording)
 - Status update misclassified as a decision (e.g. "We discussed X", "We reviewed Y")
 - Personal trivia misclassified as a learning (e.g. "Alice lives in Seattle")
-- Vague or unactionable items that add no signal
 
 Return ONLY valid JSON in this format:
 {"drops": [{"id": "item-id", "reason": "brief reason"}]}
