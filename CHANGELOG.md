@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.9.1] - 2026-04-30
 
 ### Fixed
 - **Cross-meeting reconciliation self-match on reprocess** — when a meeting whose status was already `processed` or `approved` was reprocessed, `loadRecentMeetingBatch` picked it up alongside everything else, so the caller's `[...recentBatch, currentBatch]` flow handed `findDuplicates` two copies of the same meeting. "First occurrence wins" → on-disk staged items became canonical and the fresh extraction got flipped to `status: 'skipped'`, `source: 'reconciled'` (with no `matched_text` — the diagnostic tell). `loadRecentMeetingBatch` now accepts an optional `excludePath`; the CLI extract path, the backend `runProcessingSessionTestable` reconciliation step, and the backend priorItems loader all pass the current meeting's path. Verified end-to-end against the actual incident meeting: 0/12 items flipped, vs 11/12 with the bug present.

@@ -4,6 +4,17 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 27, 2026 (patch — 0.9.1)
+
+### Reprocessing a meeting no longer marks fresh items as "already done"
+
+**Bug fix.** If you re-ran extraction on a meeting that was already `processed`, cross-meeting reconciliation would silently match the meeting against its own on-disk staged items and flip the freshly extracted action items, decisions, and learnings to `skipped` / `reconciled`. The diagnostic tell was an empty `matched_text` field — per-item dedup paths always populate it, the cross-meeting path didn't.
+
+- The current meeting is now excluded from the recent batch on all three call sites (CLI extract, web app reconciliation, web app priorItems loader). Reprocessing produces the same result whether the meeting was already processed or not.
+- If you have meetings whose staged sections were corrupted by this bug (look for items with `staged_item_status: skipped` and `staged_item_source: reconciled` but no entry in `staged_item_matched_text`), reprocess them with `arete meeting extract <file> --stage --reconcile` to restore the right statuses.
+
+---
+
 ## Week of April 27, 2026
 
 ### Wiki-Leaning Meeting Extraction
