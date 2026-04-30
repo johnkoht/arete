@@ -1188,6 +1188,38 @@ Some transcript.
       assert.ok(events.some((e) => e.includes('Cross-meeting:') && e.includes('duplicate')));
     });
 
+    it('passes the current meeting path as excludePath when loading the recent batch', async () => {
+      // Wiring test for the self-match-on-reprocess fix. Without `excludePath`,
+      // `loadRecentMeetingBatch` returns the meeting being reprocessed, which
+      // the caller's `[...recentBatch, currentBatch]` flow then duplicates.
+      // This test fails if a future refactor drops the arg from agent.ts:348.
+      const jobs = makeMockJobs();
+      const baseDeps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem('Some action', { confidence: 0.9 })],
+        }),
+      });
+
+      const capturedExcludePath: Array<string | undefined> = [];
+      const deps = {
+        ...baseDeps,
+        loadRecentBatch: async (excludePath?: string) => {
+          capturedExcludePath.push(excludePath);
+          return [] as unknown as import('@arete/core').MeetingExtractionBatch[];
+        },
+      };
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      assert.equal(capturedExcludePath.length, 1, 'loadRecentBatch should be called once');
+      assert.equal(
+        capturedExcludePath[0],
+        `${WORKSPACE}/resources/meetings/${SLUG}.md`,
+        'excludePath must be the current meeting path',
+      );
+    });
+
     it('does not overwrite already-skipped items from processing', async () => {
       const jobs = makeMockJobs();
       // An item with low confidence will be filtered out by processMeetingExtraction,
