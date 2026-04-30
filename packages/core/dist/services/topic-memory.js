@@ -256,7 +256,7 @@ export class TopicMemoryService {
      * Idempotent for identical inputs: returns identical results.
      */
     async aliasAndMerge(candidates, existing, options = {}) {
-        // Deduplicate inputs while preserving order — a meeting may repeat a slug.
+        // Deduplicate inputs while preserving order — a source may repeat a slug.
         const seen = new Set();
         const deduped = [];
         for (const c of candidates) {
@@ -374,8 +374,9 @@ export function parseIntegrateResponse(response) {
 }
 /**
  * Content-hash a string for idempotency. Low-level primitive; callers
- * should prefer `hashMeetingSource` for meeting files so frontmatter
- * edits (attendee adds, status changes, post-processing metadata) don't
+ * should prefer `hashMeetingSource` for any frontmatter-framed source
+ * file (meetings AND slack-digests) so frontmatter edits (attendee
+ * adds, status changes, post-processing metadata, dedup markers) don't
  * bust dedup.
  */
 export function hashSource(content) {
@@ -523,7 +524,7 @@ export function createTopicStub(slug, today, options = {}) {
  *
  * Layout:
  *  - Existing page (if any) so the LLM can revise rather than regen
- *  - New source (meeting content)
+ *  - New source (meeting OR slack-digest content)
  *  - Relevant L2 items (decisions, learnings) — filtered by caller
  *  - Response schema + constraints
  */
@@ -586,12 +587,26 @@ import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page
  * Filename pattern: `YYYY-MM-DD-slack-digest.md`. Files not matching this
  * pattern are ignored (they may be other kinds of notes — capture-conversation
  * outputs, manual notes, etc., none of which contribute to topic narratives).
+ *
+ * Example matches:
+ *  - `2026-04-28-slack-digest.md` → MATCH
+ *  - `2026-04-28-capture-acme-call.md` → no match (not a digest)
+ *  - `slack-digest-2026-04-28.md` → no match (date prefix is required)
  */
 export const SLACK_DIGEST_FILENAME_RE = /^\d{4}-\d{2}-\d{2}-slack-digest\.md$/;
 /**
- * Scan `resources/meetings/` and `resources/notes/{date}-slack-digest.md`
- * and return parseable entries sorted by `date` ascending (ties broken by
- * `path` ascending, for determinism).
+ * Scan both topic-source classes and return parseable entries sorted by
+ * `date` ascending (ties broken by `path` ascending, for determinism).
+ * The two classes are:
+ *  - **meetings**: every `*.md` under `resources/meetings/` whose filename
+ *    starts with a `YYYY-MM-DD` prefix.
+ *  - **slack-digests**: every `*.md` under `resources/notes/` whose filename
+ *    matches `SLACK_DIGEST_FILENAME_RE` (`YYYY-MM-DD-slack-digest.md`).
+ *
+ * Both classes flatten into the same `SourceDiscoveryEntry` shape so
+ * `refreshAllFromSources` can iterate them uniformly. Single-pass discovery
+ * is shared by `arete topic refresh --all` and `arete memory refresh` to
+ * avoid duplicate FS walks.
  *
  * Tolerant by design:
  *  - Missing `meetings/` dir → no meeting entries (no throw).
@@ -791,8 +806,9 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
     }
 };
 /**
- * Cost estimate helper — rough Haiku cost per (topic, meeting) integration.
- * Used by CLI for `--dry-run` and `--confirm` prompts.
+ * Cost estimate helper — rough Haiku cost per (topic, source) integration,
+ * where `source` is a meeting or slack-digest. Used by CLI for `--dry-run`
+ * and `--confirm` prompts.
  */
 export const ESTIMATED_USD_PER_INTEGRATION = 0.015;
 TopicMemoryService.prototype.listTopicMemoryStatus = async function (paths, options = {}) {

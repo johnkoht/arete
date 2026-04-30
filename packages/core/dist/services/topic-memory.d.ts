@@ -186,8 +186,9 @@ export interface IntegrateOutput {
 export declare function parseIntegrateResponse(response: string): IntegrateOutput | null;
 /**
  * Content-hash a string for idempotency. Low-level primitive; callers
- * should prefer `hashMeetingSource` for meeting files so frontmatter
- * edits (attendee adds, status changes, post-processing metadata) don't
+ * should prefer `hashMeetingSource` for any frontmatter-framed source
+ * file (meetings AND slack-digests) so frontmatter edits (attendee
+ * adds, status changes, post-processing metadata, dedup markers) don't
  * bust dedup.
  */
 export declare function hashSource(content: string): string;
@@ -239,7 +240,7 @@ export declare function createTopicStub(slug: string, today: string, options?: {
  *
  * Layout:
  *  - Existing page (if any) so the LLM can revise rather than regen
- *  - New source (meeting content)
+ *  - New source (meeting OR slack-digest content)
  *  - Relevant L2 items (decisions, learnings) — filtered by caller
  *  - Response schema + constraints
  */
@@ -332,6 +333,11 @@ declare module './topic-memory.js' {
  * Filename pattern: `YYYY-MM-DD-slack-digest.md`. Files not matching this
  * pattern are ignored (they may be other kinds of notes — capture-conversation
  * outputs, manual notes, etc., none of which contribute to topic narratives).
+ *
+ * Example matches:
+ *  - `2026-04-28-slack-digest.md` → MATCH
+ *  - `2026-04-28-capture-acme-call.md` → no match (not a digest)
+ *  - `slack-digest-2026-04-28.md` → no match (date prefix is required)
  */
 export declare const SLACK_DIGEST_FILENAME_RE: RegExp;
 /**
@@ -346,15 +352,33 @@ export interface SourceDiscoveryEntry {
     date: string;
     /** Full file content (read once during discovery). */
     content: string;
-    /** Set by which directory the file lives in, NOT by frontmatter parsing. */
+    /**
+     * The source class. Set by which directory the file lives in (NOT by
+     * frontmatter parsing): `'meeting'` for files under `resources/meetings/`,
+     * `'slack-digest'` for files under `resources/notes/` whose filename
+     * matches `SLACK_DIGEST_FILENAME_RE`. The downstream integration path
+     * does NOT branch on this field today (both classes share the same
+     * `integrateSource` LLM prompt and `hashMeetingSource` content hash) —
+     * it exists for telemetry, logging, and any future class-specific
+     * routing (e.g., per-class cost accounting).
+     */
     type: 'meeting' | 'slack-digest';
     /** Slugs read from frontmatter `topics:` via `parseMeetingFile`. */
     topics: string[];
 }
 /**
- * Scan `resources/meetings/` and `resources/notes/{date}-slack-digest.md`
- * and return parseable entries sorted by `date` ascending (ties broken by
- * `path` ascending, for determinism).
+ * Scan both topic-source classes and return parseable entries sorted by
+ * `date` ascending (ties broken by `path` ascending, for determinism).
+ * The two classes are:
+ *  - **meetings**: every `*.md` under `resources/meetings/` whose filename
+ *    starts with a `YYYY-MM-DD` prefix.
+ *  - **slack-digests**: every `*.md` under `resources/notes/` whose filename
+ *    matches `SLACK_DIGEST_FILENAME_RE` (`YYYY-MM-DD-slack-digest.md`).
+ *
+ * Both classes flatten into the same `SourceDiscoveryEntry` shape so
+ * `refreshAllFromSources` can iterate them uniformly. Single-pass discovery
+ * is shared by `arete topic refresh --all` and `arete memory refresh` to
+ * avoid duplicate FS walks.
  *
  * Tolerant by design:
  *  - Missing `meetings/` dir → no meeting entries (no throw).
@@ -369,8 +393,9 @@ export interface SourceDiscoveryEntry {
  */
 export declare function discoverTopicSources(paths: WorkspacePaths, storage: StorageAdapter): Promise<SourceDiscoveryEntry[]>;
 /**
- * Cost estimate helper — rough Haiku cost per (topic, meeting) integration.
- * Used by CLI for `--dry-run` and `--confirm` prompts.
+ * Cost estimate helper — rough Haiku cost per (topic, source) integration,
+ * where `source` is a meeting or slack-digest. Used by CLI for `--dry-run`
+ * and `--confirm` prompts.
  */
 export declare const ESTIMATED_USD_PER_INTEGRATION = 0.015;
 /**

@@ -157,14 +157,17 @@ export declare const MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000;
  * the rendered slug list (`renderActiveTopicsAsSlugList(getActiveTopics(...))`),
  * and a closing newline.
  *
- * **Load-bearing constant — do not edit lightly.** This same text is embedded
- * verbatim in `packages/runtime/skills/slack-digest/SKILL.md` (between
- * `<!-- BIAS_BLOCK_START -->` and `<!-- BIAS_BLOCK_END -->` markers) so the
- * slack-digest skill biases its per-thread topic extraction with the same
- * wording the meeting-extraction prompt uses. A byte-equality test
- * (`packages/core/test/runtime/slack-digest-bias-block.test.ts`) reads SKILL.md
- * and asserts equality against this constant, catching drift between the two
- * surfaces. Editing this constant requires a parallel edit to SKILL.md.
+ * **Exported for skill-drift tests, not for reuse.** Internal callers should
+ * use the prompt builders that already embed it; the only legitimate external
+ * reader is `packages/core/test/runtime/slack-digest-bias-block.test.ts`,
+ * which asserts byte-equality between this constant and the matching block in
+ * `packages/runtime/skills/slack-digest/SKILL.md` (between
+ * `<!-- BIAS_BLOCK_START -->` and `<!-- BIAS_BLOCK_END -->` markers).
+ *
+ * **Load-bearing constant — do not edit lightly.** Editing this constant
+ * requires a parallel edit to SKILL.md or the drift test will fail. The
+ * slack-digest skill uses the SKILL.md copy verbatim to bias its per-thread
+ * topic extraction with the same wording the meeting-extraction prompt uses.
  */
 export declare const TOPIC_BIAS_BLOCK_PROMPT = "**Prefer these existing topic slugs when applicable.** Only propose a new slug\nwhen the meeting is substantively about something not covered. Matching an\nexisting slug keeps knowledge compounding instead of sprawling:";
 /**

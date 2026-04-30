@@ -187,12 +187,17 @@ meetings. Two sub-problems:
    meeting extraction — same pattern).
 
 2. *Source integration.* After slack-digest commits, fire Hook 2
-   equivalent: `services.topicMemory.refreshAllFromMeetings(paths, {
+   equivalent: `services.topicMemory.refreshAllFromSources(paths, {
    slugs: digestTopics, sourcePath: <digest-file-path>, ... })`. This
-   requires widening `refreshAllFromMeetings`' source discovery — today
-   it scans `resources/meetings/*.md`; it needs to also pick up slack
-   digest files (probably `resources/slack-digests/*.md` or wherever
-   the skill writes them, subject to naming conventions).
+   requires widening source discovery — previously it scanned
+   `resources/meetings/*.md` only; it now also picks up slack digest
+   files at `resources/notes/{date}-slack-digest.md` (the path the
+   slack-digest skill already writes to via the
+   `<!-- ARETE_INTEGRATION_START -->` block). Resolved: see
+   `dev/work/plans/slack-digest-topic-wiki/plan.md` for the
+   implementation that landed (`refreshAllFromMeetings` was renamed
+   to `refreshAllFromSources` and `discoverTopicSources` now scans
+   both directories).
 
 **Approach alternative (lighter).** Skip the extraction extension;
 require users to manually tag slack-digest output with `topics:`

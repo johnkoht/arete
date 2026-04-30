@@ -675,7 +675,7 @@ Slack search returns max 20 results per page. For busy days:
 ## References
 
 - **Patterns**: `significance_analyst`, `context_bundle_assembly`, `extract_decisions_learnings`, `refresh_person_memory` (see [PATTERNS.md](../PATTERNS.md))
-- **CLI**: `arete resolve`, `arete people show --memory`, `arete people memory refresh`, `arete commitments list`, `arete commitments create`, `arete commitments resolve`, `arete search`, `arete index`
+- **CLI**: `arete resolve`, `arete people show --memory`, `arete people memory refresh`, `arete commitments list`, `arete commitments create`, `arete commitments resolve`, `arete search`, `arete index`, `arete topic list --active --slugs --json` (Phase 2a active-topic bias for extraction), `arete topic refresh --slugs <list> --source <path>` (Phase 5b Hook 2 — integrates the just-written digest into each tagged topic page; `--source` scopes the integration to this digest only)
 - **MCP Tools**: `slack_search_public_and_private`, `slack_read_channel`, `slack_read_thread`, `slack_search_users`
 - **Related Skills**: `capture-conversation` (single thread), `process-meetings` (extraction model), `daily-winddown` (orchestrator)
 - **Data Models**: Person files (`people/**/*.md`), Memory (`decisions.md`, `learnings.md`), Commitments (`.arete/commitments.json`), Areas (`areas/*.md`)
