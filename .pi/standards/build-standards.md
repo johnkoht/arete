@@ -41,7 +41,6 @@ This applies to: `packages/core/dist/`, `packages/cli/dist/`, `packages/apps/bac
 ### Configuration
 
 - **Config**: `tsconfig.json` (NodeNext, strict mode)
-- **Tests**: `tsconfig.test.json`
 - **Module Resolution**: NodeNext (requires `.js` extensions in imports)
 
 ### Code Style
