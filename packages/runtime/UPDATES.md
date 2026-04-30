@@ -4,6 +4,20 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 27, 2026 (patch — 0.9.2)
+
+### Reconciliation: fewer false positives, smarter handling of duplicate decisions/learnings
+
+A fast-follow on the v0.9.1 reconciliation fix. After running real meetings, false positives still showed up — different path, same outcome of items being marked "already done" when they weren't. Three changes:
+
+- **The reconciliation pass now runs at the standard tier (Sonnet) by default for new workspaces.** It was running on `fast` (Haiku), which proved unreliable in practice — same inputs producing 6/6 false-positive flags on one run and 0/0 on the next. Sonnet is consistent. **If your workspace was created before this release**, edit your `arete.yaml` and change `ai.tasks.reconciliation: fast` → `standard` to get the same improvement.
+- **Duplicate decisions and learnings are now silently merged into committed memory** instead of being marked "skipped." The match is real (the content is in your `.arete/memory/items/`), but "already complete" was wrong vocabulary for an insight. They just don't appear in staging. A `Merged into committed memory: 2 learnings` summary line tells you what was dropped.
+- **Action items keep the visible "skipped/reconciled" marker** — that vocabulary is still right for a commitment, and you may want to know it was discussed but already tracked.
+
+The LLM-driven duplicate-detection pass also got tighter: dropped a vague "vague or unactionable" criterion that produced most of the false-positive flags, and now runs on action items only.
+
+---
+
 ## Week of April 27, 2026 (patch — 0.9.1)
 
 ### Reprocessing a meeting no longer marks fresh items as "already done"
