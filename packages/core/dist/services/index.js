@@ -19,7 +19,7 @@ export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingE
 // Meeting file parsing
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
-export { processMeetingExtraction, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
+export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
 // Meeting reconciliation
 export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview } from './meeting-reconciliation.js';
 // Pattern detection

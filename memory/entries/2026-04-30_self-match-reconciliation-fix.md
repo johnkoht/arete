@@ -67,7 +67,40 @@ The actual incident hit 6/12, not 11/12, because the meeting's on-disk staged it
 
 ## Follow-ups
 
-- [ ] Reprocess `2026-04-29-claude-code-for-reserv-product.md` to fix its lingering bad `staged_item_status`/`source` values. Fix prevents new occurrences but doesn't retroactively repair the file.
+- [x] Reprocess `2026-04-29-claude-code-for-reserv-product.md` to fix its lingering bad `staged_item_status`/`source` values. *Done — closed by the v0.9.2 follow-up.*
 - [ ] Triage 5 pre-existing test failures (3 in `agent.test.ts`, 2 in `view.test.ts`).
-- [ ] Investigate extraction determinism (6/12 drift across extraction passes on identical source).
+- [x] Investigate extraction determinism (6/12 drift across extraction passes on identical source). *Closed — see "v0.9.2 follow-up" below; the drift was an LLM non-determinism issue, not extraction non-determinism.*
 - [ ] Backend lookback window: respect a config value rather than hard-coded `7`.
+
+---
+
+## v0.9.2 follow-up — reconciliation tier + scope + vocab
+
+After v0.9.1 shipped the self-match fix, the user reprocessed `2026-04-29-claude-code-for-reserv-product.md` and reported 6 of 11 items still showing as `skipped`/`reconciled`. Diagnosis: not a regression of the fix — a different path. The remaining false positives came from two sources:
+
+1. **`batchLLMReview` non-determinism on Haiku.** The reconciliation tier was `fast` (Haiku) per the user's `arete.yaml`. Across many runs of the same item set against the same committed memory: 0 drops 25 times in isolation, 2 drops once, 6 drops on the user's actual reprocess. Pure LLM flakiness — the prompt criterion "Vague or unactionable items that add no signal" was the loosest bullet and produced most of the variance.
+
+2. **Cross-meeting matching against committed memory still flagged a real near-duplicate** (`le_003: Email template adoption ~30%` vs. two committed learnings about email template adoption). That one was actually correct, but **"skipped/already complete" was wrong vocabulary for a learning** — a learning is an insight, not a task; you can't "complete" it.
+
+Three responses shipped together (commit `24d11ba7`):
+
+- **A**: Dropped the "Vague or unactionable items" criterion from the `batchLLMReview` prompt.
+- **B**: Restricted `batchLLMReview` to `type === 'action'`. Decisions and learnings no longer go through the LLM review.
+- **C**: When cross-meeting reconciliation flags a decision or learning as a duplicate, silently merge it into committed memory — drop from `filteredItems` and metadata maps entirely instead of marking skipped/reconciled. Action items keep the visible marker. New `silentlyMerged: { decisions, learnings }` count surfaces in the JSON output and post-extract summary so silent merges aren't truly invisible.
+
+Plus a separate commit (`4aa14bba`) fixed the upstream default: `arete onboard` was writing `reconciliation: fast` to fresh workspaces' `arete.yaml`, overriding the runtime `'standard'` default in `config.ts`. Now writes `'standard'`.
+
+Then a follow-up commit (`<this commit>`) addressed eng-manager review nits:
+
+- Extracted the duplicated silent-merge block (CLI + backend) into a single core helper `applyReconciliationDecision(processed, matchingItem, silentlyMerged)`. Same drift-prevention rationale that motivated the `ONBOARD_DEFAULT_AI_CONFIG` consolidation.
+- Defensive counter reset on the backend reconciliation catch path — if the merge loop throws mid-iteration, partial counts won't be reported alongside the "reconciliation skipped" warning.
+- 5 new unit tests on `applyReconciliationDecision` (action visible-marker, decision silent-merge, learning silent-merge, sibling-item invariance, missing optional maps).
+
+### Verification
+
+3-for-3 Sonnet runs on the user's actual incident meeting → 0 false positives. Pre-fix Haiku had been wildly variant on identical input: 0/6/0/2/6 across separate runs.
+
+### Recommendations / Continue
+
+- **The drift was at the LLM tier, not the extraction.** Lesson: when a system involves multiple LLM passes, isolate which one is misbehaving before tightening prompts. The v0.9.1 fix was the right fix but for the wrong path; the user's continued reports led to the right diagnosis.
+- **DRY the moment you have two identical literal blocks.** `DEFAULT_AI_CONFIG` / `API_KEY_AI_CONFIG` were 100% character-identical and silently drifted from the documented `'standard'` default. The eng-manager review caught a *future* version of the same drift in the silent-merge logic before it shipped.

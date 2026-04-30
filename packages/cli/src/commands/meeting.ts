@@ -14,6 +14,7 @@ import {
   formatStagedSections,
   updateMeetingContent,
   processMeetingExtraction,
+  applyReconciliationDecision,
   extractUserNotes,
   parseStagedSections,
   parseStagedItemStatus,
@@ -981,33 +982,11 @@ export function registerMeetingCommands(program: Command): void {
             const currentStatus = processed.stagedItemStatus[matchingItem.id];
             if (currentStatus === 'skipped') continue;
 
-            // Items flagged 'duplicate' or 'completed':
-            //  - action items: flip to skipped/reconciled (visible in staging
-            //    with the marker — "already done" is coherent for a commitment)
-            //  - decisions/learnings: silent merge. The matching content is
-            //    already in committed memory; surfacing the duplicate as
-            //    "skipped" forces the user to dismiss something that was never
-            //    going to add value. Drop from filteredItems + metadata maps.
+            // Action items get a visible 'skipped' marker; decisions and
+            // learnings are silently merged into committed memory.
+            // See `applyReconciliationDecision` for the type-dependent contract.
             if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
-              if (matchingItem.type === 'action') {
-                processed.stagedItemStatus[matchingItem.id] = 'skipped';
-                processed.stagedItemSource[matchingItem.id] = 'reconciled';
-              } else {
-                processed.filteredItems = processed.filteredItems.filter(
-                  (fi) => fi.id !== matchingItem.id,
-                );
-                delete processed.stagedItemStatus[matchingItem.id];
-                delete processed.stagedItemSource[matchingItem.id];
-                delete processed.stagedItemConfidence[matchingItem.id];
-                if (processed.stagedItemMatchedText) {
-                  delete processed.stagedItemMatchedText[matchingItem.id];
-                }
-                if (processed.stagedItemOwner) {
-                  delete processed.stagedItemOwner[matchingItem.id];
-                }
-                if (matchingItem.type === 'decision') silentlyMerged.decisions += 1;
-                else if (matchingItem.type === 'learning') silentlyMerged.learnings += 1;
-              }
+              applyReconciliationDecision(processed, matchingItem, silentlyMerged);
             }
           }
         }

@@ -38,6 +38,7 @@ import {
   batchLLMReview,
   loadMemorySummary,
   renderActiveTopicsAsSlugList,
+  applyReconciliationDecision,
   FileStorageAdapter,
   TopicMemoryService,
   type ExtractionMode,
@@ -379,30 +380,10 @@ export async function runProcessingSessionTestable(
           if (processed.stagedItemStatus[matchingItem.id] === 'skipped') continue;
 
           if (item.status === 'duplicate' || item.status === 'completed') {
-            // action items: flip to skipped/reconciled (visible with marker —
-            // "already done" is coherent for a commitment).
-            // decisions/learnings: silent merge. Already in committed memory;
-            // surfacing as "skipped" forces the user to dismiss something that
-            // was never going to add value. Drop from filteredItems + maps.
-            if (matchingItem.type === 'action') {
-              processed.stagedItemStatus[matchingItem.id] = 'skipped';
-              processed.stagedItemSource[matchingItem.id] = 'reconciled';
-            } else {
-              processed.filteredItems = processed.filteredItems.filter(
-                (fi) => fi.id !== matchingItem.id,
-              );
-              delete processed.stagedItemStatus[matchingItem.id];
-              delete processed.stagedItemSource[matchingItem.id];
-              delete processed.stagedItemConfidence[matchingItem.id];
-              if (processed.stagedItemMatchedText) {
-                delete processed.stagedItemMatchedText[matchingItem.id];
-              }
-              if (processed.stagedItemOwner) {
-                delete processed.stagedItemOwner[matchingItem.id];
-              }
-              if (matchingItem.type === 'decision') silentlyMerged.decisions++;
-              else if (matchingItem.type === 'learning') silentlyMerged.learnings++;
-            }
+            // Action items get a visible 'skipped' marker; decisions and
+            // learnings are silently merged into committed memory.
+            // See `applyReconciliationDecision` for the type-dependent contract.
+            applyReconciliationDecision(processed, matchingItem, silentlyMerged);
             if (item.status === 'duplicate') reconciliationStats.duplicates++;
             else reconciliationStats.completed++;
           } else if (item.relevanceTier === 'low') {
@@ -419,7 +400,15 @@ export async function runProcessingSessionTestable(
           jobs.appendEvent(jobId, `Merged into committed memory: ${silentlyMerged.decisions} decision(s), ${silentlyMerged.learnings} learning(s)`);
         }
       } catch (err) {
-        // Graceful degradation — log warning and continue
+        // Graceful degradation — log warning and continue.
+        // Zero the merge-loop counters: if the throw came mid-loop the
+        // partial counts would be reported alongside a "reconciliation
+        // skipped" warning, which is misleading. Better to under-report
+        // (the persisted state mutations stand) than to claim merges that
+        // weren't fully accounted for.
+        reconciliationStats = { duplicates: 0, completed: 0, lowRelevance: 0 };
+        silentlyMerged.decisions = 0;
+        silentlyMerged.learnings = 0;
         console.warn('[agent] reconciliation failed:', err);
         jobs.appendEvent(jobId, 'Warning: Cross-meeting reconciliation skipped due to error');
       }
