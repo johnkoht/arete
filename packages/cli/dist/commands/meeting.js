@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -774,6 +774,8 @@ export function registerMeetingCommands(program) {
         // For --stage: process extraction to get filtered items and metadata
         let stagedSections;
         let processed;
+        // Lifted so the post-merge response can surface counts to the user.
+        const silentlyMerged = { decisions: 0, learnings: 0 };
         if (shouldStage) {
             // Extract user notes and process extraction (filtering, dedup, metadata)
             const userNotes = extractUserNotes(body);
@@ -796,7 +798,9 @@ export function registerMeetingCommands(program) {
                 openTasks,
                 importance: effectiveImportance,
             });
-            // Merge reconciliation decisions into processed items
+            // Merge reconciliation decisions into processed items.
+            // silentlyMerged counts surface to the user via JSON output and the
+            // post-extract summary so silent merges aren't truly invisible.
             if (reconciliationResult) {
                 for (const reconciledItem of reconciliationResult.items) {
                     // Skip items that reconciliation wants to keep
@@ -815,19 +819,26 @@ export function registerMeetingCommands(program) {
                     const currentStatus = processed.stagedItemStatus[matchingItem.id];
                     if (currentStatus === 'skipped')
                         continue;
-                    // Items flagged 'duplicate' or 'completed' → skipped
+                    // Action items get a visible 'skipped' marker; decisions and
+                    // learnings are silently merged into committed memory.
+                    // See `applyReconciliationDecision` for the type-dependent contract.
                     if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
-                        processed.stagedItemStatus[matchingItem.id] = 'skipped';
-                        processed.stagedItemSource[matchingItem.id] = 'reconciled';
+                        applyReconciliationDecision(processed, matchingItem, silentlyMerged);
                     }
                 }
             }
-            // Run batch LLM quality review when reconciliation is active
+            // Run batch LLM quality review when reconciliation is active.
+            // Limited to action items: "skipped" / "already done" is coherent
+            // vocabulary for a commitment, but a learning is an insight and a
+            // decision is a point-in-time fact — neither has a "done" state. For
+            // those types, duplicate detection happens via cross-meeting matching
+            // above and is handled as silent merge into committed memory.
             if (opts.reconcile && processed) {
                 try {
                     const proc = processed;
                     const reviewItems = proc.filteredItems
                         .filter(fi => proc.stagedItemStatus[fi.id] !== 'skipped')
+                        .filter(fi => fi.type === 'action')
                         .map(fi => ({ text: fi.text, type: fi.type, id: fi.id }));
                     if (reviewItems.length > 0) {
                         // Reuse cached context to avoid redundant I/O
@@ -919,6 +930,7 @@ export function registerMeetingCommands(program) {
             priorItemsUsed: !!priorItems,
             reconciled,
             skippedBySource,
+            silentlyMerged,
             qmd: qmdResult ?? { indexed: false, skipped: true },
         };
         // Add reconciliation stats when reconciliation was run
@@ -966,6 +978,17 @@ export function registerMeetingCommands(program) {
                 if (skippedBySource.slackResolved > 0)
                     parts.push(`${skippedBySource.slackResolved} slack-resolved`);
                 info(`Skipped ${totalSkipped} items: ${parts.join(', ')}`);
+            }
+            // Silent-merge summary — duplicate decisions/learnings dropped from
+            // staging (already in committed memory).
+            const totalMerged = silentlyMerged.decisions + silentlyMerged.learnings;
+            if (totalMerged > 0) {
+                const parts = [];
+                if (silentlyMerged.decisions > 0)
+                    parts.push(`${silentlyMerged.decisions} decision${silentlyMerged.decisions === 1 ? '' : 's'}`);
+                if (silentlyMerged.learnings > 0)
+                    parts.push(`${silentlyMerged.learnings} learning${silentlyMerged.learnings === 1 ? '' : 's'}`);
+                info(`Merged into committed memory: ${parts.join(', ')}`);
             }
             // Display reconciliation details
             if (reconciliationResult) {

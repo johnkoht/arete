@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   processMeetingExtraction,
+  applyReconciliationDecision,
   extractUserNotes,
   clearApprovedSections,
   formatFilteredStagedSections,
@@ -9,7 +10,7 @@ import {
   calculateSpeakingRatio,
   inferUrgency,
 } from '../../src/services/meeting-processing.js';
-import type { FilteredItem } from '../../src/services/meeting-processing.js';
+import type { FilteredItem, ProcessedMeetingResult } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
 import type { MeetingExtractionResult, ActionItem, MeetingIntelligence, PriorItem } from '../../src/services/meeting-extraction.js';
 
@@ -2294,5 +2295,106 @@ describe('decision/learning confidence from extraction', () => {
     assert.equal(learnings.length, 1);
     assert.equal(processed.stagedItemStatus[decisions[0].id], 'approved');
     assert.equal(processed.stagedItemStatus[learnings[0].id], 'approved');
+  });
+});
+
+describe('applyReconciliationDecision', () => {
+  // Builds a `ProcessedMeetingResult` with one entry per type, fully
+  // populated metadata maps. Tests can then call the helper with each
+  // type and assert the disposition.
+  function makeProcessed(): ProcessedMeetingResult {
+    return {
+      filteredItems: [
+        { id: 'ai_001', text: 'Send report to Alice', type: 'action', confidence: 0.9 },
+        { id: 'de_001', text: 'Use PostgreSQL for prod', type: 'decision', confidence: 0.9 },
+        { id: 'le_001', text: 'Batch is faster than streaming', type: 'learning', confidence: 0.9 },
+      ],
+      stagedItemStatus: { ai_001: 'approved', de_001: 'approved', le_001: 'approved' },
+      stagedItemConfidence: { ai_001: 0.9, de_001: 0.9, le_001: 0.9 },
+      stagedItemSource: { ai_001: 'ai', de_001: 'ai', le_001: 'ai' },
+      stagedItemOwner: { ai_001: { ownerSlug: 'alice', direction: 'i_owe_them' } },
+      stagedItemMatchedText: {},
+    };
+  }
+
+  it('action items: flips to skipped/reconciled and stays in filteredItems', () => {
+    const processed = makeProcessed();
+    const silentlyMerged = { decisions: 0, learnings: 0 };
+
+    applyReconciliationDecision(processed, { id: 'ai_001', type: 'action' }, silentlyMerged);
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'skipped');
+    assert.equal(processed.stagedItemSource['ai_001'], 'reconciled');
+    assert.ok(
+      processed.filteredItems.some((fi) => fi.id === 'ai_001'),
+      'Action item should remain in filteredItems with the visible marker',
+    );
+    assert.equal(silentlyMerged.decisions, 0);
+    assert.equal(silentlyMerged.learnings, 0);
+  });
+
+  it('decisions: silent merge — drops from filteredItems and all metadata maps, increments counter', () => {
+    const processed = makeProcessed();
+    const silentlyMerged = { decisions: 0, learnings: 0 };
+
+    applyReconciliationDecision(processed, { id: 'de_001', type: 'decision' }, silentlyMerged);
+
+    assert.ok(
+      !processed.filteredItems.some((fi) => fi.id === 'de_001'),
+      'Decision should be removed from filteredItems',
+    );
+    assert.equal(processed.stagedItemStatus['de_001'], undefined);
+    assert.equal(processed.stagedItemSource['de_001'], undefined);
+    assert.equal(processed.stagedItemConfidence['de_001'], undefined);
+    assert.equal(silentlyMerged.decisions, 1);
+    assert.equal(silentlyMerged.learnings, 0);
+  });
+
+  it('learnings: silent merge — drops from filteredItems and increments learnings counter', () => {
+    const processed = makeProcessed();
+    const silentlyMerged = { decisions: 0, learnings: 0 };
+
+    applyReconciliationDecision(processed, { id: 'le_001', type: 'learning' }, silentlyMerged);
+
+    assert.ok(
+      !processed.filteredItems.some((fi) => fi.id === 'le_001'),
+      'Learning should be removed from filteredItems',
+    );
+    assert.equal(processed.stagedItemStatus['le_001'], undefined);
+    assert.equal(silentlyMerged.decisions, 0);
+    assert.equal(silentlyMerged.learnings, 1);
+  });
+
+  it('decisions: leaves OTHER items (action, learning) untouched', () => {
+    // Belt for the helper's narrow contract — only mutates the matching id's
+    // entries, never the siblings.
+    const processed = makeProcessed();
+    const silentlyMerged = { decisions: 0, learnings: 0 };
+
+    applyReconciliationDecision(processed, { id: 'de_001', type: 'decision' }, silentlyMerged);
+
+    assert.equal(processed.stagedItemStatus['ai_001'], 'approved');
+    assert.equal(processed.stagedItemStatus['le_001'], 'approved');
+    assert.ok(processed.filteredItems.some((fi) => fi.id === 'ai_001'));
+    assert.ok(processed.filteredItems.some((fi) => fi.id === 'le_001'));
+  });
+
+  it('handles processed without optional matchedText/owner maps gracefully', () => {
+    // ProcessedMeetingResult.stagedItemMatchedText is optional; the helper
+    // must not throw if it's undefined.
+    const processed: ProcessedMeetingResult = {
+      filteredItems: [{ id: 'le_001', text: 'X', type: 'learning', confidence: 0.9 }],
+      stagedItemStatus: { le_001: 'approved' },
+      stagedItemConfidence: { le_001: 0.9 },
+      stagedItemSource: { le_001: 'ai' },
+      stagedItemOwner: {},
+      // stagedItemMatchedText omitted
+    };
+    const silentlyMerged = { decisions: 0, learnings: 0 };
+
+    applyReconciliationDecision(processed, { id: 'le_001', type: 'learning' }, silentlyMerged);
+
+    assert.equal(processed.filteredItems.length, 0);
+    assert.equal(silentlyMerged.learnings, 1);
   });
 });

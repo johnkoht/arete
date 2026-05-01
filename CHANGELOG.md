@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.2] - 2026-04-30
+
+### Fixed
+- **Reconciliation false positives on real data.** The cross-meeting + LLM batch review pass was running on `reconciliation: fast` (Haiku) by default, which proved unreliable in practice — same inputs produced 6/6 false-positive flags on one run and 0/0 on the next. New workspaces created via `arete onboard` now ship with `reconciliation: standard` (Sonnet). Workspace-level `arete.yaml` values still win over the runtime default; existing workspaces should manually update `ai.tasks.reconciliation: fast → standard` to get the improvement.
+- **`batchLLMReview` prompt over-aggressive.** Dropped the "Vague or unactionable items that add no signal" criterion — it was the loosest, most subjective bullet and produced the bulk of false-positive flags.
+- **`batchLLMReview` scope mismatch.** The review now runs only on action items. "Skipped" / "already done" is coherent vocabulary for a commitment, but a learning is an insight and a decision is a point-in-time fact — neither has a "done" state. Decisions and learnings still get cross-meeting duplicate detection, but the disposition is different (see Changed below).
+
+### Changed
+- **Duplicate decisions and learnings are now silently merged into committed memory** instead of being marked `skipped`/`reconciled` in the staged sections. The matching content is already captured; surfacing it as "skipped" forced the user to dismiss something with no value. Action items keep the visible marker — that vocabulary is still right for a commitment.
+- **JSON output shape**: `arete meeting extract --reconcile --json` adds a `silentlyMerged: { decisions, learnings }` field alongside the existing `skippedBySource`. Anyone scripting against the JSON output for "how many items did reconciliation drop?" needs `skippedBySource.reconciled + silentlyMerged.decisions + silentlyMerged.learnings` going forward.
+
+## [0.9.1] - 2026-04-30
+
+### Fixed
+- **Cross-meeting reconciliation self-match on reprocess** — when a meeting whose status was already `processed` or `approved` was reprocessed, `loadRecentMeetingBatch` picked it up alongside everything else, so the caller's `[...recentBatch, currentBatch]` flow handed `findDuplicates` two copies of the same meeting. "First occurrence wins" → on-disk staged items became canonical and the fresh extraction got flipped to `status: 'skipped'`, `source: 'reconciled'` (with no `matched_text` — the diagnostic tell). `loadRecentMeetingBatch` now accepts an optional `excludePath`; the CLI extract path, the backend `runProcessingSessionTestable` reconciliation step, and the backend priorItems loader all pass the current meeting's path. Verified end-to-end against the actual incident meeting: 0/12 items flipped, vs 11/12 with the bug present.
+
 ## [0.9.0] - 2026-04-29
 
 ### Added

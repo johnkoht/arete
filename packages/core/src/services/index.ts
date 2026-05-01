@@ -64,6 +64,7 @@ export type { ParsedActionItem } from './meeting-parser.js';
 // Meeting processing
 export {
   processMeetingExtraction,
+  applyReconciliationDecision,
   extractUserNotes,
   clearApprovedSections,
   formatFilteredStagedSections,

@@ -480,7 +480,6 @@ DROP criteria:
 - Semantic duplicate of a committed item (same meaning, different wording)
 - Status update misclassified as a decision (e.g. "We discussed X", "We reviewed Y")
 - Personal trivia misclassified as a learning (e.g. "Alice lives in Seattle")
-- Vague or unactionable items that add no signal
 
 Return ONLY valid JSON in this format:
 {"drops": [{"id": "item-id", "reason": "brief reason"}]}
@@ -672,13 +671,19 @@ function extractIntelligenceFromFrontmatter(frontmatter, body) {
  * filters by recency and status (`processed` or `approved`), and extracts
  * staged intelligence items from frontmatter.
  *
- * Pass `excludePath` when reprocessing a meeting whose status is already
- * `processed` or `approved` — without it, the meeting being reprocessed shows
- * up in the batch with its OLD staged items, and the caller's
- * `[...recentBatch, currentBatch]` pattern flips the fresh extraction into
- * `findDuplicates` against itself ("first occurrence wins" → disk version
- * canonical, fresh items marked duplicate). Exact string match against
- * `storage.list()` output (absolute paths); do not normalize via `resolve()`.
+ * Pass `excludePath` when reprocessing a meeting whose status already
+ * satisfies the loop's eligibility filter (currently `processed` or
+ * `approved` — keep this comment accurate if that set widens). Without it,
+ * the meeting being reprocessed shows up in the batch with its OLD staged
+ * items, and the caller's `[...recentBatch, currentBatch]` pattern flips
+ * the fresh extraction into `findDuplicates` against itself ("first
+ * occurrence wins" → disk version canonical, fresh items marked duplicate).
+ *
+ * `excludePath` is compared with strict `===` against the paths emitted by
+ * `storage.list(meetingsDir)`. Callers MUST pass the path exactly as
+ * `storage.list` would emit it for that file — do not run it through
+ * `path.resolve()` or `path.normalize()`, which would silently miss the
+ * match for symlinked or `./`-prefixed inputs.
  *
  * @param storage - Storage adapter for file access
  * @param meetingsDir - Path to meetings directory (e.g., resources/meetings)

@@ -1301,7 +1301,12 @@ Discussion about tasks.
       assert.ok(!events.some((e) => e.includes('Cross-meeting:')));
     });
 
-    it('reconciles decision items across meetings', async () => {
+    it('silently merges duplicate decision items into committed memory (no staged entry)', async () => {
+      // Decisions/learnings flagged as duplicates are silently dropped — they
+      // already exist in committed memory, so surfacing them as "skipped"
+      // forces the user to dismiss something with no value. Different from
+      // action items, which still get a visible "skipped/reconciled" marker
+      // because "already done" is coherent vocabulary for a commitment.
       const jobs = makeMockJobs();
       const decisionText = 'We decided to use React for the frontend';
       const deps = makeDepsWithReconciliation({
@@ -1325,22 +1330,81 @@ Discussion about tasks.
       await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
       const content = deps.writtenFiles[0]!.content;
-      assert.ok(content.includes('de_001: skipped'), 'Duplicate decision should be skipped');
-      assert.ok(content.includes('de_001: reconciled'), 'Duplicate decision should have reconciled source');
+      // The duplicate decision should be entirely absent from the written
+      // file: no body bullet, no frontmatter status entry.
+      assert.ok(!content.includes(decisionText), 'Duplicate decision body bullet should be absent');
+      assert.ok(!content.includes('de_001:'), 'Duplicate decision should have no frontmatter entry');
     });
 
-    it('batch LLM review drops items flagged by LLM', async () => {
+    it('silently merges duplicate learning items into committed memory (no staged entry)', async () => {
       const jobs = makeMockJobs();
-      const decisionText = 'Use PostgreSQL for production database';
-      const learningText = 'The API supports batch processing mode';
+      const learningText = 'Batch processing is 3x faster than streaming for ingestion';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [],
+          decisions: [],
+          learnings: [learningText],
+        }),
+        recentBatch: [
+          {
+            meetingPath: '/workspace/resources/meetings/2024-01-14-prior.md',
+            extraction: mockCoreExtractionResponse({
+              summary: 'Prior meeting.',
+              learnings: [learningText],
+            }),
+          },
+        ],
+      });
 
-      // Track call count to return different responses for extraction vs batch review
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(!content.includes(learningText), 'Duplicate learning body bullet should be absent');
+      assert.ok(!content.includes('le_001:'), 'Duplicate learning should have no frontmatter entry');
+    });
+
+    it('still flips duplicate ACTION items to skipped/reconciled (visible marker)', async () => {
+      // Counterpart to the silent-merge tests above: action items keep their
+      // "already done" marker because that vocabulary is coherent for a
+      // commitment, and the user may want to know it was discussed but already
+      // tracked elsewhere.
+      const jobs = makeMockJobs();
+      const actionText = 'Send the Q2 plan to Alice by Friday';
+      const deps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+        }),
+        recentBatch: [
+          {
+            meetingPath: '/workspace/resources/meetings/2024-01-14-prior.md',
+            extraction: mockCoreExtractionResponse({
+              summary: 'Prior meeting.',
+              actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+            }),
+          },
+        ],
+      });
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      const content = deps.writtenFiles[0]!.content;
+      assert.ok(content.includes('ai_001: skipped'), 'Duplicate action should be marked skipped');
+      assert.ok(content.includes('ai_001: reconciled'), 'Duplicate action should have reconciled source');
+    });
+
+    it('batch LLM review drops action items flagged by LLM', async () => {
+      // Batch review now runs on action items only (learnings/decisions are
+      // either silent-merged via cross-meeting matching or kept as-is).
+      const jobs = makeMockJobs();
+      const actionText = 'Migrate the staging database to PostgreSQL by Q3';
+
       let callCount = 0;
       const baseDeps = makeDepsWithReconciliation({
         coreResponse: mockCoreExtractionResponse({
           summary: 'Summary.',
-          decisions: [decisionText],
-          learnings: [learningText],
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
         }),
         reconciliationContext: {
           areaMemories: new Map(),
@@ -1351,38 +1415,90 @@ Discussion about tasks.
         },
       });
 
-      // Override aiService to return batch review drops on second call
       const deps = {
         ...baseDeps,
         aiService: {
           call: async () => {
             callCount++;
             if (callCount === 1) {
-              // First call: extraction
               const response = mockCoreExtractionResponse({
                 summary: 'Summary.',
-                decisions: [decisionText],
-                learnings: [learningText],
+                actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
               });
               return { text: JSON.stringify(toRawLLMJson(response)) };
             }
-            // Second call: batch review — drop the learning as low-signal
-            return { text: JSON.stringify({ drops: [{ id: 'le_001', reason: 'Duplicate of committed item' }] }) };
+            return { text: JSON.stringify({ drops: [{ id: 'ai_001', reason: 'Duplicate of committed item' }] }) };
           },
         },
       };
 
       const result = await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
 
-      // The learning should be skipped by batch review
-      const learning = result.filteredItems.find(fi => fi.text === learningText);
-      assert.ok(learning, 'Learning should exist in filtered items');
-      assert.equal(result.stagedItemStatus[learning!.id], 'skipped');
-      assert.equal(result.stagedItemSource[learning!.id], 'reconciled');
+      const action = result.filteredItems.find(fi => fi.text === actionText);
+      assert.ok(action, 'Action should exist in filtered items');
+      assert.equal(result.stagedItemStatus[action!.id], 'skipped');
+      assert.equal(result.stagedItemSource[action!.id], 'reconciled');
 
-      // Batch review event should be logged
       const events = jobs.appended.map((e) => e.line);
       assert.ok(events.some((e) => e.includes('Batch review dropped 1')));
+    });
+
+    it('batch LLM review does NOT receive learning or decision items', async () => {
+      // Wiring guarantee for the type filter: only action items make it into
+      // the LLM review payload. Captures the prompt and parses the
+      // "## Current Extraction Items" section to verify type filtering.
+      const jobs = makeMockJobs();
+      const actionText = 'Ship the Q2 plan';
+      const decisionText = 'We decided to use React for the frontend';
+      const learningText = 'Batch processing is 3x faster than streaming';
+
+      let callCount = 0;
+      let capturedReviewPrompt: string | undefined;
+      const baseDeps = makeDepsWithReconciliation({
+        coreResponse: mockCoreExtractionResponse({
+          summary: 'Summary.',
+          actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+          decisions: [decisionText],
+          learnings: [learningText],
+        }),
+      });
+
+      const deps = {
+        ...baseDeps,
+        aiService: {
+          call: async (_task: unknown, prompt: string) => {
+            callCount++;
+            if (callCount === 1) {
+              const response = mockCoreExtractionResponse({
+                summary: 'Summary.',
+                actionItems: [mockActionItem(actionText, { confidence: 0.9 })],
+                decisions: [decisionText],
+                learnings: [learningText],
+              });
+              return { text: JSON.stringify(toRawLLMJson(response)) };
+            }
+            // Second call is the batch review — capture and return no drops.
+            capturedReviewPrompt = prompt;
+            return { text: '{"drops": []}' };
+          },
+        },
+      };
+
+      await runProcessingSessionTestable(WORKSPACE, SLUG, JOB_ID, jobs, deps);
+
+      assert.ok(capturedReviewPrompt, 'Batch review prompt should have been captured');
+      assert.ok(
+        capturedReviewPrompt!.includes(actionText),
+        'Action item should be in the review payload',
+      );
+      assert.ok(
+        !capturedReviewPrompt!.includes(decisionText),
+        'Decision should NOT be in the review payload',
+      );
+      assert.ok(
+        !capturedReviewPrompt!.includes(learningText),
+        'Learning should NOT be in the review payload',
+      );
     });
 
     it('logs per-source skip count when an action item matches an open task', async () => {

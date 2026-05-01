@@ -29,6 +29,33 @@ import { header, success, error, info, warn, listItem } from '../formatters.js';
 import { displayQmdResult } from '../lib/qmd-output.js';
 import { testProviderConnection, maskApiKey } from './credentials.js';
 
+/**
+ * Default AI tier + task mapping written to a fresh workspace's `arete.yaml`
+ * during onboarding (both OAuth and API-key flows). Exported for unit
+ * verification — keeping the value testable prevents silent drift, since
+ * the *runtime* default in `config.ts` and `services/ai.ts` is `'standard'`
+ * for reconciliation but the workspace value wins when explicit.
+ *
+ * `reconciliation: 'standard'` is deliberate: Haiku is too non-deterministic
+ * at the cross-meeting + LLM batch review pass (false-positive rate measurably
+ * worse than Sonnet on real data — see `2026-04-30_self-match-reconciliation-fix.md`).
+ */
+export const ONBOARD_DEFAULT_AI_CONFIG = {
+  tiers: {
+    fast: 'anthropic/claude-3-5-haiku-latest',
+    standard: 'anthropic/claude-sonnet-4-latest',
+    frontier: 'anthropic/claude-opus-4-latest',
+  },
+  tasks: {
+    summary: 'fast',
+    extraction: 'fast',
+    decision_extraction: 'standard',
+    learning_extraction: 'standard',
+    significance_analysis: 'frontier',
+    reconciliation: 'standard',
+  },
+} as const;
+
 interface OnboardAnswers {
   name: string;
   email: string;
@@ -392,22 +419,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
                 saveOAuthCredentials('anthropic', credentials);
 
                 // Write default AI config to arete.yaml
-                const DEFAULT_AI_CONFIG = {
-                  tiers: {
-                    fast: 'anthropic/claude-3-5-haiku-latest',
-                    standard: 'anthropic/claude-sonnet-4-latest',
-                    frontier: 'anthropic/claude-opus-4-latest',
-                  },
-                  tasks: {
-                    summary: 'fast',
-                    extraction: 'fast',
-                    decision_extraction: 'standard',
-                    learning_extraction: 'standard',
-                    significance_analysis: 'frontier',
-                    reconciliation: 'fast',
-                  },
-                };
-                await services.workspace.updateManifestField(root, 'ai', DEFAULT_AI_CONFIG);
+                await services.workspace.updateManifestField(root, 'ai', ONBOARD_DEFAULT_AI_CONFIG);
 
                 aiConfigured = true;
 
@@ -452,25 +464,6 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
           }
         }
 
-        // Default AI configuration for the workspace
-        // Uses Anthropic models since we're onboarding with Anthropic key
-        // TODO: Multi-provider onboarding (see backlog)
-        const API_KEY_AI_CONFIG = {
-          tiers: {
-            fast: 'anthropic/claude-3-5-haiku-latest',
-            standard: 'anthropic/claude-sonnet-4-latest',
-            frontier: 'anthropic/claude-opus-4-latest',
-          },
-          tasks: {
-            summary: 'fast',
-            extraction: 'fast',
-            decision_extraction: 'standard',
-            learning_extraction: 'standard',
-            significance_analysis: 'frontier',
-            reconciliation: 'fast',
-          },
-        };
-
         // Validate and save key if we have one
         if (apiKeyToSave) {
           if (!opts.json) {
@@ -484,7 +477,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
             saveCredential('anthropic', apiKeyToSave);
 
             // Write default AI config to arete.yaml
-            await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
+            await services.workspace.updateManifestField(root, 'ai', ONBOARD_DEFAULT_AI_CONFIG);
 
             aiConfigured = true;
 
@@ -504,7 +497,7 @@ ${domains.map(d => `- \`${d}\``).join('\n')}
               saveCredential('anthropic', apiKeyToSave);
 
               // Still write AI config
-              await services.workspace.updateManifestField(root, 'ai', API_KEY_AI_CONFIG);
+              await services.workspace.updateManifestField(root, 'ai', ONBOARD_DEFAULT_AI_CONFIG);
               aiConfigured = true;
             } else {
               // Auth error - don't save

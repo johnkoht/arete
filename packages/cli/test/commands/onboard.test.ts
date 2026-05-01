@@ -4,6 +4,7 @@ import { mkdtemp, rm, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { ONBOARD_DEFAULT_AI_CONFIG } from '../../src/commands/onboard.js';
 
 const CLI_PATH = join(import.meta.dirname, '../../src/index.ts');
 
@@ -177,5 +178,34 @@ describe('onboard command', () => {
     // AI config should be present
     assert.ok('ai' in output);
     assert.equal(output.ai.skipped, true);
+  });
+});
+
+describe('ONBOARD_DEFAULT_AI_CONFIG', () => {
+  // Locks the task→tier defaults written to a fresh workspace's arete.yaml.
+  // The reconciliation tier is the load-bearing one for this lock — it's
+  // written explicitly to the workspace, and the workspace value wins over
+  // the runtime default. Haiku is too non-deterministic at this task; see
+  // `memory/entries/2026-04-30_self-match-reconciliation-fix.md`.
+
+  it('reconciliation runs at the standard tier (Sonnet, not Haiku)', () => {
+    assert.equal(ONBOARD_DEFAULT_AI_CONFIG.tasks.reconciliation, 'standard');
+  });
+
+  it('exposes the full task→tier mapping (catches accidental key drops)', () => {
+    assert.deepStrictEqual(ONBOARD_DEFAULT_AI_CONFIG.tasks, {
+      summary: 'fast',
+      extraction: 'fast',
+      decision_extraction: 'standard',
+      learning_extraction: 'standard',
+      significance_analysis: 'frontier',
+      reconciliation: 'standard',
+    });
+  });
+
+  it('points each tier at an Anthropic model (catches provider-prefix drift)', () => {
+    assert.match(ONBOARD_DEFAULT_AI_CONFIG.tiers.fast, /^anthropic\//);
+    assert.match(ONBOARD_DEFAULT_AI_CONFIG.tiers.standard, /^anthropic\//);
+    assert.match(ONBOARD_DEFAULT_AI_CONFIG.tiers.frontier, /^anthropic\//);
   });
 });

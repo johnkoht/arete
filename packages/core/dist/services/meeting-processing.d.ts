@@ -14,6 +14,7 @@ import type { MeetingExtractionResult, PriorItem } from './meeting-extraction.js
 import type { Importance } from '../integrations/meetings.js';
 export type { ItemSource } from '../models/common.js';
 import type { ItemSource } from '../models/common.js';
+import type { ExtractedItemType } from '../models/entities.js';
 /** Item status: 'approved' (auto or dedup), 'pending' (needs review), or 'skipped' (matched completed task) */
 export type ItemStatus = 'approved' | 'pending' | 'skipped';
 /** Owner metadata for action items */
@@ -120,6 +121,37 @@ export declare function hasNegationMarkers(text: string): boolean;
  * @returns Processed result with filtered items and metadata maps
  */
 export declare function processMeetingExtraction(result: MeetingExtractionResult, userNotes: string, options?: ProcessingOptions): ProcessedMeetingResult;
+/**
+ * Apply a "this item is a duplicate / already done" decision from
+ * cross-meeting reconciliation onto a `ProcessedMeetingResult` in place.
+ *
+ * Type-dependent disposition:
+ * - **action** → flip to `status: 'skipped'`, `source: 'reconciled'` and
+ *   keep the item visible in staging. "Already done" is coherent vocabulary
+ *   for a commitment, and the user may want to know it was discussed but
+ *   already tracked elsewhere.
+ * - **decision / learning** → silent merge. Drop the item from
+ *   `filteredItems` and every per-item metadata map. The matching content
+ *   is already in committed memory; surfacing it as "skipped" forces the
+ *   user to dismiss something with no value. `silentlyMerged.{decisions,learnings}`
+ *   is incremented so callers can surface a count.
+ *
+ * Pure mutation of the inputs; returns void. Both `processed` and
+ * `silentlyMerged` must already exist (never null/undefined). The
+ * `matchingItem` is the entry from `processed.filteredItems` whose text
+ * matched the reconciliation result.
+ *
+ * Extracted from CLI extract + backend `runProcessingSession` to keep
+ * the two call sites in lockstep — silent drift here is the same failure
+ * mode that bit `ONBOARD_DEFAULT_AI_CONFIG`.
+ */
+export declare function applyReconciliationDecision(processed: ProcessedMeetingResult, matchingItem: {
+    id: string;
+    type: ExtractedItemType;
+}, silentlyMerged: {
+    decisions: number;
+    learnings: number;
+}): void;
 /**
  * Remove approved sections from meeting content.
  * Removes: `## Approved Action Items`, `## Approved Decisions`, `## Approved Learnings`
