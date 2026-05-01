@@ -2,15 +2,23 @@
  * TopicMemoryService — the L3 topic-wiki layer.
  *
  * Responsibilities (split across phased work):
- *  - alias/merge candidate topic slugs from meeting extraction against
- *    existing topic pages (Step 2 — this file's primary concern today)
- *  - integrateSource: read existing topic page + new meeting + filter
- *    L2 items, ask LLM to rewrite only touched sections, merge back
- *    (Step 3 — stubbed)
+ *  - alias/merge candidate topic slugs from source extraction against
+ *    existing topic pages (Step 2 — primary concern of this file today)
+ *  - integrateSource: read existing topic page + new source (meeting or
+ *    slack-digest) + filter L2 items, ask LLM to rewrite only touched
+ *    sections, merge back (Step 3)
+ *  - discoverTopicSources / refreshAllFromSources: scan
+ *    `resources/meetings/*.md` and `resources/notes/{date}-slack-digest.md`
+ *    and integrate each source into every topic page that references it
+ *    via frontmatter `topics:`. Both source classes share `parseMeetingFile`
+ *    (the parser tolerates the slack-digest frontmatter shape; see
+ *    plan `slack-digest-topic-wiki/plan.md` Step 2 and pre-mortem Risk 2).
  *  - listAll / listForArea: read topic pages from storage (needed by
- *    Step 4 area-memory and Step 9 CLAUDE.md regen)
+ *    area-memory and CLAUDE.md regen)
  *
- * See plan: dev/work/plans/topic-wiki-memory/plan.md
+ * See plans:
+ *  - dev/work/plans/topic-wiki-memory/plan.md (parent build)
+ *  - dev/work/plans/slack-digest-topic-wiki/plan.md (slack-digest source class)
  */
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
@@ -178,21 +186,33 @@ export interface IntegrateOutput {
 export declare function parseIntegrateResponse(response: string): IntegrateOutput | null;
 /**
  * Content-hash a string for idempotency. Low-level primitive; callers
- * should prefer `hashMeetingSource` for meeting files so frontmatter
- * edits (attendee adds, status changes, post-processing metadata) don't
+ * should prefer `hashMeetingSource` for any frontmatter-framed source
+ * file (meetings AND slack-digests) so frontmatter edits (attendee
+ * adds, status changes, post-processing metadata, dedup markers) don't
  * bust dedup.
  */
 export declare function hashSource(content: string): string;
 /**
- * Hash a meeting file's body only — excludes frontmatter. Used in
- * `sources_integrated[].hash` so that editing a meeting's frontmatter
- * (adding an attendee, fixing title typo, rewriting the `intelligence`
- * block from re-extraction) does NOT bust topic-page idempotency. Only
- * substantive body changes — the actual transcript / notes — trigger
- * re-integration.
+ * Hash a topic-source file's body only — excludes frontmatter. Used in
+ * `sources_integrated[].hash` so that editing source-file frontmatter
+ * does NOT bust topic-page idempotency.
  *
- * For content that isn't a full meeting file (missing frontmatter), the
- * raw string is hashed as-is.
+ * Applies to both source classes:
+ *  - meetings (`resources/meetings/*.md`): adding an attendee, fixing a
+ *    title typo, rewriting the `intelligence` block from re-extraction
+ *    leaves the body hash unchanged.
+ *  - slack-digests (`resources/notes/{date}-slack-digest.md`): adding
+ *    `topics:`, `items_approved`, or sibling-plan dedup metadata to
+ *    frontmatter (e.g., `dedup_processed_at`) leaves the body hash
+ *    unchanged.
+ *
+ * Only substantive body changes — the actual transcript, notes, or
+ * digest summary — trigger re-integration.
+ *
+ * For content that isn't a frontmatter-framed file (no `^---\n...\n---`),
+ * the raw string is hashed as-is. The function name retains
+ * `MeetingSource` for back-compat; consider rename to `hashSourceBody`
+ * in a follow-up.
  */
 export declare function hashMeetingSource(content: string): string;
 /**
@@ -220,7 +240,7 @@ export declare function createTopicStub(slug: string, today: string, options?: {
  *
  * Layout:
  *  - Existing page (if any) so the LLM can revise rather than regen
- *  - New source (meeting content)
+ *  - New source (meeting OR slack-digest content)
  *  - Relevant L2 items (decisions, learnings) — filtered by caller
  *  - Response schema + constraints
  */
@@ -254,6 +274,26 @@ export interface RefreshBatchOptions {
     today: string;
     /** Only refresh these slugs; omit for all existing topics. */
     slugs?: string[];
+    /**
+     * When set, scope source discovery to a single file. The
+     * `discoverTopicSources` output is filtered to entries where
+     * `entry.path === sourcePath` (exact equality, after both sides are
+     * resolved to absolute paths) BEFORE the per-slug source filter
+     * runs. Used by the slack-digest skill (Hook 2) to integrate ONLY
+     * the just-written digest, not every prior digest tagged with the
+     * same slugs.
+     *
+     * **Must be an absolute path.** If a relative path is passed,
+     * `refreshAllFromSources` resolves it against `paths.root` before
+     * matching. Path normalization is the caller's responsibility — the
+     * service rejects ambiguous suffix matches by design (cost-correct).
+     *
+     * Pre-mortem Risk 4 / memory bullet 5: this is a behavioral filter,
+     * NOT a label-only logging hint. Without it, a workspace with N
+     * prior digests tagged `cover-whale-templates` runs N× the user's
+     * expected cost.
+     */
+    sourcePath?: string;
     /**
      * When true, skip acquiring the `.arete/.seed.lock`. Use only when
      * the caller already holds the lock (e.g., `arete topic seed`
@@ -291,12 +331,77 @@ export interface RefreshBatchResult {
 }
 declare module './topic-memory.js' {
     interface TopicMemoryService {
-        refreshAllFromMeetings(paths: import('../models/workspace.js').WorkspacePaths, options: RefreshBatchOptions): Promise<RefreshBatchResult>;
+        refreshAllFromSources(paths: import('../models/workspace.js').WorkspacePaths, options: RefreshBatchOptions): Promise<RefreshBatchResult>;
     }
 }
 /**
- * Cost estimate helper — rough Haiku cost per (topic, meeting) integration.
- * Used by CLI for `--dry-run` and `--confirm` prompts.
+ * Source-of-truth filter for slack-digest files in `resources/notes/`.
+ * Filename pattern: `YYYY-MM-DD-slack-digest.md`. Files not matching this
+ * pattern are ignored (they may be other kinds of notes — capture-conversation
+ * outputs, manual notes, etc., none of which contribute to topic narratives).
+ *
+ * Example matches:
+ *  - `2026-04-28-slack-digest.md` → MATCH
+ *  - `2026-04-28-capture-acme-call.md` → no match (not a digest)
+ *  - `slack-digest-2026-04-28.md` → no match (date prefix is required)
+ */
+export declare const SLACK_DIGEST_FILENAME_RE: RegExp;
+/**
+ * Internal type produced by `discoverTopicSources`. Both source classes
+ * (meetings + slack-digests) flatten into this shape so
+ * `refreshAllFromSources`'s integration loop is source-agnostic.
+ */
+export interface SourceDiscoveryEntry {
+    /** Absolute or workspace-relative path the storage adapter understands. */
+    path: string;
+    /** YYYY-MM-DD parsed from the filename's `^(\d{4}-\d{2}-\d{2})` prefix. */
+    date: string;
+    /** Full file content (read once during discovery). */
+    content: string;
+    /**
+     * The source class. Set by which directory the file lives in (NOT by
+     * frontmatter parsing): `'meeting'` for files under `resources/meetings/`,
+     * `'slack-digest'` for files under `resources/notes/` whose filename
+     * matches `SLACK_DIGEST_FILENAME_RE`. The downstream integration path
+     * does NOT branch on this field today (both classes share the same
+     * `integrateSource` LLM prompt and `hashMeetingSource` content hash) —
+     * it exists for telemetry, logging, and any future class-specific
+     * routing (e.g., per-class cost accounting).
+     */
+    type: 'meeting' | 'slack-digest';
+    /** Slugs read from frontmatter `topics:` via `parseMeetingFile`. */
+    topics: string[];
+}
+/**
+ * Scan both topic-source classes and return parseable entries sorted by
+ * `date` ascending (ties broken by `path` ascending, for determinism).
+ * The two classes are:
+ *  - **meetings**: every `*.md` under `resources/meetings/` whose filename
+ *    starts with a `YYYY-MM-DD` prefix.
+ *  - **slack-digests**: every `*.md` under `resources/notes/` whose filename
+ *    matches `SLACK_DIGEST_FILENAME_RE` (`YYYY-MM-DD-slack-digest.md`).
+ *
+ * Both classes flatten into the same `SourceDiscoveryEntry` shape so
+ * `refreshAllFromSources` can iterate them uniformly. Single-pass discovery
+ * is shared by `arete topic refresh --all` and `arete memory refresh` to
+ * avoid duplicate FS walks.
+ *
+ * Tolerant by design:
+ *  - Missing `meetings/` dir → no meeting entries (no throw).
+ *  - Missing `notes/` dir → no slack-digest entries (no throw).
+ *  - Files that fail filename pattern, parse, or read → skipped silently
+ *    (warn-and-continue is reserved for the belt-and-suspenders frontmatter
+ *    `type:` check below; parser failures are common-enough that warning
+ *    spam isn't useful).
+ *  - A file in `notes/` whose frontmatter `type:` is set but is NOT
+ *    `slack-digest` emits one warn line and is skipped (sanity check;
+ *    primary filter remains the filename regex).
+ */
+export declare function discoverTopicSources(paths: WorkspacePaths, storage: StorageAdapter): Promise<SourceDiscoveryEntry[]>;
+/**
+ * Cost estimate helper — rough Haiku cost per (topic, source) integration,
+ * where `source` is a meeting or slack-digest. Used by CLI for `--dry-run`
+ * and `--confirm` prompts.
  */
 export declare const ESTIMATED_USD_PER_INTEGRATION = 0.015;
 /**

@@ -84,7 +84,7 @@ Area memory files are **computed views**, not manually maintained. Auto-generate
 
 ### Topic Memory (L3 — Computed, LLM-synthesized)
 
-Topic pages at `.arete/memory/topics/{slug}.md` are **materialized from meeting ingestion**. Every time `arete meeting apply` runs, the extracted topic slugs bump the alias/merge pass; committed meetings then trigger `integrateSource` which rewrites the touched sections of each topic page via an LLM call. Content-hash idempotency: re-running on the same (topic, meeting) pair is a no-op.
+Topic pages at `.arete/memory/topics/{slug}.md` are **materialized from source ingestion**. Sources include both meetings (`resources/meetings/*.md`) AND slack-digests (`resources/notes/{date}-slack-digest.md`); the source-discovery pipeline treats them as one class. Every time `arete meeting apply` runs, the extracted topic slugs bump the alias/merge pass; committed meetings then trigger `integrateSource` which rewrites the touched sections of each topic page via an LLM call. Slack-digest approval fires the equivalent Hook 2 (`arete topic refresh --slugs ... --source <digest-path>`) so async decisions on Slack also keep the wiki current. Content-hash idempotency: re-running on the same (topic, source) pair is a no-op.
 
 **How topic pages materialize** — three distinct paths:
 

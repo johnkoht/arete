@@ -498,6 +498,28 @@ ${sections.join('\n\n')}`;
 export const MAX_TOPIC_WIKI_CONTEXT_CHARS = 6000;
 
 /**
+ * Prose preamble for the active-topic-slug bias block injected into extraction
+ * prompts. Byte-stable text — when present, the prompt appends a blank line,
+ * the rendered slug list (`renderActiveTopicsAsSlugList(getActiveTopics(...))`),
+ * and a closing newline.
+ *
+ * **Exported for skill-drift tests, not for reuse.** Internal callers should
+ * use the prompt builders that already embed it; the only legitimate external
+ * reader is `packages/core/test/runtime/slack-digest-bias-block.test.ts`,
+ * which asserts byte-equality between this constant and the matching block in
+ * `packages/runtime/skills/slack-digest/SKILL.md` (between
+ * `<!-- BIAS_BLOCK_START -->` and `<!-- BIAS_BLOCK_END -->` markers).
+ *
+ * **Load-bearing constant — do not edit lightly.** Editing this constant
+ * requires a parallel edit to SKILL.md or the drift test will fail. The
+ * slack-digest skill uses the SKILL.md copy verbatim to bias its per-thread
+ * topic extraction with the same wording the meeting-extraction prompt uses.
+ */
+export const TOPIC_BIAS_BLOCK_PROMPT = `**Prefer these existing topic slugs when applicable.** Only propose a new slug
+when the meeting is substantively about something not covered. Matching an
+existing slug keeps knowledge compounding instead of sprawling:`;
+
+/**
  * Shape of the topic-wiki context piped through `MeetingContextBundle.topicWikiContext`.
  *
  * **Array order encodes priority**: `detectedTopics[0]` is the highest-scored topic
@@ -942,9 +964,7 @@ JSON schema:
   "topics": ["string — 3-6 slugified keywords for what this meeting was substantively about"]
 }
 ${activeTopicSlugs !== undefined && activeTopicSlugs.length > 0 ? `
-**Prefer these existing topic slugs when applicable.** Only propose a new slug
-when the meeting is substantively about something not covered. Matching an
-existing slug keeps knowledge compounding instead of sprawling:
+${TOPIC_BIAS_BLOCK_PROMPT}
 
 ${activeTopicSlugs}
 ` : ''}${deltaDirective}

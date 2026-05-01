@@ -36,7 +36,7 @@ export { createServices } from './factory.js';
 export { renderTopicPage, parseTopicPage, getTopicHeadline, selectSectionsForBudget, SECTION_NAMES, } from './models/topic-page.js';
 export { getActiveTopics, renderActiveTopicsAsWikilinks, renderActiveTopicsAsSlugList, maxLastRefreshed, } from './models/active-topics.js';
 export { loadMemorySummary } from './services/memory-summary-loader.js';
-export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, } from './services/topic-memory.js';
+export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, discoverTopicSources, SLACK_DIGEST_FILENAME_RE, } from './services/topic-memory.js';
 export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';

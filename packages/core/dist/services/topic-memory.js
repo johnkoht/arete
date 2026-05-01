@@ -2,15 +2,23 @@
  * TopicMemoryService — the L3 topic-wiki layer.
  *
  * Responsibilities (split across phased work):
- *  - alias/merge candidate topic slugs from meeting extraction against
- *    existing topic pages (Step 2 — this file's primary concern today)
- *  - integrateSource: read existing topic page + new meeting + filter
- *    L2 items, ask LLM to rewrite only touched sections, merge back
- *    (Step 3 — stubbed)
+ *  - alias/merge candidate topic slugs from source extraction against
+ *    existing topic pages (Step 2 — primary concern of this file today)
+ *  - integrateSource: read existing topic page + new source (meeting or
+ *    slack-digest) + filter L2 items, ask LLM to rewrite only touched
+ *    sections, merge back (Step 3)
+ *  - discoverTopicSources / refreshAllFromSources: scan
+ *    `resources/meetings/*.md` and `resources/notes/{date}-slack-digest.md`
+ *    and integrate each source into every topic page that references it
+ *    via frontmatter `topics:`. Both source classes share `parseMeetingFile`
+ *    (the parser tolerates the slack-digest frontmatter shape; see
+ *    plan `slack-digest-topic-wiki/plan.md` Step 2 and pre-mortem Risk 2).
  *  - listAll / listForArea: read topic pages from storage (needed by
- *    Step 4 area-memory and Step 9 CLAUDE.md regen)
+ *    area-memory and CLAUDE.md regen)
  *
- * See plan: dev/work/plans/topic-wiki-memory/plan.md
+ * See plans:
+ *  - dev/work/plans/topic-wiki-memory/plan.md (parent build)
+ *  - dev/work/plans/slack-digest-topic-wiki/plan.md (slack-digest source class)
  */
 import { join } from 'path';
 import { parseTopicPage, selectSectionsForBudget, } from '../models/topic-page.js';
@@ -248,7 +256,7 @@ export class TopicMemoryService {
      * Idempotent for identical inputs: returns identical results.
      */
     async aliasAndMerge(candidates, existing, options = {}) {
-        // Deduplicate inputs while preserving order — a meeting may repeat a slug.
+        // Deduplicate inputs while preserving order — a source may repeat a slug.
         const seen = new Set();
         const deduped = [];
         for (const c of candidates) {
@@ -366,23 +374,35 @@ export function parseIntegrateResponse(response) {
 }
 /**
  * Content-hash a string for idempotency. Low-level primitive; callers
- * should prefer `hashMeetingSource` for meeting files so frontmatter
- * edits (attendee adds, status changes, post-processing metadata) don't
+ * should prefer `hashMeetingSource` for any frontmatter-framed source
+ * file (meetings AND slack-digests) so frontmatter edits (attendee
+ * adds, status changes, post-processing metadata, dedup markers) don't
  * bust dedup.
  */
 export function hashSource(content) {
     return createHash('sha256').update(content).digest('hex').slice(0, 16);
 }
 /**
- * Hash a meeting file's body only — excludes frontmatter. Used in
- * `sources_integrated[].hash` so that editing a meeting's frontmatter
- * (adding an attendee, fixing title typo, rewriting the `intelligence`
- * block from re-extraction) does NOT bust topic-page idempotency. Only
- * substantive body changes — the actual transcript / notes — trigger
- * re-integration.
+ * Hash a topic-source file's body only — excludes frontmatter. Used in
+ * `sources_integrated[].hash` so that editing source-file frontmatter
+ * does NOT bust topic-page idempotency.
  *
- * For content that isn't a full meeting file (missing frontmatter), the
- * raw string is hashed as-is.
+ * Applies to both source classes:
+ *  - meetings (`resources/meetings/*.md`): adding an attendee, fixing a
+ *    title typo, rewriting the `intelligence` block from re-extraction
+ *    leaves the body hash unchanged.
+ *  - slack-digests (`resources/notes/{date}-slack-digest.md`): adding
+ *    `topics:`, `items_approved`, or sibling-plan dedup metadata to
+ *    frontmatter (e.g., `dedup_processed_at`) leaves the body hash
+ *    unchanged.
+ *
+ * Only substantive body changes — the actual transcript, notes, or
+ * digest summary — trigger re-integration.
+ *
+ * For content that isn't a frontmatter-framed file (no `^---\n...\n---`),
+ * the raw string is hashed as-is. The function name retains
+ * `MeetingSource` for back-compat; consider rename to `hashSourceBody`
+ * in a follow-up.
  */
 export function hashMeetingSource(content) {
     // Body is everything after the closing `---\n` of the frontmatter block.
@@ -504,7 +524,7 @@ export function createTopicStub(slug, today, options = {}) {
  *
  * Layout:
  *  - Existing page (if any) so the LLM can revise rather than regen
- *  - New source (meeting content)
+ *  - New source (meeting OR slack-digest content)
  *  - Relevant L2 items (decisions, learnings) — filtered by caller
  *  - Response schema + constraints
  */
@@ -545,10 +565,135 @@ Constraints:
 - Prefer terse synthesis over copying source text verbatim.
 - Use Obsidian-style wikilinks [[slug]] to reference related topics or people.`;
 }
-import { join as pathJoin, basename as pathBasename } from 'node:path';
+import { join as pathJoin, basename as pathBasename, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
-TopicMemoryService.prototype.refreshAllFromMeetings = async function (paths, options) {
+// ---------------------------------------------------------------------------
+// Step 2 (slack-digest-topic-wiki) — source discovery
+//
+// `discoverTopicSources` widens the source-discovery loop that previously
+// only scanned `resources/meetings/`. It now also picks up
+// `resources/notes/{date}-slack-digest.md` files, parses both shapes via
+// the existing `parseMeetingFile` (pre-mortem Risk 2 verified empirically:
+// `parseMeetingFile` tolerates missing `attendees` and reads `topics`
+// directly, so a slack-digest parses cleanly without a second parser).
+//
+// `type` on `SourceDiscoveryEntry` is set by the discovery function based
+// on which directory the file came from — NOT by parsing — so the parser
+// stays shape-agnostic.
+// ---------------------------------------------------------------------------
+/**
+ * Source-of-truth filter for slack-digest files in `resources/notes/`.
+ * Filename pattern: `YYYY-MM-DD-slack-digest.md`. Files not matching this
+ * pattern are ignored (they may be other kinds of notes — capture-conversation
+ * outputs, manual notes, etc., none of which contribute to topic narratives).
+ *
+ * Example matches:
+ *  - `2026-04-28-slack-digest.md` → MATCH
+ *  - `2026-04-28-capture-acme-call.md` → no match (not a digest)
+ *  - `slack-digest-2026-04-28.md` → no match (date prefix is required)
+ */
+export const SLACK_DIGEST_FILENAME_RE = /^\d{4}-\d{2}-\d{2}-slack-digest\.md$/;
+/**
+ * Scan both topic-source classes and return parseable entries sorted by
+ * `date` ascending (ties broken by `path` ascending, for determinism).
+ * The two classes are:
+ *  - **meetings**: every `*.md` under `resources/meetings/` whose filename
+ *    starts with a `YYYY-MM-DD` prefix.
+ *  - **slack-digests**: every `*.md` under `resources/notes/` whose filename
+ *    matches `SLACK_DIGEST_FILENAME_RE` (`YYYY-MM-DD-slack-digest.md`).
+ *
+ * Both classes flatten into the same `SourceDiscoveryEntry` shape so
+ * `refreshAllFromSources` can iterate them uniformly. Single-pass discovery
+ * is shared by `arete topic refresh --all` and `arete memory refresh` to
+ * avoid duplicate FS walks.
+ *
+ * Tolerant by design:
+ *  - Missing `meetings/` dir → no meeting entries (no throw).
+ *  - Missing `notes/` dir → no slack-digest entries (no throw).
+ *  - Files that fail filename pattern, parse, or read → skipped silently
+ *    (warn-and-continue is reserved for the belt-and-suspenders frontmatter
+ *    `type:` check below; parser failures are common-enough that warning
+ *    spam isn't useful).
+ *  - A file in `notes/` whose frontmatter `type:` is set but is NOT
+ *    `slack-digest` emits one warn line and is skipped (sanity check;
+ *    primary filter remains the filename regex).
+ */
+export async function discoverTopicSources(paths, storage) {
+    const entries = [];
+    const meetingsDir = pathJoin(paths.resources, 'meetings');
+    if (await storage.exists(meetingsDir)) {
+        const meetingFiles = await storage.list(meetingsDir, { extensions: ['.md'] });
+        for (const filePath of meetingFiles) {
+            const fileName = pathBasename(filePath);
+            const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (!dateMatch)
+                continue;
+            const content = await storage.read(filePath);
+            if (content === null)
+                continue;
+            const parsed = parseMeetingFileExternal(content);
+            if (!parsed)
+                continue;
+            entries.push({
+                path: filePath,
+                date: dateMatch[1],
+                content,
+                type: 'meeting',
+                topics: Array.isArray(parsed.frontmatter.topics) ? parsed.frontmatter.topics : [],
+            });
+        }
+    }
+    const notesDir = pathJoin(paths.resources, 'notes');
+    if (await storage.exists(notesDir)) {
+        const noteFiles = await storage.list(notesDir, { extensions: ['.md'] });
+        for (const filePath of noteFiles) {
+            const fileName = pathBasename(filePath);
+            // Filename pattern is the source-of-truth filter; non-matching notes
+            // are ignored (capture-conversation outputs, manual notes, etc.).
+            if (!SLACK_DIGEST_FILENAME_RE.test(fileName))
+                continue;
+            const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (!dateMatch)
+                continue;
+            const content = await storage.read(filePath);
+            if (content === null)
+                continue;
+            const parsed = parseMeetingFileExternal(content);
+            if (!parsed)
+                continue;
+            // Belt-and-suspenders: if frontmatter declares a `type:` field that
+            // is not `slack-digest`, warn and skip. We only check when the field
+            // is present — older digests pre-date the convention and may omit it.
+            // `parseMeetingFile` does not surface `type` on its typed result, so
+            // re-read it from the raw content via a simple frontmatter scan.
+            const fmTypeMatch = content.match(/^---[\s\S]*?\n\s*type:\s*([^\s\n#]+)/);
+            if (fmTypeMatch && fmTypeMatch[1].trim().replace(/^["']|["']$/g, '') !== 'slack-digest') {
+                // Use console.warn directly — discovery has no logger DI surface
+                // and adding one for this single warning is overkill. Tests can
+                // capture stderr via process.stderr if they need to assert this.
+                // eslint-disable-next-line no-console
+                console.warn(`[discoverTopicSources] skipping ${filePath}: filename matches slack-digest pattern but frontmatter type is "${fmTypeMatch[1]}"`);
+                continue;
+            }
+            entries.push({
+                path: filePath,
+                date: dateMatch[1],
+                content,
+                type: 'slack-digest',
+                topics: Array.isArray(parsed.frontmatter.topics) ? parsed.frontmatter.topics : [],
+            });
+        }
+    }
+    // Deterministic order: by date asc, then path asc.
+    entries.sort((a, b) => {
+        if (a.date !== b.date)
+            return a.date.localeCompare(b.date);
+        return a.path.localeCompare(b.path);
+    });
+    return entries;
+}
+TopicMemoryService.prototype.refreshAllFromSources = async function (paths, options) {
     // Acquire the seed lock unless the caller already holds it (seed does).
     // Prevents concurrent `arete memory refresh` runs (cron + interactive)
     // from racing on topic-page writes.
@@ -566,14 +711,32 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (paths, opt
         const targetSlugs = options.slugs !== undefined
             ? options.slugs
             : existing.map((t) => t.frontmatter.topic_slug);
-        // Gather meeting files once — shared across all targets.
+        // Gather all topic-source files once (meetings + slack-digests) — shared
+        // across all targets. `discoverTopicSources` returns entries sorted by
+        // date asc, so per-target filtering preserves chronological order
+        // without re-sorting.
         // Accessing private storage through `(this as any)` avoids needing a public
         // accessor for this internal batch operation.
         const storage = this.storage;
-        const meetingsDir = pathJoin(paths.resources, 'meetings');
-        const meetingFiles = (await storage.exists(meetingsDir))
-            ? await storage.list(meetingsDir, { extensions: ['.md'] })
-            : [];
+        const discovered = await discoverTopicSources(paths, storage);
+        // `--source <path>` scopes discovery to a single file BEFORE the per-
+        // slug filter runs. Mirrors the skill's "integrate just the digest I
+        // just wrote" semantics. Match is **exact-equality only** on absolute
+        // paths — fuzzy `endsWith` matching was a footgun for programmatic
+        // callers (a bare filename like `slack-digest.md` would match every
+        // digest in the workspace, defeating cost-correctness). The CLI
+        // already passes absolute paths via `path.resolve(cwd, arg)`; if a
+        // caller passes a relative `sourcePath`, we resolve it here against
+        // `paths.root` so the equality check is well-defined.
+        let resolvedSourcePath;
+        if (options.sourcePath !== undefined) {
+            resolvedSourcePath = pathIsAbsolute(options.sourcePath)
+                ? options.sourcePath
+                : pathResolve(paths.root, options.sourcePath);
+        }
+        const allSources = resolvedSourcePath !== undefined
+            ? discovered.filter((src) => src.path === resolvedSourcePath)
+            : discovered;
         const perTopic = [];
         for (const targetSlug of targetSlugs) {
             let page = existingBySlug.get(targetSlug) ?? null;
@@ -581,23 +744,13 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (paths, opt
             let fallback = 0;
             let skipped = 0;
             const matching = [];
-            for (const meetingPath of meetingFiles) {
-                const fileName = pathBasename(meetingPath);
-                const dateMatch = fileName.match(/^(\d{4}-\d{2}-\d{2})/);
-                if (!dateMatch)
+            for (const src of allSources) {
+                if (!src.topics.includes(targetSlug))
                     continue;
-                const content = await storage.read(meetingPath);
-                if (content === null)
-                    continue;
-                const parsed = parseMeetingFileExternal(content);
-                if (!parsed)
-                    continue;
-                const meetingTopics = parsed.frontmatter.topics;
-                if (!Array.isArray(meetingTopics) || !meetingTopics.includes(targetSlug))
-                    continue;
-                matching.push({ path: meetingPath, date: dateMatch[1], content });
+                matching.push({ path: src.path, date: src.date, content: src.content });
             }
-            matching.sort((a, b) => a.date.localeCompare(b.date));
+            // `allSources` is already sorted by date asc; the filter preserves
+            // that order, so no re-sort needed.
             if (matching.length === 0) {
                 perTopic.push({ slug: targetSlug, integrated: 0, fallback: 0, skipped: 0, status: 'no-sources' });
                 continue;
@@ -651,8 +804,9 @@ TopicMemoryService.prototype.refreshAllFromMeetings = async function (paths, opt
     }
 };
 /**
- * Cost estimate helper — rough Haiku cost per (topic, meeting) integration.
- * Used by CLI for `--dry-run` and `--confirm` prompts.
+ * Cost estimate helper — rough Haiku cost per (topic, source) integration,
+ * where `source` is a meeting or slack-digest. Used by CLI for `--dry-run`
+ * and `--confirm` prompts.
  */
 export const ESTIMATED_USD_PER_INTEGRATION = 0.015;
 TopicMemoryService.prototype.listTopicMemoryStatus = async function (paths, options = {}) {

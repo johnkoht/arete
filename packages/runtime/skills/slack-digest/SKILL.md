@@ -132,6 +132,10 @@ arete search "recent decisions" --scope memory --json
 
 # Existing commitments (for dedup)
 arete commitments list --json
+
+# Active topic slugs — biases per-thread topic extraction in Phase 2c.
+# Same rendering meeting-extraction.ts uses; output shape: {"slugs": [...]}.
+arete topic list --active --slugs --json
 ```
 
 For each resolved participant, gather person context:
@@ -186,6 +190,40 @@ Extract these item types:
 - Cross-conversation duplicates (same topic in multiple channels)
 
 Flag potential dupes: "This looks similar to existing commitment: [existing]. Skip? / Keep both?"
+
+**Per-thread topic slugs** — For each conversation/thread, also propose
+**1–3 topic slugs** describing what the thread is substantively about. These
+flow into the digest's `topics:` frontmatter (Phase 5a, union across approved
+threads) and drive Hook 2 source integration on the receiving topic pages.
+
+Bias the proposals against the active-topic slug list captured in Phase 2a
+(`arete topic list --active --slugs --json`). Render the slug list as bare
+slugs (one per line, e.g. `cover-whale-templates — active: pilot in flight`)
+and include the block below verbatim — the wording is byte-equal to the
+meeting-extraction prompt's bias block (`TOPIC_BIAS_BLOCK_PROMPT` in
+`packages/core/src/services/meeting-extraction.ts`) and a test enforces that
+equality. Edit both surfaces together or the test fails.
+
+<!-- BIAS_BLOCK_START -->
+**Prefer these existing topic slugs when applicable.** Only propose a new slug
+when the meeting is substantively about something not covered. Matching an
+existing slug keeps knowledge compounding instead of sprawling:
+<!-- BIAS_BLOCK_END -->
+
+Per-thread output shape inside the skill's intermediate state:
+
+```ts
+{
+  channel_id: string,
+  participants: string[],
+  topics: string[],  // 1-3 slugs, biased toward the active-slug list above
+  // ...other extracted items
+}
+```
+
+A thread with no clear topic match emits zero slugs (an empty `topics: []`)
+rather than a forced match. Two threads in the same digest may legitimately
+emit the same slug — the union dedups in Phase 5a.
 
 #### 2d. Area Association (Optional)
 
@@ -448,7 +486,11 @@ arete index
 
 #### 5a. Save Digest File
 
-Write to `resources/notes/YYYY-MM-DD-slack-digest.md`:
+Write to `resources/notes/YYYY-MM-DD-slack-digest.md`. The `topics:` frontmatter
+field is the **deduped union of per-thread topic slugs** from Phase 2c, scoped
+to threads the user approved in Phase 4b. Drop unapproved threads' slugs.
+A thread with `topics: []` contributes nothing to the union. Sort the final
+list for stable output:
 
 ```markdown
 ---
@@ -463,6 +505,7 @@ tasks_updated: N
 commitments_resolved: N
 commitments_added: N
 areas: [area-slug1, ...]
+topics: [slug1, slug2, ...]
 ---
 
 # Slack Digest — YYYY-MM-DD
@@ -498,11 +541,48 @@ areas: [area-slug1, ...]
 - Learning: Inbound email + threading are top feature priorities -> learnings.md
 ```
 
-#### 5b. Re-index
+#### 5b. Integrate Topics & Re-index
+
+After the digest file is written (5a), trigger Hook 2 — integrate the
+just-written digest into each affected topic page's `sources_integrated`
+trail and narrative — THEN run `arete index` so search picks up both the
+digest and any topic-page updates.
+
+The topic refresh is **scoped to the digest file** via `--source <path>`
+so only this digest is integrated, not every prior digest tagged with
+the same slugs (cost-correct semantics; see `--source` help text).
 
 ```bash
+# Comma-separated union of approved-thread slugs from Phase 5a's `topics:` frontmatter.
+SLUGS="<comma-separated topics from digest frontmatter>"
+DIGEST="resources/notes/YYYY-MM-DD-slack-digest.md"
+
+# Topic refresh — non-fatal on lock contention. The CLI exits non-zero
+# with stdout JSON `{"error":"seed_lock_held",...}` if the seed lock is
+# held by a concurrent `meeting approve` (or another topic refresh).
+# Treat that case as recoverable: warn the user, leave the digest's
+# `topics:` un-integrated, and recommend a manual re-run when the
+# conflicting operation completes. Do NOT abort the rest of Phase 5.
+if [ -n "$SLUGS" ]; then
+  TOPIC_OUT=$(arete topic refresh --slugs "$SLUGS" --source "$DIGEST" --yes --json 2>&1) || true
+  if echo "$TOPIC_OUT" | grep -q '"error":"seed_lock_held"'; then
+    echo "Topic refresh deferred — seed lock held by another operation."
+    echo "Re-run when complete: arete topic refresh --slugs $SLUGS --source $DIGEST --yes"
+  fi
+fi
+
 arete index
 ```
+
+**Lock-contention contract**: `arete topic refresh` exits non-zero with
+the JSON marker `{"error":"seed_lock_held"}` on stdout when the
+`.arete/.seed.lock` is held by another process (meeting approve, another
+topic refresh, etc.). The skill MUST catch this and continue — the
+digest file, commitments, memory items, and people refreshes from
+earlier phases have already committed; only the topic-narrative side-
+effect is deferred. Re-running the same `arete topic refresh --slugs ...
+--source ...` after the conflicting operation completes is idempotent
+(content-hash dedup applies).
 
 #### 5c. Handle Unresolved Participants
 
@@ -595,7 +675,7 @@ Slack search returns max 20 results per page. For busy days:
 ## References
 
 - **Patterns**: `significance_analyst`, `context_bundle_assembly`, `extract_decisions_learnings`, `refresh_person_memory` (see [PATTERNS.md](../PATTERNS.md))
-- **CLI**: `arete resolve`, `arete people show --memory`, `arete people memory refresh`, `arete commitments list`, `arete commitments create`, `arete commitments resolve`, `arete search`, `arete index`
+- **CLI**: `arete resolve`, `arete people show --memory`, `arete people memory refresh`, `arete commitments list`, `arete commitments create`, `arete commitments resolve`, `arete search`, `arete index`, `arete topic list --active --slugs --json` (Phase 2a active-topic bias for extraction), `arete topic refresh --slugs <list> --source <path>` (Phase 5b Hook 2 — integrates the just-written digest into each tagged topic page; `--source` scopes the integration to this digest only)
 - **MCP Tools**: `slack_search_public_and_private`, `slack_read_channel`, `slack_read_thread`, `slack_search_users`
 - **Related Skills**: `capture-conversation` (single thread), `process-meetings` (extraction model), `daily-winddown` (orchestrator)
 - **Data Models**: Person files (`people/**/*.md`), Memory (`decisions.md`, `learnings.md`), Commitments (`.arete/commitments.json`), Areas (`areas/*.md`)
@@ -608,4 +688,10 @@ After completing this skill's workflow:
 **Output**: Save to `resources/notes/{date}-slack-digest.md`.
 
 **Indexing**: Run `arete index` to make output searchable by brief, context, and other skills.
+
+### Topic Wiki Coverage
+
+Going forward, this skill writes `topics: [...]` frontmatter (Phase 5a) and triggers Hook 2 via `arete topic refresh` (Phase 5b) so each digest contributes to the topic wiki at `memory/topics/`.
+
+**Pre-existing digests** (written before topic-wiki integration shipped) lack `topics:` frontmatter and are silently skipped by `discoverTopicSources`. To pick them up: re-run this skill with `--days-back=N` over the relevant window. The new run produces fresh digests with `topics:` populated and Hook 2 then integrates them. Backfill at the historical-meeting level is tracked separately in `dev/work/plans/topic-wiki-memory-phase-c/plan.md` item 6.
 <!-- ARETE_INTEGRATION_END -->

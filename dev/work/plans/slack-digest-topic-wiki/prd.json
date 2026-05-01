@@ -1,12 +1,12 @@
 {
   "name": "slack-digest-topic-wiki",
-  "branchName": "feature/slack-digest-topic-wiki",
+  "branchName": "worktree-slack-digest-topic-wiki",
   "goal": "Add slack-digest as a second source class for the topic wiki, mirroring meeting Hooks at the slack-digest skill boundary; reuse parseMeetingFile for both source shapes; rename refreshAllFromMeetings → refreshAllFromSources across 9 sites; ensure the skill catches non-reentrant lock contention and continues; scope --source to a single file path so first-run cost matches user expectation.",
   "userStories": [
     {
       "id": "rename-refresh-method",
       "title": "Rename refreshAllFromMeetings → refreshAllFromSources across 9 sites",
-      "description": "Single no-behavior-change commit renaming the service method and all 9 call sites: packages/core/src/services/topic-memory.ts:779,790 (declaration); packages/cli/src/commands/meeting.ts:1391 (doc comment) and :1421 (call); packages/cli/src/commands/topic.ts:253,331,787,910 (calls); packages/cli/src/commands/intelligence.ts:511 (call); packages/apps/backend/src/routes/meetings.ts:244 (call) — the site plan v1 missed. Land BEFORE Task 2's discovery widening so widening is a pure additive change against a correctly-named method. Monorepo consumer only — no @deprecated alias.",
+      "description": "Single no-behavior-change commit renaming the service method and all 9 call sites: packages/core/src/services/topic-memory.ts:795,806 (declaration); packages/cli/src/commands/meeting.ts:1437 (doc comment) and :1421 (call); packages/cli/src/commands/topic.ts:253,331,787,910 (calls); packages/cli/src/commands/intelligence.ts:511 (call); packages/apps/backend/src/routes/meetings.ts:244 (call) — the site plan v1 missed. Land BEFORE Task 2's discovery widening so widening is a pure additive change against a correctly-named method. Monorepo consumer only — no @deprecated alias.",
       "acceptanceCriteria": [
         "refreshAllFromMeetings no longer exists in any packages/ source file",
         "Pre-merge grep gate: `rg -n 'refreshAllFromMeetings' packages/{cli,core,apps}/src` returns exactly 0 hits",
