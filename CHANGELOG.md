@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.10.1] - 2026-05-01
+
+### Removed
+- **Pre-monorepo legacy `/src/` and `/test/` directories** at repo root, plus the orphan `tsconfig.test.json`. Not in any active build path; legacy code did not compile due to broken imports.
+- **Four zero-caller `@deprecated` symbols**: `extractKeywords` (area-memory), `findMatchingCompletedItem` (meeting-processing), `getDocument` on `KrispMcpClient` (Krisp MCP removed `get_document`), and `PRODUCT_RULES_ALLOW_LIST` (replaced by `getProductRulesAllowList(ideTarget)`).
+- **`person-signals.ts` action-item LLM cluster** — `buildActionItemPrompt`, `parseActionItemResponse`, `extractActionItemsForPerson`, plus `RawActionItemResult`, `VALID_ACTION_ITEM_DIRECTIONS`, and the orphaned regex fallback (`extractActionItemsRegex`, `THEY_OWE_PATTERNS`, `I_OWE_PATTERNS`, plus 5 file-private helpers `slugify` / `personPattern` / `mentionsPerson` / `isOwnerActor` / `isPersonActor`). Superseded by `parseActionItemsFromMeeting` from `meeting-parser.ts`. ~50 tests removed alongside.
+- **`ContextService.getContextForSkill`** — zero in-repo callers.
+
+### Changed
+- **`ToolService` class → free `listTools` / `getTool` functions** in `@arete/core`. The class held no state beyond a `StorageAdapter` and existed to "mirror SkillService for consistency" — symmetry without payoff. Public surface change: `services.tools.list(toolsDir)` → `listTools(services.storage, toolsDir)`. Migrated 4 production call sites (`cli/{tool,route,skill}.ts`, factory wiring, services barrel) and 2 test files. The `services.tools` key is removed from `AreteServices`. Behavior unchanged: same `ToolDefinition` shape, same TOOL.md frontmatter parsing.
+- **Refactor: extracted module-private `buildTopicWikiContext` helper** from the 47-line inline block in `meeting-context.ts`. Returns `{ context?: TopicWikiContext; warning?: string }`; caller assigns conditionally to preserve "absent key" semantics on `bundle.topicWikiContext`. Pure refactor; all 5 enrichment tests pass unmodified.
+
+### Internal
+- Net ~4.7K LOC removed across 90 files. Consolidates 3 LEARNINGS.md files (services, cli/commands, runtime/tools) and the core expertise PROFILE.md to reflect the post-refactor surface.
+
 ## [0.9.2] - 2026-04-30
 
 ### Fixed
