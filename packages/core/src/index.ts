@@ -159,6 +159,8 @@ export {
   tokenizeSlug,
   estimateRefreshCostUsd,
   ESTIMATED_USD_PER_INTEGRATION,
+  discoverTopicSources,
+  SLACK_DIGEST_FILENAME_RE,
 } from './services/topic-memory.js';
 export type {
   TopicCandidate,
@@ -171,6 +173,7 @@ export type {
   RefreshBatchOptions,
   RefreshBatchResult,
   RefreshBatchTopicResult,
+  SourceDiscoveryEntry,
   TopicMemoryStatus,
   ListTopicMemoryStatusOptions,
 } from './services/topic-memory.js';

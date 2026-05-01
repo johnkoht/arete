@@ -241,7 +241,7 @@ export function createMeetingsRouter(workspaceRoot: string): Hono {
                 const r = await services.ai.call('synthesis', prompt);
                 return r.text;
               };
-              await services.topicMemory.refreshAllFromMeetings(paths, {
+              await services.topicMemory.refreshAllFromSources(paths, {
                 today: new Date().toISOString().slice(0, 10),
                 callLLM: topicCallLLM,
                 slugs: meetingTopics,

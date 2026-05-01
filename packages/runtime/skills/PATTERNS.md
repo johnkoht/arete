@@ -618,6 +618,14 @@ Users can edit `.arete-meta.yaml` to change output location, template, or indexi
 - `limit` (default 3) — top-k topics to return
 - `budget` (default 1000 words) — word cap on `bodyForContext` per topic
 
+**Source types feeding the topic pages**: topic pages compound from
+multiple source classes — `meeting` (`resources/meetings/*.md`) and
+`slack-digest` (`resources/notes/{date}-slack-digest.md`). Both flow
+through the same `discoverTopicSources` → `integrateSource` pipeline,
+so a `topic_page_retrieval` consumer never has to branch on source
+type; `bodyForContext` and `frontmatter.sources_integrated` already
+reflect the unified narrative.
+
 ### Mechanism — use the CLI, not manual path walking
 
 ```bash

@@ -68,9 +68,9 @@ Tasks are ordered by execution dependency. The rename (Task 1) is a no-behavior-
 
 **Description**: Single no-behavior-change commit renaming the service method and all call sites. The function's identity is "refresh all topics from on-disk sources" — the meeting-only suffix is a lie after Task 2 widens discovery. Land this rename FIRST so Task 2's source-discovery widening is a pure additive change against a correctly-named method. The 9 sites (verified via `rg -n 'refreshAllFromMeetings' packages/`):
 
-- `packages/core/src/services/topic-memory.ts:779` (declaration)
-- `packages/core/src/services/topic-memory.ts:790` (declaration body)
-- `packages/cli/src/commands/meeting.ts:1391` (doc comment naming the method inline)
+- `packages/core/src/services/topic-memory.ts:795` (declaration)
+- `packages/core/src/services/topic-memory.ts:806` (declaration body)
+- `packages/cli/src/commands/meeting.ts:1437` (doc comment naming the method inline)
 - `packages/cli/src/commands/meeting.ts:1421` (call)
 - `packages/cli/src/commands/topic.ts:253` (call)
 - `packages/cli/src/commands/topic.ts:331` (call)
@@ -91,7 +91,7 @@ Tasks are ordered by execution dependency. The rename (Task 1) is a no-behavior-
 **Acceptance Criteria**:
 - `refreshAllFromMeetings` no longer exists in any `packages/` source file.
 - Pre-merge grep gate: `rg -n 'refreshAllFromMeetings' packages/{cli,core,apps}/src` returns exactly 0 hits.
-- The doc comment at `packages/cli/src/commands/meeting.ts:1391` referencing the method by name is updated to `refreshAllFromSources`.
+- The doc comment at `packages/cli/src/commands/meeting.ts:1437` referencing the method by name is updated to `refreshAllFromSources`.
 - The backend route call at `packages/apps/backend/src/routes/meetings.ts:244` is updated and `npm run typecheck` passes for `@arete/backend`.
 - `npm test` passes for `packages/core/test/services/topic-memory.test.ts` with no test edits required (rename does not change behavior).
 - Commit message includes "no behavior change" and lists all 9 sites.

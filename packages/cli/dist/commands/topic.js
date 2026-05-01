@@ -8,7 +8,7 @@
  *
  * Seed (one-shot backfill from all meetings) is separate — see Step 8.
  */
-import { createServices, renderTopicPage, estimateRefreshCostUsd, parseMeetingFile, acquireSeedLock, SeedLockHeldError, } from '@arete/core';
+import { createServices, renderTopicPage, estimateRefreshCostUsd, parseMeetingFile, acquireSeedLock, SeedLockHeldError, getActiveTopics, renderActiveTopicsAsSlugList, } from '@arete/core';
 import { join, basename } from 'node:path';
 import chalk from 'chalk';
 import { header, listItem, error, info, success, warn, } from '../formatters.js';
@@ -26,6 +26,35 @@ function today() {
     return new Date().toISOString().slice(0, 10);
 }
 // ---------------------------------------------------------------------------
+// resolveTargetSlugs — Pre-mortem Risk 12: positional [slug] vs. --slugs
+// vs. --all are three ways to specify scope; this helper is the single
+// source of truth.
+//
+//  - `--all` overrides everything → returns 'all'
+//  - positional + --slugs both set → ambiguity error
+//  - positional only → [positional]
+//  - --slugs only → comma-split, trim, drop empties
+//  - neither → []  (caller treats as "none specified")
+// ---------------------------------------------------------------------------
+export function resolveTargetSlugs(positional, slugsFlag, all) {
+    if (all === true)
+        return 'all';
+    const hasPositional = positional !== undefined && positional.length > 0;
+    const hasFlag = slugsFlag !== undefined && slugsFlag.length > 0;
+    if (hasPositional && hasFlag) {
+        return { error: 'Cannot pass both positional <slug> and --slugs. Use one or the other.' };
+    }
+    if (hasPositional)
+        return [positional];
+    if (hasFlag) {
+        return slugsFlag
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+    }
+    return [];
+}
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 export function registerTopicCommands(program) {
@@ -39,6 +68,8 @@ export function registerTopicCommands(program) {
         .command('list')
         .description('List all topic pages')
         .option('--area <slug>', 'Filter to topics in this area')
+        .option('--active', 'Filter to active topics (open items OR refreshed within recency window)')
+        .option('--slugs', 'Emit the bare-slug active-topics list (the same shape the meeting-extraction prompt is biased with). Requires --active. With --json: { slugs: string[] }; without --json: one `slug — status: summary` per line.')
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         const services = await createServices(process.cwd());
@@ -54,6 +85,45 @@ export function registerTopicCommands(program) {
         }
         const paths = services.workspace.getPaths(root);
         const { topics, errors } = await services.topicMemory.listAll(paths);
+        // ---- --active --slugs primitive ------------------------------------
+        // Emits the active-topics slug list (canonical interchange shape used
+        // by the meeting-extraction prompt bias). External consumers — e.g.
+        // the slack-digest skill — pipe this into their own extraction prompts
+        // so both source classes propose against the same slug universe.
+        //
+        // Implementation deliberately calls
+        // `renderActiveTopicsAsSlugList(getActiveTopics(...))` directly. Do
+        // NOT inline a slug-list renderer here; rendering must be reachable
+        // from one place to keep the dual-tier sprawl defense single-sourced.
+        if (opts.slugs) {
+            if (opts.active !== true) {
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: false, error: '--slugs requires --active' }));
+                }
+                else {
+                    error('--slugs requires --active.');
+                    info('e.g., `arete topic list --active --slugs --json`');
+                }
+                process.exit(1);
+            }
+            const activeEntries = getActiveTopics(topics);
+            if (opts.json) {
+                // JSON object form per PRD AC: `{ slugs: string[] }`. This is the
+                // canonical interchange shape; consumers parse `.slugs` to feed
+                // the meeting-extraction-equivalent prompt bias.
+                console.log(JSON.stringify({
+                    slugs: activeEntries.map((e) => e.slug),
+                }));
+            }
+            else {
+                // Plain form: byte-equal to renderActiveTopicsAsSlugList output.
+                // (The meeting-extraction prompt embeds this exact string.)
+                const rendered = renderActiveTopicsAsSlugList(activeEntries);
+                if (rendered.length > 0)
+                    console.log(rendered);
+            }
+            return;
+        }
         const filtered = opts.area !== undefined
             ? topics.filter((t) => t.frontmatter.area === opts.area)
             : topics;
@@ -152,8 +222,11 @@ export function registerTopicCommands(program) {
     // ---------------------------------------------------------------------------
     topicCmd
         .command('refresh [slug]')
-        .description('Refresh existing topic page(s) by re-integrating source meetings (LLM-gated). Use `arete topic seed` to create new pages from meeting frontmatter.')
-        .option('--all', 'Refresh every topic (otherwise slug is required)')
+        .description('Refresh existing topic page(s) by re-integrating source meetings + slack-digests (LLM-gated). Use `arete topic seed` to create new pages from frontmatter.')
+        .option('--all', 'Refresh every topic (otherwise slug or --slugs is required)')
+        .option('--slugs <list>', 'Comma-separated list of slugs to refresh (multi-slug variant of positional [slug]). Example: `--slugs foo,bar,baz`. Mutually exclusive with positional [slug]; overridden by --all.')
+        .option('--source <path>', 'Scope source discovery to a single file at <path>. The discoverTopicSources output is filtered to entries matching <path> BEFORE the per-slug filter runs. Used by the slack-digest skill (Phase 5b) to integrate ONLY the just-written digest, not every prior digest tagged with the same slugs. File must match a meeting (`*.md`) or slack-digest (`YYYY-MM-DD-slack-digest.md`) shape.')
+        .option('--skip-topics', 'Skip topic refresh entirely (no LLM calls, no sources_integrated changes). Mirrors `arete meeting approve --skip-topics` for non-interactive callers that want to defer integration.')
         .option('--dry-run', 'Preview what would be refreshed; no LLM calls, no writes')
         .option('--allow-no-llm', 'Write Source trail only when no AI is configured (default: abort)')
         .option('-y, --yes', 'Skip the interactive confirmation prompt (scripted mode)')
@@ -172,15 +245,80 @@ export function registerTopicCommands(program) {
             process.exit(1);
         }
         const paths = services.workspace.getPaths(root);
-        if (!slug && !opts.all) {
+        // ---- --skip-topics short-circuit ---------------------------------
+        // Slack-digest skill / meeting-approve-style caller wants the verb
+        // available but disabled. Exit 0, no LLM calls, no writes.
+        if (opts.skipTopics === true) {
             if (opts.json) {
-                console.log(JSON.stringify({ success: false, error: 'Specify a slug or --all' }));
+                console.log(JSON.stringify({ success: true, skipped: 'topics' }));
             }
             else {
-                error('Specify a topic slug or pass --all.');
-                info('e.g., `arete topic refresh cover-whale-templates`');
+                info('Skipping topic refresh (--skip-topics).');
+            }
+            return;
+        }
+        // ---- Slug resolution ---------------------------------------------
+        const resolved = resolveTargetSlugs(slug, opts.slugs, opts.all);
+        if (typeof resolved === 'object' && !Array.isArray(resolved) && 'error' in resolved) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: resolved.error }));
+            }
+            else {
+                error(resolved.error);
             }
             process.exit(1);
+        }
+        if (Array.isArray(resolved) && resolved.length === 0) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Specify a slug, --slugs, or --all' }));
+            }
+            else {
+                error('Specify a topic slug, --slugs <list>, or --all.');
+                info('e.g., `arete topic refresh cover-whale-templates`');
+                info('e.g., `arete topic refresh --slugs foo,bar`');
+            }
+            process.exit(1);
+        }
+        // ---- --source path validation + resolution -----------------------
+        // `--source <path>` scopes discovery to a single file. Validate the
+        // file exists and matches a known source-shape pattern (meeting .md
+        // OR `YYYY-MM-DD-slack-digest.md`); reject early so the user gets a
+        // clear error instead of a silent "no sources found" downstream.
+        let resolvedSourcePath;
+        if (opts.source !== undefined) {
+            const { resolve: resolvePath, basename } = await import('node:path');
+            const { existsSync, realpathSync } = await import('node:fs');
+            const abs = resolvePath(process.cwd(), opts.source);
+            if (!existsSync(abs)) {
+                const msg = `--source path does not exist: ${opts.source}`;
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: false, error: msg }));
+                }
+                else {
+                    error(msg);
+                }
+                process.exit(1);
+            }
+            const fname = basename(abs);
+            const isSlackDigest = /^\d{4}-\d{2}-\d{2}-slack-digest\.md$/.test(fname);
+            const isMeetingShape = fname.endsWith('.md') && /^\d{4}-\d{2}-\d{2}-/.test(fname) && !isSlackDigest;
+            if (!isSlackDigest && !isMeetingShape) {
+                const msg = `--source filename must be a meeting (\`YYYY-MM-DD-*.md\`) or slack-digest (\`YYYY-MM-DD-slack-digest.md\`); got: ${fname}`;
+                if (opts.json) {
+                    console.log(JSON.stringify({ success: false, error: msg }));
+                }
+                else {
+                    error(msg);
+                }
+                process.exit(1);
+            }
+            // Pass the realpath form to the service so its strict-equality
+            // filter matches the path returned by the storage adapter's
+            // listing (which is itself rooted at `findRoot()` → realpath on
+            // macOS, where `/var` is a symlink to `/private/var`). Without
+            // this normalization an absolute `--source` like `/var/...`
+            // would never strict-equal `/private/var/...` from discovery.
+            resolvedSourcePath = realpathSync(abs);
         }
         // Honor ARETE_NO_LLM envvar regardless of AI configuration.
         const noLlmEnv = process.env.ARETE_NO_LLM === '1';
@@ -208,11 +346,12 @@ export function registerTopicCommands(program) {
         // --- Cost estimate via dry-run through the batch helper. This also
         // surfaces how many integrations would actually happen (accounting for
         // content-hash dedup of previously-integrated meetings).
-        const slugs = opts.all ? undefined : slug !== undefined ? [slug] : [];
-        const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+        const slugs = resolved === 'all' ? undefined : resolved;
+        const estimate = await services.topicMemory.refreshAllFromSources(paths, {
             today: today(),
             dryRun: true,
             slugs,
+            sourcePath: resolvedSourcePath,
         });
         const integrationsNeeded = estimate.totalIntegrated;
         const estimatedCost = estimateRefreshCostUsd(integrationsNeeded);
@@ -285,16 +424,26 @@ export function registerTopicCommands(program) {
         // cannot race on topic-page writes.
         let result;
         try {
-            result = await services.topicMemory.refreshAllFromMeetings(paths, {
+            result = await services.topicMemory.refreshAllFromSources(paths, {
                 today: today(),
                 callLLM,
                 slugs,
+                sourcePath: resolvedSourcePath,
                 workspaceRoot: root,
                 lockLabel: 'topic refresh',
             });
         }
         catch (err) {
-            if (err instanceof Error && err.name === 'SeedLockHeldError') {
+            // Stable, parseable error contract for the slack-digest skill's
+            // catch+warn fallback (Phase 5b). The skill greps stdout for
+            // `"error":"seed_lock_held"` to detect this case without
+            // parsing arbitrary stack traces. The single-line stderr
+            // warning is for human consumers running the CLI interactively.
+            //
+            // Note: `instanceof SeedLockHeldError` is the canonical check.
+            // The class also sets `this.name = 'SeedLockHeldError'` (since
+            // 2026-04-29) so `err.name === 'SeedLockHeldError'` works too.
+            if (err instanceof SeedLockHeldError) {
                 if (opts.json) {
                     console.log(JSON.stringify({
                         success: false,
@@ -303,8 +452,13 @@ export function registerTopicCommands(program) {
                     }, null, 2));
                 }
                 else {
-                    error(err.message);
-                    info('Wait for the other refresh/seed to finish.');
+                    // Always emit a JSON marker on stdout too — the skill's
+                    // bash invocation may not pass --json (and the skill's
+                    // catch is the only mechanism for graceful-degrade on
+                    // lock contention). Non-JSON callers see both lines.
+                    console.log(JSON.stringify({ success: false, error: 'seed_lock_held', hint: err.message }));
+                    error(`topic refresh deferred: ${err.message}`);
+                    info('Re-run when the conflicting operation completes.');
                 }
                 process.exit(1);
             }
@@ -735,7 +889,7 @@ export function registerTopicCommands(program) {
             process.exit(1);
         }
         // ---- Cost estimate via dry-run through the batch helper ------------
-        const estimate = await services.topicMemory.refreshAllFromMeetings(paths, {
+        const estimate = await services.topicMemory.refreshAllFromSources(paths, {
             today: today(),
             dryRun: true,
             slugs: targetSlugs,
@@ -851,7 +1005,7 @@ export function registerTopicCommands(program) {
         // service doesn't try to double-acquire.
         let result;
         try {
-            result = await services.topicMemory.refreshAllFromMeetings(paths, {
+            result = await services.topicMemory.refreshAllFromSources(paths, {
                 today: today(),
                 callLLM,
                 slugs: targetSlugs,

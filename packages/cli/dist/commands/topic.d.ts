@@ -9,5 +9,8 @@
  * Seed (one-shot backfill from all meetings) is separate — see Step 8.
  */
 import type { Command } from 'commander';
+export declare function resolveTargetSlugs(positional: string | undefined, slugsFlag: string | undefined, all: boolean | undefined): string[] | 'all' | {
+    error: string;
+};
 export declare function registerTopicCommands(program: Command): void;
 //# sourceMappingURL=topic.d.ts.map

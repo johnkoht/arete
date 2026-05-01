@@ -31,8 +31,8 @@ export type { ActiveTopicEntry, GetActiveTopicsOptions, } from './models/active-
 export type { MemorySummary } from './models/memory-summary.js';
 export { loadMemorySummary } from './services/memory-summary-loader.js';
 export type { LoadMemorySummaryOptions } from './services/memory-summary-loader.js';
-export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, } from './services/topic-memory.js';
-export type { TopicCandidate, TopicIdentity, AliasResult, AliasDecision, IntegrateOutput, IntegrateSourceOptions, IntegrateResult, RefreshBatchOptions, RefreshBatchResult, RefreshBatchTopicResult, TopicMemoryStatus, ListTopicMemoryStatusOptions, } from './services/topic-memory.js';
+export { TopicMemoryService, hashSource, hashMeetingSource, classifyByJaccard, tokenizeSlug, estimateRefreshCostUsd, ESTIMATED_USD_PER_INTEGRATION, discoverTopicSources, SLACK_DIGEST_FILENAME_RE, } from './services/topic-memory.js';
+export type { TopicCandidate, TopicIdentity, AliasResult, AliasDecision, IntegrateOutput, IntegrateSourceOptions, IntegrateResult, RefreshBatchOptions, RefreshBatchResult, RefreshBatchTopicResult, SourceDiscoveryEntry, TopicMemoryStatus, ListTopicMemoryStatusOptions, } from './services/topic-memory.js';
 export { detectTopicsLexical, detectTopicsLexicalDetailed, STOP_TOKENS } from './services/topic-detection.js';
 export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detection.js';
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';

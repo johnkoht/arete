@@ -408,7 +408,7 @@ export function registerMemoryCommand(program) {
         let topicResult;
         if (!opts.area && !opts.dryRun && callLLM !== undefined) {
             try {
-                topicResult = await services.topicMemory.refreshAllFromMeetings(paths, {
+                topicResult = await services.topicMemory.refreshAllFromSources(paths, {
                     today: new Date().toISOString().slice(0, 10),
                     callLLM,
                     workspaceRoot: root,
