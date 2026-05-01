@@ -516,5 +516,4 @@ export class KrispMcpClient {
     const wrapped = result as { results?: KrispDocumentResult[] };
     return wrapped.results ?? [];
   }
-
 }
