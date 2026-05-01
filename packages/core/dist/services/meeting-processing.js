@@ -168,10 +168,6 @@ function findMatchingCandidate(itemText, candidates, threshold) {
     }
     return undefined;
 }
-/** @deprecated use findMatchingCandidate — retained for back-compat only. */
-function findMatchingCompletedItem(itemText, tokenizedCompletedItems, threshold) {
-    return findMatchingCandidate(itemText, tokenizedCompletedItems, threshold);
-}
 // ---------------------------------------------------------------------------
 // Main Processing Function
 // ---------------------------------------------------------------------------

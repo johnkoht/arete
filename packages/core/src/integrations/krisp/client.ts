@@ -516,13 +516,4 @@ export class KrispMcpClient {
     const wrapped = result as { results?: KrispDocumentResult[] };
     return wrapped.results ?? [];
   }
-
-  /**
-   * @deprecated Use getMultipleDocuments instead — get_document was removed from Krisp MCP.
-   */
-  async getDocument(documentId: string): Promise<KrispDocument> {
-    const results = await this.getMultipleDocuments([documentId]);
-    const match = results.find(r => r.id === documentId);
-    return { documentId, document: match?.document ?? undefined };
-  }
 }

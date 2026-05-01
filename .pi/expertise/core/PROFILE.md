@@ -55,7 +55,7 @@ factory.ts (createServices) ─── wires everything
 
 **What it does**: Gathers relevant workspace files for a query. Maps product primitives (Problem, User, Solution, Market, Risk) to workspace files via `PRIMITIVE_FILE_MAP`. Detects coverage gaps. Provides context inventory with freshness tracking.
 
-**Key exports**: `getRelevantContext()`, `getContextForSkill()`, `getContextInventory()`
+**Key exports**: `getRelevantContext()`, `getContextInventory()`
 
 **Dependencies**: `StorageAdapter`, `SearchProvider`
 

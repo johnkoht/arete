@@ -8,6 +8,7 @@ import {
   getWorkspaceConfigPath,
   getPackageRoot,
   getSourcePaths,
+  listTools,
 } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
@@ -286,7 +287,7 @@ export function registerSkillCommands(program: Command): void {
       }));
 
       const paths = services.workspace.getPaths(root);
-      const tools = await services.tools.list(paths.tools);
+      const tools = await listTools(services.storage, paths.tools);
       candidates.push(...toolsToCandidates(tools));
 
       const routed = services.intelligence.routeToSkill(query, candidates);

@@ -12,11 +12,6 @@ export declare const BASE_WORKSPACE_DIRS: string[];
  */
 export declare function getProductRulesAllowList(ideTarget: IDETarget): string[];
 /**
- * Rule files to copy on install (product rules only).
- * @deprecated Use getProductRulesAllowList(ideTarget) instead.
- */
-export declare const PRODUCT_RULES_ALLOW_LIST: string[];
-/**
  * Default files created when missing. Key = path relative to workspace root.
  */
 export declare const DEFAULT_FILES: Record<string, string>;

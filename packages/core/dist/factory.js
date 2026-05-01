@@ -14,7 +14,6 @@ import { IntelligenceService } from './services/intelligence.js';
 import { WorkspaceService } from './services/workspace.js';
 import { SkillService } from './services/skills.js';
 import { IntegrationService } from './services/integrations.js';
-import { ToolService } from './services/tools.js';
 import { CommitmentsService } from './services/commitments.js';
 import { AreaParserService } from './services/area-parser.js';
 import { AIService } from './services/ai.js';
@@ -57,7 +56,6 @@ export async function createServices(workspaceRoot, options) {
     // Workspace management (depends on storage only)
     const workspace = new WorkspaceService(storage);
     const skills = new SkillService(storage);
-    const tools = new ToolService(storage);
     const integrations = new IntegrationService(storage, config);
     const commitments = new CommitmentsService(storage, workspaceRoot);
     const areaParser = new AreaParserService(storage, workspaceRoot);
@@ -95,7 +93,6 @@ export async function createServices(workspaceRoot, options) {
         intelligence,
         workspace,
         skills,
-        tools,
         integrations,
         commitments,
         areaParser,

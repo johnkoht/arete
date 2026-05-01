@@ -1,5 +1,5 @@
 /**
- * Tests for ToolService — tool discovery from workspace tools directory.
+ * Tests for tool discovery — listTools / getTool free functions.
  *
  * Uses FileStorageAdapter + real filesystem (mkdtempSync) pattern
  * matching skills.test.ts.
@@ -11,18 +11,17 @@ import { join } from 'node:path';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
-import { ToolService } from '../../src/services/tools.js';
+import { listTools, getTool } from '../../src/services/tools.js';
 import { FileStorageAdapter } from '../../src/storage/file.js';
 
-describe('ToolService', () => {
+describe('Tools (listTools / getTool)', () => {
   let toolsDir: string;
-  let service: ToolService;
+  const storage = new FileStorageAdapter();
 
   beforeEach(() => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'arete-core-tools-'));
     toolsDir = join(tmpDir, 'tools');
     mkdirSync(toolsDir, { recursive: true });
-    service = new ToolService(new FileStorageAdapter());
   });
 
   afterEach(() => {
@@ -31,10 +30,10 @@ describe('ToolService', () => {
   });
 
   // -----------------------------------------------------------------------
-  // list()
+  // listTools()
   // -----------------------------------------------------------------------
 
-  describe('list()', () => {
+  describe('listTools()', () => {
     it('returns tool definitions for subdirs with valid TOOL.md', async () => {
       // Tool A
       const toolADir = join(toolsDir, 'tool-a');
@@ -77,7 +76,7 @@ describe('ToolService', () => {
         'utf8',
       );
 
-      const tools = await service.list(toolsDir);
+      const tools = await listTools(storage, toolsDir);
 
       assert.equal(tools.length, 2);
 
@@ -101,7 +100,7 @@ describe('ToolService', () => {
     });
 
     it('returns empty array for non-existent directory', async () => {
-      const tools = await service.list(join(toolsDir, 'does-not-exist'));
+      const tools = await listTools(storage, join(toolsDir, 'does-not-exist'));
       assert.deepEqual(tools, []);
     });
 
@@ -110,7 +109,7 @@ describe('ToolService', () => {
       mkdirSync(toolDir, { recursive: true });
       writeFileSync(join(toolDir, 'TOOL.md'), '# Just Markdown\nNo frontmatter here.', 'utf8');
 
-      const tools = await service.list(toolsDir);
+      const tools = await listTools(storage, toolsDir);
 
       assert.equal(tools.length, 1);
       const tool = tools[0];
@@ -125,7 +124,7 @@ describe('ToolService', () => {
       mkdirSync(toolDir, { recursive: true });
       // No TOOL.md — just the directory
 
-      const tools = await service.list(toolsDir);
+      const tools = await listTools(storage, toolsDir);
 
       assert.equal(tools.length, 1);
       const tool = tools[0];
@@ -138,10 +137,10 @@ describe('ToolService', () => {
   });
 
   // -----------------------------------------------------------------------
-  // get()
+  // getTool()
   // -----------------------------------------------------------------------
 
-  describe('get()', () => {
+  describe('getTool()', () => {
     it('returns correct ToolDefinition for existing tool', async () => {
       const toolDir = join(toolsDir, 'my-tool');
       mkdirSync(toolDir, { recursive: true });
@@ -160,7 +159,7 @@ describe('ToolService', () => {
         'utf8',
       );
 
-      const tool = await service.get('my-tool', toolsDir);
+      const tool = await getTool(storage, 'my-tool', toolsDir);
 
       assert.ok(tool, 'Should return tool');
       assert.equal(tool!.id, 'my-tool');
@@ -171,7 +170,7 @@ describe('ToolService', () => {
     });
 
     it('returns null for non-existent tool', async () => {
-      const tool = await service.get('nonexistent', toolsDir);
+      const tool = await getTool(storage, 'nonexistent', toolsDir);
       assert.equal(tool, null);
     });
   });

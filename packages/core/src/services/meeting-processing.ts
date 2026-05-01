@@ -302,15 +302,6 @@ function findMatchingCandidate(
   return undefined;
 }
 
-/** @deprecated use findMatchingCandidate — retained for back-compat only. */
-function findMatchingCompletedItem(
-  itemText: string,
-  tokenizedCompletedItems: TokenizedCompletedItem[],
-  threshold: number,
-): string | undefined {
-  return findMatchingCandidate(itemText, tokenizedCompletedItems, threshold);
-}
-
 // ---------------------------------------------------------------------------
 // Main Processing Function
 // ---------------------------------------------------------------------------

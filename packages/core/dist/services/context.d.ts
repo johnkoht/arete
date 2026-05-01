@@ -3,7 +3,7 @@
  */
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { SearchProvider } from '../search/types.js';
-import type { ContextRequest, ContextBundle, ContextInventory, SkillDefinition, WorkspacePaths } from '../models/index.js';
+import type { ContextRequest, ContextBundle, ContextInventory, WorkspacePaths } from '../models/index.js';
 export declare class ContextService {
     private storage;
     private searchProvider;
@@ -21,7 +21,6 @@ export declare class ContextService {
      * Read a single file — delegate to storage for IntelligenceService proactive search.
      */
     readFile(filePath: string): Promise<string | null>;
-    getContextForSkill(skill: SkillDefinition, task: string, paths: WorkspacePaths): Promise<ContextBundle>;
     getContextInventory(paths: WorkspacePaths, options?: {
         staleThresholdDays?: number;
     }): Promise<ContextInventory>;

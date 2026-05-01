@@ -8,7 +8,9 @@ export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
 export { IntegrationService } from './integrations.js';
-export { ToolService } from './tools.js';
+// Workspace tool discovery — pure functions, no service class.
+// (Skill discovery is the parallel concern; see services/skills.ts.)
+export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';
 export { CommitmentsService, computeCommitmentPriority } from './commitments.js';
 export { AIService, parseModelSpec } from './ai.js';

@@ -1,7 +1,7 @@
 /**
  * Skill commands — list, install, route, defaults, set-default, unset-default
  */
-import { createServices, loadConfig, getWorkspaceConfigPath, getPackageRoot, getSourcePaths, } from '@arete/core';
+import { createServices, loadConfig, getWorkspaceConfigPath, getPackageRoot, getSourcePaths, listTools, } from '@arete/core';
 import chalk from 'chalk';
 import { toolsToCandidates } from '../lib/tool-candidates.js';
 import { header, listItem, success, error, warn, info, formatPath, } from '../formatters.js';
@@ -221,7 +221,7 @@ export function registerSkillCommands(program) {
             requires_briefing: s.requiresBriefing,
         }));
         const paths = services.workspace.getPaths(root);
-        const tools = await services.tools.list(paths.tools);
+        const tools = await listTools(services.storage, paths.tools);
         candidates.push(...toolsToCandidates(tools));
         const routed = services.intelligence.routeToSkill(query, candidates);
         if (opts.json) {

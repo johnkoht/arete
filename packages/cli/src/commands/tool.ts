@@ -2,7 +2,7 @@
  * Tool commands — list, show
  */
 
-import { createServices } from '@arete/core';
+import { createServices, listTools, getTool } from '@arete/core';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, error, success } from '../formatters.js';
@@ -27,7 +27,7 @@ export function registerToolCommands(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
-      const tools = await services.tools.list(paths.tools);
+      const tools = await listTools(services.storage, paths.tools);
 
       if (opts.json) {
         console.log(JSON.stringify({
@@ -81,7 +81,7 @@ export function registerToolCommands(program: Command): void {
       }
 
       const paths = services.workspace.getPaths(root);
-      const tool = await services.tools.get(name, paths.tools);
+      const tool = await getTool(services.storage, name, paths.tools);
 
       if (!tool) {
         if (opts.json) {

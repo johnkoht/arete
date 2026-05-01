@@ -754,10 +754,10 @@ describe('meetingFromKrisp', () => {
 });
 
 // ---------------------------------------------------------------------------
-// KrispMcpClient.listMeetings and getDocument (tests 15–16)
+// KrispMcpClient.listMeetings and getMultipleDocuments (tests 15–16)
 // ---------------------------------------------------------------------------
 
-describe('KrispMcpClient.listMeetings and getDocument', () => {
+describe('KrispMcpClient.listMeetings and getMultipleDocuments', () => {
   let storage: ReturnType<typeof createMockStorage>;
   let client: KrispMcpClient;
 
@@ -846,18 +846,6 @@ krisp:
     assert.equal(results[0].document, '# Transcript');
   });
 
-  it('getDocument (deprecated) wraps getMultipleDocuments', async () => {
-    const docId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
-    queueFetch({
-      jsonrpc: '2.0', id: 1,
-      result: mcpToolEnvelope({ results: [{ id: docId, document: '# Transcript' }] }),
-    });
-
-    const result = await client.getDocument(docId);
-
-    assert.equal(result.documentId, docId);
-    assert.equal(result.document, '# Transcript');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -922,8 +910,7 @@ krisp:
         structuredContent: { criteria: {}, meetings, count: 2 },
       },
     });
-    // Queue 2 getDocument calls for transcript fetching (meetings have no transcript ref)
-    // No getDocument calls needed — meetings don't have transcript refs
+    // No getMultipleDocuments calls needed — meetings have no transcript refs
 
     const result = await pullKrisp(storage, WORKSPACE, paths, 7);
 

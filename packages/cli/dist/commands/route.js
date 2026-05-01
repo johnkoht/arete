@@ -1,7 +1,7 @@
 /**
  * arete route <query> — route to skill + model tier suggestion
  */
-import { createServices } from '@arete/core';
+import { createServices, listTools } from '@arete/core';
 import chalk from 'chalk';
 import { toolsToCandidates } from '../lib/tool-candidates.js';
 const NO_MATCH_SUGGESTION = 'No skill match. Check CLI commands in AGENTS.md for available commands and guidance.';
@@ -31,7 +31,7 @@ export function registerRouteCommand(program) {
                 requires_briefing: s.requiresBriefing,
             }));
             const paths = services.workspace.getPaths(root);
-            const tools = await services.tools.list(paths.tools);
+            const tools = await listTools(services.storage, paths.tools);
             candidates.push(...toolsToCandidates(tools));
             skillRoute = services.intelligence.routeToSkill(query, candidates);
         }

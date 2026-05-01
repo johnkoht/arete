@@ -28,7 +28,7 @@ Verified against live Krisp Core account. Key differences from what you'd assume
 - Returns `{ criteria, meetings: [...], count }` in `structuredContent`
 - Meetings use `meeting_id` (not `id`)
 - `speakers` are plain strings `["Anna", "Bob"]`, not objects
-- `transcript` is a **reference** `{ status, note }` pointing to getDocument, not inline text
+- `transcript` is a **reference** `{ status, note }` pointing to getMultipleDocuments, not inline text
 
 ### get_multiple_documents response shape
 - Returns `{ results: [{ id, document }] }` in `structuredContent`
