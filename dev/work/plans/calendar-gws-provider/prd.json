@@ -1,0 +1,140 @@
+{
+  "name": "calendar-gws-provider",
+  "branchName": "feature/calendar-gws-provider",
+  "goal": "Add a third calendar provider backed by the gws CLI so users on Google Workspace via gws can use arete pull calendar / availability find / calendar create without configuring the legacy Google Calendar OAuth flow.",
+  "userStories": [
+    {
+      "id": "task-1",
+      "title": "Implement gws-calendar.ts provider",
+      "description": "Create packages/core/src/integrations/calendar/gws-calendar.ts implementing the full CalendarProvider interface using gwsExec exclusively. Mirror google-calendar.ts shape but use 'gws calendar events list / calendarList list / freebusy query / events insert' commands. Set name: 'gws-calendar'. Read first: types.ts, google-calendar.ts (L43-52, L232-259, L429-585), gws/client.ts, gws/gmail.ts, gws/LEARNINGS.md. Mitigations: R3 (isAvailable wraps all errors → returns false; 4 unit tests cover GwsNotInstalledError, GwsAuthError, GwsTimeoutError, generic Error), R7 (extract only getTodayRange + getUpcomingRange to calendar/date-helpers.ts; do NOT share mapGoogleEvent / resolveCalendarNames / fetchCalendarList), R8 (.js extensions; accept optional deps?: { exec?: GwsDeps['exec'] } and thread through every gwsExec call).",
+      "acceptanceCriteria": [
+        "File at packages/core/src/integrations/calendar/gws-calendar.ts exports getGwsCalendarProvider(deps?): CalendarProvider",
+        "New packages/core/src/integrations/calendar/date-helpers.ts exports getTodayRange and getUpcomingRange; google-calendar.ts updated to import from it (no behavior change)",
+        "Returned provider has name === 'gws-calendar'",
+        "getTodayEvents/getUpcomingEvents call gwsExec('calendar', 'events list', { calendarId, timeMin, timeMax, singleEvents:true, orderBy:'startTime', maxResults:250 }) with pageToken pagination",
+        "Mapper produces CalendarEvent with Date instances for startTime/endTime; isAllDay === true for items with start.date only",
+        "Mapper preserves organizer.self === true and recurringEventId from fixture data",
+        "getFreeBusy calls gwsExec('calendar', 'freebusy query', { timeMin, timeMax, items }) and returns FreeBusyResult with Date instances",
+        "createEvent calls gwsExec('calendar', 'events insert', {...}) and returns { id, htmlLink, summary, start, end }",
+        "isAvailable() runs gws calendar events list maxResults:1 round-trip; returns true on success; returns false (no throw) for GwsNotInstalledError, GwsAuthError, GwsTimeoutError, generic Error — 4 separate unit tests"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-2",
+      "title": "Wire provider factory",
+      "description": "Update packages/core/src/integrations/calendar/index.ts getCalendarProvider to handle provider === 'gws'. Maintain existing branches for 'google', 'ical-buddy', 'macos' exactly. Add comment 'configure writes gws — keep in sync'. Read first: calendar/index.ts, packages/core/test/integrations/calendar/factory.test.ts (L87 'google' case is the template). Mitigation: this is the canonical 2026-02-11 producer-consumer alignment check — factory regression test must use the exact value written by configure.",
+      "acceptanceCriteria": [
+        "getCalendarProvider({ integrations: { calendar: { provider: 'gws' } } }, storage, root) returns provider with name === 'gws-calendar'",
+        "Factory regression test added in factory.test.ts mirroring the 'google' case at L87",
+        "Existing factory tests for 'google', 'ical-buddy', 'macos', null provider all still pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-3",
+      "title": "Add gws-calendar registry entry",
+      "description": "Add 'gws-calendar' entry to packages/core/src/integrations/registry.ts: displayName: 'Google Calendar (gws)', description: 'Google Calendar via gws CLI (no OAuth required)', implements: ['calendar'], auth: { type: 'none' }, status: 'available'. Place adjacent to existing google-calendar entry.",
+      "acceptanceCriteria": [
+        "INTEGRATIONS['gws-calendar'] is defined with the exact shape above",
+        "arete integration list shows gws-calendar in the available integrations list (verified by snapshot or test assertion)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-4",
+      "title": "Wire integration list alias mapping",
+      "description": "Update packages/core/src/services/integrations.ts:122-137 calendar provider alias map. Add a third branch: when calendarProvider === 'gws' and calendarStatus is set, set configured['gws-calendar'] = calendarStatus as IntegrationStatus. Read first: services/integrations.ts:108-140, find the existing alias-mapping test in packages/core/test/services/. Mitigation R4-extended: this is the consumer-side counterpart to task-2's factory wiring; the 2026-02-11 incident pattern requires the test to use the exact value written by configure.",
+      "acceptanceCriteria": [
+        "With arete.yaml containing integrations.calendar.{provider:'gws',status:'active'}, IntegrationService.list() includes 'gws-calendar': 'active' in configured",
+        "Regression test added mirroring existing 'google' and 'macos' alias tests in the same file",
+        "Existing alias tests for 'google' and 'macos'/'ical-buddy' still pass"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-5",
+      "title": "Configure UX — interactive picker + cleanup + smoke test",
+      "description": "Convert the name === 'calendar' branch in packages/cli/src/commands/integration.ts:98-136 from non-interactive (writes provider:'macos' unconditionally) to interactive. (1) Inquirer select with three labeled choices: 'macOS (ical-buddy)', 'Google Calendar (OAuth)', 'Google Workspace (gws)' — match onboard.ts runIntegrationPhase pageSize:12. (2) Add --provider <gws|google|macos> non-interactive flag for testability. (3) Selecting gws runs smoke test gws calendar events list maxResults:1 with 5s timeout BEFORE writing config; on GwsAuthError/timeout abort with 'Run gws auth login first, then re-run configure'. (4) After provider chosen, prompt (default Y) to clear losers' config: gws→delete integrations.google-calendar block + .arete/secrets/google-calendar.json via storage.delete; google→delete integrations.calendar.provider:gws; macos→both. (5) Preserve --calendars/--all flags for macos path. Read first: integration.ts:80-140, onboard.ts runIntegrationPhase, cli/commands/LEARNINGS.md (Non-interactive flags + Integration phase pattern), gws/client.ts. Mitigations: R2 (use storage.delete NOT fs), R6 (smoke test before write; do not write on failure), Memory: established CLI patterns over bare minimum.",
+      "acceptanceCriteria": [
+        "arete integration configure calendar (no flags, TTY) presents inquirer select with exactly three labeled choices in order: 'macOS (ical-buddy)', 'Google Calendar (OAuth)', 'Google Workspace (gws)'; pageSize 12",
+        "arete integration configure calendar --provider gws --json runs non-interactively, runs smoke test, writes integrations.calendar.provider:gws if smoke passes, prints { success:true, integration:'calendar', provider:'gws' }",
+        "Smoke-test failure unit test in cli/test/commands/integration.test.ts: inject gwsExec that throws GwsAuthError. Assert (a) command exits non-zero, (b) arete.yaml is unchanged, (c) stderr contains literal 'gws auth login'",
+        "Transition test 1 (google→gws): pre-state has integrations.google-calendar populated AND .arete/secrets/google-calendar.json in mock storage. Run --provider gws (confirm seeded Y). Assert: integrations.google-calendar block removed; storage.delete('.arete/secrets/google-calendar.json') called; integrations.calendar.provider==='gws'",
+        "Transition test 2 (gws→macos): pre-state integrations.calendar.provider:gws. Run --provider macos. Assert: integrations.calendar.provider==='macos'; no provider:gws lingers",
+        "Transition test 3 (gws→google): pre-state integrations.calendar.provider:gws. Run --provider google. Assert: integrations.calendar block cleared; integrations.google-calendar configured",
+        "Cleanup-decline test: same gws→macos transition with confirm seeded N — assert prior config is preserved (no cleanup)",
+        "Backward-compat: existing test 'configures calendar integration with default macos provider' (integration.test.ts:25-54) is updated to pass --provider macos explicitly per CLI LEARNINGS Non-interactive flags pattern",
+        "Existing --calendars / --all flags work when paired with --provider macos OR alone (auto-implies macos)",
+        "--provider accepts only gws|google|macos; invalid value exits non-zero with error listing valid options"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-6",
+      "title": "Update CLI error messages for multi-provider",
+      "description": "Three CLI files hardcode 'Google Calendar' where gws now also satisfies the requirement. (1) availability.ts:135,139: replace 'Availability requires Google Calendar. Run: arete integration configure google-calendar' with 'Availability requires a calendar provider supporting free/busy. Run: arete integration configure calendar'. (2) calendar.ts:317,321: replace 'Event creation requires Google Calendar. Run: arete integration configure google-calendar' with 'Event creation requires a calendar provider supporting event creation. Run: arete integration configure calendar'. (3) pull.ts:422-431: extend provider.name switch to add 'gws-calendar' case: errorMsg='Google Workspace not authenticated', helpMsg='Run: gws auth login'.",
+      "acceptanceCriteria": [
+        "rg 'requires Google Calendar' packages/cli/src/ returns zero matches",
+        "Unit test in cli/test/commands/availability.test.ts (new or extend): with no calendar provider returning getFreeBusy, JSON output contains error: 'Availability requires a calendar provider supporting free/busy' and message: 'Run: arete integration configure calendar'",
+        "Unit test in cli/test/commands/calendar.test.ts (new or extend): with no calendar provider returning createEvent, JSON output contains error: 'Event creation requires a calendar provider supporting event creation'",
+        "Unit test in cli/test/commands/pull.test.ts (extend): for a provider stub with name==='gws-calendar' and isAvailable()→false, JSON output contains error: 'Google Workspace not authenticated' and message: 'Run: gws auth login'",
+        "rg 'provider\\.name\\s*===\\s*' packages/cli/src/ shows gws-calendar case is handled in pull.ts:422-431 alongside ical-buddy and google-calendar",
+        "Generic else branch in pull.ts:428-431 reachable only for truly unknown provider names"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-7",
+      "title": "Tests — gws-calendar provider + fixture replacement",
+      "description": "Create packages/core/test/integrations/calendar/gws-calendar.test.ts mirroring google-calendar.test.ts structure. Mock gwsExec via DI (NOT real child_process). CRITICAL R1: existing packages/core/test/integrations/gws/fixtures/calendar-events.json is a hand-crafted 10-line stub referenced by zero tests — REPLACE before writing the mapper. Capture real fixtures: calendar-events-list.json (≥1 all-day, ≥1 recurring, ≥1 organizer.self===true per R5), calendar-list.json, calendar-freebusy.json, calendar-event-insert.json. Read first: google-calendar.test.ts (mirror exactly), gws/gmail.test.ts (DI pattern), the orphan fixture to replace.",
+      "acceptanceCriteria": [
+        "Orphan packages/core/test/integrations/gws/fixtures/calendar-events.json is DELETED; new calendar-events-list.json captured from real gws CLI per Testing Strategy §4.2 capture protocol",
+        "Sanity check: jq '[.items[] | select(.start.date)] | length' on calendar-events-list.json returns ≥1 (all-day)",
+        "Sanity check: jq '[.items[] | select(.recurringEventId)] | length' returns ≥1",
+        "Sanity check: jq '[.items[] | select(.organizer.self == true)] | length' returns ≥1",
+        "Three additional fixtures captured from real gws: calendar-list.json, calendar-freebusy.json, calendar-event-insert.json",
+        "≥10 unit tests in gws-calendar.test.ts: (a) getTodayEvents returns mapped events with Date instances, (b) getUpcomingEvents 7-day window, (c) mapper preserves organizer.self===true, (d) mapper preserves recurringEventId, (e) mapper sets isAllDay correctly for start.date-only events, (f) getFreeBusy returns FreeBusyResult with Date instances and per-email accessible flags, (g) createEvent returns { id, htmlLink, summary, start, end }, (h) isAvailable false on GwsNotInstalledError, (i) isAvailable false on GwsAuthError, (j) isAvailable false on GwsTimeoutError, (k) isAvailable false on generic Error",
+        "Factory regression test added in factory.test.ts mirroring 'google' case at L87 (per task-2)",
+        "IntegrationService.list alias-mapping regression test added in integrations.test.ts L328 describe block (per task-4)",
+        "Tests inject gwsExec via DI (no real child_process calls in tests; verify with rg 'execFile|spawn' packages/core/test/integrations/calendar/gws-calendar.test.ts returns zero)",
+        "npm test -w @arete/core passes; npm test -w @arete/cli passes"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    },
+    {
+      "id": "task-8",
+      "title": "Skill + LEARNINGS docs",
+      "description": "Update packages/runtime/skills/calendar/SKILL.md (around L35: list three providers; L38-41: update no-calendar hint; L82-86: add auth_expired (gws) row pointing to 'gws auth login'). Update packages/core/src/integrations/gws/LEARNINGS.md Verified command paths table (L14-27): add 4 rows for events list, calendarList list, freebusy query, events insert with exact --params shapes used in gws-calendar.ts. Document any response-shape gaps observed during fixture capture in a new 'Calendar Response Shape Notes' section, or note 'no gaps observed'.",
+      "acceptanceCriteria": [
+        "SKILL.md L35 lists three calendar providers (macOS / Google Calendar / Google Workspace)",
+        "SKILL.md error table includes auth_expired (gws) row pointing to 'gws auth login'",
+        "gws/LEARNINGS.md Verified command paths table includes 4 new calendar rows with real --params JSON",
+        "Any response-shape gaps observed during fixture capture are documented (or 'no gaps observed' is noted)"
+      ],
+      "status": "pending",
+      "passes": false,
+      "attemptCount": 0
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-05-01T02:36:14.000Z",
+    "totalTasks": 8,
+    "completedTasks": 0,
+    "failedTasks": 0
+  }
+}
