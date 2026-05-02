@@ -128,7 +128,7 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 
 | Phase | Sub-orch ID | Sub-worktree | /ship stage | Last review | Notes |
 |---|---|---|---|---|---|
-| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED to parent** (merge `b5eab52c`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups (backend `onApproved` wire-up, internal observer error trap, cosmetic). Fix-up agent landed 5 commits (incl. dist). Mini-review APPROVE. Backend test framework note: `tsx --test` is pre-existing convention, not a regression. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. Soak begins after main merge. |
+| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED TO MAIN** (merge `131863fe`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups. Fix-up agent landed 5 more commits (incl. dist). Mini-review APPROVE. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. **14-day soak begins now.** Phase 1 build can proceed in parallel; Phase 1 merge to main waits for John's testing/usage of Phase 0. |
 
 ## Open questions / parking lot
 
@@ -137,6 +137,34 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`week.md` as a working file**: hand-readable markdown, or derived view from state.json? **Lean: derived view, but markdown remains source-of-truth for user edits; refresh harmlessly regenerates non-user sections.**
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
+
+## Decisions log — 2026-05-01 (Phase 0 shipped)
+
+Phase 0 (Instrument + baseline) merged into local main at commit `131863fe`. Parent worktree fast-forwarded to match.
+
+**Pipeline that proved itself**:
+1. Meta drafts phase plan with detailed handoff brief and ACs.
+2. Sub-orchestrator (isolated worktree) builds D1–D4 with per-deliverable commits (~9 commits + dist + build-report).
+3. Eng-lead reviewer (independent agent) reads diff + build-report + parent plan; verdict APPROVE WITH MINOR CONCERNS.
+4. Fix-up agent addresses concerns directly in sub-worktree (5 more commits).
+5. Mini-reviewer confirms fix-ups landed as specified; verdict APPROVE.
+6. Meta merges sub-branch → parent worktree branch.
+7. Meta merges parent → local main with `git -C main-repo merge --no-ff`.
+8. NOT pushed to origin (user discipline; user pushes manually).
+
+**Wall time**: ~50 min build + ~5 min first review + ~6 min fix-ups + ~1 min mini-review + ~2 min merge logistics = ~64 min from spawn to ship.
+
+**Validated patterns**:
+- Sub-worktree isolation via `Agent` + `isolation: "worktree"` works cleanly off the parent worktree's HEAD.
+- Per-task commits with `phase-N(<area>): <change>` convention preserves the discipline-rule audit trail.
+- The "fix-soon vs fix-now" review framework worked — meta upgraded the backend wire-up to fix-now because the sub-orch was warm; ~30 min of extra work for measurement integrity from day 1.
+- Independent reviewer agents (NOT the building agent) catch real issues. The first review's open-question evaluation correctly flagged the backend gap as worth fixing.
+- `SendMessage` is NOT available in this harness; for fix-ups, spawn a fresh agent with explicit cwd into the sub-worktree path. Don't rely on agent-to-agent comms.
+
+**Lessons forward**:
+- Phase 1+ should follow the same pattern.
+- The "open question" mechanism (sub-orch flags mid-build issues for meta evaluation) is a useful escape valve; should be in every handoff brief.
+- For very small fix-ups, a fresh general-purpose agent with cwd into the existing sub-worktree works fine — no need to keep the original sub-orch alive.
 
 ## Decisions log — 2026-05-01 (execution authorization)
 
