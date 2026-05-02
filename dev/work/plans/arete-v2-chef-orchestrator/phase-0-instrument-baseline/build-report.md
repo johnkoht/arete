@@ -88,7 +88,7 @@ Counts taken against `9d26005c` (post-hygiene-pass-1 main). "After Phase 0" refl
 
 | Proxy | Before Phase 0 | After Phase 0 | Δ |
 |---|---|---|---|
-| CLI verbs (top-level commands registered in `cli/src/index.ts`) | 33 | 35 | **+2** (`cost`, `events`) |
+| CLI verbs (top-level commands registered in `cli/src/index.ts`) | 31 | 33 | **+2** (`cost`, `events`) |
 | Runtime skills (directories under `packages/runtime/skills/`) | 38 | 38 | 0 (daily-winddown got a stanza; no new skill) |
 | Frontmatter fields across canonical file shapes | (no new shapes) | (no new shapes) | 0 |
 | Memory file types in `.arete/memory/` | 5 (`log.md`, `index.md`, `items/`, `areas/`, `topics/`, etc.) | 6 | **+1** (`item-fates.jsonl`) |
@@ -119,6 +119,24 @@ Phase 0 added new files (`cost.ts`, `events.ts`, `item-fates.jsonl` runtime arti
 
 The phase plan's skeptical view: "skip the baseline; ship Phase 1+2; if it feels better, declare success." Build experience didn't invalidate that argument — it's still a coherent shortcut path the user might want to take. The counter-argument (AC10 unfalsifiable without a measured baseline) holds; nothing learned during build weakens it. No escalation to meta needed on this front.
 
+## Review fixes applied
+
+After eng-lead review (`review.md`, verdict APPROVE WITH MINOR CONCERNS),
+three follow-on fixes landed on this branch:
+
+1. **`1c9ed2fa` — phase-0(backend): wire item_fate onApproved observer at workspace approve.** Backend `approveMeeting` (`packages/apps/backend/src/services/workspace.ts`) now passes an `onApproved` observer to `commitApprovedItems` mirroring the CLI side. Item-fate events now fire for web-approve traffic, closing the AC0.6 baseline gap (web-approve was silently missing). Integration test added in `workspace.test.ts`.
+2. **`de2be846` — phase-0(core): internalize observer error trapping in commitApprovedItems.** The per-item `onApproved` invocation is now wrapped in try/catch inside `commitApprovedItems` itself; observer errors are logged to stderr and never abort the commit. Caller-side try/catches retained as defense in depth. Two unit tests added.
+3. **`<this commit>` — phase-0(docs): apply review fixes to build-report.md.** Corrected the AC0.8 ledger CLI verb count (31 → 33; delta unchanged at +2) and added this section.
+
+After these fixes:
+- `npm run typecheck` clean.
+- `staged-items.test.ts`: 48/48 pass (incl. 2 new observer-error tests).
+- `workspace.test.ts` (backend): 10/10 pass (incl. 2 new fate-emission tests).
+- `memory-log.test.ts`: 13/13 pass (regression-clean).
+
+The dist artifacts for `packages/core` and `packages/apps/backend` were
+rebuilt and committed in a follow-up commit (see git log).
+
 ## Ready for /review
 
-Ready for /review.
+Ready for /review v2 (post-fix-ups).
