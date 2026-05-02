@@ -126,16 +126,14 @@ three follow-on fixes landed on this branch:
 
 1. **`1c9ed2fa` — phase-0(backend): wire item_fate onApproved observer at workspace approve.** Backend `approveMeeting` (`packages/apps/backend/src/services/workspace.ts`) now passes an `onApproved` observer to `commitApprovedItems` mirroring the CLI side. Item-fate events now fire for web-approve traffic, closing the AC0.6 baseline gap (web-approve was silently missing). Integration test added in `workspace.test.ts`.
 2. **`de2be846` — phase-0(core): internalize observer error trapping in commitApprovedItems.** The per-item `onApproved` invocation is now wrapped in try/catch inside `commitApprovedItems` itself; observer errors are logged to stderr and never abort the commit. Caller-side try/catches retained as defense in depth. Two unit tests added.
-3. **`<this commit>` — phase-0(docs): apply review fixes to build-report.md.** Corrected the AC0.8 ledger CLI verb count (31 → 33; delta unchanged at +2) and added this section.
+3. **`cde6e7ce` — phase-0(docs): apply review fixes to build-report.md.** Corrected the AC0.8 ledger CLI verb count (31 → 33; delta unchanged at +2) and added this section.
+4. **`336a07fb` — phase-0: rebuild dist after review fix-ups.** Rebuilt `packages/core/dist/integrations/staged-items.{js,d.ts,*.map}` and `packages/apps/backend/dist/services/workspace.js` after fixes 1 + 2.
 
 After these fixes:
 - `npm run typecheck` clean.
 - `staged-items.test.ts`: 48/48 pass (incl. 2 new observer-error tests).
 - `workspace.test.ts` (backend): 10/10 pass (incl. 2 new fate-emission tests).
 - `memory-log.test.ts`: 13/13 pass (regression-clean).
-
-The dist artifacts for `packages/core` and `packages/apps/backend` were
-rebuilt and committed in a follow-up commit (see git log).
 
 ## Ready for /review
 
