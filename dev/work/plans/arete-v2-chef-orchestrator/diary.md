@@ -126,10 +126,9 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 
 ## Sub-orchestrator review queue
 
-(Empty until first phase spawned.)
-
-| Phase | Sub-orch ID | /ship stage | Last review | Notes |
-|---|---|---|---|---|
+| Phase | Sub-orch ID | Sub-worktree | /ship stage | Last review | Notes |
+|---|---|---|---|---|---|
+| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` (branch `worktree-agent-aa686a8109331e31b`) | review (eng-lead pending) | n/a | Build complete. 9 phase-0 commits + dist rebuild + build-report. Sub-orch flagged open Q: backend `commitApprovedItems` at workspace.ts:657 lacks `onApproved` observer (CLI-only writers shipped). Eng-lead evaluating. |
 
 ## Open questions / parking lot
 
