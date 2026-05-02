@@ -9,6 +9,7 @@ import matter from 'gray-matter';
 import type { ItemSource } from '@arete/core';
 import {
   FileStorageAdapter,
+  MemoryLogService,
   parseStagedSections,
   parseStagedItemStatus,
   parseStagedItemEdits,
@@ -19,6 +20,7 @@ import {
   refreshQmdIndex,
   createServices,
   extractAttendeeSlugs,
+  getWorkspacePaths,
   inferUrgency,
   PEOPLE_CATEGORIES,
 } from '@arete/core';
@@ -654,7 +656,36 @@ export async function approveMeeting(
   }
   
   // Step 2: Commit approved items (decisions, learnings to memory)
-  await commitApprovedItems(storage, filePath, memoryDir);
+  // Phase 0 instrumentation — write one item-fate event per approved item,
+  // mirroring the CLI approve path. Best-effort; never blocks approve.
+  // John uses the web review UI in his daily flow (per user_role.md), so the
+  // 14-day baseline (AC0.6) needs web-approve fates captured alongside CLI.
+  const fmBeforeCommit = matter(rawContentBeforeCommit).data as Record<string, unknown>;
+  const importanceRaw = fmBeforeCommit['importance'];
+  const importanceForFate =
+    typeof importanceRaw === 'string'
+      && (['light', 'normal', 'important', 'skip'] as const).includes(importanceRaw as 'light' | 'normal' | 'important' | 'skip')
+      ? (importanceRaw as 'light' | 'normal' | 'important' | 'skip')
+      : null;
+  const memoryLog = new MemoryLogService(storage);
+  const workspacePaths = getWorkspacePaths(workspaceRoot);
+  await commitApprovedItems(storage, filePath, memoryDir, {
+    onApproved: async (item) => {
+      try {
+        await memoryLog.appendItemFate(workspacePaths, {
+          item_text: item.text,
+          item_kind: item.kind,
+          source_path: filePath,
+          fate: 'approved',
+          reason: null,
+          confidence: item.confidence,
+          importance_at_extraction: importanceForFate,
+        });
+      } catch {
+        // best-effort
+      }
+    },
+  });
   
   // Get meeting to extract metadata
   let meeting = await getMeeting(workspaceRoot, slug);
