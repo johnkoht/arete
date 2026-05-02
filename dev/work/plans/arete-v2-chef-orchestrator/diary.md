@@ -128,7 +128,7 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 
 | Phase | Sub-orch ID | Sub-worktree | /ship stage | Last review | Notes |
 |---|---|---|---|---|---|
-| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` (branch `worktree-agent-aa686a8109331e31b`) | review (eng-lead pending) | n/a | Build complete. 9 phase-0 commits + dist rebuild + build-report. Sub-orch flagged open Q: backend `commitApprovedItems` at workspace.ts:657 lacks `onApproved` observer (CLI-only writers shipped). Eng-lead evaluating. |
+| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED to parent** (merge `b5eab52c`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups (backend `onApproved` wire-up, internal observer error trap, cosmetic). Fix-up agent landed 5 commits (incl. dist). Mini-review APPROVE. Backend test framework note: `tsx --test` is pre-existing convention, not a regression. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. Soak begins after main merge. |
 
 ## Open questions / parking lot
 
