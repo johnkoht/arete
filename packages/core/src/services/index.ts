@@ -71,6 +71,8 @@ export {
   formatFilteredStagedSections,
   calculateSpeakingRatio,
   inferUrgency,
+  buildSkippedItemFateEvents,
+  buildDismissedItemFateEvents,
 } from './meeting-processing.js';
 export type {
   ProcessedMeetingResult,
@@ -80,6 +82,7 @@ export type {
   ItemStatus,
   ItemOwnerMeta,
   UrgencyBucket,
+  MeetingItemFateInput,
 } from './meeting-processing.js';
 
 // Meeting reconciliation

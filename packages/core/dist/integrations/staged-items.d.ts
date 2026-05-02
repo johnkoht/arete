@@ -65,6 +65,33 @@ export type MeetingMetadata = {
     topics: string[];
 };
 /**
+ * Per-item callback invoked once per approved item AFTER the meeting file
+ * is written. Phase 0 instrumentation hook — callers plumb item-fate event
+ * writes here without `commitApprovedItems` itself owning a storage-level
+ * dependency on `MemoryLogService`.
+ *
+ * Errors thrown from the callback are caught internally by
+ * `commitApprovedItems` and logged to stderr; the commit always completes
+ * normally even if instrumentation fails. Callers may still wrap their
+ * observers in try/catch as defense in depth, but it is no longer a
+ * correctness requirement.
+ */
+export type ApprovedItemObserver = (item: ApprovedItemRecord) => Promise<void>;
+export interface ApprovedItemRecord {
+    /** Frontmatter id (e.g. `ai_001`, `de_002`, `le_003`). */
+    id: string;
+    /** Mapped to memory-log fate kinds: action_item / decision / learning. */
+    kind: 'action_item' | 'decision' | 'learning';
+    /** Final committed text (post-edits when `staged_item_edits` overrode). */
+    text: string;
+    /** Recorded confidence at extraction time, when known. */
+    confidence: number | null;
+}
+export interface CommitApprovedItemsOptions {
+    /** Phase 0 instrumentation. */
+    onApproved?: ApprovedItemObserver;
+}
+/**
  * Commit all approved staged items:
  *
  * 1. Collect approved item IDs from `staged_item_status`
@@ -76,6 +103,9 @@ export type MeetingMetadata = {
  * 5. Clear `staged_item_status` and `staged_item_edits` from frontmatter
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
+ * 8. (Phase 0) Fire `options.onApproved` once per committed item.
+ *    Observer failures are caught internally and logged to stderr — the
+ *    commit always succeeds even if instrumentation throws.
  */
-export declare function commitApprovedItems(storage: StorageAdapter, filePath: string, memoryDir: string): Promise<void>;
+export declare function commitApprovedItems(storage: StorageAdapter, filePath: string, memoryDir: string, options?: CommitApprovedItemsOptions): Promise<void>;
 //# sourceMappingURL=staged-items.d.ts.map

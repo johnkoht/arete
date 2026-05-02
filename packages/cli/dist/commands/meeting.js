@@ -1,7 +1,7 @@
 /**
  * arete meeting commands — add and process meetings
  */
-import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, } from '@arete/core';
+import { createServices, loadConfig, saveMeetingFile, meetingFilename, slugifyPersonName, refreshQmdIndex, extractMeetingIntelligence, formatStagedSections, updateMeetingContent, processMeetingExtraction, applyReconciliationDecision, extractUserNotes, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, clearApprovedSections, formatFilteredStagedSections, parseGoals, buildMeetingContext, applyMeetingIntelligence, generateMeetingManifest, getCompletedItems, getOpenTasks, calculateSpeakingRatio, inferUrgency, loadReconciliationContext, reconcileMeetingBatch, loadRecentMeetingBatch, batchLLMReview, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from '@arete/core';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -776,6 +776,11 @@ export function registerMeetingCommands(program) {
         let processed;
         // Lifted so the post-merge response can surface counts to the user.
         const silentlyMerged = { decisions: 0, learnings: 0 };
+        // Phase 0 instrumentation — snapshots of items that get silently merged
+        // (decisions/learnings dropped from filteredItems by reconciliation) so
+        // we can write item-fate events after `applyReconciliationDecision`
+        // mutates `processed`.
+        const dismissedSnapshots = [];
         if (shouldStage) {
             // Extract user notes and process extraction (filtering, dedup, metadata)
             const userNotes = extractUserNotes(body);
@@ -823,6 +828,16 @@ export function registerMeetingCommands(program) {
                     // learnings are silently merged into committed memory.
                     // See `applyReconciliationDecision` for the type-dependent contract.
                     if (reconciledItem.status === 'duplicate' || reconciledItem.status === 'completed') {
+                        // Phase 0: snapshot dismissed decisions/learnings before
+                        // applyReconciliationDecision deletes them from filteredItems.
+                        if (matchingItem.type !== 'action') {
+                            dismissedSnapshots.push({
+                                item_text: matchingItem.text,
+                                item_kind: matchingItem.type,
+                                confidence: processed.stagedItemConfidence[matchingItem.id],
+                                reason: reconciledItem.status === 'completed' ? 'matched_completed' : 'duplicate',
+                            });
+                        }
                         applyReconciliationDecision(processed, matchingItem, silentlyMerged);
                     }
                 }
@@ -885,6 +900,25 @@ export function registerMeetingCommands(program) {
                 // Reconstruct file: frontmatter + body
                 const updatedFile = `---\n${stringifyYaml(fm)}---\n\n${updatedBody}`;
                 await services.storage.write(meetingPath, updatedFile);
+                // Phase 0 instrumentation — emit one item-fate event per skipped
+                // staged item and per silently-merged decision/learning. Best
+                // effort; never blocks the extract write.
+                try {
+                    const fateImportance = effectiveImportance ?? null;
+                    const skippedEvents = buildSkippedItemFateEvents(processed, meetingPath, fateImportance);
+                    const dismissedEvents = buildDismissedItemFateEvents(dismissedSnapshots.map((s) => ({
+                        item_text: s.item_text,
+                        item_kind: s.item_kind,
+                        confidence: s.confidence,
+                        reason: s.reason,
+                    })), meetingPath, fateImportance);
+                    for (const ev of [...skippedEvents, ...dismissedEvents]) {
+                        await services.memoryLog.appendItemFate(paths, ev);
+                    }
+                }
+                catch {
+                    // best-effort instrumentation
+                }
                 // Refresh qmd index unless --skip-qmd
                 if (!opts.skipQmd) {
                     qmdResult = await refreshQmdIndex(root, config.qmd_collection);
@@ -1246,7 +1280,30 @@ export function registerMeetingCommands(program) {
             : undefined;
         // Commit approved items (decisions, learnings to memory)
         const memoryDir = join(root, '.arete', 'memory', 'items');
-        await commitApprovedItems(services.storage, meetingPath, memoryDir);
+        // Phase 0 instrumentation — write one item-fate event per approved item.
+        // Best-effort; never blocks approve.
+        const importanceForFate = typeof frontmatter['importance'] === 'string'
+            && ['light', 'normal', 'important', 'skip'].includes(frontmatter['importance'])
+            ? frontmatter['importance']
+            : null;
+        await commitApprovedItems(services.storage, meetingPath, memoryDir, {
+            onApproved: async (item) => {
+                try {
+                    await services.memoryLog.appendItemFate(paths, {
+                        item_text: item.text,
+                        item_kind: item.kind,
+                        source_path: meetingPath,
+                        fate: 'approved',
+                        reason: null,
+                        confidence: item.confidence,
+                        importance_at_extraction: importanceForFate,
+                    });
+                }
+                catch {
+                    // best-effort
+                }
+            },
+        });
         // --------------------------------------------------------------------------
         // Hook 2 — Integrate this meeting into its topic wiki pages (Phase A #2)
         //

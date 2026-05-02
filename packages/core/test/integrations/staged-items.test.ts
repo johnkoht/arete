@@ -1016,3 +1016,98 @@ staged_item_status:
     assert.ok(topicsIdx < contentIdx, 'Topics comes before the content line');
   });
 });
+
+// ---------------------------------------------------------------------------
+// onApproved observer error containment (Phase 0 instrumentation contract)
+// ---------------------------------------------------------------------------
+// commitApprovedItems internalizes try/catch around the onApproved callback
+// so a misbehaving observer can never break the commit. Errors are logged
+// to stderr; the commit completes normally and all approved items are
+// persisted to memory files + the meeting file.
+
+describe('commitApprovedItems — onApproved observer error containment', () => {
+  let storage: ReturnType<typeof createMockStorage>;
+
+  beforeEach(() => {
+    storage = createMockStorage();
+    storage.files.set(MEETING_FILE, FULL_MEETING);
+  });
+
+  it('completes the commit normally when onApproved throws synchronously', async () => {
+    // Capture stderr writes to assert the failure is logged but non-fatal.
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {
+        onApproved: async () => {
+          throw new Error('observer boom');
+        },
+      });
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+
+    // The commit's own writes must have happened despite the observer throwing.
+    const updated = storage.files.get(MEETING_FILE);
+    assert.ok(updated, 'meeting file still written');
+    const fmMatch = updated!.match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(fmMatch, 'frontmatter present');
+    const fm = parseYaml(fmMatch![1]) as Record<string, unknown>;
+    assert.equal(fm['status'], 'approved', 'status set to approved');
+
+    // Memory files written too.
+    assert.ok(
+      storage.files.get(`${MEMORY_DIR}/decisions.md`),
+      'decisions.md written despite observer failure',
+    );
+    assert.ok(
+      storage.files.get(`${MEMORY_DIR}/learnings.md`),
+      'learnings.md written despite observer failure',
+    );
+
+    // Stderr captured at least one observer-failure message (one per approved
+    // item that triggered the throw).
+    const stderr = stderrChunks.join('');
+    assert.match(
+      stderr,
+      /\[commitApprovedItems\] onApproved observer failed/,
+      'stderr should record the observer failure',
+    );
+    assert.match(stderr, /observer boom/, 'underlying error message surfaces in stderr');
+  });
+
+  it('logs each observer failure independently and processes all approved items', async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+
+    const seen: string[] = [];
+    try {
+      await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR, {
+        onApproved: async (item) => {
+          seen.push(item.id);
+          throw new Error(`fail-${item.id}`);
+        },
+      });
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+
+    // All three approved items (ai_001, de_001, le_001) were observed even
+    // though each throw — internal catch must not abort the loop.
+    assert.deepEqual(seen.sort(), ['ai_001', 'de_001', 'le_001']);
+
+    const stderr = stderrChunks.join('');
+    assert.match(stderr, /fail-ai_001/);
+    assert.match(stderr, /fail-de_001/);
+    assert.match(stderr, /fail-le_001/);
+  });
+});

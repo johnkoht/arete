@@ -44,6 +44,8 @@ import { registerSearchCommand } from './commands/search.js';
 import { registerCreateCommands } from './commands/create.js';
 import { registerInboxCommand } from './commands/inbox.js';
 import { registerHygieneCommand } from './commands/hygiene.js';
+import { registerCostCommand } from './commands/cost.js';
+import { registerEventsCommand } from './commands/events.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -126,6 +128,10 @@ ${chalk.bold('Workspace Hygiene')}
   hygiene scan [--tier] [--category]  Scan for workspace entropy
   hygiene apply [--yes] [--dry-run]   Apply hygiene fixes
 
+${chalk.bold('Telemetry')}
+  cost report [--since 7d] [--by day|skill]  Aggregate LLM costs from memory/log.md
+  events log winddown --event start|end       Append a winddown event to memory/log.md
+
 ${chalk.bold('AI Configuration')}
   credentials set <provider>       Set API key for a provider
   credentials show                 Show configured providers (keys masked)
@@ -167,5 +173,7 @@ registerSearchCommand(program);
 registerCreateCommands(program);
 registerInboxCommand(program);
 registerHygieneCommand(program);
+registerCostCommand(program);
+registerEventsCommand(program);
 
 program.parse();

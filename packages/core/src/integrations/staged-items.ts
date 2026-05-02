@@ -409,6 +409,42 @@ function generateEntryTitle(text: string): string {
 // ---------------------------------------------------------------------------
 
 /**
+ * Per-item callback invoked once per approved item AFTER the meeting file
+ * is written. Phase 0 instrumentation hook — callers plumb item-fate event
+ * writes here without `commitApprovedItems` itself owning a storage-level
+ * dependency on `MemoryLogService`.
+ *
+ * Errors thrown from the callback are caught internally by
+ * `commitApprovedItems` and logged to stderr; the commit always completes
+ * normally even if instrumentation fails. Callers may still wrap their
+ * observers in try/catch as defense in depth, but it is no longer a
+ * correctness requirement.
+ */
+export type ApprovedItemObserver = (item: ApprovedItemRecord) => Promise<void>;
+
+export interface ApprovedItemRecord {
+  /** Frontmatter id (e.g. `ai_001`, `de_002`, `le_003`). */
+  id: string;
+  /** Mapped to memory-log fate kinds: action_item / decision / learning. */
+  kind: 'action_item' | 'decision' | 'learning';
+  /** Final committed text (post-edits when `staged_item_edits` overrode). */
+  text: string;
+  /** Recorded confidence at extraction time, when known. */
+  confidence: number | null;
+}
+
+export interface CommitApprovedItemsOptions {
+  /** Phase 0 instrumentation. */
+  onApproved?: ApprovedItemObserver;
+}
+
+const STAGED_TYPE_TO_FATE_KIND: Record<StagedItem['type'], ApprovedItemRecord['kind']> = {
+  ai: 'action_item',
+  de: 'decision',
+  le: 'learning',
+};
+
+/**
  * Commit all approved staged items:
  *
  * 1. Collect approved item IDs from `staged_item_status`
@@ -420,17 +456,21 @@ function generateEntryTitle(text: string): string {
  * 5. Clear `staged_item_status` and `staged_item_edits` from frontmatter
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
+ * 8. (Phase 0) Fire `options.onApproved` once per committed item.
+ *    Observer failures are caught internally and logged to stderr — the
+ *    commit always succeeds even if instrumentation throws.
  */
 export async function commitApprovedItems(
   storage: StorageAdapter,
   filePath: string,
-  memoryDir: string
+  memoryDir: string,
+  options: CommitApprovedItemsOptions = {}
 ): Promise<void> {
   const raw = await storage.read(filePath);
   if (raw === null) throw new Error(`Meeting file not found: ${filePath}`);
 
   const { data, body } = parseFrontmatter(raw);
-  
+
   // Extract meeting metadata for memory file entries
   const meetingMeta = extractMeetingMetadata(data);
 
@@ -438,6 +478,9 @@ export async function commitApprovedItems(
   const statusMap = (data['staged_item_status'] as StagedItemStatus | undefined) ?? {};
   const editsMap = (data['staged_item_edits'] as StagedItemEdits | undefined) ?? {};
   const ownerMap = parseStagedItemOwner(raw);
+  // Snapshot confidence map BEFORE the frontmatter cleanup deletes it; the
+  // observer needs it for the fate event.
+  const confidenceMap = (data['staged_item_confidence'] as Record<string, number> | undefined) ?? {};
 
   const approvedIds = new Set(
     Object.entries(statusMap)
@@ -534,6 +577,45 @@ export async function commitApprovedItems(
 
   // ── 7. Write cleaned file ─────────────────────────────────────────────────
   await storage.write(filePath, serializeFrontmatter(data, cleanedBody));
+
+  // ── 8. Phase 0 instrumentation — fire onApproved per committed item ──────
+  if (options.onApproved !== undefined) {
+    const approvedRecords: ApprovedItemRecord[] = [];
+    for (const item of approvedActionItems) {
+      approvedRecords.push({
+        id: item.id,
+        kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+        text: item.text,
+        confidence: confidenceMap[item.id] ?? null,
+      });
+    }
+    for (const item of approvedDecisions) {
+      approvedRecords.push({
+        id: item.id,
+        kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+        text: item.text,
+        confidence: confidenceMap[item.id] ?? null,
+      });
+    }
+    for (const item of approvedLearnings) {
+      approvedRecords.push({
+        id: item.id,
+        kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+        text: item.text,
+        confidence: confidenceMap[item.id] ?? null,
+      });
+    }
+    for (const record of approvedRecords) {
+      try {
+        await options.onApproved(record);
+      } catch (err) {
+        // Phase 0 instrumentation must never break the commit. A future
+        // caller may forget to wrap the observer, so we trap here.
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[commitApprovedItems] onApproved observer failed for ${record.kind} ${record.id}: ${msg}\n`);
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
