@@ -70,8 +70,11 @@ export type MeetingMetadata = {
  * writes here without `commitApprovedItems` itself owning a storage-level
  * dependency on `MemoryLogService`.
  *
- * Failure inside the callback is swallowed by the caller's contract; this
- * function does not attempt error handling beyond awaiting the promise.
+ * Errors thrown from the callback are caught internally by
+ * `commitApprovedItems` and logged to stderr; the commit always completes
+ * normally even if instrumentation fails. Callers may still wrap their
+ * observers in try/catch as defense in depth, but it is no longer a
+ * correctness requirement.
  */
 export type ApprovedItemObserver = (item: ApprovedItemRecord) => Promise<void>;
 export interface ApprovedItemRecord {
@@ -101,6 +104,8 @@ export interface CommitApprovedItemsOptions {
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
  * 8. (Phase 0) Fire `options.onApproved` once per committed item.
+ *    Observer failures are caught internally and logged to stderr — the
+ *    commit always succeeds even if instrumentation throws.
  */
 export declare function commitApprovedItems(storage: StorageAdapter, filePath: string, memoryDir: string, options?: CommitApprovedItemsOptions): Promise<void>;
 //# sourceMappingURL=staged-items.d.ts.map

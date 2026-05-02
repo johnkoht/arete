@@ -319,6 +319,8 @@ const STAGED_TYPE_TO_FATE_KIND = {
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
  * 8. (Phase 0) Fire `options.onApproved` once per committed item.
+ *    Observer failures are caught internally and logged to stderr — the
+ *    commit always succeeds even if instrumentation throws.
  */
 export async function commitApprovedItems(storage, filePath, memoryDir, options = {}) {
     const raw = await storage.read(filePath);
@@ -445,7 +447,15 @@ export async function commitApprovedItems(storage, filePath, memoryDir, options 
             });
         }
         for (const record of approvedRecords) {
-            await options.onApproved(record);
+            try {
+                await options.onApproved(record);
+            }
+            catch (err) {
+                // Phase 0 instrumentation must never break the commit. A future
+                // caller may forget to wrap the observer, so we trap here.
+                const msg = err instanceof Error ? err.message : String(err);
+                process.stderr.write(`[commitApprovedItems] onApproved observer failed for ${record.kind} ${record.id}: ${msg}\n`);
+            }
         }
     }
 }
