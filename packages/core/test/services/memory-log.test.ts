@@ -166,6 +166,163 @@ describe('MemoryLogService.append', () => {
   });
 });
 
+describe('MemoryLogService.appendItemFate', () => {
+  it('writes one JSON object per line to item-fates.jsonl', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      await svc.appendItemFate(paths, {
+        item_text: 'Send Lauren Q3 pushback on churn assumption',
+        item_kind: 'action_item',
+        source_path: 'resources/meetings/2026-05-15-glance-comms.md',
+        fate: 'approved',
+        reason: null,
+        confidence: 0.82,
+        importance_at_extraction: 'normal',
+      });
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const lines = content.split('\n').filter((l) => l.length > 0);
+      assert.strictEqual(lines.length, 1);
+      const record = JSON.parse(lines[0]);
+      assert.strictEqual(record.type, 'item_fate');
+      assert.strictEqual(record.fate, 'approved');
+      assert.strictEqual(record.item_kind, 'action_item');
+      assert.strictEqual(record.item_text, 'Send Lauren Q3 pushback on churn assumption');
+      assert.strictEqual(record.confidence, 0.82);
+      assert.strictEqual(record.reason, null);
+      assert.strictEqual(record.importance_at_extraction, 'normal');
+      assert.match(record.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    });
+  });
+
+  it('escapes embedded newlines so each event is exactly one line', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      await svc.appendItemFate(paths, {
+        item_text: 'multi\nline\nitem text',
+        item_kind: 'decision',
+        source_path: 'resources/meetings/x.md',
+        fate: 'dismissed',
+        reason: 'duplicate',
+        confidence: null,
+        importance_at_extraction: null,
+      });
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const lines = content.split('\n').filter((l) => l.length > 0);
+      assert.strictEqual(lines.length, 1, 'one event = one physical line');
+      const record = JSON.parse(lines[0]);
+      assert.strictEqual(record.item_text, 'multi\nline\nitem text');
+    });
+  });
+
+  it('stamps ts via options.now when not provided', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      const fixedDate = new Date('2026-04-30T08:00:00Z');
+      await svc.appendItemFate(
+        paths,
+        {
+          item_text: 'foo',
+          item_kind: 'learning',
+          source_path: 'resources/meetings/x.md',
+          fate: 'skipped',
+          reason: 'matched_completed',
+          confidence: 0.9,
+          importance_at_extraction: 'light',
+        },
+        { now: fixedDate },
+      );
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const record = JSON.parse(content.trim());
+      assert.strictEqual(record.ts, '2026-04-30T08:00:00Z');
+    });
+  });
+
+  it('survives 10 parallel writers × 100 events without malformed lines (AC0.5)', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      const writers = 10;
+      const eventsPerWriter = 100;
+      const work: Promise<void>[] = [];
+      for (let w = 0; w < writers; w++) {
+        for (let i = 0; i < eventsPerWriter; i++) {
+          work.push(
+            svc.appendItemFate(paths, {
+              item_text: `writer-${w}-event-${i}`.padEnd(150, 'x'),
+              item_kind: 'action_item',
+              source_path: `resources/meetings/w${w}.md`,
+              fate: 'skipped',
+              reason: 'duplicate',
+              confidence: 0.5,
+              importance_at_extraction: 'normal',
+            }),
+          );
+        }
+      }
+      await Promise.all(work);
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const lines = content.split('\n').filter((l) => l.length > 0);
+      assert.strictEqual(lines.length, writers * eventsPerWriter, 'all events must land');
+
+      const seen = new Set<string>();
+      for (const line of lines) {
+        let record: { item_text: string; type: string; fate: string };
+        try {
+          record = JSON.parse(line);
+        } catch (err) {
+          assert.fail(`torn JSON line: ${line.slice(0, 80)}…`);
+        }
+        assert.strictEqual(record.type, 'item_fate', 'every line is a typed event');
+        seen.add(record.item_text);
+      }
+      // Every (writer,event) pair must appear exactly once.
+      for (let w = 0; w < writers; w++) {
+        for (let i = 0; i < eventsPerWriter; i++) {
+          const expected = `writer-${w}-event-${i}`.padEnd(150, 'x');
+          assert.ok(seen.has(expected), `missing event ${w}/${i}`);
+        }
+      }
+    });
+  });
+
+  it('falls back to read-modify-write when adapter has no append primitive', async () => {
+    const store = new Map<string, string>();
+    const fakeStorage = {
+      read: async (p: string) => store.get(p) ?? null,
+      write: async (p: string, c: string) => {
+        store.set(p, c);
+      },
+      exists: async () => false,
+      delete: async () => {},
+      list: async () => [],
+      listSubdirectories: async () => [],
+      mkdir: async () => {},
+      getModified: async () => null,
+    };
+    const svc = new MemoryLogService(fakeStorage);
+    const paths = { memory: '/.arete/memory' } as WorkspacePaths;
+    await svc.appendItemFate(paths, {
+      item_text: 'a',
+      item_kind: 'action_item',
+      source_path: 'm.md',
+      fate: 'approved',
+      reason: null,
+      confidence: null,
+      importance_at_extraction: null,
+    });
+    await svc.appendItemFate(paths, {
+      item_text: 'b',
+      item_kind: 'decision',
+      source_path: 'm.md',
+      fate: 'dismissed',
+      reason: 'duplicate',
+      confidence: null,
+      importance_at_extraction: null,
+    });
+    const content = store.get('/.arete/memory/item-fates.jsonl')!;
+    const lines = content.split('\n').filter((l) => l.length > 0);
+    assert.strictEqual(lines.length, 2);
+    const records = lines.map((l) => JSON.parse(l));
+    assert.strictEqual(records[0].item_text, 'a');
+    assert.strictEqual(records[1].item_text, 'b');
+  });
+});
+
 describe('FileStorageAdapter.append', () => {
   it('is atomic for concurrent appenders of small lines', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'arete-append-'));

@@ -9,6 +9,8 @@ import {
   hasNegationMarkers,
   calculateSpeakingRatio,
   inferUrgency,
+  buildSkippedItemFateEvents,
+  buildDismissedItemFateEvents,
 } from '../../src/services/meeting-processing.js';
 import type { FilteredItem, ProcessedMeetingResult } from '../../src/services/meeting-processing.js';
 import { normalizeForJaccard, jaccardSimilarity } from '../../src/services/meeting-extraction.js';
@@ -2396,5 +2398,127 @@ describe('applyReconciliationDecision', () => {
 
     assert.equal(processed.filteredItems.length, 0);
     assert.equal(silentlyMerged.learnings, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSkippedItemFateEvents — Phase 0 instrumentation
+// ---------------------------------------------------------------------------
+
+describe('buildSkippedItemFateEvents', () => {
+  function processedWith(items: FilteredItem[], status: Record<string, 'approved' | 'pending' | 'skipped'>, source: Record<string, 'ai' | 'dedup' | 'reconciled' | 'existing-task' | 'slack-resolved' | 'manual-edit'>, matched: Record<string, string> = {}): ProcessedMeetingResult {
+    return {
+      filteredItems: items,
+      stagedItemStatus: status,
+      stagedItemConfidence: items.reduce<Record<string, number>>((acc, i) => {
+        acc[i.id] = i.confidence;
+        return acc;
+      }, {}),
+      stagedItemSource: source,
+      stagedItemOwner: {},
+      stagedItemMatchedText: matched,
+    };
+  }
+
+  it('emits one event per skipped item with reason derived from source', () => {
+    const processed = processedWith(
+      [
+        { id: 'ai_001', text: 'a1', type: 'action', confidence: 0.7 },
+        { id: 'ai_002', text: 'a2', type: 'action', confidence: 0.8 },
+        { id: 'ai_003', text: 'a3', type: 'action', confidence: 0.9 },
+        { id: 'de_001', text: 'd1', type: 'decision', confidence: 0.95 },
+      ],
+      {
+        ai_001: 'skipped',
+        ai_002: 'skipped',
+        ai_003: 'pending',
+        de_001: 'approved',
+      },
+      {
+        ai_001: 'reconciled',
+        ai_002: 'existing-task',
+        ai_003: 'ai',
+        de_001: 'ai',
+      },
+      // ai_001 has matchedText (matched a completed task), ai_002 has matchedText too
+      { ai_001: 'send report', ai_002: 'open task' },
+    );
+
+    const events = buildSkippedItemFateEvents(processed, '/m/x.md', 'normal');
+    assert.strictEqual(events.length, 2);
+    const byId = Object.fromEntries(events.map((e) => [e.item_text, e]));
+    assert.strictEqual(byId.a1.fate, 'skipped');
+    assert.strictEqual(byId.a1.reason, 'matched_completed');
+    assert.strictEqual(byId.a1.item_kind, 'action_item');
+    assert.strictEqual(byId.a1.source_path, '/m/x.md');
+    assert.strictEqual(byId.a1.confidence, 0.7);
+    assert.strictEqual(byId.a1.importance_at_extraction, 'normal');
+    assert.strictEqual(byId.a2.reason, 'matched_open_task');
+  });
+
+  it('emits reason=duplicate for source=reconciled without matchedText (cross-meeting dup)', () => {
+    const processed = processedWith(
+      [{ id: 'ai_001', text: 'cross-meeting dup', type: 'action', confidence: 0.6 }],
+      { ai_001: 'skipped' },
+      { ai_001: 'reconciled' },
+      // no matchedText
+    );
+    const events = buildSkippedItemFateEvents(processed, '/m/x.md', null);
+    assert.strictEqual(events.length, 1);
+    assert.strictEqual(events[0].reason, 'duplicate');
+    assert.strictEqual(events[0].importance_at_extraction, null);
+  });
+
+  it('emits reason=null for unrecognized sources', () => {
+    const processed = processedWith(
+      [{ id: 'ai_001', text: 'manual', type: 'action', confidence: 0.5 }],
+      { ai_001: 'skipped' },
+      { ai_001: 'manual-edit' },
+    );
+    const events = buildSkippedItemFateEvents(processed, '/m/x.md', 'light');
+    assert.strictEqual(events[0].reason, null);
+  });
+
+  it('returns empty when no items are skipped', () => {
+    const processed = processedWith(
+      [{ id: 'ai_001', text: 'kept', type: 'action', confidence: 0.95 }],
+      { ai_001: 'approved' },
+      { ai_001: 'ai' },
+    );
+    assert.strictEqual(buildSkippedItemFateEvents(processed, '/m/x.md', 'normal').length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDismissedItemFateEvents — Phase 0 instrumentation
+// ---------------------------------------------------------------------------
+
+describe('buildDismissedItemFateEvents', () => {
+  it('emits one fate=dismissed event per silently-merged item', () => {
+    const events = buildDismissedItemFateEvents(
+      [
+        { item_text: 'd-old', item_kind: 'decision', confidence: 0.9, reason: 'duplicate' },
+        { item_text: 'l-old', item_kind: 'learning', confidence: 0.85, reason: 'matched_completed' },
+      ],
+      '/m/x.md',
+      'important',
+    );
+    assert.strictEqual(events.length, 2);
+    assert.strictEqual(events[0].fate, 'dismissed');
+    assert.strictEqual(events[0].item_kind, 'decision');
+    assert.strictEqual(events[0].reason, 'duplicate');
+    assert.strictEqual(events[1].item_kind, 'learning');
+    assert.strictEqual(events[1].reason, 'matched_completed');
+    assert.strictEqual(events[1].importance_at_extraction, 'important');
+  });
+
+  it('defaults reason to "duplicate" when omitted', () => {
+    const events = buildDismissedItemFateEvents(
+      [{ item_text: 'd', item_kind: 'decision' }],
+      '/m/x.md',
+      null,
+    );
+    assert.strictEqual(events[0].reason, 'duplicate');
+    assert.strictEqual(events[0].confidence, null);
   });
 });
