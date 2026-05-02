@@ -7,12 +7,12 @@
  * 'slack-resolved' once they ship), causing UI badges to disappear.
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseStagedItemSource, getMeeting } from '../../src/services/workspace.js';
+import { parseStagedItemSource, getMeeting, approveMeeting } from '../../src/services/workspace.js';
 
 describe('parseStagedItemSource', () => {
   it('preserves all five valid ItemSource values through round-trip', () => {
@@ -213,5 +213,174 @@ Some content.
     // Matched text pairs with the source attribution
     assert.equal(byId.get('ai_002')?.matchedText, 'Already completed task from week.md');
     assert.equal(byId.get('ai_003')?.matchedText, 'Open task already tracked');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 0 instrumentation: backend approveMeeting wires onApproved → item-fates
+// ---------------------------------------------------------------------------
+// John uses the web review UI in his daily flow (per user_role.md). Without
+// this observer, AC0.6's 14-day baseline silently skews CLI-only. This test
+// asserts the backend approve path emits one fate=approved event per
+// committed item, mirroring the CLI integration test.
+
+interface FateRecord {
+  type: string;
+  ts: string;
+  item_text: string;
+  item_kind: 'action_item' | 'decision' | 'learning';
+  source_path: string;
+  fate: 'approved' | 'dismissed' | 'skipped' | 'deferred';
+  reason: string | null;
+  confidence: number | null;
+  importance_at_extraction: string | null;
+}
+
+function readFates(workspaceRoot: string): FateRecord[] {
+  const path = join(workspaceRoot, '.arete', 'memory', 'item-fates.jsonl');
+  if (!existsSync(path)) return [];
+  const content = readFileSync(path, 'utf8');
+  return content
+    .split('\n')
+    .filter((l) => l.length > 0)
+    .map((l) => JSON.parse(l) as FateRecord);
+}
+
+describe('approveMeeting — Phase 0 item-fate instrumentation', () => {
+  let workspaceRoot: string;
+
+  beforeEach(() => {
+    workspaceRoot = mkdtempSync(join(tmpdir(), 'arete-backend-fate-'));
+    mkdirSync(join(workspaceRoot, 'resources', 'meetings'), { recursive: true });
+    mkdirSync(join(workspaceRoot, '.arete', 'memory', 'items'), { recursive: true });
+    mkdirSync(join(workspaceRoot, 'people', 'internal'), { recursive: true });
+    writeFileSync(
+      join(workspaceRoot, 'arete.yaml'),
+      'version: 1\nqmd_collection: test-arete\n',
+    );
+  });
+
+  afterEach(() => {
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it('writes one item_fate event per approved item when invoked via the backend', async () => {
+    const slug = '2026-04-22-backend-approve';
+    const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${slug}.md`);
+    const meetingContent = `---
+title: "Backend Approve"
+date: "2026-04-22"
+status: processed
+importance: normal
+attendees:
+  - name: "Alice Smith"
+    email: "alice@example.com"
+staged_item_status:
+  ai_001: approved
+  de_001: approved
+  le_001: approved
+staged_item_source:
+  ai_001: ai
+  de_001: ai
+  le_001: ai
+staged_item_confidence:
+  ai_001: 0.91
+  de_001: 0.95
+  le_001: 0.7
+---
+
+## Summary
+Backend approval test.
+
+## Staged Action Items
+- ai_001: Send the draft to Alice
+
+## Staged Decisions
+- de_001: Adopt TypeScript for new services
+
+## Staged Learnings
+- le_001: Integration tests catch more bugs
+
+## Transcript
+Test transcript.
+`;
+    writeFileSync(meetingPath, meetingContent);
+
+    await approveMeeting(workspaceRoot, slug);
+
+    const fates = readFates(workspaceRoot);
+    assert.equal(fates.length, 3, 'one fate per approved item (1 action + 1 decision + 1 learning)');
+
+    for (const fate of fates) {
+      assert.equal(fate.type, 'item_fate');
+      assert.equal(fate.fate, 'approved');
+      assert.equal(fate.reason, null);
+      assert.equal(fate.importance_at_extraction, 'normal');
+      assert.match(fate.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      assert.ok(fate.source_path.endsWith(`${slug}.md`));
+    }
+
+    const kinds = fates.map((f) => f.item_kind).sort();
+    assert.deepEqual(kinds, ['action_item', 'decision', 'learning']);
+
+    const decision = fates.find((f) => f.item_kind === 'decision');
+    assert.ok(decision);
+    assert.equal(decision.confidence, 0.95);
+    assert.match(decision.item_text, /Adopt TypeScript/);
+
+    const learning = fates.find((f) => f.item_kind === 'learning');
+    assert.ok(learning);
+    assert.equal(learning.confidence, 0.7);
+  });
+
+  it('emits no fates for items that were not approved', async () => {
+    const slug = '2026-04-22-mixed-status';
+    const meetingPath = join(workspaceRoot, 'resources', 'meetings', `${slug}.md`);
+    const meetingContent = `---
+title: "Mixed Status"
+date: "2026-04-22"
+status: processed
+importance: light
+attendees:
+  - name: "Bob Jones"
+    email: "bob@example.com"
+staged_item_status:
+  ai_001: skipped
+  de_001: approved
+  le_001: pending
+staged_item_source:
+  ai_001: ai
+  de_001: ai
+  le_001: ai
+staged_item_confidence:
+  ai_001: 0.5
+  de_001: 0.8
+  le_001: 0.6
+---
+
+## Summary
+Test.
+
+## Staged Action Items
+- ai_001: Skipped action
+
+## Staged Decisions
+- de_001: Approved decision only
+
+## Staged Learnings
+- le_001: Pending learning
+
+## Transcript
+Test.
+`;
+    writeFileSync(meetingPath, meetingContent);
+
+    await approveMeeting(workspaceRoot, slug);
+
+    const fates = readFates(workspaceRoot);
+    assert.equal(fates.length, 1, 'only the single approved decision should produce a fate');
+    assert.equal(fates[0]!.item_kind, 'decision');
+    assert.equal(fates[0]!.fate, 'approved');
+    assert.equal(fates[0]!.importance_at_extraction, 'light');
   });
 });

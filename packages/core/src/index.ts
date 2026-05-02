@@ -101,7 +101,12 @@ export {
   writeItemStatusToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
-export type { WriteItemStatusOptions } from './integrations/staged-items.js';
+export type {
+  WriteItemStatusOptions,
+  ApprovedItemRecord,
+  ApprovedItemObserver,
+  CommitApprovedItemsOptions,
+} from './integrations/staged-items.js';
 export {
   saveConversationFile,
   conversationFilename,
@@ -182,6 +187,13 @@ export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detect
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
+export type {
+  ItemFate,
+  ItemFateEvent,
+  ItemFateImportance,
+  ItemFateKind,
+  AppendItemFateOptions,
+} from './services/memory-log.js';
 export {
   acquireSeedLock,
   readSeedLock,

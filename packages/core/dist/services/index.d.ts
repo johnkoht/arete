@@ -19,8 +19,8 @@ export { buildMeetingExtractionPrompt, buildLightExtractionPrompt, parseMeetingE
 export type { MeetingIntelligence, ActionItem, ActionItemDirection, MeetingExtractionResult, ValidationWarning, LLMCallFn as MeetingLLMCallFn, PriorItem, ExtractionMode, CategoryLimits, } from './meeting-extraction.js';
 export { parseActionItemsFromMeeting } from './meeting-parser.js';
 export type { ParsedActionItem } from './meeting-parser.js';
-export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, } from './meeting-processing.js';
-export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, UrgencyBucket, } from './meeting-processing.js';
+export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from './meeting-processing.js';
+export type { ProcessedMeetingResult, ProcessingOptions, FilteredItem, ItemSource, ItemStatus, ItemOwnerMeta, UrgencyBucket, MeetingItemFateInput, } from './meeting-processing.js';
 export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview } from './meeting-reconciliation.js';
 export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
 export { detectCrossPersonPatterns } from './patterns.js';

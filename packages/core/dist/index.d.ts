@@ -19,7 +19,7 @@ export { getCalendarProvider, type BusyBlock, type FreeBusyResult, type FreeBusy
 export { saveMeetingFile, meetingFilename, findMatchingAgenda, findMatchingAgendaPath, findMatchingCalendarEvent, inferMeetingImportance, } from './integrations/meetings.js';
 export type { MeetingForSave, AgendaMatchResult, Importance } from './integrations/meetings.js';
 export { generateItemId, parseStagedSections, parseStagedItemStatus, parseStagedItemEdits, parseStagedItemOwner, writeItemStatusToFile, commitApprovedItems, } from './integrations/staged-items.js';
-export type { WriteItemStatusOptions } from './integrations/staged-items.js';
+export type { WriteItemStatusOptions, ApprovedItemRecord, ApprovedItemObserver, CommitApprovedItemsOptions, } from './integrations/staged-items.js';
 export { saveConversationFile, conversationFilename, updateConversationFrontmatter, parseConversation, extractInsights, } from './integrations/conversations/index.js';
 export type { ConversationForSave, ConversationInsights, ConversationProvenance, ParsedConversation, ParsedMessage, LLMCallFn, } from './integrations/conversations/index.js';
 export { createServices } from './factory.js';
@@ -38,6 +38,7 @@ export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detect
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
+export type { ItemFate, ItemFateEvent, ItemFateImportance, ItemFateKind, AppendItemFateOptions, } from './services/memory-log.js';
 export { acquireSeedLock, readSeedLock, breakSeedLock, SeedLockHeldError, } from './services/seed-lock.js';
 export type { SeedLockInfo } from './services/seed-lock.js';
 export { formatEvent as formatMemoryLogEvent, parseEvent as parseMemoryLogEvent, parseLog as parseMemoryLog, appendEvent as appendMemoryLogEvent, nowIsoSeconds, } from './utils/memory-log.js';
