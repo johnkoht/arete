@@ -698,4 +698,81 @@ export function inferUrgency(text) {
     // Default: should (per Harvester requirement - don't block on unclear urgency)
     return 'should';
 }
+const FILTERED_KIND_TO_FATE_KIND = {
+    action: 'action_item',
+    decision: 'decision',
+    learning: 'learning',
+};
+const EXTRACTED_KIND_TO_FATE_KIND = {
+    action: 'action_item',
+    decision: 'decision',
+    learning: 'learning',
+};
+/**
+ * Map a `stagedItemSource` value to the fate event's `reason` taxonomy.
+ *
+ * - `reconciled` with matchedText present → `matched_completed` (matched a
+ *   completed task in week.md/scratchpad.md).
+ * - `reconciled` without matchedText → `duplicate` (cross-meeting dedup
+ *   flipped the item to skipped via `applyReconciliationDecision`).
+ * - `existing-task` → `matched_open_task`.
+ * - `slack-resolved` → `slack_resolved`.
+ * - everything else → `null` (no specific reason).
+ */
+function reasonForSkipped(source, hasMatchedText) {
+    if (source === 'reconciled')
+        return hasMatchedText ? 'matched_completed' : 'duplicate';
+    if (source === 'existing-task')
+        return 'matched_open_task';
+    if (source === 'slack-resolved')
+        return 'slack_resolved';
+    return null;
+}
+/**
+ * Build item-fate events for items that landed `status: 'skipped'` in the
+ * processed result. Pure — caller invokes `appendItemFate` for each.
+ *
+ * Excludes items that were dismissed via silent merge (decisions/learnings
+ * removed from `filteredItems` by `applyReconciliationDecision`); those are
+ * captured separately by `buildDismissedItemFateEvents`.
+ */
+export function buildSkippedItemFateEvents(processed, sourcePath, importance) {
+    const out = [];
+    const matchedText = processed.stagedItemMatchedText ?? {};
+    for (const item of processed.filteredItems) {
+        const status = processed.stagedItemStatus[item.id];
+        if (status !== 'skipped')
+            continue;
+        const source = processed.stagedItemSource[item.id];
+        const reason = reasonForSkipped(source, matchedText[item.id] !== undefined);
+        out.push({
+            item_text: item.text,
+            item_kind: FILTERED_KIND_TO_FATE_KIND[item.type],
+            source_path: sourcePath,
+            fate: 'skipped',
+            reason,
+            confidence: processed.stagedItemConfidence[item.id] ?? null,
+            importance_at_extraction: importance,
+        });
+    }
+    return out;
+}
+/**
+ * Build item-fate events for items dismissed via silent merge. Pass in the
+ * snapshot list of dismissed items collected from `applyReconciliationDecision`
+ * call sites (decisions/learnings whose duplicates are already in committed
+ * memory). For action items, the reconciliation flips status to 'skipped'
+ * and they're covered by `buildSkippedItemFateEvents` instead.
+ */
+export function buildDismissedItemFateEvents(dismissed, sourcePath, importance) {
+    return dismissed.map((d) => ({
+        item_text: d.item_text,
+        item_kind: EXTRACTED_KIND_TO_FATE_KIND[d.item_kind],
+        source_path: sourcePath,
+        fate: 'dismissed',
+        reason: d.reason ?? 'duplicate',
+        confidence: d.confidence ?? null,
+        importance_at_extraction: importance,
+    }));
+}
 //# sourceMappingURL=meeting-processing.js.map

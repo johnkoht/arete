@@ -231,4 +231,41 @@ export type UrgencyBucket = 'must' | 'should' | 'anytime';
  * ```
  */
 export declare function inferUrgency(text: string): UrgencyBucket;
+/**
+ * Type alias for the slice of `MemoryLogService.appendItemFate` input that
+ * `meeting-processing` produces. Decoupled from the service module to keep
+ * core processing storage-free; the CLI/backend caller plumbs these into
+ * `services.memoryLog.appendItemFate`.
+ */
+export interface MeetingItemFateInput {
+    item_text: string;
+    item_kind: 'action_item' | 'decision' | 'learning';
+    source_path: string;
+    fate: 'approved' | 'dismissed' | 'skipped' | 'deferred';
+    reason: string | null;
+    confidence: number | null;
+    importance_at_extraction: 'light' | 'normal' | 'important' | 'skip' | null;
+}
+/**
+ * Build item-fate events for items that landed `status: 'skipped'` in the
+ * processed result. Pure — caller invokes `appendItemFate` for each.
+ *
+ * Excludes items that were dismissed via silent merge (decisions/learnings
+ * removed from `filteredItems` by `applyReconciliationDecision`); those are
+ * captured separately by `buildDismissedItemFateEvents`.
+ */
+export declare function buildSkippedItemFateEvents(processed: ProcessedMeetingResult, sourcePath: string, importance: 'light' | 'normal' | 'important' | 'skip' | null): MeetingItemFateInput[];
+/**
+ * Build item-fate events for items dismissed via silent merge. Pass in the
+ * snapshot list of dismissed items collected from `applyReconciliationDecision`
+ * call sites (decisions/learnings whose duplicates are already in committed
+ * memory). For action items, the reconciliation flips status to 'skipped'
+ * and they're covered by `buildSkippedItemFateEvents` instead.
+ */
+export declare function buildDismissedItemFateEvents(dismissed: Array<{
+    item_text: string;
+    item_kind: ExtractedItemType;
+    confidence?: number;
+    reason?: string;
+}>, sourcePath: string, importance: 'light' | 'normal' | 'important' | 'skip' | null): MeetingItemFateInput[];
 //# sourceMappingURL=meeting-processing.d.ts.map

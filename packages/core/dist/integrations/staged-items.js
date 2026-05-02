@@ -301,9 +301,11 @@ function generateEntryTitle(text) {
     const truncated = candidate.slice(0, 77).replace(/\s+\S*$/, '');
     return truncated + '...';
 }
-// ---------------------------------------------------------------------------
-// commitApprovedItems
-// ---------------------------------------------------------------------------
+const STAGED_TYPE_TO_FATE_KIND = {
+    ai: 'action_item',
+    de: 'decision',
+    le: 'learning',
+};
 /**
  * Commit all approved staged items:
  *
@@ -316,8 +318,9 @@ function generateEntryTitle(text) {
  * 5. Clear `staged_item_status` and `staged_item_edits` from frontmatter
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
+ * 8. (Phase 0) Fire `options.onApproved` once per committed item.
  */
-export async function commitApprovedItems(storage, filePath, memoryDir) {
+export async function commitApprovedItems(storage, filePath, memoryDir, options = {}) {
     const raw = await storage.read(filePath);
     if (raw === null)
         throw new Error(`Meeting file not found: ${filePath}`);
@@ -328,6 +331,9 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     const statusMap = data['staged_item_status'] ?? {};
     const editsMap = data['staged_item_edits'] ?? {};
     const ownerMap = parseStagedItemOwner(raw);
+    // Snapshot confidence map BEFORE the frontmatter cleanup deletes it; the
+    // observer needs it for the fate event.
+    const confidenceMap = data['staged_item_confidence'] ?? {};
     const approvedIds = new Set(Object.entries(statusMap)
         .filter(([, v]) => v === 'approved')
         .map(([k]) => k));
@@ -411,6 +417,37 @@ export async function commitApprovedItems(storage, filePath, memoryDir) {
     data['approved_at'] = new Date().toISOString();
     // ── 7. Write cleaned file ─────────────────────────────────────────────────
     await storage.write(filePath, serializeFrontmatter(data, cleanedBody));
+    // ── 8. Phase 0 instrumentation — fire onApproved per committed item ──────
+    if (options.onApproved !== undefined) {
+        const approvedRecords = [];
+        for (const item of approvedActionItems) {
+            approvedRecords.push({
+                id: item.id,
+                kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+                text: item.text,
+                confidence: confidenceMap[item.id] ?? null,
+            });
+        }
+        for (const item of approvedDecisions) {
+            approvedRecords.push({
+                id: item.id,
+                kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+                text: item.text,
+                confidence: confidenceMap[item.id] ?? null,
+            });
+        }
+        for (const item of approvedLearnings) {
+            approvedRecords.push({
+                id: item.id,
+                kind: STAGED_TYPE_TO_FATE_KIND[item.type],
+                text: item.text,
+                confidence: confidenceMap[item.id] ?? null,
+            });
+        }
+        for (const record of approvedRecords) {
+            await options.onApproved(record);
+        }
+    }
 }
 // ---------------------------------------------------------------------------
 // Internal helpers
