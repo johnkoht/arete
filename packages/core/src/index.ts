@@ -101,7 +101,12 @@ export {
   writeItemStatusToFile,
   commitApprovedItems,
 } from './integrations/staged-items.js';
-export type { WriteItemStatusOptions } from './integrations/staged-items.js';
+export type {
+  WriteItemStatusOptions,
+  ApprovedItemRecord,
+  ApprovedItemObserver,
+  CommitApprovedItemsOptions,
+} from './integrations/staged-items.js';
 export {
   saveConversationFile,
   conversationFilename,
