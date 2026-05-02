@@ -22,6 +22,8 @@ intelligence:
 
 # Daily Winddown Skill
 
+**Phase 0 instrumentation** — at skill start, run `arete events log winddown --event start`. At skill completion (after the final report in Phase 4c), run `arete events log winddown --event end`. These writes append a single grammar-clean event line each to `.arete/memory/log.md` via `MemoryLogService.append`; downstream tooling reads them to compute median/p90 winddown duration. Best-effort — if the CLI fails (e.g., not in a workspace), continue the skill anyway.
+
 End-of-day reconciliation using **subagent orchestration** for reliability and parallelism. The orchestrator spawns focused subagents for independent work (recording pulls, per-meeting processing), then merges results, handles user approvals, and writes verified outputs.
 
 ## When to Use
@@ -80,6 +82,14 @@ ORCHESTRATOR (you)
 ### Phase 1: Gather
 
 This phase runs in the orchestrator. Pull recordings, read local state, merge agendas, and process inbox.
+
+#### 1.0 Log winddown start (Phase 0 instrumentation)
+
+```bash
+arete events log winddown --event start
+```
+
+Best-effort. If this fails, continue without blocking.
 
 #### 1a. Pull Recordings
 
@@ -951,6 +961,16 @@ Compile the final report:
 ### Notes
 - {any errors, skipped steps, or issues}
 ```
+
+#### 4d. Log winddown end (Phase 0 instrumentation)
+
+After the final report is rendered:
+
+```bash
+arete events log winddown --event end
+```
+
+Best-effort. If this fails, do not retry — the start event already established a timestamped boundary; downstream tooling treats a missing end as an outlier rather than failure.
 
 ---
 
