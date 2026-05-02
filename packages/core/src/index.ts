@@ -182,6 +182,13 @@ export type { DetectTopicsOptions, DetectedTopic } from './services/topic-detect
 export { MemoryIndexService, renderMemoryIndex } from './services/memory-index.js';
 export type { MemoryIndexData, AreaIndexEntry } from './services/memory-index.js';
 export { MemoryLogService } from './services/memory-log.js';
+export type {
+  ItemFate,
+  ItemFateEvent,
+  ItemFateImportance,
+  ItemFateKind,
+  AppendItemFateOptions,
+} from './services/memory-log.js';
 export {
   acquireSeedLock,
   readSeedLock,
