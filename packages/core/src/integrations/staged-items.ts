@@ -414,8 +414,11 @@ function generateEntryTitle(text: string): string {
  * writes here without `commitApprovedItems` itself owning a storage-level
  * dependency on `MemoryLogService`.
  *
- * Failure inside the callback is swallowed by the caller's contract; this
- * function does not attempt error handling beyond awaiting the promise.
+ * Errors thrown from the callback are caught internally by
+ * `commitApprovedItems` and logged to stderr; the commit always completes
+ * normally even if instrumentation fails. Callers may still wrap their
+ * observers in try/catch as defense in depth, but it is no longer a
+ * correctness requirement.
  */
 export type ApprovedItemObserver = (item: ApprovedItemRecord) => Promise<void>;
 
@@ -454,6 +457,8 @@ const STAGED_TYPE_TO_FATE_KIND: Record<StagedItem['type'], ApprovedItemRecord['k
  * 6. Set `status: 'approved'` and `approved_at: <ISO timestamp>` in frontmatter
  * 7. Write the cleaned meeting file back
  * 8. (Phase 0) Fire `options.onApproved` once per committed item.
+ *    Observer failures are caught internally and logged to stderr — the
+ *    commit always succeeds even if instrumentation throws.
  */
 export async function commitApprovedItems(
   storage: StorageAdapter,
@@ -601,7 +606,14 @@ export async function commitApprovedItems(
       });
     }
     for (const record of approvedRecords) {
-      await options.onApproved(record);
+      try {
+        await options.onApproved(record);
+      } catch (err) {
+        // Phase 0 instrumentation must never break the commit. A future
+        // caller may forget to wrap the observer, so we trap here.
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[commitApprovedItems] onApproved observer failed for ${record.kind} ${record.id}: ${msg}\n`);
+      }
     }
   }
 }
