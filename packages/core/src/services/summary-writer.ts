@@ -155,6 +155,16 @@ export function summaryPathForInbox(workspaceRoot: string, input: { sourcePath: 
   return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'inbox', `${base}.md`);
 }
 
+/**
+ * Derive the summary filename for a slack thread. Convention:
+ * `.arete/memory/summaries/slack/<thread-slug>.md` where thread-slug is
+ * a sanitized thread id (channel+ts).
+ */
+export function summaryPathForSlack(workspaceRoot: string, input: { threadId: string }): string {
+  const safe = input.threadId.replace(/[^a-zA-Z0-9._-]+/g, '-');
+  return join(workspaceRoot, '.arete', 'memory', SUMMARIES_DIR, 'slack', `${safe}.md`);
+}
+
 // ---------------------------------------------------------------------------
 // Idempotency check
 // ---------------------------------------------------------------------------

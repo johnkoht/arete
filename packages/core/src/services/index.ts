@@ -195,6 +195,21 @@ export type {
   ScoredTask,
 } from './task-scoring.js';
 
+// Slack-thread substantial heuristic (Phase 1 §a.3 / MC3)
+export {
+  evaluateSlackThread,
+  formatSlackEvalLogLine,
+  slackSummariesEnabled,
+  DEFAULT_SLACK_MESSAGE_THRESHOLD,
+  DEFAULT_SLACK_PARTICIPANT_THRESHOLD,
+} from './slack-heuristic.js';
+export type {
+  SlackThreadEvalInput,
+  SlackHeuristicTrigger,
+  SlackHeuristicConfig,
+  SlackHeuristicResult,
+} from './slack-heuristic.js';
+
 // Org entity auto-detection + refresh (Phase 1 §b)
 export {
   detectOrgsFromMeetings,
