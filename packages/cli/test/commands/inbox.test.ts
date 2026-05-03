@@ -269,6 +269,31 @@ describe('inbox add command', () => {
     });
   });
 
+  describe('summary writer integration (Phase 1 §a.2)', () => {
+    it('JSON output includes summaryPath/summaryWritten fields (skipped when no AI)', () => {
+      const output = runCli([
+        'inbox', 'add',
+        '--title', 'Test Note',
+        '--body', 'Body content',
+        '--skip-qmd', '--json',
+      ], { cwd: tmpDir });
+
+      const parsed = JSON.parse(output) as {
+        success: boolean;
+        summaryPath: string | null;
+        summaryWritten: boolean;
+      };
+      assert.equal(parsed.success, true);
+      // AI is not configured in test workspaces — writer self-skips.
+      assert.equal(parsed.summaryWritten, false);
+      // Field is present (null when no AI / no summary written).
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(parsed, 'summaryPath'),
+        'JSON shape should include summaryPath field',
+      );
+    });
+  });
+
   describe('mode validation', () => {
     it('rejects --url combined with --file', () => {
       const srcFile = join(tmpDir, 'test.txt');
