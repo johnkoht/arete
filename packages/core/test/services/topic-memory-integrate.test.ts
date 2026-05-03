@@ -641,4 +641,62 @@ describe('TopicMemoryService.integrateSource', () => {
     );
     assert.strictEqual(second.decision, 'skipped-already-integrated');
   });
+
+  // Phase 1 §c — llmContent override (summary-first integration)
+  it('llmContent overrides newSource.content in the LLM prompt', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    let promptSeen = '';
+    const callLLM = async (prompt: string) => {
+      promptSeen = prompt;
+      return JSON.stringify({
+        updated_sections: { 'Current state': 'updated via summary' },
+        new_change_log_entry: 'integrated summary input',
+      });
+    };
+    await svc.integrateSource(
+      'topic',
+      samplePage(),
+      { path: 'resources/meetings/f.md', date: '2026-04-22', content: 'RAW TRANSCRIPT' },
+      {
+        today: TODAY,
+        callLLM,
+        llmContent: 'CURATED SUMMARY BODY',
+      },
+    );
+    assert.match(promptSeen, /CURATED SUMMARY BODY/);
+    assert.doesNotMatch(promptSeen, /RAW TRANSCRIPT/);
+  });
+
+  it('llmContent does NOT change the idempotency hash (uses newSource.content)', async () => {
+    const svc = new TopicMemoryService(nullStorage);
+    const content = 'transcript-body';
+    const callLLM = async () =>
+      JSON.stringify({
+        updated_sections: { 'Current state': 'x' },
+        new_change_log_entry: 'x',
+      });
+    // First integration — uses transcript content for the hash, summary
+    // body for the LLM input.
+    const first = await svc.integrateSource(
+      'topic',
+      null,
+      { path: 'resources/meetings/a.md', date: '2026-04-22', content },
+      { today: TODAY, callLLM, llmContent: 'summary v1' },
+    );
+    // Second integration — different summary body but same transcript.
+    // Should still match the hash → skipped.
+    const second = await svc.integrateSource(
+      'topic',
+      first.page,
+      { path: 'resources/meetings/a.md', date: '2026-04-22', content },
+      {
+        today: TODAY,
+        callLLM: async () => {
+          throw new Error('should not call when hash matches');
+        },
+        llmContent: 'summary v2 (rewritten)',
+      },
+    );
+    assert.strictEqual(second.decision, 'skipped-already-integrated');
+  });
 });
