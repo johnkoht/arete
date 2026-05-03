@@ -195,6 +195,24 @@ export type {
   ScoredTask,
 } from './task-scoring.js';
 
+// Org entity auto-detection + refresh (Phase 1 §b)
+export {
+  detectOrgsFromMeetings,
+  refreshOrgs,
+  createOrgEntityManual,
+  renderOrgAutoSection,
+  slugifyDomain,
+  DEFAULT_INTERNAL_DOMAINS,
+  DEFAULT_DETECTION_WINDOW_DAYS,
+  DEFAULT_DETECTION_MIN_MEETINGS,
+} from './org-entity.js';
+export type {
+  DetectOrgsOptions,
+  DetectedOrg,
+  RefreshOrgsOptions,
+  RefreshOrgsResult,
+} from './org-entity.js';
+
 // Summary writers (Phase 1 wiki expansion)
 export {
   writeMeetingSummary,
