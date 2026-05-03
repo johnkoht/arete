@@ -194,3 +194,26 @@ export type {
   ScoreBreakdown,
   ScoredTask,
 } from './task-scoring.js';
+
+// Summary writers (Phase 1 wiki expansion)
+export {
+  writeMeetingSummary,
+  writeInboxSummary,
+  readMeetingSummary,
+  buildMeetingSummaryPrompt,
+  buildInboxSummaryPrompt,
+  parseMeetingSummaryResponse,
+  parseInboxSummaryResponse,
+  summaryAlreadyFresh,
+  summaryPathForMeeting,
+  summaryPathForInbox,
+  hashSummarySource,
+  resolveMeetingSourcePath,
+  SUMMARY_EXTRACTION_VERSION,
+} from './summary-writer.js';
+export type {
+  MeetingSummaryInput,
+  InboxSummaryInput,
+  WriteSummaryDeps,
+  WriteSummaryResult,
+} from './summary-writer.js';

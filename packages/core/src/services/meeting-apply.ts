@@ -8,11 +8,12 @@
  * Used by `arete meeting apply <file>` CLI command.
  */
 
-import { resolve, dirname, join } from 'path';
+import { resolve, dirname, join, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type { StorageAdapter } from '../storage/adapter.js';
 import type { MeetingIntelligence, MeetingExtractionResult } from './meeting-extraction.js';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
+import { writeMeetingSummary, type MeetingSummaryInput } from './summary-writer.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +35,13 @@ export interface ApplyMeetingOptions {
    * be fast and will run `arete memory refresh` later.
    */
   skipTopicAlias?: boolean;
+  /**
+   * Skip the post-apply summary writer (Phase 1 wiki expansion §a.1).
+   * Use during reprocessing where the source body hasn't changed and
+   * the existing summary is fresh; the writer also self-skips on
+   * content_hash match, so this flag is mostly a fast-path.
+   */
+  skipSummary?: boolean;
 }
 
 /**
@@ -50,6 +58,17 @@ export interface ApplyMeetingResult {
   learningsStaged: number;
   /** Path to the archived agenda (if any). */
   agendaArchived: string | null;
+  /**
+   * Path to the per-meeting summary file (Phase 1 §a.1) when one was
+   * written or already-fresh; null when no LLM was provided / writer
+   * was skipped / write failed.
+   */
+  summaryPath: string | null;
+  /**
+   * Whether the summary was written this invocation. False for
+   * already-fresh / no-llm / skip-summary paths.
+   */
+  summaryWritten: boolean;
   /** Warnings during processing. */
   warnings: string[];
 }
@@ -107,6 +126,16 @@ function parseFrontmatter(content: string): FrontmatterResult {
 function serializeFrontmatter(data: Record<string, unknown>, body: string): string {
   const fm = stringifyYaml(data).trimEnd();
   return `---\n${fm}\n---\n\n${body.replace(/^\n+/, '')}`;
+}
+
+/**
+ * Extract YYYY-MM-DD from a meeting filename, e.g.,
+ * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no
+ * date prefix is present.
+ */
+function extractDateFromFilename(absPath: string): string | null {
+  const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,12 +320,85 @@ export async function applyMeetingIntelligence(
     }
   }
 
+  // 9. Write per-meeting summary file (Phase 1 §a.1).
+  //
+  // Hook lives AFTER frontmatter is finalized (so the summary inherits
+  // resolved topics, importance, participants) and AFTER the meeting
+  // file is written (so summary parses the same body the user reads).
+  // The writer is idempotent on body content_hash — reprocessing the
+  // same meeting is a no-op against an unchanged body.
+  let summaryPath: string | null = null;
+  let summaryWritten = false;
+  if (!options.skipSummary) {
+    try {
+      const dateRaw = data['date'];
+      const meetingDate = typeof dateRaw === 'string'
+        ? dateRaw.slice(0, 10)
+        : extractDateFromFilename(absPath);
+      if (meetingDate !== null) {
+        // Workspace-relative source_path for portability.
+        const wsRel = absPath.startsWith(workspaceRoot)
+          ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
+          : absPath;
+
+        const importanceRaw = data['importance'];
+        const importance: 'skip' | 'light' | 'standard' | 'heavy' | undefined =
+          importanceRaw === 'skip' ||
+          importanceRaw === 'light' ||
+          importanceRaw === 'standard' ||
+          importanceRaw === 'heavy'
+            ? importanceRaw
+            : undefined;
+
+        const areaRaw = data['area'];
+        const area = typeof areaRaw === 'string' ? areaRaw : undefined;
+
+        const attendeesRaw = data['attendees'];
+        const participants: string[] | undefined = Array.isArray(attendeesRaw)
+          ? attendeesRaw
+              .map((a) => (typeof a === 'string' ? a : (a as { name?: string })?.name))
+              .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+          : typeof attendeesRaw === 'string'
+            ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+            : undefined;
+
+        // Hash on body alone, mirroring topic-memory.hashMeetingSource —
+        // frontmatter changes (status bumps, item counts) don't bust dedup.
+        const summaryInput: MeetingSummaryInput = {
+          sourcePath: wsRel,
+          date: meetingDate,
+          sourceBody: updatedBody,
+          area,
+          importance,
+          topics: normalizedTopics,
+          participants,
+        };
+
+        const summaryResult = await writeMeetingSummary(summaryInput, {
+          storage,
+          workspaceRoot,
+          callLLM: deps.callLLM,
+        });
+        summaryPath = summaryResult.summaryPath;
+        summaryWritten = summaryResult.written;
+        for (const w of summaryResult.warnings) warnings.push(w);
+      }
+    } catch (err) {
+      // Summary is non-fatal; meeting apply succeeded.
+      warnings.push(
+        `summary writer failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`,
+      );
+    }
+  }
+
   return {
     meetingPath: absPath,
     actionItemsStaged: intelligence.actionItems.length,
     decisionsStaged: intelligence.decisions.length,
     learningsStaged: intelligence.learnings.length,
     agendaArchived,
+    summaryPath,
+    summaryWritten,
     warnings,
   };
 }

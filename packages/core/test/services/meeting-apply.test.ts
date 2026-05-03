@@ -752,4 +752,122 @@ Hello world.
         'pre-topic-wiki-memory callers (no topicMemory dep) are unaffected');
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Phase 1 §a.1 — meeting summary writer hook
+  // ---------------------------------------------------------------------
+
+  describe('summary writer hook', () => {
+    const VALID_SUMMARY_RESPONSE = JSON.stringify({
+      'What happened': 'Standup-style sync about test meeting.',
+      'What was decided': '- Approved next steps',
+      "What's next": '- John: schedule kickoff',
+      'Open questions': '',
+      FYI: '',
+      'Things mentioned but not actioned': '',
+    });
+
+    it('writes summary file under .arete/memory/summaries/meetings/ when callLLM provided', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+        status: 'synced',
+      }, '# Test Meeting\n\n## Transcript\nSpeaker: Hello.\n');
+
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      // Use a callLLM that returns the summary JSON for the summary
+      // prompt and an empty topic-alias response otherwise.
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) return VALID_SUMMARY_RESPONSE;
+        return '{}';
+      };
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+
+      assert.equal(result.summaryWritten, true);
+      assert.notEqual(result.summaryPath, null);
+      assert.match(result.summaryPath!, /\.arete\/memory\/summaries\/meetings\/2026-04-22-test\.md$/);
+
+      const summaryContent = readFileSync(result.summaryPath!, 'utf8');
+      assert.match(summaryContent, /source_type: meeting/);
+      assert.match(summaryContent, /## What happened/);
+      assert.match(summaryContent, /Standup-style sync/);
+    });
+
+    it('skips summary write when callLLM is missing', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir },
+      );
+      assert.equal(result.summaryWritten, false);
+      assert.notEqual(result.summaryPath, null);
+      // Path is computed even when not written (so callers know where it would land).
+    });
+
+    it('skipSummary: true bypasses the writer entirely', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      let summaryCalls = 0;
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) summaryCalls++;
+        return VALID_SUMMARY_RESPONSE;
+      };
+
+      const result = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+        { skipSummary: true },
+      );
+      assert.equal(result.summaryWritten, false);
+      assert.equal(result.summaryPath, null);
+      assert.equal(summaryCalls, 0);
+    });
+
+    it('idempotent: second apply with same body does not re-call LLM', async () => {
+      writeMeetingFile(tmpDir, '2026-04-22-test.md', {
+        title: 'Test Meeting',
+        date: '2026-04-22',
+      }, '# Test\n\n## Transcript\nA: hi\n');
+      const meetingPath = join(tmpDir, 'resources', 'meetings', '2026-04-22-test.md');
+
+      let summaryCalls = 0;
+      const callLLM = async (prompt: string) => {
+        if (prompt.includes('summarizing a meeting')) summaryCalls++;
+        return VALID_SUMMARY_RESPONSE;
+      };
+
+      const first = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+      assert.equal(first.summaryWritten, true);
+      assert.equal(summaryCalls, 1);
+
+      const second = await applyMeetingIntelligence(
+        meetingPath,
+        sampleIntelligence,
+        { storage, workspaceRoot: tmpDir, callLLM },
+      );
+      assert.equal(second.summaryWritten, false);
+      assert.equal(summaryCalls, 1, 'idempotency: same body → no second LLM call');
+    });
+  });
 });
