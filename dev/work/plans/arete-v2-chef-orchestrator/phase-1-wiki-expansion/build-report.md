@@ -5,7 +5,7 @@ parent: arete-v2-phase-1-wiki-expansion
 status: ready-for-review
 created: "2026-05-04"
 updated: "2026-05-04"
-sub_orchestrator: agent-a7aa23e400eeeac6c (recovery agent finishing Steps 7+)
+sub_orchestrator: agent-a7aa23e400eeeac6c (recovery agent finishing Steps 7+; targeted fix-up applied 2026-05-04)
 worktree: .claude/worktrees/agent-a7aa23e400eeeac6c
 branch: worktree-agent-a7aa23e400eeeac6c
 ---
@@ -34,6 +34,10 @@ build-report) without re-tripping the watchdog.
 | `7c483731` | phase-1(cli): inbox-add writes summary file under .arete/memory/summaries/inbox/ |
 | `a89257c4` | phase-1(runtime): slack-digest substantial-heuristic logging-only pass |
 | `a5550b63` | phase-1: rebuild dist after Phase 1 changes |
+| `1e89dcdf` | phase-1(core): remove `## Could include` body-block rendering — content lives in summaries |
+| `02110585` | phase-1(test): update tests + fixtures for `## Could include` removal |
+| `1ff32305` | phase-1: rebuild dist after `## Could include` removal |
+| _docs commit_ | phase-1(docs): update build-report with post-recovery fix-up and revised ledger |
 
 ## Files touched (per deliverable)
 
@@ -134,24 +138,26 @@ pre-Phase-1) vs `HEAD` (after Phase 1's 6 source commits + dist commit).
 |---|---|---|---|---|---|
 | **CLI verbs** (count of `.command('…')` calls across `packages/cli/src/commands/*.ts`) | 87 | 88 | **+1** | +1 to +2 | New: `arete events log slack-thread`. `arete entity org create` was deferred to a follow-up commit (the service primitive `createOrgEntityManual` ships). No removes (no CLI command was deleted). |
 | **Runtime skills** (count of skills under `packages/runtime/skills/`) | 40 | 40 | **0** | 0 | No new skills; `slack-digest/SKILL.md` was modified (logging-only stanza). |
-| **Frontmatter fields across canonical file shapes** | — | — | **+16 (over 2 new shapes)** | +11 to +13 (over ≈ +2 new shapes) | New `SourceSummaryFrontmatter` (8 fields: `source_path`, `source_type`, `date`, `area?`, `importance?`, `topics?`, `participants?`, `extraction_version?`); new `OrgEntityFrontmatter` (8 fields: `org_slug`, `status`, `aliases?`, `people?`, `related_topics?`, `first_seen`, `last_refreshed`, `sources_integrated?`). Field count slightly exceeds estimate (+16 vs +11 to +13) because the unified summary frontmatter ended up carrying both meeting and inbox/slack shapes via discriminator (`source_type`) — net file-shape count is +2 as estimated. **No removes** — `## Could include` body block was NOT deleted in Phase 1 (still rendered by `meeting-extraction.ts:1670` and `meeting-processing.ts:699`); the plan suggested this remove as a "find more removes in scope" candidate, and the original sub-orchestrator did not pull it forward. |
+| **Frontmatter fields across canonical file shapes** | — | — | **+16 (over 2 new shapes)** with **-1 body-section pattern** | +11 to +13 (over ≈ +2 new shapes) | New `SourceSummaryFrontmatter` (8 fields: `source_path`, `source_type`, `date`, `area?`, `importance?`, `topics?`, `participants?`, `extraction_version?`); new `OrgEntityFrontmatter` (8 fields: `org_slug`, `status`, `aliases?`, `people?`, `related_topics?`, `first_seen`, `last_refreshed`, `sources_integrated?`). Field count slightly exceeds estimate (+16 vs +11 to +13) because the unified summary frontmatter ended up carrying both meeting and inbox/slack shapes via discriminator (`source_type`) — net file-shape count is +2 as estimated. **Remove (post-recovery fix-up 2026-05-04)**: `## Could include` body-block rendering deleted from `formatStagedSections` (`meeting-extraction.ts:1668`) and `formatFilteredStagedSections` (`meeting-processing.ts:697`); the same content now lives in the summary file's `## FYI` section. The `intelligence.could_include` field is preserved on the extraction result and is now threaded into the summary writer's prompt context via `MeetingSummaryInput.couldInclude`. The plan listed this remove under (a.1) Removes — original sub-orchestrator missed it; recovery agent applied it as a targeted fix-up. |
 | **Memory file types** (distinct path patterns under `.arete/memory/`) | (baseline) | (baseline) **+3 active** | **+3** | +2 | New: `summaries/meetings/`, `summaries/inbox/`, `entities/orgs/`. `summaries/slack/` is **declared** in `summary-writer.ts` and `slack-heuristic.ts` but not actively written until `ARETE_SLACK_SUMMARIES=1` flips post-shadow. Counting only active paths gives +3 (one over plan estimate). |
 | **Services** (count of `.ts` files under `packages/core/src/services/`, excluding tests) | 36 | 39 | **+3** | +1 to +2 | New: `summary-writer.ts`, `org-entity.ts`, `slack-heuristic.ts`. **One over estimate** — the slack heuristic was extracted into its own service (rather than living inline in CLI or events command); arguable substitution, see below. |
 
 ### Combined Δ verdict
 
-**Net combined: +5** (1 + 0 + 16 fields ÷ note + 3 + 3 — counting file-shape-count rather than raw field count: **2 file-shapes + 3 memory-types + 3 services + 1 CLI verb = +9 vs plan's +6 to +9 estimate**). On the conservative count, **Phase 1 lands at the high end of its predicted over-budget range** — within the plan's surfaced estimate, but **still positive Δ**.
+**Pre-fix-up (original sub-orch ship)**: file-shape-count basis was **2 file-shapes + 3 memory-types + 3 services + 1 CLI verb − 0 removes = +9** (high end of the plan's +6 to +9 estimate, but **still positive Δ**).
+
+**Post-fix-up (2026-05-04)**: the `## Could include` body-block rendering was deleted (was the single highest-leverage Phase-1-scope remove already named in the plan). On a body-section-pattern proxy this is **-1**, dropping the conservative count to **+8**. The substitution argument remains the load-bearing path to Δ ≤ 0 — the body-block removal alone does not zero the ledger, but it honors the plan as written and tightens the substitution argument materially: the new `SourceSummary` substrate now genuinely replaces the body-block-extraction pattern (the previous +9 number was over-counting because the body block wasn't actually deleted).
 
 Per the plan's explicit instruction (§"Sub-orchestrator instruction"):
 
 > If actual Δ > 0, surface to meta — meta will either (a) approve the substitution argument with the second reviewer, or (b) require Phase 1 to pull additional removes. Do not unilaterally exceed the ledger.
 
-**Surfaced**: the recovery agent does not unilaterally pull additional removes. Two paths for /review:
+**Surfaced**: still surfaced to meta. Two paths for /review (unchanged framing):
 
-1. **Substitution argument** — the new `SourceSummary` substrate replaces the body-block-extraction pattern (`## Could include` etc.) which was getting bigger over time as wiki-leaning extraction grew. The new file-type concentrates summary into a single owned file rather than fanning across body sections. The +2 new file-shapes are *substrate additions that absorb* growing complexity that would otherwise have continued accumulating in meeting body sections.
-2. **Pull more removes** — the plan's §"Two options" lists `## Approved Decisions/Learnings/ActionItems` body sections (duplicates of body content) as Phase-2-territory candidates that could pull forward. The recovery agent did NOT pull these forward (out of scope for recovery; original Phase 2 framing).
+1. **Substitution argument (now stronger)** — the new `SourceSummary` substrate replaces the body-block-extraction pattern (`## Could include` etc.) which was getting bigger over time as wiki-leaning extraction grew. The new file-type concentrates summary into a single owned file rather than fanning across body sections. The +2 new file-shapes are *substrate additions that absorb* growing complexity that would otherwise have continued accumulating in meeting body sections. **The 2026-05-04 fix-up actually deletes the body-block rendering, making this argument concrete rather than rhetorical.**
+2. **Pull more removes** — the plan's §"Two options" lists `## Approved Decisions/Learnings/ActionItems` body sections (duplicates of body content) as Phase-2-territory candidates that could pull forward. Not in scope for the recovery + fix-up cycle; would land in a follow-up if /review wants Δ ≤ 0 strictly.
 
-**Recommend** at /review: reviewer applies the substitution argument or directs a small follow-up commit to delete `## Could include` rendering (`meeting-extraction.ts:1670`, `meeting-processing.ts:699`) — that's the single highest-leverage remove already named in the plan and would bring the ledger closer to (though still over) zero.
+**Recommend** at /review: reviewer applies the (now-stronger) substitution argument. The body-block removal was the single Phase-1-scope remove the plan named; it's now applied. Δ is still > 0 by the conservative count, so meta still has the call.
 
 ## Stretch (d)/(e) state
 
@@ -184,7 +190,7 @@ Most likely `npm test` at repo root (the project's defined `test` script runs ~3
 
 - **5-meeting A/B subjective compare** (per plan §Daily-driver risk): cannot be done in worktree — requires John using new summary path on real meetings. Soak-time verification.
 - **`arete entity org create` CLI verb**: the plan explicitly says "Land as a separate small commit; not blocking Phase 1 ship." The service primitive `createOrgEntityManual` ships in this phase; the CLI wrapper is a 30-LOC follow-up.
-- **`## Could include` removal** (frontmatter-ledger remove candidate): not pulled forward by original sub-orchestrator. Recovery agent surfaces this honestly rather than unilaterally adding scope. See ledger §"Combined Δ verdict" above.
+- **`## Could include` removal** (frontmatter-ledger remove candidate): not pulled forward by original sub-orchestrator and surfaced honestly in the original recovery report. **Subsequently applied as a 2026-05-04 fix-up after meta engagement** — see "Post-recovery fix-ups" section below.
 - **Stretch (d)/(e)**: deferred per MC1 + recovery brief.
 - **Snapshot fixtures for AC1.9**: lower bar accepted per recovery brief; verification is the fallback-path unit test + topic-memory regression smoke.
 - **Full `npm test`**: deliberately avoided per watchdog-safe practice. /review reviewer is welcome to run the full suite if needed; targeted-test verification is the bound this recovery operates under.
@@ -205,13 +211,104 @@ The actual landed scope is **(a) + (b) + (c) — gates only**, with (d) and (e) 
 
 **No invalidation** of the counter-argument surfaced during build. The over-budget ledger needs /review's call on substitution-vs-additional-removes; that is the only meta-engagement requested.
 
+## Post-recovery fix-ups
+
+### 2026-05-04 — `## Could include` body-block removal
+
+**Why this fix-up was applied**: meta engaged the recovery agent
+because the original sub-orchestrator surfaced `## Could include`
+rendering as a missed Phase 1 plan-listed Remove (build-report's
+"Concerns to flag back to meta" #1 / "Recommend at /review" line
+in the original ledger verdict). The Phase 1 plan's (a.1) Removes
+explicitly listed:
+
+> `## FYI` — things mentioned worth knowing but not actionable (replaces today's `## Could include`)
+
+i.e., the replacement was implemented (summary file's `## FYI`
+section ships) but the *deletion* of the duplicate body-block on
+the meeting source file was not. This fix-up completes the Remove
+as the plan was written.
+
+**What changed (commits `1e89dcdf`, `02110585`, `1ff32305`)**:
+
+- Source: `formatStagedSections` (meeting-extraction.ts) and
+  `formatFilteredStagedSections` (meeting-processing.ts) no longer
+  emit `## Could include`. The data path is preserved:
+  - `intelligence.could_include` is still parsed from the LLM
+    response.
+  - It is now surfaced as a `SIDE-THREAD HEADLINES` block in the
+    meeting-summary prompt via a new `MeetingSummaryInput.couldInclude`
+    field.
+  - The summary writer's `## FYI` section continues to render the
+    same content into `summaries/meetings/<date>-<slug>.md`.
+  - `'Could include'` stays in `STAGED_HEADERS` so existing meeting
+    files containing the section get cleaned up by
+    `clearStagedSections` / `updateMeetingContent` on next apply.
+- Tests: 3 formatter tests migrated from "asserts ## Could include
+  rendered" to "asserts ## Could include is NOT rendered"; +3 new
+  tests for `couldInclude` flowing into the summary prompt.
+  Backend `agent.test.ts` Task-10 e2e test renamed and re-asserted.
+- Dist: `tsc -b packages/core packages/cli` re-run; backend dist
+  unchanged.
+
+**Targeted-test results (post-fix-up, file-by-file via tsx --test)**:
+
+```
+meeting-extraction.test.ts                  269/269 pass
+meeting-processing.test.ts                  183/183 pass
+meeting-apply.test.ts                        29/29  pass
+summary-writer.test.ts                       27/27  pass (+3 new)
+topic-memory-summary-fallback.test.ts         3/3   pass
+source-summary.test.ts                       12/12  pass
+agent.test.ts (backend)                      52/55  pass (3 pre-existing failures unrelated to this fix-up — confirmed by stash-and-rerun on baseline; see "Pre-existing flakes" below)
+```
+
+`tsc -b packages/core packages/cli` clean; `tsc -b packages/apps/backend` clean.
+
+**Ledger Δ before vs after this fix-up**:
+
+| | Δ |
+|---|---|
+| Before (original sub-orch ship) | **+9** (file-shape-count basis: 2 file-shapes + 3 memory-types + 3 services + 1 CLI verb − 0 removes) |
+| After (this fix-up) | **+8** (same + 1 body-section-pattern remove). Substitution argument is now concrete rather than rhetorical. Δ is still > 0 — meta still has the call between substitution-vs-additional-removes. |
+
+**Items deliberately not pulled into this fix-up**:
+
+- Daily-winddown / weekly-winddown SKILL.md prompts still describe
+  reading `## Could include` from meeting files (Phase 2.4 selective
+  promotion). These will gracefully no-op once meeting files no
+  longer contain the section, but the skill prompts could later be
+  migrated to read `## FYI` from the summary file. **Not in scope
+  for this surgical Remove**; flagged for a future runtime-side
+  follow-up if /review wants the prompts updated.
+- `## Approved Decisions/Learnings/ActionItems` body-section pull-forward
+  (per plan §"Two options" #2). Phase-2 territory; left untouched.
+
+### Pre-existing failures observed during fix-up
+
+Three failures in `packages/apps/backend/test/services/agent.test.ts`
+exist on the baseline (`worktree-agent-a7aa23e400eeeac6c` HEAD before
+this fix-up), confirmed by `git stash` then re-run:
+
+```
+✖ dedup takes precedence over confidence for approval status
+✖ handles boundary case: exactly 0.5 confidence is included as pending
+✖ auto-approves items matching priorItems
+```
+
+These are **not** caused by the body-block removal. They appear to
+be related to confidence/dedup logic in the backend agent service
+and were already failing before any fix-up source changes were
+made. Flagged here because the recovery agent ran the file as part
+of fix-up verification.
+
 ## Engagement requests for meta-orchestrator
 
 Per plan §"When to engage meta":
 
 1. **AC1.10 ledger Δ > 0 at ship time** — engaged: see ledger above. Recovery agent does not unilaterally exceed; surfaces for /review.
 2. **AC1.7 (`ARETE_SLACK_SUMMARIES=1` Stage-2)** — Stage 2 is post-shadow-run by design (MC3); not a recovery-time concern.
-3. **`## Could include` removal** — flagged as the highest-leverage Phase-1-scope remove that was not pulled forward; reviewer's call whether to do it as a small follow-up commit pre-merge or accept the substitution argument as-is.
+3. **`## Could include` removal** — **RESOLVED via 2026-05-04 fix-up** (commits `1e89dcdf` / `02110585` / `1ff32305`). Meta engaged the recovery agent to apply the plan-listed Remove; the body-block rendering is now deleted from both formatter call-sites. See "Post-recovery fix-ups" section above for details and revised ledger.
 
 Nothing else needs meta engagement. No discovery invalidating the counter-argument; no test failing in a way that suggests an AC is wrong; stretch deferral on plan; slack heuristic ships per MC3.
 
