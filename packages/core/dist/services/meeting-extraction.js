@@ -1345,14 +1345,16 @@ export function formatStagedSections(result) {
         lines.push(intelligence.summary);
         lines.push('');
     }
-    // Could include (only if non-empty list provided)
-    if (intelligence.could_include && intelligence.could_include.length > 0) {
-        lines.push('## Could include');
-        for (const headline of intelligence.could_include) {
-            lines.push(`- ${headline}`);
-        }
-        lines.push('');
-    }
+    // `## Could include` body-block rendering was removed in Phase 1 wiki
+    // expansion. The same content (side-thread headlines worth knowing
+    // about but not load-bearing enough to commit) is now surfaced under
+    // `## FYI` and `## Things mentioned but not actioned` in the summary
+    // file at `.arete/memory/summaries/meetings/<date>-<slug>.md`. The
+    // `intelligence.could_include` field is still parsed from the LLM
+    // response and threaded into the summary writer's prompt context so
+    // those items continue to surface — just not duplicated on the source
+    // meeting file. `'Could include'` remains in `STAGED_HEADERS` so old
+    // files that already have the section get cleaned on next apply.
     // Staged Action Items (only if non-empty)
     if (intelligence.actionItems.length > 0) {
         lines.push('## Staged Action Items');

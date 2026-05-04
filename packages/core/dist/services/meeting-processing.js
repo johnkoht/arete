@@ -479,18 +479,27 @@ export function clearApprovedSections(content) {
  * Takes FilteredItem[] from processMeetingExtraction() and original summary.
  *
  * Lead-prose section: emits `## Core` when `core` is provided non-empty,
- * otherwise falls back to `## Summary` for backward compat. Optional
- * `couldInclude` renders as a `## Could include` bullet list when non-empty.
+ * otherwise falls back to `## Summary` for backward compat.
  * (Task 8 / Decision #7 — historical files keep ## Summary; new wiki-aware
  * meetings get ## Core.)
+ *
+ * `## Could include` body-block rendering was removed in Phase 1 wiki
+ * expansion. The `couldInclude` parameter is preserved (callers still
+ * pass it) but is no longer rendered onto the meeting source file —
+ * the same items surface under `## FYI` in the summary file at
+ * `.arete/memory/summaries/meetings/<date>-<slug>.md`. The parameter
+ * is kept so callers don't need to change shape; the summary writer
+ * receives the data through `MeetingSummaryInput.couldInclude`.
  *
  * @param filteredItems - Items from processMeetingExtraction()
  * @param summary - The meeting summary text (used as fallback when `core` absent)
  * @param core - Optional lead-prose from wiki-aware extraction
- * @param couldInclude - Optional headlines for side-thread items
- * @returns Markdown string with lead + Could-include + Staged sections
+ * @param couldInclude - Accepted for API stability; no longer rendered on the meeting file
+ * @returns Markdown string with lead + Staged sections
  */
-export function formatFilteredStagedSections(filteredItems, summary, core, couldInclude) {
+export function formatFilteredStagedSections(filteredItems, summary, core, 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+couldInclude) {
     const lines = [];
     // Lead-prose section: Core takes precedence over Summary when present.
     const trimmedCore = core?.trim();
@@ -504,14 +513,8 @@ export function formatFilteredStagedSections(filteredItems, summary, core, could
         lines.push(summary);
         lines.push('');
     }
-    // Could include (only if non-empty list provided)
-    if (couldInclude && couldInclude.length > 0) {
-        lines.push('## Could include');
-        for (const headline of couldInclude) {
-            lines.push(`- ${headline}`);
-        }
-        lines.push('');
-    }
+    // `## Could include` body-block rendering was removed in Phase 1 wiki
+    // expansion. See JSDoc above.
     // Staged Action Items
     const actionItems = filteredItems.filter((i) => i.type === 'action');
     if (actionItems.length > 0) {

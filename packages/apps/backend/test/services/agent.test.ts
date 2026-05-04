@@ -320,11 +320,13 @@ describe('runProcessingSession', () => {
       assert.ok(!content.includes('## Staged Learnings'));
     });
 
-    // Task 10: end-to-end wiring of `core` + `could_include` from extraction
-    // through to the staged sections written into the meeting file. Verifies
-    // backend agent.ts threads both fields to formatFilteredStagedSections
-    // (task-10-callsite-plumbing acceptance criterion C).
-    it('renders ## Core and ## Could include when extraction populates them', async () => {
+    // Task 10 / Phase 1 wiki expansion: `core` continues to render as
+    // `## Core`. The `could_include` body-block was removed in Phase 1
+    // — items now surface under the summary file's `## FYI` section
+    // rather than on the meeting source file. The data still flows
+    // through `formatFilteredStagedSections` (parameter preserved for
+    // API stability) but is no longer rendered.
+    it('renders ## Core and does NOT render ## Could include (Phase 1)', async () => {
       const jobs = makeMockJobs();
       const deps = makeMockDeps({
         coreResponse: mockCoreExtractionResponse({
@@ -348,15 +350,18 @@ describe('runProcessingSession', () => {
         'expected core lead-prose body',
       );
       assert.ok(!content.includes('## Summary'), 'expected no ## Summary when ## Core is present');
-      // Could include: emitted as bullet list when non-empty.
-      assert.ok(content.includes('## Could include'), 'expected ## Could include heading');
+      // Phase 1: `## Could include` body-block removed; items now in summary `## FYI`.
       assert.ok(
-        content.includes('- Considered monthly invoicing — deferred'),
-        'expected first could-include bullet',
+        !content.includes('## Could include'),
+        'expected no ## Could include heading (Phase 1 removed)',
       );
       assert.ok(
-        content.includes('- Open question: PO requirements'),
-        'expected second could-include bullet',
+        !content.includes('- Considered monthly invoicing — deferred'),
+        'expected no could-include bullet rendered on meeting file',
+      );
+      assert.ok(
+        !content.includes('- Open question: PO requirements'),
+        'expected no could-include bullet rendered on meeting file',
       );
     });
 

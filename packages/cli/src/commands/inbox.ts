@@ -10,6 +10,7 @@ import {
   loadConfig,
   refreshQmdIndex,
   slugify,
+  writeInboxSummary,
   type QmdRefreshResult,
   type StorageAdapter,
 } from '@arete/core';
@@ -91,6 +92,12 @@ export interface InboxAddResult {
   title: string;
   source: string;
   qmd?: QmdRefreshResult | { indexed: false; skipped: true };
+  /**
+   * Path to the per-doc summary file (Phase 1 §a.2) when written or
+   * already-fresh; null when no LLM available / writer skipped.
+   */
+  summaryPath?: string | null;
+  summaryWritten?: boolean;
 }
 
 export interface InboxAddDeps {
@@ -269,6 +276,38 @@ export async function runInboxAdd(
   const markdown = buildInboxMarkdown({ title, source, body, type: itemType });
   await services.storage.write(mdPath, markdown);
 
+  // Per Phase 1 §a.2: write a per-inbox-doc summary alongside the file.
+  // Source-agnostic: same summary shape for URL/file/manual/text inputs.
+  // Best-effort — failures land in warnings; never block the inbox add.
+  let summaryPath: string | null = null;
+  let summaryWritten = false;
+  if (services.ai.isConfigured() && process.env.ARETE_NO_LLM !== '1') {
+    try {
+      const callLLM = async (prompt: string) => {
+        const r = await services.ai.call('summary', prompt);
+        return r.text;
+      };
+      const today = new Date().toISOString().slice(0, 10);
+      const result = await writeInboxSummary(
+        {
+          sourcePath: `inbox/${fileSlug}.md`,
+          date: today,
+          sourceBody: body,
+          title,
+        },
+        {
+          storage: services.storage,
+          workspaceRoot: root,
+          callLLM,
+        },
+      );
+      summaryPath = result.summaryPath;
+      summaryWritten = result.written;
+    } catch {
+      // Summary is best-effort; inbox add already succeeded.
+    }
+  }
+
   // Refresh QMD index
   let qmdResult: QmdRefreshResult | undefined;
   if (!opts.skipQmd) {
@@ -287,6 +326,8 @@ export async function runInboxAdd(
       path: `inbox/${fileSlug}.md`,
       title,
       source,
+      summaryPath,
+      summaryWritten,
       qmd: qmdResult ?? { indexed: false, skipped: true },
     }, null, 2));
     return;
@@ -298,6 +339,12 @@ export async function runInboxAdd(
   listItem('Title', title);
   listItem('Path', relativePath);
   listItem('Source', source);
+  if (summaryWritten && summaryPath !== null) {
+    const wsRel = summaryPath.startsWith(root)
+      ? summaryPath.slice(root.length).replace(/^[/\\]+/, '')
+      : summaryPath;
+    listItem('Summary', wsRel);
+  }
   displayQmdResult(qmdResult);
   console.log('');
 }

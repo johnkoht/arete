@@ -25,6 +25,19 @@ export interface ApplyMeetingOptions {
      * be fast and will run `arete memory refresh` later.
      */
     skipTopicAlias?: boolean;
+    /**
+     * Skip the post-apply summary writer (Phase 1 wiki expansion §a.1).
+     * Use during reprocessing where the source body hasn't changed and
+     * the existing summary is fresh; the writer also self-skips on
+     * content_hash match, so this flag is mostly a fast-path.
+     */
+    skipSummary?: boolean;
+    /**
+     * Skip the post-apply org-entity auto-detection refresh (Phase 1
+     * wiki expansion §b). When set, no `.arete/memory/entities/orgs/`
+     * pages are written from this apply.
+     */
+    skipOrgEntities?: boolean;
 }
 /**
  * Result of applying meeting intelligence.
@@ -40,6 +53,23 @@ export interface ApplyMeetingResult {
     learningsStaged: number;
     /** Path to the archived agenda (if any). */
     agendaArchived: string | null;
+    /**
+     * Path to the per-meeting summary file (Phase 1 §a.1) when one was
+     * written or already-fresh; null when no LLM was provided / writer
+     * was skipped / write failed.
+     */
+    summaryPath: string | null;
+    /**
+     * Whether the summary was written this invocation. False for
+     * already-fresh / no-llm / skip-summary paths.
+     */
+    summaryWritten: boolean;
+    /**
+     * Slugs of org-entity pages refreshed this invocation. Empty when
+     * skipOrgEntities is set, when no orgs qualified, or when the
+     * detection scan was skipped (e.g., no workspacePaths).
+     */
+    orgsRefreshed: string[];
     /** Warnings during processing. */
     warnings: string[];
 }

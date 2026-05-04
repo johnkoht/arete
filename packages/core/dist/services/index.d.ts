@@ -49,4 +49,10 @@ export type { CompleteTaskResult } from './tasks.js';
 export type { TaskMetadata, TaskDestination, WorkspaceTask, ParsedTaskLine, ListTasksOptions, } from '../models/tasks.js';
 export { scoreTask, scoreTasks, getTopTasks, scoreDueDate, scoreCommitment, scoreMeetingRelevance, scoreWeekPriority, calculateModifiers, formatScoredTask, formatTaskRecommendations, } from './task-scoring.js';
 export type { ScoringContext, ScoreBreakdown, ScoredTask, } from './task-scoring.js';
+export { evaluateSlackThread, formatSlackEvalLogLine, slackSummariesEnabled, DEFAULT_SLACK_MESSAGE_THRESHOLD, DEFAULT_SLACK_PARTICIPANT_THRESHOLD, } from './slack-heuristic.js';
+export type { SlackThreadEvalInput, SlackHeuristicTrigger, SlackHeuristicConfig, SlackHeuristicResult, } from './slack-heuristic.js';
+export { detectOrgsFromMeetings, refreshOrgs, createOrgEntityManual, renderOrgAutoSection, slugifyDomain, DEFAULT_INTERNAL_DOMAINS, DEFAULT_DETECTION_WINDOW_DAYS, DEFAULT_DETECTION_MIN_MEETINGS, } from './org-entity.js';
+export type { DetectOrgsOptions, DetectedOrg, RefreshOrgsOptions, RefreshOrgsResult, } from './org-entity.js';
+export { writeMeetingSummary, writeInboxSummary, readMeetingSummary, buildMeetingSummaryPrompt, buildInboxSummaryPrompt, parseMeetingSummaryResponse, parseInboxSummaryResponse, summaryAlreadyFresh, summaryPathForMeeting, summaryPathForInbox, hashSummarySource, resolveMeetingSourcePath, SUMMARY_EXTRACTION_VERSION, } from './summary-writer.js';
+export type { MeetingSummaryInput, InboxSummaryInput, WriteSummaryDeps, WriteSummaryResult, } from './summary-writer.js';
 //# sourceMappingURL=index.d.ts.map

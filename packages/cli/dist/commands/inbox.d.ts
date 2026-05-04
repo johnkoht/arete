@@ -16,6 +16,12 @@ export interface InboxAddResult {
         indexed: false;
         skipped: true;
     };
+    /**
+     * Path to the per-doc summary file (Phase 1 §a.2) when written or
+     * already-fresh; null when no LLM available / writer skipped.
+     */
+    summaryPath?: string | null;
+    summaryWritten?: boolean;
 }
 export interface InboxAddDeps {
     createServices: typeof createServices;

@@ -30,6 +30,12 @@ integration:
 
 Pull today's Slack conversations, resolve participants to workspace people, assemble context, extract intelligence using the **significance_analyst** pattern, and route approved items to memory, commitments, and people files. Designed to run standalone or as a phase within `daily-winddown`.
 
+> **Phase 1 wiki-expansion note**: this skill emits a `slack-thread-eval`
+> event per thread (Phase 2c-bis) for the substantial-thread heuristic
+> shadow run. The slack-summary writer is gated by
+> `ARETE_SLACK_SUMMARIES=1` (default OFF during the 7-day shadow). See
+> Phase 2c-bis for the CLI invocation.
+
 ## When to Use
 
 - "Slack digest" / "Process my slack"
@@ -224,6 +230,36 @@ Per-thread output shape inside the skill's intermediate state:
 A thread with no clear topic match emits zero slugs (an empty `topics: []`)
 rather than a forced match. Two threads in the same digest may legitimately
 emit the same slug — the union dedups in Phase 5a.
+
+#### 2c-bis. Slack-thread heuristic eval (Phase 1 §a.3 / MC3 — shadow run)
+
+For each thread evaluated in 2c, emit a `slack-thread-eval` event to
+`memory/log.md` so John can spot-check the substantial-thread heuristic
+during the 7-day Phase 1 shadow run. The heuristic is logging-only by
+default (no summary file is written until `ARETE_SLACK_SUMMARIES=1`):
+
+```bash
+arete events log slack-thread \
+  --thread "<channel_id>/<thread_ts>" \
+  --messages <message_count> \
+  --participants <participant_count> \
+  $([ <decision_detected> = true ] && echo --decision) \
+  $([ <user_flagged> = true ] && echo --user-flag) \
+  --json
+```
+
+Default heuristic (logged for every thread):
+- `would_summarize=true` when **any** of:
+  - `messages >= 10`
+  - decision detected by significance_analyst
+  - `participants >= 3`
+  - user-flagged via slack reaction or skill arg
+
+Best-effort: if the CLI errors, continue with the digest. The shadow log
+is a soak signal, not a critical path. After ≤20% combined false-pos /
+false-neg rate over 7 days, John flips `ARETE_SLACK_SUMMARIES=1` and the
+slack summary writer (separate, in-progress wiring) goes live writing to
+`.arete/memory/summaries/slack/<thread-id>.md`.
 
 #### 2d. Area Association (Optional)
 
