@@ -7,9 +7,11 @@
  *
  * Used by `arete meeting apply <file>` CLI command.
  */
-import { resolve } from 'path';
+import { resolve, basename } from 'path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { formatStagedSections, updateMeetingContent } from './meeting-extraction.js';
+import { writeMeetingSummary } from './summary-writer.js';
+import { refreshOrgs } from './org-entity.js';
 function parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
     if (!match)
@@ -25,6 +27,15 @@ function parseFrontmatter(content) {
 function serializeFrontmatter(data, body) {
     const fm = stringifyYaml(data).trimEnd();
     return `---\n${fm}\n---\n\n${body.replace(/^\n+/, '')}`;
+}
+/**
+ * Extract YYYY-MM-DD from a meeting filename, e.g.,
+ * `2026-04-22-cover-whale.md` → `2026-04-22`. Returns null if no
+ * date prefix is present.
+ */
+function extractDateFromFilename(absPath) {
+    const m = basename(absPath).match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : null;
 }
 // ---------------------------------------------------------------------------
 // Content manipulation helpers
@@ -180,12 +191,108 @@ export async function applyMeetingIntelligence(meetingPath, intelligence, deps, 
             }
         }
     }
+    // 9. Write per-meeting summary file (Phase 1 §a.1).
+    //
+    // Hook lives AFTER frontmatter is finalized (so the summary inherits
+    // resolved topics, importance, participants) and AFTER the meeting
+    // file is written (so summary parses the same body the user reads).
+    // The writer is idempotent on body content_hash — reprocessing the
+    // same meeting is a no-op against an unchanged body.
+    let summaryPath = null;
+    let summaryWritten = false;
+    if (!options.skipSummary) {
+        try {
+            const dateRaw = data['date'];
+            const meetingDate = typeof dateRaw === 'string'
+                ? dateRaw.slice(0, 10)
+                : extractDateFromFilename(absPath);
+            if (meetingDate !== null) {
+                // Workspace-relative source_path for portability.
+                const wsRel = absPath.startsWith(workspaceRoot)
+                    ? absPath.slice(workspaceRoot.length).replace(/^[/\\]+/, '')
+                    : absPath;
+                const importanceRaw = data['importance'];
+                const importance = importanceRaw === 'skip' ||
+                    importanceRaw === 'light' ||
+                    importanceRaw === 'standard' ||
+                    importanceRaw === 'heavy'
+                    ? importanceRaw
+                    : undefined;
+                const areaRaw = data['area'];
+                const area = typeof areaRaw === 'string' ? areaRaw : undefined;
+                const attendeesRaw = data['attendees'];
+                const participants = Array.isArray(attendeesRaw)
+                    ? attendeesRaw
+                        .map((a) => (typeof a === 'string' ? a : a?.name))
+                        .filter((s) => typeof s === 'string' && s.trim().length > 0)
+                    : typeof attendeesRaw === 'string'
+                        ? attendeesRaw.split(',').map((s) => s.trim()).filter((s) => s.length > 0)
+                        : undefined;
+                // Hash on body alone, mirroring topic-memory.hashMeetingSource —
+                // frontmatter changes (status bumps, item counts) don't bust dedup.
+                const summaryInput = {
+                    sourcePath: wsRel,
+                    date: meetingDate,
+                    sourceBody: updatedBody,
+                    area,
+                    importance,
+                    topics: normalizedTopics,
+                    participants,
+                };
+                const summaryResult = await writeMeetingSummary(summaryInput, {
+                    storage,
+                    workspaceRoot,
+                    callLLM: deps.callLLM,
+                });
+                summaryPath = summaryResult.summaryPath;
+                summaryWritten = summaryResult.written;
+                for (const w of summaryResult.warnings)
+                    warnings.push(w);
+            }
+        }
+        catch (err) {
+            // Summary is non-fatal; meeting apply succeeded.
+            warnings.push(`summary writer failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+    }
+    // 10. Refresh org-entity pages (Phase 1 §b).
+    //
+    // Auto-detection scans recent meetings for non-internal email domains
+    // and writes/updates pages under .arete/memory/entities/orgs/. The
+    // scan runs on every meeting apply because:
+    //   - Detection threshold (≥2 distinct meetings in 90d) is cheap to
+    //     re-evaluate; expensive part is only triggered when an org
+    //     newly qualifies.
+    //   - Existing pages are byte-equal-skipped when content hasn't
+    //     changed.
+    // Caller can disable via `options.skipOrgEntities`. No LLM cost; runs
+    // independently of `deps.callLLM`.
+    let orgsRefreshed = [];
+    if (!options.skipOrgEntities && deps.workspacePaths !== undefined) {
+        try {
+            const result = await refreshOrgs(deps.workspacePaths, storage, {
+                // Pass `today` from the meeting apply so detection windows are
+                // deterministic relative to the meeting being processed (not
+                // wall-clock at write time).
+                today: new Date().toISOString().slice(0, 10),
+            });
+            orgsRefreshed = result.written;
+            for (const w of result.warnings)
+                warnings.push(w);
+        }
+        catch (err) {
+            warnings.push(`org-entity refresh failed (non-fatal): ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+    }
     return {
         meetingPath: absPath,
         actionItemsStaged: intelligence.actionItems.length,
         decisionsStaged: intelligence.decisions.length,
         learningsStaged: intelligence.learnings.length,
         agendaArchived,
+        summaryPath,
+        summaryWritten,
+        orgsRefreshed,
         warnings,
     };
 }

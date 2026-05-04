@@ -253,6 +253,23 @@ export interface IntegrateSourceOptions {
     callLLM?: LLMCallFn;
     relevantL2?: string;
     today: string;
+    /**
+     * Optional override of the content fed to the LLM prompt. When set,
+     * the LLM sees this string instead of `newSource.content`.
+     *
+     * Used by Phase 1 §c (wiki expansion): when a per-meeting summary
+     * exists at `.arete/memory/summaries/meetings/<date>-<slug>.md`,
+     * the caller passes the summary body here so the LLM synthesizes
+     * against curated input instead of the raw transcript.
+     *
+     * The idempotency hash is STILL computed against `newSource.content`
+     * (the source body) so summary-vs-transcript swap doesn't bust dedup
+     * on the topic page's `sources_integrated[].hash`. This keeps the
+     * "did we already integrate this source?" check stable across the
+     * Phase 1 backfill window where some meetings have summaries and
+     * others don't.
+     */
+    llmContent?: string;
 }
 export interface IntegrateResult {
     page: TopicPage;

@@ -568,6 +568,45 @@ Constraints:
 import { join as pathJoin, basename as pathBasename, isAbsolute as pathIsAbsolute, resolve as pathResolve } from 'node:path';
 import { parseMeetingFile as parseMeetingFileExternal } from './meeting-context.js';
 import { renderTopicPage as renderTopicPageExternal } from '../models/topic-page.js';
+import { summaryPathForMeeting } from './summary-writer.js';
+import { parseSourceSummary, MEETING_SECTION_NAMES } from '../models/source-summary.js';
+/**
+ * Load the body of a per-meeting summary file (Phase 1 §c). Returns
+ * null when no summary exists, parsing fails, or the parsed file is
+ * not a meeting summary. Used by `refreshAllFromSources` to swap
+ * curated summary content for raw transcript at LLM time, while
+ * keeping the source-body hash stable for idempotency.
+ *
+ * The body returned is a concatenation of recognized sections in
+ * canonical order — the same shape `renderSourceSummary` produces but
+ * without the frontmatter and outer title.
+ */
+async function loadMeetingSummaryBody(workspaceRoot, storage, meetingPath, date) {
+    // Build summary path. The meetingPath we get here is workspace-
+    // relative or absolute; summaryPathForMeeting handles both.
+    const summaryPath = summaryPathForMeeting(workspaceRoot, {
+        sourcePath: meetingPath,
+        date,
+    });
+    const content = await storage.read(summaryPath);
+    if (content === null)
+        return null;
+    const parsed = parseSourceSummary(content);
+    if (parsed === null || parsed.frontmatter.source_type !== 'meeting')
+        return null;
+    const lines = [];
+    for (const name of MEETING_SECTION_NAMES) {
+        const body = parsed.sections[name];
+        if (body === undefined || body.trim().length === 0)
+            continue;
+        lines.push(`## ${name}`);
+        lines.push('');
+        lines.push(body.trim());
+        lines.push('');
+    }
+    const out = lines.join('\n').trim();
+    return out.length > 0 ? out : null;
+}
 // ---------------------------------------------------------------------------
 // Step 2 (slack-digest-topic-wiki) — source discovery
 //
@@ -747,7 +786,7 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
             for (const src of allSources) {
                 if (!src.topics.includes(targetSlug))
                     continue;
-                matching.push({ path: src.path, date: src.date, content: src.content });
+                matching.push({ path: src.path, date: src.date, content: src.content, type: src.type });
             }
             // `allSources` is already sorted by date asc; the filter preserves
             // that order, so no re-sort needed.
@@ -768,7 +807,36 @@ TopicMemoryService.prototype.refreshAllFromSources = async function (paths, opti
                 continue;
             }
             for (const src of matching) {
-                const result = await this.integrateSource(targetSlug, page, src, { today: options.today, callLLM: options.callLLM });
+                // Phase 1 §c: when the source is a meeting AND a per-meeting
+                // summary exists at `.arete/memory/summaries/meetings/<date>-
+                // <slug>.md`, feed the summary body to the integration LLM
+                // instead of the raw transcript. Curated input → better synthesis,
+                // ≥30% input-token reduction on a typical day (see AC1.4).
+                //
+                // Idempotency hash STILL uses the source body (transcript) — that
+                // way reprocessing-with-summary doesn't bust dedup, and the
+                // backfill window (some meetings have summaries, some don't)
+                // works without thrashing the topic page's
+                // `sources_integrated[].hash` field.
+                let llmContent;
+                if (src.type === 'meeting') {
+                    try {
+                        const summaryBody = await loadMeetingSummaryBody(paths.root, storage, src.path, src.date);
+                        if (summaryBody !== null)
+                            llmContent = summaryBody;
+                    }
+                    catch {
+                        // Defensive: any read/parse failure → silent fall back to
+                        // transcript. Logging here would spam during the backfill
+                        // window where many meetings legitimately don't have
+                        // summaries yet.
+                    }
+                }
+                const result = await this.integrateSource(targetSlug, page, src, {
+                    today: options.today,
+                    callLLM: options.callLLM,
+                    llmContent,
+                });
                 if (result.decision === 'integrated')
                     integrated++;
                 else if (result.decision === 'fallback')
@@ -873,7 +941,17 @@ TopicMemoryService.prototype.integrateSource = async function (topicSlug, existi
             reason: 'no-llm',
         };
     }
-    const prompt = buildIntegratePrompt(topicSlug, existingPage, newSource, options.relevantL2 ?? '');
+    // Phase 1 §c: when llmContent is provided (summary body), feed that
+    // to the LLM instead of newSource.content (transcript). Hash above
+    // STILL uses newSource.content so idempotency stays anchored on the
+    // source body, not the summary body — this prevents thrash during
+    // the backfill window and lets a summary-rewrite trigger
+    // re-integration only when the underlying transcript actually
+    // changes.
+    const llmSource = options.llmContent !== undefined
+        ? { ...newSource, content: options.llmContent }
+        : newSource;
+    const prompt = buildIntegratePrompt(topicSlug, existingPage, llmSource, options.relevantL2 ?? '');
     let response;
     try {
         response = await options.callLLM(prompt);

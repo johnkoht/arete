@@ -7,7 +7,7 @@
  * later is a matter of adding subcommands; the grammar enforcement and
  * append atomicity already live in core.
  */
-import { createServices } from '@arete/core';
+import { createServices, evaluateSlackThread, } from '@arete/core';
 import { error as printError, success } from '../formatters.js';
 export async function runWinddownEventLog(opts, deps = {}) {
     if (opts.event !== 'start' && opts.event !== 'end') {
@@ -42,6 +42,90 @@ export async function runWinddownEventLog(opts, deps = {}) {
     }
     success(`Logged winddown event=${opts.event}`);
 }
+/**
+ * Run the slack-thread heuristic and append the result to
+ * `.arete/memory/log.md` as a `slack_thread_eval` event. During the
+ * 7-day shadow run (Phase 1 ship), the writer is gated by
+ * ARETE_SLACK_SUMMARIES — this command logs the WOULD-decision
+ * regardless, so John can spot-check false-pos / false-neg rates.
+ *
+ * The slack-digest skill calls this once per thread it processes.
+ */
+export async function runSlackThreadEval(opts, deps = {}) {
+    const thread = (opts.thread ?? '').trim();
+    if (thread.length === 0) {
+        const msg = '--thread <id> is required';
+        if (opts.json)
+            console.log(JSON.stringify({ success: false, error: msg }));
+        else
+            printError(msg);
+        process.exit(1);
+    }
+    const messages = parseNonNegativeInt(opts.messages);
+    if (messages === null) {
+        const msg = '--messages <n> must be a non-negative integer';
+        if (opts.json)
+            console.log(JSON.stringify({ success: false, error: msg }));
+        else
+            printError(msg);
+        process.exit(1);
+    }
+    const participants = parseNonNegativeInt(opts.participants);
+    if (participants === null) {
+        const msg = '--participants <n> must be a non-negative integer';
+        if (opts.json)
+            console.log(JSON.stringify({ success: false, error: msg }));
+        else
+            printError(msg);
+        process.exit(1);
+    }
+    const input = {
+        threadId: thread,
+        messages,
+        participants,
+        decisionDetected: opts.decision === true,
+        userFlagged: opts.userFlag === true,
+    };
+    const result = evaluateSlackThread(input);
+    const services = await createServices(process.cwd());
+    const root = await services.workspace.findRoot();
+    if (!root) {
+        if (opts.json)
+            console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+        else
+            printError('Not in an Areté workspace');
+        process.exit(1);
+    }
+    const paths = services.workspace.getPaths(root);
+    await services.memoryLog.append(paths, {
+        event: 'slack-thread-eval',
+        fields: {
+            thread: result.threadId,
+            would_summarize: String(result.wouldSummarize),
+            trigger: result.trigger,
+            messages: String(result.messages),
+            participants: String(result.participants),
+        },
+    }, { now: deps.now });
+    if (opts.json) {
+        console.log(JSON.stringify({
+            success: true,
+            wouldSummarize: result.wouldSummarize,
+            trigger: result.trigger,
+            allTriggers: result.allTriggers,
+        }));
+        return;
+    }
+    success(`slack_thread_eval thread=${result.threadId} would_summarize=${result.wouldSummarize} trigger=${result.trigger}`);
+}
+function parseNonNegativeInt(v) {
+    if (v === undefined)
+        return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0)
+        return null;
+    return n;
+}
 // ---------------------------------------------------------------------------
 // Command registration
 // ---------------------------------------------------------------------------
@@ -55,6 +139,22 @@ export function registerEventsCommand(program, deps = {}) {
         .option('--json', 'Output as JSON')
         .action(async (opts) => {
         await runWinddownEventLog(opts, deps);
+    });
+    // Phase 1 §a.3: slack-thread heuristic eval logging. The writer (when
+    // ARETE_SLACK_SUMMARIES=1) is wired separately in the slack-digest
+    // skill; this command logs the WOULD-decision unconditionally so
+    // shadow-run analysis works.
+    log
+        .command('slack-thread')
+        .description('Log slack-thread substantial-heuristic eval (Phase 1 shadow run)')
+        .requiredOption('--thread <id>', 'Stable thread id (channel + ts)')
+        .requiredOption('--messages <n>', 'Number of messages in thread')
+        .requiredOption('--participants <n>', 'Number of distinct participants')
+        .option('--decision', 'Decision/commitment detected in thread')
+        .option('--user-flag', 'User explicitly flagged this thread')
+        .option('--json', 'Output as JSON')
+        .action(async (opts) => {
+        await runSlackThreadEval(opts, deps);
     });
 }
 //# sourceMappingURL=events.js.map

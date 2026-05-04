@@ -18,5 +18,23 @@ export interface EventsCommandDeps {
     now?: Date;
 }
 export declare function runWinddownEventLog(opts: WinddownEventOptions, deps?: EventsCommandDeps): Promise<void>;
+export interface SlackEvalCliOptions {
+    thread?: string;
+    messages?: string;
+    participants?: string;
+    decision?: boolean;
+    userFlag?: boolean;
+    json?: boolean;
+}
+/**
+ * Run the slack-thread heuristic and append the result to
+ * `.arete/memory/log.md` as a `slack_thread_eval` event. During the
+ * 7-day shadow run (Phase 1 ship), the writer is gated by
+ * ARETE_SLACK_SUMMARIES — this command logs the WOULD-decision
+ * regardless, so John can spot-check false-pos / false-neg rates.
+ *
+ * The slack-digest skill calls this once per thread it processes.
+ */
+export declare function runSlackThreadEval(opts: SlackEvalCliOptions, deps?: EventsCommandDeps): Promise<void>;
 export declare function registerEventsCommand(program: Command, deps?: EventsCommandDeps): void;
 //# sourceMappingURL=events.d.ts.map
