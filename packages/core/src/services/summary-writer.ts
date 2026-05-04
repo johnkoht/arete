@@ -70,6 +70,14 @@ export interface MeetingSummaryInput {
   importance?: 'skip' | 'light' | 'standard' | 'heavy';
   topics?: string[];
   participants?: string[];
+  /**
+   * Side-thread headlines surfaced by wiki-aware extraction
+   * (`intelligence.could_include`). The body-block rendering on the
+   * meeting source file was removed in Phase 1 wiki expansion; these
+   * items are passed through here so the summary's `## FYI` section
+   * still picks them up. May be undefined or empty.
+   */
+  couldInclude?: string[];
 }
 
 export interface InboxSummaryInput {
@@ -213,6 +221,13 @@ export function buildMeetingSummaryPrompt(input: MeetingSummaryInput): string {
     input.topics && input.topics.length > 0 ? input.topics.join(', ') : '(no topic tags yet)';
   const area = input.area ?? '(no area)';
 
+  const couldIncludeBlock =
+    input.couldInclude && input.couldInclude.length > 0
+      ? `\n\nSIDE-THREAD HEADLINES (from wiki-aware extraction; candidates for the FYI section):\n${input.couldInclude
+          .map((h) => `- ${h}`)
+          .join('\n')}`
+      : '';
+
   return `You are summarizing a meeting for John, the participant. Produce a post-call-email-quality summary that John would send to attendees explaining what happened, what was decided, what's next.
 
 MEETING METADATA:
@@ -222,7 +237,7 @@ MEETING METADATA:
   Topics (tagged): ${topics}
 
 MEETING CONTENT:
-${input.sourceBody}
+${input.sourceBody}${couldIncludeBlock}
 
 Return ONLY a JSON object with this exact shape (no markdown fences, no prose outside JSON):
 

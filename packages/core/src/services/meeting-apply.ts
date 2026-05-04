@@ -377,6 +377,9 @@ export async function applyMeetingIntelligence(
 
         // Hash on body alone, mirroring topic-memory.hashMeetingSource —
         // frontmatter changes (status bumps, item counts) don't bust dedup.
+        // Phase 1: pass `could_include` headlines through so the summary
+        // writer's `## FYI` section can surface them — the body-block
+        // rendering on the meeting source file was removed.
         const summaryInput: MeetingSummaryInput = {
           sourcePath: wsRel,
           date: meetingDate,
@@ -385,6 +388,7 @@ export async function applyMeetingIntelligence(
           importance,
           topics: normalizedTopics,
           participants,
+          couldInclude: intelligence.could_include,
         };
 
         const summaryResult = await writeMeetingSummary(summaryInput, {
