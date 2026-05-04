@@ -41,6 +41,14 @@ export interface MeetingSummaryInput {
     importance?: 'skip' | 'light' | 'standard' | 'heavy';
     topics?: string[];
     participants?: string[];
+    /**
+     * Side-thread headlines surfaced by wiki-aware extraction
+     * (`intelligence.could_include`). The body-block rendering on the
+     * meeting source file was removed in Phase 1 wiki expansion; these
+     * items are passed through here so the summary's `## FYI` section
+     * still picks them up. May be undefined or empty.
+     */
+    couldInclude?: string[];
 }
 export interface InboxSummaryInput {
     /** Workspace-relative path to the inbox doc. */
