@@ -1225,7 +1225,13 @@ describe('formatFilteredStagedSections', () => {
     assert.ok(!result.includes('## Core'));
   });
 
-  it('emits ## Could include with bullets when list non-empty', () => {
+  // Phase 1 wiki expansion: `## Could include` body-block rendering was
+  // removed. The data still flows into the summary writer's prompt
+  // context (via MeetingSummaryInput.couldInclude); the bullets surface
+  // under the summary file's `## FYI` section instead of on the meeting
+  // source file. The `couldInclude` parameter is preserved on the
+  // formatter for API stability but is no longer rendered.
+  it('does NOT render ## Could include even when list non-empty (Phase 1)', () => {
     const items: FilteredItem[] = [];
 
     const result = formatFilteredStagedSections(
@@ -1235,12 +1241,13 @@ describe('formatFilteredStagedSections', () => {
       ['Risks: Sara flagged churn', 'Pricing: tier may shift'],
     );
 
-    assert.ok(result.includes('## Could include'));
-    assert.ok(result.includes('- Risks: Sara flagged churn'));
-    assert.ok(result.includes('- Pricing: tier may shift'));
+    assert.ok(result.includes('## Core'));
+    assert.ok(!result.includes('## Could include'), 'body-block removed in Phase 1');
+    assert.ok(!result.includes('- Risks: Sara flagged churn'));
+    assert.ok(!result.includes('- Pricing: tier may shift'));
   });
 
-  it('omits ## Could include block when list is empty', () => {
+  it('does NOT render ## Could include when list is empty', () => {
     const items: FilteredItem[] = [];
 
     const result = formatFilteredStagedSections(items, 'unused', 'Lead', []);
@@ -1249,7 +1256,7 @@ describe('formatFilteredStagedSections', () => {
     assert.ok(!result.includes('## Could include'));
   });
 
-  it('omits ## Could include block when list is undefined', () => {
+  it('does NOT render ## Could include when list is undefined', () => {
     const items: FilteredItem[] = [];
 
     const result = formatFilteredStagedSections(items, 'unused', 'Lead');

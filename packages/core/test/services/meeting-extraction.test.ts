@@ -1574,7 +1574,12 @@ describe('formatStagedSections - core / could_include (Task 8)', () => {
     assert.ok(!output.includes('## Core'));
   });
 
-  it('emits ## Could include with bullets when list non-empty', () => {
+  // Phase 1 wiki expansion: `## Could include` body-block rendering was
+  // removed. The same content is now surfaced under the summary file's
+  // `## FYI` section. The `intelligence.could_include` field is still
+  // parsed and is now threaded into the summary writer's prompt context;
+  // it is no longer rendered onto the meeting source file.
+  it('does NOT render ## Could include even when list non-empty (Phase 1)', () => {
     const result: MeetingExtractionResult = {
       intelligence: {
         ...baseIntelligence(),
@@ -1587,16 +1592,13 @@ describe('formatStagedSections - core / could_include (Task 8)', () => {
 
     const output = formatStagedSections(result);
 
-    assert.ok(output.includes('## Could include'));
-    assert.ok(output.includes('- Risks: Sara flagged churn'));
-    assert.ok(output.includes('- Pricing: tier may shift'));
-    // Sanity: Could-include block sits between Core and any Staged sections
-    const coreIdx = output.indexOf('## Core');
-    const couldIdx = output.indexOf('## Could include');
-    assert.ok(coreIdx >= 0 && couldIdx > coreIdx, 'Could-include must follow Core');
+    assert.ok(output.includes('## Core'));
+    assert.ok(!output.includes('## Could include'), 'body-block removed in Phase 1');
+    assert.ok(!output.includes('- Risks: Sara flagged churn'));
+    assert.ok(!output.includes('- Pricing: tier may shift'));
   });
 
-  it('omits ## Could include block entirely when list is empty', () => {
+  it('does NOT render ## Could include when list is empty', () => {
     const result: MeetingExtractionResult = {
       intelligence: {
         ...baseIntelligence(),
@@ -1613,7 +1615,7 @@ describe('formatStagedSections - core / could_include (Task 8)', () => {
     assert.ok(!output.includes('## Could include'));
   });
 
-  it('omits ## Could include block when list is undefined', () => {
+  it('does NOT render ## Could include when list is undefined', () => {
     const result: MeetingExtractionResult = {
       intelligence: {
         ...baseIntelligence(),

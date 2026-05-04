@@ -184,6 +184,41 @@ describe('summary-writer pure helpers', () => {
       assert.match(prompt, /participants not specified/);
       assert.match(prompt, /no topic tags yet/);
     });
+
+    // Phase 1 wiki expansion: `## Could include` body-block was removed
+    // from meeting source files; the same headlines now flow into the
+    // summary writer's prompt context via `couldInclude` so the LLM can
+    // surface them under the summary's `## FYI` section.
+    it('includes side-thread headlines when couldInclude is provided', () => {
+      const prompt = buildMeetingSummaryPrompt({
+        sourcePath: 'resources/meetings/foo.md',
+        date: '2026-04-22',
+        sourceBody: 'transcript body',
+        couldInclude: ['Risks: Sara flagged churn', 'Pricing: tier may shift'],
+      });
+      assert.match(prompt, /SIDE-THREAD HEADLINES/);
+      assert.match(prompt, /Risks: Sara flagged churn/);
+      assert.match(prompt, /Pricing: tier may shift/);
+    });
+
+    it('omits the side-thread block when couldInclude is empty', () => {
+      const prompt = buildMeetingSummaryPrompt({
+        sourcePath: 'resources/meetings/foo.md',
+        date: '2026-04-22',
+        sourceBody: 'transcript body',
+        couldInclude: [],
+      });
+      assert.ok(!prompt.includes('SIDE-THREAD HEADLINES'));
+    });
+
+    it('omits the side-thread block when couldInclude is undefined', () => {
+      const prompt = buildMeetingSummaryPrompt({
+        sourcePath: 'resources/meetings/foo.md',
+        date: '2026-04-22',
+        sourceBody: 'transcript body',
+      });
+      assert.ok(!prompt.includes('SIDE-THREAD HEADLINES'));
+    });
   });
 });
 
