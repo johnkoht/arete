@@ -128,7 +128,8 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 
 | Phase | Sub-orch ID | Sub-worktree | /ship stage | Last review | Notes |
 |---|---|---|---|---|---|
-| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED TO MAIN** (merge `131863fe`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups. Fix-up agent landed 5 more commits (incl. dist). Mini-review APPROVE. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. **14-day soak begins now.** Phase 1 build can proceed in parallel; Phase 1 merge to main waits for John's testing/usage of Phase 0. |
+| Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED TO MAIN** (merge `131863fe`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups. Fix-up agent landed 5 more commits (incl. dist). Mini-review APPROVE. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. Soak in progress (depends on John actually running daily-winddown). |
+| Phase 1 | a7aa23e400eeeac6c | `.claude/worktrees/agent-a7aa23e400eeeac6c` | **SHIPPED to parent** (merge `eb50dccf`); main merge **pending John's Phase 0 testing** | APPROVE WITH MINOR CONCERNS — meta's three framing calls all ACCEPTED | Build: 6 phase-1 commits (Steps 1-6). Original sub-orch died on `npm test` watchdog stall (~50 min). Recovery agent (~9 min) finished Steps 7+ via per-file `tsx --test`. Fix-up agent (~10 min) deleted missed `## Could include` body-block Remove. Eng-lead review accepted: (a) substitution argument at +8 ledger; (b) skill-prompt migration deferred to Phase 2; (c) 3 pre-existing backend agent.test.ts failures not Phase 1's regression. Total wall time ~69 min vs. 14-18 day estimate. |
 
 ## Open questions / parking lot
 
@@ -137,6 +138,29 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`week.md` as a working file**: hand-readable markdown, or derived view from state.json? **Lean: derived view, but markdown remains source-of-truth for user edits; refresh harmlessly regenerates non-user sections.**
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
+
+## Decisions log — 2026-05-04 (Phase 1 shipped to parent worktree)
+
+Phase 1 (Wiki expansion) merged into parent worktree branch at commit `eb50dccf`. **Not yet merged to main** — waiting for John's testing/usage of Phase 0 per the user's earlier execution rule. Phase 2 build can proceed in parallel.
+
+**Path that proved (and where the new pattern broke)**:
+1. Meta drafted Phase 1 plan with detailed scope, ACs, MC1/MC3 explicit, sub-orch handoff brief.
+2. Phase 1 sub-orch (a7aa23e400eeeac6c) shipped 6 phase-1 commits across Steps 1–6 in ~18 min, then **died on `npm test` watchdog stall after ~30 min** of attempted test-running. Watchdog timeout: "no progress for 600s." Total ~50 min.
+3. Recovery agent (a0410502757a88aa0) picked up in same sub-worktree, ran tests **per-file via `tsx --test`** (not `npm test`), committed dist, wrote build-report. ~9 min.
+4. Recovery surfaced honest AC1.10 ledger at +9 (over budget) AND flagged that the original sub-orch missed a plan-listed Remove (`## Could include` body-block).
+5. Fix-up agent (abd2c0d0f72befeed) deleted the body-block at named call-sites, migrated tests, rebuilt dist, updated build-report. ~10 min. Ledger dropped to +8.
+6. Eng-lead reviewer (aeae27ccbff4b69bf) ran with explicit framing of meta's three calls (substitution argument, skill-prompt deferral, pre-existing test failures). All three ACCEPTED. ~4 min.
+7. Meta merged sub-branch into parent worktree branch.
+
+**Total wall time spawn-to-parent-merge**: ~73 min across 4 agents.
+
+**Lessons forward (additions to diary's "Lessons forward" section from Phase 0)**:
+
+- **`npm test` at repo root is a watchdog killer.** Phase 0 lucked out by not running it; Phase 1 sub-orch hit the wall. Going forward, every sub-orch handoff brief explicitly bans full `npm test` and requires per-file `tsx --test` / `vitest run` invocations.
+- **The "open question" escape valve from Phase 0 evolved into a "ledger truth" escape valve in Phase 1.** Recovery agent surfaced the +9 ledger honestly per plan instruction. Meta then made a substantive call (pull more removes via fix-up agent) rather than rubber-stamping. The pattern works: sub-orch surfaces, meta decides, reviewer evaluates the meta decision.
+- **Original sub-orch missed a plan-listed Remove despite plan being explicit.** This is the kind of drift the discipline rule exists to catch. The fix-up cycle worked, but a future improvement: when sub-orch writes the build-report, explicitly cross-check each Remove in the phase plan against actual deletion.
+- **Watchdog stalls don't lose work** because per-task commits land before stalls happen. The 6 commits stayed; recovery picked up cleanly. This validates the "per-task commits during build, no squash" rule from the parent plan.
+- **"Skip the failing run, recover from where it stopped" is cheaper than restarting.** Recovery agent ran in ~9 min vs. an entire fresh sub-orch which would have repeated all 6 commits.
 
 ## Decisions log — 2026-05-01 (Phase 0 shipped)
 
