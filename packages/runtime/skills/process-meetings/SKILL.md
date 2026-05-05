@@ -48,7 +48,7 @@ one consolidated curated view at the end.
 - "Update people from meetings"
 - "Extract decisions from my meetings"
 - After syncing / saving new meetings
-- Called from `daily-winddown` Phase 2 (subagent-style invocation)
+- Called from `daily-winddown` as a primitive (subagent-style invocation)
 
 ## Default behavior (staged mode)
 
@@ -208,7 +208,7 @@ arete index
 
 ## Integration with caller skills
 
-When called by `daily-winddown` or `weekly-winddown` Phase 1h:
+When called by `daily-winddown` or `weekly-winddown` as a primitive:
 
 - The caller is responsible for engaging the user (single engage at
   the parent skill level).
@@ -291,8 +291,8 @@ Optional policy file: `context/people-intelligence-policy.json`
 - **Local files** — `resources/meetings/`,
   `.arete/memory/items/{decisions,learnings}.md`,
   `.arete/commitments.json`, `people/`.
-- **Related skills**: `daily-winddown` (Phase 1h caller),
-  `weekly-winddown` (Phase 1h caller), `meeting-prep` (sister skill —
+- **Related skills**: `daily-winddown` (parent caller),
+  `weekly-winddown` (parent caller), `meeting-prep` (sister skill —
   pre-meeting; this is post-meeting).
 
 ## Rollback
