@@ -130,6 +130,7 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 |---|---|---|---|---|---|
 | Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED TO MAIN** (merge `131863fe`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups. Fix-up agent landed 5 more commits (incl. dist). Mini-review APPROVE. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. Soak in progress (depends on John actually running daily-winddown). |
 | Phase 1 | a7aa23e400eeeac6c | `.claude/worktrees/agent-a7aa23e400eeeac6c` | **SHIPPED to parent** (merge `eb50dccf`); main merge **pending John's Phase 0 testing** | APPROVE WITH MINOR CONCERNS — meta's three framing calls all ACCEPTED | Build: 6 phase-1 commits (Steps 1-6). Original sub-orch died on `npm test` watchdog stall (~50 min). Recovery agent (~9 min) finished Steps 7+ via per-file `tsx --test`. Fix-up agent (~10 min) deleted missed `## Could include` body-block Remove. Eng-lead review accepted: (a) substitution argument at +8 ledger; (b) skill-prompt migration deferred to Phase 2; (c) 3 pre-existing backend agent.test.ts failures not Phase 1's regression. Total wall time ~69 min vs. 14-18 day estimate. |
+| Phase 2 | a8c94a3575a32646c | `.claude/worktrees/agent-a8c94a3575a32646c` | **SHIPPED to parent** (merge `650d325c`); main merge **pending John's Phase 0 + 1 testing** | APPROVE WITH MINOR CONCERNS — all four meta framing calls ACCEPTED | Build: 9 mandatory steps (PATTERNS.md → APPEND seeding → skill-resolver → daily-winddown validation + Step-5 A/B → 4 more skills → frontmatter.approved_items removal → tests → dist) shipped autonomously in ~37 min. Step-5 A/B PASS at 8/10 with 2 prose refinements. Eng-lead review (~4 min) verified ledger truth, plan-Removes cross-check, skill prose ambiguity. Prose fix-up agent (~2 min) landed 3 minor concerns; 4th (deferral_disagreement wiring) deferred to first soak pull-back. AC2.11 ledger: +8 at ship → +2 at wrap-up after MC5 legacy sunset; substitution argument accepted (skills-local + skill-resolver load-bearing for chef pattern with safe rollback). Total wall time ~43 min vs. 10-14 day estimate. |
 
 ## Open questions / parking lot
 
@@ -138,6 +139,31 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`week.md` as a working file**: hand-readable markdown, or derived view from state.json? **Lean: derived view, but markdown remains source-of-truth for user edits; refresh harmlessly regenerates non-user sections.**
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
+
+## Decisions log — 2026-05-04 (Phase 2 shipped to parent worktree)
+
+Phase 2 (Chef-orchestrator behavior rewrite) merged into parent worktree branch at `650d325c`. **Main merge pending John's testing/usage of Phase 0 + Phase 1.** This is the highest-stakes phase by a wide margin; the per-skill `ARETE_LEGACY_SKILL_PROSE` flag and 14-day soak with AC11 hard stop are the live safety nets.
+
+**Pipeline (~43 min wall time across 3 agents)**:
+1. Phase 2 sub-orch built all 9 mandatory steps autonomously in ~37 min: PATTERNS.md (chef patterns + verb taxonomy with executable / draft-only modes; Jira draft-only) → APPEND-file convention seeding → skill-resolver routing → daily-winddown rewrite + SKILL.legacy.md → **Step-5 A/B PASS at 8/10 (2 self-applied prose refinements)** → other 4 skills → frontmatter.approved_items removal → tests (per-file tsx --test, no `npm test`) → dist rebuild.
+2. Eng-lead reviewer (~4 min): APPROVE WITH MINOR CONCERNS; all four meta framing calls accepted (substitution argument, A/B PASS, two-engage variant, verb taxonomy completeness). Verified ledger truth independently via concrete file/dir counts. Spot-checked legacy files for verbatim integrity.
+3. Prose fix-up agent (~2 min): three minor concerns landed (process-meetings stale Phase-1h refs, daily-winddown wave behavior, week-plan sidecar threshold alignment); fourth (deferral_disagreement event wiring) deferred to first real soak pull-back per plan.
+
+**AC2.11 ledger**: +8 at ship; +2 at wrap-up after MC5 legacy sunset (Phase 3 ship). Substitution argument accepted: `skills-local` + `skill-resolver` are load-bearing for the chef-orchestrator pattern with safe rollback (AC11 hard stop machinery). They REPLACE the old "skills are immutable shipped" pattern.
+
+**Lessons forward (additions)**:
+- Validation-skill pattern (daily-winddown first, then propagate) earned its keep. Step-5 A/B caught two prose tightening opportunities before they spread to the other 4 skills. Subsequent phases with multi-target rewrites should keep this shape.
+- Prose-ambiguity catching at /review was effective. Phase 1's lesson was "cross-check plan-Removes against actual deletion"; Phase 2's reviewer did this and verified all plan-Removes (legacy step-by-step gates, frontmatter.approved_items) actually shipped.
+- Per-file targeted tests (`tsx --test` + `vitest run`) with bounded timeouts is now the established pattern. Two consecutive phases shipped without watchdog stalls. Sub-orch handoff briefs codify the ban on root `npm test`.
+- Eng-lead reviewer caught one potential regression-class issue (skill prose ambiguities like "Max 4 in parallel" without wave specification) that the soak's AC11 hard stop would NOT catch — soak only catches behavioral degradation; prose ambiguity is a review-time concern. Continue spawning the eng-lead reviewer for every phase.
+
+**Status of v2 phases**:
+- Phase 0: shipped to main; soaking (depends on John running daily-winddown)
+- Phase 1: shipped to parent; main-merge pending Phase 0 testing
+- Phase 2: shipped to parent; main-merge pending Phase 0 + Phase 1 testing
+- Phase 3 (skills directory split), Phase 4 (skills audit), Phase 5 (meeting extract decomposition), Phase 6 (schema layer conditional): not started.
+
+**Question for next meta session**: with Phases 1 and 2 stacked on parent waiting for user testing/usage, do we continue building Phase 3 onto parent worktree, or pause until John has used what's already shipped?
 
 ## Decisions log — 2026-05-04 (Phase 1 shipped to parent worktree)
 
