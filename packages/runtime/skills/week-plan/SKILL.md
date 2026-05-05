@@ -241,8 +241,9 @@ With confirmed priorities, build the full week plan:
 - Thu 3pm — Anthony 1:1 (run meeting-prep)
 
 ### Carryovers from last week (deferred)
-- 4 stale items pruned — see ./deferred-week-2026-WNN.md (if user wants
-  to spot-check before commit)
+- 4 stale items pruned — see ./deferred-week-2026-WNN.md
+  (≥4 deferred items always write a sidecar per Pattern 4; ≤3 surface
+  inline without a file)
 
 ## Proposed actions
 
