@@ -922,3 +922,329 @@ Prep Recommendations:
 
 **See also**: `context_bundle_assembly` — assembles the bundle this pattern consumes. `get_meeting_context` — when meeting-prep runs both, `context_bundle_assembly` reuses `get_meeting_context` outputs. `meeting-prep` — primary skill consumer.
 
+---
+
+# Chef-Orchestrator Patterns (Areté v2 Phase 2)
+
+These four patterns define how the agent behaves when running a "chef-orchestrator" skill: it does all primitive work upfront, applies judgment using wiki + memory + user-specific guidance, and engages the user **once** at the end with a curated, reason-labeled view.
+
+The patterns are **prescriptive on envelope, guidance on content** — the structure of how the agent presents output is fixed; the content the agent fills in is per-skill judgment.
+
+Used by: `daily-winddown`, `weekly-winddown`, `week-plan`, `process-meetings`, `meeting-prep`. Other skills may adopt as they're rewritten in Phase 4.
+
+---
+
+## do-all-work-then-engage
+
+**Purpose**: Replace step-by-step engagement gates with one upfront work pass + one curated engagement at the end. Eliminates the "10 cooks" feeling where the agent runs primitive A, asks user, runs primitive B, asks user, etc.
+
+**Used by**: All five chef-orchestrator skills. `week-plan` uses a **two-engage variant** (see below).
+
+### Envelope (prescriptive)
+
+The agent runs the following steps in order. **Do not engage the user between steps 1–5.** Engagement happens only at step 6.
+
+1. **List primitive calls** — enumerate every CLI invocation, MCP query, and file read needed for this run. Include both reads (today's calendar, recent meetings, open commitments) and writes (none expected at this stage — writes are user-approved at engage time).
+2. **Run primitives** — execute them. Parallelize where independent (e.g., calendar pull and inbox read are independent). Sequence where dependent (e.g., `meeting context` depends on the meeting list).
+3. **Read APPEND file** — `.arete/skills-local/<skill-slug>.md` if it exists. This is John's per-skill guidance. Treat its content as opinion-defining context for this skill.
+4. **Apply judgment** — using the gathered output + APPEND content + wiki context (summaries, entity pages, topic pages), decide what to surface, what to defer, and what to propose as actions. Use Patterns 2 (reason labels), 3 (action proposals), and 4 (sidecar) to compose the output.
+5. **Compose curated view** — single message to the user. Sections per the skill's output template. Never a flat firehose.
+6. **Engage user once** — present the curated view. Wait for response. Only then proceed to writes / executions.
+
+### When to use
+
+- Daily-winddown, weekly-winddown, process-meetings, meeting-prep — all run this pattern verbatim.
+- Week-plan uses the **two-engage variant** (below) because the user owns priorities upstream of the plan draft.
+
+### Two-engage variant (week-plan only)
+
+Some skills require an explicit user decision midway. Week-plan is the canonical case: the agent surfaces last week's carryovers + suggested priorities, the user confirms/edits the priorities, then the agent drafts the week plan against the confirmed list.
+
+Two engages are legitimate when both of these hold:
+
+- The midway decision is **the user's call** (e.g., priorities), not something the agent can reasonably infer.
+- The work after the midway decision **changes meaningfully** based on the user's input.
+
+If both don't hold, default to one-engage.
+
+For two-engage skills:
+
+- **Engage 1**: agent does all upfront work (pull last week's carryovers, scan unfinished items, gather candidate priorities) and surfaces a curated proposal. User confirms/edits.
+- **Engage 2**: agent does all draft work (build the plan against confirmed priorities + wiki + commitments) and surfaces a curated draft. User approves/edits.
+
+Do not insert additional engages. If the agent is tempted to ask a third question, the answer is "make a default choice and surface it as part of the curated view."
+
+### What counts as "all work"
+
+"All work" means every primitive call needed to compose the curated view. It does **not** include writes that require user approval (committing decisions to memory, scheduling calendar events, sending Slack DMs). Those are step 6+ post-engage.
+
+If a primitive fails mid-gather:
+
+- **Continue with partial state** when the failure is in a non-load-bearing primitive (e.g., topic find returned `searchBackend: 'none'` — note in output, proceed).
+- **Abort and engage early** when the failure is in a load-bearing primitive (e.g., today's meetings list cannot be retrieved — surface the error to the user and stop).
+
+The skill prose specifies which primitives are load-bearing vs not. When in doubt, continue and note the gap in the curated view.
+
+### Content (per-skill)
+
+Each skill's SKILL.md specifies:
+
+- **Which primitives** it runs in step 2 (read commands and parallelism notes).
+- **APPEND key** — `.arete/skills-local/<skill-slug>.md` (slug matches skill directory name).
+- **What judgment looks like** for this skill (e.g., "importance-rank, dedup against state, conflict-with-priorities").
+- **Output shape** — the section headers and quotas of the curated view.
+
+---
+
+## curate-with-reason-labels
+
+**Purpose**: Every staged item carries a "why this surfaced" label. Every deferred item carries a "why this was deferred" label. When the agent is unsure whether to stage or defer, it asks — explicitly, briefly — rather than guessing.
+
+**Used by**: All five chef-orchestrator skills.
+
+### Envelope (prescriptive)
+
+- **Every staged item** includes a one-line reason label. ≤12 words. Format: `— <reason>` appended to the item line.
+  - Examples:
+    - `Send API spec to Anthony — open commitment to Anthony, 9d old`
+    - `Push back on Q3 churn — matches week focus #2 (Glance launch)`
+    - `Schedule Lauren 1:1 — 3 mentions in last 5 days, no recent sync`
+- **Every deferred item** includes a one-line reason label. ≤12 words. Format: `— <reason>` appended to the item line.
+  - Examples:
+    - `Slack reaction reminder — low importance + no decision`
+    - `Standup follow-up — matches dismissal pattern (routine standup)`
+    - `Vendor email reply — confidence 0.4, below threshold`
+- **When uncertain**, surface to a `## Uncertain — your call` mini-tier. Brief yes/no proposal per item:
+  ```
+  ## Uncertain — your call
+  - [ ] Glance metrics ping to Lindsay — 14d old, possibly resolved by today's standup. **Stage or skip?**
+  - [ ] Email follow-up to Sara — matches dismissal pattern but customer-touching. **Stage or skip?**
+  ```
+- **Don't guess.** If a reasonable person could disagree, ask. Better to surface a 3-item Uncertain tier than to silently auto-defer something John wanted to see.
+
+### Reason taxonomy (standard set — extend per-skill)
+
+Reason labels should pull from a standard taxonomy where possible. This makes the language consistent across skills and gives John a stable mental model.
+
+| Category | Example reasons |
+|---|---|
+| **Importance match** | "matches week focus #N", "high-importance meeting", "active topic" |
+| **Time pressure** | "due today", "9d old commitment", "scheduled tomorrow" |
+| **Relationship** | "open with @person", "no recent 1:1", "customer-touching" |
+| **Volume / repetition** | "3 mentions in last 5 days", "topic compounding" |
+| **Dismissal pattern** | "matches dismissal pattern (routine standup)", "user has skipped 5×" |
+| **Confidence** | "below confidence 0.6", "low extraction confidence" |
+| **Importance gate** | "low importance + no decision", "frontmatter.importance=light" |
+| **Status** | "already resolved", "duplicate of staged item N" |
+
+The taxonomy is not a closed set. New categories emerge as the chef encounters new situations. Per-skill SKILL.md adds skill-specific reasons (e.g., meeting-prep: "1:1 prep", "agenda has unresolved item").
+
+### Where the label appears
+
+Inline with the item, after a single em-dash separator:
+
+```
+- [ ] <action> — <reason>
+- <decision> — <reason>
+- <learning> — <reason>
+```
+
+Not in a separate column, not in a footnote. The reason is the third part of the bullet, after the type prefix and item text.
+
+### Content (per-skill)
+
+Each skill's SKILL.md specifies the reason labels relevant to that skill's domain. E.g., daily-winddown surfaces commitments and meeting outputs; meeting-prep surfaces relationship signals and prior-meeting threads.
+
+---
+
+## propose-with-mcp-action
+
+**Purpose**: When a committed action or surfaced item maps to a known verb (Slack DM, calendar event, Notion update, Jira ticket, Areté CLI command), the agent proposes the action with full parameters and **awaits user approval before executing**. The agent never auto-executes, even for "simple" actions. User approval is required for every action, every time.
+
+**Used by**: All five chef-orchestrator skills (where action proposals make sense).
+
+### Envelope (prescriptive)
+
+At the end of the curated view, after all staged/deferred/uncertain items, include a `## Proposed actions` section if any actions are warranted. Format: inline numbered list, one action per line, with verb name + parameters.
+
+```
+## Proposed actions
+
+[1] slack.send_dm to @anthony: "Following up on auto-attachments — saw your PR comment, want to align Wed?"
+[2] calendar.create_event "Lauren / John 1:1" attendees=[lauren] when=Wed-10am-CT duration=30m
+[3] arete.inbox_add source=manual "Q3 churn assumption pushback for Lauren"
+[4] (draft) jira.create_ticket project=INGEST type=Task summary="Default Attachments rollout test" description="Ready for testing per Tim..." labels=[glance,defaults]
+```
+
+User responds with action numbers to execute, edit, or skip:
+
+- `1` → execute action 1
+- `1, 3` → execute actions 1 and 3
+- `1 with target=@jamie` → edit and execute action 1
+- `2 when=Thu-10am` → edit action 2's `when` parameter and execute
+- `skip 1` or `skip` → drop the action(s)
+- `all` → execute every executable; for draft-only, confirm acknowledgment
+- (no response in 30s) → treat as skip; do not execute
+
+### Modes — `executable` vs `draft-only`
+
+Two execution modes. The propose envelope is identical; the only difference is whether the agent can run the action via an MCP/CLI on approval.
+
+- **`executable`** — agent can run the action on approval. The action line has no mode tag; it's the default.
+- **`draft-only`** — agent formats the action as the user would create it externally (e.g., open Jira and create the ticket). The action line is prefixed with `(draft)`. On approval, the agent confirms acknowledgment but does not execute.
+
+Draft-only exists because not every verb has a wired MCP. Jira is the canonical example today (no Jira MCP in John's stack). Drafts let the agent draft the ticket content while the user retains the execute step.
+
+### Action verb taxonomy (Phase 2 default — user extends via APPEND)
+
+| Source | Verb | Mode | Parameters |
+|---|---|---|---|
+| Slack MCP | `slack.send_dm` | executable | target_user, message |
+| Slack MCP | `slack.send_channel` | executable | channel, message |
+| GWS Calendar MCP / `arete calendar create` | `calendar.create_event` | executable | title, attendees, start, duration, agenda? |
+| GWS Calendar MCP | `calendar.suggest_time` | executable | attendees, duration, window |
+| Notion MCP | `notion.update_page` | executable | page_id_or_title, content |
+| Notion MCP | `notion.create_page` | executable | parent, title, content |
+| Jira (no MCP today) | `jira.create_ticket` | draft-only | project, type, summary, description, assignee?, labels?, parent_epic? |
+| Jira | `jira.update_ticket` | draft-only | ticket_id, fields |
+| Jira | `jira.transition_ticket` | draft-only | ticket_id, to_state |
+| Areté CLI | `arete.inbox_add` | executable | source, content |
+| Areté CLI | `arete.commitments_create` | executable | text, target_person, due? |
+| Areté CLI | `arete.commitments_resolve` | executable | id, resolution |
+
+The chef reads the user's APPEND file to learn:
+
+1. **Which MCPs are wired** — only propose verbs the user has connected.
+2. **Which draft-only verbs the user wants drafts for** — Jira is opt-in per project.
+3. **User-specific context** — project keys, default labels, naming conventions.
+
+The chef proposes only verbs the user listed in their APPEND file or that are obviously wired (e.g., `arete.*` verbs always available in an Areté workspace).
+
+### Never auto-execute
+
+This is the rule, not a guideline. Even for "obviously safe" actions:
+
+- `slack.send_dm` to a known recipient with a clearly-drafted message — **propose, don't auto-send.**
+- `arete.inbox_add` for a captured note — **propose, don't auto-add.**
+
+The trust gap is calibrated by user approvals; auto-execution shortcuts that calibration. Phase 2 ships conservative; Phase 4+ may revisit per-verb defaults based on observed acceptance rates.
+
+### Content (per-skill)
+
+Each skill's SKILL.md specifies which verbs the skill might propose and the contextual phrasing for each. E.g., daily-winddown proposes `arete.commitments_resolve` for completed tasks; meeting-prep proposes `slack.send_dm` for pre-meeting follow-ups.
+
+---
+
+## surface-deferred-as-sidecar
+
+**Purpose**: Auto-deferred items don't bloat the primary view. They roll up to a count + a sidecar file the user can spot-check. When the user pulls an item back from the sidecar, the agent records it as a `deferral_disagreement` event for the chef to learn from.
+
+**Used by**: All five chef-orchestrator skills.
+
+### Envelope (prescriptive)
+
+In the primary curated view, deferred items appear as a single line:
+
+```
+12 items deferred — see ./deferred-2026-05-15.md
+```
+
+The sidecar file is written to **workspace root** (not `.arete/memory/` — these are user-facing review surfaces, not durable memory):
+
+- Daily skills: `./deferred-<YYYY-MM-DD>.md`
+- Weekly skills: `./deferred-week-<YYYY-WNN>.md` (ISO week number)
+- Per-meeting skills: `./deferred-<meeting-slug>.md`
+
+Sidecar contents: full deferred list with reason labels, grouped by category (importance / dismissal / confidence / etc.). Same `— <reason>` format as Pattern 2.
+
+```markdown
+# Deferred items — 2026-05-15
+
+12 items auto-deferred during daily-winddown. Pull back any you want surfaced
+by adding `[[pull-back]]` after the item; the next winddown will re-surface it
+and log a deferral_disagreement event.
+
+## Low importance / no decision (5)
+- Routine standup notes — low importance + no decision
+- Weekly review FYI — low importance + already covered in summary
+- ...
+
+## Matches dismissal pattern (4)
+- Anthony PR comment — matches dismissal pattern (routine code review ping)
+- ...
+
+## Below confidence threshold (3)
+- Possible action item from rambling discussion — confidence 0.4, below threshold
+- ...
+```
+
+### Pull-back mechanism
+
+When the user manually re-surfaces a deferred item (by editing the sidecar to mark it `[[pull-back]]` or by mentioning it in the next winddown), the chef:
+
+1. Re-stages the item in the next run.
+2. Appends a `deferral_disagreement` event to `.arete/memory/item-fates.jsonl` (Phase 0 substrate). Event shape:
+   ```json
+   {
+     "ts": "2026-05-16T09:42:00Z",
+     "kind": "deferral_disagreement",
+     "skill": "daily-winddown",
+     "item_id": "<id>",
+     "item_text": "<verbatim>",
+     "deferred_reason": "<original reason label>",
+     "source_sidecar": "./deferred-2026-05-15.md"
+   }
+   ```
+3. Surfaces the disagreement count weekly: "Deferral disagreements this week: N. Pattern: <observed cluster, if any>." This is the disagreement-as-signal feedback loop.
+
+### When to use the sidecar vs primary view
+
+- **Sidecar**: items the chef is confident the user does not want surfaced. Default behavior is "skip"; sidecar exists for spot-checking.
+- **Primary view**: items the chef is confident should surface. Reason label says why.
+- **`## Uncertain — your call` (Pattern 2)**: items the chef is unsure about. Quick yes/no inline in the primary view; never goes to sidecar.
+
+If the deferred count is small (≤3 items) and the chef has high confidence in deferral, the sidecar may be omitted entirely — surface the count inline without writing a file:
+
+```
+3 items auto-deferred (low importance / dismissal pattern; no sidecar needed)
+```
+
+### Content (per-skill)
+
+Each skill's SKILL.md specifies:
+
+- **Sidecar naming convention** for that skill (`deferred-<date>.md`, `deferred-week-<weeknum>.md`, etc.).
+- **What gets included** — categories of deferral relevant to the skill's domain.
+- **Pull-back surface** — how the user re-surfaces (sidecar edit, next-run mention, or both).
+
+---
+
+## Chef-orchestrator pattern interplay
+
+The four patterns compose. A typical chef-skill output looks like:
+
+```
+[do-all-work-then-engage]: agent has gathered, judged, and curated.
+
+## What I think you should do today (staged)
+- [ ] Send API spec to Anthony — open commitment, 9d old   [Pattern 2: reason label]
+- [ ] Push back on Q3 churn — matches week focus #2
+
+## Uncertain — your call                                    [Pattern 2: uncertain tier]
+- [ ] Glance metrics ping to Lindsay — possibly resolved by standup. Stage or skip?
+
+## Pruning candidates                                       [skill-specific tier]
+- Stale Notion doc from March
+
+12 items deferred — see ./deferred-2026-05-15.md            [Pattern 4: sidecar reference]
+
+## Proposed actions                                         [Pattern 3: action proposals]
+[1] slack.send_dm to @anthony: "..."
+[2] arete.commitments_resolve id=cmt_abc resolution="sent"
+[3] (draft) jira.create_ticket project=INGEST summary="..."
+
+What's your call?                                            [Pattern 1: engage user once]
+```
+
+This is what "chef-orchestrator" looks like in practice: the agent has done the work, applied judgment, surfaced reasoning, and asked for one decision. The user reviews exceptions and proposals, not a flat firehose.
+
