@@ -1674,26 +1674,37 @@ export function registerMeetingCommands(program: Command): void {
 
       // Read final meeting state for response
       const finalContent = await services.storage.read(meetingPath);
-      const { frontmatter: finalFm } = extractFrontmatter(finalContent ?? '');
+      const { frontmatter: finalFm, body: finalBody } = extractFrontmatter(finalContent ?? '');
 
-      // Build response
-      const approvedItems = finalFm['approved_items'] as {
+      // Phase 2 (Areté v2): approved items live in body sections
+      // (## Approved Action Items / Decisions / Learnings) — the
+      // frontmatter.approved_items duplicate is gone. Backward-compat:
+      // fall back to legacy frontmatter when body has no approved
+      // sections (pre-Phase-2 meeting files).
+      const { parseApprovedSection } = await import('@arete/core');
+      const bodyActions = parseApprovedSection(finalBody ?? '', 'Action Items');
+      const bodyDecisions = parseApprovedSection(finalBody ?? '', 'Decisions');
+      const bodyLearnings = parseApprovedSection(finalBody ?? '', 'Learnings');
+
+      const legacyApproved = finalFm['approved_items'] as {
         actionItems?: string[];
         decisions?: string[];
         learnings?: string[];
       } | undefined;
 
+      const approvedItems = {
+        actionItems: bodyActions.length > 0 ? bodyActions : (legacyApproved?.actionItems ?? []),
+        decisions: bodyDecisions.length > 0 ? bodyDecisions : (legacyApproved?.decisions ?? []),
+        learnings: bodyLearnings.length > 0 ? bodyLearnings : (legacyApproved?.learnings ?? []),
+      };
+
       const response = {
         success: true,
         slug,
-        approvedItems: {
-          actionItems: approvedItems?.actionItems ?? [],
-          decisions: approvedItems?.decisions ?? [],
-          learnings: approvedItems?.learnings ?? [],
-        },
+        approvedItems,
         memoryUpdated: {
-          decisions: (approvedItems?.decisions?.length ?? 0) > 0,
-          learnings: (approvedItems?.learnings?.length ?? 0) > 0,
+          decisions: approvedItems.decisions.length > 0,
+          learnings: approvedItems.learnings.length > 0,
         },
         ...(selectedGoalSlug ? { goalSlug: selectedGoalSlug } : {}),
         topicIntegration: topicIntegration ?? null,
@@ -1708,9 +1719,9 @@ export function registerMeetingCommands(program: Command): void {
       // Human-readable output
       success(`Meeting approved: ${slug}`);
 
-      const actionCount = approvedItems?.actionItems?.length ?? 0;
-      const decisionCount = approvedItems?.decisions?.length ?? 0;
-      const learningCount = approvedItems?.learnings?.length ?? 0;
+      const actionCount = approvedItems.actionItems.length;
+      const decisionCount = approvedItems.decisions.length;
+      const learningCount = approvedItems.learnings.length;
 
       if (actionCount > 0) {
         const goalNote = selectedGoalSlug ? ` (linked to ${selectedGoalSlug})` : '';

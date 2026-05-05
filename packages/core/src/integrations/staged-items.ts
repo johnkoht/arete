@@ -558,13 +558,18 @@ export async function commitApprovedItems(
     }
   }
 
-  // ── 4.6 Store approved items in frontmatter for UI display ───────────────
-  // Action items include owner notation for commitment tracking consistency
-  data['approved_items'] = {
-    actionItems: approvedActionItems.map(i => formatActionItemWithOwner(i)),
-    decisions: approvedDecisions.map(i => i.text),
-    learnings: approvedLearnings.map(i => i.text),
-  };
+  // ── 4.6 Approved items live in the body (## Approved sections) ───────────
+  // Phase 2 (Areté v2): the `frontmatter.approved_items` duplicate is gone.
+  // Body sections written above (## Approved Action Items / Decisions /
+  // Learnings) are the single source of truth. Web review UI + CLI
+  // reconciliation parse from the body.
+  //
+  // Old shape (removed): `data['approved_items'] = {...}` — third-copy
+  // duplicate that existed only because the web UI used to read it.
+
+  // Defensive cleanup: remove any pre-Phase-2 `approved_items` field on
+  // re-approval. Idempotent — no-op when the field doesn't exist.
+  delete data['approved_items'];
 
   // ── 5-6. Update frontmatter ───────────────────────────────────────────────
   delete data['staged_item_status'];
