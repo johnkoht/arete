@@ -23,6 +23,7 @@ export const BASE_WORKSPACE_DIRS = [
   '.arete/memory/summaries',
   '.arete/activity',
   '.arete/config',
+  '.arete/skills-local',
   '.arete/templates/meeting-agendas',
   'projects',
   'projects/active',

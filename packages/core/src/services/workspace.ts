@@ -36,6 +36,7 @@ const SKILLS_DOC_FILES = new Set([
 ]);
 import { loadConfig, getDefaultConfig } from '../config.js';
 import { SkillService } from './skills.js';
+import { seedSkillsLocal } from './skills-local.js';
 import {
   generateIntegrationSection,
   injectIntegrationSection,
@@ -465,6 +466,21 @@ export class WorkspaceService {
       }
     }
 
+    // Seed `.arete/skills-local/<slug>.md` APPEND-file templates for the
+    // five Phase 2 chef-orchestrator skills. Idempotent — never
+    // overwrites existing user content. The agent reads these files at
+    // the start of each chef-orchestrator skill run for per-skill
+    // user guidance.
+    try {
+      const seedResult = await seedSkillsLocal(this.storage, targetDir);
+      for (const file of seedResult.added) {
+        if (!result.files.includes(file)) result.files.push(file);
+      }
+    } catch {
+      // Non-fatal: skills-local seeding failure should never wedge
+      // workspace install.
+    }
+
     const manifest: AreteConfig = {
       schema: 1,
       version: '0.1.0',
@@ -566,6 +582,21 @@ export class WorkspaceService {
       result.added.push(...syncResult.added);
       result.updated.push(...syncResult.updated);
       result.preserved.push(...syncResult.preserved);
+    }
+
+    // Seed `.arete/skills-local/<slug>.md` APPEND templates (Phase 2).
+    // Idempotent: existing user content is preserved verbatim. New
+    // templates are added; preserved files are listed in result.preserved.
+    try {
+      const seedResult = await seedSkillsLocal(this.storage, workspaceRoot);
+      for (const file of seedResult.added) {
+        if (!result.added.includes(file)) result.added.push(file);
+      }
+      for (const file of seedResult.preserved) {
+        if (!result.preserved.includes(file)) result.preserved.push(file);
+      }
+    } catch {
+      // Non-fatal: skills-local seeding failure should never wedge update.
     }
 
     // Build skill list for commands and root files

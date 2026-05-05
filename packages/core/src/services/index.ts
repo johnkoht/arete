@@ -8,6 +8,15 @@ export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
+export {
+  seedSkillsLocal,
+  renderSkillsLocalTemplate,
+  PHASE_2_CHEF_ORCHESTRATOR_SKILLS,
+} from './skills-local.js';
+export type {
+  SeedSkillsLocalResult,
+  ChefOrchestratorSkillSlug,
+} from './skills-local.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.
 // (Skill discovery is the parallel concern; see services/skills.ts.)
