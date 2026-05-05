@@ -389,3 +389,27 @@ Sub-branch: `worktree-agent-a8c94a3575a32646c`
 HEAD: `e045814f` (12 commits ahead of `0ddb33cc`)
 
 Ready for eng-lead reviewer.
+
+## Post-review fix-ups
+
+Eng-lead `/review` returned **APPROVE WITH MINOR CONCERNS** with three small
+prose-tightening follow-ons (concern 4 — `deferral_disagreement` wiring —
+genuinely defers to soak per the reviewer's note). Applied as three per-skill
+commits:
+
+| # | Commit | File | Change |
+|---|---|---|---|
+| 1 | `edaec104` | `packages/runtime/skills/process-meetings/SKILL.md` | Replaced three stale "Phase 1h" / "Phase 2 (subagent-style invocation)" references (lines 51, 211, 294–295) with skill-local language ("primitive", "parent caller"). Process-meetings is its own skill; its prose should not reference the caller's internal step numbering. |
+| 2 | `e3e70146` | `packages/runtime/skills/daily-winddown/SKILL.md` | Tightened Step 1h parallelism comment from "Max 4 in parallel; batch larger sets" to "Process up to 4 in parallel; for batches larger than 4, process in waves of 4 (start the next wave when the previous wave completes; do not skip files)." Removes the ambiguity that the agent could read this as "process only 4." |
+| 3 | `bad88e9e` | `packages/runtime/skills/week-plan/SKILL.md` | Tightened the line-244 sidecar phrasing to match Pattern 4's ≥4 threshold rule. Replaced the conditional "(if user wants to spot-check before commit)" with explicit "(≥4 deferred items always write a sidecar per Pattern 4; ≤3 surface inline without a file)". |
+
+**Verification**:
+- `npx tsx --test packages/core/test/services/skill-resolver.test.ts` — 22/22 pass
+- `npx tsx --test packages/core/test/services/chef-orchestrator-skills.test.ts` — 39/39 pass
+- `tsc -b packages/core packages/cli` — clean
+
+No dist rebuild required (SKILL.md prose only, no compiled TS changed).
+
+**Deferred to soak (per review)**: `deferral_disagreement` event emission
+remains prose-only in PATTERNS.md. First pull-back during soak will exercise
+the substrate (`item-fates.jsonl` from Phase 0); wire then.
