@@ -21,10 +21,20 @@ integration:
 # Process Meetings — chef-orchestrator pattern
 
 This skill applies the four chef-orchestrator patterns from
-`PATTERNS.md` to meeting batch processing. The agent extracts and
-stages **all** meetings upfront (in parallel where possible), applies
-judgment using wiki + memory + APPEND, and engages the user **once**
-with a curated review across the batch.
+`PATTERNS.md` to meeting batch processing. Pattern names:
+
+- Pattern 1 — `do-all-work-then-engage` (gather + extract +
+  stage + judge across the batch, then engage once).
+- Pattern 2 — `curate-with-reason-labels` (every staged + deferred
+  item carries a reason, including cross-meeting dedup notes).
+- Pattern 3 — `propose-with-mcp-action` (action proposals at end
+  of batch review).
+- Pattern 4 — `surface-deferred-as-sidecar` (deferred items roll
+  to a per-batch sidecar or the parent skill's sidecar).
+
+The agent extracts and stages **all** meetings upfront (in parallel
+where possible), applies judgment using wiki + memory + APPEND, and
+engages the user **once** with a curated review across the batch.
 
 The legacy step-by-step "extract, ask, extract, ask" flow is gone;
 the agent does the gather + extraction work concurrently and presents

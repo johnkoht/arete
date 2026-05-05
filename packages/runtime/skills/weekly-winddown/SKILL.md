@@ -20,15 +20,27 @@ intelligence:
 # Weekly Winddown — chef-orchestrator pattern
 
 This skill applies the four chef-orchestrator patterns from
-`PATTERNS.md` to a weekly time horizon. The agent does **all** primitive
-work upfront across the full week (catch up unprocessed meetings,
-gather planning context, scan thread arcs, check context health),
-applies judgment using wiki + memory + APPEND, and engages the user
-**once** with a curated weekly review + next-week setup.
+`PATTERNS.md` to a weekly time horizon. Pattern names:
 
-Patterns 1–4 from PATTERNS.md apply verbatim. The longer time horizon
-means the deferred sidecar will typically be larger; group it by
-category (importance / dismissal / confidence / status).
+- Pattern 1 — `do-all-work-then-engage` (single-engage variant —
+  the agent does all primitive work upfront, then engages once
+  with the curated review).
+- Pattern 2 — `curate-with-reason-labels` (every staged + deferred
+  item carries a one-line reason).
+- Pattern 3 — `propose-with-mcp-action` (action proposals at end
+  of view; never auto-execute).
+- Pattern 4 — `surface-deferred-as-sidecar` (deferred items roll
+  to a sidecar; pull-back logs `deferral_disagreement` events).
+
+The agent does **all** primitive work upfront across the full week
+(catch up unprocessed meetings, gather planning context, scan
+thread arcs, check context health), applies judgment using wiki +
+memory + APPEND, and engages the user **once** with a curated
+weekly review + next-week setup.
+
+The longer time horizon means the deferred sidecar will typically
+be larger; group it by category (importance / dismissal /
+confidence / status).
 
 **Read first** (if exists): `.arete/skills-local/weekly-winddown.md`.
 

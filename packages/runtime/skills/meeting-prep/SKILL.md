@@ -22,10 +22,20 @@ intelligence:
 # Meeting Prep — chef-orchestrator pattern
 
 This skill applies the four chef-orchestrator patterns from
-`PATTERNS.md` to pre-meeting briefing. The agent gathers **all**
-context upfront (attendees, recent meetings, commitments, area
-state, recent threads) using existing patterns
-(`get_meeting_context`, `get_area_context`,
+`PATTERNS.md` to pre-meeting briefing. Pattern names:
+
+- Pattern 1 — `do-all-work-then-engage` (gather + judge across all
+  context sources, then engage once with the brief).
+- Pattern 2 — `curate-with-reason-labels` (relationship signals,
+  open commitments, recent meetings — each with a reason).
+- Pattern 3 — `propose-with-mcp-action` (pre-meeting actions:
+  drafted DMs, commitment status, captures).
+- Pattern 4 — `surface-deferred-as-sidecar` (rare for meeting-prep
+  — used only when historical context is large).
+
+The agent gathers **all** context upfront (attendees, recent
+meetings, commitments, area state, recent threads) using existing
+patterns (`get_meeting_context`, `get_area_context`,
 `relationship_intelligence`, `topic_page_retrieval`,
 `contextual_memory_search`), applies relationship + topic judgment,
 and engages the user **once** with a curated brief.

@@ -24,7 +24,21 @@ intelligence:
 
 This skill applies the four chef-orchestrator patterns from
 `PATTERNS.md` with the **two-engage variant** of Pattern 1
-(`do-all-work-then-engage`). Two engages are warranted because:
+(`do-all-work-then-engage`).
+
+Pattern names applied here:
+
+- Pattern 1 — `do-all-work-then-engage` (two-engage variant —
+  priorities → plan draft).
+- Pattern 2 — `curate-with-reason-labels` (every suggested
+  priority and every staged task carries a reason).
+- Pattern 3 — `propose-with-mcp-action` (action proposals at
+  end of the plan-draft engage).
+- Pattern 4 — `surface-deferred-as-sidecar` (pruning candidates
+  the user accepts roll to the shared
+  `./deferred-week-YYYY-WNN.md` sidecar).
+
+Two engages are warranted because:
 
 - **The midway decision is the user's call** — weekly priorities are
   not something the agent can reasonably infer.

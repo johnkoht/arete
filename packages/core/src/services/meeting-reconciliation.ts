@@ -841,19 +841,29 @@ const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←])\s*(?:@(
  */
 export function parseApprovedSection(body: string, sectionName: string): string[] {
   // Note: cannot use `$` with the `m` flag for end-of-string — that matches
-  // end-of-line. Use a two-step approach: try lookahead for next ##/---;
-  // if no such marker, fall back to consuming through end-of-string.
+  // end-of-line. Use a two-step approach: anchor to the header line, then
+  // walk forward to the next ##/--- boundary or end-of-string.
   const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const headerRe = new RegExp(`^##\\s+Approved\\s+${escapedName}\\s*\\n`, 'mi');
+
+  // Match only the header line itself (not greedy-consume blank lines after).
+  // `\\r?\\n` consumes exactly one line terminator; subsequent blank lines
+  // remain in the remainder so the boundary lookup can find them.
+  const headerRe = new RegExp(
+    `^##\\s+Approved\\s+${escapedName}[ \\t]*\\r?\\n`,
+    'mi',
+  );
   const headerMatch = body.match(headerRe);
   if (!headerMatch || headerMatch.index === undefined) return [];
 
   const sectionStart = headerMatch.index + headerMatch[0].length;
   const remainder = body.slice(sectionStart);
 
-  // Find the next ## or --- boundary; if none, take all remaining content.
-  const boundaryMatch = remainder.match(/\n##\s|\n---/);
-  const sectionContent = boundaryMatch
+  // Boundary: either `## ` at line start (could be at remainder position 0
+  // if the section is empty, or after `\n` for a non-empty section) or `---`
+  // at line start. If no boundary, take the rest of the body.
+  const boundaryRe = /(?:^|\n)(?:##\s|---)/;
+  const boundaryMatch = remainder.match(boundaryRe);
+  const sectionContent = boundaryMatch && boundaryMatch.index !== undefined
     ? remainder.slice(0, boundaryMatch.index)
     : remainder;
 
