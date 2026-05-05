@@ -140,6 +140,35 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## User testing window — starting 2026-05-05 morning
+
+John pausing meta work to test all three phases from the worktree before authorizing main merges. Setup he'll run:
+
+```bash
+cd /Users/john/code/arete/.claude/worktrees/arete-v2-chef-orchestrator/packages/cli
+npm link
+cd ~/code/arete-reserv
+arete update   # refresh skills + seed .arete/skills-local/ APPEND templates
+```
+
+Then he'll run his actual EOD winddown using the chef-orchestrator pattern.
+
+**What to watch for in his report-back**:
+- Phase 0 instrumentation populating (winddown timing log, item-fate jsonl, cost aggregator)
+- Phase 1 wiki: meeting summary quality, entity pages auto-generated for orgs, slack heuristic logging-only entries
+- Phase 2 chef behavior: single engagement, reason labels, `## Uncertain` tier, inline action proposals, sidecar for deferred
+- AC11 hard stop trigger: any winddown >45 min on any single day = revert relevant skill via `ARETE_LEGACY_SKILL_PROSE`
+- Trust-gap signals: chef defers things he wanted to see / surfaces things he didn't (pre-mortem R3) — retune APPEND file or chef prose
+
+**Decisions waiting on John's testing**:
+- Phase 1 main-merge authorization
+- Phase 2 main-merge authorization
+- Whether to continue building Phase 3 (skills directory split) onto parent worktree now or pause until shipped phases are validated
+
+**If the next meta is in a fresh context**: read this section + the most recent decisions log entry + Phase 2's `review.md` for the four follow-on concerns, especially the `deferral_disagreement` event wiring that defers to "first soak pull-back" (i.e., when John pulls a deferred item back from `./deferred-<date>.md`, that should trigger appending a `deferral_disagreement` event to `item-fates.jsonl` — wire it then).
+
+**If `npm link` or `arete update` errors at setup**: most likely cause is dist out-of-sync. From the worktree root, run `npm run build` (rebuild core + cli + backend dist) and re-run `npm link`. The Phase 2 sub-orch's dist commit `e045814f` should be current, but rebuilding is cheap and safe.
+
 ## Decisions log — 2026-05-04 (Phase 2 shipped to parent worktree)
 
 Phase 2 (Chef-orchestrator behavior rewrite) merged into parent worktree branch at `650d325c`. **Main merge pending John's testing/usage of Phase 0 + Phase 1.** This is the highest-stakes phase by a wide margin; the per-skill `ARETE_LEGACY_SKILL_PROSE` flag and 14-day soak with AC11 hard stop are the live safety nets.
