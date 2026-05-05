@@ -86,7 +86,10 @@ for this skill.
 
 ### Step 1 — Gather (all primitives, parallelize where independent)
 
-**Run in parallel (no engagement gates between):**
+**Run in parallel (no engagement gates between).** The chef-orchestrator
+pattern's speed win comes from *actually* running 1a–1f as concurrent
+tool calls in a single agent turn. Sequential reads here defeat the
+purpose. If the harness supports parallel tool calls, use them.
 
 ```bash
 # 1a. Pull recordings from configured integrations
@@ -330,6 +333,14 @@ needed — the chef reads frontmatter inline.
 - `importance: light` → defer unless customer-touching or in APPEND
   active initiatives
 - `importance: skip` → defer always
+
+**When in doubt, surface to Uncertain rather than auto-defer.** This
+is especially important on the first few runs — the APPEND file may
+be empty, and the chef hasn't yet learned the user's deferral
+pattern. Better to ask 3 yes/no questions than silently drop a
+customer-touching item. Trust earns over time as
+`deferral_disagreement` events accumulate (Phase 0 substrate); the
+chef can tighten its defer-confidence as the disagreement rate drops.
 
 ## Error handling
 
