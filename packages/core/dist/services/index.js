@@ -7,6 +7,8 @@ export { EntityService } from './entity.js';
 export { IntelligenceService } from './intelligence.js';
 export { WorkspaceService } from './workspace.js';
 export { SkillService } from './skills.js';
+export { seedSkillsLocal, renderSkillsLocalTemplate, PHASE_2_CHEF_ORCHESTRATOR_SKILLS, } from './skills-local.js';
+export { parseLegacyList, resolveSkillFile, resolveSkillFileFromEnv, resolveSkillFileWithFallback, } from './skill-resolver.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.
 // (Skill discovery is the parallel concern; see services/skills.ts.)
@@ -23,7 +25,7 @@ export { parseActionItemsFromMeeting } from './meeting-parser.js';
 // Meeting processing
 export { processMeetingExtraction, applyReconciliationDecision, extractUserNotes, clearApprovedSections, formatFilteredStagedSections, calculateSpeakingRatio, inferUrgency, buildSkippedItemFateEvents, buildDismissedItemFateEvents, } from './meeting-processing.js';
 // Meeting reconciliation
-export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview } from './meeting-reconciliation.js';
+export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
 // Pattern detection
 export { detectCrossPersonPatterns } from './patterns.js';
 // Momentum analysis

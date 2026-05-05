@@ -200,11 +200,13 @@ function extractTranscript(body) {
  *
  * Status hierarchy:
  * 1. Explicit frontmatter status takes precedence
- * 2. Has approved_items frontmatter → approved
- * 3. Has "## Staged X" sections → processed (pending review in new UI)
- * 4. Has "## Action Items" (no Staged prefix) with content → approved (old format, already committed)
- * 5. Has Summary/Key Points → processed
- * 6. Otherwise → synced
+ * 2. Has "## Approved <Section>" body sections → approved
+ *    (Phase 2 v2: replaces the legacy `frontmatter.approved_items` check)
+ * 3. Has legacy `approved_items` frontmatter (pre-Phase-2 files) → approved
+ * 4. Has "## Staged X" sections → processed (pending review in new UI)
+ * 5. Has "## Action Items" (no Staged prefix) with content → approved (old format)
+ * 6. Has Summary/Key Points → processed
+ * 7. Otherwise → synced
  *
  * Returns lowercase status (frontend handles display formatting).
  */
@@ -213,7 +215,12 @@ function detectMeetingStatus(fm, body) {
     if (typeof fm['status'] === 'string') {
         return fm['status'].toLowerCase();
     }
-    // Has approved_items in frontmatter → approved
+    // Has Phase-2 ## Approved body sections → approved
+    const hasApprovedSections = /^##\s+Approved\s+(Action Items|Decisions|Learnings)\s*\n/im.test(body);
+    if (hasApprovedSections) {
+        return 'approved';
+    }
+    // Backward-compat: legacy approved_items frontmatter (pre-Phase-2 files)
     if (fm['approved_items'] && typeof fm['approved_items'] === 'object') {
         return 'approved';
     }
@@ -425,21 +432,37 @@ export async function getMeeting(workspaceRoot, slug) {
         item.confidence = stagedItemConfidence[item.id];
         item.matchedText = stagedItemMatchedText[item.id];
     }
-    // Parse approved_items from frontmatter if present
-    const rawApproved = fm['approved_items'];
+    // Phase 2 (Areté v2): approved items live in body sections
+    // (## Approved Action Items / Decisions / Learnings) — the
+    // `frontmatter.approved_items` duplicate is gone. Backward-compat:
+    // fall back to legacy frontmatter when body has no approved sections
+    // (pre-Phase-2 meeting files).
+    const bodyApprovedActions = parseListSection(content, 'Approved Action Items').map((i) => i.text);
+    const bodyApprovedDecisions = parseListSection(content, 'Approved Decisions').map((i) => i.text);
+    const bodyApprovedLearnings = parseListSection(content, 'Approved Learnings').map((i) => i.text);
     const approvedItems = {
         actionItems: [],
         decisions: [],
         learnings: [],
     };
-    if (rawApproved && typeof rawApproved === 'object' && !Array.isArray(rawApproved)) {
-        const ra = rawApproved;
-        if (Array.isArray(ra['actionItems']))
-            approvedItems.actionItems = ra['actionItems'].filter((x) => typeof x === 'string');
-        if (Array.isArray(ra['decisions']))
-            approvedItems.decisions = ra['decisions'].filter((x) => typeof x === 'string');
-        if (Array.isArray(ra['learnings']))
-            approvedItems.learnings = ra['learnings'].filter((x) => typeof x === 'string');
+    if (bodyApprovedActions.length > 0 || bodyApprovedDecisions.length > 0 || bodyApprovedLearnings.length > 0) {
+        approvedItems.actionItems = bodyApprovedActions;
+        approvedItems.decisions = bodyApprovedDecisions;
+        approvedItems.learnings = bodyApprovedLearnings;
+    }
+    else {
+        // Backward-compat: pre-Phase-2 meeting files still carrying
+        // frontmatter.approved_items.
+        const rawApproved = fm['approved_items'];
+        if (rawApproved && typeof rawApproved === 'object' && !Array.isArray(rawApproved)) {
+            const ra = rawApproved;
+            if (Array.isArray(ra['actionItems']))
+                approvedItems.actionItems = ra['actionItems'].filter((x) => typeof x === 'string');
+            if (Array.isArray(ra['decisions']))
+                approvedItems.decisions = ra['decisions'].filter((x) => typeof x === 'string');
+            if (Array.isArray(ra['learnings']))
+                approvedItems.learnings = ra['learnings'].filter((x) => typeof x === 'string');
+        }
     }
     // Parse sections from body (for old meetings or detailed view)
     const parsedSections = {

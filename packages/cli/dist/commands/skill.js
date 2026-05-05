@@ -423,6 +423,71 @@ export function registerSkillCommands(program) {
             success(`Restored Areté default for role: ${role}`);
         }
     });
+    // Phase 2 — chef-orchestrator legacy SKILL.md routing.
+    //
+    // Returns the SKILL.md path to load for a given skill, considering
+    // the `ARETE_LEGACY_SKILL_PROSE` env var (comma-separated slugs).
+    // If a skill is in the legacy list AND `<skill>/SKILL.legacy.md`
+    // exists, that path is returned. Otherwise live `SKILL.md` is
+    // returned. When legacy is requested but the file is missing, the
+    // resolver falls back to live SKILL.md and surfaces a warning.
+    //
+    // Used by chef-orchestrator skill prose to honor the per-skill
+    // rollback flag without code changes.
+    skillCmd
+        .command('resolve <slug>')
+        .description('Resolve which SKILL.md to load (honors ARETE_LEGACY_SKILL_PROSE)')
+        .option('--json', 'Output as JSON')
+        .action(async (slug, opts) => {
+        const services = await createServices(process.cwd());
+        const root = await services.workspace.findRoot();
+        if (!root) {
+            if (opts.json) {
+                console.log(JSON.stringify({ success: false, error: 'Not in an Areté workspace' }));
+            }
+            else {
+                error('Not in an Areté workspace');
+            }
+            process.exit(1);
+        }
+        const { resolveSkillFileWithFallback } = await import('@arete/core');
+        const skillDir = join(root, '.agents', 'skills', slug);
+        const skillDirExists = existsSync(skillDir);
+        if (!skillDirExists) {
+            if (opts.json) {
+                console.log(JSON.stringify({
+                    success: false,
+                    error: `Skill not installed: ${slug}`,
+                    path: null,
+                }));
+            }
+            else {
+                error(`Skill not installed: ${slug}`);
+                info(`Expected directory: ${formatPath(skillDir)}`);
+            }
+            process.exit(1);
+        }
+        const result = await resolveSkillFileWithFallback(skillDir, slug, (p) => existsSync(p));
+        if (opts.json) {
+            console.log(JSON.stringify({
+                success: true,
+                slug,
+                path: result.path,
+                legacyRequested: result.legacyRequested,
+                legacyUsed: result.legacyUsed,
+                warning: result.warning ?? null,
+            }, null, 2));
+            return;
+        }
+        // Human output: print the path on stdout for shell-substitution use.
+        console.log(result.path);
+        if (result.warning) {
+            warn(result.warning);
+        }
+        else if (result.legacyUsed) {
+            info(`Using legacy SKILL.md for ${slug} (ARETE_LEGACY_SKILL_PROSE)`);
+        }
+    });
 }
 async function setSkillDefault(storage, workspaceRoot, role, skillName) {
     const configPath = getWorkspaceConfigPath(workspaceRoot);

@@ -227,13 +227,30 @@ export declare function batchLLMReview(currentItems: Array<{
  */
 export declare function loadReconciliationContext(storage: StorageAdapter, workspaceRoot: string): Promise<ReconciliationContext>;
 /**
+ * Parse a `## Approved <SectionName>` body section into a list of strings.
+ *
+ * Reads bullet lines:
+ *   - [ ] item text          (Action Items section may have checkbox prefix)
+ *   - [x] item text
+ *   - item text              (Decisions / Learnings, no checkbox)
+ *
+ * Returns the raw text per bullet (checkbox stripped, trimmed). Stops at
+ * the next `## ` heading or end of body.
+ *
+ * Phase 2 (Areté v2): replaces `frontmatter.approved_items` parsing.
+ * The third-copy duplicate field on frontmatter is gone; ## Approved
+ * body sections are the single source of truth.
+ */
+export declare function parseApprovedSection(body: string, sectionName: string): string[];
+/**
  * Extract MeetingIntelligence from meeting file content.
  *
  * Handles two formats:
  * - Format A (staged/processed): Items in body sections (## Staged Action Items, etc.)
  *   with owner metadata in frontmatter staged_item_owner map.
- * - Format B (approved): Items in frontmatter approved_items object
- *   ({ actionItems: string[], decisions: string[], learnings: string[] }).
+ * - Format B (approved): Items in body `## Approved Action Items / Decisions /
+ *   Learnings` sections. Phase 2 removed `frontmatter.approved_items` —
+ *   body sections are the single source of truth.
  */
 declare function extractIntelligenceFromFrontmatter(frontmatter: Record<string, unknown>, body: string): MeetingIntelligence | null;
 /**
