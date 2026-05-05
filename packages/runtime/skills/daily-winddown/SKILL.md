@@ -126,7 +126,8 @@ ls now/agendas/$(date +%Y-%m-%d)-*.md 2>/dev/null
 # For each meeting file from 1b, run:
 arete meeting context <file> --json > /tmp/<slug>-context.json
 arete meeting extract <file> --context /tmp/<slug>-context.json --stage --reconcile --skip-qmd --json
-# Max 4 in parallel; batch larger sets.
+# Process up to 4 in parallel; for batches larger than 4, process in waves of 4
+# (start the next wave when the previous wave completes; do not skip files).
 # This stages items but does NOT approve them — approval is user-driven below.
 
 # 1i. List open commitments + recent area state
