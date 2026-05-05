@@ -825,13 +825,60 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 const APPROVED_OWNER_PATTERN = /^(.+?)\s+\(@([a-z0-9-]+)(?:\s*([→←])\s*(?:@([a-z0-9-]+))?)?\)\s*$/i;
 
 /**
+ * Parse a `## Approved <SectionName>` body section into a list of strings.
+ *
+ * Reads bullet lines:
+ *   - [ ] item text          (Action Items section may have checkbox prefix)
+ *   - [x] item text
+ *   - item text              (Decisions / Learnings, no checkbox)
+ *
+ * Returns the raw text per bullet (checkbox stripped, trimmed). Stops at
+ * the next `## ` heading or end of body.
+ *
+ * Phase 2 (Areté v2): replaces `frontmatter.approved_items` parsing.
+ * The third-copy duplicate field on frontmatter is gone; ## Approved
+ * body sections are the single source of truth.
+ */
+export function parseApprovedSection(body: string, sectionName: string): string[] {
+  // Note: cannot use `$` with the `m` flag for end-of-string — that matches
+  // end-of-line. Use a two-step approach: try lookahead for next ##/---;
+  // if no such marker, fall back to consuming through end-of-string.
+  const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headerRe = new RegExp(`^##\\s+Approved\\s+${escapedName}\\s*\\n`, 'mi');
+  const headerMatch = body.match(headerRe);
+  if (!headerMatch || headerMatch.index === undefined) return [];
+
+  const sectionStart = headerMatch.index + headerMatch[0].length;
+  const remainder = body.slice(sectionStart);
+
+  // Find the next ## or --- boundary; if none, take all remaining content.
+  const boundaryMatch = remainder.match(/\n##\s|\n---/);
+  const sectionContent = boundaryMatch
+    ? remainder.slice(0, boundaryMatch.index)
+    : remainder;
+
+  const lines = sectionContent.split(/\r?\n/);
+  const items: string[] = [];
+  for (const line of lines) {
+    // Match bullet with optional checkbox: "- [ ] text", "- [x] text", "- text"
+    const bulletMatch = line.match(/^\s*-\s+(?:\[[ xX]\]\s+)?(.*)$/);
+    if (bulletMatch) {
+      const text = bulletMatch[1].trim();
+      if (text) items.push(text);
+    }
+  }
+  return items;
+}
+
+/**
  * Extract MeetingIntelligence from meeting file content.
  *
  * Handles two formats:
  * - Format A (staged/processed): Items in body sections (## Staged Action Items, etc.)
  *   with owner metadata in frontmatter staged_item_owner map.
- * - Format B (approved): Items in frontmatter approved_items object
- *   ({ actionItems: string[], decisions: string[], learnings: string[] }).
+ * - Format B (approved): Items in body `## Approved Action Items / Decisions /
+ *   Learnings` sections. Phase 2 removed `frontmatter.approved_items` —
+ *   body sections are the single source of truth.
  */
 function extractIntelligenceFromFrontmatter(
   frontmatter: Record<string, unknown>,
@@ -867,16 +914,37 @@ function extractIntelligenceFromFrontmatter(
     return { summary: '', actionItems, nextSteps: [], decisions, learnings };
   }
 
-  // Format B: approved_items in frontmatter
-  const approved = frontmatter.approved_items as {
+  // Format B: ## Approved <Section> body sections (Phase 2: replaces
+  // frontmatter.approved_items).
+  // Backward compat: if frontmatter.approved_items exists (pre-Phase-2
+  // meeting file), still parse it. New writes only use body sections.
+  const approvedActionTexts = parseApprovedSection(body, 'Action Items');
+  const approvedDecisionTexts = parseApprovedSection(body, 'Decisions');
+  const approvedLearningTexts = parseApprovedSection(body, 'Learnings');
+
+  // Backward-compat fallback for pre-Phase-2 meetings still carrying
+  // frontmatter.approved_items.
+  const legacyApproved = frontmatter.approved_items as {
     actionItems?: string[];
     decisions?: string[];
     learnings?: string[];
   } | undefined;
+  const legacyActions = legacyApproved?.actionItems ?? [];
+  const legacyDecisions = legacyApproved?.decisions ?? [];
+  const legacyLearnings = legacyApproved?.learnings ?? [];
 
-  if (!approved) return null;
+  // Body sections take precedence. Fall back to legacy frontmatter only
+  // when the body has no Approved sections at all (a pre-Phase-2 file
+  // that was approved before the writer was updated).
+  const actionTexts = approvedActionTexts.length > 0 ? approvedActionTexts : legacyActions;
+  const decisionTexts = approvedDecisionTexts.length > 0 ? approvedDecisionTexts : legacyDecisions;
+  const learningTexts = approvedLearningTexts.length > 0 ? approvedLearningTexts : legacyLearnings;
 
-  for (const text of approved.actionItems ?? []) {
+  if (actionTexts.length === 0 && decisionTexts.length === 0 && learningTexts.length === 0) {
+    return null;
+  }
+
+  for (const text of actionTexts) {
     const match = text.match(APPROVED_OWNER_PATTERN);
     if (match) {
       const arrow = match[3]; // '→', '←', or undefined
@@ -897,10 +965,10 @@ function extractIntelligenceFromFrontmatter(
       });
     }
   }
-  for (const text of approved.decisions ?? []) {
+  for (const text of decisionTexts) {
     decisions.push(text);
   }
-  for (const text of approved.learnings ?? []) {
+  for (const text of learningTexts) {
     learnings.push(text);
   }
 

@@ -759,7 +759,9 @@ Content here.
     );
   });
 
-  it('(26) stores direction-aware owner notation in approved_items frontmatter', async () => {
+  it('(26) writes direction-aware owner notation to ## Approved Action Items body section', async () => {
+    // Phase 2 (Areté v2): the `frontmatter.approved_items` field is gone.
+    // Owner notation lives in the ## Approved Action Items body section.
     const meetingWithOwner = `---
 title: "Meeting with Owner"
 date: "2026-03-01"
@@ -790,17 +792,23 @@ Content here.
     await commitApprovedItems(storage, MEETING_FILE, MEMORY_DIR);
 
     const updated = storage.files.get(MEETING_FILE)!;
-    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
-    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
-    const approvedItems = frontmatter['approved_items'] as { actionItems: string[] };
 
+    // Body sections — single source of truth post-Phase-2
     assert.ok(
-      approvedItems.actionItems[0].includes('(@john-koht → @lindsay-gray)'),
-      'i_owe_them should use → in approved_items'
+      updated.includes('(@john-koht → @lindsay-gray)'),
+      'i_owe_them should use → in ## Approved Action Items body section',
     );
     assert.ok(
-      approvedItems.actionItems[1].includes('(@anthony-avina ← @john-koht)'),
-      'they_owe_me should use ← in approved_items'
+      updated.includes('(@anthony-avina ← @john-koht)'),
+      'they_owe_me should use ← in ## Approved Action Items body section',
+    );
+
+    // Frontmatter no longer carries the third-copy duplicate
+    const frontmatterMatch = updated.match(/^---\n([\s\S]*?)\n---/);
+    const frontmatter = parseYaml(frontmatterMatch![1]) as Record<string, unknown>;
+    assert.ok(
+      !('approved_items' in frontmatter),
+      'frontmatter.approved_items should be removed (Phase 2 third-copy cleanup)',
     );
   });
 

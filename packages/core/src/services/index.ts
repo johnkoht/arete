@@ -102,7 +102,7 @@ export type {
 } from './meeting-processing.js';
 
 // Meeting reconciliation
-export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview } from './meeting-reconciliation.js';
+export { reconcileMeetingBatch, loadReconciliationContext, loadRecentMeetingBatch, parseMemoryItems, batchLLMReview, parseApprovedSection } from './meeting-reconciliation.js';
 export type { MeetingExtractionBatch } from './meeting-reconciliation.js';
 
 // Pattern detection
