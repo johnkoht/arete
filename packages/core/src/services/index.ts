@@ -17,6 +17,13 @@ export type {
   SeedSkillsLocalResult,
   ChefOrchestratorSkillSlug,
 } from './skills-local.js';
+export {
+  parseLegacyList,
+  resolveSkillFile,
+  resolveSkillFileFromEnv,
+  resolveSkillFileWithFallback,
+} from './skill-resolver.js';
+export type { ResolveSkillFileResult } from './skill-resolver.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.
 // (Skill discovery is the parallel concern; see services/skills.ts.)
