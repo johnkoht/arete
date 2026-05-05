@@ -71,19 +71,28 @@ A new top-level pattern doc at `packages/runtime/skills/PATTERNS.md` (or extend 
 
 **Action verb taxonomy** (Phase 2 default; user extends via APPEND):
 
-| Source | Verb | Parameters |
-|---|---|---|
-| Slack MCP | `slack.send_dm` | target_user, message |
-| Slack MCP | `slack.send_channel` | channel, message |
-| GWS Calendar MCP / `arete calendar create` | `calendar.create_event` | title, attendees, start, duration, agenda? |
-| GWS Calendar MCP | `calendar.suggest_time` | attendees, duration, window |
-| Notion MCP | `notion.update_page` | page_id_or_title, content |
-| Notion MCP | `notion.create_page` | parent, title, content |
-| Areté CLI | `arete.inbox_add` | source, content |
-| Areté CLI | `arete.commitments_create` | text, target_person, due? |
-| Areté CLI | `arete.commitments_resolve` | id, resolution |
+Two execution modes — `executable` (agent can run via MCP/CLI on approval) and `draft-only` (agent formats the action, user executes externally). Pattern 3 supports both. `draft-only` is just `executable` minus the execute step; the propose envelope is identical.
 
-The chef doesn't need to know exhaustively which MCPs are available — the user lists their MCPs in the APPEND file (per (c) below). The chef then proposes only verbs backed by the user's listed MCPs.
+| Source | Verb | Mode | Parameters |
+|---|---|---|---|
+| Slack MCP | `slack.send_dm` | executable | target_user, message |
+| Slack MCP | `slack.send_channel` | executable | channel, message |
+| GWS Calendar MCP / `arete calendar create` | `calendar.create_event` | executable | title, attendees, start, duration, agenda? |
+| GWS Calendar MCP | `calendar.suggest_time` | executable | attendees, duration, window |
+| Notion MCP | `notion.update_page` | executable | page_id_or_title, content |
+| Notion MCP | `notion.create_page` | executable | parent, title, content |
+| Jira (no MCP today; user web/CLI) | `jira.create_ticket` | draft-only | project, type, summary, description, assignee?, labels?, parent_epic? |
+| Jira | `jira.update_ticket` | draft-only | ticket_id, fields |
+| Jira | `jira.transition_ticket` | draft-only | ticket_id, to_state |
+| Areté CLI | `arete.inbox_add` | executable | source, content |
+| Areté CLI | `arete.commitments_create` | executable | text, target_person, due? |
+| Areté CLI | `arete.commitments_resolve` | executable | id, resolution |
+
+**Mode handling in proposal format**:
+- `executable`: `[N] slack.send_dm to @anthony: "..."` → user responds with `1` to execute, `1 with target=@jamie` to edit, `skip 1` to drop.
+- `draft-only`: `[N] (draft) jira.create_ticket project=INGEST type=Task summary="..." description="..."` → user responds same way; agent confirms acknowledgment but no execution. User opens Jira and creates manually with the drafted content.
+
+The chef reads the user's APPEND file to learn (a) which MCPs are wired, (b) which draft-only verbs the user wants drafts for, (c) any user-specific context (project keys, default labels, naming conventions). The chef proposes only verbs the user listed.
 
 #### Pattern 4 — `surface-deferred-as-sidecar`
 
@@ -216,7 +225,7 @@ Concrete:
 | **AC2.3**: Each rewritten SKILL.md begins with the "Read first" stanza pointing at the corresponding APPEND file. | grep check across the 5 SKILL.md files |
 | **AC2.4 (replaces parent AC4)**: Every staged item has a reason label; every deferred item has a reason label; when uncertain, the agent surfaces an `## Uncertain — your call` tier. **No length cap** — chef judgment determines what surfaces. | Manual review on 10 consecutive winddown invocations |
 | **AC2.5**: Each rewritten skill ships with `<skill>/SKILL.legacy.md` (verbatim pre-rewrite copy) AND `ARETE_LEGACY_SKILL_PROSE` env var routes to it correctly. | Per-skill smoke: set env var, run skill, observe legacy behavior |
-| **AC2.6**: Action proposals always include the verb name + parameters; agent never auto-executes; user response format documented in PATTERNS.md. | Read-through; manual test on a real winddown with proposed slack.send_dm |
+| **AC2.6**: Action proposals always include the verb name + parameters AND mode tag (`executable` or `draft-only`); agent never auto-executes any mode; user response format documented in PATTERNS.md. Draft-only proposals (e.g., Jira ticket content) format the action as the user would create it externally. | Read-through; manual test on a real winddown with proposed `slack.send_dm` AND proposed `jira.create_ticket` |
 | **AC2.7**: Deferred items roll to a sidecar (`./deferred-<date>.md`); user pulling an item back appends a `deferral_disagreement` event to `item-fates.jsonl` (Phase 0 substrate). | Integration test simulating pull-back |
 | **AC2.8**: `frontmatter.approved_items` removed from meeting frontmatter writers; web review UI reads body sections. | Test that backend approve flow still produces item-fate events without frontmatter.approved_items |
 | **AC2.9**: AC10 (gating, parent plan) — winddown median time across the 14-day Phase 2 soak ≤ 50% of Phase 0 baseline. **If AC10 fails, Phase 2 reverts.** | 14-day rolling median; baseline established Phase 0 |
