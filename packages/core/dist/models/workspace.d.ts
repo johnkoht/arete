@@ -91,8 +91,23 @@ export type WorkspacePaths = {
     manifest: string;
     ideConfig: string;
     rules: string;
-    /** Single skills location: .agents/skills (last-in-wins) */
+    /**
+     * User-customization skills directory: `.agents/skills`. Skills the user
+     * has forked or hand-authored live here. Takes precedence at agent-load
+     * time over `managedSkills`. Survives `arete update`.
+     *
+     * Pre-Phase-3 workspaces also had shipped skills written here on install
+     * + update; the migration treats unforked legacy entries as
+     * "user-tracked-upstream" rather than forks (see `skill-resolver` two-tier
+     * resolver).
+     */
     agentSkills: string;
+    /**
+     * Managed skills directory: `.arete/skills`. Areté's shipped skills are
+     * written here on `arete install` and refreshed on `arete update`. Treated
+     * as read-only by convention. Phase 3 Step 1.
+     */
+    managedSkills: string;
     tools: string;
     integrations: string;
     context: string;

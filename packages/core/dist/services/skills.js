@@ -71,13 +71,34 @@ export class SkillService {
         this.storage = storage;
     }
     async list(workspaceRoot) {
-        const skillsDir = join(workspaceRoot, '.agents', 'skills');
-        const exists = await this.storage.exists(skillsDir);
-        if (!exists)
+        // Phase 3 Step 2: two-tier skill discovery.
+        // `.agents/skills/<name>/` (user forks + community installs) wins over
+        // `.arete/skills/<name>/` (managed/shipped). For each skill name seen
+        // in either dir, we surface ONE definition — the user fork if present,
+        // otherwise the managed copy. This lets `arete skill list` show the
+        // skill the agent will actually load, and CLAUDE.md / AGENTS.md
+        // generation reflects the same.
+        const userDir = join(workspaceRoot, '.agents', 'skills');
+        const managedDir = join(workspaceRoot, '.arete', 'skills');
+        const seen = new Map();
+        if (await this.storage.exists(userDir)) {
+            const userSubdirs = await this.storage.listSubdirectories(userDir);
+            for (const p of userSubdirs) {
+                seen.set(basename(p), p);
+            }
+        }
+        if (await this.storage.exists(managedDir)) {
+            const managedSubdirs = await this.storage.listSubdirectories(managedDir);
+            for (const p of managedSubdirs) {
+                const name = basename(p);
+                if (!seen.has(name))
+                    seen.set(name, p);
+            }
+        }
+        if (seen.size === 0)
             return [];
-        const subdirs = await this.storage.listSubdirectories(skillsDir);
         const results = [];
-        for (const skillPath of subdirs) {
+        for (const skillPath of seen.values()) {
             const def = await this.getInfo(skillPath);
             if (def)
                 results.push(def);
@@ -158,6 +179,7 @@ export class SkillService {
             ideConfig: join(workspaceRoot, '.cursor'),
             rules: join(workspaceRoot, '.cursor', 'rules'),
             agentSkills: join(workspaceRoot, '.agents', 'skills'),
+            managedSkills: join(workspaceRoot, '.arete', 'skills'),
             tools: join(workspaceRoot, '.cursor', 'tools'),
             integrations: join(workspaceRoot, '.cursor', 'integrations'),
             context: join(workspaceRoot, 'context'),

@@ -25,7 +25,14 @@ describe('template resolve command', () => {
     assert.equal(result.skill, 'create-prd');
     assert.equal(result.variant, 'prd-regular');
     assert.ok(result.content.length > 0, 'content should be non-empty');
-    assert.ok(result.relPath.includes('.agents/skills/create-prd/templates'), 'should resolve to skill-local path');
+    // Phase 3: shipped skills live at .arete/skills/ (managed). User
+    // forks at .agents/skills/ would win, but on a fresh install
+    // there's no fork — so the template resolves out of .arete/.
+    assert.ok(
+      result.relPath.includes('.arete/skills/create-prd/templates') ||
+        result.relPath.includes('.agents/skills/create-prd/templates'),
+      'should resolve to skill-local path (user fork or managed)',
+    );
   });
 
   it('resolves workspace override when it exists', () => {
@@ -48,7 +55,11 @@ describe('template resolve command', () => {
 
     assert.equal(result.success, true);
     assert.ok(result.content.length > 0, 'content should be non-empty');
-    assert.ok(result.relPath.includes('.agents/skills/prepare-meeting-agenda/templates'), 'should be skill-local');
+    assert.ok(
+      result.relPath.includes('.arete/skills/prepare-meeting-agenda/templates') ||
+        result.relPath.includes('.agents/skills/prepare-meeting-agenda/templates'),
+      'should be skill-local (user fork or managed)',
+    );
   });
 
   it('returns --path only when flag is set (skill-local)', () => {

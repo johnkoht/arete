@@ -54,9 +54,16 @@ describe('install command', () => {
 
         assert.ok(parsed.results.skills.length > 0, 'should copy skills on install');
         assert.ok(parsed.results.rules.length > 0, 'should copy rules on install');
+        // Phase 3: shipped skills land in `.arete/skills/` (managed),
+        // not `.agents/skills/`. User customizations go in
+        // `.agents/skills/` only when the user runs `arete skill fork`.
         assert.ok(
-          existsSync(join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md')),
-          'meeting-prep skill should exist in .agents/skills',
+          existsSync(join(tmpDir, '.arete', 'skills', 'meeting-prep', 'SKILL.md')),
+          'meeting-prep skill should exist in .arete/skills (managed tier)',
+        );
+        assert.ok(
+          !existsSync(join(tmpDir, '.agents', 'skills', 'meeting-prep')),
+          'meeting-prep should NOT exist in .agents/skills on a fresh install (Phase 3)',
         );
         assert.ok(
           existsSync(join(tmpDir, '.cursor', 'rules', 'pm-workspace.mdc')),

@@ -10,8 +10,13 @@
  * Each rewritten skill must:
  * - Have a "Read first" stanza referencing .arete/skills-local/<slug>.md
  * - Reference the four chef-orchestrator patterns from PATTERNS.md
- * - Include a Rollback section citing ARETE_LEGACY_SKILL_PROSE
- * - Have a corresponding SKILL.legacy.md file (MC2 ship gate)
+ * - Include a Rollback section (`git revert` of the Phase 2 commit per
+ *   Phase 3 Step 9 / MC5 sunset; the previous `ARETE_LEGACY_SKILL_PROSE`
+ *   env var routing was removed when Phase 3 sunset legacy artifacts).
+ *
+ * Note: pre-MC5-sunset, this suite also asserted `SKILL.legacy.md`
+ * presence and `ARETE_LEGACY_SKILL_PROSE` references — both have been
+ * removed per Phase 3 plan §(g).
  */
 
 import { describe, it } from 'node:test';
@@ -41,10 +46,10 @@ describe('Phase 2 chef-orchestrator skill prose', () => {
         assert.ok(existsSync(skillPath), `${skillPath} missing`);
       });
 
-      it('SKILL.legacy.md exists (MC2 ship gate)', () => {
+      it('SKILL.legacy.md is GONE post Phase 3 MC5 sunset', () => {
         assert.ok(
-          existsSync(legacyPath),
-          `${legacyPath} missing — Phase 2 plan §(e) ship gate violated`,
+          !existsSync(legacyPath),
+          `${legacyPath} should NOT exist post Phase 3 MC5 sunset; rollback is via git revert of the Phase 2 rewrite commit`,
         );
       });
 
@@ -85,12 +90,16 @@ describe('Phase 2 chef-orchestrator skill prose', () => {
         }
       });
 
-      it('SKILL.md has Rollback section citing ARETE_LEGACY_SKILL_PROSE', () => {
+      it('SKILL.md has Rollback section pointing at git revert (post MC5 sunset)', () => {
         const content = readFileSync(skillPath, 'utf8');
         assert.match(content, /## Rollback/);
         assert.ok(
-          content.includes('ARETE_LEGACY_SKILL_PROSE'),
-          'Missing ARETE_LEGACY_SKILL_PROSE reference in Rollback',
+          content.includes('git revert'),
+          'Rollback section should describe `git revert` of the Phase 2 commit (post MC5 sunset)',
+        );
+        assert.ok(
+          !content.includes('ARETE_LEGACY_SKILL_PROSE'),
+          'ARETE_LEGACY_SKILL_PROSE should not appear in SKILL.md post MC5 sunset',
         );
       });
 

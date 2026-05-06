@@ -399,7 +399,7 @@ describe('WorkspaceService', () => {
       );
     });
 
-    it('syncs core skills from source paths and preserves custom workspace skills', async () => {
+    it('syncs core skills to .arete/skills/ (Phase 3 managed tier) and preserves custom workspace skills under .agents/skills/', async () => {
       const sourceRoot = join(tmpDir, 'source-runtime');
       const sourceSkills = join(sourceRoot, 'skills');
       mkdirSync(join(sourceSkills, 'meeting-prep'), { recursive: true });
@@ -414,15 +414,16 @@ describe('WorkspaceService', () => {
         source: 'npm',
       });
 
-      // Existing core skill should be updated from source
+      // Pre-Phase-3 layout: a user-edited copy under .agents/skills/.
+      // This must survive the Phase 3 migration (content differs from managed).
       mkdirSync(join(tmpDir, '.agents', 'skills', 'meeting-prep'), { recursive: true });
       writeFileSync(
         join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
-        '# Meeting Prep\n\nOld content\n',
+        '# Meeting Prep\n\nOld content (pre-Phase-3 user fork)\n',
         'utf8',
       );
 
-      // Custom skill should remain untouched
+      // Custom community skill should remain untouched
       mkdirSync(join(tmpDir, '.agents', 'skills', 'my-custom-skill'), { recursive: true });
       writeFileSync(
         join(tmpDir, '.agents', 'skills', 'my-custom-skill', 'SKILL.md'),
@@ -443,16 +444,31 @@ describe('WorkspaceService', () => {
         },
       });
 
+      // Phase 3: shipped skill lands in .arete/skills/, treated as
+      // "added" (the managed tier was empty before this update).
       assert.ok(
-        result.updated.includes('meeting-prep'),
-        `Expected meeting-prep in updated. added=${JSON.stringify(result.added)} updated=${JSON.stringify(result.updated)} preserved=${JSON.stringify(result.preserved)}`,
+        result.added.includes('meeting-prep'),
+        `Expected meeting-prep in added. added=${JSON.stringify(result.added)} updated=${JSON.stringify(result.updated)} preserved=${JSON.stringify(result.preserved)}`,
       );
-      const updatedContent = readFileSync(
+      const managedContent = readFileSync(
+        join(tmpDir, '.arete', 'skills', 'meeting-prep', 'SKILL.md'),
+        'utf8',
+      );
+      assert.ok(managedContent.includes('New canonical skill content'));
+
+      // The pre-Phase-3 user copy is preserved (content differs from
+      // managed → migration keeps it as a user fork).
+      const userMeetingPrep = existsSync(
+        join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
+      );
+      assert.equal(userMeetingPrep, true);
+      const userContent = readFileSync(
         join(tmpDir, '.agents', 'skills', 'meeting-prep', 'SKILL.md'),
         'utf8',
       );
-      assert.ok(updatedContent.includes('New canonical skill content'));
+      assert.ok(userContent.includes('pre-Phase-3 user fork'));
 
+      // Community skill remains in .agents/skills/.
       const customExists = existsSync(
         join(tmpDir, '.agents', 'skills', 'my-custom-skill', 'SKILL.md'),
       );
@@ -965,7 +981,7 @@ describe('WorkspaceService', () => {
       return { sourceRoot, sourceSkills };
     }
 
-    it('create() excludes documentation files (README.md, LEARNINGS.md, etc.) but copies PATTERNS.md from .agents/skills/', async () => {
+    it('create() excludes documentation files (README.md, LEARNINGS.md, etc.) but copies PATTERNS.md from .arete/skills/ (Phase 3 managed tier)', async () => {
       // Documentation files in skills/ root that are internal-only should not be copied
       // But PATTERNS.md is referenced by skills and must be present in user workspaces
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
@@ -992,40 +1008,40 @@ describe('WorkspaceService', () => {
         },
       });
 
-      // PATTERNS.md SHOULD be copied (skills reference it)
+      // Phase 3: PATTERNS.md SHOULD be copied to .arete/skills/ (managed tier)
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'PATTERNS.md')),
         true,
-        'PATTERNS.md should be copied (skills reference it)',
+        'PATTERNS.md should be copied to .arete/skills/ (skills reference it)',
       );
       // Other documentation files should NOT be copied
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'README.md')),
         false,
         'README.md should NOT be copied (doc file)',
       );
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'LEARNINGS.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'LEARNINGS.md')),
         false,
         'LEARNINGS.md should NOT be copied (doc file)',
       );
       // Non-doc files should still be copied
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'custom-file.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'custom-file.md')),
         true,
-        'Non-documentation .md files should still be copied',
+        'Non-documentation .md files should still be copied to .arete/skills/',
       );
     });
 
-    it('syncCoreSkills via update() copies PATTERNS.md and excludes other documentation files', async () => {
+    it('syncCoreSkills via update() copies PATTERNS.md to .arete/skills/ and excludes other documentation files', async () => {
       const { sourceRoot, sourceSkills } = makeSourceRuntime(tmpDir);
       writeFileSync(join(sourceSkills, 'PATTERNS.md'), '# Updated PATTERNS\n', 'utf8');
       writeFileSync(join(sourceSkills, 'README.md'), '# README\n', 'utf8');
       writeFileSync(join(sourceSkills, 'custom-file.md'), '# Custom Updated\n', 'utf8');
 
-      // Pre-plant files in the workspace
-      mkdirSync(join(tmpDir, '.agents', 'skills'), { recursive: true });
-      writeFileSync(join(tmpDir, '.agents', 'skills', 'custom-file.md'), '# Old Custom\n', 'utf8');
+      // Pre-plant files in the managed tier (.arete/skills/)
+      mkdirSync(join(tmpDir, '.arete', 'skills'), { recursive: true });
+      writeFileSync(join(tmpDir, '.arete', 'skills', 'custom-file.md'), '# Old Custom\n', 'utf8');
       writeFileSync(join(tmpDir, 'arete.yaml'), 'schema: 1\nversion: "0.1.0"\nsource: npm\nide_target: cursor\n', 'utf8');
 
       await service.update(tmpDir, {
@@ -1041,20 +1057,20 @@ describe('WorkspaceService', () => {
         },
       });
 
-      // PATTERNS.md SHOULD be copied (skills reference it)
+      // Phase 3: root-level docs in .arete/skills/ (managed tier)
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'PATTERNS.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'PATTERNS.md')),
         true,
-        'PATTERNS.md should be copied by update (skills reference it)',
+        'PATTERNS.md should be copied to .arete/skills/ by update (skills reference it)',
       );
       // README.md should NOT be copied (doc file)
       assert.equal(
-        existsSync(join(tmpDir, '.agents', 'skills', 'README.md')),
+        existsSync(join(tmpDir, '.arete', 'skills', 'README.md')),
         false,
         'README.md should NOT be copied by update (doc file)',
       );
-      // Non-doc files should be updated
-      const content = readFileSync(join(tmpDir, '.agents', 'skills', 'custom-file.md'), 'utf8');
+      // Non-doc files should be updated in .arete/skills/
+      const content = readFileSync(join(tmpDir, '.arete', 'skills', 'custom-file.md'), 'utf8');
       assert.ok(content.includes('Custom Updated'), 'Non-doc .md files should be overwritten by syncCoreSkills');
     });
 

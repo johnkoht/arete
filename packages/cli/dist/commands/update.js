@@ -1,8 +1,9 @@
 /**
  * arete update — pull latest skills/tools/integrations
  */
-import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig, GoalMigrationService, loadMemorySummary } from '@arete/core';
+import { createServices, getPackageRoot, getSourcePaths, ensureQmdCollections, loadConfig, GoalMigrationService, loadMemorySummary, summarizeUpstreamChanges } from '@arete/core';
 import { join } from 'node:path';
+import chalk from 'chalk';
 import { header, listItem, success, error, info, warn } from '../formatters.js';
 export function registerUpdateCommand(program) {
     program
@@ -87,6 +88,12 @@ export function registerUpdateCommand(program) {
                 }
             }
         }
+        // Phase 3 Step 1: surface skills with upstream changes the user
+        // hasn't yet picked up. We compute this AFTER the sync so the
+        // managed dir reflects the freshly-pulled content.
+        const upstreamChanges = !opts.check
+            ? await summarizeUpstreamChanges(services.storage, root)
+            : [];
         if (opts.json) {
             // Compute backward-compat 'created' field: true if any scope was created
             const createdAny = qmdResult?.scopes?.some((s) => s.created) ?? false;
@@ -98,6 +105,7 @@ export function registerUpdateCommand(program) {
                 qmd: qmdResult
                     ? { ...qmdResult, created: createdAny }
                     : { skipped: true, available: false, collections: {}, indexed: false, created: false },
+                upstreamChanges,
             }, null, 2));
             return;
         }
@@ -121,6 +129,27 @@ export function registerUpdateCommand(program) {
                 }
                 if (qmdResult.warning) {
                     warn(qmdResult.warning);
+                }
+            }
+            // Phase 3 Step 1: print upstream-changes summary when any
+            // user fork has diverged from current managed content.
+            if (upstreamChanges.length > 0) {
+                console.log('');
+                console.log(chalk.bold(`${upstreamChanges.length} skill${upstreamChanges.length > 1 ? 's have' : ' has'} upstream changes vs. your fork:`));
+                for (const change of upstreamChanges) {
+                    const tag = change.baseMissing ? chalk.dim(' (no fork base recorded)') : '';
+                    console.log(`  - ${chalk.cyan(change.name)} (${change.changeCount} change${change.changeCount > 1 ? 's' : ''})${tag}`);
+                }
+                console.log('');
+                info('Run `arete skill diff <name>` to inspect, or `arete skill merge <name>` to integrate.');
+            }
+            if (result.removed.length > 0) {
+                // Phase 3 Step 7: surface migration removals so the user
+                // sees their pre-Phase-3 skill copies were cleaned up.
+                const skillRemovals = result.removed.filter((p) => !p.startsWith('.claude/') && !p.startsWith('.cursor/'));
+                if (skillRemovals.length > 0) {
+                    console.log('');
+                    info(`Migrated ${skillRemovals.length} pre-Phase-3 skill cop${skillRemovals.length > 1 ? 'ies' : 'y'} from .agents/skills/ → .arete/skills/ (byte-equal; no edits to preserve).`);
                 }
             }
             console.log('');

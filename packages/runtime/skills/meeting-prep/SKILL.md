@@ -294,10 +294,15 @@ in Phase 2; the patterns themselves stay.
 
 ## Rollback
 
+If this rewrite degrades meeting-prep quality, revert the Phase 2
+meeting-prep rewrite commit (per-skill commit; surgical revert):
+
 ```bash
-export ARETE_LEGACY_SKILL_PROSE=meeting-prep
+git log --oneline packages/runtime/skills/meeting-prep/SKILL.md
+git revert <phase-2 meeting-prep rewrite commit>
 ```
 
-Per-skill rollback. Note: meeting-prep is heavily used; if the chef
-brief feels worse than the legacy step-by-step, revert this first
-while keeping the others.
+Note: meeting-prep is heavily used; if the chef brief feels worse
+than the pre-Phase-2 step-by-step, revert this first. The user fork
+can also be restored from a `.fork-base/` snapshot if the user has run
+`arete skill fork meeting-prep`.

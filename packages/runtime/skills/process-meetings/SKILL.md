@@ -297,10 +297,14 @@ Optional policy file: `context/people-intelligence-policy.json`
 
 ## Rollback
 
+If this rewrite degrades process-meetings quality, revert the Phase 2
+process-meetings rewrite commit (per-skill commit; surgical revert):
+
 ```bash
-export ARETE_LEGACY_SKILL_PROSE=process-meetings
+git log --oneline packages/runtime/skills/process-meetings/SKILL.md
+git revert <phase-2 process-meetings rewrite commit>
 ```
 
-Per-skill rollback. Note: process-meetings is heavily used; if it
-regresses, revert it first while keeping daily-winddown / weekly
-on the chef pattern.
+Note: process-meetings is heavily used; if it regresses, revert it
+first. The user fork can also be restored from a `.fork-base/`
+snapshot if the user has run `arete skill fork process-meetings`.

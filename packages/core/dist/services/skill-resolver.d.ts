@@ -1,98 +1,65 @@
 /**
- * Skill-prose resolver (Phase 2 — legacy SKILL.md routing).
+ * Skill-prose resolver (Phase 3 — two-tier directory resolution).
  *
- * Per Phase 2 plan §(e) — MC2 ship gate: each chef-orchestrator skill
- * ships with two artifacts:
+ * Skills live in two tiers:
  *
- *   1. `<skill-dir>/SKILL.md`        — the new chef-orchestrator prose
- *   2. `<skill-dir>/SKILL.legacy.md` — verbatim pre-rewrite copy
+ *   1. `<workspace>/.agents/skills/<name>/`  — user customizations
+ *      (forks via `arete skill fork`, community installs, hand-authored).
+ *      Survives `arete update`.
+ *   2. `<workspace>/.arete/skills/<name>/`   — managed/shipped skills.
+ *      Refreshed on `arete update`. Read-only by convention.
  *
- * The agent harness reads `ARETE_LEGACY_SKILL_PROSE` (comma-separated
- * skill slugs) at skill-resolve time. For each named skill, the
- * harness routes to `SKILL.legacy.md` instead of `SKILL.md`. Per-skill
- * routing means John can run new daily-winddown but legacy meeting-prep
- * if the latter regresses mid-soak.
+ * Tier 1 wins when present; tier 2 is fallback.
  *
- * The rollback mechanism: Phase 2 wrap-up commit removes both
- * `SKILL.legacy.md` files AND this resolver code. Until then, the
- * resolver is the structural escape hatch (per MC2 ship gate).
+ * Phase 3 Step 9 (MC5 sunset): the Phase 2 `ARETE_LEGACY_SKILL_PROSE`
+ * routing has been removed. Each chef-orchestrator skill no longer
+ * ships a `SKILL.legacy.md` companion. Pre-Phase-2 prose lives in git
+ * history; recovery requires `git revert` of the Phase 2 rewrites
+ * (Phase 2 commits are per-skill so revert is surgical), not a runtime
+ * env var flip.
  *
  * Design notes:
- * - Pure function `resolveSkillFile()` — no I/O. Caller checks
- *   existence (storage adapter, fs, etc.).
- * - `parseLegacyList()` is exported for testability.
- * - Empty / unset / malformed env var → no skills routed (returns []).
- * - Whitespace and empty entries are tolerated:
- *     "daily-winddown,, meeting-prep ,," → ["daily-winddown", "meeting-prep"]
+ * - Pure path math; one I/O dependency (`existsFn`) so callers can
+ *   inject `fs.existsSync` or a storage-adapter `exists`.
+ * - `existsFn` may be sync or async (returns `boolean | Promise<boolean>`).
  */
 /**
- * Parse the `ARETE_LEGACY_SKILL_PROSE` env var into a normalized list.
+ * Result of `resolveSkillDirTwoTier`. The `tier` field tells callers
+ * which directory the skill was found in:
  *
- * Comma-separated skill slugs. Whitespace tolerated. Empty entries
- * (from trailing commas, double commas) dropped silently.
- *
- * Returns lowercased slugs. Skill slugs in the runtime are always
- * lowercased; normalizing here means consumers don't need to.
+ *   - `'user'`     — `.agents/skills/<name>/` (user fork / community / hand-authored)
+ *   - `'managed'`  — `.arete/skills/<name>/`  (shipped, managed by `arete update`)
+ *   - `'missing'`  — neither directory contains the skill
  */
-export declare function parseLegacyList(envValue: string | undefined): string[];
-/**
- * Decide which SKILL.md file path to resolve for a given skill slug,
- * considering the legacy env var list. Pure function — does not check
- * file existence. The caller is responsible for verifying the legacy
- * file exists (and falling back to SKILL.md if not).
- *
- * Returns:
- *   - `<skillDir>/SKILL.legacy.md` when slug is in legacyList
- *   - `<skillDir>/SKILL.md` otherwise
- */
-export declare function resolveSkillFile(skillDir: string, skillSlug: string, legacyList: readonly string[]): string;
-/**
- * High-level resolver that reads ARETE_LEGACY_SKILL_PROSE from the
- * environment, parses it, and returns the resolved path.
- *
- * Caller should verify the resolved file exists; if not (e.g., legacy
- * file missing for a skill that's in the env var list), caller should
- * fall back to the live SKILL.md and log a warning. This fallback is
- * NOT done here — the resolver is pure path math; existence checks
- * belong in the I/O layer (storage adapter or fs).
- *
- * @param skillDir Absolute path to the skill's directory
- *                 (e.g. `<workspace>/.agents/skills/daily-winddown`)
- * @param skillSlug The skill's slug (matches the directory name)
- * @param env Process env (default: `process.env`). Inject for testing.
- */
-export declare function resolveSkillFileFromEnv(skillDir: string, skillSlug: string, env?: NodeJS.ProcessEnv): {
-    /** The path the resolver chose. */
-    path: string;
-    /** True if the env var routed this skill to legacy. */
-    legacy: boolean;
-    /** The parsed list of legacy-routed slugs (for diagnostics). */
-    legacyList: string[];
-};
-/**
- * Result of the I/O-aware resolver — checks file existence and
- * falls back to live SKILL.md when the legacy file is missing.
- *
- * Caller passes an `existsFn` (storage adapter or fs.existsSync) so
- * this stays decoupled from any specific I/O layer.
- */
-export interface ResolveSkillFileResult {
-    /** The resolved file path. */
-    path: string;
-    /** Was legacy mode requested for this skill via env var. */
-    legacyRequested: boolean;
-    /** Did the resolver actually use the legacy file. */
-    legacyUsed: boolean;
-    /** Warning message when fallback occurred (legacy requested but missing). */
-    warning?: string;
+export interface ResolveSkillDirResult {
+    /** Resolved skill directory path (or the user-tier path when missing). */
+    dir: string;
+    tier: 'user' | 'managed' | 'missing';
+    /** Path to the user-tier dir, regardless of which tier was selected. */
+    userDir: string;
+    /** Path to the managed-tier dir, regardless of which tier was selected. */
+    managedDir: string;
 }
 /**
- * I/O-aware resolver. Checks file existence and falls back from
- * SKILL.legacy.md to SKILL.md if the legacy file is missing.
- *
- * Returns a ResolveSkillFileResult that includes a warning when
- * legacy was requested but the file was absent — caller can surface
- * this to the user / agent.
+ * Resolve the active skill directory for a given slug, preferring the
+ * user tier (`.agents/skills/<slug>/`) when it exists.
  */
-export declare function resolveSkillFileWithFallback(skillDir: string, skillSlug: string, existsFn: (path: string) => boolean | Promise<boolean>, env?: NodeJS.ProcessEnv): Promise<ResolveSkillFileResult>;
+export declare function resolveSkillDirTwoTier(workspaceRoot: string, skillSlug: string, existsFn: (path: string) => boolean | Promise<boolean>): Promise<ResolveSkillDirResult>;
+/** Result of `resolveSkillFileTwoTier`. */
+export interface TwoTierResolveResult {
+    /** Final SKILL.md path the harness should load. */
+    path: string;
+    /** Which directory tier provided the skill. */
+    tier: 'user' | 'managed' | 'missing';
+    /** Path to the user-tier dir (regardless of selection). */
+    userDir: string;
+    /** Path to the managed-tier dir (regardless of selection). */
+    managedDir: string;
+}
+/**
+ * Resolve the SKILL.md file path for a given slug under Phase 3
+ * two-tier resolution. Returns the user-tier path when missing so
+ * callers can produce a clear "skill not installed at <userDir>" error.
+ */
+export declare function resolveSkillFileTwoTier(workspaceRoot: string, skillSlug: string, existsFn: (path: string) => boolean | Promise<boolean>): Promise<TwoTierResolveResult>;
 //# sourceMappingURL=skill-resolver.d.ts.map

@@ -288,9 +288,13 @@ In addition to the standard taxonomy in PATTERNS.md:
 
 ## Rollback
 
+If this rewrite degrades weekly winddown quality, revert the Phase 2
+weekly-winddown rewrite commit (per-skill commit; surgical revert):
+
 ```bash
-export ARETE_LEGACY_SKILL_PROSE=weekly-winddown
+git log --oneline packages/runtime/skills/weekly-winddown/SKILL.md
+git revert <phase-2 weekly-winddown rewrite commit>
 ```
 
-Routes to `SKILL.legacy.md` on next invocation. Per-skill — daily-winddown
-stays on chef pattern.
+The user fork can also be restored from a `.fork-base/` snapshot if the
+user has run `arete skill fork weekly-winddown`.

@@ -66,11 +66,10 @@ it runs in the agent without prompting.
 ### Step 0 — Read the APPEND file and log start
 
 ```bash
-# Resolve which SKILL.md to use (honors ARETE_LEGACY_SKILL_PROSE)
+# Resolve which SKILL.md to load (Phase 3 two-tier: .agents/skills/
+# wins over .arete/skills/). Used for shell-substitution-style path
+# discovery; not strictly required for the agent to run.
 arete skill resolve daily-winddown
-# (this command's output is the path the harness will read; if it
-# returns SKILL.legacy.md, the chef-orchestrator pattern is bypassed
-# and the legacy step-by-step prose is used instead)
 
 # Log winddown start
 arete events log winddown --event start
@@ -374,7 +373,7 @@ chef can tighten its defer-confidence as the disagreement rate drops.
   - `arete meeting approve <slug>` — commit staged → approved.
   - `arete people memory refresh` — refresh person highlights.
   - `arete search "<query>" --timeline` — thread progress.
-  - `arete skill resolve daily-winddown` — Phase 2 legacy routing.
+  - `arete skill resolve daily-winddown` — Phase 3 two-tier path resolution.
 - **Local files**:
   - `now/week.md` — weekly plan with inbox, tasks, daily progress.
   - `now/scratchpad.md` — carryover and waiting-on-others.
@@ -393,15 +392,18 @@ chef can tighten its defer-confidence as the disagreement rate drops.
 
 ## Rollback
 
-If this rewrite degrades winddown quality during soak:
+If this rewrite degrades winddown quality, revert the Phase 2 daily-winddown
+rewrite commit (per-skill commit; surgical revert):
 
 ```bash
-export ARETE_LEGACY_SKILL_PROSE=daily-winddown
+git log --oneline packages/runtime/skills/daily-winddown/SKILL.md
+git revert <phase-2 daily-winddown rewrite commit>
 ```
 
-The skill resolver routes the agent to `SKILL.legacy.md` on next
-invocation. Per-skill — other Phase 2 rewrites stay live.
+The user fork can also be restored from a `.fork-base/` snapshot if the
+user has run `arete skill fork daily-winddown` and the recorded base
+predates the regression.
 
-If patterns themselves are wrong (vs. one specific skill misapplying
+If the patterns themselves are wrong (vs. one specific skill misapplying
 them), pause skill rewrites, fix `PATTERNS.md`, re-derive affected
 skills.

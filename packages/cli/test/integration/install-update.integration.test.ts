@@ -84,7 +84,7 @@ describe('integration: workspace install/update journeys', () => {
     // PRD templates: skill-local YES, templates/outputs/ NO
     for (const variant of ['prd-simple', 'prd-regular', 'prd-full']) {
       assert.equal(
-        existsSync(join(workspace, '.agents', 'skills', 'create-prd', 'templates', `${variant}.md`)),
+        existsSync(join(workspace, '.arete', 'skills', 'create-prd', 'templates', `${variant}.md`)),
         true, `.agents/skills/create-prd/templates/${variant}.md should be skill-local`
       );
       assert.equal(
@@ -96,7 +96,7 @@ describe('integration: workspace install/update journeys', () => {
     // Meeting agenda templates: skill-local YES, templates/meeting-agendas/ NO
     for (const type of ['one-on-one', 'customer', 'leadership', 'dev-team', 'other']) {
       assert.equal(
-        existsSync(join(workspace, '.agents', 'skills', 'prepare-meeting-agenda', 'templates', `${type}.md`)),
+        existsSync(join(workspace, '.arete', 'skills', 'prepare-meeting-agenda', 'templates', `${type}.md`)),
         true, `.agents/skills/prepare-meeting-agenda/templates/${type}.md should be skill-local`
       );
       assert.equal(
@@ -107,11 +107,11 @@ describe('integration: workspace install/update journeys', () => {
 
     // Plans templates: skill-local YES, templates/plans/ NO
     assert.equal(
-      existsSync(join(workspace, '.agents', 'skills', 'week-plan', 'templates', 'week-priorities.md')),
+      existsSync(join(workspace, '.arete', 'skills', 'week-plan', 'templates', 'week-priorities.md')),
       true, 'week-plan skill-local template should be present'
     );
     assert.equal(
-      existsSync(join(workspace, '.agents', 'skills', 'quarter-plan', 'templates', 'quarter-goals.md')),
+      existsSync(join(workspace, '.arete', 'skills', 'quarter-plan', 'templates', 'quarter-goals.md')),
       true, 'quarter-plan skill-local template should be present'
     );
     assert.equal(
@@ -131,8 +131,8 @@ describe('integration: workspace install/update journeys', () => {
       ['construct-roadmap', 'roadmap'],
     ] as [string, string][]) {
       assert.equal(
-        existsSync(join(workspace, '.agents', 'skills', skill, 'templates', 'project.md')),
-        true, `.agents/skills/${skill}/templates/project.md should be skill-local`
+        existsSync(join(workspace, '.arete', 'skills', skill, 'templates', 'project.md')),
+        true, `.arete/skills/${skill}/templates/project.md should be skill-local`
       );
       assert.equal(
         existsSync(join(workspace, 'templates', 'projects', type, 'README.md')),
