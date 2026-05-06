@@ -167,7 +167,15 @@ Then he'll run his actual EOD winddown using the chef-orchestrator pattern.
 
 **If the next meta is in a fresh context**: read this section + the most recent decisions log entry + Phase 2's `review.md` for the four follow-on concerns, especially the `deferral_disagreement` event wiring that defers to "first soak pull-back" (i.e., when John pulls a deferred item back from `./deferred-<date>.md`, that should trigger appending a `deferral_disagreement` event to `item-fates.jsonl` — wire it then).
 
-**If `npm link` or `arete update` errors at setup**: most likely cause is dist out-of-sync. From the worktree root, run `npm run build` (rebuild core + cli + backend dist) and re-run `npm link`. The Phase 2 sub-orch's dist commit `e045814f` should be current, but rebuilding is cheap and safe.
+**If `npm link` or `arete update` errors at setup**: most likely cause is missing `node_modules/` in the worktree (workspace symlinks not set up). Confirmed gotcha 2026-05-05 morning — first user testing attempt failed with `@arete/core does not provide an export named 'writeInboxSummary'` because `npm install` was never run in the worktree, so `packages/cli`'s `@arete/core` dependency fell back to a stale global linked version. **Always run `npm install` at worktree root BEFORE `npm link`.**
+
+Correct setup order:
+1. `cd /Users/john/code/arete/.claude/worktrees/arete-v2-chef-orchestrator` (worktree root)
+2. `npm install` (sets up workspace symlinks; creates `node_modules/@arete/core -> ../packages/core`)
+3. `cd packages/cli && npm link`
+4. `cd ~/code/arete-reserv && arete update`
+
+If still erroring after that, dist may be stale: `npm run build` from worktree root, then re-run `npm link`. The Phase 2 sub-orch's dist commit `e045814f` should be current.
 
 ## Decisions log — 2026-05-04 (Phase 2 shipped to parent worktree)
 
