@@ -514,20 +514,19 @@ export function registerSkillCommands(program: Command): void {
       }
     });
 
-  // Skill prose resolver (Phase 2 legacy routing + Phase 3 two-tier dirs).
+  // Skill prose resolver (Phase 3 two-tier dirs).
   //
   // Resolution order:
-  //   1. Pick the active skill directory: `.agents/skills/<slug>/`
-  //      (user) wins; otherwise `.arete/skills/<slug>/` (managed).
-  //   2. Within that directory, honor `ARETE_LEGACY_SKILL_PROSE` to
-  //      route to SKILL.legacy.md when listed and present.
+  //   1. `.agents/skills/<slug>/SKILL.md` (user fork / community).
+  //   2. `.arete/skills/<slug>/SKILL.md`  (managed/shipped).
   //
-  // Used by chef-orchestrator skill prose for shell-substitution-style
-  // path discovery. Once Phase 3 Step 9 (MC5 sunset) lands, the legacy
-  // routing branch is removed but the two-tier dir resolution stays.
+  // Phase 3 Step 9 / MC5 sunset removed the Phase 2
+  // `ARETE_LEGACY_SKILL_PROSE` routing — chef-orchestrator skills no
+  // longer ship a SKILL.legacy.md companion; recovery is via
+  // `git revert` of the Phase 2 rewrite commits.
   skillCmd
     .command('resolve <slug>')
-    .description('Resolve which SKILL.md to load (.agents wins over .arete; honors ARETE_LEGACY_SKILL_PROSE)')
+    .description('Resolve which SKILL.md to load (.agents wins over .arete)')
     .option('--json', 'Output as JSON')
     .action(async (slug: string, opts: { json?: boolean }) => {
       const services = await createServices(process.cwd());
@@ -578,9 +577,6 @@ export function registerSkillCommands(program: Command): void {
               tier: result.tier,
               userDir: result.userDir,
               managedDir: result.managedDir,
-              legacyRequested: result.legacyRequested,
-              legacyUsed: result.legacyUsed,
-              warning: result.warning ?? null,
             },
             null,
             2,
@@ -591,11 +587,6 @@ export function registerSkillCommands(program: Command): void {
 
       // Human output: print the path on stdout for shell-substitution use.
       console.log(result.path);
-      if (result.warning) {
-        warn(result.warning);
-      } else if (result.legacyUsed) {
-        info(`Using legacy SKILL.md for ${slug} (ARETE_LEGACY_SKILL_PROSE)`);
-      }
     });
 
   // Phase 3 Step 3 — `arete skill fork <name>`

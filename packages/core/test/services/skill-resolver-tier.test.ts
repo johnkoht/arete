@@ -1,9 +1,13 @@
 /**
- * Tests for two-tier skill-resolver functions (Phase 3 Step 2).
+ * Tests for two-tier skill-resolver functions (Phase 3 Step 2 + Step 9).
  *
  * Covers:
  * - resolveSkillDirTwoTier: user wins, managed fallback, missing
- * - resolveSkillFileTwoTier: combines tier resolution + legacy routing
+ * - resolveSkillFileTwoTier: returns SKILL.md path in the resolved tier
+ *
+ * Note: post Phase 3 Step 9 / MC5 sunset, the legacy
+ * `ARETE_LEGACY_SKILL_PROSE` routing has been removed. This test file
+ * previously asserted that path; those cases are gone.
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
@@ -90,12 +94,9 @@ describe('resolveSkillFileTwoTier', () => {
       root,
       'foo',
       (p) => existsSync(p),
-      {},
     );
     assert.equal(result.tier, 'user');
     assert.equal(result.path, join(userDir, 'SKILL.md'));
-    assert.equal(result.legacyRequested, false);
-    assert.equal(result.legacyUsed, false);
   });
 
   it('returns managed SKILL.md when no user fork', async () => {
@@ -106,7 +107,6 @@ describe('resolveSkillFileTwoTier', () => {
       root,
       'foo',
       (p) => existsSync(p),
-      {},
     );
     assert.equal(result.tier, 'managed');
     assert.equal(result.path, join(managedDir, 'SKILL.md'));
@@ -117,79 +117,27 @@ describe('resolveSkillFileTwoTier', () => {
       root,
       'foo',
       (p) => existsSync(p),
-      {},
     );
     assert.equal(result.tier, 'missing');
     assert.equal(result.path, join(root, '.agents', 'skills', 'foo', 'SKILL.md'));
   });
 
-  it('routes to legacy SKILL.md when env var lists slug AND legacy file exists in user tier', async () => {
+  it('user tier still wins when both tiers have a SKILL.md (was: legacy override scenario)', async () => {
+    // Pre-MC5 sunset, this test exercised SKILL.legacy.md routing.
+    // Post-sunset: just confirm two-tier precedence under the simpler
+    // resolver.
     const userDir = join(root, '.agents', 'skills', 'foo');
-    mkdirSync(userDir, { recursive: true });
-    writeFileSync(join(userDir, 'SKILL.md'), '# user');
-    writeFileSync(join(userDir, 'SKILL.legacy.md'), '# user-legacy');
-    const result = await resolveSkillFileTwoTier(
-      root,
-      'foo',
-      (p) => existsSync(p),
-      { ARETE_LEGACY_SKILL_PROSE: 'foo' },
-    );
-    assert.equal(result.legacyRequested, true);
-    assert.equal(result.legacyUsed, true);
-    assert.equal(result.path, join(userDir, 'SKILL.legacy.md'));
-    assert.equal(result.tier, 'user');
-  });
-
-  it('routes to legacy SKILL.md in managed tier when no user fork', async () => {
     const managedDir = join(root, '.arete', 'skills', 'foo');
-    mkdirSync(managedDir, { recursive: true });
-    writeFileSync(join(managedDir, 'SKILL.md'), '# managed');
-    writeFileSync(join(managedDir, 'SKILL.legacy.md'), '# managed-legacy');
-    const result = await resolveSkillFileTwoTier(
-      root,
-      'foo',
-      (p) => existsSync(p),
-      { ARETE_LEGACY_SKILL_PROSE: 'foo' },
-    );
-    assert.equal(result.legacyUsed, true);
-    assert.equal(result.path, join(managedDir, 'SKILL.legacy.md'));
-    assert.equal(result.tier, 'managed');
-  });
-
-  it('falls back to live SKILL.md when legacy requested but missing', async () => {
-    const userDir = join(root, '.agents', 'skills', 'foo');
     mkdirSync(userDir, { recursive: true });
+    mkdirSync(managedDir, { recursive: true });
     writeFileSync(join(userDir, 'SKILL.md'), '# user');
+    writeFileSync(join(managedDir, 'SKILL.md'), '# managed');
     const result = await resolveSkillFileTwoTier(
       root,
       'foo',
       (p) => existsSync(p),
-      { ARETE_LEGACY_SKILL_PROSE: 'foo' },
     );
-    assert.equal(result.legacyRequested, true);
-    assert.equal(result.legacyUsed, false);
-    assert.ok(result.warning);
+    assert.equal(result.tier, 'user');
     assert.equal(result.path, join(userDir, 'SKILL.md'));
-  });
-
-  it('user tier wins for the legacy lookup too (user can override managed legacy)', async () => {
-    const userDir = join(root, '.agents', 'skills', 'foo');
-    const managedDir = join(root, '.arete', 'skills', 'foo');
-    mkdirSync(userDir, { recursive: true });
-    mkdirSync(managedDir, { recursive: true });
-    writeFileSync(join(userDir, 'SKILL.md'), '# user');
-    writeFileSync(join(managedDir, 'SKILL.md'), '# managed');
-    writeFileSync(join(managedDir, 'SKILL.legacy.md'), '# managed-legacy');
-    // Legacy requested but only managed has the legacy file. User
-    // dir is what we're resolving against → fallback warning.
-    const result = await resolveSkillFileTwoTier(
-      root,
-      'foo',
-      (p) => existsSync(p),
-      { ARETE_LEGACY_SKILL_PROSE: 'foo' },
-    );
-    assert.equal(result.tier, 'user');
-    assert.equal(result.legacyUsed, false);
-    assert.ok(result.warning);
   });
 });

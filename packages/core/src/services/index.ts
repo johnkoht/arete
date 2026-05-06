@@ -18,15 +18,10 @@ export type {
   ChefOrchestratorSkillSlug,
 } from './skills-local.js';
 export {
-  parseLegacyList,
-  resolveSkillFile,
-  resolveSkillFileFromEnv,
-  resolveSkillFileWithFallback,
   resolveSkillDirTwoTier,
   resolveSkillFileTwoTier,
 } from './skill-resolver.js';
 export type {
-  ResolveSkillFileResult,
   ResolveSkillDirResult,
   TwoTierResolveResult,
 } from './skill-resolver.js';

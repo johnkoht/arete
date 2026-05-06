@@ -314,8 +314,13 @@ arete index
 
 ## Rollback
 
+If this rewrite degrades week-plan quality, revert the Phase 2
+week-plan rewrite commit (per-skill commit; surgical revert):
+
 ```bash
-export ARETE_LEGACY_SKILL_PROSE=week-plan
+git log --oneline packages/runtime/skills/week-plan/SKILL.md
+git revert <phase-2 week-plan rewrite commit>
 ```
 
-Per-skill rollback. Other Phase 2 skills stay on chef pattern.
+The user fork can also be restored from a `.fork-base/` snapshot if the
+user has run `arete skill fork week-plan`.
