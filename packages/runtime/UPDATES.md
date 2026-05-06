@@ -4,6 +4,23 @@ Lightweight release notes for product builders using Areté. Most recent updates
 
 ---
 
+## Week of April 27, 2026 (release — 0.10.0)
+
+### Slack Digests Now Feed the Topic Wiki
+
+**Async conversation in Slack now updates your topic pages the same way meetings do.** When the `slack-digest` skill processes a Slack thread, the same lexical topic detection that runs on meetings now runs on each thread's content. Threads that match active topics flow into a per-source refresh so the topic wiki captures decisions, signals, and context from Slack — not just from recordings.
+
+- **Topic detection on slack-digest output** — each thread is scored against active topic slugs with the same stop-token list and ≥0.5 coverage threshold used for meetings. Detection is biased toward already-active topics so wiki growth stays focused on topics you've already invested in, instead of fragmenting across new slugs.
+- **`arete topic refresh --source <path>`** — refreshes a topic's narrative from a single source file (slack-digest or meeting). Lets the slack-digest skill update only the topics that the just-processed thread touched, rather than re-scanning the whole meeting corpus on every run.
+- **Topic source discovery widened** — the `discoverTopicSources` core service now finds slack-digest files alongside meeting files, so `arete topic refresh <slug>` (no `--source`) considers both. Renamed internal `refreshAllFromMeetings` → `refreshAllFromSources` to reflect the broader scope.
+- **`arete topic list --active --slugs --json`** — adds a slug-only JSON output mode so the slack-digest skill (and other skills) can cheaply grab the active-slug list to bias detection without parsing full topic pages.
+
+### What this means in practice
+
+If you run `slack-digest` daily, your topic wiki will accumulate narrative from both meetings and Slack — pricing decisions discussed in a Slack thread show up on the same topic page as the QBR where the original decision was made. The active-slug bias means topics you care about get richer over time instead of every new conversation spawning a new slug.
+
+---
+
 ## Week of April 27, 2026 (patch — 0.9.2)
 
 ### Reconciliation: fewer false positives, smarter handling of duplicate decisions/learnings
