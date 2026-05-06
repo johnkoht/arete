@@ -158,6 +158,7 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 | Phase 0 | aa686a8109331e31b | `.claude/worktrees/agent-aa686a8109331e31b` | **SHIPPED TO MAIN** (merge `131863fe`) | APPROVE WITH MINOR CONCERNS → fix-ups → APPROVE | Build: 9 commits. Eng-lead first review surfaced 3 fix-ups. Fix-up agent landed 5 more commits (incl. dist). Mini-review APPROVE. AC0.8 ledger net +3 matches plan prediction. Tests 71/71 pass. Soak in progress (depends on John actually running daily-winddown). |
 | Phase 1 | a7aa23e400eeeac6c | `.claude/worktrees/agent-a7aa23e400eeeac6c` | **SHIPPED to parent** (merge `eb50dccf`); main merge **pending John's Phase 0 testing** | APPROVE WITH MINOR CONCERNS — meta's three framing calls all ACCEPTED | Build: 6 phase-1 commits (Steps 1-6). Original sub-orch died on `npm test` watchdog stall (~50 min). Recovery agent (~9 min) finished Steps 7+ via per-file `tsx --test`. Fix-up agent (~10 min) deleted missed `## Could include` body-block Remove. Eng-lead review accepted: (a) substitution argument at +8 ledger; (b) skill-prompt migration deferred to Phase 2; (c) 3 pre-existing backend agent.test.ts failures not Phase 1's regression. Total wall time ~69 min vs. 14-18 day estimate. |
 | Phase 2 | a8c94a3575a32646c | `.claude/worktrees/agent-a8c94a3575a32646c` | **SHIPPED to parent** (merge `650d325c`); main merge **pending John's Phase 0 + 1 testing** | APPROVE WITH MINOR CONCERNS — all four meta framing calls ACCEPTED | Build: 9 mandatory steps (PATTERNS.md → APPEND seeding → skill-resolver → daily-winddown validation + Step-5 A/B → 4 more skills → frontmatter.approved_items removal → tests → dist) shipped autonomously in ~37 min. Step-5 A/B PASS at 8/10 with 2 prose refinements. Eng-lead review (~4 min) verified ledger truth, plan-Removes cross-check, skill prose ambiguity. Prose fix-up agent (~2 min) landed 3 minor concerns; 4th (deferral_disagreement wiring) deferred to first soak pull-back. AC2.11 ledger: +8 at ship → +2 at wrap-up after MC5 legacy sunset; substitution argument accepted (skills-local + skill-resolver load-bearing for chef pattern with safe rollback). Total wall time ~43 min vs. 10-14 day estimate. |
+| Phase 3 | (take 1 a8e2726204ec3dbd4 halted on wrong base; take 2 a644f0be6b075ca58) | `.claude/worktrees/phase-3-skills-split` (manually pre-made) | **SHIPPED to parent** (merge `56a9e135`); main merge **pending John's Phase 0/1/2 testing** | **APPROVE — no fix-ups required** (cleanest cycle yet) | Take 1 halted correctly on pre-flight: Agent's `isolation: "worktree"` landed on `main` instead of v2 parent branch; sub-orch noticed missing Phase 2 artifacts and refused to proceed. Take 2 shipped all 9 plan steps in ~35 min from manually-prepped worktree. **MC5 sunset complete** (Step 9 standalone commit `099f1492`): 5 SKILL.legacy.md files deleted (~3.2K LOC), `ARETE_LEGACY_SKILL_PROSE` routing removed from skill-resolver, `## Rollback` sections updated to cite git revert of Phase 2 commits. Eng-lead review (~3 min): independent ledger recount matches; migration test exercises both code paths plus 5 edge cases; hygiene reconciliation clean. AC3.7 ledger: +5 at ship → 0 at wrap-up (vs plan +6 → 0; better than estimate). Total wall time ~41 min vs. 5-7 day estimate. |
 
 ## Open questions / parking lot
 
@@ -166,6 +167,39 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`week.md` as a working file**: hand-readable markdown, or derived view from state.json? **Lean: derived view, but markdown remains source-of-truth for user edits; refresh harmlessly regenerates non-user sections.**
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
+
+## Decisions log — 2026-05-05 (Phase 3 shipped to parent worktree)
+
+Phase 3 (Skills directory split) merged into parent worktree branch at `56a9e135`. **Main merge pending John's testing/usage of Phases 0/1/2.** The directory split is mechanical (no agent behavior change), so daily-driver risk is lower than Phase 2; AC11 hard stop doesn't apply.
+
+**Cleanest cycle of v2 so far** — ~41 min total wall time, no fix-up agents needed:
+1. Take 1 sub-orch halted at pre-flight (~71 sec; Agent isolation landed on wrong base)
+2. Manual worktree creation + `npm install` (~2 min meta)
+3. Take 2 sub-orch shipped all 9 steps in ~35 min
+4. Eng-lead review APPROVE in ~3 min (no fix-ups required)
+
+**AC3.7 ledger**: +5 at ship; **0 at wrap-up after MC5 sunset** (better than plan's +6 → 0 estimate).
+
+**MC5 LEGACY SUNSET COMPLETE.** As of merge `56a9e135`:
+- 5 `<skill>/SKILL.legacy.md` files (~3.2K LOC) deleted
+- `ARETE_LEGACY_SKILL_PROSE` env var routing removed from `skill-resolver.ts`: `parseLegacyList`, `resolveSkillFile`, `resolveSkillFileFromEnv`, `resolveSkillFileWithFallback` all gone
+- `arete skill resolve` JSON output scrubbed of legacy fields
+- 5 SKILL.md `## Rollback` sections updated to cite `git revert` of Phase 2 commits
+
+**Important caveat**: with MC5 sunset shipped, Phase 2 chef-orchestrator skills no longer have the per-skill flag escape hatch. AC11 hard-stop revert path for any of the 5 chef skills is now `git revert <Phase 2 commit>` — heavier than flag flip. If John surfaces a Phase 2 regression during ongoing soak BEFORE the Phase 1+2+3 main merges, we ship Phase 1+2 main merge but DELAY Phase 3 main merge, restoring legacy flag option until the regression is resolved. Diary's "Decisions waiting on John's testing" updated to reflect this.
+
+**Cumulative ledger across Phases 1-3**:
+- Phase 1: +8 at ship → +8 at wrap-up (no further sunset)
+- Phase 2: +8 at ship → +2 at wrap-up (MC5 sunset shipped in Phase 3)
+- Phase 3: +5 at ship → 0 at wrap-up
+- **Cumulative at wrap-up**: ~+10 across the five proxies
+
+**Phase 4 audit + demote-to-CLI** is expected to pull cumulative back toward 0 by removing 12-18 skill files (per parent plan's Phase 4 disposition table). Phase 4 will be the first phase that cumulative ledger ≤ 0 across all of v2.
+
+**Lessons forward (additions)**:
+- **Agent's `isolation: "worktree"` doesn't reliably land on the v2 parent branch.** Phase 1 and 2 sub-orchs got the right base by happenstance; Phase 3 didn't. Remedy applied: manual worktree creation off the correct base + `npm install` + spawn agent without `isolation` parameter, with explicit cwd-into-worktree instructions and a pre-flight check before any code change. This is now the established pattern for Phase 4+.
+- **Pre-flight checks pay off when the base is wrong.** The first Phase 3 sub-orch made zero code changes before halting — the build-report's "Critical first step" verification block (verify branch, verify Phase N artifacts present) caught the issue. Add this block to every future handoff brief.
+- **No-fix-up cycles are achievable** when (a) PATTERNS-style scaffolding is in place from prior phases (Phase 2 established the chef pattern; Phase 3 just adds infrastructure around it), (b) the phase plan's Removes list cross-checks, (c) the eng-lead review framing surfaces the load-bearing checks (MC5 sunset here) explicitly. This kept the Phase 3 cycle to two agents instead of three or four.
 
 ## Decisions log — 2026-05-05 (Phase 3 spawn + Agent worktree-isolation lesson)
 
@@ -266,7 +300,8 @@ Phase 2 (Chef-orchestrator behavior rewrite) merged into parent worktree branch 
 - Phase 0: shipped to main; soaking (depends on John running daily-winddown)
 - Phase 1: shipped to parent; main-merge pending Phase 0 testing
 - Phase 2: shipped to parent; main-merge pending Phase 0 + Phase 1 testing
-- Phase 3 (skills directory split), Phase 4 (skills audit), Phase 5 (meeting extract decomposition), Phase 6 (schema layer conditional): not started.
+- Phase 3: shipped to parent; main-merge pending Phase 0/1/2 testing
+- Phase 4 (skills audit + demote-to-CLI), Phase 5 (meeting extract decomposition), Phase 6 (schema layer conditional): not started.
 
 **Question for next meta session**: with Phases 1 and 2 stacked on parent waiting for user testing/usage, do we continue building Phase 3 onto parent worktree, or pause until John has used what's already shipped?
 
