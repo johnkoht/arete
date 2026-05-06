@@ -10,6 +10,33 @@ purpose: durable thread across context resets; decision log; sub-orchestrator st
 
 This file is the durable thread for the meta-orchestrator running this parent plan. Read top-to-bottom on every fresh context. Append-only by convention; correct in-place only when a recorded fact turns out to be wrong (and note the correction).
 
+## Compact-safe recovery — what to read in what order if context was just reset
+
+If you're a fresh meta picking this up after a compact or new session:
+
+1. **`MEMORY.md`** (auto-loaded by harness) — `project_arete_v2_direction.md` is the v2 thesis. `feedback_branch_isolation.md`, `feedback_commit_dist.md`, `feedback_l3_memory.md` are load-bearing rules.
+2. **This diary** — start with the latest "Decisions log" entry below; scan the status table for Phase positions; read "User testing window" if active; read "Lessons forward" sections for Phase 0/1/2 patterns.
+3. **`plan.md`** — Principles 1–9, AC table (esp. AC10 gating, AC11 hard stop, AC8 ledger), Phase Plan Requirements table, current phase definitions.
+4. **`pre-mortem.md`** if reviewing risk for a new phase.
+5. **Parent reviews** (`review.md`, `review-2.md`) — first verdict (REVISE BEFORE BUILD) → revisions → second verdict (APPROVE WITH MINOR CONCERNS). MC1–MC5 came from this.
+
+Per-phase deep dive (only if needed):
+- **Phase 0** (instrument + baseline) — shipped to main `131863fe`. Artifacts at `phase-0-instrument-baseline/{plan,build-report,review,review-2}.md`.
+- **Phase 1** (wiki expansion) — shipped to parent `eb50dccf`; main-merge pending user testing. Artifacts at `phase-1-wiki-expansion/{plan,build-report,review}.md`. Recovery agent + fix-up agent histories captured in build-report.
+- **Phase 2** (chef-orchestrator rewrite) — shipped to parent `650d325c`; main-merge pending user testing. Artifacts at `phase-2-chef-orchestrator-rewrite/{plan,build-report,review}.md`. Five rewritten skills + 5 SKILL.legacy.md companions; `ARETE_LEGACY_SKILL_PROSE` flag for per-skill rollback; `arete skill resolve` CLI verb.
+- **Phase 3** (skills directory split) — not started; section in parent plan.
+- **Phase 4** (skills audit) — not started; section in parent plan **includes the demote-to-CLI disposition rule + candidate list** added 2026-05-05. Read that section before drafting the Phase 4 plan.
+- **Phase 5** (meeting extract decomposition) — not started.
+- **Phase 6** (schema layer, conditional) — not started.
+
+Sub-worktrees still on disk:
+- `.claude/worktrees/agent-aa686a8109331e31b` (Phase 0)
+- `.claude/worktrees/agent-a7aa23e400eeeac6c` (Phase 1)
+- `.claude/worktrees/agent-a8c94a3575a32646c` (Phase 2)
+- `.claude/worktrees/agent-ab2ab108` (older; pre-v2; can ignore)
+
+Cleanup whenever: `git worktree remove <path>`.
+
 ## Origin
 
 User (John, builder + primary daily user) initiated v2 thinking on 2026-04-30 after observing Areté has grown bloated and hard to reason about. Goals: slimmer system, Karpathy-wiki memory foundation, Core/Skills split, MCP-first where applicable, address the daily-winddown bloat that takes 30–45 min daily. Four research subagents ran in parallel; their findings are summarized below.
@@ -139,6 +166,24 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`week.md` as a working file**: hand-readable markdown, or derived view from state.json? **Lean: derived view, but markdown remains source-of-truth for user edits; refresh harmlessly regenerates non-user sections.**
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
+
+## Decisions log — 2026-05-05 morning (testing in progress + Phase 4 disposition rule)
+
+**John currently testing all three phases from worktree.** Setup hit a known-now gotcha:
+
+- First attempt failed: `arete --version` errored with `@arete/core does not provide an export named 'writeInboxSummary'`.
+- Root cause: `npm install` was never run in the worktree. Without `node_modules/`, `packages/cli`'s `@arete/core` dependency fell back to a stale global linked version. Setup recovery section above (and User testing window below) updated to require `npm install` before `npm link`.
+- Fix landed in commit `e7f857e4`. After `npm install` + re-link, `arete --version` and `arete inbox --help` both run cleanly. User confirmed "fixed" 2026-05-05 ~mid-morning.
+
+**Phase 4 disposition rule added** (not actionable now; durable input for Phase 4 sub-orch handoff):
+
+User identified that some shipped skills are pure wrappers (`pull-from-*`, `calendar`, `save-meeting`, `email-search`, `drive-search`, `doc-search`, `people-intelligence`) and shouldn't be skills — they're 1:1 with CLI verbs, or the user-customizable bit is a config file rather than prose. Parent plan's Phase 4 section now has a third disposition (alongside "apply chef pattern" and "drop"): **demote to CLI**.
+
+Rule formalized as: skills earn their existence when (a) they orchestrate multi-step judgment, OR (b) they have user-tunable prose that affects behavior. Anything else is bloat. Pre-identified candidates listed in parent plan's Phase 4 section. Phase 4 audit produces the per-skill verdict.
+
+**`people-intelligence` confirmed never invoked directly** by John (2026-05-05). Strong demote-to-CLI signal. The `context/people-intelligence-policy.json` file stays as user-tunable config alongside the demoted CLI verb.
+
+**Awaiting John's EOD winddown report** as primary user testing signal. AC11 hard stop (>45 min winddown = revert relevant skill) is live. Trust-gap signals (chef defers things he wanted to see / surfaces things he didn't, pre-mortem R3) are the soft revert signal — captured in APPEND-file edits or skill prose tweaks.
 
 ## User testing window — starting 2026-05-05 morning
 
