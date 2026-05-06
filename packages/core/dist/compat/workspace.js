@@ -33,6 +33,7 @@ export function getWorkspacePaths(workspaceRoot) {
         ideConfig: join(workspaceRoot, adapter.configDirName),
         rules: join(workspaceRoot, adapter.rulesDir()),
         agentSkills: join(workspaceRoot, '.agents', 'skills'),
+        managedSkills: join(workspaceRoot, '.arete', 'skills'),
         tools: join(workspaceRoot, adapter.toolsDir()),
         integrations: join(workspaceRoot, adapter.integrationsDir()),
         context: join(workspaceRoot, 'context'),

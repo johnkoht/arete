@@ -14,4 +14,6 @@ export { parseAgendaItems, getUncheckedAgendaItems, getCompletedItems, getOpenTa
 export type { AgendaItem } from './agenda.js';
 export { extractAttendeeSlugs } from './attendees.js';
 export { jaccardSimilarity, normalizeForJaccard } from './similarity.js';
+export { parseMarkdownSections, diffMarkdownSections, formatMarkdownDiff, threeWayMergeSections, renderSections, SYNTHETIC_FRONTMATTER_HEADING, SYNTHETIC_PREAMBLE_HEADING, } from './markdown-diff.js';
+export type { MarkdownSection, MarkdownSectionChange, MarkdownDiff, MergeResult, MergeHunk, } from './markdown-diff.js';
 //# sourceMappingURL=index.d.ts.map

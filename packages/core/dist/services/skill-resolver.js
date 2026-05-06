@@ -17,6 +17,18 @@
  * `SKILL.legacy.md` files AND this resolver code. Until then, the
  * resolver is the structural escape hatch (per MC2 ship gate).
  *
+ * Phase 3: two-tier skill directory resolution. Skills live in two
+ * tiers:
+ *
+ *   1. `<workspace>/.agents/skills/<name>/`  - user customizations
+ *      (forks via `arete skill fork`, community installs, hand-authored).
+ *      Survives `arete update`.
+ *   2. `<workspace>/.arete/skills/<name>/`   - managed/shipped skills.
+ *      Refreshed on `arete update`. Read-only by convention.
+ *
+ * Tier 1 wins when present; tier 2 is fallback. See
+ * `resolveSkillDir()` and `resolveSkillFileTwoTier()`.
+ *
  * Design notes:
  * - Pure function `resolveSkillFile()` — no I/O. Caller checks
  *   existence (storage adapter, fs, etc.).
@@ -115,6 +127,50 @@ export async function resolveSkillFileWithFallback(skillDir, skillSlug, existsFn
         path: livePath,
         legacyRequested: false,
         legacyUsed: false,
+    };
+}
+/**
+ * Resolve the active skill directory for a given slug, preferring the
+ * user tier (`.agents/skills/<slug>/`) when it exists. Pure path math
+ * with one I/O dependency (existsFn) so the caller can inject `fs.existsSync`
+ * or a storage-adapter `exists`.
+ *
+ * Async-friendly: `existsFn` may return `boolean` or `Promise<boolean>`.
+ */
+export async function resolveSkillDirTwoTier(workspaceRoot, skillSlug, existsFn) {
+    const userDir = join(workspaceRoot, '.agents', 'skills', skillSlug);
+    const managedDir = join(workspaceRoot, '.arete', 'skills', skillSlug);
+    const userExists = await Promise.resolve(existsFn(userDir));
+    if (userExists) {
+        return { dir: userDir, tier: 'user', userDir, managedDir };
+    }
+    const managedExists = await Promise.resolve(existsFn(managedDir));
+    if (managedExists) {
+        return { dir: managedDir, tier: 'managed', userDir, managedDir };
+    }
+    return { dir: userDir, tier: 'missing', userDir, managedDir };
+}
+export async function resolveSkillFileTwoTier(workspaceRoot, skillSlug, existsFn, env = process.env) {
+    const dirResult = await resolveSkillDirTwoTier(workspaceRoot, skillSlug, existsFn);
+    if (dirResult.tier === 'missing') {
+        return {
+            path: join(dirResult.dir, 'SKILL.md'),
+            tier: 'missing',
+            userDir: dirResult.userDir,
+            managedDir: dirResult.managedDir,
+            legacyRequested: false,
+            legacyUsed: false,
+        };
+    }
+    const fileResult = await resolveSkillFileWithFallback(dirResult.dir, skillSlug, existsFn, env);
+    return {
+        path: fileResult.path,
+        tier: dirResult.tier,
+        userDir: dirResult.userDir,
+        managedDir: dirResult.managedDir,
+        legacyRequested: fileResult.legacyRequested,
+        legacyUsed: fileResult.legacyUsed,
+        warning: fileResult.warning,
     };
 }
 //# sourceMappingURL=skill-resolver.js.map

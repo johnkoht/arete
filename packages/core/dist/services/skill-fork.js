@@ -1,0 +1,500 @@
+/**
+ * Skill fork / diff / merge service (Phase 3 Steps 3, 5, 6, 7).
+ *
+ * Phase 3 introduces a two-tier skill directory layout:
+ *
+ *   - `.arete/skills/<name>/`   — managed; refreshed by `arete update`;
+ *                                 read-only by convention.
+ *   - `.agents/skills/<name>/`  — user customizations; takes precedence
+ *                                 at agent-load time; survives update.
+ *
+ * This module owns the user-facing flow:
+ *
+ *   - `forkSkill(name, ...)`   — copy managed → user; record `.fork-base`.
+ *   - `diffSkill(name, ...)`   — section-level diff against the recorded base.
+ *   - `mergeSkill(name, ...)`  — three-way merge of base + user + new managed;
+ *                                git-style conflict markers when needed.
+ *   - `summarizeUpstreamChanges(...)` — `arete update` summary helper.
+ *   - `migratePreSplitAgentSkills(...)` — Step 7 migration for pre-Phase-3
+ *                                 workspaces with shipped content under
+ *                                 `.agents/skills/`.
+ *
+ * Pure I/O (no LLMs, no network). Markdown-section diff lives in
+ * `utils/markdown-diff.ts`. Tests at
+ * `packages/core/test/services/skill-fork.test.ts`.
+ *
+ * The `.fork-base/` directory inside a user fork holds a snapshot of
+ * the managed skill at fork time. `arete skill diff` and `arete skill
+ * merge` use it as the merge base. We snapshot the whole skill dir
+ * (not just SKILL.md) so APPEND.md and templates/ are also tracked.
+ */
+import { join, basename, dirname } from 'path';
+import { createHash } from 'crypto';
+import { diffMarkdownSections, threeWayMergeSections, } from '../utils/markdown-diff.js';
+/** Where the recorded base lives inside a user fork. */
+const FORK_BASE_DIRNAME = '.fork-base';
+/** Manifest file inside `.fork-base/` recording the snapshot hash + date. */
+const FORK_BASE_MANIFEST = '.fork-base.yaml';
+/**
+ * Fork a managed skill into the user's `.agents/skills/` overlay.
+ * Idempotent: if the fork already exists and `force` is false, this
+ * returns ok=true with `alreadyExisted=true` — never overwrites user
+ * edits. Call with `force: true` to refresh the recorded base of an
+ * existing fork to the current managed content.
+ */
+export async function forkSkill(storage, options) {
+    const { workspaceRoot, name, force = false } = options;
+    const managedPath = join(workspaceRoot, '.arete', 'skills', name);
+    const forkPath = join(workspaceRoot, '.agents', 'skills', name);
+    const managedExists = await storage.exists(managedPath);
+    if (!managedExists) {
+        return {
+            ok: false,
+            forkPath,
+            managedPath,
+            alreadyExisted: false,
+            error: `Managed skill not found: ${name} (looked at ${managedPath})`,
+        };
+    }
+    const forkExists = await storage.exists(forkPath);
+    if (forkExists) {
+        // Already forked. NEVER overwrite the fork SKILL.md — that's the
+        // user's hand-edited content. With or without `--force`, we only
+        // (re-)record `.fork-base/` from current managed content.
+        const basePath = join(forkPath, FORK_BASE_DIRNAME);
+        const baseExists = await storage.exists(basePath);
+        if (!baseExists || force) {
+            const hash = await snapshotManagedAsBase(storage, managedPath, basePath);
+            return {
+                ok: true,
+                forkPath,
+                managedPath,
+                alreadyExisted: true,
+                baseHash: hash,
+            };
+        }
+        return {
+            ok: true,
+            forkPath,
+            managedPath,
+            alreadyExisted: true,
+        };
+    }
+    // Copy managed → fork.
+    await copyDirectory(storage, managedPath, forkPath);
+    // Snapshot managed → fork's `.fork-base/`.
+    const basePath = join(forkPath, FORK_BASE_DIRNAME);
+    const hash = await snapshotManagedAsBase(storage, managedPath, basePath);
+    return {
+        ok: true,
+        forkPath,
+        managedPath,
+        alreadyExisted: false,
+        baseHash: hash,
+    };
+}
+/**
+ * Diff a user fork's recorded base vs current managed content. Used
+ * by `arete skill diff` and by `arete update` to surface the
+ * upstream-changed-skills summary.
+ */
+export async function diffSkill(storage, workspaceRoot, name) {
+    const managedPath = join(workspaceRoot, '.arete', 'skills', name);
+    const forkPath = join(workspaceRoot, '.agents', 'skills', name);
+    const basePath = join(forkPath, FORK_BASE_DIRNAME);
+    const baseSkillMd = join(basePath, 'SKILL.md');
+    const managedSkillMd = join(managedPath, 'SKILL.md');
+    const baseExists = await storage.exists(baseSkillMd);
+    if (!baseExists) {
+        // No recorded base. Synthesize an empty diff with baseMissing flag.
+        const managedContent = (await storage.read(managedSkillMd)) ?? '';
+        return {
+            upToDate: false,
+            diff: { changes: [], unchanged: true },
+            forkPath,
+            managedPath,
+            basePath: baseSkillMd,
+            baseMissing: true,
+        };
+    }
+    const managedContent = (await storage.read(managedSkillMd)) ?? '';
+    const baseContent = (await storage.read(baseSkillMd)) ?? '';
+    const diff = diffMarkdownSections(baseContent, managedContent);
+    return {
+        upToDate: diff.unchanged,
+        diff,
+        forkPath,
+        managedPath,
+        basePath: baseSkillMd,
+        baseMissing: false,
+    };
+}
+/**
+ * Three-way merge: integrate upstream changes (base → managed) into
+ * the user fork. Conflicts land as git-style markers for the user to
+ * resolve manually. `--interactive` mode prompts per-hunk via the
+ * `onHunk` callback.
+ *
+ * On clean merges, `.fork-base/` is updated to the new managed
+ * content so subsequent diff/merge calls operate against the new
+ * base. On conflict, base is NOT updated — user needs to resolve
+ * conflicts and re-run `arete skill merge` to advance the base
+ * (alternatively pass `forceBaseUpdate: true` to advance unconditionally;
+ * not exposed via CLI in v1).
+ */
+export async function mergeSkill(storage, options) {
+    const { workspaceRoot, name, onHunk, forceBaseUpdate = false } = options;
+    const managedPath = join(workspaceRoot, '.arete', 'skills', name);
+    const forkPath = join(workspaceRoot, '.agents', 'skills', name);
+    const basePath = join(forkPath, FORK_BASE_DIRNAME);
+    const baseSkillMd = join(basePath, 'SKILL.md');
+    const managedSkillMd = join(managedPath, 'SKILL.md');
+    const forkSkillMd = join(forkPath, 'SKILL.md');
+    if (!(await storage.exists(forkSkillMd))) {
+        return {
+            ran: false,
+            mergedContent: '',
+            conflicts: [],
+            hunks: [],
+            clean: false,
+            baseUpdated: false,
+            error: `User fork not found at ${forkSkillMd}. Run \`arete skill fork ${name}\` first.`,
+        };
+    }
+    if (!(await storage.exists(managedSkillMd))) {
+        return {
+            ran: false,
+            mergedContent: '',
+            conflicts: [],
+            hunks: [],
+            clean: false,
+            baseUpdated: false,
+            error: `Managed skill not found at ${managedSkillMd}.`,
+        };
+    }
+    const baseExists = await storage.exists(baseSkillMd);
+    const baseContent = baseExists ? ((await storage.read(baseSkillMd)) ?? '') : '';
+    const localContent = (await storage.read(forkSkillMd)) ?? '';
+    const incomingContent = (await storage.read(managedSkillMd)) ?? '';
+    // Auto-merge.
+    const auto = threeWayMergeSections(baseContent, localContent, incomingContent);
+    // Interactive override: walk hunks, ask user, rewrite per decision.
+    let finalResult = auto;
+    if (onHunk) {
+        finalResult = await applyHunkDecisions(auto, onHunk, baseContent, localContent, incomingContent);
+    }
+    // Write merged content to the fork.
+    await storage.write(forkSkillMd, finalResult.merged);
+    // Update `.fork-base/` only on clean merges (or when forced).
+    let baseUpdated = false;
+    let baseHash;
+    if (finalResult.clean || forceBaseUpdate) {
+        baseHash = await snapshotManagedAsBase(storage, managedPath, basePath);
+        baseUpdated = true;
+    }
+    return {
+        ran: true,
+        mergedContent: finalResult.merged,
+        conflicts: finalResult.conflicts,
+        hunks: finalResult.hunks,
+        clean: finalResult.clean,
+        baseUpdated,
+        baseHash,
+    };
+}
+/**
+ * For each managed skill that has a corresponding user fork, return
+ * whether upstream has changes the user fork hasn't picked up yet.
+ * Used by `arete update` to print the summary banner.
+ */
+export async function summarizeUpstreamChanges(storage, workspaceRoot) {
+    const managedDir = join(workspaceRoot, '.arete', 'skills');
+    const userDir = join(workspaceRoot, '.agents', 'skills');
+    if (!(await storage.exists(managedDir)))
+        return [];
+    if (!(await storage.exists(userDir)))
+        return [];
+    const userSubdirs = await storage.listSubdirectories(userDir);
+    const result = [];
+    for (const userPath of userSubdirs) {
+        const name = basename(userPath);
+        const managedPath = join(managedDir, name);
+        if (!(await storage.exists(managedPath)))
+            continue;
+        const diff = await diffSkill(storage, workspaceRoot, name);
+        if (diff.baseMissing) {
+            // Compare fork SKILL.md vs managed SKILL.md directly. If they
+            // match, nothing to surface; if they differ, treat as changed
+            // (the user has either edited or never refreshed).
+            const forkContent = (await storage.read(join(userPath, 'SKILL.md'))) ?? '';
+            const managedContent = (await storage.read(join(managedPath, 'SKILL.md'))) ?? '';
+            if (forkContent === managedContent)
+                continue;
+            const wholesaleDiff = diffMarkdownSections(forkContent, managedContent);
+            if (wholesaleDiff.unchanged)
+                continue;
+            result.push({
+                name,
+                hasFork: true,
+                baseMissing: true,
+                changeCount: wholesaleDiff.changes.length,
+            });
+            continue;
+        }
+        if (!diff.upToDate) {
+            result.push({
+                name,
+                hasFork: true,
+                baseMissing: false,
+                changeCount: diff.diff.changes.length,
+            });
+        }
+    }
+    return result;
+}
+/**
+ * Phase 3 Step 7 migration. Pre-Phase-3 `arete install` / `update`
+ * wrote shipped skills directly to `.agents/skills/`. After Phase 3,
+ * shipped skills live in `.arete/skills/`; `.agents/skills/` is for
+ * user customizations only.
+ *
+ * Migration policy (idempotent):
+ *
+ * 1. For each `.agents/skills/<name>/` whose SKILL.md is byte-equal to
+ *    the corresponding `.arete/skills/<name>/SKILL.md`: delete the
+ *    `.agents/skills/<name>/` entry. The user has not edited; they
+ *    are tracking upstream. After migration, agent-load resolves to
+ *    `.arete/skills/<name>/` (managed).
+ *
+ * 2. For each `.agents/skills/<name>/` whose SKILL.md DIFFERS from the
+ *    corresponding `.arete/skills/<name>/SKILL.md`: leave intact.
+ *    Treat as user fork. If `.fork-base/` is missing, do NOT
+ *    fabricate one — the diff will show the full divergence on first
+ *    `arete skill diff` call. User can run `arete skill fork --force`
+ *    to record a base if they want clean upstream-update reports.
+ *
+ * 3. For `.agents/skills/<name>/` with NO matching managed entry
+ *    (community skill installed via `arete skill install <repo>`,
+ *    or hand-authored): leave intact. Outside Phase 3 split scope.
+ *
+ * Returns lists of `removed` (case 1) and `preserved` (cases 2 + 3)
+ * for the caller to surface in the update report. Never throws on
+ * partial failure — best-effort. Migration runs as part of `arete
+ * update` (not `install`), since `install` always writes shipped
+ * skills to `.arete/skills/` directly.
+ */
+export async function migratePreSplitAgentSkills(storage, agentSkillsDir, managedSkillsDir) {
+    const removed = [];
+    const preserved = [];
+    if (!(await storage.exists(agentSkillsDir))) {
+        return { removed, preserved };
+    }
+    if (!(await storage.exists(managedSkillsDir))) {
+        // No managed dir yet — nothing to migrate against. Caller
+        // (workspace.update) syncs managed BEFORE calling this; in tests
+        // this branch is rare.
+        return { removed, preserved };
+    }
+    const userSubdirs = await storage.listSubdirectories(agentSkillsDir);
+    for (const userPath of userSubdirs) {
+        const name = basename(userPath);
+        const managedPath = join(managedSkillsDir, name);
+        if (!(await storage.exists(managedPath))) {
+            // Case 3: community / hand-authored skill. Leave alone.
+            preserved.push(name);
+            continue;
+        }
+        const userSkillMd = join(userPath, 'SKILL.md');
+        const managedSkillMd = join(managedPath, 'SKILL.md');
+        const userContent = await storage.read(userSkillMd);
+        const managedContent = await storage.read(managedSkillMd);
+        if (userContent === null || managedContent === null) {
+            // Either side missing SKILL.md — preserve and let later flows
+            // surface the breakage; never silently delete.
+            preserved.push(name);
+            continue;
+        }
+        if (userContent === managedContent) {
+            // Case 1: byte-equal. Safe to remove UNLESS the user has an
+            // explicit `.fork-base/` (meaning they ran `arete skill fork`
+            // and the fact that the fork is currently byte-equal is
+            // incidental — they've signaled intent to track this skill as
+            // a fork). Preserve in that case.
+            const forkBaseExists = await storage.exists(join(userPath, FORK_BASE_DIRNAME));
+            if (forkBaseExists) {
+                preserved.push(name);
+                continue;
+            }
+            try {
+                await deleteDirectory(storage, userPath);
+                removed.push(name);
+            }
+            catch {
+                // Removal failure is non-fatal; treat as preserved so the
+                // user isn't lied to in the update summary.
+                preserved.push(name);
+            }
+            continue;
+        }
+        // Case 2: user fork (edited).
+        preserved.push(name);
+    }
+    return { removed, preserved };
+}
+// ---- internal helpers ----
+async function snapshotManagedAsBase(storage, managedPath, basePath) {
+    // Wipe + recreate the base dir. We cannot do an in-place overwrite
+    // safely without tracking removals.
+    if (await storage.exists(basePath)) {
+        await deleteDirectory(storage, basePath);
+    }
+    await storage.mkdir(basePath);
+    await copyDirectoryContents(storage, managedPath, basePath, {
+        exclude: new Set([FORK_BASE_DIRNAME, FORK_BASE_MANIFEST]),
+    });
+    // Compute hash of SKILL.md.
+    const skillMdContent = (await storage.read(join(managedPath, 'SKILL.md'))) ?? '';
+    const hash = createHash('sha256').update(skillMdContent).digest('hex');
+    // Manifest yaml — minimal shape, no `yaml` dep needed.
+    const manifest = [
+        `# Phase 3 fork-base manifest. Do not hand-edit; rewritten on \`arete skill fork --force\` /`,
+        `# \`arete skill merge\`. The hash is sha256(SKILL.md) of the managed content at fork time.`,
+        `version: 1`,
+        `recorded_at: ${new Date().toISOString()}`,
+        `skill_md_sha256: ${hash}`,
+        '',
+    ].join('\n');
+    await storage.write(join(basePath, FORK_BASE_MANIFEST), manifest);
+    return hash;
+}
+async function copyDirectory(storage, src, dest) {
+    await storage.mkdir(dest);
+    await copyDirectoryContents(storage, src, dest);
+}
+async function copyDirectoryContents(storage, src, dest, options = {}) {
+    const exclude = options.exclude ?? new Set();
+    const files = await storage.list(src, { recursive: true });
+    for (const srcFile of files) {
+        const rel = srcFile.slice(src.length).replace(/^[/\\]/, '');
+        // Skip excluded top-level entries.
+        const topSegment = rel.split(/[/\\]/)[0];
+        if (exclude.has(topSegment))
+            continue;
+        const destFile = join(dest, rel);
+        const content = await storage.read(srcFile);
+        if (content === null)
+            continue;
+        await storage.mkdir(dirname(destFile));
+        await storage.write(destFile, content);
+    }
+}
+async function deleteDirectory(storage, dir) {
+    if (!(await storage.exists(dir)))
+        return;
+    const files = await storage.list(dir, { recursive: true });
+    for (const f of files) {
+        try {
+            await storage.delete(f);
+        }
+        catch {
+            // Best effort.
+        }
+    }
+    // Some storage adapters require explicit dir removal; the file-based
+    // adapter cleans up empty dirs in delete(). For others, we attempt:
+    try {
+        await storage.delete(dir);
+    }
+    catch {
+        // If the adapter doesn't support directory delete, that's fine —
+        // empty subdirs are harmless.
+    }
+}
+/**
+ * Apply per-hunk decisions to an auto-merge result. Walks every
+ * non-trivial hunk, asks the caller, and rebuilds the merged
+ * document. Pure rewrite — the auto-merge is the source of truth for
+ * section ordering.
+ */
+async function applyHunkDecisions(auto, onHunk, baseContent, localContent, incomingContent) {
+    // Re-parse the three sides to access section bodies by heading.
+    const { parseMarkdownSections, renderSections } = await import('../utils/markdown-diff.js');
+    const localMap = new Map(parseMarkdownSections(localContent).map((s) => [s.heading, s.body]));
+    const incomingMap = new Map(parseMarkdownSections(incomingContent).map((s) => [s.heading, s.body]));
+    // baseMap unused for decision logic (decisions only choose between local /
+    // incoming or accept the auto-merge body), but kept for future use.
+    void baseContent;
+    // Rebuild the merged document from the auto-merge's hunk order.
+    // For each hunk, the auto already chose a body and emitted it in
+    // `auto.merged`. We rewrite per-hunk based on the decision.
+    const autoSections = parseMarkdownSections(auto.merged);
+    const finalSections = [];
+    const conflicts = [];
+    for (let i = 0; i < auto.hunks.length; i++) {
+        const hunk = auto.hunks[i];
+        const autoSection = autoSections[i];
+        if (!autoSection) {
+            // Defensive — should not happen because hunks are produced 1:1
+            // with output sections (except for fully-removed sections, which
+            // are not in the hunks list either).
+            continue;
+        }
+        // Always-trivial hunks: caller doesn't need to decide.
+        if (hunk.kind === 'unchanged' ||
+            hunk.kind === 'both-agree' ||
+            hunk.kind === 'incoming-add' ||
+            hunk.kind === 'incoming-only' ||
+            hunk.kind === 'incoming-restore' ||
+            hunk.kind === 'local-add' ||
+            hunk.kind === 'local-only' ||
+            hunk.kind === 'local-keep-removed') {
+            const decision = await onHunk(hunk);
+            if (decision === 'keep-local' || decision === 'skip') {
+                const lb = localMap.get(hunk.heading);
+                if (lb !== undefined) {
+                    finalSections.push({ heading: hunk.heading, body: lb });
+                }
+                // If local doesn't have the section (e.g. incoming-add and
+                // user said "keep-local"), drop it — they're saying don't
+                // take incoming.
+                continue;
+            }
+            if (decision === 'take-incoming') {
+                const ib = incomingMap.get(hunk.heading);
+                if (ib !== undefined) {
+                    finalSections.push({ heading: hunk.heading, body: ib });
+                }
+                continue;
+            }
+            // 'accept' — use the auto body.
+            finalSections.push({ heading: autoSection.heading, body: autoSection.body });
+            continue;
+        }
+        // Conflict hunks.
+        const decision = await onHunk(hunk);
+        if (decision === 'keep-local' || decision === 'skip') {
+            const lb = localMap.get(hunk.heading);
+            if (lb !== undefined) {
+                finalSections.push({ heading: hunk.heading, body: lb });
+            }
+            continue;
+        }
+        if (decision === 'take-incoming') {
+            const ib = incomingMap.get(hunk.heading);
+            if (ib !== undefined) {
+                finalSections.push({ heading: hunk.heading, body: ib });
+            }
+            continue;
+        }
+        // 'accept' — keep the auto's conflict-marker body.
+        finalSections.push({ heading: autoSection.heading, body: autoSection.body });
+        conflicts.push(hunk.heading);
+    }
+    return {
+        merged: renderSections(finalSections),
+        conflicts,
+        hunks: auto.hunks,
+        clean: conflicts.length === 0,
+    };
+}
+//# sourceMappingURL=skill-fork.js.map
