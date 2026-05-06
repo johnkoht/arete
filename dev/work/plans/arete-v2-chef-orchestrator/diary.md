@@ -167,6 +167,29 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## Decisions log — 2026-05-05 (Phase 3 spawn + Agent worktree-isolation lesson)
+
+User confirmed Phase 2 is "looking good so far" after first daily-winddown test and authorized Phase 3 build. Phase 3 plan drafted at `bfe75440`.
+
+**First Phase 3 sub-orch spawn failed at pre-flight** — correctly. The Agent tool's `isolation: "worktree"` parameter created a sub-worktree branched off **`main`** (HEAD `bab5a77d`, the slack-digest-topic-wiki release commit) instead of off the v2 parent worktree branch (`worktree-arete-v2-chef-orchestrator` HEAD `bfe75440`).
+
+Phase 1 and Phase 2 sub-orchs both used `isolation: "worktree"` and landed on the right base. Phase 3 didn't. Cause unclear — possibly the Agent tool defaults to repo-default-branch as the base, and Phase 1/2 worked by happenstance. The sub-orch's escalation was excellent: noticed missing Phase 2 source artifacts before any code change, refused to proceed, returned to meta cleanly.
+
+**Recovery applied 2026-05-05**:
+1. Auto-cleanup removed the failed sub-worktree (since it made no changes per agent docs).
+2. Meta manually created a worktree off the correct base:
+   ```
+   git worktree add -b worktree-phase-3-skills-split \
+     /Users/john/code/arete/.claude/worktrees/phase-3-skills-split \
+     worktree-arete-v2-chef-orchestrator
+   ```
+3. Ran `npm install` in the new worktree (Phase 1 lesson honored).
+4. Spawned a fresh agent **without** `isolation: "worktree"` — agent inherits meta's cwd but is instructed to `cd` into the pre-made worktree path as its first action.
+
+**Lesson forward (added to handoff-brief template)**: do NOT rely on `isolation: "worktree"` to land sub-orch on the v2 parent worktree branch. Manually create the sub-worktree, run `npm install`, then spawn a non-isolated agent that operates in that path. Add a pre-flight check to the brief: agent must verify the base (current branch + key Phase-N artifacts present) before any code change, halt and engage meta if base is wrong.
+
+This keeps the per-task commits + per-phase isolation pattern intact while removing the Agent-tool isolation foot-gun.
+
 ## Decisions log — 2026-05-05 morning (testing in progress + Phase 4 disposition rule)
 
 **John currently testing all three phases from worktree.** Setup hit a known-now gotcha:
