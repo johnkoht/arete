@@ -17,6 +17,18 @@
  * `SKILL.legacy.md` files AND this resolver code. Until then, the
  * resolver is the structural escape hatch (per MC2 ship gate).
  *
+ * Phase 3: two-tier skill directory resolution. Skills live in two
+ * tiers:
+ *
+ *   1. `<workspace>/.agents/skills/<name>/`  - user customizations
+ *      (forks via `arete skill fork`, community installs, hand-authored).
+ *      Survives `arete update`.
+ *   2. `<workspace>/.arete/skills/<name>/`   - managed/shipped skills.
+ *      Refreshed on `arete update`. Read-only by convention.
+ *
+ * Tier 1 wins when present; tier 2 is fallback. See
+ * `resolveSkillDir()` and `resolveSkillFileTwoTier()`.
+ *
  * Design notes:
  * - Pure function `resolveSkillFile()` — no I/O. Caller checks
  *   existence (storage adapter, fs, etc.).
@@ -165,5 +177,125 @@ export async function resolveSkillFileWithFallback(
     path: livePath,
     legacyRequested: false,
     legacyUsed: false,
+  };
+}
+
+// ----------------------------------------------------------------
+// Phase 3 — two-tier skill directory resolution
+// ----------------------------------------------------------------
+
+/**
+ * Result of `resolveSkillDirTwoTier`. The `tier` field tells callers
+ * which directory the skill was found in:
+ *
+ *   - `'user'`     — `.agents/skills/<name>/` (user fork / community / hand-authored)
+ *   - `'managed'`  — `.arete/skills/<name>/`  (shipped, managed by `arete update`)
+ *   - `'missing'`  — neither directory contains the skill
+ */
+export interface ResolveSkillDirResult {
+  /** Resolved skill directory path (or the user-tier path when missing). */
+  dir: string;
+  tier: 'user' | 'managed' | 'missing';
+  /** Path to the user-tier dir, regardless of which tier was selected. */
+  userDir: string;
+  /** Path to the managed-tier dir, regardless of which tier was selected. */
+  managedDir: string;
+}
+
+/**
+ * Resolve the active skill directory for a given slug, preferring the
+ * user tier (`.agents/skills/<slug>/`) when it exists. Pure path math
+ * with one I/O dependency (existsFn) so the caller can inject `fs.existsSync`
+ * or a storage-adapter `exists`.
+ *
+ * Async-friendly: `existsFn` may return `boolean` or `Promise<boolean>`.
+ */
+export async function resolveSkillDirTwoTier(
+  workspaceRoot: string,
+  skillSlug: string,
+  existsFn: (path: string) => boolean | Promise<boolean>,
+): Promise<ResolveSkillDirResult> {
+  const userDir = join(workspaceRoot, '.agents', 'skills', skillSlug);
+  const managedDir = join(workspaceRoot, '.arete', 'skills', skillSlug);
+
+  const userExists = await Promise.resolve(existsFn(userDir));
+  if (userExists) {
+    return { dir: userDir, tier: 'user', userDir, managedDir };
+  }
+  const managedExists = await Promise.resolve(existsFn(managedDir));
+  if (managedExists) {
+    return { dir: managedDir, tier: 'managed', userDir, managedDir };
+  }
+  return { dir: userDir, tier: 'missing', userDir, managedDir };
+}
+
+/**
+ * Two-tier resolver that ALSO honors `ARETE_LEGACY_SKILL_PROSE` for
+ * legacy SKILL.md routing. Combines `resolveSkillDirTwoTier` with the
+ * legacy fallback. Returns the absolute path to the SKILL*.md file
+ * the harness should load.
+ *
+ * Resolution order:
+ *   1. Pick the active skill directory (user wins, then managed).
+ *   2. Within that directory, route to SKILL.legacy.md when the env
+ *      var lists this slug AND the legacy file exists; otherwise to
+ *      SKILL.md.
+ *   3. If neither tier has the skill, return the user-tier path with
+ *      `tier: 'missing'` so callers can produce a clear error.
+ *
+ * Phase 3 Step 9 will remove the legacy routing path; the two-tier
+ * directory resolution stays.
+ */
+export interface TwoTierResolveResult {
+  /** Final SKILL.md path the harness should load. */
+  path: string;
+  /** Which directory tier provided the skill. */
+  tier: 'user' | 'managed' | 'missing';
+  /** Path to the user-tier dir (regardless of selection). */
+  userDir: string;
+  /** Path to the managed-tier dir (regardless of selection). */
+  managedDir: string;
+  /** Was legacy SKILL.md requested for this slug. */
+  legacyRequested: boolean;
+  /** Did the resolver actually use the legacy file. */
+  legacyUsed: boolean;
+  /** Warning when legacy was requested but the file was absent. */
+  warning?: string;
+}
+
+export async function resolveSkillFileTwoTier(
+  workspaceRoot: string,
+  skillSlug: string,
+  existsFn: (path: string) => boolean | Promise<boolean>,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TwoTierResolveResult> {
+  const dirResult = await resolveSkillDirTwoTier(workspaceRoot, skillSlug, existsFn);
+
+  if (dirResult.tier === 'missing') {
+    return {
+      path: join(dirResult.dir, 'SKILL.md'),
+      tier: 'missing',
+      userDir: dirResult.userDir,
+      managedDir: dirResult.managedDir,
+      legacyRequested: false,
+      legacyUsed: false,
+    };
+  }
+
+  const fileResult = await resolveSkillFileWithFallback(
+    dirResult.dir,
+    skillSlug,
+    existsFn,
+    env,
+  );
+
+  return {
+    path: fileResult.path,
+    tier: dirResult.tier,
+    userDir: dirResult.userDir,
+    managedDir: dirResult.managedDir,
+    legacyRequested: fileResult.legacyRequested,
+    legacyUsed: fileResult.legacyUsed,
+    warning: fileResult.warning,
   };
 }

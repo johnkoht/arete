@@ -80,13 +80,17 @@ export function renderTemplateString(
  * Resolve a skill template path using 2-level precedence (+ legacy fallback):
  *
  * 1. Workspace override:  {workspaceRoot}/templates/outputs/{skillId}/{variant}.md
- * 2. Skill-local default: {workspaceRoot}/.agents/skills/{skillId}/templates/{variant}.md
- * 3. Legacy fallback:     {workspaceRoot}/templates/outputs/{variant}.md
+ * 2. User-fork (Phase 3): {workspaceRoot}/.agents/skills/{skillId}/templates/{variant}.md
+ * 3. Managed (Phase 3):   {workspaceRoot}/.arete/skills/{skillId}/templates/{variant}.md
+ * 4. Legacy fallback:     {workspaceRoot}/templates/outputs/{variant}.md
  *
- * Level 1 is the unified workspace override location for all skills (Decision 1).
- * Level 3 exists only for backward compat with workspaces created before this system.
+ * Level 1 is the unified workspace override location for all skills.
+ * Levels 2 + 3 mirror Phase 3's two-tier skill resolution: user fork
+ * wins, managed (`.arete/skills/`) is the fallback. Level 4 exists for
+ * backward compat with workspaces created before the templates system.
  *
- * Returns the absolute path to the first file that exists, or null if none found.
+ * Returns the absolute path to the first file that exists, or null if
+ * none found.
  *
  * @param workspaceRoot - Absolute path to the workspace root
  * @param skillId - The skill identifier (e.g., 'create-prd')
@@ -100,6 +104,7 @@ export async function resolveTemplatePath(
   const candidates = [
     join(workspaceRoot, 'templates', 'outputs', skillId, `${variant}.md`),
     join(workspaceRoot, '.agents', 'skills', skillId, 'templates', `${variant}.md`),
+    join(workspaceRoot, '.arete', 'skills', skillId, 'templates', `${variant}.md`),
     join(workspaceRoot, 'templates', 'outputs', `${variant}.md`),
   ];
 

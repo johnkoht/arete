@@ -22,8 +22,30 @@ export {
   resolveSkillFile,
   resolveSkillFileFromEnv,
   resolveSkillFileWithFallback,
+  resolveSkillDirTwoTier,
+  resolveSkillFileTwoTier,
 } from './skill-resolver.js';
-export type { ResolveSkillFileResult } from './skill-resolver.js';
+export type {
+  ResolveSkillFileResult,
+  ResolveSkillDirResult,
+  TwoTierResolveResult,
+} from './skill-resolver.js';
+export {
+  forkSkill,
+  diffSkill,
+  mergeSkill,
+  summarizeUpstreamChanges,
+  migratePreSplitAgentSkills,
+} from './skill-fork.js';
+export type {
+  ForkSkillOptions,
+  ForkSkillResult,
+  DiffSkillResult,
+  MergeSkillOptions,
+  MergeSkillResult,
+  HunkDecision,
+  UpstreamChangedSkill,
+} from './skill-fork.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.
 // (Skill discovery is the parallel concern; see services/skills.ts.)
