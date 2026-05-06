@@ -218,20 +218,70 @@ Phase 2 plan must pick one of the following resolutions and document it:
 
 ### Phase 4 — Skills audit + chef-pattern propagation (`phase-4-skills-audit/`)
 
-**Why fifth**: with the chef-pattern proven on the five Phase 2 skills and the directory split in place (Phase 3), audit the remaining shipped runtime skills and apply the chef pattern where it fits. This is also where remaining `pull-from-*` skills get summary writers per the absorption principle (Phase 1's writers covered meetings + inbox + slack; Phase 4 wires the rest).
+**Why fifth**: with the chef-pattern proven on the five Phase 2 skills and the directory split in place (Phase 3), audit the remaining shipped runtime skills, apply the chef pattern where it fits, **demote to CLI commands where the skill is just a wrapper**, drop where it's unused.
 
-**Scope** (per-skill verdicts produced by audit):
-- `slack-digest`, `inbox-triage`, `email-triage`, `email-search` — apply chef pattern; rewrite as customizable templates.
-- PM artifacts (`create-prd`, `discovery`, `pre-mortem`, `review-plan`, `synthesize`, `construct-roadmap`, `competitive-analysis`) — apply chef pattern (do-all-work-then-engage) where the user-felt step-by-step pain exists; otherwise leave as-is.
-- `pull-from-notion`, `pull-from-fathom`, etc. — wire summary writers per Phase 1 absorption table for any source type that should produce a summary.
-- `getting-started`, `workspace-tour`, `rapid-context-dump`, `save-meeting`, `capture-conversation` — likely stay Core-as-shipped (true universal primitives).
-- Skills with no clear chef-pattern fit, no active usage, and no upstream-update story — drop.
+#### Three dispositions per skill (added 2026-05-05 from user input)
 
-**Removes**: per-audit findings; expected to remove 4–8 skills outright that nobody (including John) uses.
+The original Phase 4 framing had two outcomes: apply chef pattern, or drop. User feedback during Phase 2 soak surfaced a missing third disposition:
 
-**Skeptical view**: "Audit phases drift into make-work. Without specific user pain to fix, the audit produces churn." **Counter**: the audit is bounded — produce a verdict per skill in 1–2 days, then apply patterns to the agreed subset over 5–7 days. If the verdict for a skill is "leave alone," that's a valid outcome.
+> Skills earn their existence when (a) they orchestrate multi-step judgment, OR (b) they have user-tunable prose that affects behavior. Skills are bloat when they're 1:1 with a CLI command, when their user-customizable bit is a config file rather than the prose, or when they're shims around external tooling.
 
-**Rollback**: per-skill, since each skill is rewritten independently.
+So Phase 4 produces a per-skill verdict from this disposition table:
+
+| Disposition | When | What happens |
+|---|---|---|
+| **Apply chef pattern** | User-tunable workflow with multi-step judgment | Rewrite as chef-pattern skill following Phase 2 PATTERNS.md envelopes; preserve `SKILL.legacy.md` per Phase 2 MC2 pattern |
+| **Demote to CLI** | 1:1 with an existing CLI verb, or pure wrapper around an integration/MCP, or user-customizable bit lives in a config file (not prose) | Remove the skill; expose the underlying CLI verb as the user surface; if the skill carried policy-as-config, keep the config file alongside the CLI verb |
+| **Drop** | Unused (no John invocation, no other-skill invocation), no upstream-update story | Delete the skill outright |
+| **Leave as-is** | True universal primitive that doesn't benefit from chef pattern | No action |
+
+#### Pre-identified candidates (from 2026-05-05 conversation)
+
+Sub-orch validates each at audit time; this is starting input, not final verdict.
+
+**Demote to CLI:**
+- `pull-from-krisp`, `pull-from-fathom`, `pull-from-notion`, `pull-from-doc`, `pull-from-drive`, `pull-from-email` — pure integration shims; `arete pull <integration>` already exists
+- `save-meeting` — single ingest; becomes `arete meeting save` (or extend existing `meeting add`)
+- `email-search`, `drive-search`, `doc-search` — query primitives
+- `calendar` — `arete calendar create / find / availability` already exists; skill is a wrapper
+- `people-intelligence` — **confirmed by John never invoked directly via `/people-intelligence`** (2026-05-05). Becomes `arete people intelligence digest` (or already is — verify). Policy file at `context/people-intelligence-policy.json` stays as user-tunable config
+
+**Apply chef pattern (already user-customizable workflows):**
+- `inbox-triage` — routing rules + "important" definitions are personal
+- `email-triage` — same
+- `slack-digest` — split: pull-from-slack as CLI; user-tunable digest workflow (with `significance_analyst` rules) as chef-pattern skill
+- `schedule-meeting` — orchestrates calendar primitive + context + communication; user has preferences
+
+**PM artifacts (case-by-case):**
+- `create-prd`, `discovery`, `pre-mortem`, `review-plan`, `synthesize`, `construct-roadmap`, `competitive-analysis` — apply chef pattern where user-felt step-by-step pain exists; otherwise leave as-is
+
+**Leave as-is (true universal primitives):**
+- `getting-started`, `workspace-tour`, `rapid-context-dump`, `capture-conversation`
+
+**Already covered by Phase 2** (skip in Phase 4 audit):
+- `daily-winddown`, `weekly-winddown`, `week-plan`, `process-meetings`, `meeting-prep`
+
+#### Scope notes
+
+- For **Demote to CLI**, the corresponding CLI verb must already exist (or be added in Phase 4). Audit: does `arete pull krisp` actually do what `pull-from-krisp` skill described? If not, gap-fill the CLI before removing the skill.
+- For **Apply chef pattern**, follow Phase 2's MC2 ship gate: per-skill `SKILL.legacy.md` + `ARETE_LEGACY_SKILL_PROSE` flag routing. Same legacy sunset path per MC5.
+- For **Drop**, surface the deletion in the Phase 4 review. If anything in PATTERNS.md or other skills refers to a dropped skill, update the references.
+- The `pull-from-*` skill removals also tie back to Phase 1's absorption principle: when a `pull-from-X` flow becomes a primary-ingest path that should produce a summary, wire the summary writer at the CLI layer (not the skill).
+
+#### Removes
+
+Expected scope of removals (sub-orch validates):
+- 6+ `pull-from-*` skills demoted to existing CLI verbs
+- 4–6 search/query skills demoted to CLI
+- 1–2 wrapper skills (`calendar`, possibly `save-meeting`) dropped
+- 0–4 skills dropped outright as unused
+- Estimated 12–18 skill files removed from `packages/runtime/skills/`
+
+This is a substantial AC8-ledger remove — pulls Phase 1's +8 ledger materially closer to ≤0 across phases.
+
+**Skeptical view**: "Audit phases drift into make-work. Demoting to CLI risks losing useful prose context that the agent benefits from when invoked via `/<name>`." **Counter**: the demotion criterion is specific (1:1 with CLI, config-not-prose customization, integration shim). Where prose is genuinely load-bearing, the disposition is "apply chef pattern," not "demote." Each demotion ships with explicit verification: the corresponding `arete X` CLI invocation actually produces the same outcome the deleted skill prose orchestrated.
+
+**Rollback**: per-skill, since each disposition is independent.
 
 ### Phase 5 — `meeting extract` decomposition (`phase-5-meeting-extract-decomposition/`)
 
