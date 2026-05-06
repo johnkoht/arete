@@ -168,6 +168,23 @@ Today's `.arete/memory/` has `topics/` (concept pages, well-built), `areas/` (op
 - **`route` command**: keep or remove? **Defer.**
 - **Skills directory shape**: `.arete/skills` (managed) + `.agents/skills` (user) per John's preference. Naming friction with adapter renderer for Cursor/Codex AGENTS.md flow. Resolve in Phase 4.
 
+## Decisions log — 2026-05-06 (Phase 3 polish bugs surfaced during user testing)
+
+John ran `arete update` from the worktree to pick up Phase 3. Migration reported "4 skills have upstream changes vs. your fork (no fork base recorded)" + "Migrated 24 pre-Phase-3 skill copies." Subsequent inspection surfaced multiple Phase 3 polish issues; aggregating here for the inevitable Phase 3 polish pass before Phase 4:
+
+**Confirmed bugs in `arete update` migration (Phase 3)**:
+1. **`arete update` skips writing `<skill>/SKILL.md` to `.arete/skills/<name>/` when user already has `.agents/skills/<name>/SKILL.md`** AND the user version has not been refreshed in earlier updates. weekly-winddown is the canary: its user-fork dates from April 15 (pre-Phase-2), so yesterday's `arete update` ALSO didn't refresh it (independent old bug); today's update didn't write a managed copy either. Result: resolver has no fallback. Manually fixed by copying from worktree source-of-truth.
+2. **Stale `SKILL.legacy.md` files in `.agents/skills/<name>/` not cleaned post-MC5.** Leftover from yesterday's Phase 2 install. Harmless (env-var routing is gone) but cruft.
+3. **Migration writes auxiliary files (`templates/`, `LEARNINGS.md`) to `.arete/skills/<name>/` but doesn't remove them from `.agents/skills/<name>/`.** Result: duplicate copies in both tiers. Probably benign (content matches at migration time) but real cruft.
+4. **"No fork base recorded" friction.** When user content differs from current upstream (e.g., yesterday's chef-rewrite vs today's chef-rewrite-with-fix-ups), migration leaves user content in `.agents/skills/` but doesn't auto-record a `.fork-base`. Result: `arete skill diff` errors out. UX is "you have a fork — but no base, so we can't actually diff." User has to choose between `arete skill fork --force` or manual recovery.
+5. **Empty `.agents/skills/<name>/` directories left behind when user removes SKILL.md.** Cosmetic, but a v2 cleanup oversight.
+6. **`arete skill fork <name>` behavior with pre-existing `.agents/skills/<name>/` auxiliary files** — unclear whether it merges, overwrites, or errors. Not tested in Phase 3 build.
+
+**Genuine customization preserved** (not a bug, but worth noting):
+- weekly-winddown has 7 lines of REAL user customizations: integrates `now/action-plans/*.md` into Phase 1B gather and adds an "Action Plan Check-In" section in Phase 5/6. These survived ONLY because Phase 1's update bug skipped weekly-winddown. **Need to port to chef-pattern weekly-winddown** in a small focused task — Option A from today's recovery convo.
+
+**Action**: aggregate these as Phase 4 polish prerequisites OR stand up a "Phase 3.5 polish" mini-phase if Phase 4 build can't proceed cleanly without them. Recommendation: address (1)–(3) as a mini-phase before Phase 4; defer (4)–(6) to Phase 4 itself since they're cosmetic.
+
 ## Decisions log — 2026-05-05 (Phase 3 shipped to parent worktree)
 
 Phase 3 (Skills directory split) merged into parent worktree branch at `56a9e135`. **Main merge pending John's testing/usage of Phases 0/1/2.** The directory split is mechanical (no agent behavior change), so daily-driver risk is lower than Phase 2; AC11 hard stop doesn't apply.
