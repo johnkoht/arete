@@ -525,6 +525,130 @@ describe('WorkspaceService', () => {
       assert.ok(result.preserved.includes('meeting-prep'));
     });
 
+    // Phase 3.5 A1 — `arete update` writes managed SKILL.md to
+    // .arete/skills/<name>/ for every shipped skill, even when user
+    // already has .agents/skills/<name>/SKILL.md. (AC3.5.1)
+    it('Phase 3.5 A1 — writes managed SKILL.md for every shipped skill regardless of user-fork state (AC3.5.1)', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      // Two skills: foo with no user fork; bar with a pre-existing
+      // user fork (mimics weekly-winddown canary).
+      mkdirSync(join(sourceSkills, 'foo'), { recursive: true });
+      writeFileSync(join(sourceSkills, 'foo', 'SKILL.md'), '# Foo\n\nfoo body');
+      mkdirSync(join(sourceSkills, 'bar'), { recursive: true });
+      writeFileSync(join(sourceSkills, 'bar', 'SKILL.md'), '# Bar\n\nbar body v2');
+
+      await service.create(tmpDir, { ideTarget: 'cursor', source: 'npm' });
+
+      // Pre-existing user fork for bar that DIFFERS from upcoming
+      // managed content. Simulates the weekly-winddown bug: user fork
+      // exists but managed copy was never written by an earlier update.
+      mkdirSync(join(tmpDir, '.agents', 'skills', 'bar'), { recursive: true });
+      writeFileSync(
+        join(tmpDir, '.agents', 'skills', 'bar', 'SKILL.md'),
+        '# Bar\n\nbar body v1 (user pre-Phase-3 fork)',
+      );
+      // Defensive: simulate prior-bug residue — managed bar/SKILL.md is
+      // missing even though .arete/skills/bar/ may exist as an empty
+      // directory.
+      const managedBarDir = join(tmpDir, '.arete', 'skills', 'bar');
+      if (existsSync(join(managedBarDir, 'SKILL.md'))) {
+        rmSync(join(managedBarDir, 'SKILL.md'));
+      }
+
+      await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
+        },
+      });
+
+      // Foo: managed SKILL.md present.
+      assert.ok(
+        existsSync(join(tmpDir, '.arete', 'skills', 'foo', 'SKILL.md')),
+        'managed foo/SKILL.md must exist',
+      );
+      // Bar: managed SKILL.md present DESPITE pre-existing user fork.
+      const managedBarMd = join(tmpDir, '.arete', 'skills', 'bar', 'SKILL.md');
+      assert.ok(
+        existsSync(managedBarMd),
+        'managed bar/SKILL.md must be written even when user fork exists (AC3.5.1)',
+      );
+      assert.ok(
+        readFileSync(managedBarMd, 'utf8').includes('bar body v2'),
+        'managed bar/SKILL.md must carry source content',
+      );
+      // User fork preserved.
+      assert.ok(
+        readFileSync(
+          join(tmpDir, '.agents', 'skills', 'bar', 'SKILL.md'),
+          'utf8',
+        ).includes('user pre-Phase-3 fork'),
+        'user fork content preserved',
+      );
+    });
+
+    // Phase 3.5 A2/A3/A4 wiring through update().
+    it('Phase 3.5 A2/A3/A4 — update() surfaces stale-legacy / aux-dedup / empty-dir cleanups via result.cleaned', async () => {
+      const sourceRoot = join(tmpDir, 'source-runtime');
+      const sourceSkills = join(sourceRoot, 'skills');
+      // Source: only SKILL.md + LEARNINGS.md (post-MC5; no SKILL.legacy.md).
+      mkdirSync(join(sourceSkills, 'foo'), { recursive: true });
+      writeFileSync(join(sourceSkills, 'foo', 'SKILL.md'), '# Foo\n\nbody');
+      writeFileSync(join(sourceSkills, 'foo', 'LEARNINGS.md'), 'shared learnings');
+
+      await service.create(tmpDir, { ideTarget: 'cursor', source: 'npm' });
+
+      // Lay down a user-edited fork with a stale legacy + byte-equal aux.
+      const userDir = join(tmpDir, '.agents', 'skills', 'foo');
+      mkdirSync(userDir, { recursive: true });
+      writeFileSync(join(userDir, 'SKILL.md'), '# Foo\n\nuser-customized');
+      writeFileSync(join(userDir, 'SKILL.legacy.md'), 'old phase-2 legacy');
+      writeFileSync(join(userDir, 'LEARNINGS.md'), 'shared learnings');
+
+      const result = await service.update(tmpDir, {
+        sourcePaths: {
+          root: sourceRoot,
+          skills: sourceSkills,
+          tools: join(sourceRoot, 'tools'),
+          rules: join(sourceRoot, 'rules'),
+          integrations: join(sourceRoot, 'integrations'),
+          templates: join(sourceRoot, 'templates'),
+          guide: join(sourceRoot, 'GUIDE.md'),
+          updates: join(sourceRoot, 'UPDATES.md'),
+        },
+      });
+
+      // A2: stale legacy removed (source has no SKILL.legacy.md).
+      assert.ok(
+        !existsSync(join(userDir, 'SKILL.legacy.md')),
+        'stale SKILL.legacy.md should be removed (A2)',
+      );
+      // A3: byte-equal LEARNINGS.md removed.
+      assert.ok(
+        !existsSync(join(userDir, 'LEARNINGS.md')),
+        'byte-equal LEARNINGS.md should be removed (A3)',
+      );
+      // SKILL.md preserved (user-edited).
+      assert.equal(
+        readFileSync(join(userDir, 'SKILL.md'), 'utf8'),
+        '# Foo\n\nuser-customized',
+      );
+
+      // result.cleaned populated.
+      const cleaned = result.cleaned ?? [];
+      const legacy = cleaned.filter((c) => c.kind === 'legacy_skill');
+      const aux = cleaned.filter((c) => c.kind === 'aux_dedup');
+      assert.equal(legacy.length, 1, `expected 1 legacy_skill cleanup; got ${cleaned.length}`);
+      assert.equal(aux.length, 1, `expected 1 aux_dedup cleanup; got ${cleaned.length}`);
+    });
+
     it('preserves community skill with colliding core name', async () => {
       const sourceRoot = join(tmpDir, 'source-runtime');
       const sourceSkills = join(sourceRoot, 'skills');
@@ -1158,6 +1282,35 @@ describe('workspace-structure constants', () => {
       assert.ok(template.includes('{name}'), 'Template should use {name} placeholder');
       assert.ok(template.includes('{description}'), 'Template should use {description} placeholder');
       assert.ok(template.includes('{meeting_title}'), 'Template should use {meeting_title} placeholder');
+    });
+
+    // Phase 3.5 E2 — gitignore template fix.
+    it('gitignore template ignores .arete/skills/ and .agents/skills/ but not .arete/skills-local/ (AC3.5.14 / E2)', () => {
+      const gi = DEFAULT_FILES['.gitignore'];
+      // Ignore patterns are non-comment, non-blank lines.
+      const patterns = gi
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !l.startsWith('#'));
+      assert.ok(
+        patterns.includes('.arete/skills/'),
+        `should ignore .arete/skills/; patterns=${JSON.stringify(patterns)}`,
+      );
+      assert.ok(
+        patterns.includes('.agents/skills/'),
+        `should ignore .agents/skills/; patterns=${JSON.stringify(patterns)}`,
+      );
+      // .arete/skills-local/ must NOT appear as an ignore pattern.
+      assert.ok(
+        !patterns.includes('.arete/skills-local/') &&
+          !patterns.includes('.arete/skills-local'),
+        '.arete/skills-local/ must remain tracked',
+      );
+      // credentials.yaml still ignored.
+      assert.ok(
+        patterns.includes('.credentials/credentials.yaml'),
+        'should still ignore credentials.yaml',
+      );
     });
   });
 });

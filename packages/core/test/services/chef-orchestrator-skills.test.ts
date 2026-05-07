@@ -111,8 +111,89 @@ describe('Phase 2 chef-orchestrator skill prose', () => {
         assert.match(fm, new RegExp(`^name:\\s*${slug}`, 'm'), 'frontmatter.name missing or wrong');
         assert.match(fm, /^description:\s*\S/m, 'frontmatter.description missing');
       });
+
+      // Phase 3.5 C1 — every chef SKILL.md must instruct the agent to
+      // persist the curated view to `now/<skill-pattern>.md` BEFORE
+      // engaging the user. AC3.5.7.
+      it('Phase 3.5 C1 — instructs agent to persist curated view to now/...md (AC3.5.7)', () => {
+        const content = readFileSync(skillPath, 'utf8');
+        // Each skill uses a distinct filename pattern; assert the
+        // skill-specific filename appears AND the persist directive is
+        // close to it.
+        const expectedPath = (() => {
+          switch (slug) {
+            case 'daily-winddown':
+              return 'now/winddown-';
+            case 'weekly-winddown':
+              return 'now/weekly-winddown-';
+            case 'week-plan':
+              return 'now/week-plan-';
+            case 'process-meetings':
+              return 'now/process-meetings-';
+            case 'meeting-prep':
+              return 'now/meeting-prep-';
+            default:
+              return null;
+          }
+        })();
+        assert.ok(expectedPath, `${slug}: no expected persist path defined`);
+        assert.ok(
+          content.includes(expectedPath!),
+          `${slug} SKILL.md missing persist-path "${expectedPath}"`,
+        );
+        // Persist directive lives in the prose: "Persist the curated
+        // view" is the canonical phrase used across the five skills.
+        assert.match(
+          content,
+          /Persist (the )?(curated|prep) (view|brief|priorities)/i,
+          `${slug} missing "Persist the curated view/brief/priorities" directive`,
+        );
+      });
+
+      // Phase 3.5 C2 — every chef SKILL.md must include the
+      // strengthened Uncertain-tier rule with at least 3 explicit
+      // category examples. AC3.5.8.
+      it('Phase 3.5 C2 — Uncertain rule includes the three category examples (AC3.5.8)', () => {
+        const content = readFileSync(skillPath, 'utf8');
+        for (const example of [
+          'needs verification',
+          'interesting future',
+          'covered elsewhere',
+        ]) {
+          assert.ok(
+            content.includes(example),
+            `${slug} SKILL.md missing "${example}" defer-category example`,
+          );
+        }
+        // The framing phrase that makes the rule operative.
+        assert.match(
+          content,
+          /(LOW-confidence|surface to Uncertain)/i,
+          `${slug} missing strengthened-Uncertain framing phrase`,
+        );
+      });
     });
   }
+
+  describe('Phase 3.5 D2 — daily-winddown scans prior sidecar', () => {
+    it('daily-winddown SKILL.md instructs to scan prior sidecar and log deferral_disagreement', () => {
+      const content = readFileSync(
+        join(SKILLS_DIR, 'daily-winddown', 'SKILL.md'),
+        'utf8',
+      );
+      // Step header.
+      assert.match(content, /scan previous day's deferred sidecar/i);
+      // CLI invocation.
+      assert.match(
+        content,
+        /arete events log deferral-disagreement/,
+        'daily-winddown should reference the deferral-disagreement CLI',
+      );
+      // The pull-back markers.
+      assert.match(content, /\[\[pull-back\]\]/);
+      assert.match(content, /\[\[defer\]\]/);
+    });
+  });
 
   describe('week-plan two-engage variant', () => {
     it('explicitly documents the two-engage pattern', () => {
