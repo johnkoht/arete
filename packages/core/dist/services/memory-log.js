@@ -82,6 +82,15 @@ export class MemoryLogService {
             confidence: event.confidence,
             importance_at_extraction: event.importance_at_extraction,
         };
+        // Phase 3.5 D1 — only emit the disagreement-specific fields when
+        // they apply; preserves single-line JSONL backward-compat for
+        // existing consumers.
+        if (event.original_fate !== undefined) {
+            record.original_fate = event.original_fate;
+        }
+        if (event.pulled_back_at !== undefined) {
+            record.pulled_back_at = event.pulled_back_at;
+        }
         const line = JSON.stringify(record) + '\n';
         if (this.storage.append !== undefined) {
             await this.storage.append(path, line);
