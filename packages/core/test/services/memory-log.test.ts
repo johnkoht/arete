@@ -234,6 +234,51 @@ describe('MemoryLogService.appendItemFate', () => {
     });
   });
 
+  it('Phase 3.5 D1 — accepts deferral_disagreement fate with original_fate + pulled_back_at', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      await svc.appendItemFate(paths, {
+        item_text: 'Pay Choice demo tomorrow',
+        item_kind: 'action_item',
+        source_path: 'deferred-2026-05-05.md',
+        fate: 'deferral_disagreement',
+        reason: 'covered elsewhere',
+        confidence: null,
+        importance_at_extraction: null,
+        original_fate: 'deferred',
+        pulled_back_at: '2026-05-06T08:30:00Z',
+      });
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const lines = content.split('\n').filter((l) => l.length > 0);
+      assert.strictEqual(lines.length, 1);
+      const record = JSON.parse(lines[0]);
+      assert.strictEqual(record.fate, 'deferral_disagreement');
+      assert.strictEqual(record.original_fate, 'deferred');
+      assert.strictEqual(record.pulled_back_at, '2026-05-06T08:30:00Z');
+      // reason carries the ORIGINAL defer reason — bias-correction target.
+      assert.strictEqual(record.reason, 'covered elsewhere');
+      assert.strictEqual(record.source_path, 'deferred-2026-05-05.md');
+    });
+  });
+
+  it('Phase 3.5 D1 — does not emit original_fate / pulled_back_at when not set (existing fates)', async () => {
+    await withTempWorkspace(async (paths, svc) => {
+      await svc.appendItemFate(paths, {
+        item_text: 'normal approved item',
+        item_kind: 'action_item',
+        source_path: 'resources/meetings/x.md',
+        fate: 'approved',
+        reason: null,
+        confidence: 0.9,
+        importance_at_extraction: 'normal',
+      });
+      const content = await readFile(join(paths.memory, 'item-fates.jsonl'), 'utf8');
+      const record = JSON.parse(content.trim());
+      // Backward-compat: no extra D1 fields on existing fate types.
+      assert.ok(!('original_fate' in record), 'original_fate omitted when not set');
+      assert.ok(!('pulled_back_at' in record), 'pulled_back_at omitted when not set');
+    });
+  });
+
   it('survives 10 parallel writers × 100 events without malformed lines (AC0.5)', async () => {
     await withTempWorkspace(async (paths, svc) => {
       const writers = 10;

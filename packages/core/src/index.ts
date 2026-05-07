@@ -212,6 +212,10 @@ export type { LogEvent as MemoryLogEvent } from './utils/memory-log.js';
 
 // Meeting parsing helper
 export { parseMeetingFile } from './services/meeting-context.js';
+// Phase 3.5 D4 — backfill CLI needs to scan approved meeting bodies
+// for staged-then-approved items. `parseApprovedSection` is the
+// minimal pure helper exposed for that purpose.
+export { parseApprovedSection } from './services/meeting-reconciliation.js';
 
 // Google Calendar integration
 export { getGoogleCalendarProvider, listCalendars } from './integrations/calendar/google-calendar.js';

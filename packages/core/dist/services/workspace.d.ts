@@ -35,6 +35,13 @@ export declare class WorkspaceService {
     create(targetDir: string, options: CreateWorkspaceOptions): Promise<InstallResult>;
     update(workspaceRoot: string, options?: UpdateWorkspaceOptions): Promise<UpdateResult>;
     private copyDirectory;
+    /**
+     * Phase 3.5 A1 helper. Guarantees `<targetSkillDir>/SKILL.md` exists.
+     * Reads `<sourceSkillDir>/SKILL.md`; if missing in target, writes it.
+     * Idempotent and best-effort — a non-fatal storage error here must
+     * not wedge `arete update`.
+     */
+    private ensureManagedSkillMd;
     private isCommunitySkill;
     private syncCoreSkills;
     private ensureWorkspaceStructure;

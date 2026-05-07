@@ -211,9 +211,28 @@ For each gathered signal, decide whether and how to surface:
 What's your call? Approve actions before the meeting, or just take the brief.
 ```
 
-### Step 4 — Engage user once
+### Step 4 — Persist the curated brief + engage user once
 
-Send brief. Wait for response. Standard response format.
+**Persist the prep brief to disk BEFORE engaging the user.** Write
+the full Step-3 brief verbatim to
+`now/meeting-prep-{meeting-slug}.md` (the slug is the meeting's slug,
+not a date — meeting-prep maps to a single upcoming meeting). This is
+the audit trail and gives the user a hand-readable artifact they can
+glance at on a separate device before the meeting.
+
+```bash
+mkdir -p now
+cat > "now/meeting-prep-{meeting-slug}.md" <<'EOF'
+{full Step-3 prep brief}
+EOF
+```
+
+Re-runs (e.g., refreshing the brief 30 min before the meeting) append
+a `## Re-run at HH:MM` divider rather than overwriting earlier
+history.
+
+After persisting, send brief. Wait for response. Standard response
+format.
 
 ### Step 5 — Execute approved pre-meeting actions
 
@@ -257,6 +276,29 @@ In addition to PATTERNS.md standard taxonomy:
 - **Carryover from agenda** — `unaddressed in last meeting agenda`
 - **Customer-touching** — `customer in attendees`
 - **Cold attendee** — `no recent 1:1; suggest icebreaker context`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+Pre-meeting context is high-stakes — surfacing a stale claim or
+mis-calibrated relationship signal is worse than surfacing one
+extra ambiguous item. Bias toward Uncertain.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain instead unless the chef can
+articulate a specific, confident defer reason** (already in
+the talking points; explicitly out of scope per APPEND;
+superseded-by-recent-decision):
+
+- **"needs verification"** — a claim about commitments, customer
+  status, or stance that may have shifted since last meeting. Don't
+  auto-defer; surface as "Confirm before the meeting or skip?"
+- **"interesting future"** — a forward-looking observation that may
+  or may not be worth raising in the meeting. Don't auto-defer;
+  surface as "Mention preemptively or hold?"
+- **"covered elsewhere"** — chef thinks another talking point or
+  recent meeting already covers this — but the overlap is fuzzy.
+  Don't auto-defer; surface with the cover-by reference for the
+  user to confirm.
 
 ## Existing patterns this skill reuses
 

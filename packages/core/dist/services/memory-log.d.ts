@@ -37,8 +37,13 @@ export type ItemFateKind = 'action_item' | 'decision' | 'learning';
  * - `dismissed`: silently merged or dropped because already-known (duplicate/matched).
  * - `skipped`: visibly marked as skipped to the user (matched a completed/open task).
  * - `deferred`: reserved for Phase 2's deferred-tier surface; not emitted by Phase 0.
+ * - `deferral_disagreement`: Phase 3.5 — the user pulled back a previously
+ *   deferred item (e.g., uncommented or removed `[[defer]]` in the sidecar).
+ *   Captures the chef's mis-classification so future runs can tighten
+ *   defer-confidence. See `DeferralDisagreementFields` for the additional
+ *   schema beyond the base ItemFateEvent.
  */
-export type ItemFate = 'approved' | 'dismissed' | 'skipped' | 'deferred';
+export type ItemFate = 'approved' | 'dismissed' | 'skipped' | 'deferred' | 'deferral_disagreement';
 /**
  * Importance taxonomy as written by the extraction pipeline. Tracked at
  * extraction time so the fate log captures the signal even when later
@@ -58,12 +63,32 @@ export interface ItemFateEvent {
     /**
      * Free-form short tag. Examples: `low_priority`, `duplicate`, `user_skip`,
      * `matched_completed`, `matched_open_task`. `null` when no reason applies.
+     *
+     * For `deferral_disagreement` events, `reason` carries the ORIGINAL
+     * defer reason (the one the chef recorded when auto-deferring the
+     * item). The fact that the user pulled it back is the disagreement
+     * signal; the original reason is the bias-correction target.
      */
     reason: string | null;
     /** Confidence score recorded at extraction (0–1) when known. */
     confidence: number | null;
     /** Importance assigned at extraction time when the meeting carried one. */
     importance_at_extraction: ItemFateImportance | null;
+    /**
+     * Phase 3.5 D1 — when `fate === 'deferral_disagreement'`, the prior
+     * fate the chef recorded for this item. Always `'deferred'` in the
+     * v1 wiring (we don't yet observe disagreements with other fates),
+     * but typed as `ItemFate | null` for future flexibility.
+     */
+    original_fate?: ItemFate | null;
+    /**
+     * Phase 3.5 D1 — when `fate === 'deferral_disagreement'`, the
+     * timestamp at which the user pulled the item back from the
+     * sidecar. Distinct from `ts` (the fate-write time): pull-back
+     * detection is asynchronous from the moment the user edited the
+     * sidecar.
+     */
+    pulled_back_at?: string;
 }
 export interface AppendItemFateOptions {
     /** Optional clock override for tests. */

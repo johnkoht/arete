@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { header, listItem, success, error, info, warn } from '../formatters.js';
+import { detectRunningBackend, formatBackendWarning } from '../lib/backend-detect.js';
 
 export function registerUpdateCommand(program: Command): void {
   program
@@ -68,6 +69,15 @@ export function registerUpdateCommand(program: Command): void {
       // topics for this one update; next refresh restores them).
       const paths = services.workspace.getPaths(root);
       const memorySummary = await loadMemorySummary(services.topicMemory, paths).catch(() => undefined);
+
+      // Phase 3.5 E1 — warn before update when a backend is
+      // detected. Stale backends silently bypass new event writers /
+      // migration paths until restart.
+      const backendBefore = await detectRunningBackend(root);
+      if (backendBefore.running && !opts.json) {
+        warn(formatBackendWarning(backendBefore));
+        console.log('');
+      }
 
       const result = await services.workspace.update(root, {
         sourcePaths,
@@ -188,6 +198,28 @@ export function registerUpdateCommand(program: Command): void {
           if (skillRemovals.length > 0) {
             console.log('');
             info(`Migrated ${skillRemovals.length} pre-Phase-3 skill cop${skillRemovals.length > 1 ? 'ies' : 'y'} from .agents/skills/ → .arete/skills/ (byte-equal; no edits to preserve).`);
+          }
+        }
+
+        // Phase 3.5 (A2/A3/A4/B1): surface migration cleanups (stale
+        // SKILL.legacy.md, byte-equal aux files, empty user dirs,
+        // auto-recorded fork bases).
+        if (result.cleaned && result.cleaned.length > 0) {
+          const legacyCount = result.cleaned.filter((c) => c.kind === 'legacy_skill').length;
+          const auxCount = result.cleaned.filter((c) => c.kind === 'aux_dedup').length;
+          const emptyCount = result.cleaned.filter((c) => c.kind === 'empty_dir').length;
+          const autoBaseCount = result.cleaned.filter((c) => c.kind === 'auto_fork_base').length;
+          const parts: string[] = [];
+          if (legacyCount > 0) parts.push(`${legacyCount} stale SKILL.legacy.md`);
+          if (auxCount > 0) parts.push(`${auxCount} byte-equal aux file${auxCount > 1 ? 's' : ''}`);
+          if (emptyCount > 0) parts.push(`${emptyCount} empty .agents/skills/ dir${emptyCount > 1 ? 's' : ''}`);
+          if (parts.length > 0) {
+            console.log('');
+            info(`Cleaned ${parts.join(', ')}.`);
+          }
+          if (autoBaseCount > 0) {
+            console.log('');
+            info(`Auto-recorded ${autoBaseCount} fork base${autoBaseCount > 1 ? 's' : ''} from git history (matched prior shipped versions).`);
           }
         }
 

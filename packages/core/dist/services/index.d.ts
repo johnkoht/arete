@@ -12,7 +12,7 @@ export type { SeedSkillsLocalResult, ChefOrchestratorSkillSlug, } from './skills
 export { resolveSkillDirTwoTier, resolveSkillFileTwoTier, } from './skill-resolver.js';
 export type { ResolveSkillDirResult, TwoTierResolveResult, } from './skill-resolver.js';
 export { forkSkill, diffSkill, mergeSkill, summarizeUpstreamChanges, migratePreSplitAgentSkills, } from './skill-fork.js';
-export type { ForkSkillOptions, ForkSkillResult, DiffSkillResult, MergeSkillOptions, MergeSkillResult, HunkDecision, UpstreamChangedSkill, } from './skill-fork.js';
+export type { ForkSkillOptions, ForkSkillResult, DiffSkillResult, MergeSkillOptions, MergeSkillResult, HunkDecision, UpstreamChangedSkill, MigratePreSplitOptions, MigratePreSplitResult, MigrationCleanup, } from './skill-fork.js';
 export { IntegrationService } from './integrations.js';
 export { listTools, getTool } from './tools.js';
 export { extractPersonMemorySection } from './person-memory.js';

@@ -83,6 +83,47 @@ which initiatives are active, which people to watch, which action
 verbs to propose. Treat its content as the user's running briefing
 for this skill.
 
+### Step 0.5 — Scan previous day's deferred sidecar for pulled-back items
+
+**Phase 3.5 D2 — dismissal-as-signal feedback loop.** Before any
+gather, scan `./deferred-YYYY-MM-DD.md` for the prior calendar day
+(or the most recent sidecar with date < today). For each item the
+user pulled back — i.e., bullet lines that no longer carry the
+`[[defer]]` tag, OR lines explicitly marked `[[pull-back]]` — log a
+`deferral_disagreement` event so future runs can tighten
+defer-confidence.
+
+```bash
+# Find most recent prior-day sidecar (skip today's own).
+prior_sidecar=$(ls -t ./deferred-*.md 2>/dev/null \
+  | grep -v "deferred-$(date +%Y-%m-%d).md" \
+  | head -n 1)
+
+if [ -n "$prior_sidecar" ]; then
+  # For each pulled-back item, log the disagreement event:
+  #   - <item-text>: the bullet line content (stripped of bullet prefix and tags)
+  #   - <original-reason>: the reason label from the bullet (text after the em-dash)
+  arete events log deferral-disagreement \
+    --item "<item-text>" \
+    --source "$prior_sidecar" \
+    --reason "<original-reason>" \
+    --json
+fi
+```
+
+Pull-back detection rules:
+
+- A bullet that previously had `[[defer]]` and no longer does → pulled
+  back.
+- A bullet explicitly tagged `[[pull-back]]` → pulled back.
+- A bullet with no defer/pull-back tags but present in the sidecar
+  → not yet decided; do NOT log.
+
+The event is fire-and-forget — if the CLI fails (workspace
+unresolved, log write race), continue with Step 1 gather. The
+disagreement signal is best-effort context for the chef's defer
+calibration over time, not a hard dependency.
+
 ### Step 1 — Gather (all primitives, parallelize where independent)
 
 **Run in parallel (no engagement gates between).** The chef-orchestrator
@@ -248,10 +289,29 @@ What's your call?
 - Never auto-execute. User responds with action numbers to run / edit
   / skip.
 
-### Step 4 — Engage user once
+### Step 4 — Persist the curated view + engage user once
 
-Send the curated view as a single message. Wait for user response.
-Do not run any further primitives or writes until response received.
+**Persist the curated view to disk BEFORE engaging the user.** Write
+the full Step-3 output verbatim to `now/winddown-YYYY-MM-DD.md`. This
+is the audit trail: reason labels, Uncertain tier, action proposals,
+sidecar references. Without this, the curated view exists only in
+the chat buffer and is lost when the conversation scrolls. AC10/AC11
+soak evaluation depends on it.
+
+```bash
+mkdir -p now
+cat > "now/winddown-$(date +%Y-%m-%d).md" <<'EOF'
+{full Step-3 curated view, including all sections}
+EOF
+```
+
+If the file already exists for today (re-run), append a `## Re-run at
+HH:MM` divider and re-write the latest curated view below it; do not
+silently overwrite earlier history.
+
+After persisting, send the curated view as a single message. Wait for
+user response. Do not run any further primitives or writes until
+response received.
 
 Acceptable user responses:
 - `1, 3` → execute actions 1 and 3
@@ -341,6 +401,25 @@ pattern. Better to ask 3 yes/no questions than silently drop a
 customer-touching item. Trust earns over time as
 `deferral_disagreement` events accumulate (Phase 0 substrate); the
 chef can tighten its defer-confidence as the disagreement rate drops.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain instead unless the chef can
+articulate a specific, confident defer reason** (open task already
+covers it; explicitly out of scope per APPEND; user dismissed similar
+item recently with same source/topic):
+
+- **"needs verification"** — a fact-check or claim that the user
+  might want to confirm now while context is fresh (e.g., "JPM eChecks
+  pricing changed Q3"). Don't auto-defer; surface as "Verify or skip?"
+- **"interesting future"** — a forward-looking idea/observation that
+  may or may not become a priority (e.g., "per-adjuster instructions
+  could help the LEAP UK rollout"). Don't auto-defer; surface as
+  "Capture as inbox item or skip?"
+- **"covered elsewhere"** — chef thinks another item, area page, or
+  active commitment already covers this — but the overlap is fuzzy
+  (e.g., "Pay Choice demo tomorrow — assumed covered by Sarah's
+  ownership"). Don't auto-defer; surface with the proposed cover-by
+  reference so the user can confirm.
 
 ## Error handling
 

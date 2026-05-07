@@ -40,6 +40,9 @@ export type {
   MergeSkillResult,
   HunkDecision,
   UpstreamChangedSkill,
+  MigratePreSplitOptions,
+  MigratePreSplitResult,
+  MigrationCleanup,
 } from './skill-fork.js';
 export { IntegrationService } from './integrations.js';
 // Workspace tool discovery — pure functions, no service class.

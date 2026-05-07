@@ -30,6 +30,7 @@
  */
 import { join, basename, dirname } from 'path';
 import { createHash } from 'crypto';
+import { execFileSync } from 'child_process';
 import { diffMarkdownSections, threeWayMergeSections, } from '../utils/markdown-diff.js';
 /** Where the recorded base lives inside a user fork. */
 const FORK_BASE_DIRNAME = '.fork-base';
@@ -58,10 +59,22 @@ export async function forkSkill(storage, options) {
     }
     const forkExists = await storage.exists(forkPath);
     if (forkExists) {
-        // Already forked. NEVER overwrite the fork SKILL.md — that's the
-        // user's hand-edited content. With or without `--force`, we only
-        // (re-)record `.fork-base/` from current managed content.
+        // Already forked. Phase 3.5 B2 semantics:
+        //
+        // - SKILL.md: NEVER overwrite. The user's hand-edited content is
+        //   the load-bearing artifact and is the only thing this skill
+        //   resolution prefers from the user tier.
+        // - Auxiliary files (templates/, LEARNINGS.md, anything else
+        //   under managed except `.fork-base/` and SKILL.md): copy from
+        //   managed only when MISSING in the fork. Never overwrite an
+        //   existing user-tier copy. This makes `arete skill fork`
+        //   idempotent against partial manual setups (e.g., user
+        //   hand-created `.agents/skills/<name>/SKILL.md` and now wants a
+        //   proper fork-base recorded — re-running fork backfills the aux
+        //   files without trampling their SKILL.md).
+        // - `.fork-base/`: (re-)record only when missing OR `--force`.
         const basePath = join(forkPath, FORK_BASE_DIRNAME);
+        const auxCopied = await backfillAuxFiles(storage, managedPath, forkPath);
         const baseExists = await storage.exists(basePath);
         if (!baseExists || force) {
             const hash = await snapshotManagedAsBase(storage, managedPath, basePath);
@@ -71,6 +84,7 @@ export async function forkSkill(storage, options) {
                 managedPath,
                 alreadyExisted: true,
                 baseHash: hash,
+                auxFilesCopied: auxCopied,
             };
         }
         return {
@@ -78,6 +92,7 @@ export async function forkSkill(storage, options) {
             forkPath,
             managedPath,
             alreadyExisted: true,
+            auxFilesCopied: auxCopied,
         };
     }
     // Copy managed → fork.
@@ -92,6 +107,53 @@ export async function forkSkill(storage, options) {
         alreadyExisted: false,
         baseHash: hash,
     };
+}
+/**
+ * Phase 3.5 B2 — copy aux files (anything under managed except
+ * `SKILL.md` and `.fork-base/`) into the fork only when the
+ * corresponding user-tier path doesn't exist. Never overwrites an
+ * existing user-tier file. Returns the list of relative paths
+ * copied.
+ *
+ * This runs on the "fork already exists" branch of `forkSkill` so
+ * that aux files (templates/, LEARNINGS.md) end up in the fork even
+ * when the user hand-created the fork before running `arete skill
+ * fork`.
+ */
+async function backfillAuxFiles(storage, managedPath, forkPath) {
+    const copied = [];
+    let managedFiles;
+    try {
+        managedFiles = await storage.list(managedPath, { recursive: true });
+    }
+    catch {
+        return copied;
+    }
+    for (const managedFile of managedFiles) {
+        const rel = managedFile.slice(managedPath.length).replace(/^[/\\]/, '');
+        if (rel.length === 0)
+            continue;
+        const topSegment = rel.split(/[/\\]/)[0];
+        if (topSegment === 'SKILL.md')
+            continue;
+        if (topSegment === FORK_BASE_DIRNAME)
+            continue;
+        const forkFile = join(forkPath, rel);
+        if (await storage.exists(forkFile))
+            continue;
+        try {
+            const content = await storage.read(managedFile);
+            if (content === null)
+                continue;
+            await storage.mkdir(dirname(forkFile));
+            await storage.write(forkFile, content);
+            copied.push(rel);
+        }
+        catch {
+            // Non-fatal; skip this file.
+        }
+    }
+    return copied;
 }
 /**
  * Diff a user fork's recorded base vs current managed content. Used
@@ -283,17 +345,18 @@ export async function summarizeUpstreamChanges(storage, workspaceRoot) {
  * update` (not `install`), since `install` always writes shipped
  * skills to `.arete/skills/` directly.
  */
-export async function migratePreSplitAgentSkills(storage, agentSkillsDir, managedSkillsDir) {
+export async function migratePreSplitAgentSkills(storage, agentSkillsDir, managedSkillsDir, options = {}) {
     const removed = [];
     const preserved = [];
+    const cleaned = [];
     if (!(await storage.exists(agentSkillsDir))) {
-        return { removed, preserved };
+        return { removed, preserved, cleaned };
     }
     if (!(await storage.exists(managedSkillsDir))) {
         // No managed dir yet — nothing to migrate against. Caller
         // (workspace.update) syncs managed BEFORE calling this; in tests
         // this branch is rare.
-        return { removed, preserved };
+        return { removed, preserved, cleaned };
     }
     const userSubdirs = await storage.listSubdirectories(agentSkillsDir);
     for (const userPath of userSubdirs) {
@@ -308,10 +371,23 @@ export async function migratePreSplitAgentSkills(storage, agentSkillsDir, manage
         const managedSkillMd = join(managedPath, 'SKILL.md');
         const userContent = await storage.read(userSkillMd);
         const managedContent = await storage.read(managedSkillMd);
+        // Phase 3.5 A2 — opportunistic cleanup of stale SKILL.legacy.md.
+        // Run BEFORE the byte-equal/fork branching so that legacy removal
+        // happens whether the user's SKILL.md ends up pruned or preserved.
+        await cleanupStaleLegacy(storage, userPath, options.sourceSkillsDir, name, cleaned);
+        // Phase 3.5 A3 — opportunistic dedup of byte-equal aux files.
+        // Same rationale: dedup runs whether the user's SKILL.md is
+        // pruned (case 1) or preserved (case 2). The dedup target is the
+        // user-tier `.agents/skills/<name>/` aux files when their byte
+        // content matches `.arete/skills/<name>/`.
+        await dedupAuxFiles(storage, userPath, managedPath, name, cleaned);
         if (userContent === null || managedContent === null) {
             // Either side missing SKILL.md — preserve and let later flows
             // surface the breakage; never silently delete.
             preserved.push(name);
+            // Phase 3.5 A4 — empty-dir cleanup AFTER aux dedup may have
+            // emptied the user dir.
+            await pruneEmptyUserDir(storage, userPath, name, cleaned);
             continue;
         }
         if (userContent === managedContent) {
@@ -338,8 +414,268 @@ export async function migratePreSplitAgentSkills(storage, agentSkillsDir, manage
         }
         // Case 2: user fork (edited).
         preserved.push(name);
+        // Phase 3.5 B1 — auto-record `.fork-base/` when the user's
+        // SKILL.md content matches a known prior shipped version. Without
+        // this, `arete skill diff <name>` errors with "no fork base
+        // recorded" and the user has to choose between
+        // `arete skill fork --force` or manual recovery. Best-effort —
+        // skipped silently if git history is unavailable or no match
+        // found.
+        if (options.autoForkBase && options.sourceSkillsDir) {
+            const forkBasePath = join(userPath, FORK_BASE_DIRNAME);
+            const forkBaseExists = await storage.exists(forkBasePath);
+            if (!forkBaseExists) {
+                const matched = await tryAutoForkBase(storage, userPath, managedPath, options.sourceSkillsDir, name, userContent, options.gitWorkingDir);
+                if (matched) {
+                    cleaned.push({ name, kind: 'auto_fork_base', path: forkBasePath });
+                }
+            }
+        }
+        // Phase 3.5 A4 — empty-dir cleanup after aux dedup may have
+        // emptied the user dir (e.g., user removed SKILL.md but left
+        // templates/ behind which then byte-deduped to the managed copy).
+        await pruneEmptyUserDir(storage, userPath, name, cleaned);
     }
-    return { removed, preserved };
+    return { removed, preserved, cleaned };
+}
+/**
+ * Phase 3.5 A2 — remove stale `<userDir>/SKILL.legacy.md` when the
+ * corresponding source `<sourceSkillsDir>/<name>/SKILL.legacy.md` is
+ * gone. MC5 sunset removed all source `.legacy.md` files; user-side
+ * copies that survived earlier updates are stale and should be
+ * cleaned. Caller may omit `sourceSkillsDir` to suppress A2 cleanup.
+ */
+async function cleanupStaleLegacy(storage, userPath, sourceSkillsDir, name, cleaned) {
+    if (!sourceSkillsDir)
+        return;
+    const userLegacy = join(userPath, 'SKILL.legacy.md');
+    if (!(await storage.exists(userLegacy)))
+        return;
+    const sourceLegacy = join(sourceSkillsDir, name, 'SKILL.legacy.md');
+    // Only remove when source is gone — otherwise the user might
+    // still be relying on it for some experimental flag we don't know
+    // about.
+    if (await storage.exists(sourceLegacy))
+        return;
+    try {
+        await storage.delete(userLegacy);
+        cleaned.push({ name, kind: 'legacy_skill', path: userLegacy });
+    }
+    catch {
+        // Non-fatal.
+    }
+}
+/**
+ * Phase 3.5 A3 — for each top-level entry in `.agents/skills/<name>/`
+ * (excluding `SKILL.md`, `.fork-base/`, hidden dotfiles), if a
+ * byte-equal copy exists at the same relative path under
+ * `.arete/skills/<name>/`, remove the user-tier copy. Byte equality
+ * means the user has not customized it — keeping the duplicate is
+ * cruft that this migration cleans up.
+ *
+ * Templates dirs are walked recursively; LEARNINGS.md / aux .md files
+ * are top-level entries. The `.fork-base/` snapshot is preserved
+ * unconditionally (it's the diff source-of-truth).
+ */
+async function dedupAuxFiles(storage, userPath, managedPath, name, cleaned) {
+    // Walk every file under userPath recursively, compute its rel path,
+    // skip SKILL.md / .fork-base/, and compare against managed's
+    // file at the same rel path.
+    let userFiles;
+    try {
+        userFiles = await storage.list(userPath, { recursive: true });
+    }
+    catch {
+        return;
+    }
+    for (const userFile of userFiles) {
+        const rel = userFile.slice(userPath.length).replace(/^[/\\]/, '');
+        if (rel.length === 0)
+            continue;
+        const topSegment = rel.split(/[/\\]/)[0];
+        if (topSegment === 'SKILL.md')
+            continue;
+        if (topSegment === FORK_BASE_DIRNAME)
+            continue;
+        // Ignore other dotfiles defensively (no aux dedup of
+        // `.arete-meta.yaml`, etc.) — those carry user metadata.
+        if (topSegment.startsWith('.'))
+            continue;
+        const managedFile = join(managedPath, rel);
+        if (!(await storage.exists(managedFile)))
+            continue;
+        const userContent = await storage.read(userFile);
+        const managedContent = await storage.read(managedFile);
+        if (userContent === null || managedContent === null)
+            continue;
+        if (userContent !== managedContent)
+            continue;
+        try {
+            await storage.delete(userFile);
+            cleaned.push({ name, kind: 'aux_dedup', path: userFile });
+        }
+        catch {
+            // Non-fatal.
+        }
+    }
+}
+/**
+ * Phase 3.5 A4 — remove `.agents/skills/<name>/` entirely when no
+ * substantive content remains (no SKILL.md, no aux files, no
+ * `.fork-base/`). Idempotent: a previously-pruned dir is a no-op.
+ *
+ * "No substantive content" = `storage.list(userPath, { recursive: true })`
+ * returns no files. (Empty subdirs are treated as no-content for the
+ * adapter implementations we care about.)
+ */
+async function pruneEmptyUserDir(storage, userPath, name, cleaned) {
+    if (!(await storage.exists(userPath)))
+        return;
+    let files;
+    try {
+        files = await storage.list(userPath, { recursive: true });
+    }
+    catch {
+        return;
+    }
+    if (files.length > 0)
+        return;
+    try {
+        await storage.delete(userPath);
+        cleaned.push({ name, kind: 'empty_dir', path: userPath });
+    }
+    catch {
+        // Non-fatal.
+    }
+}
+/**
+ * Phase 3.5 B1 — search the runtime source's git history for a prior
+ * shipped version of `<name>/SKILL.md` whose content matches the
+ * user's `<userPath>/SKILL.md`. On match, snapshot the matched
+ * revision's tree into `<userPath>/.fork-base/`.
+ *
+ * Returns true when a match was recorded, false otherwise (no git,
+ * no match, or any failure path — all best-effort and silent).
+ *
+ * Implementation walks at most 30 commits of the file's history (the
+ * file rarely has more than 5–10 substantive revisions; 30 is a
+ * generous ceiling that bounds latency). Uses `git log --pretty=%H`
+ * and `git show <sha>:<path>` via execFileSync. Each git invocation
+ * is best-effort; any throw aborts the search and returns false.
+ */
+async function tryAutoForkBase(storage, userPath, managedPath, sourceSkillsDir, name, userContent, gitWorkingDirOverride) {
+    // Resolve git working dir. Default: the parent of the runtime source
+    // skills dir (e.g., package root if sourceSkillsDir is
+    // "<repo>/packages/runtime/skills").
+    const gitDir = gitWorkingDirOverride ?? findGitWorkingDir(sourceSkillsDir);
+    if (!gitDir)
+        return false;
+    // Determine the relative path inside the git repo of
+    // `<sourceSkillsDir>/<name>/SKILL.md`.
+    const sourceSkillMd = join(sourceSkillsDir, name, 'SKILL.md');
+    const relPath = relativizeForGit(gitDir, sourceSkillMd);
+    if (!relPath)
+        return false;
+    let commits;
+    try {
+        const out = execFileSync('git', ['log', '--pretty=%H', '-n', '30', '--', relPath], { cwd: gitDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        commits = out.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0);
+    }
+    catch {
+        return false;
+    }
+    if (commits.length === 0)
+        return false;
+    for (const sha of commits) {
+        let revContent;
+        try {
+            revContent = execFileSync('git', ['show', `${sha}:${relPath}`], { cwd: gitDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        }
+        catch {
+            // File may not have existed at this commit; keep walking.
+            continue;
+        }
+        if (revContent === userContent) {
+            // Match found. Snapshot the *current managed* tree as
+            // `.fork-base/` rather than the matched commit's tree, because
+            // we're recording "what the user's fork was based on" and the
+            // user's SKILL.md is the source of truth for that base. We
+            // record the SKILL.md byte-for-byte to ensure the diff against
+            // current managed shows accurate "what changed since you
+            // forked" output.
+            try {
+                const basePath = join(userPath, FORK_BASE_DIRNAME);
+                if (await storage.exists(basePath)) {
+                    // Don't overwrite an existing fork-base — caller already
+                    // gated on its absence, but handle race defensively.
+                    return false;
+                }
+                await storage.mkdir(basePath);
+                // Write the matched historical SKILL.md as the base.
+                await storage.write(join(basePath, 'SKILL.md'), revContent);
+                // Hash of the matched content.
+                const hash = createHash('sha256').update(revContent).digest('hex');
+                const manifest = [
+                    `# Phase 3.5 auto-recorded fork-base manifest. Recorded by`,
+                    `# \`arete update\` migration when the user's SKILL.md byte-equaled`,
+                    `# a prior shipped revision found in git history.`,
+                    `version: 1`,
+                    `recorded_at: ${new Date().toISOString()}`,
+                    `skill_md_sha256: ${hash}`,
+                    `auto_recorded: true`,
+                    `matched_commit: ${sha}`,
+                    '',
+                ].join('\n');
+                await storage.write(join(basePath, FORK_BASE_MANIFEST), manifest);
+                // Reference managedPath to silence unused-arg lint; reserved
+                // for future use (e.g., snapshot full managed tree alongside
+                // SKILL.md).
+                void managedPath;
+                return true;
+            }
+            catch {
+                return false;
+            }
+        }
+    }
+    return false;
+}
+/**
+ * Walk up from `<sourceSkillsDir>` looking for a `.git/` directory.
+ * Returns the directory containing it, or null if none found.
+ */
+function findGitWorkingDir(sourceSkillsDir) {
+    let current = sourceSkillsDir;
+    while (current && current !== dirname(current)) {
+        const gitDir = join(current, '.git');
+        try {
+            // execFileSync rev-parse to confirm it's a real git repo.
+            execFileSync('git', ['rev-parse', '--git-dir'], {
+                cwd: current,
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+            });
+            return current;
+        }
+        catch {
+            // Try parent.
+        }
+        void gitDir;
+        current = dirname(current);
+    }
+    return null;
+}
+/**
+ * Compute the path of `target` relative to `base`, suitable for use
+ * as a git pathspec. Returns null if `target` isn't under `base`.
+ */
+function relativizeForGit(base, target) {
+    if (!target.startsWith(base))
+        return null;
+    const rel = target.slice(base.length).replace(/^[/\\]/, '');
+    if (rel.length === 0)
+        return null;
+    return rel.split(/[/\\]/).join('/');
 }
 // ---- internal helpers ----
 async function snapshotManagedAsBase(storage, managedPath, basePath) {

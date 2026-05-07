@@ -5,6 +5,7 @@ import { createServices, isAreteWorkspace, parseSourceType, getSourcePaths, getP
 import { join, resolve } from 'path';
 import chalk from 'chalk';
 import { success, error, warn, info, header, listItem, formatPath, } from '../formatters.js';
+import { detectRunningBackend, formatBackendWarning } from '../lib/backend-detect.js';
 export function registerInstallCommand(program) {
     program
         .command('install [directory]')
@@ -79,6 +80,14 @@ export function registerInstallCommand(program) {
             guide: basePaths.guide,
             updates: basePaths.updates,
         };
+        // Phase 3.5 E1 — warn before install when a backend is
+        // detected. Stale backends silently bypass new event writers
+        // / migration paths until restart.
+        const backendBeforeCreate = await detectRunningBackend(targetDir);
+        if (backendBeforeCreate.running && !opts.json) {
+            warn(formatBackendWarning(backendBeforeCreate));
+            console.log('');
+        }
         const result = await services.workspace.create(targetDir, {
             ideTarget: ide,
             source: source,

@@ -173,10 +173,28 @@ references.
 What's your call?
 ```
 
-### Step 4 — Engage user once
+### Step 4 — Persist the curated view + engage user once
 
-Send curated review. Wait for response. Standard response format
-(see PATTERNS.md Pattern 3).
+**Persist the curated view to disk BEFORE engaging the user.** Write
+the full Step-3 output verbatim to
+`now/process-meetings-YYYY-MM-DD.md` (or append a numeric suffix if
+the skill runs multiple times same-day with distinct batches —
+`now/process-meetings-YYYY-MM-DD-2.md`). When called as a primitive
+from daily-winddown / weekly-winddown, the **caller** is responsible
+for persisting their consolidated view; this skill's standalone
+runs persist independently.
+
+```bash
+mkdir -p now
+# Standalone-run path — caller skill writes its own file when invoked
+# as a primitive
+cat > "now/process-meetings-$(date +%Y-%m-%d).md" <<'EOF'
+{full Step-3 curated batch review}
+EOF
+```
+
+After persisting, send curated review. Wait for response. Standard
+response format (see PATTERNS.md Pattern 3).
 
 ### Step 5 — Execute approved + commit
 
@@ -240,6 +258,32 @@ In addition to PATTERNS.md standard taxonomy:
 - **Owner ambiguous** — `owner unclear in transcript`
 - **Side thread** — `from could-include — promotion candidate`
 - **Customer-touching** — `customer in attendees`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+Process-meetings is the highest-leverage point for the dismissal-as-
+signal feedback loop: every staged item carries a stake on the user's
+attention. Auto-deferring a customer-touching item or a novel learning
+costs more than asking a yes/no question.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain instead unless the chef can
+articulate a specific, confident defer reason** (already a known open
+commitment; same item already approved earlier this week; explicitly
+out of scope per APPEND):
+
+- **"needs verification"** — a claim or fact mentioned in the meeting
+  that may want fact-check before being committed (e.g., a customer
+  cited a deadline; user might want to confirm). Don't auto-defer;
+  surface as "Verify or save as-is?"
+- **"interesting future"** — a forward-looking observation or idea
+  worth knowing but not yet a priority (e.g., a new integration
+  pattern surfaced in passing). Don't auto-defer; surface as
+  "Capture as learning, save to inbox, or skip?"
+- **"covered elsewhere"** — chef thinks another decision/learning/
+  area page already covers this — but the overlap is fuzzy. Don't
+  auto-defer; surface with the proposed cover-by reference for the
+  user to confirm.
 
 ## Configuration
 
