@@ -142,7 +142,24 @@ Cap suggested priorities at **5 max** (3-5 sweet spot per the
 "top-3-to-5 priorities" pattern). Items beyond that go to a
 "Could surface" tier; user can pull back.
 
-### Step 3 — Engage 1 (priorities conversation)
+### Step 3 — Persist + Engage 1 (priorities conversation)
+
+**Persist the curated priorities view to disk BEFORE engaging.** Write
+the full Engage-1 output verbatim to `now/week-plan-YYYY-MM-DD.md`
+(date is the planning date — typically Sunday or Monday). This is
+the audit trail — without it the priorities-tier curated view is lost
+when the conversation scrolls. AC10/AC11 soak evaluation needs it.
+
+```bash
+mkdir -p now
+cat > "now/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
+{full Engage-1 priorities view}
+EOF
+```
+
+Engage 2 (Step 5 below) appends a `## Engage 2 — Plan draft` divider
+and the draft to the same file. Re-runs within the same day add a
+`## Re-run at HH:MM` divider rather than overwriting earlier history.
 
 ```markdown
 ## Week Plan — {Week of YYYY-MM-DD}
@@ -206,7 +223,20 @@ With confirmed priorities, build the full week plan:
 - **Meetings to prep** — flag customer / 1:1 / leadership meetings
   for `meeting-prep` skill.
 
-### Step 5 — Engage 2 (plan draft)
+### Step 5 — Persist + Engage 2 (plan draft)
+
+**Append the plan draft to `now/week-plan-YYYY-MM-DD.md` BEFORE
+engaging.** Use a `## Engage 2 — Plan draft` divider to separate from
+the priorities view written at Step 3.
+
+```bash
+cat >> "now/week-plan-$(date +%Y-%m-%d).md" <<'EOF'
+
+## Engage 2 — Plan draft
+
+{full Engage-2 plan draft view}
+EOF
+```
 
 ```markdown
 ## Week Plan — Week of {Monday YYYY-MM-DD}
@@ -294,6 +324,30 @@ arete index
 - **Goal traction** — `Q3 milestone-week`
 - **Customer pressure** — `customer review on Wed`
 - **Theme momentum** — `3 meetings touched this last week`
+
+## Uncertain-tier judgment (when in doubt, surface)
+
+Week-plan's "Could surface" tier is the natural home for ambiguous
+priority candidates. Bias toward surfacing — the user can pull back
+in the priorities engage if it's not worth the slot.
+
+**Category-level rule — these defer reasons are LOW-confidence
+auto-defers; surface to Uncertain (or "Could surface") instead unless
+the chef can articulate a specific, confident defer reason** (already
+a confirmed priority; explicitly out of scope per APPEND; carryover
+that user already declined last week):
+
+- **"needs verification"** — a claim about ownership, status, or
+  scope that the user might want to confirm before committing the
+  week. Don't auto-defer; surface as "Verify before locking in or
+  skip?"
+- **"interesting future"** — a forward-looking idea that may or may
+  not earn a slot this week. Don't auto-defer; surface as "Make a
+  priority, hold for later, or skip?"
+- **"covered elsewhere"** — chef thinks the item is already covered
+  by an existing priority or open commitment — but the overlap is
+  fuzzy. Don't auto-defer; surface with the cover-by reference for
+  the user to confirm.
 
 ## References
 
