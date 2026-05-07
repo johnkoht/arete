@@ -202,8 +202,31 @@ export declare function summarizeUpstreamChanges(storage: StorageAdapter, worksp
  * update` (not `install`), since `install` always writes shipped
  * skills to `.arete/skills/` directly.
  */
-export declare function migratePreSplitAgentSkills(storage: StorageAdapter, agentSkillsDir: string, managedSkillsDir: string): Promise<{
+export declare function migratePreSplitAgentSkills(storage: StorageAdapter, agentSkillsDir: string, managedSkillsDir: string, options?: MigratePreSplitOptions): Promise<MigratePreSplitResult>;
+/** Optional inputs for `migratePreSplitAgentSkills`. */
+export interface MigratePreSplitOptions {
+    /**
+     * Source `runtime/skills/` directory. When provided, A2 cleanup
+     * removes stale `<user>/<name>/SKILL.legacy.md` files when the
+     * corresponding source `<sourceSkillsDir>/<name>/SKILL.legacy.md`
+     * is gone. Without this, A2 cleanup is a no-op (safer default).
+     */
+    sourceSkillsDir?: string;
+}
+export interface MigrationCleanup {
+    name: string;
+    /**
+     * `legacy_skill` — stale `SKILL.legacy.md` removed (A2).
+     * `aux_dedup`    — byte-equal aux file removed (A3).
+     * `empty_dir`    — empty user-skill dir pruned (A4).
+     */
+    kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir';
+    /** Workspace-relative or absolute path of the entry that was removed. */
+    path: string;
+}
+export interface MigratePreSplitResult {
     removed: string[];
     preserved: string[];
-}>;
+    cleaned: MigrationCleanup[];
+}
 //# sourceMappingURL=skill-fork.d.ts.map

@@ -152,6 +152,24 @@ export function registerUpdateCommand(program) {
                     info(`Migrated ${skillRemovals.length} pre-Phase-3 skill cop${skillRemovals.length > 1 ? 'ies' : 'y'} from .agents/skills/ → .arete/skills/ (byte-equal; no edits to preserve).`);
                 }
             }
+            // Phase 3.5 (A2/A3/A4): surface migration cleanups (stale
+            // SKILL.legacy.md, byte-equal aux files, empty user dirs).
+            if (result.cleaned && result.cleaned.length > 0) {
+                const legacyCount = result.cleaned.filter((c) => c.kind === 'legacy_skill').length;
+                const auxCount = result.cleaned.filter((c) => c.kind === 'aux_dedup').length;
+                const emptyCount = result.cleaned.filter((c) => c.kind === 'empty_dir').length;
+                const parts = [];
+                if (legacyCount > 0)
+                    parts.push(`${legacyCount} stale SKILL.legacy.md`);
+                if (auxCount > 0)
+                    parts.push(`${auxCount} byte-equal aux file${auxCount > 1 ? 's' : ''}`);
+                if (emptyCount > 0)
+                    parts.push(`${emptyCount} empty .agents/skills/ dir${emptyCount > 1 ? 's' : ''}`);
+                if (parts.length > 0) {
+                    console.log('');
+                    info(`Cleaned ${parts.join(', ')}.`);
+                }
+            }
             console.log('');
             success('Update complete!');
             console.log('');

@@ -444,18 +444,20 @@ export async function migratePreSplitAgentSkills(
   storage: StorageAdapter,
   agentSkillsDir: string,
   managedSkillsDir: string,
-): Promise<{ removed: string[]; preserved: string[] }> {
+  options: MigratePreSplitOptions = {},
+): Promise<MigratePreSplitResult> {
   const removed: string[] = [];
   const preserved: string[] = [];
+  const cleaned: MigrationCleanup[] = [];
 
   if (!(await storage.exists(agentSkillsDir))) {
-    return { removed, preserved };
+    return { removed, preserved, cleaned };
   }
   if (!(await storage.exists(managedSkillsDir))) {
     // No managed dir yet — nothing to migrate against. Caller
     // (workspace.update) syncs managed BEFORE calling this; in tests
     // this branch is rare.
-    return { removed, preserved };
+    return { removed, preserved, cleaned };
   }
 
   const userSubdirs = await storage.listSubdirectories(agentSkillsDir);
@@ -474,10 +476,25 @@ export async function migratePreSplitAgentSkills(
     const userContent = await storage.read(userSkillMd);
     const managedContent = await storage.read(managedSkillMd);
 
+    // Phase 3.5 A2 — opportunistic cleanup of stale SKILL.legacy.md.
+    // Run BEFORE the byte-equal/fork branching so that legacy removal
+    // happens whether the user's SKILL.md ends up pruned or preserved.
+    await cleanupStaleLegacy(storage, userPath, options.sourceSkillsDir, name, cleaned);
+
+    // Phase 3.5 A3 — opportunistic dedup of byte-equal aux files.
+    // Same rationale: dedup runs whether the user's SKILL.md is
+    // pruned (case 1) or preserved (case 2). The dedup target is the
+    // user-tier `.agents/skills/<name>/` aux files when their byte
+    // content matches `.arete/skills/<name>/`.
+    await dedupAuxFiles(storage, userPath, managedPath, name, cleaned);
+
     if (userContent === null || managedContent === null) {
       // Either side missing SKILL.md — preserve and let later flows
       // surface the breakage; never silently delete.
       preserved.push(name);
+      // Phase 3.5 A4 — empty-dir cleanup AFTER aux dedup may have
+      // emptied the user dir.
+      await pruneEmptyUserDir(storage, userPath, name, cleaned);
       continue;
     }
 
@@ -505,9 +522,156 @@ export async function migratePreSplitAgentSkills(
 
     // Case 2: user fork (edited).
     preserved.push(name);
+    // Phase 3.5 A4 — empty-dir cleanup after aux dedup may have
+    // emptied the user dir (e.g., user removed SKILL.md but left
+    // templates/ behind which then byte-deduped to the managed copy).
+    await pruneEmptyUserDir(storage, userPath, name, cleaned);
   }
 
-  return { removed, preserved };
+  return { removed, preserved, cleaned };
+}
+
+/** Optional inputs for `migratePreSplitAgentSkills`. */
+export interface MigratePreSplitOptions {
+  /**
+   * Source `runtime/skills/` directory. When provided, A2 cleanup
+   * removes stale `<user>/<name>/SKILL.legacy.md` files when the
+   * corresponding source `<sourceSkillsDir>/<name>/SKILL.legacy.md`
+   * is gone. Without this, A2 cleanup is a no-op (safer default).
+   */
+  sourceSkillsDir?: string;
+}
+
+export interface MigrationCleanup {
+  name: string;
+  /**
+   * `legacy_skill` — stale `SKILL.legacy.md` removed (A2).
+   * `aux_dedup`    — byte-equal aux file removed (A3).
+   * `empty_dir`    — empty user-skill dir pruned (A4).
+   */
+  kind: 'legacy_skill' | 'aux_dedup' | 'empty_dir';
+  /** Workspace-relative or absolute path of the entry that was removed. */
+  path: string;
+}
+
+export interface MigratePreSplitResult {
+  removed: string[];
+  preserved: string[];
+  cleaned: MigrationCleanup[];
+}
+
+/**
+ * Phase 3.5 A2 — remove stale `<userDir>/SKILL.legacy.md` when the
+ * corresponding source `<sourceSkillsDir>/<name>/SKILL.legacy.md` is
+ * gone. MC5 sunset removed all source `.legacy.md` files; user-side
+ * copies that survived earlier updates are stale and should be
+ * cleaned. Caller may omit `sourceSkillsDir` to suppress A2 cleanup.
+ */
+async function cleanupStaleLegacy(
+  storage: StorageAdapter,
+  userPath: string,
+  sourceSkillsDir: string | undefined,
+  name: string,
+  cleaned: MigrationCleanup[],
+): Promise<void> {
+  if (!sourceSkillsDir) return;
+  const userLegacy = join(userPath, 'SKILL.legacy.md');
+  if (!(await storage.exists(userLegacy))) return;
+  const sourceLegacy = join(sourceSkillsDir, name, 'SKILL.legacy.md');
+  // Only remove when source is gone — otherwise the user might
+  // still be relying on it for some experimental flag we don't know
+  // about.
+  if (await storage.exists(sourceLegacy)) return;
+  try {
+    await storage.delete(userLegacy);
+    cleaned.push({ name, kind: 'legacy_skill', path: userLegacy });
+  } catch {
+    // Non-fatal.
+  }
+}
+
+/**
+ * Phase 3.5 A3 — for each top-level entry in `.agents/skills/<name>/`
+ * (excluding `SKILL.md`, `.fork-base/`, hidden dotfiles), if a
+ * byte-equal copy exists at the same relative path under
+ * `.arete/skills/<name>/`, remove the user-tier copy. Byte equality
+ * means the user has not customized it — keeping the duplicate is
+ * cruft that this migration cleans up.
+ *
+ * Templates dirs are walked recursively; LEARNINGS.md / aux .md files
+ * are top-level entries. The `.fork-base/` snapshot is preserved
+ * unconditionally (it's the diff source-of-truth).
+ */
+async function dedupAuxFiles(
+  storage: StorageAdapter,
+  userPath: string,
+  managedPath: string,
+  name: string,
+  cleaned: MigrationCleanup[],
+): Promise<void> {
+  // Walk every file under userPath recursively, compute its rel path,
+  // skip SKILL.md / .fork-base/, and compare against managed's
+  // file at the same rel path.
+  let userFiles: string[];
+  try {
+    userFiles = await storage.list(userPath, { recursive: true });
+  } catch {
+    return;
+  }
+  for (const userFile of userFiles) {
+    const rel = userFile.slice(userPath.length).replace(/^[/\\]/, '');
+    if (rel.length === 0) continue;
+    const topSegment = rel.split(/[/\\]/)[0];
+    if (topSegment === 'SKILL.md') continue;
+    if (topSegment === FORK_BASE_DIRNAME) continue;
+    // Ignore other dotfiles defensively (no aux dedup of
+    // `.arete-meta.yaml`, etc.) — those carry user metadata.
+    if (topSegment.startsWith('.')) continue;
+
+    const managedFile = join(managedPath, rel);
+    if (!(await storage.exists(managedFile))) continue;
+    const userContent = await storage.read(userFile);
+    const managedContent = await storage.read(managedFile);
+    if (userContent === null || managedContent === null) continue;
+    if (userContent !== managedContent) continue;
+    try {
+      await storage.delete(userFile);
+      cleaned.push({ name, kind: 'aux_dedup', path: userFile });
+    } catch {
+      // Non-fatal.
+    }
+  }
+}
+
+/**
+ * Phase 3.5 A4 — remove `.agents/skills/<name>/` entirely when no
+ * substantive content remains (no SKILL.md, no aux files, no
+ * `.fork-base/`). Idempotent: a previously-pruned dir is a no-op.
+ *
+ * "No substantive content" = `storage.list(userPath, { recursive: true })`
+ * returns no files. (Empty subdirs are treated as no-content for the
+ * adapter implementations we care about.)
+ */
+async function pruneEmptyUserDir(
+  storage: StorageAdapter,
+  userPath: string,
+  name: string,
+  cleaned: MigrationCleanup[],
+): Promise<void> {
+  if (!(await storage.exists(userPath))) return;
+  let files: string[];
+  try {
+    files = await storage.list(userPath, { recursive: true });
+  } catch {
+    return;
+  }
+  if (files.length > 0) return;
+  try {
+    await storage.delete(userPath);
+    cleaned.push({ name, kind: 'empty_dir', path: userPath });
+  } catch {
+    // Non-fatal.
+  }
 }
 
 // ---- internal helpers ----

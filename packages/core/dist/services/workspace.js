@@ -516,6 +516,7 @@ export class WorkspaceService {
             updated: [],
             preserved: config.skills?.overrides ? [...config.skills.overrides] : [],
             removed: [],
+            cleaned: [],
         };
         if (options.sourcePaths?.skills) {
             // Phase 3 Step 1: shipped skills are refreshed in `.arete/skills/`,
@@ -530,8 +531,13 @@ export class WorkspaceService {
             // Phase 3 Step 7: migrate pre-Phase-3 `.agents/skills/<name>/`
             // content to either (a) cleanup-as-tracked (matches managed) or
             // (b) preserve-as-fork (differs from managed). Idempotent.
+            //
+            // Phase 3.5 (A2/A3/A4): pass `sourceSkillsDir` so the migration
+            // additionally cleans stale SKILL.legacy.md files (A2 — source
+            // is gone post-MC5), byte-equal aux files (A3), and empty user-
+            // skill directories (A4).
             try {
-                const migrated = await migratePreSplitAgentSkills(this.storage, paths.agentSkills, paths.managedSkills);
+                const migrated = await migratePreSplitAgentSkills(this.storage, paths.agentSkills, paths.managedSkills, { sourceSkillsDir: options.sourcePaths.skills });
                 for (const name of migrated.removed) {
                     if (!result.removed.includes(name))
                         result.removed.push(name);
@@ -539,6 +545,11 @@ export class WorkspaceService {
                 for (const name of migrated.preserved) {
                     if (!result.preserved.includes(name))
                         result.preserved.push(name);
+                }
+                if (migrated.cleaned.length > 0) {
+                    if (!result.cleaned)
+                        result.cleaned = [];
+                    result.cleaned.push(...migrated.cleaned);
                 }
             }
             catch {
